@@ -1,5 +1,6 @@
-[[package]]
-name = "StrainM"
+[package]
+
+name = "strainm"
 version = "0.1.0"
 authors = ["Rhys Newell <r.newell@uq.net.au>"]
 license = "GPL-3.0"
@@ -9,7 +10,7 @@ repository = "https://github.com/rhysnewell/StrainM"
 documentation = "https://github.com/rhysnewell/StrainM"
 readme = "README.md"
 exclude = [ # Max upload is 10MB, as of writing test data was 15MB
-  "tests/*",
+  "tests/*"
 ]
 
 [dependencies]
