@@ -5,6 +5,7 @@ pub mod genome;
 pub mod external_command_checker;
 pub mod bwa_index_maintenance;
 pub mod mapping_parameters;
+pub mod shard_bam_reader;
 
 extern crate bio;
 #[macro_use]
