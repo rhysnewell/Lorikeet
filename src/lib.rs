@@ -1,6 +1,7 @@
 pub mod bam_generator;
 pub mod filter;
 pub mod genomes_and_contigs;
+pub mod genome;
 pub mod external_command_checker;
 pub mod bwa_index_maintenance;
 pub mod mapping_parameters;
