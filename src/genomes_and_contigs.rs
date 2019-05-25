@@ -1,5 +1,6 @@
-use std;
 use std::collections::HashMap;
+
+use find_first;
 
 #[derive(Debug)]
 pub struct GenomesAndContigs {
@@ -29,7 +30,7 @@ impl GenomesAndContigs {
                 let genome_current = &self.genomes[genome_index];
                 panic!("The contig '{}' has been assigned to multiple genomes, \
                         at least '{}' and '{}'. You may try not using \
-                        --reference and let coverm generate a reference of \
+                        --reference and let strainm generate a reference of \
                         concatenated contigs, or rename the contigs in your \
                         genome file(s).",
                        contig_name,
@@ -61,18 +62,4 @@ impl GenomesAndContigs {
             None => None
         }
     }
-}
-/// Finds the first occurence of element in a slice
-fn find_first<T>(slice: &[T], element: T) -> Result<usize, &'static str>
-    where T: std::cmp::PartialEq<T> {
-
-    let mut index: usize = 0;
-    for el in slice {
-        if *el == element {
-            return Ok(index)
-            //let res: Result<usize, None> = Ok(index)
-        }
-        index += 1;
-    }
-    return Err("Element not found in slice")
 }

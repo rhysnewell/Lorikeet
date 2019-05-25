@@ -1,11 +1,16 @@
+pub mod contig;
+pub mod genome;
+pub mod mosdepth_genome_coverage_estimators;
+pub mod genomes_and_contigs;
 pub mod bam_generator;
 pub mod filter;
-pub mod genomes_and_contigs;
-pub mod genome;
 pub mod external_command_checker;
 pub mod bwa_index_maintenance;
+pub mod coverage_takers;
 pub mod mapping_parameters;
+pub mod coverage_printer;
 pub mod shard_bam_reader;
+pub mod genome_exclusion;
 
 extern crate bio;
 #[macro_use]
@@ -19,14 +24,15 @@ extern crate tempfile;
 extern crate rand;
 
 use std::path::Path;
-
 use genomes_and_contigs::GenomesAndContigs;
 
 
 
 pub const CONCATENATED_FASTA_FILE_SEPARATOR: &str = "~";
+
+
 pub fn read_genome_fasta_files(fasta_file_paths: &Vec<&str>)
-                               -> GenomesAndContigs {
+    -> GenomesAndContigs {
     let mut contig_to_genome = GenomesAndContigs::new();
 
     for file in fasta_file_paths {
@@ -37,7 +43,7 @@ pub fn read_genome_fasta_files(fasta_file_paths: &Vec<&str>)
         let genome_name = String::from(
             path.file_stem()
                 .expect("Problem while determining file stem")
-                .to_str()
+            .to_str()
                 .expect("File name string conversion problem"));
         if contig_to_genome.genome_index(&genome_name).is_some() {
             panic!("The genome name {} was derived from >1 file", genome_name);
@@ -67,6 +73,22 @@ pub struct FlagFilter {
     pub include_secondary: bool,
 }
 
+
+/// Finds the first occurence of element in a slice
+fn find_first<T>(slice: &[T], element: T) -> Result<usize, &'static str>
+where T: std::cmp::PartialEq<T> {
+
+    let mut index: usize = 0;
+    for el in slice {
+        if *el == element {
+            return Ok(index)
+        }
+        index += 1;
+    }
+    return Err("Element not found in slice")
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,3 +111,6 @@ mod tests {
         assert_eq!(String::from("genome1"), *contig_to_genome.genome_of_contig(&String::from("seq2")).unwrap());
     }
 }
+
+
+
