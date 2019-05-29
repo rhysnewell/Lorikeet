@@ -28,6 +28,7 @@ pub fn contig_coverage<R: NamedBamReader,
         let mut record: bam::record::Record = bam::record::Record::new();
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut ups_and_downs: Vec<i32> = Vec::new();
+        let mut pileup_counts= Vec::new();
         let header = bam_generated.header().clone();
         let target_names = header.target_names();
 
@@ -39,6 +40,7 @@ pub fn contig_coverage<R: NamedBamReader,
         let mut process_previous_contigs = |last_tid, tid,
         coverage_estimators: &mut Vec<CoverageEstimator>,
         ups_and_downs,
+        pileup_counts,
         num_mapped_reads_in_current_contig,
         total_edit_distance_in_current_contig,
         total_indels_in_current_contig,
@@ -105,6 +107,7 @@ pub fn contig_coverage<R: NamedBamReader,
                         tid,
                         coverage_estimators,
                         ups_and_downs,
+                        pileup_counts,
                         num_mapped_reads_in_current_contig,
                         total_edit_distance_in_current_contig,
                         total_indels_in_current_contig,
@@ -174,6 +177,7 @@ pub fn contig_coverage<R: NamedBamReader,
             target_names.len() as i32,
             coverage_estimators,
             ups_and_downs,
+            pileup_counts,
             num_mapped_reads_in_current_contig,
             total_edit_distance_in_current_contig,
             total_indels_in_current_contig,

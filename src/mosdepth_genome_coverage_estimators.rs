@@ -3,6 +3,7 @@ use coverage_takers::CoverageTaker;
 #[derive(Clone, Debug)]
 pub enum CoverageEstimator {
     MeanGenomeCoverageEstimator{
+        pileup_counts: Vec<i32>,
         total_count: u32,
         total_bases: u32,
         num_covered_bases: u32,
@@ -13,6 +14,7 @@ pub enum CoverageEstimator {
         exclude_mismatches: bool,
     },
     TrimmedMeanGenomeCoverageEstimator {
+        pileup_counts: Vec<i32>,
         counts: Vec<u32>,
         observed_contig_length: u32,
         num_covered_bases: u32,
@@ -23,6 +25,7 @@ pub enum CoverageEstimator {
         contig_end_exclusion: u32,
     },
     PileupCountsGenomeCoverageEstimator {
+        pileup_counts: Vec<i32>,
         counts: Vec<u32>,
         observed_contig_length: u32,
         num_covered_bases: u32,
@@ -31,6 +34,7 @@ pub enum CoverageEstimator {
         contig_end_exclusion: u32,
     },
     CoverageFractionGenomeCoverageEstimator {
+        pileup_counts: Vec<i32>,
         total_bases: u32,
         num_covered_bases: u32,
         num_mapped_reads: u64,
@@ -38,6 +42,7 @@ pub enum CoverageEstimator {
         contig_end_exclusion: u32,
     },
     NumCoveredBasesCoverageEstimator {
+        pileup_counts: Vec<i32>,
         total_bases: u32,
         num_covered_bases: u32,
         num_mapped_reads: u64,
@@ -45,6 +50,7 @@ pub enum CoverageEstimator {
         contig_end_exclusion: u32,
     },
     VarianceGenomeCoverageEstimator {
+        pileup_counts: Vec<i32>,
         counts: Vec<u32>,
         observed_contig_length: u32,
         num_covered_bases: u32,
@@ -88,6 +94,7 @@ impl CoverageEstimator {
         exclude_mismatches: bool)
         -> CoverageEstimator {
         CoverageEstimator::MeanGenomeCoverageEstimator {
+            pileup_counts: vec!(),
             total_count: 0,
             total_bases: 0,
             num_covered_bases: 0,
@@ -103,6 +110,7 @@ impl CoverageEstimator {
         contig_end_exclusion: u32)
         -> CoverageEstimator {
         CoverageEstimator::TrimmedMeanGenomeCoverageEstimator {
+            pileup_counts: vec!(),
             counts: vec!(),
             observed_contig_length: 0,
             num_covered_bases: 0,
@@ -118,6 +126,7 @@ impl CoverageEstimator {
         contig_end_exclusion: u32)
         -> CoverageEstimator {
         CoverageEstimator::PileupCountsGenomeCoverageEstimator {
+            pileup_counts: vec!(),
             counts: vec!(),
             observed_contig_length: 0,
             num_covered_bases: 0,
@@ -131,6 +140,7 @@ impl CoverageEstimator {
         contig_end_exclusion: u32)
         -> CoverageEstimator {
         CoverageEstimator::CoverageFractionGenomeCoverageEstimator {
+            pileup_counts: vec!(),
             total_bases: 0,
             num_covered_bases: 0,
             num_mapped_reads: 0,
@@ -143,6 +153,7 @@ impl CoverageEstimator {
         contig_end_exclusion: u32)
         -> CoverageEstimator {
         CoverageEstimator::NumCoveredBasesCoverageEstimator {
+            pileup_counts: vec!(),
             total_bases: 0,
             num_covered_bases: 0,
             num_mapped_reads: 0,
@@ -155,6 +166,7 @@ impl CoverageEstimator {
         contig_end_exclusion: u32)
         -> CoverageEstimator {
         CoverageEstimator::VarianceGenomeCoverageEstimator {
+            pileup_counts: vec!(),
             counts: vec!(),
             observed_contig_length: 0,
             num_covered_bases: 0,
@@ -193,6 +205,8 @@ pub trait MosdepthGenomeCoverageEstimator {
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32;
 
+    fn get_core(&mut self, coverage: f32) -> Vec<i32>;
+
     fn print_coverage<T: CoverageTaker>(
         &self,
         coverage: &f32,
@@ -211,12 +225,14 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
         debug!("Running setup..");
         match self {
             CoverageEstimator::MeanGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut total_count,
                 ref mut total_bases,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
                 ref mut total_mismatches, ..
             } => {
+                *pileup_counts = vec!();
                 *total_count = 0;
                 *total_bases = 0;
                 *num_covered_bases = 0;
@@ -224,21 +240,25 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 *total_mismatches = 0;
             },
             CoverageEstimator::TrimmedMeanGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut counts,
                 ref mut observed_contig_length,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads, ..
             } | CoverageEstimator::PileupCountsGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut counts,
                 ref mut observed_contig_length,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads, ..
             } | CoverageEstimator::VarianceGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut observed_contig_length,
                 ref mut counts,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads, ..
             } => {
+                *pileup_counts = vec!();
                 *counts = vec!();
                 *observed_contig_length = 0;
                 *num_covered_bases = 0;
@@ -282,6 +302,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
 
         match self {
             CoverageEstimator::MeanGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut total_count,
                 ref mut total_bases,
                 ref mut num_covered_bases,
@@ -301,11 +322,13 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
                 }
                 let mut cumulative_sum: i32 = 0;
+                let mut cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = len - *contig_end_exclusion as usize - 1;
                 for i in 0..len {
                     let current = ups_and_downs[i as usize];
                     cumulative_sum += current;
+                    cumulative_array[i as usize] = cumulative_sum;
                     if i >= start_from && i <= end_at {
                         if cumulative_sum > 0 {
                             *num_covered_bases += 1
@@ -313,23 +336,27 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                         *total_count += cumulative_sum as u32;
                     }
                 }
+                *pileup_counts = cumulative_array;
                 debug!("After adding contig, have total_count {}, total_bases {}, \
                         num_covered_bases {}, mismatches {}",
                        total_count, total_bases, num_covered_bases, total_mismatches_in_contig);
             },
             CoverageEstimator::TrimmedMeanGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut counts,
                 ref mut observed_contig_length,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
                 contig_end_exclusion, ..
             } | CoverageEstimator::PileupCountsGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut counts,
                 ref mut observed_contig_length,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
                 contig_end_exclusion, ..
             } | CoverageEstimator::VarianceGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut counts,
                 ref mut observed_contig_length,
                 ref mut num_covered_bases,
@@ -348,6 +375,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
                 }
                 debug!("Total observed length now {}", *observed_contig_length);
+                let mut cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
                 let mut cumulative_sum: i32 = 0;
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = len1 - *contig_end_exclusion as usize - 1;
@@ -367,13 +395,16 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                         (*counts)[cumulative_sum as usize] += 1
                     }
                 }
+                *pileup_counts = cumulative_array;
             },
             CoverageEstimator::CoverageFractionGenomeCoverageEstimator {
+                ref mut pileup_counts,
                 ref mut total_bases,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
                 contig_end_exclusion, ..
             } | CoverageEstimator::NumCoveredBasesCoverageEstimator{
+                ref mut pileup_counts,
                 ref mut total_bases,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
@@ -390,6 +421,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
                 }
                 let mut cumulative_sum: i32 = 0;
+                let mut cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = len - *contig_end_exclusion as usize - 1;
                 for i in 0..len {
@@ -401,6 +433,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                         }
                     }
                 }
+                *pileup_counts = cumulative_array;
             },
             CoverageEstimator::ReferenceLengthCalculator {
                 ref mut observed_contig_length,
@@ -418,6 +451,10 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 *num_mapped_reads += num_mapped_reads_in_contig;
             }
         }
+    }
+
+    fn get_core(&mut self, coverage: f32) -> Vec<i32>{
+
     }
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32 {
