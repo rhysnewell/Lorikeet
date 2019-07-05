@@ -9,6 +9,18 @@ pub fn check_for_samtools() {
     self::check_for_external_command_presence("samtools", "which samtools");
 }
 
+pub fn check_for_prokka() {
+    self::check_for_external_command_presence("prokka", "which prokka");
+}
+
+pub fn check_for_prodigal() {
+    self::check_for_external_command_presence("prodigal", "which prodigal");
+}
+
+pub fn check_for_roary() {
+    self::check_for_external_command_presence("roary", "which roary");
+}
+
 fn check_for_external_command_presence(
     executable_name: &str, testing_cmd: &str) {
     debug!("Checking for {} ..", executable_name);

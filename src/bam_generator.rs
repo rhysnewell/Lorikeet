@@ -8,6 +8,7 @@ use FlagFilter;
 
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
+use rust_htslib::bam::pileup::Pileups;
 
 use nix::unistd;
 use nix::sys::stat;
@@ -20,6 +21,9 @@ pub trait NamedBamReader {
 
     // Read a record into record parameter
     fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError>;
+
+    // Get pileups
+    fn pileups(&mut self) -> Option<bam::pileup::Pileups<rust_htslib::bam::Reader>>;
 
     // Return the bam header of the final BAM file
     fn header(&self) -> &bam::HeaderView;
@@ -45,6 +49,7 @@ impl NamedBamReader for BamFileNamedReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
+
     fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
         let res = self.bam_reader.read(record);
         if res.is_ok() && !record.is_secondary() && !record.is_supplementary() {
@@ -52,6 +57,12 @@ impl NamedBamReader for BamFileNamedReader {
         }
         return res;
     }
+
+//    fn pileups(&mut self) -> bam::pileup::Pileups<Self>{
+//        let res = self.bam_reader.pileup();
+//        return res;
+//    }
+
     fn header(&self) -> &bam::HeaderView {
         self.bam_reader.header()
     }
@@ -374,18 +385,6 @@ pub fn generate_filtered_bam_readers_from_bam_files(
 
     return generators;
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 pub struct StreamingFilteredNamedBamReader {

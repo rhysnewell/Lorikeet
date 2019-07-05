@@ -1,5 +1,5 @@
 use std;
-
+use std::collections::HashMap;
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
@@ -22,13 +22,14 @@ pub fn contig_coverage<R: NamedBamReader,
     let mut reads_mapped_vector = vec!();
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-
+        //let mut bam_pileups = bam_generated.bam_reader.pileup();
+        let mut bam_pileups = bam_generated.pileup();
         let stoit_name = &(bam_generated.name().to_string());
         coverage_taker.start_stoit(stoit_name);
         let mut record: bam::record::Record = bam::record::Record::new();
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut ups_and_downs: Vec<i32> = Vec::new();
-        let mut pileup_counts= Vec::new();
+        let mut pileups: Vec<HashMap<&str, i32>> = Vec::new();
         let header = bam_generated.header().clone();
         let target_names = header.target_names();
 
@@ -36,7 +37,7 @@ pub fn contig_coverage<R: NamedBamReader,
         let mut num_mapped_reads_in_current_contig: u64 = 0;
         let mut total_indels_in_current_contig: u32 = 0;
         let mut total_edit_distance_in_current_contig: u32 = 0;
-
+        let mut pileup_counts = 0;
         let mut process_previous_contigs = |last_tid, tid,
         coverage_estimators: &mut Vec<CoverageEstimator>,
         ups_and_downs,
@@ -97,6 +98,23 @@ pub fn contig_coverage<R: NamedBamReader,
                     debug!("Skipping read based on flag filtering");
                     continue;
                 }
+
+//            let mut pileup_reader = bam_generated.read(&mut record).unwrap().pileup();
+//            for p in pileup_reader{
+//                let mut pileup = p.unwrap();
+//                println!("{}:{} depth {}", pileup.tid(), pileup.pos(), pileup.depth());
+//                for alignment in pileup.alignments() {
+//                    if !alignment.is_del() && !alignment.is_refskip() {
+//                        println!("Base {}", alignment.record().seq()[alignment.qpos().unwrap()]);
+//                    }
+//                    // mark indel start
+//                    match alignment.indel() {
+//                        bam::pileup::Indel::Ins(len) => println!("Insertion of length {} between this and next position.", len),
+//                        bam::pileup::Indel::Del(len) => println!("Deletion of length {} between this and next position.", len),
+//                        bam::pileup::Indel::None => ()
+//                    }
+//                }
+//            }
             // if reference has changed, print the last record
             let tid = record.tid();
             if !record.is_unmapped() { // if mapped
@@ -113,6 +131,7 @@ pub fn contig_coverage<R: NamedBamReader,
                         total_indels_in_current_contig,
                         &mut num_mapped_reads_total);
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    pileups = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
                     last_tid = tid;
@@ -126,6 +145,8 @@ pub fn contig_coverage<R: NamedBamReader,
                 // for each chunk of the cigar string
                 debug!("read name {:?}", std::str::from_utf8(record.qname()).unwrap());
                 let mut cursor: usize = record.pos() as usize;
+                let mut seq = record.seq();
+                let mut read_cursor = 0 as usize;
                 for cig in record.cigar().iter() {
                     debug!("Found cigar {:} from {}", cig, cursor);
                     match cig {
@@ -136,6 +157,10 @@ pub fn contig_coverage<R: NamedBamReader,
                             let final_pos = cursor + cig.len() as usize;
                             if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                                 ups_and_downs[final_pos] -= 1;
+//                                for sym in seq[read_cursor..cig.len() as usize].iter(){
+//                                    let count = pileups[cursor].entry(str::from_utf8(&sym).unwrap()).or_insert(0);
+//                                    *count += 1;
+//                                }
                             }
                             cursor += cig.len() as usize;
                         },
@@ -153,7 +178,7 @@ pub fn contig_coverage<R: NamedBamReader,
                         Cigar::SoftClip(_) | Cigar::HardClip(_) | Cigar::Pad(_) => {}
                     }
                 }
-
+                print!("{:?}", pileups);
                 // Determine the number of mismatching bases in this read by
                 // looking at the NM tag.
                 total_edit_distance_in_current_contig += match

@@ -205,7 +205,7 @@ pub trait MosdepthGenomeCoverageEstimator {
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32;
 
-    fn get_core(&mut self, coverage: f32) -> Vec<i32>;
+//    fn get_core(&mut self, coverage: f32) -> Vec<i32>;
 
     fn print_coverage<T: CoverageTaker>(
         &self,
@@ -453,13 +453,14 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
         }
     }
 
-    fn get_core(&mut self, coverage: f32) -> Vec<i32>{
-
-    }
+//    fn get_core(&mut self, coverage: f32) -> Vec<i32>{
+//
+//    }
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32 {
         match self {
             CoverageEstimator::MeanGenomeCoverageEstimator {
+                pileup_counts: _,
                 total_count,
                 total_bases,
                 num_covered_bases,
@@ -486,6 +487,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 }
             },
             CoverageEstimator::TrimmedMeanGenomeCoverageEstimator {
+                pileup_counts: _,
                 counts,
                 observed_contig_length,
                 num_covered_bases,
@@ -559,6 +561,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 return answer
             },
             CoverageEstimator::PileupCountsGenomeCoverageEstimator {
+                pileup_counts: _,
                 counts: _,
                 observed_contig_length,
                 num_covered_bases,
@@ -584,6 +587,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 }
             },
             CoverageEstimator::CoverageFractionGenomeCoverageEstimator {
+                pileup_counts: _,
                 total_bases,
                 num_covered_bases,
                 num_mapped_reads: _,
@@ -599,6 +603,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
             },
             CoverageEstimator::NumCoveredBasesCoverageEstimator {
+                pileup_counts: _,
                 total_bases,
                 num_covered_bases,
                 num_mapped_reads: _,
@@ -614,6 +619,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
             },
             CoverageEstimator::VarianceGenomeCoverageEstimator {
+                pileup_counts: _,
                 observed_contig_length,
                 ref mut counts,
                 num_covered_bases,
@@ -677,6 +683,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
     fn copy(&self) -> CoverageEstimator {
         match self {
             CoverageEstimator::MeanGenomeCoverageEstimator {
+                pileup_counts: _,
                 total_count: _,
                 total_bases: _,
                 num_covered_bases: _,
@@ -692,6 +699,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     *exclude_mismatches)
             },
             CoverageEstimator::TrimmedMeanGenomeCoverageEstimator {
+                pileup_counts: _,
                 counts: _,
                 observed_contig_length: _,
                 num_covered_bases: _,
@@ -705,6 +713,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     *min, *max, *min_fraction_covered_bases, *contig_end_exclusion)
             },
             CoverageEstimator::PileupCountsGenomeCoverageEstimator {
+                pileup_counts: _,
                 counts: _,
                 observed_contig_length: _,
                 num_covered_bases: _,
@@ -716,6 +725,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     *min_fraction_covered_bases, *contig_end_exclusion)
             },
             CoverageEstimator::CoverageFractionGenomeCoverageEstimator {
+                pileup_counts: _,
                 total_bases: _,
                 num_covered_bases: _,
                 num_mapped_reads: _,
@@ -726,6 +736,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     *min_fraction_covered_bases, *contig_end_exclusion)
             },
             CoverageEstimator::NumCoveredBasesCoverageEstimator {
+                pileup_counts: _,
                 total_bases: _,
                 num_covered_bases: _,
                 num_mapped_reads: _,
@@ -736,6 +747,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     *min_fraction_covered_bases, *contig_end_exclusion)
             },
             CoverageEstimator::VarianceGenomeCoverageEstimator {
+                pileup_counts: _,
                 observed_contig_length: _,
                 counts: _,
                 num_covered_bases: _,
