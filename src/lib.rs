@@ -1,5 +1,7 @@
 pub mod contig;
 pub mod genome;
+pub mod pileups;
+pub mod pileup_structs;
 pub mod mosdepth_genome_coverage_estimators;
 pub mod genomes_and_contigs;
 pub mod bam_generator;

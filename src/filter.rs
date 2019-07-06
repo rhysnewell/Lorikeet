@@ -205,6 +205,10 @@ impl ReferenceSortedBamFilter {
             }
         }
     }
+    pub fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
+        let res = self.reader.pileup();
+        return res;
+    }
 }
 
 fn single_read_passes_filter(

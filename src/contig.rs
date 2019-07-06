@@ -22,8 +22,6 @@ pub fn contig_coverage<R: NamedBamReader,
     let mut reads_mapped_vector = vec!();
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        //let mut bam_pileups = bam_generated.bam_reader.pileup();
-        let mut bam_pileups = bam_generated.pileup();
         let stoit_name = &(bam_generated.name().to_string());
         coverage_taker.start_stoit(stoit_name);
         let mut record: bam::record::Record = bam::record::Record::new();
@@ -99,22 +97,6 @@ pub fn contig_coverage<R: NamedBamReader,
                     continue;
                 }
 
-//            let mut pileup_reader = bam_generated.read(&mut record).unwrap().pileup();
-//            for p in pileup_reader{
-//                let mut pileup = p.unwrap();
-//                println!("{}:{} depth {}", pileup.tid(), pileup.pos(), pileup.depth());
-//                for alignment in pileup.alignments() {
-//                    if !alignment.is_del() && !alignment.is_refskip() {
-//                        println!("Base {}", alignment.record().seq()[alignment.qpos().unwrap()]);
-//                    }
-//                    // mark indel start
-//                    match alignment.indel() {
-//                        bam::pileup::Indel::Ins(len) => println!("Insertion of length {} between this and next position.", len),
-//                        bam::pileup::Indel::Del(len) => println!("Deletion of length {} between this and next position.", len),
-//                        bam::pileup::Indel::None => ()
-//                    }
-//                }
-//            }
             // if reference has changed, print the last record
             let tid = record.tid();
             if !record.is_unmapped() { // if mapped

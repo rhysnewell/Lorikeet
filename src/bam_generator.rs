@@ -15,6 +15,7 @@ use nix::sys::stat;
 use tempdir::TempDir;
 use tempfile;
 
+
 pub trait NamedBamReader {
     // Name of the stoit
     fn name(&self) -> &str;
@@ -23,7 +24,7 @@ pub trait NamedBamReader {
     fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError>;
 
     // Get pileups
-    fn pileups(&mut self) -> Option<bam::pileup::Pileups<rust_htslib::bam::Reader>>;
+    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>;
 
     // Return the bam header of the final BAM file
     fn header(&self) -> &bam::HeaderView;
@@ -58,10 +59,10 @@ impl NamedBamReader for BamFileNamedReader {
         return res;
     }
 
-//    fn pileups(&mut self) -> bam::pileup::Pileups<Self>{
-//        let res = self.bam_reader.pileup();
-//        return res;
-//    }
+    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
+        let res = self.bam_reader.pileup();
+        return res;
+    }
 
     fn header(&self) -> &bam::HeaderView {
         self.bam_reader.header()
@@ -177,6 +178,12 @@ impl NamedBamReader for StreamingNamedBamReader {
         }
         return res;
     }
+
+    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
+        let res = self.bam_reader.pileup();
+        return res;
+    }
+
     fn header(&self) -> &bam::HeaderView {
         self.bam_reader.header()
     }
@@ -327,6 +334,12 @@ impl NamedBamReader for FilteredBamReader {
     fn read(&mut self, mut record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
         self.filtered_stream.read(&mut record)
     }
+
+    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
+        let res = self.filtered_stream.pileups();
+        return res;
+    }
+
     fn header(&self) -> &bam::HeaderView {
         &self.filtered_stream.reader.header()
     }
@@ -454,6 +467,12 @@ impl NamedBamReader for StreamingFilteredNamedBamReader {
     fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
         self.filtered_stream.read(record)
     }
+
+    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
+        let res = self.filtered_stream.pileups();
+        return res;
+    }
+
     fn header(&self) -> &bam::HeaderView {
         self.filtered_stream.reader.header()
     }
