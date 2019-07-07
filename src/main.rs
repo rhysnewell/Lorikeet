@@ -716,6 +716,8 @@ fn main(){
             set_log_level(m, true);
             let print_zeros = !m.is_present("no-zeros");
             let filter_params = FilterParameters::generate_from_clap(m);
+            let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
+            let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -732,7 +734,9 @@ fn main(){
                     run_pileup(
                         bam_readers,
                         print_zeros,
-                        filter_params.flag_filters);
+                        filter_params.flag_filters,
+                        var_fraction,
+                        depth_threshold);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -741,14 +745,18 @@ fn main(){
                     run_pileup(
                         bam_readers,
                         print_zeros,
-                        filter_params.flag_filters);
+                        filter_params.flag_filters,
+                        var_fraction,
+                        depth_threshold);
                 } else {
                     let mut bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(
                         bam_readers,
                         print_zeros,
-                        filter_params.flag_filters);
+                        filter_params.flag_filters,
+                        var_fraction,
+                        depth_threshold);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -768,14 +776,18 @@ fn main(){
                     run_pileup(
                         all_generators,
                         print_zeros,
-                        filter_params.flag_filters);
+                        filter_params.flag_filters,
+                        var_fraction,
+                        depth_threshold);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
                     run_pileup(
                         generator_sets,
                         print_zeros,
-                        filter_params.flag_filters);
+                        filter_params.flag_filters,
+                        var_fraction,
+                        depth_threshold);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -790,7 +802,9 @@ fn main(){
                     run_pileup(
                         all_generators,
                         print_zeros,
-                        filter_params.flag_filters.clone());
+                        filter_params.flag_filters.clone(),
+                        var_fraction,
+                        depth_threshold);
                 }
             }
         }
@@ -1478,12 +1492,16 @@ fn run_pileup<'a,
     T: strainm::bam_generator::NamedBamReaderGenerator<R>>(
     bam_readers: Vec<T>,
     print_zeros: bool,
-    flag_filters: FlagFilter) {
+    flag_filters: FlagFilter,
+    variant_fraction: f64,
+    depth_threshold: usize) {
 
     strainm::pileups::pileup_variants(
         bam_readers,
         print_zeros,
-        flag_filters);
+        flag_filters,
+        depth_threshold,
+        variant_fraction);
 
     debug!("Finalising printing ..");
 //
@@ -2273,6 +2291,14 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
+                .arg(Arg::with_name("variant-fraction-threshold")
+                    .long("variant-fraction-threshold")
+                    .short("f")
+                    .default_value("0.01"))
+                .arg(Arg::with_name("depth-threshold")
+                    .long("depth-threshold")
+                    .short("d")
+                    .default_value("10"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))

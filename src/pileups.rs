@@ -12,16 +12,20 @@ use coverage_takers::*;
 use FlagFilter;
 use ReadsMapped;
 use std::str;
+use pileup_structs::PileupStats::PileupContigStats;
 
 
 pub fn pileup_variants<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
     print_zero_coverage_contigs: bool,
-    flag_filters: FlagFilter) {
+    flag_filters: FlagFilter,
+    depth_threshold: usize,
+    var_fraction: f64) {
 
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
+//        let mut pileup_per_contig = Vec::new();
         {
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
@@ -32,17 +36,31 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut total_indels_in_current_contig = 0;
             let mut base;
 
-            let mut process_previous_contigs = |last_tid,
-                                                tid,
+            let mut process_previous_contigs = |last_tid: i32,
                                                 depth,
                                                 tet_freq,
                                                 total_indels_in_current_contig| {
                 if last_tid != -2 {
-                    debug!("tid {} and {} indels", last_tid,
-                           total_indels_in_current_contig);
-                    println!("{} depth {:?}", std::str::from_utf8(target_names[last_tid as usize]).unwrap(), depth);
+//                    println!("tid {} and {} indels", last_tid,
+//                           total_indels_in_current_contig);
+
+//                    println!("{} depth {:?}", std::str::from_utf8(target_names[last_tid as usize]).unwrap(), depth);
+                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                    let contig_name = target_names[last_tid as usize].to_vec();
+                    let mut pileups = PileupContigStats {
+                                            tetfrequency: tet_freq,
+                                            depth: depth,
+                                            tid: last_tid,
+                                            total_indels: total_indels_in_current_contig,
+                                            target_name: contig_name,
+                                            target_len: contig_len,
+                    };
+
+                    pileups.calc_variants(depth_threshold,
+                                          var_fraction);
                 }
             };
+
             for p in bam_pileups {
                 // if reference has changed, print the last record
 
@@ -52,29 +70,38 @@ pub fn pileup_variants<R: NamedBamReader,
                 if tid != last_tid {
                     process_previous_contigs(
                         last_tid,
-                        tid,
                         depth,
                         tet_freq,
                         total_indels_in_current_contig);
                     tet_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    depth[pileup.pos() as usize] = pileup.depth() as usize;
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
                     last_tid = tid;
                     total_indels_in_current_contig = 0;
+                } else {
+                    depth[pileup.pos() as usize] = pileup.depth() as usize;
                 }
 
                 for alignment in pileup.alignments() {
+
                     if !alignment.is_del() && !alignment.is_refskip() {
+
                         base = alignment.record().seq()[alignment.qpos().unwrap()] as char;
                         let count = tet_freq[pileup.pos() as usize].entry(base)
                             .or_insert(0);
                         *count += 1;
-                        depth[pileup.pos() as usize] += 1
+                    } else {
+                        let count = tet_freq[pileup.pos() as usize]
+                            .entry('N' as char).or_insert(0);
+                        *count += 1
                     }
                     // mark indel start
                     match alignment.indel() {
-                        bam::pileup::Indel::Ins(len) | bam::pileup::Indel::Del(len) => total_indels_in_current_contig += 1,
+                        bam::pileup::Indel::Ins(len) | bam::pileup::Indel::Del(len) => {
+                            total_indels_in_current_contig += 1;
+                        },
                         bam::pileup::Indel::None => ()
                     }
                 }
@@ -82,7 +109,6 @@ pub fn pileup_variants<R: NamedBamReader,
 //        print!("{:?}", tet_freq);
             process_previous_contigs(
                 last_tid,
-                target_names.len() as i32,
                 depth,
                 tet_freq,
                 total_indels_in_current_contig);

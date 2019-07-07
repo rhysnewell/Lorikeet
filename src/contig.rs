@@ -160,7 +160,7 @@ pub fn contig_coverage<R: NamedBamReader,
                         Cigar::SoftClip(_) | Cigar::HardClip(_) | Cigar::Pad(_) => {}
                     }
                 }
-                print!("{:?}", pileups);
+//                print!("{:?}", pileups);
                 // Determine the number of mismatching bases in this read by
                 // looking at the NM tag.
                 total_edit_distance_in_current_contig += match
