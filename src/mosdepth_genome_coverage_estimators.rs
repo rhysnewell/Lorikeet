@@ -336,6 +336,8 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                         *total_count += cumulative_sum as u32;
                     }
                 }
+//                println!("{:?}", cumulative_array);
+
                 *pileup_counts = cumulative_array;
                 debug!("After adding contig, have total_count {}, total_bases {}, \
                         num_covered_bases {}, mismatches {}",

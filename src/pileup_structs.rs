@@ -8,12 +8,17 @@ pub enum PileupStats {
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
-        target_len: usize
+        target_len: usize,
+        contig_end_exclusion: u32,
+        min_fraction_covered_bases: f32,
+        min: f32,
+        max: f32,
     }
 }
 
 impl PileupStats {
-    pub fn new_contig_stats() -> PileupStats {
+    pub fn new_contig_stats(min: f32, max: f32, min_fraction_covered_bases: f32,
+                            contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
             tetfrequency: vec!(),
             depth: vec!(),
@@ -21,6 +26,10 @@ impl PileupStats {
             total_indels: 0,
             target_name: vec!(),
             target_len: 0,
+            contig_end_exclusion: contig_end_exclusion,
+            min_fraction_covered_bases: min_fraction_covered_bases,
+            min: min,
+            max: max,
         }
     }
 }
@@ -39,6 +48,8 @@ pub trait PileupFunctions {
     fn calc_variants(&mut self,
                      depth_thresh: usize,
                      variant_fraction: f64);
+
+    fn calc_coverage(&mut self) -> f32;
 }
 
 impl PileupFunctions for PileupStats {
@@ -76,6 +87,7 @@ impl PileupFunctions for PileupStats {
                 ref mut total_indels,
                 ref mut target_name,
                 ref mut target_len,
+                ..
             } => {
                 *tetfrequency = tet_freq;
                 *depth = read_depth;
@@ -133,5 +145,70 @@ impl PileupFunctions for PileupStats {
                          total_indels);
             }
         }
+    }
+
+    fn calc_coverage(&mut self) -> f32 {
+        let total_bases = *observed_contig_length + unobserved_contig_length;
+        debug!("Calculating coverage with num_covered_bases {}, observed_length {}, unobserved_length {} and counts {:?}",
+               num_covered_bases, observed_contig_length, unobserved_contig_length, counts);
+        let answer = match total_bases {
+            0 => 0.0,
+            _ => {
+                if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
+                    0.0
+                } else {
+                    let min_index: usize = (*min * total_bases as f32).floor() as usize;
+                    let max_index: usize = (*max * total_bases as f32).ceil() as usize;
+                    if *num_covered_bases == 0 {return 0.0;}
+                    counts[0] += unobserved_contig_length;
+
+                    let mut num_accounted_for: usize = 0;
+                    let mut total: usize = 0;
+                    let mut started = false;
+                    let mut i = 0;
+                    for num_covered in counts.iter() {
+                        num_accounted_for += *num_covered as usize;
+                        debug!("start: i {}, num_accounted_for {}, total {}, min {}, max {}", i, num_accounted_for, total, min_index, max_index);
+                        if num_accounted_for >= min_index {
+                            debug!("inside");
+                            if started {
+                                if num_accounted_for > max_index {
+                                    debug!("num_accounted_for {}, *num_covered {}",
+                                           num_accounted_for, *num_covered);
+                                    let num_excess = num_accounted_for - *num_covered as usize;
+                                    let num_wanted = match max_index >= num_excess {
+                                        true => max_index - num_excess + 1,
+                                        false => 0
+                                    };
+                                    debug!("num wanted1: {}", num_wanted);
+                                    total += num_wanted * i;
+                                    break;
+                                } else {
+                                    total += *num_covered as usize * i;
+                                }
+                            } else {
+                                if num_accounted_for > max_index {
+                                    // all coverages are the same in the trimmed set
+                                    total = (max_index-min_index+1) * i;
+                                    started = true
+                                } else if num_accounted_for < min_index {
+                                    debug!("too few on first")
+                                } else {
+                                    let num_wanted = num_accounted_for - min_index + 1;
+                                    debug!("num wanted2: {}", num_wanted);
+                                    total = num_wanted * i;
+                                    started = true;
+                                }
+                            }
+                        }
+                        debug!("end i {}, num_accounted_for {}, total {}", i, num_accounted_for, total);
+
+                        i += 1;
+                    }
+                    total as f32 / (max_index-min_index) as f32
+                }
+            }
+        };
+        return answer
     }
 }

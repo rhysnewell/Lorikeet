@@ -1,5 +1,6 @@
 extern crate strainm;
 use strainm::mosdepth_genome_coverage_estimators::*;
+use strainm::pileup_structs::*;
 use strainm::bam_generator::*;
 use strainm::filter;
 use strainm::external_command_checker;
@@ -719,6 +720,25 @@ fn main(){
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
 
+
+            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+
+            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+                process::exit(1)
+            }
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+            }
+//            PileupStats::new_contig_stats(min,
+//                                                     max,
+//                                                     min_fraction_covered,
+//                                                     contig_end_exclusion);
+
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
@@ -736,7 +756,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -747,7 +771,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 } else {
                     let mut bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -756,7 +784,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -778,7 +810,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
@@ -787,7 +823,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -804,7 +844,11 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters.clone(),
                         var_fraction,
-                        depth_threshold);
+                        depth_threshold,
+                        min,
+                        max,
+                        min_fraction_covered,
+                        contig_end_exclusion);
                 }
             }
         }
@@ -1118,7 +1162,7 @@ fn run_genome<'a,
             strainm::genome::mosdepth_genome_coverage(
                 bam_generators,
                 separator.unwrap(),
-	              &mut estimators_and_taker.taker,
+                &mut estimators_and_taker.taker,
                 print_zeros,
                 &mut estimators_and_taker.estimators,
                 proper_pairs_only,
@@ -1494,14 +1538,21 @@ fn run_pileup<'a,
     print_zeros: bool,
     flag_filters: FlagFilter,
     variant_fraction: f64,
-    depth_threshold: usize) {
+    depth_threshold: usize,
+    min: f32, max: f32,
+    min_fraction_covered_bases: f32,
+    contig_end_exclusion: u32) {
 
     strainm::pileups::pileup_variants(
         bam_readers,
         print_zeros,
         flag_filters,
         depth_threshold,
-        variant_fraction);
+        variant_fraction,
+        min,
+        max,
+        min_fraction_covered,
+        contig_end_exclusion);
 
     debug!("Finalising printing ..");
 //

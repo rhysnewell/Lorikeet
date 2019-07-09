@@ -21,7 +21,10 @@ pub fn pileup_variants<R: NamedBamReader,
     print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     depth_threshold: usize,
-    var_fraction: f64) {
+    var_fraction: f64,
+    min: f32, max: f32,
+    min_fraction_covered_bases: f32,
+    contig_end_exclusion: u32) {
 
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
@@ -35,6 +38,10 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
             let mut base;
+            let mut pileups = PileupStats::new_contig_stats(min,
+                                                     max,
+                                                     min_fraction_covered,
+                                                     contig_end_exclusion);
 
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth,
@@ -47,14 +54,12 @@ pub fn pileup_variants<R: NamedBamReader,
 //                    println!("{} depth {:?}", std::str::from_utf8(target_names[last_tid as usize]).unwrap(), depth);
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
                     let contig_name = target_names[last_tid as usize].to_vec();
-                    let mut pileups = PileupContigStats {
-                                            tetfrequency: tet_freq,
-                                            depth: depth,
-                                            tid: last_tid,
-                                            total_indels: total_indels_in_current_contig,
-                                            target_name: contig_name,
-                                            target_len: contig_len,
-                    };
+                    pileups.add_contig(tet_freq,
+                                       depth,
+                                       last_tid,
+                                       total_indels_in_current_contig,
+                                       contig_name,
+                                       contig_len);
 
                     pileups.calc_variants(depth_threshold,
                                           var_fraction);
