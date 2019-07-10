@@ -38,10 +38,10 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
             let mut base;
-            let mut pileups = PileupStats::new_contig_stats(min,
-                                                     max,
-                                                     min_fraction_covered,
-                                                     contig_end_exclusion);
+//            let mut pileup_struct = PileupStats::new_contig_stats(min,
+//                                                     max,
+//                                                     min_fraction_covered_bases,
+//                                                     contig_end_exclusion);
 
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth,
@@ -54,15 +54,22 @@ pub fn pileup_variants<R: NamedBamReader,
 //                    println!("{} depth {:?}", std::str::from_utf8(target_names[last_tid as usize]).unwrap(), depth);
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
                     let contig_name = target_names[last_tid as usize].to_vec();
-                    pileups.add_contig(tet_freq,
+                    let mut pileup_struct = PileupStats::new_contig_stats(min,
+                                                                          max,
+                                                                          min_fraction_covered_bases,
+                                                                          contig_end_exclusion);
+                    pileup_struct.add_contig(tet_freq,
                                        depth,
                                        last_tid,
                                        total_indels_in_current_contig,
                                        contig_name,
                                        contig_len);
 
-                    pileups.calc_variants(depth_threshold,
-                                          var_fraction);
+                    let coverage = pileup_struct.calc_coverage();
+
+                    pileup_struct.calc_variants(coverage,
+                                                depth_threshold,
+                                                var_fraction);
                 }
             };
 

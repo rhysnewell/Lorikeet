@@ -1551,7 +1551,7 @@ fn run_pileup<'a,
         variant_fraction,
         min,
         max,
-        min_fraction_covered,
+        min_fraction_covered_bases,
         contig_end_exclusion);
 
     debug!("Finalising printing ..");
