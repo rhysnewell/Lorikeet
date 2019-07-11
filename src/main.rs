@@ -16,11 +16,13 @@ use strainm::genome_exclusion::*;
 extern crate rust_htslib;
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
+use rust::bio::io::fasta::*;
 
 use std::env;
 use std::str;
 use std::process;
 use std::collections::HashSet;
+use std::path::Path;
 
 extern crate clap;
 use clap::*;
@@ -719,6 +721,8 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+            let reference_path = Path::new(m.value_of("reference").unwrap());
+            let mut fasta_reader = bio::io::fasta::IndexedReader::from_file(reference_path).unwrap();
 
 
             let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
@@ -753,6 +757,7 @@ fn main(){
                         filter_params.min_aligned_percent_pair);
                     run_pileup(
                         bam_readers,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
@@ -768,6 +773,7 @@ fn main(){
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(
                         bam_readers,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
@@ -781,6 +787,7 @@ fn main(){
                         bam_files);
                     run_pileup(
                         bam_readers,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
@@ -807,6 +814,7 @@ fn main(){
                     debug!("Finished collecting generators.");
                     run_pileup(
                         all_generators,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
@@ -820,6 +828,7 @@ fn main(){
                         m, &None, &NoExclusionGenomeFilter{});
                     run_pileup(
                         generator_sets,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters,
                         var_fraction,
@@ -841,6 +850,7 @@ fn main(){
                     }
                     run_pileup(
                         all_generators,
+                        fasta_reader,
                         print_zeros,
                         filter_params.flag_filters.clone(),
                         var_fraction,
@@ -1535,6 +1545,7 @@ fn run_pileup<'a,
     R: strainm::bam_generator::NamedBamReader,
     T: strainm::bam_generator::NamedBamReaderGenerator<R>>(
     bam_readers: Vec<T>,
+    reference: bio::io::fasta::IndexedReader<std::fs::File>,
     print_zeros: bool,
     flag_filters: FlagFilter,
     variant_fraction: f64,
@@ -1545,6 +1556,7 @@ fn run_pileup<'a,
 
     strainm::pileups::pileup_variants(
         bam_readers,
+        reference,
         print_zeros,
         flag_filters,
         depth_threshold,

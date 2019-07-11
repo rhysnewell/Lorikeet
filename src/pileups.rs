@@ -12,11 +12,13 @@ use ReadsMapped;
 use std::str;
 use rm::linalg::Matrix;
 use rm::linalg::Vector;
+use std::fs::File;
 
 
 pub fn pileup_variants<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
+    reference: bio::io::fasta::IndexedReader<File>,
     print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     depth_threshold: usize,
