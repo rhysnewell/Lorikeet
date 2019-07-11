@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::collections::BTreeMap;
 use std::cmp::min;
+use rm::linalg::Matrix;
 
 pub enum PileupStats {
     PileupContigStats {

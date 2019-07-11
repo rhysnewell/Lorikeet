@@ -14,6 +14,7 @@ exclude = [ # Max upload is 10MB, as of writing test data was 15MB
 ]
 
 [dependencies]
+rusty-machine = "0.5.4"
 bio = "0.25.*"
 rust-htslib = "0.22.*"
 clap = "2.*"

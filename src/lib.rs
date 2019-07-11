@@ -17,7 +17,7 @@ pub mod genome_exclusion;
 extern crate bio;
 #[macro_use]
 extern crate log;
-
+extern crate rusty_machine as rm;
 extern crate rust_htslib;
 extern crate env_logger;
 extern crate nix;

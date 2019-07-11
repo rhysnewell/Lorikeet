@@ -4,15 +4,14 @@ use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
 use pileup_structs::*;
-
 use mosdepth_genome_coverage_estimators::*;
-use pileup_structs::*;
 use bam_generator::*;
 use coverage_takers::*;
 use FlagFilter;
 use ReadsMapped;
 use std::str;
-use pileup_structs::PileupStats::PileupContigStats;
+use rm::linalg::Matrix;
+use rm::linalg::Vector;
 
 
 pub fn pileup_variants<R: NamedBamReader,
