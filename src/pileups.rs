@@ -32,7 +32,7 @@ pub fn pileup_variants<R: NamedBamReader,
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
             let bam_pileups = bam_generated.pileups();
-            let mut tet_freq = Vec::new();
+            let mut nuc_freq = Vec::new();
             let mut depth = Vec::new();
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
@@ -44,7 +44,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth,
-                                                tet_freq,
+                                                nuc_freq,
                                                 total_indels_in_current_contig| {
                 if last_tid != -2 {
 //                    println!("tid {} and {} indels", last_tid,
@@ -57,7 +57,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                                           max,
                                                                           min_fraction_covered_bases,
                                                                           contig_end_exclusion);
-                    pileup_struct.add_contig(tet_freq,
+                    pileup_struct.add_contig(nuc_freq,
                                        depth,
                                        last_tid,
                                        total_indels_in_current_contig,
@@ -82,9 +82,9 @@ pub fn pileup_variants<R: NamedBamReader,
                     process_previous_contigs(
                         last_tid,
                         depth,
-                        tet_freq,
+                        nuc_freq,
                         total_indels_in_current_contig);
-                    tet_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
                     debug!("Working on new reference {}",
@@ -100,11 +100,11 @@ pub fn pileup_variants<R: NamedBamReader,
                     if !alignment.is_del() && !alignment.is_refskip() {
 
                         base = alignment.record().seq()[alignment.qpos().unwrap()] as char;
-                        let count = tet_freq[pileup.pos() as usize].entry(base)
+                        let count = nuc_freq[pileup.pos() as usize].entry(base)
                             .or_insert(0);
                         *count += 1;
                     } else {
-                        let count = tet_freq[pileup.pos() as usize]
+                        let count = nuc_freq[pileup.pos() as usize]
                             .entry('N' as char).or_insert(0);
                         *count += 1
                     }
@@ -117,11 +117,11 @@ pub fn pileup_variants<R: NamedBamReader,
                     }
                 }
             }
-//        print!("{:?}", tet_freq);
+//        print!("{:?}", nuc_freq);
             process_previous_contigs(
                 last_tid,
                 depth,
-                tet_freq,
+                nuc_freq,
                 total_indels_in_current_contig);
         }
         bam_generated.finish();
