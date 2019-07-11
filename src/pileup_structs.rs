@@ -4,7 +4,7 @@ use std::cmp::min;
 
 pub enum PileupStats {
     PileupContigStats {
-        tetfrequency: Vec<HashMap<char, usize>>,
+        nucfrequency: Vec<HashMap<char, usize>>,
         depth: Vec<usize>,
         tid: i32,
         total_indels: usize,
@@ -23,7 +23,7 @@ impl PileupStats {
     pub fn new_contig_stats(min: f32, max: f32, min_fraction_covered_bases: f32,
                             contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
-            tetfrequency: vec!(),
+            nucfrequency: vec!(),
             depth: vec!(),
             tid: 0,
             total_indels: 0,
@@ -43,7 +43,7 @@ pub trait PileupFunctions {
     fn setup(&mut self);
 
     fn add_contig(&mut self,
-                  tet_freq: Vec<HashMap<char, usize>>,
+                  nuc_freq: Vec<HashMap<char, usize>>,
                   depth: Vec<usize>,
                   tid: i32,
                   total_indels_in_contig: usize,
@@ -62,7 +62,7 @@ impl PileupFunctions for PileupStats {
     fn setup(&mut self) {
         match self {
             PileupStats::PileupContigStats {
-                ref mut tetfrequency,
+                ref mut nucfrequency,
                 ref mut depth,
                 ref mut tid,
                 ref mut total_indels,
@@ -71,7 +71,7 @@ impl PileupFunctions for PileupStats {
                 ref mut num_covered_bases,
                 ..
             } => {
-                *tetfrequency = vec!();
+                *nucfrequency = vec!();
                 *depth = vec!();
                 *tid = 0;
                 *total_indels = 0;
@@ -82,7 +82,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn add_contig(&mut self, tet_freq: Vec<HashMap<char, usize>>,
+    fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, usize>>,
                   read_depth: Vec<usize>,
                   target_id: i32,
                   total_indels_in_contig: usize,
@@ -90,7 +90,7 @@ impl PileupFunctions for PileupStats {
                   contig_len: usize) {
         match self {
             PileupStats::PileupContigStats {
-                ref mut tetfrequency,
+                ref mut nucfrequency,
                 ref mut depth,
                 ref mut tid,
                 ref mut total_indels,
@@ -98,7 +98,7 @@ impl PileupFunctions for PileupStats {
                 ref mut target_len,
                 ..
             } => {
-                *tetfrequency = tet_freq;
+                *nucfrequency = nuc_freq;
                 *depth = read_depth;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
@@ -112,7 +112,7 @@ impl PileupFunctions for PileupStats {
     fn calc_variants(&mut self, coverage: f32, depth_thresh: usize, variant_fraction: f64){
         match self {
             PileupStats::PileupContigStats {
-                ref mut tetfrequency,
+                ref mut nucfrequency,
                 ref mut depth,
                 tid,
                 total_indels,
@@ -124,13 +124,13 @@ impl PileupFunctions for PileupStats {
                 let mut variant_count = 0;
                 let mut cursor = 0;
                 let mut depth_sum = 0;
-                for zipped in tetfrequency.iter().zip(depth.iter()){
-                    let (tetfreq, d) = zipped;
+                for zipped in nucfrequency.iter().zip(depth.iter()){
+                    let (nucfreq, d) = zipped;
                     let mut rel_abundance = HashMap::new();
                     if d >= &depth_thresh {
-                        if tetfreq.len() > 1 {
+                        if nucfreq.len() > 1 {
                             variant_count += 1;
-                            for (base, count) in tetfreq.iter() {
+                            for (base, count) in nucfreq.iter() {
                                 if *count as f64 / *d as f64 >= variant_fraction {
                                     rel_abundance.insert(base, count / d);
                                 }
@@ -161,7 +161,7 @@ impl PileupFunctions for PileupStats {
     fn calc_coverage(&mut self) -> f32 {
         match self {
             PileupStats::PileupContigStats {
-                tetfrequency,
+                nucfrequency,
                 ref mut depth,
                 tid,
                 total_indels,
