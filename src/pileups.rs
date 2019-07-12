@@ -35,7 +35,7 @@ pub fn pileup_variants<R: NamedBamReader,
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
 
-//        let mut pileup_per_contig = Vec::new();
+        let mut pileup_matrix = PileupMatrix::new_contig_stats();
         {
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
@@ -69,7 +69,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     for (tet, loc) in kmers.iter(){
                         tet_freq.entry(tet.to_vec()).or_insert(loc.len());
                     }
-                    println!("{:?}", tet_freq);
+//                    println!("{:?}", tet_freq);
 
 
                     let mut pileup_struct = PileupStats::new_contig_stats(min,
@@ -86,9 +86,10 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     let coverage = pileup_struct.calc_coverage();
 
-                    pileup_struct.calc_variants(coverage,
-                                                depth_threshold,
+                    pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
+                    pileup_matrix.add_contig(pileup_struct,
+                                             target_names.len() as usize)
                 }
             };
 
@@ -144,6 +145,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 nuc_freq,
                 total_indels_in_current_contig);
         }
+        pileup_matrix.print_matrix();
         bam_generated.finish();
     }
 }
