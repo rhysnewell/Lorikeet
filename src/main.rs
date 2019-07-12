@@ -16,13 +16,17 @@ use strainm::genome_exclusion::*;
 extern crate rust_htslib;
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
-use rust::bio::io::fasta::*;
+
+extern crate bio;
+use bio::io::fasta::*;
 
 use std::env;
 use std::str;
 use std::process;
 use std::collections::HashSet;
 use std::path::Path;
+use std::fs::File;
+use std::io::prelude::*;
 
 extern crate clap;
 use clap::*;
@@ -722,7 +726,8 @@ fn main(){
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
-            let mut fasta_reader = bio::io::fasta::IndexedReader::from_file(reference_path).unwrap();
+//            let index_path = reference_path.clone().to_owned() + ".fai";
+            let mut fasta_reader = bio::io::fasta::IndexedReader::from_file(&reference_path).unwrap();
 
 
             let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
@@ -738,10 +743,6 @@ fn main(){
                 panic!("error: Trim bounds must be between 0 and 1, and \
                                     min must be less than max, found {} and {}", min, max);
             }
-//            PileupStats::new_contig_stats(min,
-//                                                     max,
-//                                                     min_fraction_covered,
-//                                                     contig_end_exclusion);
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -1545,7 +1546,7 @@ fn run_pileup<'a,
     R: strainm::bam_generator::NamedBamReader,
     T: strainm::bam_generator::NamedBamReaderGenerator<R>>(
     bam_readers: Vec<T>,
-    reference: bio::io::fasta::IndexedReader<std::fs::File>,
+    reference: bio::io::fasta::IndexedReader<File>,
     print_zeros: bool,
     flag_filters: FlagFilter,
     variant_fraction: f64,
@@ -2289,9 +2290,7 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
-                    .multiple(true)
-                    .required_unless_one(&["bam-files","full-help"])
-                    .conflicts_with("bam-files"))
+                    .required(true))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .takes_value(true)

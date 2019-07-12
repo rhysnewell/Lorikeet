@@ -6,6 +6,7 @@ use rm::linalg::Matrix;
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, usize>>,
+        kfrequency: BTreeMap<Vec<u8>, usize>,
         depth: Vec<usize>,
         tid: i32,
         total_indels: usize,
@@ -25,6 +26,7 @@ impl PileupStats {
                             contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: vec!(),
+            kfrequency: BTreeMap::new(),
             depth: vec!(),
             tid: 0,
             total_indels: 0,
@@ -45,6 +47,7 @@ pub trait PileupFunctions {
 
     fn add_contig(&mut self,
                   nuc_freq: Vec<HashMap<char, usize>>,
+                  k_freq: BTreeMap<Vec<u8>, usize>,
                   depth: Vec<usize>,
                   tid: i32,
                   total_indels_in_contig: usize,
@@ -64,6 +67,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
+                ref mut kfrequency,
                 ref mut depth,
                 ref mut tid,
                 ref mut total_indels,
@@ -73,6 +77,7 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 *nucfrequency = vec!();
+                *kfrequency = BTreeMap::new();
                 *depth = vec!();
                 *tid = 0;
                 *total_indels = 0;
@@ -84,6 +89,7 @@ impl PileupFunctions for PileupStats {
     }
 
     fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, usize>>,
+                  k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
                   target_id: i32,
                   total_indels_in_contig: usize,
@@ -92,6 +98,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
+                ref mut kfrequency,
                 ref mut depth,
                 ref mut tid,
                 ref mut total_indels,
@@ -100,6 +107,7 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 *nucfrequency = nuc_freq;
+                *kfrequency = k_freq;
                 *depth = read_depth;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
@@ -114,6 +122,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
+                kfrequency,
                 ref mut depth,
                 tid,
                 total_indels,
@@ -163,6 +172,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 nucfrequency,
+                kfrequency,
                 ref mut depth,
                 tid,
                 total_indels,
@@ -270,6 +280,74 @@ impl PileupFunctions for PileupStats {
                     }
                 };
                 return answer
+            }
+        }
+    }
+}
+
+pub enum PileupMatrix {
+    PileupContigMatrix {
+        variants: Vec<f32>,
+        kfrequency: BTreeMap<Vec<u8>, Vec<usize>>,
+        coverage: Vec<usize>,
+        tid: Vec<i32>,
+        total_indels: Vec<usize>,
+        target_names: Vec<Vec<u8>>,
+    }
+}
+
+impl PileupMatrix {
+    pub fn new_contig_stats() -> PileupMatrix {
+        PileupMatrix::PileupContigMatrix {
+            variants: vec!(),
+            kfrequency: BTreeMap::new(),
+            coverage: vec!(),
+            tid: vec!(),
+            total_indels: vec!(),
+            target_names: vec!(),
+        }
+    }
+}
+
+pub trait PileupMatrixFunctions {
+
+    fn add_contig(&mut self,
+                  nuc_freq: Vec<HashMap<char, usize>>,
+                  k_freq: BTreeMap<Vec<u8>, usize>,
+                  cov: Vec<f32>,
+                  tid: i32,
+                  total_indels_in_contig: usize,
+                  contig_name: Vec<u8>);
+
+}
+
+impl PileupMatrixFunctions for PileupMatrix{
+    fn add_contig(&mut self, var: f32,
+                  k_freq: BTreeMap<Vec<u8>, usize>,
+                  cov: f32,
+                  target_id: i32,
+                  total_indels_in_contig: usize,
+                  contig_name: Vec<u8>) {
+        match self {
+            PileupStats::PileupContigStats {
+                ref mut variants,
+                ref mut kfrequency,
+                ref mut coverage,
+                ref mut tid,
+                ref mut total_indels,
+                ref mut target_names,
+            } => {
+                *variants.push(var);
+                for (tet, count) in k_freq.iter(){
+
+                }
+                *kfrequency = k_freq;
+                *depth = read_depth;
+                *tid = target_id;
+                *total_indels = total_indels_in_contig;
+                *target_name = contig_name;
+                *target_len = contig_len;
+
             }
         }
     }

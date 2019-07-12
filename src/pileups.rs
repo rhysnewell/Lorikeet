@@ -1,5 +1,6 @@
 use std;
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
@@ -13,12 +14,16 @@ use std::str;
 use rm::linalg::Matrix;
 use rm::linalg::Vector;
 use std::fs::File;
+use bio::io::fasta::*;
+use bio::alignment::sparse::*;
+use std::io::prelude::*;
+
 
 
 pub fn pileup_variants<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
-    reference: bio::io::fasta::IndexedReader<File>,
+    mut reference: bio::io::fasta::IndexedReader<File>,
     print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     depth_threshold: usize,
@@ -29,6 +34,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
     for mut bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
+
 //        let mut pileup_per_contig = Vec::new();
         {
             let header = bam_generated.header().clone();
@@ -55,11 +61,23 @@ pub fn pileup_variants<R: NamedBamReader,
 //                    println!("{} depth {:?}", std::str::from_utf8(target_names[last_tid as usize]).unwrap(), depth);
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
                     let contig_name = target_names[last_tid as usize].to_vec();
+                    reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap());
+                    let mut seq: Vec<u8> = Vec::new();
+                    reference.read(&mut seq);
+                    let kmers = hash_kmers(&seq, 4);
+                    let mut tet_freq = BTreeMap::new();
+                    for (tet, loc) in kmers.iter(){
+                        tet_freq.entry(tet.to_vec()).or_insert(loc.len());
+                    }
+                    println!("{:?}", tet_freq);
+
+
                     let mut pileup_struct = PileupStats::new_contig_stats(min,
                                                                           max,
                                                                           min_fraction_covered_bases,
                                                                           contig_end_exclusion);
                     pileup_struct.add_contig(nuc_freq,
+                                       tet_freq,
                                        depth,
                                        last_tid,
                                        total_indels_in_current_contig,
