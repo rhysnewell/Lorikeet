@@ -5,8 +5,9 @@ use rm::linalg::Matrix;
 
 pub enum PileupStats {
     PileupContigStats {
-        nucfrequency: Vec<HashMap<char, usize>>,
+        nucfrequency: Vec<HashMap<char, Vec<Vec<u8>>>>,
         kfrequency: BTreeMap<Vec<u8>, usize>,
+        variants_in_reads: HashMap<Vec<u8>, Vec<i32>>,
         depth: Vec<usize>,
         tid: i32,
         total_indels: usize,
@@ -29,6 +30,7 @@ impl PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: vec!(),
             kfrequency: BTreeMap::new(),
+            variants_in_reads: HashMap::new(),
             depth: vec!(),
             tid: 0,
             total_indels: 0,
@@ -50,7 +52,7 @@ pub trait PileupFunctions {
     fn setup(&mut self);
 
     fn add_contig(&mut self,
-                  nuc_freq: Vec<HashMap<char, usize>>,
+                  nuc_freq: Vec<HashMap<char, Vec<Vec<u8>>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   depth: Vec<usize>,
                   tid: i32,
@@ -71,6 +73,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
                 ref mut kfrequency,
+                ref mut variants_in_reads,
                 ref mut depth,
                 ref mut tid,
                 ref mut total_indels,
@@ -83,6 +86,7 @@ impl PileupFunctions for PileupStats {
             } => {
                 *nucfrequency = vec!();
                 *kfrequency = BTreeMap::new();
+                *variants_in_reads = HashMap::new();
                 *depth = vec!();
                 *tid = 0;
                 *total_indels = 0;
@@ -95,7 +99,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, usize>>,
+    fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, Vec<Vec<u8>>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
                   target_id: i32,
@@ -130,6 +134,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
                 kfrequency,
+                ref mut variants_in_reads,
                 ref mut depth,
                 tid,
                 total_indels,
@@ -139,19 +144,27 @@ impl PileupFunctions for PileupStats {
                 ref mut coverage,
                 ..
             } => {
-                let mut variants = BTreeMap::new();
+                let mut variants = BTreeMap::new(); // The relative abundance of each variant
+                let mut read_variants = HashMap::new(); // The reads with variants and their positions
                 let mut variant_count = 0;
                 let mut cursor = 0;
                 let mut depth_sum = 0;
+
                 for zipped in nucfrequency.iter().zip(depth.iter()){
                     let (nucfreq, d) = zipped;
                     let mut rel_abundance = HashMap::new();
                     if d >= &depth_thresh {
                         if nucfreq.len() > 1 {
                             variant_count += 1;
-                            for (base, count) in nucfreq.iter() {
-                                if *count as f64 / *d as f64 >= variant_fraction {
+                            for (base, read_ids) in nucfreq.iter() {
+                                let count = read_ids.len();
+                                if count as f64 / *d as f64 >= variant_fraction {
                                     rel_abundance.insert(base, count / d);
+                                    for read in read_ids {
+                                        let mut read_vec = read_variants.entry(read.clone())
+                                            .or_insert(vec!());
+                                        read_vec.push(cursor as i32);
+                                    }
                                 }
                             }
                         }
@@ -164,6 +177,9 @@ impl PileupFunctions for PileupStats {
                     cursor += 1;
                     depth_sum += d;
                 }
+
+                debug!("read variants {:?}", read_variants);
+                *variants_in_reads = read_variants;
 
                 *variations_per_base = variant_count as f32/target_len.clone() as f32;
 //                debug!("Depth Sum: {}\t Contig Length: {}", depth_sum, target_len);
@@ -194,6 +210,7 @@ impl PileupFunctions for PileupStats {
                 min_fraction_covered_bases,
                 min,
                 max,
+                ..
 
             } => {
                 let len1 = target_len;

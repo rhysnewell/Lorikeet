@@ -122,12 +122,13 @@ pub fn pileup_variants<R: NamedBamReader,
 
                         base = alignment.record().seq()[alignment.qpos().unwrap()] as char;
                         let count = nuc_freq[pileup.pos() as usize].entry(base)
-                            .or_insert(0);
-                        *count += 1;
+                            .or_insert(vec!());
+                        count.push(alignment.record().qname().to_vec());
+
                     } else {
                         let count = nuc_freq[pileup.pos() as usize]
-                            .entry('N' as char).or_insert(0);
-                        *count += 1
+                            .entry('N' as char).or_insert(vec!());
+                        count.push(alignment.record().qname().to_vec());
                     }
                     // mark indel start
                     match alignment.indel() {
