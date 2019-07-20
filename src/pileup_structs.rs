@@ -3,6 +3,15 @@ use std::collections::BTreeMap;
 use std::cmp::min;
 use rm::linalg::Matrix;
 
+pub struct Indel {
+    pub insertion: bool,
+    pub len: u32,
+    pub start: usize,
+    pub end: usize,
+    pub cursor: usize,
+}
+
+
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, Vec<i32>>>,
@@ -10,6 +19,7 @@ pub enum PileupStats {
         variants_in_reads: HashMap<i32, Vec<i32>>,
         variant_abundances: BTreeMap<i32, HashMap<char, usize>>,
         depth: Vec<usize>,
+        indels: Vec<HashMap<char, Vec<i32>>>,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
@@ -34,6 +44,7 @@ impl PileupStats {
             variants_in_reads: HashMap::new(),
             variant_abundances: BTreeMap::new(),
             depth: vec!(),
+            indels: vec!(),
             tid: 0,
             total_indels: 0,
             target_name: vec!(),
@@ -56,7 +67,8 @@ pub trait PileupFunctions {
     fn add_contig(&mut self,
                   nuc_freq: Vec<HashMap<char, Vec<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
-                  depth: Vec<usize>,
+                  read_depth: Vec<usize>,
+                  indels_positions: Vec<HashMap<char, Vec<i32>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -81,6 +93,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variants_in_reads,
                 ref mut variant_abundances,
                 ref mut depth,
+                ref mut indels,
                 ref mut tid,
                 ref mut total_indels,
                 ref mut target_name,
@@ -95,6 +108,7 @@ impl PileupFunctions for PileupStats {
                 *variants_in_reads = HashMap::new();
                 *variant_abundances = BTreeMap::new();
                 *depth = vec!();
+                *indels = vec!();
                 *tid = 0;
                 *total_indels = 0;
                 *target_name = vec!();
@@ -109,6 +123,7 @@ impl PileupFunctions for PileupStats {
     fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, Vec<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
+                  indel_positions: Vec<HashMap<char, Vec<i32>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -118,6 +133,7 @@ impl PileupFunctions for PileupStats {
                 ref mut nucfrequency,
                 ref mut kfrequency,
                 ref mut depth,
+                ref mut indels,
                 ref mut tid,
                 ref mut total_indels,
                 ref mut target_name,
@@ -127,6 +143,7 @@ impl PileupFunctions for PileupStats {
                 *nucfrequency = nuc_freq;
                 *kfrequency = k_freq;
                 *depth = read_depth;
+                *indels = indel_positions;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
@@ -197,14 +214,9 @@ impl PileupFunctions for PileupStats {
     fn generate_variant_contig(&mut self, original_contig: Vec<u8>){
         match self {
             PileupStats::PileupContigStats {
-                ref mut nucfrequency,
-                kfrequency,
                 ref mut variants_in_reads,
                 ref mut depth,
-                tid,
-                total_indels,
-                target_name,
-                target_len,
+
                 ref mut variations_per_base,
                 ref mut coverage,
                 ..

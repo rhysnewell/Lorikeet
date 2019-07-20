@@ -40,15 +40,20 @@ pub fn pileup_variants<R: NamedBamReader,
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
             let bam_pileups = bam_generated.pileups();
+            let mut record: bam::record::Record = bam::record::Record::new();
             let mut ref_seq: Vec<u8> = Vec::new();
             let mut nuc_freq = Vec::new();
+            let mut indels = Vec::new();
             let mut tet_freq = BTreeMap::new();
             let mut depth = Vec::new();
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
             let mut read_cnt_id = 0;
             let mut read_to_id = HashMap::new();
+            let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
             let mut base;
+            let mut insert;
+            let mut del;
 //            let mut pileup_struct = PileupStats::new_contig_stats(min,
 //                                                     max,
 //                                                     min_fraction_covered_bases,
@@ -58,6 +63,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                 depth,
                                                 nuc_freq,
                                                 tet_freq,
+                                                indels,
                                                 total_indels_in_current_contig| {
                 if last_tid != -2 {
 //                    println!("tid {} and {} indels", last_tid,
@@ -77,6 +83,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     pileup_struct.add_contig(nuc_freq,
                                        tet_freq,
                                        depth,
+                                       indels,
                                        last_tid,
                                        total_indels_in_current_contig,
                                        contig_name,
@@ -102,10 +109,13 @@ pub fn pileup_variants<R: NamedBamReader,
                         depth,
                         nuc_freq,
                         tet_freq,
+                        indels,
                         total_indels_in_current_contig);
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
+                    indel_start_sites = HashMap::new();
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
                     last_tid = tid;
@@ -123,43 +133,75 @@ pub fn pileup_variants<R: NamedBamReader,
                 }
 
                 for alignment in pileup.alignments() {
+                    // Check if new read to id
+                    if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
+                        read_to_id.entry(alignment.record().qname().to_vec())
+                            .or_insert(read_cnt_id);
+                        read_cnt_id += 1;
+                    }
 
                     if !alignment.is_del() && !alignment.is_refskip() {
 
                         base = alignment.record().seq()[alignment.qpos().unwrap()] as char;
                         if base != ref_seq[pileup.pos() as usize] as char {
-                            if read_to_id.contains_key(&alignment.record().qname().to_vec()) {
-                                let count = nuc_freq[pileup.pos() as usize].entry(base)
-                                                                           .or_insert(vec!());
-                                count.push(read_to_id[&alignment.record().qname().to_vec()]);
-                            } else {
-                                read_to_id.entry(alignment.record().qname().to_vec())
-                                    .or_insert(read_cnt_id);
-                                read_cnt_id += 1;
-                                let count = nuc_freq[pileup.pos() as usize].entry(base)
-                                                                           .or_insert(vec!());
-                                count.push(read_to_id[&alignment.record().qname().to_vec()]);
+
+                            let id = nuc_freq[pileup.pos() as usize].entry(base)
+                                                                       .or_insert(vec!());
+                            id.push(read_to_id[&alignment.record().qname().to_vec()]);
+
+                        }
+
+                    } else if indel_start_sites
+                        .contains_key(&read_to_id[&alignment.record().qname().to_vec()]) {
+                        let mut indel_vec = indel_start_sites.entry(read_to_id[
+                            &alignment.record().qname().to_vec()]).or_insert(vec!());
+                        for indel_struct in indel_vec {
+                            if indel_struct.insertion {
+                                insert = alignment.record().seq()[indel_struct.cursor] as char;
+                                indel_struct.cursor += 1;
+
+//                                debug!("Insert: {} at {}", insert, pileup.pos());
+                                let id = indels[pileup.pos() as usize].entry(insert)
+                                    .or_insert(vec!());
+                                id.push(read_to_id[&alignment.record().qname().to_vec()]);
+                            } else{
+                                del = 'N' as char;
+//                                debug!("Del: {} at {}", del, pileup.pos());
+
+                                let id = indels[pileup.pos() as usize]
+                                    .entry(del).or_insert(vec!());
+                                id.push(read_to_id[&alignment.record().qname().to_vec()]);
                             }
                         }
 
-                    } else {
-                        if read_to_id.contains_key(&alignment.record().qname().to_vec()) {
-                            let count = nuc_freq[pileup.pos() as usize]
-                                .entry('N' as char).or_insert(vec!());
-                            count.push(read_to_id[&alignment.record().qname().to_vec()]);
-                        } else {
-                            read_to_id.entry(alignment.record().qname().to_vec())
-                                      .or_insert(read_cnt_id);
-                            read_cnt_id += 1;
-                            let count = nuc_freq[pileup.pos() as usize]
-                                .entry('N' as char).or_insert(vec!());
-                            count.push(read_to_id[&alignment.record().qname().to_vec()]);
-                        }
                     }
                     // mark indel start
+                    debug!("{:?}", alignment.record().cigar());
                     match alignment.indel() {
-                        bam::pileup::Indel::Ins(len) | bam::pileup::Indel::Del(len) => {
+                        bam::pileup::Indel::Ins(len) => {
+                            let indel_vec = indel_start_sites.entry(
+                                read_to_id[&alignment.record().qname().to_vec()]).or_insert(
+                                vec!());
+                            indel_vec.push(Indel{
+                                insertion: true,
+                                len: len,
+                                start: alignment.qpos().unwrap() + 1,
+                                end: alignment.qpos().unwrap() + 1 + len as usize,
+                                cursor: alignment.qpos().unwrap() + 1,});
                             total_indels_in_current_contig += 1;
+                        },
+                        bam::pileup::Indel::Del(len) => {
+                            let indel_vec = indel_start_sites.entry(
+                                read_to_id[&alignment.record().qname().to_vec()]).or_insert(
+                                vec!());
+                            indel_vec.push(Indel{
+                                insertion: false,
+                                len: len,
+                                start: alignment.qpos().unwrap() + 1,
+                                end: alignment.qpos().unwrap() + 1 + len as usize,
+                                cursor: alignment.qpos().unwrap() + 1,});
+                            total_indels_in_current_contig += 1;
+
                         },
                         bam::pileup::Indel::None => ()
                     }
@@ -171,6 +213,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 depth,
                 nuc_freq,
                 tet_freq,
+                indels,
                 total_indels_in_current_contig);
         }
         pileup_matrix.print_matrix();

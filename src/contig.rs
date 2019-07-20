@@ -27,7 +27,6 @@ pub fn contig_coverage<R: NamedBamReader,
         let mut record: bam::record::Record = bam::record::Record::new();
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut ups_and_downs: Vec<i32> = Vec::new();
-        let mut pileups: Vec<HashMap<&str, i32>> = Vec::new();
         let header = bam_generated.header().clone();
         let target_names = header.target_names();
 
@@ -35,7 +34,6 @@ pub fn contig_coverage<R: NamedBamReader,
         let mut num_mapped_reads_in_current_contig: u64 = 0;
         let mut total_indels_in_current_contig: u32 = 0;
         let mut total_edit_distance_in_current_contig: u32 = 0;
-        let mut pileup_counts = 0;
         let mut process_previous_contigs = |last_tid, tid,
         coverage_estimators: &mut Vec<CoverageEstimator>,
         ups_and_downs,
@@ -113,7 +111,6 @@ pub fn contig_coverage<R: NamedBamReader,
                         total_indels_in_current_contig,
                         &mut num_mapped_reads_total);
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-                    pileups = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
                     last_tid = tid;
