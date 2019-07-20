@@ -2,13 +2,17 @@ use std::collections::HashMap;
 use std::collections::BTreeMap;
 use std::cmp::min;
 use rm::linalg::Matrix;
+use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 pub struct Indel {
     pub insertion: bool,
+    pub seen: bool,
     pub len: u32,
     pub start: usize,
     pub end: usize,
     pub cursor: usize,
+    pub seq: String,
+    pub cigar: CigarStringView,
 }
 
 
@@ -19,7 +23,7 @@ pub enum PileupStats {
         variants_in_reads: HashMap<i32, Vec<i32>>,
         variant_abundances: BTreeMap<i32, HashMap<char, usize>>,
         depth: Vec<usize>,
-        indels: Vec<HashMap<char, Vec<i32>>>,
+        indels: Vec<HashMap<String, Vec<i32>>>,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
@@ -68,7 +72,7 @@ pub trait PileupFunctions {
                   nuc_freq: Vec<HashMap<char, Vec<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
-                  indels_positions: Vec<HashMap<char, Vec<i32>>>,
+                  indels_positions: Vec<HashMap<String, Vec<i32>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -123,7 +127,7 @@ impl PileupFunctions for PileupStats {
     fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, Vec<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
-                  indel_positions: Vec<HashMap<char, Vec<i32>>>,
+                  indel_positions: Vec<HashMap<String, Vec<i32>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,

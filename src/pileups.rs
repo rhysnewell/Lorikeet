@@ -40,7 +40,7 @@ pub fn pileup_variants<R: NamedBamReader,
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
             let bam_pileups = bam_generated.pileups();
-            let mut record: bam::record::Record = bam::record::Record::new();
+//            let mut record: bam::record::Record = bam::record::Record::new();
             let mut ref_seq: Vec<u8> = Vec::new();
             let mut nuc_freq = Vec::new();
             let mut indels = Vec::new();
@@ -52,8 +52,6 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut read_to_id = HashMap::new();
             let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
             let mut base;
-            let mut insert;
-            let mut del;
 //            let mut pileup_struct = PileupStats::new_contig_stats(min,
 //                                                     max,
 //                                                     min_fraction_covered_bases,
@@ -156,50 +154,55 @@ pub fn pileup_variants<R: NamedBamReader,
                         let mut indel_vec = indel_start_sites.entry(read_to_id[
                             &alignment.record().qname().to_vec()]).or_insert(vec!());
                         for indel_struct in indel_vec {
-                            if indel_struct.insertion {
-                                insert = alignment.record().seq()[indel_struct.cursor] as char;
-                                indel_struct.cursor += 1;
+                            if !indel_struct.seen {
+//                                insert = alignment.record().seq()[indel_struct.cursor] as char;
+//                                indel_struct.cursor += 1;
 
-//                                debug!("Insert: {} at {}", insert, pileup.pos());
-                                let id = indels[pileup.pos() as usize].entry(insert)
+                                debug!("Indel: {} at {}", indel_struct.seq, pileup.pos());
+                                let id = indels[pileup.pos() as usize].entry(indel_struct.seq.clone())
                                     .or_insert(vec!());
                                 id.push(read_to_id[&alignment.record().qname().to_vec()]);
-                            } else{
-                                del = 'N' as char;
-//                                debug!("Del: {} at {}", del, pileup.pos());
-
-                                let id = indels[pileup.pos() as usize]
-                                    .entry(del).or_insert(vec!());
-                                id.push(read_to_id[&alignment.record().qname().to_vec()]);
+                                indel_struct.seen = true;
                             }
                         }
 
                     }
                     // mark indel start
-                    debug!("{:?}", alignment.record().cigar());
+//                    debug!("{:?}", alignment.record().cigar());
                     match alignment.indel() {
                         bam::pileup::Indel::Ins(len) => {
+//                            debug!("Ins len: {} cigar: {:?} id: {}", len, alignment.record().cigar(), read_to_id[&alignment.record().qname().to_vec()]);
+
                             let indel_vec = indel_start_sites.entry(
                                 read_to_id[&alignment.record().qname().to_vec()]).or_insert(
                                 vec!());
+
                             indel_vec.push(Indel{
                                 insertion: true,
+                                seen: false,
                                 len: len,
                                 start: alignment.qpos().unwrap() + 1,
                                 end: alignment.qpos().unwrap() + 1 + len as usize,
-                                cursor: alignment.qpos().unwrap() + 1,});
+                                cursor: alignment.qpos().unwrap() + 1,
+                                seq: str::from_utf8(&alignment.record().seq().as_bytes()[
+                                    alignment.qpos().unwrap() + 1..alignment.qpos().unwrap() + 1 + len as usize]).unwrap().to_string(),
+                                cigar: alignment.record().cigar(),});
                             total_indels_in_current_contig += 1;
                         },
                         bam::pileup::Indel::Del(len) => {
+//                            debug!("Del len: {} cigar: {:?} id: {}", len, alignment.record().cigar(), read_to_id[&alignment.record().qname().to_vec()]);
                             let indel_vec = indel_start_sites.entry(
                                 read_to_id[&alignment.record().qname().to_vec()]).or_insert(
                                 vec!());
                             indel_vec.push(Indel{
                                 insertion: false,
+                                seen: false,
                                 len: len,
                                 start: alignment.qpos().unwrap() + 1,
                                 end: alignment.qpos().unwrap() + 1 + len as usize,
-                                cursor: alignment.qpos().unwrap() + 1,});
+                                cursor: alignment.qpos().unwrap() + 1,
+                                seq: std::iter::repeat("N").take(len as usize).collect::<String>(),
+                                cigar: alignment.record().cigar(),});
                             total_indels_in_current_contig += 1;
 
                         },
