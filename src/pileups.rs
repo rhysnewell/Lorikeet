@@ -1,5 +1,5 @@
 use std;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::collections::BTreeMap;
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
@@ -144,8 +144,8 @@ pub fn pileup_variants<R: NamedBamReader,
                         base = alignment.record().seq()[alignment.qpos().unwrap()] as char;
                         if base != ref_seq[pileup.pos() as usize] as char {
                             let id = nuc_freq[pileup.pos() as usize].entry(base)
-                                .or_insert(vec!());
-                            id.push(read_to_id[&alignment.record().qname().to_vec()]);
+                                .or_insert(HashSet::new());
+                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
                         }
                     }
                     // mark indel start
@@ -157,8 +157,8 @@ pub fn pileup_variants<R: NamedBamReader,
                                 alignment.qpos().unwrap()+1..alignment.qpos().unwrap() + 1 + len as usize]).unwrap().to_string(), pileup.pos());
                             let id = indels[pileup.pos() as usize].entry(str::from_utf8(&alignment.record().seq().as_bytes()[
                                 alignment.qpos().unwrap()+1..alignment.qpos().unwrap() + 1 + len as usize]).unwrap().to_string())
-                                .or_insert(vec!());
-                            id.push(read_to_id[&alignment.record().qname().to_vec()]);
+                                .or_insert(HashSet::new());
+                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
                             total_indels_in_current_contig += 1;
                         },
 
@@ -170,8 +170,8 @@ pub fn pileup_variants<R: NamedBamReader,
                                    pileup.pos());
                             let id = indels[pileup.pos() as usize].entry(
                                 std::iter::repeat("N").take(len as usize).collect::<String>())
-                                .or_insert(vec!());
-                            id.push(read_to_id[&alignment.record().qname().to_vec()]);
+                                .or_insert(HashSet::new());
+                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
                             total_indels_in_current_contig += 1;
                         },
 

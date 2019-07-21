@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::collections::BTreeMap;
 use std::cmp::min;
 use rm::linalg::Matrix;
@@ -6,21 +6,22 @@ use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
 pub struct VariantBase {
-    read_ids: Vec<i32>,
-    connected_bases: Vec<i32>,
+    read_ids: HashSet<i32>,
+    connected_bases: HashSet<i32>,
     indel: bool,
     pos: usize,
     seq: String,
+    abundance: f32,
 }
 
 pub enum PileupStats {
     PileupContigStats {
-        nucfrequency: Vec<HashMap<char, Vec<i32>>>,
+        nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         kfrequency: BTreeMap<Vec<u8>, usize>,
-        variants_in_reads: HashMap<i32, Vec<i32>>,
+        variants_in_reads: HashMap<i32, HashSet<i32>>,
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
-        indels: Vec<HashMap<String, Vec<i32>>>,
+        indels: Vec<HashMap<String, HashSet<i32>>>,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
@@ -66,10 +67,10 @@ pub trait PileupFunctions {
     fn setup(&mut self);
 
     fn add_contig(&mut self,
-                  nuc_freq: Vec<HashMap<char, Vec<i32>>>,
+                  nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
-                  indels_positions: Vec<HashMap<String, Vec<i32>>>,
+                  indels_positions: Vec<HashMap<String, HashSet<i32>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -123,10 +124,10 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, Vec<i32>>>,
+    fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
                   k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
-                  indel_positions: Vec<HashMap<String, Vec<i32>>>,
+                  indel_positions: Vec<HashMap<String, HashSet<i32>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -191,8 +192,8 @@ impl PileupFunctions for PileupStats {
                                     for read in read_ids {
                                         let mut read_vec = read_variants
                                             .entry(read.clone())
-                                            .or_insert(vec!());
-                                        read_vec.push(cursor as i32);
+                                            .or_insert(HashSet::new());
+                                        read_vec.insert(cursor as i32);
                                     }
                                 }
                             }
@@ -206,8 +207,8 @@ impl PileupFunctions for PileupStats {
                                     for read in read_ids {
                                         let mut read_vec = read_variants
                                             .entry(read.clone())
-                                            .or_insert(vec!());
-                                        read_vec.push(cursor as i32);
+                                            .or_insert(HashSet::new());
+                                        read_vec.insert(cursor as i32);
                                     }
                                 }
                             }
@@ -224,7 +225,7 @@ impl PileupFunctions for PileupStats {
 
                 debug!("read variants {:?}", read_variants);
                 *variants_in_reads = read_variants;
-                debug!("read variants {:?}", variants);
+                debug!("variants abundances {:?}", variants);
                 *variant_abundances = variants;
                 *variations_per_base = (variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
             }
@@ -253,17 +254,22 @@ impl PileupFunctions for PileupStats {
                             for (k , v) in nucfrequency[i].iter() {
                                 let count = v.len();
                                 if count as f64 / *d as f64 >= variant_fraction {
-                                    let occ = variant_cooccurrences.entry(i)
+                                    let mut occ = variant_cooccurrences.entry(i)
                                         .or_insert(VariantBase {
-                                            read_ids: vec!(),
-                                            connected_bases: vec!(),
+                                            read_ids: HashSet::new(),
+                                            connected_bases: HashSet::new(),
                                             indel: false,
                                             pos: i,
                                             seq: k.to_string(),
+                                            abundance: variant_abundances[i][k].clone()
                                         });
-                                    occ.read_ids.extend(v);
+                                    occ.read_ids = occ.read_ids.union(&v).cloned().collect::<HashSet<i32>>();
                                     for read_id in v {
-                                        occ.connected_bases.extend(&variants_in_reads[&read_id]);
+                                        occ.connected_bases = occ
+                                                                .connected_bases
+                                                                .union(&variants_in_reads[&read_id])
+                                                                .cloned()
+                                                                .collect::<HashSet<i32>>();
                                     }
                                 }
                             }
@@ -272,17 +278,21 @@ impl PileupFunctions for PileupStats {
                             for (k , v) in indels[i].iter() {
                                 let count = v.len();
                                 if count as f64 / *d as f64 >= variant_fraction {
-                                    let occ = variant_cooccurrences.entry(i)
+                                    let mut occ = variant_cooccurrences.entry(i)
                                         .or_insert(VariantBase {
-                                            read_ids: vec!(),
-                                            connected_bases: vec!(),
+                                            read_ids: HashSet::new(),
+                                            connected_bases: HashSet::new(),
                                             indel: true,
                                             pos: i,
                                             seq: k.to_string(),
+                                            abundance: variant_abundances[i][k].clone(),
                                         });
-                                    occ.read_ids.extend(v);
+                                    occ.read_ids = occ.read_ids.union(&v).cloned().collect::<HashSet<i32>>();
                                     for read_id in v {
-                                        occ.connected_bases.extend(&variants_in_reads[&read_id]);
+                                        occ.connected_bases = occ
+                                            .connected_bases
+                                            .union(&variants_in_reads[&read_id]).cloned()
+                                            .collect::<HashSet<i32>>();
                                     }
                                 }
                             }
@@ -333,9 +343,6 @@ impl PileupFunctions for PileupStats {
                 let end_at = *len1 - *contig_end_exclusion as usize - 1;
                 let mut cumulative_sum = 0;
                 for (i, current) in depth.iter().enumerate() {
-                    if *current != 0 {
-//                        debug!("cumulative sum {} and current {}", cumulative_sum, current);
-                    }
                     cumulative_sum = *current;
                     if i >= start_from && i <= end_at {
                         if cumulative_sum > 0 {
@@ -347,7 +354,7 @@ impl PileupFunctions for PileupStats {
                         (counts)[cumulative_sum] += 1
                     }
                 }
-//                println!("{:?}", counts);
+
                 let total_bases = *observed_contig_length;
                 debug!("Calculating coverage with num_covered_bases {}, observed_length {} and counts {:?}",
                        num_covered_bases, observed_contig_length, counts);
@@ -428,7 +435,7 @@ pub enum PileupMatrix {
     },
     PileupVariantMatrix {
         variants: Vec<f32>,
-        read_variants: Vec<HashMap<i32, Vec<i32>>>,
+        read_variants: Vec<HashMap<i32, HashSet<i32>>>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
         coverages: Vec<f32>,
         tids: Vec<i32>,
