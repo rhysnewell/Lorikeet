@@ -4,24 +4,21 @@ use std::cmp::min;
 use rm::linalg::Matrix;
 use rust_htslib::bam::record::{Cigar, CigarStringView};
 
-pub struct Indel {
-    pub insertion: bool,
-    pub seen: bool,
-    pub len: u32,
-    pub start: usize,
-    pub end: usize,
-    pub cursor: usize,
-    pub seq: String,
-    pub cigar: CigarStringView,
+#[derive(Debug)]
+pub struct VariantBase {
+    read_ids: Vec<i32>,
+    connected_bases: Vec<i32>,
+    indel: bool,
+    pos: usize,
+    seq: String,
 }
-
 
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, Vec<i32>>>,
         kfrequency: BTreeMap<Vec<u8>, usize>,
         variants_in_reads: HashMap<i32, Vec<i32>>,
-        variant_abundances: BTreeMap<i32, HashMap<char, usize>>,
+        variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, Vec<i32>>>,
         tid: i32,
@@ -83,7 +80,9 @@ pub trait PileupFunctions {
                      variant_fraction: f64);
 
     fn generate_variant_contig(&mut self,
-                     original_contig: Vec<u8>);
+                               original_contig: Vec<u8>,
+                               depth_thresh: usize,
+                               variant_fraction: f64);
 
     fn calc_coverage(&mut self) -> f32;
 }
@@ -165,6 +164,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variants_in_reads,
                 ref mut variant_abundances,
                 ref mut depth,
+                ref mut indels,
                 tid,
                 total_indels,
                 target_name,
@@ -179,18 +179,33 @@ impl PileupFunctions for PileupStats {
                 let mut cursor = 0;
                 let mut depth_sum = 0;
 
-                for zipped in nucfrequency.iter().zip(depth.iter()){
-                    let (nucfreq, d) = zipped;
+                for (i, d) in depth.iter().enumerate(){
                     let mut rel_abundance = HashMap::new();
                     if d >= &depth_thresh {
-                        if nucfreq.len() > 0 {
-                            variant_count += 1;
-                            for (base, read_ids) in nucfreq.iter() {
+                        if nucfrequency[i].len() > 0 {
+                            for (base, read_ids) in nucfrequency[i].iter() {
+                                variant_count += 1;
                                 let count = read_ids.len();
                                 if count as f64 / *d as f64 >= variant_fraction {
-                                    rel_abundance.insert(*base, count / d);
+                                    rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
                                     for read in read_ids {
-                                        let mut read_vec = read_variants.entry(read.clone())
+                                        let mut read_vec = read_variants
+                                            .entry(read.clone())
+                                            .or_insert(vec!());
+                                        read_vec.push(cursor as i32);
+                                    }
+                                }
+                            }
+                        };
+                        if indels[i].len() > 0 {
+                            for (indel, read_ids) in indels[i].iter(){
+                                variant_count += 1;
+                                let count = read_ids.len();
+                                if count as f64 / *d as f64 >= variant_fraction {
+                                    rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
+                                    for read in read_ids {
+                                        let mut read_vec = read_variants
+                                            .entry(read.clone())
                                             .or_insert(vec!());
                                         read_vec.push(cursor as i32);
                                     }
@@ -209,57 +224,73 @@ impl PileupFunctions for PileupStats {
 
                 debug!("read variants {:?}", read_variants);
                 *variants_in_reads = read_variants;
+                debug!("read variants {:?}", variants);
                 *variant_abundances = variants;
-                *variations_per_base = variant_count as f32/target_len.clone() as f32;
+                *variations_per_base = (variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
             }
         }
     }
 
-    fn generate_variant_contig(&mut self, original_contig: Vec<u8>){
+    fn generate_variant_contig(&mut self,
+                               original_contig: Vec<u8>,
+                               depth_thresh: usize,
+                               variant_fraction: f64){
         match self {
             PileupStats::PileupContigStats {
+                ref mut nucfrequency,
                 ref mut variants_in_reads,
                 ref mut depth,
-
+                ref mut indels,
                 ref mut variations_per_base,
                 ref mut coverage,
+                ref mut variant_abundances,
                 ..
             } => {
-//                let mut variants = BTreeMap::new(); // The relative abundance of each variant
-//                let mut read_variants = HashMap::new(); // The reads with variants and their positions
-//                let mut variant_count = 0;
-//                let mut cursor = 0;
-//                let mut depth_sum = 0;
-//
-//                for zipped in nucfrequency.iter().zip(depth.iter()){
-//                    let (nucfreq, d) = zipped;
-//                    let mut rel_abundance = HashMap::new();
-//                    if d >= &depth_thresh {
-//                        if nucfreq.len() > 0 {
-//                            variant_count += 1;
-//                            for (base, read_ids) in nucfreq.iter() {
-//                                let count = read_ids.len();
-//                                if count as f64 / *d as f64 >= variant_fraction {
-//                                    rel_abundance.insert(base, count / d);
-//                                    for read in read_ids {
-//                                        let mut read_vec = read_variants.entry(read.clone())
-//                                                                        .or_insert(vec!());
-//                                        read_vec.push(cursor as i32);
-//                                    }
-//                                }
-//                            }
-//                        }
-//                    }
-//
-//                    if rel_abundance.len() > 0 {
-//                        variants.insert(cursor, rel_abundance);
-//                    }
-//
-//                    cursor += 1;
-//                    depth_sum += d;
-//                }
-//
-//                debug!("read variants {:?}", read_variants);
+                let mut variant_cooccurrences = HashMap::new();
+                for (i, d) in depth.iter().enumerate(){
+                    if d >= &depth_thresh {
+                        if nucfrequency[i].len() > 0 {
+                            for (k , v) in nucfrequency[i].iter() {
+                                let count = v.len();
+                                if count as f64 / *d as f64 >= variant_fraction {
+                                    let occ = variant_cooccurrences.entry(i)
+                                        .or_insert(VariantBase {
+                                            read_ids: vec!(),
+                                            connected_bases: vec!(),
+                                            indel: false,
+                                            pos: i,
+                                            seq: k.to_string(),
+                                        });
+                                    occ.read_ids.extend(v);
+                                    for read_id in v {
+                                        occ.connected_bases.extend(&variants_in_reads[&read_id]);
+                                    }
+                                }
+                            }
+                        };
+                        if indels[i].len() > 0 {
+                            for (k , v) in indels[i].iter() {
+                                let count = v.len();
+                                if count as f64 / *d as f64 >= variant_fraction {
+                                    let occ = variant_cooccurrences.entry(i)
+                                        .or_insert(VariantBase {
+                                            read_ids: vec!(),
+                                            connected_bases: vec!(),
+                                            indel: true,
+                                            pos: i,
+                                            seq: k.to_string(),
+                                        });
+                                    occ.read_ids.extend(v);
+                                    for read_id in v {
+                                        occ.connected_bases.extend(&variants_in_reads[&read_id]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+                debug!("{:?}", variant_cooccurrences);
+
             }
         }
     }
