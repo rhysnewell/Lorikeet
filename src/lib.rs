@@ -13,6 +13,9 @@ pub mod mapping_parameters;
 pub mod coverage_printer;
 pub mod shard_bam_reader;
 pub mod genome_exclusion;
+pub mod mash;
+pub mod minhashes;
+pub mod distance;
 
 extern crate bio;
 #[macro_use]
@@ -24,6 +27,7 @@ extern crate nix;
 extern crate tempdir;
 extern crate tempfile;
 extern crate rand;
+extern crate needletail;
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;
