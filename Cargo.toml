@@ -26,7 +26,11 @@ tempfile = "3.0.*"
 ansi_term = "0.11"
 lazy_static = "1.3.0"
 rand = "0.6.*"
+<<<<<<< HEAD
 needletail = "0.2.2"
+=======
+simhash = "0.2"
+>>>>>>> d7fe0138e0e42fb46e66fe965988e44bc64dd51e
 
 [dev-dependencies]
 assert_cli = "0.6.*"

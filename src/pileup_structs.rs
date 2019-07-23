@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::cmp::min;
+use std::str;
 use rm::linalg::Matrix;
+use simhash::*;
 use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
@@ -9,6 +11,7 @@ pub struct VariantBase {
     read_ids: HashSet<i32>,
     connected_bases: HashSet<i32>,
     indel: bool,
+    seen: bool,
     pos: usize,
     seq: String,
     abundance: f32,
@@ -248,29 +251,38 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 let mut variant_cooccurrences = HashMap::new();
+                let mut variant_record;
                 for (i, d) in depth.iter().enumerate(){
                     if d >= &depth_thresh {
                         if nucfrequency[i].len() > 0 {
                             for (k , v) in nucfrequency[i].iter() {
                                 let count = v.len();
                                 if count as f64 / *d as f64 >= variant_fraction {
+
                                     let mut occ = variant_cooccurrences.entry(i)
-                                        .or_insert(VariantBase {
-                                            read_ids: HashSet::new(),
-                                            connected_bases: HashSet::new(),
-                                            indel: false,
-                                            pos: i,
-                                            seq: k.to_string(),
-                                            abundance: variant_abundances[i][k].clone()
-                                        });
-                                    occ.read_ids = occ.read_ids.union(&v).cloned().collect::<HashSet<i32>>();
+                                        .or_insert(vec!());
+
+                                    variant_record = VariantBase {
+                                        read_ids: HashSet::new(),
+                                        connected_bases: HashSet::new(),
+                                        indel: false,
+                                        seen: false,
+                                        pos: i,
+                                        seq: k.clone().to_string(),
+                                        abundance: variant_abundances[&(i as i32)][&k.to_string()],
+                                    };
+                                    variant_record.read_ids = variant_record.read_ids
+                                                                .union(&v)
+                                                                .cloned()
+                                                                .collect::<HashSet<i32>>();
                                     for read_id in v {
-                                        occ.connected_bases = occ
+                                        variant_record.connected_bases = variant_record
                                                                 .connected_bases
                                                                 .union(&variants_in_reads[&read_id])
                                                                 .cloned()
                                                                 .collect::<HashSet<i32>>();
-                                    }
+                                    };
+                                    occ.push(variant_record);
                                 }
                             }
                         };
@@ -279,21 +291,26 @@ impl PileupFunctions for PileupStats {
                                 let count = v.len();
                                 if count as f64 / *d as f64 >= variant_fraction {
                                     let mut occ = variant_cooccurrences.entry(i)
-                                        .or_insert(VariantBase {
-                                            read_ids: HashSet::new(),
-                                            connected_bases: HashSet::new(),
-                                            indel: true,
-                                            pos: i,
-                                            seq: k.to_string(),
-                                            abundance: variant_abundances[i][k].clone(),
-                                        });
-                                    occ.read_ids = occ.read_ids.union(&v).cloned().collect::<HashSet<i32>>();
+                                        .or_insert(vec!());
+
+                                    variant_record = VariantBase {
+                                        read_ids: HashSet::new(),
+                                        connected_bases: HashSet::new(),
+                                        indel: true,
+                                        seen: false,
+                                        pos: i,
+                                        seq: k.clone().to_string(),
+                                        abundance: variant_abundances[&(i as i32)][k],
+                                    };
+
+                                    variant_record.read_ids = variant_record.read_ids.union(&v).cloned().collect::<HashSet<i32>>();
                                     for read_id in v {
-                                        occ.connected_bases = occ
+                                        variant_record.connected_bases = variant_record
                                             .connected_bases
                                             .union(&variants_in_reads[&read_id]).cloned()
                                             .collect::<HashSet<i32>>();
-                                    }
+                                    };
+                                    occ.push(variant_record);
                                 }
                             }
                         }
@@ -301,6 +318,77 @@ impl PileupFunctions for PileupStats {
                 };
                 debug!("{:?}", variant_cooccurrences);
 
+                let mut contig_variants = HashMap::new();
+                for (base, variants) in variant_cooccurrences.iter(){
+                    let mut variant_track = vec![HashSet::new(); original_contig.len()];
+                    let mut base_char;
+                    for variant in variants{
+                        if variant.indel {
+                            if variant.seq.contains("N"){
+                                let mut pos = variant.pos + 1;
+                                for del in 0..variant.seq.len(){
+                                    variant_track[pos].insert('N'.to_string());
+                                    pos += 1;
+                                }
+                            } else {
+                                base_char = (original_contig[variant.pos] as char).to_string();
+                                base_char.push_str(&variant.seq.clone());
+                                variant_track[variant.pos].insert(base_char);
+                            }
+                        } else{
+                            variant_track[variant.pos].insert(variant.seq.clone());
+                        };
+                        for connected_base in variant.connected_bases.clone(){
+                            let mut connected_variants = &variant_cooccurrences[&(connected_base as usize)];
+                            for covariant in connected_variants{
+                                if !variant.read_ids.is_disjoint(&covariant.read_ids) {
+                                    if covariant.indel {
+                                        if covariant.seq.contains("N"){
+                                            let mut pos = covariant.pos + 1;
+                                            for del in 0..covariant.seq.len(){
+                                                variant_track[pos].insert('N'.to_string());
+                                                pos += 1;
+                                            }
+                                        } else {
+                                            base_char = (original_contig[covariant.pos] as char).to_string();
+                                            base_char.push_str(&covariant.seq.clone());
+                                            variant_track[covariant.pos].insert(base_char);
+                                        }
+                                    } else{
+                                        variant_track[covariant.pos].insert(covariant.seq.clone());
+                                    };
+                                }
+                            }
+                        }
+                    }
+//                    debug!("Variant Track: {:?}", variant_track);
+                    let mut modified_contig = String::new();
+                    for (var, reference) in variant_track.iter().zip(original_contig.iter()){
+                        if var.len() > 0{
+                            for v in var.iter(){
+                                if v != &'N'.to_string() {
+                                    modified_contig.push_str(v);
+                                } else {
+                                    break
+                                }
+                            }
+                        } else {
+                            modified_contig.push(*reference as char);
+                        }
+                    }
+//                    debug!("Modified Contig: {:?}", modified_contig);
+                    contig_variants.insert(simhash(&modified_contig), modified_contig);
+                };
+                debug!("Contig Variants: {:?}", contig_variants);
+                let mut hashes =  vec!();
+                hashes.extend(contig_variants.keys().map(|x| x+1));
+                for (i, el1) in hashes.iter().enumerate() {
+                    for el2 in hashes[i+1..hashes.len()].iter(){
+                        println!("{}", hash_similarity(*el1, *el2));
+
+                    }
+
+                }
             }
         }
     }

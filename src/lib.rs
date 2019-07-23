@@ -28,6 +28,8 @@ extern crate tempdir;
 extern crate tempfile;
 extern crate rand;
 extern crate needletail;
+extern crate simhash;
+
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;
