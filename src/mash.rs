@@ -1,19 +1,20 @@
 use bio::io::fasta::*;
 use bio::alignment::sparse::*;
 use minhashes::*;
-use std::collections::BTreeMap;
-use needletail::kmer::{canonical, normalize};
+use std::collections::HashMap;
+use needletail::fastx::{fastx_bytes};
+use distance::*;
 
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct SketchDistance {
     pub containment: f64,
     pub jaccard: f64,
     pub mashDistance: f64,
     pub commonHashes: u64,
     pub totalHashes: u64,
-    pub query: String,
-    pub reference: String,
+//    pub query: String,
+//    pub reference: String,
 }
 
 #[allow(non_snake_case)]
@@ -28,7 +29,7 @@ pub struct Sketch {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct MultiSketch {
     pub kmer: u8,
     pub alphabet: String,
@@ -77,23 +78,29 @@ impl Sketch {
 
 pub fn mash_sequence(
     seq: &[u8],
-    n_hashes: usize,
     final_size: usize,
     kmer_length: u8,
-    no_strict: bool,
-    seed: u64, ){ // need to return Vec<KmerCount> -- Found in minhash
+    seed: u64, ) -> Vec<KmerCount> { // need to return Vec<KmerCount> -- Found in minhash
 //    let mut sketches = Vec::with_capacity(filenames.len()); // Move outside function
-    let mut needle_seq = canonical(seq);
-    let mut seq_len = seq.len();
+//    let mut needle_seq = canonical(seq);
+    let mut seq_len = 0u64;
     let mut minhash =  MinHashKmers::new(final_size, seed);
+//    debug!("seq: {:?}", seq);
+    fastx_bytes(
+        seq,
+        |needle_seq| {
+            seq_len += needle_seq.seq.len() as u64;
+            debug!("seq len: {:?}", seq_len);
 
-    for (_, kmer, is_rev_complement) in needle_seq.normalize(false).kmers(kmer_length, true) {
-        let rc_count = if is_rev_complement { 1u8 } else { 0u8 };
-        minhash.push(kmer, rc_count);
-    };
-
-
+            for (_, kmer, is_rev_complement) in needle_seq.normalize(false).kmers(kmer_length, true) {
+                debug!("kmer: {:?}", kmer);
+                let rc_count = if is_rev_complement { 1u8 } else { 0u8 };
+                minhash.push(kmer, rc_count);
+            }
+        },
+    );
     let n_kmers = minhash.total_kmers() as u64;
+    debug!("{:?}", minhash);
     let hashes = minhash.into_vec();
 
     // directory should be clipped from filename
@@ -110,6 +117,7 @@ pub fn mash_sequence(
 //        &filter_stats,
 //    );
 //    sketches.push(sketch);
+    return hashes
 }
 
 fn calc_sketch_distances(
@@ -129,8 +137,6 @@ fn calc_sketch_distances(
             let distance = distance(
                 &qsketch,
                 &rsketch,
-                &query_sketch.name,
-                &ref_sketch.name,
                 mash_mode,
             )
                 .unwrap();

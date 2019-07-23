@@ -4,6 +4,8 @@ use std::cmp::min;
 use std::str;
 use rm::linalg::Matrix;
 use simhash::*;
+use mash::*;
+use distance::*;
 use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
@@ -377,14 +379,23 @@ impl PileupFunctions for PileupStats {
                         }
                     }
 //                    debug!("Modified Contig: {:?}", modified_contig);
-                    contig_variants.insert(simhash(&modified_contig), modified_contig);
+                    contig_variants.insert(modified_contig.clone(), mash_sequence(&modified_contig.into_bytes(),
+                            1000,
+                            21,
+                            0)); // parse to mash
                 };
                 debug!("Contig Variants: {:?}", contig_variants);
-                let mut hashes =  vec!();
-                hashes.extend(contig_variants.keys().map(|x| x+1));
-                for (i, el1) in hashes.iter().enumerate() {
-                    for el2 in hashes[i+1..hashes.len()].iter(){
-                        println!("{}", hash_similarity(*el1, *el2));
+//                let mut hashes =  vec!();
+//                hashes.extend(contig_variants.keys().map(|x| x+1));
+                for el1 in contig_variants.values() {
+                    for el2 in contig_variants.values(){
+//                        println!("{}", hash_similarity(*el1, *el2));
+                        if el1 != el2 {
+                            let dist = distance(&el1,
+                                                &el2,
+                                                false);
+                            println!("{:?}", dist)
+                        }
 
                     }
 

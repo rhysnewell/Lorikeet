@@ -13,6 +13,7 @@ exclude = [ # Max upload is 10MB, as of writing test data was 15MB
   "tests/*"
 ]
 
+
 [dependencies]
 rusty-machine = "0.5.4"
 bio = "0.25.*"
@@ -26,11 +27,9 @@ tempfile = "3.0.*"
 ansi_term = "0.11"
 lazy_static = "1.3.0"
 rand = "0.6.*"
-<<<<<<< HEAD
 needletail = "0.2.2"
-=======
 simhash = "0.2"
->>>>>>> d7fe0138e0e42fb46e66fe965988e44bc64dd51e
+murmurhash3 = "~0.0.5"
 
 [dev-dependencies]
 assert_cli = "0.6.*"

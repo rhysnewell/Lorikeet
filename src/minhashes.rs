@@ -65,7 +65,7 @@ impl Hasher for NoHashHasher {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct KmerCount {
     pub hash: ItemHash,
     pub kmer: Vec<u8>,
@@ -73,7 +73,7 @@ pub struct KmerCount {
     pub extra_count: u16,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MinHashKmers {
     hashes: BinaryHeap<HashedItem<Vec<u8>>>,
     counts: HashMap<ItemHash, (u16, u16), BuildHasherDefault<NoHashHasher>>,

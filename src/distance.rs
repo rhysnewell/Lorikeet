@@ -5,8 +5,6 @@ use mash::SketchDistance;
 pub fn distance(
     sketch1: &[KmerCount],
     sketch2: &[KmerCount],
-    sketch1_name: &str,
-    sketch2_name: &str,
     mash_mode: bool,
 ) -> Result<SketchDistance, &'static str> {
     // // TODO: in principle this is a good check, but sometimes one of the kmers will be "" if
@@ -31,8 +29,8 @@ pub fn distance(
         mashDistance: f64::min(1f64, f64::max(0f64, mash_distance)),
         commonHashes: common,
         totalHashes: total,
-        query: sketch1_name.to_string(),
-        reference: sketch2_name.to_string(),
+//        query: sketch1_name.to_string(),
+//        reference: sketch2_name.to_string(),
     })
 }
 

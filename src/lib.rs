@@ -29,6 +29,7 @@ extern crate tempfile;
 extern crate rand;
 extern crate needletail;
 extern crate simhash;
+extern crate murmurhash3;
 
 
 use std::path::Path;

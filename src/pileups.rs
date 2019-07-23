@@ -73,13 +73,13 @@ pub fn pileup_variants<R: NamedBamReader,
 
 
                     pileup_struct.add_contig(nuc_freq,
-                                       tet_freq,
-                                       depth,
-                                       indels,
-                                       last_tid,
-                                       total_indels_in_current_contig,
-                                       contig_name,
-                                       contig_len);
+                                               tet_freq,
+                                               depth,
+                                               indels,
+                                               last_tid,
+                                               total_indels_in_current_contig,
+                                               contig_name,
+                                               contig_len);
 
                     let coverage = pileup_struct.calc_coverage();
 
