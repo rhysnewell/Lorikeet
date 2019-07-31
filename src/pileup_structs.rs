@@ -185,6 +185,7 @@ impl PileupFunctions for PileupStats {
                 let mut cursor = 0;
                 let mut depth_sum = 0;
 
+
                 for (i, d) in depth.iter().enumerate(){
                     let mut rel_abundance = HashMap::new();
                     if d >= &depth_thresh {
