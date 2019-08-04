@@ -59,7 +59,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                 tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig,
-                                                ref_sequence| {
+                                                ref_sequence: Vec<u8>| {
                 if last_tid != -2 {
 
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
@@ -71,7 +71,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                                           contig_end_exclusion);
                     debug!("INDELS: {:?}", indels);
                     debug!("nuc frequency: {:?}", nuc_freq);
-
+                    println!("pos\tA\tT\tC\tG\tdepth\tref");
                     let nucs = vec!('A', 'T', 'C', 'G');
                     for (position, hash) in nuc_freq.iter().enumerate() {
                         if hash.len() > 0 {
@@ -82,11 +82,10 @@ pub fn pileup_variants<R: NamedBamReader,
                                     None => print!("0\t")
                                 }
                             }
-                            print!("{}\n", depth[position]);
+                            print!("{}\t{}\n", depth[position], ref_sequence[position] as char);
                         }
 
                     };
-
 
                     pileup_struct.add_contig(nuc_freq,
                                                tet_freq,
@@ -98,10 +97,6 @@ pub fn pileup_variants<R: NamedBamReader,
                                                contig_len);
 
                     let coverage = pileup_struct.calc_coverage();
-
-
-
-
 
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);

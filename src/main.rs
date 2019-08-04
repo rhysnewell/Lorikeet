@@ -727,7 +727,13 @@ fn main(){
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
-            let mut fasta_reader = bio::io::fasta::IndexedReader::from_file(&reference_path).unwrap();
+            let mut fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+                Ok(reader) => reader,
+                Err(e) => {
+                    eprintln!("Missing or corrupt fasta file {}", e);
+                    process::exit(1);
+                },
+            };
 
 
             let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
