@@ -59,7 +59,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                 tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig,
-                                                ref_sequence| {
+                                                ref_sequence: Vec<u8>| {
                 if last_tid != -2 {
 
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
@@ -72,20 +72,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     debug!("INDELS: {:?}", indels);
                     debug!("nuc frequency: {:?}", nuc_freq);
 
-                    let nucs = vec!('A', 'T', 'C', 'G');
-                    for (position, hash) in nuc_freq.iter().enumerate() {
-                        if hash.len() > 0 {
-                            print!("{}\t", position);
-                            for nuc in &nucs {
-                                match hash.get(nuc) {
-                                    Some(reads) => print!("{}\t", reads.len()),
-                                    None => print!("0\t")
-                                }
-                            }
-                            print!("{}\n", depth[position]);
-                        }
 
-                    };
 
 
                     pileup_struct.add_contig(nuc_freq,
@@ -99,19 +86,16 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     let coverage = pileup_struct.calc_coverage();
 
-
-
-
-
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
-
+                    pileup_struct.print_variants(ref_sequence);
 //                    pileup_struct.generate_variant_contig(ref_sequence,
 //                                                          depth_threshold.clone(),
 //                                                          var_fraction.clone());
 
                     pileup_matrix.add_contig(pileup_struct,
-                                             target_names.len() as usize)
+                                             target_names.len() as usize);
+
                 }
             };
 
@@ -196,6 +180,9 @@ pub fn pileup_variants<R: NamedBamReader,
                             };
 //                            debug!("Ins len: {} cigar: {:?} id: {}", len, alignment.record().cigar(), read_to_id[&alignment.record().qname().to_vec()]);
 //                            debug!("Indel: {} at {}", insert, pileup.pos());
+                            let id = nuc_freq[pileup.pos() as usize].entry('I')
+                                                                    .or_insert(HashSet::new());
+                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
                             let id = indels[pileup.pos() as usize].entry(insert)
                                 .or_insert(HashSet::new());
                             id.insert(read_to_id[&alignment.record().qname().to_vec()]);
@@ -208,6 +195,9 @@ pub fn pileup_variants<R: NamedBamReader,
 //                            debug!("Indel: {} at {}",
 //                                   std::iter::repeat("N").take(len as usize).collect::<String>(),
 //                                   pileup.pos());
+                            let id = nuc_freq[pileup.pos() as usize].entry('D')
+                                                                        .or_insert(HashSet::new());
+                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
                             let id = indels[pileup.pos() as usize].entry(
                                 std::iter::repeat("N").take(len as usize).collect::<String>())
                                 .or_insert(HashSet::new());
