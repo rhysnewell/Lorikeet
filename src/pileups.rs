@@ -74,7 +74,6 @@ pub fn pileup_variants<R: NamedBamReader,
 
 
 
-
                     pileup_struct.add_contig(nuc_freq,
                                                tet_freq,
                                                depth,
