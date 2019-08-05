@@ -580,6 +580,7 @@ pub enum PileupMatrix {
         tids: Vec<i32>,
         total_indels_across_contigs: Vec<usize>,
         target_names: Vec<Vec<u8>>,
+        target_lengths: Vec<usize>,
     },
     PileupVariantMatrix {
         variants: Vec<f32>,
@@ -589,6 +590,7 @@ pub enum PileupMatrix {
         tids: Vec<i32>,
         total_indels_across_contigs: Vec<usize>,
         target_names: Vec<Vec<u8>>,
+        target_lengths: Vec<usize>,
     }
 }
 
@@ -601,6 +603,7 @@ impl PileupMatrix {
             tids: vec!(),
             total_indels_across_contigs: vec!(),
             target_names: vec!(),
+            target_lengths: vec!(),
         }
     }
     pub fn new_contig_variants() -> PileupMatrix {
@@ -612,6 +615,7 @@ impl PileupMatrix {
             tids: vec!(),
             total_indels_across_contigs: vec!(),
             target_names: vec!(),
+            target_lengths: vec!(),
         }
     }
 }
@@ -637,6 +641,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
+                ref mut target_lengths,
             } => {
                 *variants = vec!();
                 *kfrequencies = BTreeMap::new();
@@ -644,6 +649,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 *tids = vec!();
                 *total_indels_across_contigs = vec!();
                 *target_names = vec!();
+                *target_lengths = vec!();
             },
             PileupMatrix::PileupVariantMatrix {
                 ref mut variants,
@@ -653,6 +659,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
+                ref mut target_lengths,
             } => {
                 *variants = vec!();
                 *read_variants = vec!();
@@ -661,6 +668,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 *tids = vec!();
                 *total_indels_across_contigs = vec!();
                 *target_names = vec!();
+                *target_lengths = vec!();
             }
         }
     }
@@ -674,6 +682,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
+                ref mut target_lengths,
             } => {
                 match pileup_stats {
                     PileupStats::PileupContigStats {
@@ -682,6 +691,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut tid,
                         ref mut total_indels,
                         ref mut target_name,
+                        ref mut target_len,
                         ref mut variations_per_base,
                         ref mut coverage,
                         ref mut num_covered_bases,
@@ -698,6 +708,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         tids.push(*tid);
                         total_indels_across_contigs.push(*total_indels);
                         target_names.push(target_name.clone());
+                        target_lengths.push(target_len.clone());
                     }
                 }
             },
@@ -709,6 +720,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
+                ref mut target_lengths,
             } => {
                 match pileup_stats {
                     PileupStats::PileupContigStats {
@@ -717,6 +729,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut tid,
                         ref mut total_indels,
                         ref mut target_name,
+                        ref mut target_len,
                         ref mut variations_per_base,
                         ref mut coverage,
                         ref mut num_covered_bases,
@@ -734,6 +747,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         tids.push(*tid);
                         total_indels_across_contigs.push(*total_indels);
                         target_names.push(target_name.clone());
+                        target_lengths.push(target_len.clone());
                     }
                 }
             }
@@ -749,15 +763,17 @@ impl PileupMatrixFunctions for PileupMatrix{
                 tids,
                 total_indels_across_contigs,
                 target_names,
+                target_lengths,
             } => {
                 for i in 0..variants.len() {
-                    print!("{}\t{}\t{}\t{}\t",
+                    print!("{}\t",
                              std::str::from_utf8(&target_names[i][..]).unwrap(),
-                             variants[i],
-                             coverages[i],
-                             total_indels_across_contigs[i]);
+//                             variants[i],
+//                             coverages[i],
+//                             total_indels_across_contigs[i]
+                    );
                     for (kmer, counts) in kfrequencies.iter(){
-                        print!("{}\t", counts[i]);
+                        print!("{}\t", (counts[i] as f32/target_lengths[i] as f32)*(coverages[i]));
                     }
                     print!("\n");
                 }
@@ -771,6 +787,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 tids,
                 total_indels_across_contigs,
                 target_names,
+                target_lengths,
             } => {
                 for i in 0..variants.len() {
                     print!("{}\t{}\t{}\t{}\t",
