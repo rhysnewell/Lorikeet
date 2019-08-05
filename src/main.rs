@@ -19,14 +19,18 @@ use rust_htslib::bam::Read;
 
 extern crate bio;
 use bio::io::fasta::*;
+use bio::alignment::sparse::*;
 
 use std::env;
 use std::str;
 use std::process;
-use std::collections::HashSet;
+use std::collections::{HashSet, BTreeMap};
 use std::path::Path;
 use std::fs::File;
 use std::io::prelude::*;
+
+extern crate itertools;
+use itertools::Itertools;
 
 extern crate clap;
 use clap::*;
@@ -868,6 +872,49 @@ fn main(){
                         contig_end_exclusion);
                 }
             }
+        }
+        Some("kmer") => {
+            let m = matches.subcommand_matches("kmer").unwrap();
+            if m.is_present("full-help") {
+                println!("{}", contig_full_help());
+                process::exit(1);
+            }
+            set_log_level(m, true);
+            let reference_path = Path::new(m.value_of("reference").unwrap());
+//            let index_path = reference_path.clone().to_owned() + ".fai";
+            let mut fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
+                Ok(reader) => reader,
+                Err(e) => {
+                    eprintln!("Missing or corrupt fasta file {}", e);
+                    process::exit(1);
+                },
+            };
+            let mut contigs = fasta_reader.records().collect_vec();
+            // Initialize bound contig variable
+            let mut tet_freq = BTreeMap::new();
+            let contig_count = contigs.len();
+            let mut contig_idx = 0 as usize;
+            let mut contig_names = vec![String::new(); contig_count];
+            for contig in contigs{
+                let contig = contig.unwrap();
+                contig_names[contig_idx] = contig.id().to_string();
+                debug!("Parsing contig: {}", contig.id());
+                let kmers = hash_kmers(contig.seq(), 4);
+                // Get kmer counts in a contig
+                for (kmer, pos) in kmers {
+                    let mut k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
+                    k[contig_idx] = pos.len();
+                }
+                contig_idx += 1;
+            }
+            for (idx, contig) in contig_names.iter().enumerate() {
+                print!("{}\t", contig);
+                for (kmer, counts) in &tet_freq{
+                    print!("{}\t", counts[idx])
+                }
+                print!("\n");
+            }
+
         }
         Some("make") => {
             let m = matches.subcommand_matches("make").unwrap();
@@ -2389,5 +2436,19 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("verbose"))
                 .arg(Arg::with_name("quiet")
                     .short("q")
-                    .long("quiet")));
+                    .long("quiet")))
+        .subcommand(
+        SubCommand::with_name("kmer")
+            .about("Generate kmer count matrix for contigs")
+//                .help(CONTIG_HELP.as_str())
+            .arg(Arg::with_name("full-help")
+                .long("full-help"))
+            .arg(Arg::with_name("reference")
+                .short("-r")
+                .long("reference")
+                .takes_value(true)
+                .required(true))
+            .arg(Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")));
 }

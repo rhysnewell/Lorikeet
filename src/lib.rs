@@ -30,6 +30,7 @@ extern crate rand;
 extern crate needletail;
 extern crate simhash;
 extern crate murmurhash3;
+extern crate itertools;
 
 
 use std::path::Path;
