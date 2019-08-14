@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
-use std::collections::{BTreeMap, BTreeSet};
-use std::cmp::min;
-use std::str;
-use rm::linalg::Matrix;
-use simhash::*;
+use std::collections::BTreeMap;
+use ndarray::Array2;
+//use simhash::*;
 use mash::*;
-use distance::*;
-use rust_htslib::bam::record::{Cigar, CigarStringView};
+//use distance::*;
+use itertools::Itertools;
+use std::fmt::Write;
+//use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
 pub struct VariantBase {
@@ -84,6 +84,8 @@ pub trait PileupFunctions {
     fn calc_variants(&mut self,
                      depth_thresh: usize,
                      variant_fraction: f64);
+
+    fn generate_variant_matrix(&mut self);
 
     fn generate_variant_contig(&mut self,
                                original_contig: Vec<u8>,
@@ -187,7 +189,6 @@ impl PileupFunctions for PileupStats {
                 let mut cursor = 0;
                 let mut depth_sum = 0;
 
-
                 for (i, d) in depth.iter().enumerate(){
                     let mut rel_abundance = HashMap::new();
                     if d >= &depth_thresh {
@@ -236,6 +237,36 @@ impl PileupFunctions for PileupStats {
                 debug!("variants abundances {:?}", variants);
                 *variant_abundances = variants;
                 *variations_per_base = (variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
+            }
+        }
+    }
+
+    fn generate_variant_matrix(&mut self){
+        match self {
+            PileupStats::PileupContigStats {
+                ref mut variants_in_reads,
+                ref mut target_len,
+                ..
+            } => {
+//                let mut position_covariance = BTreeMap::new();
+                let mut covar_array = Array2::<usize>::zeros((*target_len, *target_len));
+
+                for (read_id, positions) in variants_in_reads{
+                    for position in positions.iter().combinations(2){
+
+                        covar_array[[*position[0] as usize, *position[1] as usize]] += 1 as usize;
+                        covar_array[[*position[1] as usize, *position[0] as usize]] += 1 as usize;
+
+                    }
+                }
+//                println!("{:?}", covar_array);
+                for row in covar_array.genrows(){
+//                    for col in row{
+//                        print!("{},")
+//                    }
+                    println!("{}", row.iter().fold(String::new(), |acc, &num| acc + &num.to_string() + "\t"));
+//                    row.iter().fold(String::new(),|mut s,&n| {print!(format!((s,"{},",n).ok()); s});
+                }
             }
         }
     }
@@ -387,22 +418,22 @@ impl PileupFunctions for PileupStats {
                             21,
                             0)); // parse to mash
                 };
-                debug!("Contig Variants: {:?}", contig_variants);
+//                debug!("Contig Variants: {:?}", contig_variants);
 //                let mut hashes =  vec!();
 //                hashes.extend(contig_variants.keys().map(|x| x+1));
-                for el1 in contig_variants.values() {
-                    for el2 in contig_variants.values(){
-//                        println!("{}", hash_similarity(*el1, *el2));
-                        if el1 != el2 {
-                            let dist = distance(&el1,
-                                                &el2,
-                                                false);
-                            println!("{:?}", dist)
-                        }
-
-                    }
-
-                }
+//                for el1 in contig_variants.values() {
+//                    for el2 in contig_variants.values(){
+////                        println!("{}", hash_similarity(*el1, *el2));
+//                        if el1 != el2 {
+//                            let dist = distance(&el1,
+//                                                &el2,
+//                                                false);
+//                            println!("{:?}", dist)
+//                        }
+//
+//                    }
+//
+//                }
             }
         }
     }
@@ -561,7 +592,7 @@ impl PileupFunctions for PileupStats {
                             let count_sum: usize = base_counts.iter().sum();
                             base_counts[ref_id] = d - count_sum;
                             for base in base_counts {
-                                print!("{}\t", base);
+                                print!("{}\t", base as f32/d as f32);
                             }
                             print!("{}\t{}\n", d, ref_base);
                         }

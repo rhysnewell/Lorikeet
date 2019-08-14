@@ -1,5 +1,5 @@
-use bio::io::fasta::*;
-use bio::alignment::sparse::*;
+//use bio::io::fasta::*;
+//use bio::alignment::sparse::*;
 use minhashes::*;
 use std::collections::HashMap;
 use needletail::fastx::{fastx_bytes};

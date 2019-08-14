@@ -1,5 +1,4 @@
 use std;
-use std::collections::HashMap;
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 

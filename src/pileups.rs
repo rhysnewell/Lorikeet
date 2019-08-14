@@ -2,21 +2,19 @@ use std;
 use std::collections::{HashMap, HashSet};
 use std::collections::BTreeMap;
 use rust_htslib::bam;
-use rust_htslib::bam::record::Cigar;
 
 use pileup_structs::*;
 use mosdepth_genome_coverage_estimators::*;
 use bam_generator::*;
 use coverage_takers::*;
 use FlagFilter;
-use ReadsMapped;
 use std::str;
 //use rm::linalg::Matrix;
 //use rm::linalg::Vector;
 use std::fs::File;
-use bio::io::fasta::*;
+//use bio::io::fasta::*;
 use bio::alignment::sparse::*;
-use std::io::prelude::*;
+//use std::io::prelude::*;
 
 
 
@@ -87,6 +85,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
+                    pileup_struct.generate_variant_matrix();
 //                    pileup_struct.print_variants(ref_sequence);
 //                    pileup_struct.generate_variant_contig(ref_sequence,
 //                                                          depth_threshold.clone(),
@@ -218,7 +217,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 total_indels_in_current_contig,
                 ref_seq);
         }
-        pileup_matrix.print_matrix();
+//        pileup_matrix.print_matrix();
         bam_generated.finish();
     }
 }

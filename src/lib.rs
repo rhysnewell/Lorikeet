@@ -31,6 +31,7 @@ extern crate needletail;
 extern crate simhash;
 extern crate murmurhash3;
 extern crate itertools;
+extern crate ndarray;
 
 
 use std::path::Path;
