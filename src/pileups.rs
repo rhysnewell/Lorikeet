@@ -87,7 +87,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
-//                    pileup_struct.print_variants(ref_sequence);
+                    pileup_struct.print_variants(ref_sequence);
 //                    pileup_struct.generate_variant_contig(ref_sequence,
 //                                                          depth_threshold.clone(),
 //                                                          var_fraction.clone());
@@ -218,7 +218,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 total_indels_in_current_contig,
                 ref_seq);
         }
-        pileup_matrix.print_matrix();
+//        pileup_matrix.print_matrix();
         bam_generated.finish();
     }
 }
