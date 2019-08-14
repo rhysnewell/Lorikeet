@@ -31,6 +31,7 @@ needletail = "0.2.2"
 simhash = "0.2"
 murmurhash3 = "~0.0.5"
 itertools = "*"
+ndarray = "0.12.*"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
