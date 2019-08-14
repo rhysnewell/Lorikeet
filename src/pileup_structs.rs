@@ -562,17 +562,20 @@ impl PileupFunctions for PileupStats {
                 nucfrequency,
                 depth,
                 coverage,
+                target_name,
                 ..
 
             } => {
                 let nucs = vec!('A', 'T', 'C', 'G', 'I', 'D');
+                let mut contig_name;
                 for (position, hash) in nucfrequency.iter().enumerate() {
                     let d = depth[position];
+                    contig_name = str::from_utf8(&target_name[..]).unwrap().to_string();
                     if *coverage*0.75 < d as f32 && d as f32 <= *coverage*1.25 {
                         if hash.len() > 0 {
                             let mut base_counts = vec![0; nucs.len()];
                             let ref_base = ref_sequence[position] as char;
-                            print!("{}\t", position);
+                            print!("{}\t{}\t", contig_name, position);
                             let mut cnt = 0;
                             let mut ref_id = 0;
                             for nuc in &nucs {
