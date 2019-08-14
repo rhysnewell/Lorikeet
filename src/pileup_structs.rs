@@ -6,6 +6,7 @@ use mash::*;
 //use distance::*;
 use itertools::Itertools;
 use std::fmt::Write;
+use std::str;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
