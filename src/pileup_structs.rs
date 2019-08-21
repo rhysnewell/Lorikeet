@@ -95,7 +95,7 @@ pub trait PileupFunctions {
 
     fn calc_coverage(&mut self) -> f32;
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>);
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, depth_thresh: usize);
 }
 
 impl PileupFunctions for PileupStats {
@@ -557,48 +557,48 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>){
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, depth_thresh: usize){
         match self {
             PileupStats::PileupContigStats {
                 nucfrequency,
                 depth,
                 coverage,
-                target_name,
+                tid,
                 ..
 
             } => {
                 let nucs = vec!('A', 'T', 'C', 'G', 'I', 'D');
-                let mut contig_name;
                 for (position, hash) in nucfrequency.iter().enumerate() {
                     let d = depth[position];
-                    contig_name = str::from_utf8(&target_name[..]).unwrap().to_string();
-                    if *coverage*0.75 < d as f32 && d as f32 <= *coverage*1.25 {
-                        if hash.len() > 0 {
-                            let mut base_counts = vec![0; nucs.len()];
-                            let ref_base = ref_sequence[position] as char;
-                            print!("{}\t{}\t", contig_name, position);
-                            let mut cnt = 0;
-                            let mut ref_id = 0;
-                            for nuc in &nucs {
-                                match hash.get(nuc) {
-                                    Some(reads) => {
-                                        base_counts[cnt] = reads.len();
-                                        cnt += 1;
-                                    },
-                                    None => {
-                                        if nuc == &ref_base {
-                                            ref_id = cnt;
+                    if d >= depth_thresh {
+                        if *coverage * 0.75 < d as f32 && d as f32 <= *coverage * 1.25 {
+                            if hash.len() > 0 {
+                                let mut base_counts = vec![0; nucs.len()];
+                                let ref_base = ref_sequence[position] as char;
+                                print!("{}\t{}\t", tid, position);
+                                let mut cnt = 0;
+                                let mut ref_id = 0;
+                                for nuc in &nucs {
+                                    match hash.get(nuc) {
+                                        Some(reads) => {
+                                            base_counts[cnt] = reads.len();
+                                            cnt += 1;
+                                        },
+                                        None => {
+                                            if nuc == &ref_base {
+                                                ref_id = cnt;
+                                            }
+                                            cnt += 1;
                                         }
-                                        cnt += 1;
                                     }
                                 }
+                                let count_sum: usize = base_counts.iter().sum();
+                                base_counts[ref_id] = d - count_sum;
+                                for base in base_counts {
+                                    print!("{}\t", base as f32 / d as f32);
+                                }
+                                print!("{}\t{}\n", d, ref_base);
                             }
-                            let count_sum: usize = base_counts.iter().sum();
-                            base_counts[ref_id] = d - count_sum;
-                            for base in base_counts {
-                                print!("{}\t", base as f32/d as f32);
-                            }
-                            print!("{}\t{}\n", d, ref_base);
                         }
                     }
                 };

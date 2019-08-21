@@ -85,7 +85,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
-                    pileup_struct.generate_variant_matrix();
+//                    pileup_struct.generate_variant_matrix();
                     pileup_struct.print_variants(ref_sequence);
 //                    pileup_struct.generate_variant_contig(ref_sequence,
 //                                                          depth_threshold.clone(),
