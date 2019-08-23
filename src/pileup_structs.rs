@@ -287,6 +287,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variant_abundances,
                 ..
             } => {
+
                 let mut variant_cooccurrences = HashMap::new();
                 let mut variant_record;
                 for (i, d) in depth.iter().enumerate(){
@@ -561,6 +562,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 nucfrequency,
+                variant_abundances,
                 depth,
                 coverage,
                 tid,
@@ -568,35 +570,33 @@ impl PileupFunctions for PileupStats {
 
             } => {
                 let nucs = vec!('A', 'T', 'C', 'G', 'I', 'D');
-                for (position, hash) in nucfrequency.iter().enumerate() {
-                    let d = depth[position];
+                for (position, hash) in variant_abundances.iter() {
+                    let d = depth[*position as usize];
+                    debug!("{:?}", nucfrequency[*position as usize]);
                     if d >= depth_thresh {
                         if *coverage * 0.75 < d as f32 && d as f32 <= *coverage * 1.25 {
                             if hash.len() > 0 {
                                 let mut base_counts = vec![0; nucs.len()];
-                                let ref_base = ref_sequence[position] as char;
+                                let ref_base = ref_sequence[*position as usize] as char;
                                 print!("{}\t{}\t", tid, position);
                                 let mut cnt = 0;
                                 let mut ref_id = 0;
                                 for nuc in &nucs {
-                                    match hash.get(nuc) {
-                                        Some(reads) => {
-                                            base_counts[cnt] = reads.len();
+                                    match hash.get(&nuc.to_string()) {
+                                        Some(abundance) => {
+                                            print!("{}\t", abundance);
                                             cnt += 1;
                                         },
                                         None => {
                                             if nuc == &ref_base {
                                                 ref_id = cnt;
                                             }
+                                            print!("{}\t", 0.0);
                                             cnt += 1;
                                         }
                                     }
                                 }
-                                let count_sum: usize = base_counts.iter().sum();
-                                base_counts[ref_id] = d - count_sum;
-                                for base in base_counts {
-                                    print!("{}\t", base as f32 / d as f32);
-                                }
+
                                 print!("{}\t{}\n", d, ref_base);
                             }
                         }
