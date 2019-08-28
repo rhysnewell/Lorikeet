@@ -192,33 +192,35 @@ impl PileupFunctions for PileupStats {
 
                 for (i, d) in depth.iter().enumerate(){
                     let mut rel_abundance = HashMap::new();
-                    if d >= &depth_thresh {
-                        if nucfrequency[i].len() > 0 {
-                            for (base, read_ids) in nucfrequency[i].iter() {
-                                variant_count += 1;
-                                let count = read_ids.len();
-                                if count as f64 / *d as f64 >= variant_fraction {
-                                    rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
-                                    for read in read_ids {
-                                        let mut read_vec = read_variants
-                                            .entry(read.clone())
-                                            .or_insert(HashSet::new());
-                                        read_vec.insert(cursor as i32);
+                    if *coverage * 0.75 < *d as f32 && *d as f32 <= *coverage * 1.25 {
+                        if d >= &depth_thresh {
+                            if nucfrequency[i].len() > 0 {
+                                for (base, read_ids) in nucfrequency[i].iter() {
+                                    variant_count += 1;
+                                    let count = read_ids.len();
+                                    if count as f64 / depth_thresh as f64 >= variant_fraction {
+                                        rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
+                                        for read in read_ids {
+                                            let mut read_vec = read_variants
+                                                .entry(read.clone())
+                                                .or_insert(HashSet::new());
+                                            read_vec.insert(cursor as i32);
+                                        }
                                     }
                                 }
-                            }
-                        };
-                        if indels[i].len() > 0 {
-                            for (indel, read_ids) in indels[i].iter(){
-                                variant_count += 1;
-                                let count = read_ids.len();
-                                if count as f64 / *d as f64 >= variant_fraction {
-                                    rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
-                                    for read in read_ids {
-                                        let mut read_vec = read_variants
-                                            .entry(read.clone())
-                                            .or_insert(HashSet::new());
-                                        read_vec.insert(cursor as i32);
+                            };
+                            if indels[i].len() > 0 {
+                                for (indel, read_ids) in indels[i].iter() {
+                                    variant_count += 1;
+                                    let count = read_ids.len();
+                                    if count as f64 / depth_thresh as f64 >= variant_fraction {
+                                        rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
+                                        for read in read_ids {
+                                            let mut read_vec = read_variants
+                                                .entry(read.clone())
+                                                .or_insert(HashSet::new());
+                                            read_vec.insert(cursor as i32);
+                                        }
                                     }
                                 }
                             }
@@ -562,45 +564,70 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 nucfrequency,
+                indels,
                 variant_abundances,
+                variants_in_reads,
                 depth,
                 coverage,
                 tid,
                 ..
 
             } => {
-                let nucs = vec!('A', 'T', 'C', 'G', 'I', 'D');
                 for (position, hash) in variant_abundances.iter() {
-                    let d = depth[*position as usize];
-                    debug!("{:?}", nucfrequency[*position as usize]);
-                    if d >= depth_thresh {
-                        if *coverage * 0.75 < d as f32 && d as f32 <= *coverage * 1.25 {
-                            if hash.len() > 0 {
-                                let mut base_counts = vec![0; nucs.len()];
-                                let ref_base = ref_sequence[*position as usize] as char;
-                                print!("{}\t{}\t", tid, position);
-                                let mut cnt = 0;
-                                let mut ref_id = 0;
-                                for nuc in &nucs {
-                                    match hash.get(&nuc.to_string()) {
-                                        Some(abundance) => {
-                                            print!("{}\t", abundance);
-                                            cnt += 1;
-                                        },
-                                        None => {
-                                            if nuc == &ref_base {
-                                                ref_id = cnt;
+                    let position = *position as usize;
+                    let d = depth[position];
+//                    if d >= depth_thresh {
+//                        if *coverage * 0.75 < d as f32 && d as f32 <= *coverage * 1.25 {
+                                for (var, abundance) in hash.iter() {
+                                    if indels[position].contains_key(var) {
+                                        print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                                               var,
+                                               str::from_utf8(
+                                                   &ref_sequence[position..position
+                                                       + var.len() as usize]).unwrap(),
+                                               abundance, d);
+
+                                        let read_ids =
+                                            match indels[position].get(var) {
+                                                Some(ids) => ids,
+                                                None => {
+                                                    println!("Variant not in indel hash");
+                                                    std::process::exit(1)
+                                                },
+                                            };
+                                        let mut connected_bases = HashSet::new();
+                                        for read_id in read_ids {
+                                            if variants_in_reads.contains_key(&read_id) {
+                                                connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
                                             }
-                                            print!("{}\t", 0.0);
-                                            cnt += 1;
                                         }
+                                        print!("{:?}\n", connected_bases)
+                                    } else if var.len() == 1{
+                                        print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                                               var,
+                                               ref_sequence[position] as char,
+                                               abundance, d);
+                                        let read_ids =
+                                            match nucfrequency[position]
+                                                .get(&(var.clone().into_bytes()[0] as char)){
+                                            Some(ids) => ids,
+                                            None => {
+                                                println!("Variant not in frequency Hash");
+                                                std::process::exit(1)},
+                                        };
+//                                        let mut variant_ids= HashSet::new();
+
+                                        let mut connected_bases = HashSet::new();
+                                        for read_id in read_ids{
+                                            if variants_in_reads.contains_key(&read_id) {
+                                                connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                            }
+                                        }
+                                        print!("{:?}\n", connected_bases)
                                     }
                                 }
-
-                                print!("{}\t{}\n", d, ref_base);
-                            }
-                        }
-                    }
+//                        }
+//                    }
                 };
             }
         }

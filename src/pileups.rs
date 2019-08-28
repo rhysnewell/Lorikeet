@@ -176,11 +176,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                 Ok(ins) => {ins.to_string()},
                                 Err(e) => {"".to_string()},
                             };
-//                            debug!("Ins len: {} cigar: {:?} id: {}", len, alignment.record().cigar(), read_to_id[&alignment.record().qname().to_vec()]);
-//                            debug!("Indel: {} at {}", insert, pileup.pos());
-                            let id = nuc_freq[pileup.pos() as usize].entry('I')
-                                                                    .or_insert(HashSet::new());
-                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
+
                             let id = indels[pileup.pos() as usize].entry(insert)
                                 .or_insert(HashSet::new());
                             id.insert(read_to_id[&alignment.record().qname().to_vec()]);
@@ -188,14 +184,7 @@ pub fn pileup_variants<R: NamedBamReader,
                         },
 
                         bam::pileup::Indel::Del(len) => {
-//                            debug!("Del len: {} cigar: {:?} id: {}",
-//                                   len, alignment.record().cigar(), read_to_id[&alignment.record().qname().to_vec()]);
-//                            debug!("Indel: {} at {}",
-//                                   std::iter::repeat("N").take(len as usize).collect::<String>(),
-//                                   pileup.pos());
-                            let id = nuc_freq[pileup.pos() as usize].entry('D')
-                                                                        .or_insert(HashSet::new());
-                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
+
                             let id = indels[pileup.pos() as usize].entry(
                                 std::iter::repeat("N").take(len as usize).collect::<String>())
                                 .or_insert(HashSet::new());
