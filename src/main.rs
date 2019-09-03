@@ -1,6 +1,5 @@
 extern crate strainm;
 use strainm::mosdepth_genome_coverage_estimators::*;
-use strainm::pileup_structs::*;
 use strainm::bam_generator::*;
 use strainm::filter;
 use strainm::external_command_checker;
@@ -18,7 +17,6 @@ use rust_htslib::bam;
 use rust_htslib::bam::Read;
 
 extern crate bio;
-use bio::io::fasta::*;
 use bio::alignment::sparse::*;
 
 use std::env;
@@ -27,7 +25,6 @@ use std::process;
 use std::collections::{HashSet, BTreeMap};
 use std::path::Path;
 use std::fs::File;
-use std::io::prelude::*;
 
 extern crate itertools;
 use itertools::Itertools;
@@ -351,7 +348,7 @@ fn main(){
             let genomes_and_contigs_option = match separator.is_some() || single_genome {
                 true => None,
                 false => {
-                    let mut genome_fasta_files: Vec<String> = parse_list_of_genome_fasta_files(m);
+                    let genome_fasta_files: Vec<String> = parse_list_of_genome_fasta_files(m);
                     info!("Reading contig names for {} genomes ..", genome_fasta_files.len());
                     Some(strainm::read_genome_fasta_files(
                         &genome_fasta_files.iter().map(|s| s.as_str()).collect()))
@@ -594,7 +591,7 @@ fn main(){
             let num_threads = value_t!(m.value_of("threads"), u16).unwrap();
 
             for (bam, output) in bam_files.iter().zip(output_bam_files.iter()) {
-                let mut reader = bam::Reader::from_path(bam).expect(
+                let reader = bam::Reader::from_path(bam).expect(
                     &format!("Unable to find BAM file {}", bam));
                 let header = bam::header::Header::from_template(reader.header());
                 let mut writer = bam::Writer::from_path(
@@ -638,7 +635,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let mut bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -655,7 +652,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let mut bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_contig(
                         &mut estimators_and_taker,
@@ -663,7 +660,7 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters);
                 } else {
-                    let mut bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_contig(
                         &mut estimators_and_taker,
@@ -728,10 +725,11 @@ fn main(){
             let print_zeros = !m.is_present("no-zeros");
             let filter_params = FilterParameters::generate_from_clap(m);
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
+            let variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
-            let mut fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
                 Ok(reader) => reader,
                 Err(e) => {
                     eprintln!("Missing or corrupt fasta file {}", e);
@@ -757,7 +755,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let mut bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -776,11 +774,12 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let mut bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(
                         bam_readers,
@@ -792,9 +791,10 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 } else {
-                    let mut bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(
                         bam_readers,
@@ -806,7 +806,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -833,7 +834,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
@@ -847,7 +849,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -869,7 +872,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        variant_consensus_file);
                 }
             }
         }
@@ -882,14 +886,14 @@ fn main(){
             set_log_level(m, true);
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
-            let mut fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
+            let fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
                 Ok(reader) => reader,
                 Err(e) => {
                     eprintln!("Missing or corrupt fasta file {}", e);
                     process::exit(1);
                 },
             };
-            let mut contigs = fasta_reader.records().collect_vec();
+            let contigs = fasta_reader.records().collect_vec();
             // Initialize bound contig variable
             let mut tet_freq = BTreeMap::new();
             let contig_count = contigs.len();
@@ -902,14 +906,14 @@ fn main(){
                 let kmers = hash_kmers(contig.seq(), 4);
                 // Get kmer counts in a contig
                 for (kmer, pos) in kmers {
-                    let mut k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
+                    let k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
                     k[contig_idx] = pos.len();
                 }
                 contig_idx += 1;
             }
             for (idx, contig) in contig_names.iter().enumerate() {
                 print!("{}\t", contig);
-                for (kmer, counts) in &tet_freq{
+                for (_kmer, counts) in &tet_freq{
                     print!("{}\t", counts[idx])
                 }
                 print!("\n");
@@ -1606,7 +1610,8 @@ fn run_pileup<'a,
     depth_threshold: usize,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32) {
+    contig_end_exclusion: u32,
+    variant_consensus_file: String) {
 
     strainm::pileups::pileup_variants(
         bam_readers,
@@ -1618,7 +1623,8 @@ fn run_pileup<'a,
         min,
         max,
         min_fraction_covered_bases,
-        contig_end_exclusion);
+        contig_end_exclusion,
+        variant_consensus_file);
 
     debug!("Finalising printing ..");
 //
@@ -2384,7 +2390,10 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
                     .requires("proper-pairs-only"))
-
+                .arg(Arg::with_name("variant-consensus-fasta")
+                    .long("variant-consensus-fasta")
+                    .takes_value(true)
+                    .default_value("variant_fasta.fna"))
                 .arg(Arg::with_name("methods")
                     .short("m")
                     .long("method")

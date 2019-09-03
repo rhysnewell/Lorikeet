@@ -8,7 +8,7 @@ use FlagFilter;
 
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
-use rust_htslib::bam::pileup::Pileups;
+//use rust_htslib::bam::pileup::Pileups;
 
 use nix::unistd;
 use nix::sys::stat;

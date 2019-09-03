@@ -4,17 +4,15 @@ use std::collections::BTreeMap;
 use rust_htslib::bam;
 
 use pileup_structs::*;
-use mosdepth_genome_coverage_estimators::*;
 use bam_generator::*;
-use coverage_takers::*;
 use FlagFilter;
 use std::str;
 //use rm::linalg::Matrix;
 //use rm::linalg::Vector;
 use std::fs::File;
+use std::io::prelude::*;
 //use bio::io::fasta::*;
 use bio::alignment::sparse::*;
-//use std::io::prelude::*;
 
 
 
@@ -22,18 +20,26 @@ pub fn pileup_variants<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
     mut reference: bio::io::fasta::IndexedReader<File>,
-    print_zero_coverage_contigs: bool,
-    flag_filters: FlagFilter,
+    _print_zero_coverage_contigs: bool,
+    _flag_filters: FlagFilter,
     depth_threshold: usize,
     var_fraction: f64,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32) {
+    contig_end_exclusion: u32,
+    variant_file_name: String) {
 
-    for mut bam_generator in bam_readers {
+    let mut pileup_matrix = PileupMatrix::new_contig_stats();
+    let consensus_variant_fasta = match File::create(variant_file_name) {
+        Ok(fasta) => fasta,
+        Err(e) => {
+            println!("Cannot create file {:?}", e);
+            std::process::exit(1)
+        },
+    };
+    for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
 
-        let mut pileup_matrix = PileupMatrix::new_contig_stats();
         {
             let header = bam_generated.header().clone();
             let target_names = header.target_names();
@@ -81,15 +87,18 @@ pub fn pileup_variants<R: NamedBamReader,
                                                contig_name,
                                                contig_len);
 
-                    let coverage = pileup_struct.calc_coverage();
+                    pileup_struct.calc_coverage();
 
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
 //                    pileup_struct.generate_variant_matrix();
-                    pileup_struct.print_variants(ref_sequence, depth_threshold);
-//                    pileup_struct.generate_variant_contig(ref_sequence,
-//                                                          depth_threshold.clone(),
-//                                                          var_fraction.clone());
+                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
+
+                    let contig_n = ">".to_owned() + &str::from_utf8(target_names[last_tid as usize]).unwrap().to_string() + "\n";
+                    let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
+                    consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+                    pileup_struct.generate_variant_contig(ref_sequence.clone(),
+                                                          consensus_clone);
 
                     pileup_matrix.add_contig(pileup_struct,
                                              target_names.len() as usize);
@@ -121,10 +130,21 @@ pub fn pileup_variants<R: NamedBamReader,
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
                     last_tid = tid;
+//                    contig_name = str::from_utf8(target_names[tid as usize]).unwrap().to_string();
                     total_indels_in_current_contig = 0;
-                    reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap());
+                    match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)},
+                    };
                     ref_seq = Vec::new();
-                    reference.read(&mut ref_seq);
+                    match reference.read(&mut ref_seq) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)},
+                    };
                     let kmers = hash_kmers(&ref_seq, 4);
                     tet_freq = BTreeMap::new();
                     for (tet, loc) in kmers.iter(){
@@ -174,7 +194,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             let insert = match str::from_utf8(&alignment.record().seq().as_bytes()[
                                 qpos + 1..qpos + 1 + len as usize]) {
                                 Ok(ins) => {ins.to_string()},
-                                Err(e) => {"".to_string()},
+                                Err(_e) => {"".to_string()},
                             };
 
                             let id = indels[pileup.pos() as usize].entry(insert)
@@ -206,30 +226,8 @@ pub fn pileup_variants<R: NamedBamReader,
                 total_indels_in_current_contig,
                 ref_seq);
         }
-//        pileup_matrix.print_matrix();
         bam_generated.finish();
     }
-}
+//    pileup_matrix.print_matrix();
 
-
-fn print_previous_zero_coverage_contigs<T: CoverageTaker>(
-    last_tid: i32,
-    current_tid: i32,
-    coverage_estimators: &Vec<CoverageEstimator>,
-    target_names: &Vec<&[u8]>,
-    coverage_taker: &mut T,
-    header: &bam::HeaderView) {
-    let mut my_tid = last_tid + 1;
-    while my_tid < current_tid {
-        debug!("printing zero coverage for tid {}", my_tid);
-        coverage_taker.start_entry(
-            my_tid as usize,
-            std::str::from_utf8(target_names[my_tid as usize]).unwrap());
-        for ref coverage_estimator in coverage_estimators.iter() {
-            coverage_estimator.print_zero_coverage(
-                coverage_taker, header.target_len(my_tid as u32).unwrap());
-        }
-        coverage_taker.finish_entry();
-        my_tid += 1;
-    };
 }

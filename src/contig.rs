@@ -19,7 +19,7 @@ pub fn contig_coverage<R: NamedBamReader,
     -> Vec<ReadsMapped> {
 
     let mut reads_mapped_vector = vec!();
-    for mut bam_generator in bam_readers {
+    for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
         let stoit_name = &(bam_generated.name().to_string());
         coverage_taker.start_stoit(stoit_name);
@@ -65,7 +65,7 @@ pub fn contig_coverage<R: NamedBamReader,
                     coverage_taker.start_entry(
                         last_tid as usize,
                         std::str::from_utf8(target_names[last_tid as usize]).unwrap());
-                    for (coverage, mut estimator) in coverages.iter().zip(coverage_estimators.iter_mut()) {
+                    for (coverage, estimator) in coverages.iter().zip(coverage_estimators.iter_mut()) {
                         estimator.print_coverage(
                             &coverage,
                             coverage_taker);
@@ -121,8 +121,6 @@ pub fn contig_coverage<R: NamedBamReader,
                 // for each chunk of the cigar string
                 debug!("read name {:?}", std::str::from_utf8(record.qname()).unwrap());
                 let mut cursor: usize = record.pos() as usize;
-                let mut seq = record.seq();
-                let mut read_cursor = 0 as usize;
                 for cig in record.cigar().iter() {
                     debug!("Found cigar {:} from {}", cig, cursor);
                     match cig {

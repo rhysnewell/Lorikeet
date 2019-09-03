@@ -377,7 +377,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
                 }
                 debug!("Total observed length now {}", *observed_contig_length);
-                let mut cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
+                let cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
                 let mut cumulative_sum: i32 = 0;
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = len1 - *contig_end_exclusion as usize - 1;
@@ -424,7 +424,7 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                     }
                 }
                 let mut cumulative_sum: i32 = 0;
-                let mut cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
+                let cumulative_array: Vec<i32> = vec![0; ups_and_downs.len() as usize];
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = len - *contig_end_exclusion as usize - 1;
                 for i in 0..len {

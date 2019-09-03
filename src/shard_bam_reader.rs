@@ -542,7 +542,7 @@ pub fn generate_named_sharded_bam_readers_from_reads(
         log_files.push(samtools_view_cache_log);
     }
 
-    let stoit_name = match include_reference_in_stoit_name {
+    let _stoit_name = match include_reference_in_stoit_name {
         true => std::path::Path::new(reference).file_name()
             .expect("Unable to convert reference to file name").to_str()
             .expect("Unable to covert file name into str").to_string() + "/",

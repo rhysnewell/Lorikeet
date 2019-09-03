@@ -86,7 +86,7 @@ pub fn mash_sequence(
     let mut seq_len = 0u64;
     let mut minhash =  MinHashKmers::new(final_size, seed);
 //    debug!("seq: {:?}", seq);
-    fastx_bytes(
+    match fastx_bytes(
         seq,
         |needle_seq| {
             seq_len += needle_seq.seq.len() as u64;
@@ -96,10 +96,15 @@ pub fn mash_sequence(
                 debug!("kmer: {:?}", kmer);
                 let rc_count = if is_rev_complement { 1u8 } else { 0u8 };
                 minhash.push(kmer, rc_count);
-            }
-        },
-    );
-    let n_kmers = minhash.total_kmers() as u64;
+                    }
+            },
+    ){
+        Ok(fastx) => fastx,
+        Err(e) => {
+            println!("Cannot fastx bytes {:?}", e);
+            std::process::exit(1)}
+    };
+    let _n_kmers = minhash.total_kmers() as u64;
     debug!("{:?}", minhash);
     let hashes = minhash.into_vec();
 
