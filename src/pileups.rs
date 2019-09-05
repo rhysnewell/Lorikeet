@@ -47,6 +47,7 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut ref_seq: Vec<u8> = Vec::new();
             let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
             let mut indels = Vec::new();
+            let mut read_starts = HashMap::new();
             let mut tet_freq = BTreeMap::new();
             let mut depth = Vec::new();
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
@@ -160,6 +161,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
                             .or_insert(read_cnt_id);
+                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
                         read_cnt_id += 1;
                     }
 
