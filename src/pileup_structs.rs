@@ -11,12 +11,11 @@ use std::io::prelude::*;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug)]
-pub struct VariantBase {
+pub struct Genotype {
     read_ids: HashSet<i32>,
-    connected_bases: HashSet<i32>,
+    bases: HashSet<i32>,
     pos: usize,
     seq: String,
-    abundance: f32,
 }
 
 pub enum PileupStats {
@@ -337,11 +336,17 @@ impl PileupFunctions for PileupStats {
                 ref mut variants_in_reads,
                 ..
             } => {
-//                let mut variant_cooccurrences = HashMap::new();
-//                let mut variant_record;
+                let mut genotype_record;
+                let mut genotypes = HashMap::new();
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
+                    genotype_record = Genotype {
+                        read_ids: HashSet::new(),
+                        bases: HashSet::new(),
+                        pos: position,
+                        seq: variant.clone().to_string(),
+                    };
                     for (var, abundance) in variants.iter() {
                         if indels[position].contains_key(var) {
                             let read_ids =
@@ -352,10 +357,12 @@ impl PileupFunctions for PileupStats {
                                         std::process::exit(1)
                                     },
                                 };
+
                             let mut connected_bases = HashSet::new();
                             for read_id in read_ids {
                                 if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                    connected_bases = connected_bases.union(
+                                        &variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
                                 }
                             }
                             print!("{:?}\n", connected_bases)
