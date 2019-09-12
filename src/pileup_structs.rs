@@ -13,16 +13,15 @@ use std::io::prelude::*;
 #[derive(Debug)]
 pub struct Genotype {
     read_ids: HashSet<i32>,
-    bases: HashSet<i32>,
-    pos: usize,
-    seq: String,
+    start_var_pos: usize,
+    ordered_variants: BTreeSet,
 }
 
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         kfrequency: BTreeMap<Vec<u8>, usize>,
-        variants_in_reads: HashMap<i32, HashSet<i32>>,
+        variants_in_reads: HashMap<i32, HashMap<i32, String>>,
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
@@ -200,8 +199,8 @@ impl PileupFunctions for PileupStats {
                                         for read in read_ids {
                                             let read_vec = read_variants
                                                 .entry(read.clone())
-                                                .or_insert(HashSet::new());
-                                            read_vec.insert(cursor as i32);
+                                                .or_insert(HashMap::new());
+                                            read_vec.insert(cursor as i32, base.to_string());
                                         }
                                     }
                                 }
@@ -215,8 +214,8 @@ impl PileupFunctions for PileupStats {
                                         for read in read_ids {
                                             let read_vec = read_variants
                                                 .entry(read.clone())
-                                                .or_insert(HashSet::new());
-                                            read_vec.insert(cursor as i32);
+                                                .or_insert(HashMap::new());
+                                            read_vec.insert(cursor as i32, *indel);
                                         }
                                     }
                                 }
@@ -249,24 +248,24 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
 //                let mut position_covariance = BTreeMap::new();
-                let mut covar_array = Array2::<usize>::zeros((*target_len, *target_len));
-
-                for (_read_id, positions) in variants_in_reads{
-                    for position in positions.iter().combinations(2){
-
-                        covar_array[[*position[0] as usize, *position[1] as usize]] += 1 as usize;
-                        covar_array[[*position[1] as usize, *position[0] as usize]] += 1 as usize;
-
-                    }
-                }
-//                println!("{:?}", covar_array);
-                for row in covar_array.genrows(){
-//                    for col in row{
-//                        print!("{},")
+//                let mut covar_array = Array2::<usize>::zeros((*target_len, *target_len));
+//
+//                for (_read_id, positions) in variants_in_reads{
+//                    for position in positions.keys().collect().iter().combinations(2){
+//
+//                        covar_array[[*position[0] as usize, *position[1] as usize]] += 1 as usize;
+//                        covar_array[[*position[1] as usize, *position[0] as usize]] += 1 as usize;
+//
 //                    }
-                    println!("{}", row.iter().fold(String::new(), |acc, &num| acc + &num.to_string() + "\t"));
-//                    row.iter().fold(String::new(),|mut s,&n| {print!(format!((s,"{},",n).ok()); s});
-                }
+//                }
+////                println!("{:?}", covar_array);
+//                for row in covar_array.genrows(){
+////                    for col in row{
+////                        print!("{},")
+////                    }
+//                    println!("{}", row.iter().fold(String::new(), |acc, &num| acc + &num.to_string() + "\t"));
+////                    row.iter().fold(String::new(),|mut s,&n| {print!(format!((s,"{},",n).ok()); s});
+//                }
             }
         }
     }
@@ -341,13 +340,15 @@ impl PileupFunctions for PileupStats {
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
-                    genotype_record = Genotype {
-                        read_ids: HashSet::new(),
-                        bases: HashSet::new(),
-                        pos: position,
-                        seq: variant.clone().to_string(),
-                    };
+
                     for (var, abundance) in variants.iter() {
+                        let mut genotypes = Vec::new();
+                        genotype_record = Genotype {
+                            read_ids: HashSet::new(),
+//                            base_positions: Vec::new(),
+                            start_var_pos: position,
+                            ordered_variants: BTreeSet::new(),
+                        };
                         if indels[position].contains_key(var) {
                             let read_ids =
                                 match indels[position].get(var) {
@@ -362,15 +363,19 @@ impl PileupFunctions for PileupStats {
                             for read_id in read_ids {
                                 if variants_in_reads.contains_key(&read_id) {
                                     connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                        &variants_in_reads[&read_id]
+                                            .keys()).cloned().collect::<HashSet<i32>>();
                                 }
                             }
                             print!("{:?}\n", connected_bases)
                         } else if var.len() == 1{
-                            print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                            print!("{}\t{}\t{}\t{}\t{}\t{}\t",
+                                   tid,
+                                   position,
                                    var,
                                    ref_sequence[position] as char,
-                                   abundance, d);
+                                   abundance,
+                                   d);
                             let read_ids =
                                 match nucfrequency[position]
                                     .get(&(var.clone().into_bytes()[0] as char)){
@@ -383,7 +388,9 @@ impl PileupFunctions for PileupStats {
                             let mut connected_bases = HashSet::new();
                             for read_id in read_ids{
                                 if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                    connected_bases = connected_bases.union(
+                                        &variants_in_reads[&read_id]
+                                            .keys()).cloned().collect::<HashSet<i32>>();
                                 }
                             }
                             print!("{:?}\n", connected_bases)
@@ -562,7 +569,9 @@ impl PileupFunctions for PileupStats {
                             let mut connected_bases = HashSet::new();
                             for read_id in read_ids {
                                 if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                    connected_bases = connected_bases.union(
+                                        &variants_in_reads[&read_id].keys())
+                                        .cloned().collect::<HashSet<i32>>();
                                 }
                             }
                             print!("{:?}\n", connected_bases)
@@ -583,7 +592,9 @@ impl PileupFunctions for PileupStats {
                             let mut connected_bases = HashSet::new();
                             for read_id in read_ids{
                                 if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(&variants_in_reads[&read_id]).cloned().collect::<HashSet<i32>>();
+                                    connected_bases = connected_bases.union(
+                                        &variants_in_reads[&read_id].keys())
+                                        .cloned().collect::<HashSet<i32>>();
                                 }
                             }
                             print!("{:?}\n", connected_bases)
