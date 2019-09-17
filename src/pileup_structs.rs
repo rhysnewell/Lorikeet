@@ -386,12 +386,21 @@ impl PileupFunctions for PileupStats {
                                 } else {
                                     let position_map_variants = BTreeSet::from_iter(position_map.values());
                                     let position_map_positions = BTreeSet::from_iter(position_map.keys());
+                                    let genotype_position_vec = Vec::from_iter(genotype.base_positions.iter());
                                     for genotype in genotype_var.iter(){
                                         let diff: Vec<_> = genotype.base_positions
                                                                                 .symmetric_difference(&position_map_positions).collect();
                                         if diff.len() > 0 {
+                                            // Positional difference found
                                             for position in diff.iter() {
-//                                                if
+                                                if (genotype_position_vec.min() < position) & (position < genotype_position_vec.max()) {
+                                                    // possible new genotype detected
+                                                    genotype_record.read_ids.insert(*read_id);
+                                                    genotype_record.base_positions = position_map_positions.clone();
+                                                    genotype_record.ordered_variants = position_map_varaints.clone();
+
+
+                                                }
                                             }
                                         }
 
