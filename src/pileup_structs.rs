@@ -10,18 +10,19 @@ use std::fs::File;
 use std::io::prelude::*;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Genotype {
     read_ids: HashSet<i32>,
+    base_positions: BTreeSet,
     start_var_pos: usize,
-    ordered_variants: BTreeSet,
+    ordered_variants: BTreeMap,
 }
 
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         kfrequency: BTreeMap<Vec<u8>, usize>,
-        variants_in_reads: HashMap<i32, HashMap<i32, String>>,
+        variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
@@ -199,7 +200,7 @@ impl PileupFunctions for PileupStats {
                                         for read in read_ids {
                                             let read_vec = read_variants
                                                 .entry(read.clone())
-                                                .or_insert(HashMap::new());
+                                                .or_insert(BTreeMap::new());
                                             read_vec.insert(cursor as i32, base.to_string());
                                         }
                                     }
@@ -214,7 +215,7 @@ impl PileupFunctions for PileupStats {
                                         for read in read_ids {
                                             let read_vec = read_variants
                                                 .entry(read.clone())
-                                                .or_insert(HashMap::new());
+                                                .or_insert(BTreeMap::new());
                                             read_vec.insert(cursor as i32, *indel);
                                         }
                                     }
@@ -337,15 +338,20 @@ impl PileupFunctions for PileupStats {
             } => {
                 let mut genotype_record;
                 let mut genotypes = HashMap::new();
+                let mut position_map;
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
+                    let genotype_pos = genotypes.entry(position)
+                                            .or_insert(HashMap::new());
 
                     for (var, abundance) in variants.iter() {
-                        let mut genotypes = Vec::new();
+                        let genotype_var = genotype_pos.entry(var)
+                            .or_insert(HashSet::new());
+
                         genotype_record = Genotype {
                             read_ids: HashSet::new(),
-//                            base_positions: Vec::new(),
+                            base_positions: BTreeSet::new(),
                             start_var_pos: position,
                             ordered_variants: BTreeSet::new(),
                         };
@@ -359,23 +365,43 @@ impl PileupFunctions for PileupStats {
                                     },
                                 };
 
-                            let mut connected_bases = HashSet::new();
-                            for read_id in read_ids {
-                                if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id]
-                                            .keys()).cloned().collect::<HashSet<i32>>();
+                            let read_vec = read_ids.into_iter().collect::<Vec<&i32>>().sort();
+
+                            for read_id in read_vec {
+                                position_map = match variants_in_reads.get(&read_id){
+                                    Some(positions) => positions,
+                                    None => {
+                                        println!("Position not recorded in variant map");
+                                        std::process::exit(1)
+                                    },
+                                };
+                                if genotype_var.len() == 0 {
+                                    genotype_record.read_ids.insert(*read_id);
+                                    for (position, variant) in position_map.iter(){
+                                        genotype_record.base_positions.insert(position);
+                                        genotype_record.ordered_variants.insert(variant);
+                                    }
+                                    genotype_var.insert(genotype_record.cloned());
+
+                                } else {
+                                    let position_map_variants = BTreeSet::from_iter(position_map.values());
+                                    let position_map_positions = BTreeSet::from_iter(position_map.keys());
+                                    for genotype in genotype_var.iter(){
+                                        let diff: Vec<_> = genotype.base_positions
+                                                                                .symmetric_difference(&position_map_positions).collect();
+                                        if diff.len() > 0 {
+                                            for position in diff.iter() {
+//                                                if
+                                            }
+                                        }
+
+                                    }
+
+
                                 }
+
                             }
-                            print!("{:?}\n", connected_bases)
                         } else if var.len() == 1{
-                            print!("{}\t{}\t{}\t{}\t{}\t{}\t",
-                                   tid,
-                                   position,
-                                   var,
-                                   ref_sequence[position] as char,
-                                   abundance,
-                                   d);
                             let read_ids =
                                 match nucfrequency[position]
                                     .get(&(var.clone().into_bytes()[0] as char)){
@@ -393,29 +419,7 @@ impl PileupFunctions for PileupStats {
                                             .keys()).cloned().collect::<HashSet<i32>>();
                                 }
                             }
-                            print!("{:?}\n", connected_bases)
                         }
-//                        let mut occ = variant_cooccurrences.entry(position)
-//                                                           .or_insert(vec!());
-//                        variant_record = VariantBase {
-//                            read_ids: HashSet::new(),
-//                            connected_bases: HashSet::new(),
-//                            pos: position,
-//                            seq: variant.clone().to_string(),
-//                            abundance: abundances,
-//                        };
-//                        variant_record.read_ids = variant_record.read_ids
-//                                                                .union(&v)
-//                                                                .cloned()
-//                                                                .collect::<HashSet<i32>>();
-//                        for read_id in v {
-//                            variant_record.connected_bases = variant_record
-//                                .connected_bases
-//                                .union(&variants_in_reads[&read_id])
-//                                .cloned()
-//                                .collect::<HashSet<i32>>();
-//                        };
-//                        occ.push(variant_record);
                     }
                 }
             }
@@ -618,7 +622,7 @@ pub enum PileupMatrix {
     },
     PileupVariantMatrix {
         variants: Vec<f32>,
-        read_variants: Vec<HashMap<i32, HashSet<i32>>>,
+        read_variants: Vec<HashMap<i32, BTreeMap<i32, String>>>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
         coverages: Vec<f32>,
         tids: Vec<i32>,
