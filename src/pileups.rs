@@ -101,6 +101,8 @@ pub fn pileup_variants<R: NamedBamReader,
                     pileup_struct.generate_variant_contig(ref_sequence.clone(),
                                                           consensus_clone);
 
+                    pileup_struct.generate_genotypes();
+
                     pileup_matrix.add_contig(pileup_struct,
                                              target_names.len() as usize);
 

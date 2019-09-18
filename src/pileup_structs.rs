@@ -91,7 +91,7 @@ pub trait PileupFunctions {
                                original_contig: Vec<u8>,
                                consensus_genome: std::fs::File);
 
-    fn generate_genotypes(&mut self, read_starts: HashMap<i32, u32>);
+    fn generate_genotypes(&mut self);
 
     fn calc_coverage(&mut self) -> f32;
 
@@ -328,7 +328,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn generate_genotypes(&mut self, read_starts: HashMap<i32, u32>) {
+    fn generate_genotypes(&mut self) {
         match self {
             PileupStats::PileupContigStats {
                 ref mut variant_abundances,
@@ -461,21 +461,69 @@ impl PileupFunctions for PileupStats {
                                                                 .insert(new_position.clone(), new_variant.clone());
                                                         }
                                                     };
+
+                                                    // reset genotype_record
+                                                    genotype_record = Genotype {
+                                                        read_ids: HashSet::new(),
+                                                        base_positions: Vec::new(),
+                                                        start_var_pos: position,
+                                                        ordered_variants: HashMap::new(),
+                                                    };
+                                                    genotype.read_ids.insert(*read_id);
                                                     break
                                                 }
                                             }
 
                                         } else {
-                                            // No difference with a previous genotype, reset current
-                                            genotype_record = Genotype {
-                                                read_ids: HashSet::new(),
-                                                base_positions: Vec::new(),
-                                                start_var_pos: position,
-                                                ordered_variants: HashMap::new(),
-                                            };
-                                            genotype.read_ids.insert(*read_id);
-                                            break
+                                            // check variants against stored variants for a genotype
+                                            for (check_pos, check_var) in position_map.iter() {
+                                                if genotype.ordered_variants.contains_key(&check_pos) {
+                                                    let current_var = match genotype
+                                                        .ordered_variants
+                                                        .get(&check_pos) {
+                                                        Some(var) => var,
+                                                        None => {
+                                                            println!("Position not recorded in variant map");
+                                                            std::process::exit(1)
+                                                        }
+                                                    };
+                                                    if current_var != check_var {
+                                                        //Then this is a new genotype
+                                                        new_genotype = true;
+                                                    }
+                                                }
+                                            }
+                                            if new_genotype{
+                                                // possible new genotype detected
+                                                genotype_record.read_ids = HashSet::new();
+                                                genotype_record.read_ids.insert(*read_id);
+                                                for (pos, variant) in position_map.iter(){
+                                                    genotype_record.base_positions.push(pos.clone());
+                                                    genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
+                                                }
+                                                genotype_record.base_positions.sort();
+                                            } else {
+                                                // No difference with a previous genotype, reset current
+                                                genotype_record = Genotype {
+                                                    read_ids: HashSet::new(),
+                                                    base_positions: Vec::new(),
+                                                    start_var_pos: position,
+                                                    ordered_variants: HashMap::new(),
+                                                };
+                                                genotype.read_ids.insert(*read_id);
+                                                break
+                                            }
                                         }
+                                    }
+                                    if genotype_record.base_positions.len() > 0 {
+                                        genotype_var.push(genotype_record);
+
+                                        genotype_record = Genotype {
+                                            read_ids: HashSet::new(),
+                                            base_positions: Vec::new(),
+                                            start_var_pos: position,
+                                            ordered_variants: HashMap::new(),
+                                        };
                                     }
                                 }
                             }
@@ -488,17 +536,173 @@ impl PileupFunctions for PileupStats {
                                         println!("Variant not in frequency Hash");
                                         std::process::exit(1)},
                                 };
+                            let mut read_vec = read_ids.into_iter().collect::<Vec<&i32>>();
+                            read_vec.sort();
 
-//                            let mut connected_bases = HashSet::new();
-                            for read_id in read_ids{
-//                                if variants_in_reads.contains_key(&read_id) {
-//                                    connected_bases = connected_bases.union(
-//                                        &variants_in_reads[&read_id]
-//                                            .keys()).cloned().collect::<HashSet<i32>>();
-//                                }
+                            for read_id in read_vec {
+                                position_map = match variants_in_reads.get(&read_id){
+                                    Some(positions) => positions,
+                                    None => {
+                                        println!("Position not recorded in variant map");
+                                        std::process::exit(1)
+                                    },
+                                };
+                                if genotype_var.len() == 0 {
+                                    genotype_record.read_ids.insert(*read_id);
+                                    for (pos, variant) in position_map.iter(){
+                                        genotype_record.base_positions.push(pos.clone());
+                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
+                                    }
+                                    genotype_record.base_positions.sort();
+                                    genotype_var.push(genotype_record.clone());
+
+                                } else {
+                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
+                                    let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
+                                    let position_set = position_map.keys().cloned().collect::<HashSet<i32>>();
+
+                                    let mut new_genotype = false;
+
+                                    for genotype in genotype_var.iter_mut(){
+                                        let genotype_position_set =
+                                            genotype.base_positions.iter().cloned().collect::<HashSet<i32>>();
+
+                                        let diff: Vec<i32> = genotype_position_set
+                                            .symmetric_difference(&position_set).cloned().collect();
+                                        if diff.len() > 0 {
+                                            // Positional difference found
+                                            // Check if new genotype
+                                            for pos in diff.iter() {
+
+                                                if (genotype.base_positions.iter().min() < Some(pos)) && (Some(pos) < genotype.base_positions.iter().max()) {
+                                                    // possible new genotype detected
+                                                    genotype_record.read_ids = HashSet::new();
+                                                    genotype_record.read_ids.insert(*read_id);
+                                                    for (pos, variant) in position_map.iter(){
+                                                        genotype_record.base_positions.push(pos.clone());
+                                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
+                                                    }
+                                                    genotype_record.base_positions.sort();
+//                                                    new_genotype = true;
+                                                    break
+                                                }
+                                            }
+                                            if (genotype.base_positions.iter().min() == diff.iter().min())
+                                                || (diff.iter().max() > genotype.base_positions.iter().max()) {
+                                                // check variants against stored variants for a genotype
+                                                for (check_pos, check_var) in position_map.iter() {
+                                                    if genotype.ordered_variants.contains_key(&check_pos) {
+                                                        let current_var = match genotype
+                                                            .ordered_variants
+                                                            .get(&check_pos) {
+                                                            Some(var) => var,
+                                                            None => {
+                                                                println!("Position not recorded in variant map");
+                                                                std::process::exit(1)
+                                                            }
+                                                        };
+                                                        if current_var != check_var {
+                                                            //Then this is a new genotype
+                                                            new_genotype = true;
+                                                        }
+                                                    }
+                                                }
+                                                if new_genotype{
+                                                    // possible new genotype detected
+                                                    genotype_record.read_ids = HashSet::new();
+                                                    genotype_record.read_ids.insert(*read_id);
+                                                    for (pos, variant) in position_map.iter(){
+                                                        genotype_record.base_positions.push(pos.clone());
+                                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
+                                                    }
+                                                    genotype_record.base_positions.sort();
+                                                } else {
+                                                    // Extension of previous genotype
+                                                    genotype.read_ids.insert(*read_id);
+                                                    for base_position in position_map_positions.iter(){
+                                                        if !(genotype.base_positions.contains(&base_position)){
+                                                            genotype.base_positions.push(*base_position);
+                                                        }
+                                                    };
+                                                    genotype.base_positions.sort();
+                                                    for (new_position, new_variant) in position_map.iter() {
+                                                        if !(genotype.ordered_variants.contains_key(&new_position)) {
+                                                            genotype.ordered_variants
+                                                                    .insert(new_position.clone(), new_variant.clone());
+                                                        }
+                                                    };
+
+                                                    // reset genotype_record
+                                                    genotype_record = Genotype {
+                                                        read_ids: HashSet::new(),
+                                                        base_positions: Vec::new(),
+                                                        start_var_pos: position,
+                                                        ordered_variants: HashMap::new(),
+                                                    };
+                                                    genotype.read_ids.insert(*read_id);
+                                                    break
+                                                }
+                                            }
+
+                                        } else {
+                                            // check variants against stored variants for a genotype
+                                            for (check_pos, check_var) in position_map.iter() {
+                                                if genotype.ordered_variants.contains_key(&check_pos) {
+                                                    let current_var = match genotype
+                                                        .ordered_variants
+                                                        .get(&check_pos) {
+                                                        Some(var) => var,
+                                                        None => {
+                                                            println!("Position not recorded in variant map");
+                                                            std::process::exit(1)
+                                                        }
+                                                    };
+                                                    if current_var != check_var {
+                                                        //Then this is a new genotype
+                                                        new_genotype = true;
+                                                    }
+                                                }
+                                            }
+                                            if new_genotype{
+                                                // possible new genotype detected
+                                                genotype_record.read_ids = HashSet::new();
+                                                genotype_record.read_ids.insert(*read_id);
+                                                for (pos, variant) in position_map.iter(){
+                                                    genotype_record.base_positions.push(pos.clone());
+                                                    genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
+                                                }
+                                                genotype_record.base_positions.sort();
+                                            } else {
+                                                // No difference with a previous genotype, reset current
+                                                genotype_record = Genotype {
+                                                    read_ids: HashSet::new(),
+                                                    base_positions: Vec::new(),
+                                                    start_var_pos: position,
+                                                    ordered_variants: HashMap::new(),
+                                                };
+                                                genotype.read_ids.insert(*read_id);
+                                                break
+                                            }
+                                        }
+                                    }
+                                    if genotype_record.base_positions.len() > 0 {
+                                        genotype_var.push(genotype_record);
+
+                                        genotype_record = Genotype {
+                                            read_ids: HashSet::new(),
+                                            base_positions: Vec::new(),
+                                            start_var_pos: position,
+                                            ordered_variants: HashMap::new(),
+                                        };
+                                    }
+                                }
                             }
                         }
                     }
+                }
+                debug!("Genotypes {:?}", genotypes);
+                for (key, var) in genotypes.iter() {
+                    println!("position {}, number of variabls {:?}", key, var);
                 }
             }
         }
