@@ -1,14 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::BTreeMap;
-use ndarray::Array2;
+//use ndarray::Array2;
 //use simhash::*;
 //use mash::*;
 //use distance::*;
-use itertools::Itertools;
+//use itertools::Itertools;
 use std::str;
-use std::fs::File;
+//use std::fs::File;
 use std::io::prelude::*;
-use std::iter::FromIterator;
+//use std::iter::FromIterator;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug, Clone)]
@@ -245,8 +245,8 @@ impl PileupFunctions for PileupStats {
     fn generate_variant_matrix(&mut self){
         match self {
             PileupStats::PileupContigStats {
-                ref mut variants_in_reads,
-                ref mut target_len,
+                variants_in_reads: _,
+                target_len: _,
                 ..
             } => {
 //                let mut position_covariance = BTreeMap::new();
@@ -346,7 +346,7 @@ impl PileupFunctions for PileupStats {
                     let mut genotype_pos = genotypes.entry(position)
                                             .or_insert(HashMap::new());
 
-                    for (var, abundance) in variants.iter() {
+                    for (var, _abundance) in variants.iter() {
                         let mut genotype_var = genotype_pos.entry(var)
                             .or_insert(Vec::new());
 
@@ -387,7 +387,7 @@ impl PileupFunctions for PileupStats {
                                     genotype_var.push(genotype_record.clone());
 
                                 } else {
-                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
+//                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
                                     let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
                                     let position_set = position_map.keys().cloned().collect::<HashSet<i32>>();
 
@@ -557,7 +557,7 @@ impl PileupFunctions for PileupStats {
                                     genotype_var.push(genotype_record.clone());
 
                                 } else {
-                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
+//                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
                                     let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
                                     let position_set = position_map.keys().cloned().collect::<HashSet<i32>>();
 
@@ -702,7 +702,10 @@ impl PileupFunctions for PileupStats {
                 }
                 debug!("Genotypes {:?}", genotypes);
                 for (key, var) in genotypes.iter() {
-                    println!("position {}, number of variabls {:?}", key, var);
+                    print!("position {}, number of Genotypes", key);
+                    for v in var.values(){
+                        println!(" {:?}", v.len())
+                    }
                 }
             }
         }
