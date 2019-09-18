@@ -8,6 +8,7 @@ use itertools::Itertools;
 use std::str;
 use std::fs::File;
 use std::io::prelude::*;
+use std::iter::FromIterator;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
 #[derive(Debug, Clone)]
@@ -216,7 +217,7 @@ impl PileupFunctions for PileupStats {
                                             let read_vec = read_variants
                                                 .entry(read.clone())
                                                 .or_insert(BTreeMap::new());
-                                            read_vec.insert(cursor as i32, *indel);
+                                            read_vec.insert(cursor as i32, indel.clone());
                                         }
                                     }
                                 }
@@ -379,44 +380,45 @@ impl PileupFunctions for PileupStats {
                                 if genotype_var.len() == 0 {
                                     genotype_record.read_ids.insert(*read_id);
                                     for (pos, variant) in position_map.iter(){
-                                        genotype_record.base_positions.push(pos);
-                                        genotype_record.ordered_variants.insert(pos, variant);
+                                        genotype_record.base_positions.push(pos.clone());
+                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
                                     }
                                     genotype_record.base_positions.sort();
-                                    genotype_var.push(genotype_record);
+                                    genotype_var.push(genotype_record.clone());
 
                                 } else {
-                                    let position_map_variants = Vec::from(position_map.values());
-                                    let position_map_positions = Vec::from(position_map.keys());
-                                    let position_set = HashSet::from_iter(position_map.keys());
+                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
+                                    let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
+                                    let position_set = position_map.keys().cloned().collect::<HashSet<i32>>();
 
                                     let mut new_genotype = false;
 
                                     for genotype in genotype_var.iter_mut(){
-                                        let genotype_position_set = HashSet::from_iter(
-                                            genotype.base_positions.iter());
+                                        let genotype_position_set =
+                                            genotype.base_positions.iter().cloned().collect::<HashSet<i32>>();
 
                                         let diff: Vec<i32> = genotype_position_set
-                                            .symmetric_difference(&position_set).collect();
+                                            .symmetric_difference(&position_set).cloned().collect();
                                         if diff.len() > 0 {
                                             // Positional difference found
                                             // Check if new genotype
                                             for pos in diff.iter() {
-                                                if (genotype.base_positions.min() < pos) && (pos < genotype.base_positions.max()) {
+
+                                                if (genotype.base_positions.iter().min() < Some(pos)) && (Some(pos) < genotype.base_positions.iter().max()) {
                                                     // possible new genotype detected
                                                     genotype_record.read_ids = HashSet::new();
                                                     genotype_record.read_ids.insert(*read_id);
                                                     for (pos, variant) in position_map.iter(){
-                                                        genotype_record.base_positions.push(pos);
-                                                        genotype_record.ordered_variants.insert(pos, variant);
+                                                        genotype_record.base_positions.push(pos.clone());
+                                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
                                                     }
                                                     genotype_record.base_positions.sort();
 //                                                    new_genotype = true;
                                                     break
                                                 }
                                             }
-                                            if (genotype.base_positions.min() == diff.min())
-                                                || (diff.max() > genotype.base_positions.max()) {
+                                            if (genotype.base_positions.iter().min() == diff.iter().min())
+                                                || (diff.iter().max() > genotype.base_positions.iter().max()) {
                                                 // check variants against stored variants for a genotype
                                                 for (check_pos, check_var) in position_map.iter() {
                                                     if genotype.ordered_variants.contains_key(&check_pos) {
@@ -440,8 +442,8 @@ impl PileupFunctions for PileupStats {
                                                     genotype_record.read_ids = HashSet::new();
                                                     genotype_record.read_ids.insert(*read_id);
                                                     for (pos, variant) in position_map.iter(){
-                                                        genotype_record.base_positions.push(pos);
-                                                        genotype_record.ordered_variants.insert(pos, variant);
+                                                        genotype_record.base_positions.push(pos.clone());
+                                                        genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
                                                     }
                                                     genotype_record.base_positions.sort();
                                                 } else {
@@ -456,7 +458,7 @@ impl PileupFunctions for PileupStats {
                                                     for (new_position, new_variant) in position_map.iter() {
                                                         if !(genotype.ordered_variants.contains_key(&new_position)) {
                                                             genotype.ordered_variants
-                                                                .insert(*new_position, *new_variant);
+                                                                .insert(new_position.clone(), new_variant.clone());
                                                         }
                                                     };
                                                     break
@@ -476,7 +478,6 @@ impl PileupFunctions for PileupStats {
                                         }
                                     }
                                 }
-
                             }
                         } else if var.len() == 1{
                             let read_ids =
@@ -488,13 +489,13 @@ impl PileupFunctions for PileupStats {
                                         std::process::exit(1)},
                                 };
 
-                            let mut connected_bases = HashSet::new();
+//                            let mut connected_bases = HashSet::new();
                             for read_id in read_ids{
-                                if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id]
-                                            .keys()).cloned().collect::<HashSet<i32>>();
-                                }
+//                                if variants_in_reads.contains_key(&read_id) {
+//                                    connected_bases = connected_bases.union(
+//                                        &variants_in_reads[&read_id]
+//                                            .keys()).cloned().collect::<HashSet<i32>>();
+//                                }
                             }
                         }
                     }
@@ -651,7 +652,7 @@ impl PileupFunctions for PileupStats {
                             for read_id in read_ids {
                                 if variants_in_reads.contains_key(&read_id) {
                                     connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id].keys())
+                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
                                         .cloned().collect::<HashSet<i32>>();
                                 }
                             }
@@ -674,7 +675,7 @@ impl PileupFunctions for PileupStats {
                             for read_id in read_ids{
                                 if variants_in_reads.contains_key(&read_id) {
                                     connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id].keys())
+                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
                                         .cloned().collect::<HashSet<i32>>();
                                 }
                             }
