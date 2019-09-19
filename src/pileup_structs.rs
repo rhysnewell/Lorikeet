@@ -27,6 +27,7 @@ pub enum PileupStats {
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
+        genotypes_per_position: HashMap<usize, HashMap<String, Vec<Genotype>>>,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
@@ -52,6 +53,7 @@ impl PileupStats {
             variant_abundances: BTreeMap::new(),
             depth: vec!(),
             indels: vec!(),
+            genotypes_per_position: HashMap::new(),
             tid: 0,
             total_indels: 0,
             target_name: vec!(),
@@ -335,6 +337,7 @@ impl PileupFunctions for PileupStats {
                 ref mut nucfrequency,
                 ref mut indels,
                 ref mut variants_in_reads,
+                ref mut genotypes_per_position,
                 ..
             } => {
                 let mut genotype_record;
@@ -347,7 +350,7 @@ impl PileupFunctions for PileupStats {
                                             .or_insert(HashMap::new());
 
                     for (var, _abundance) in variants.iter() {
-                        let mut genotype_var = genotype_pos.entry(var)
+                        let mut genotype_var = genotype_pos.entry(var.to_string())
                             .or_insert(Vec::new());
 
                         genotype_record = Genotype {
@@ -700,13 +703,14 @@ impl PileupFunctions for PileupStats {
                         }
                     }
                 }
-                debug!("Genotypes {:?}", genotypes);
-                for (key, var) in genotypes.iter() {
-                    print!("position {}, number of Genotypes", key);
-                    for v in var.values(){
-                        println!(" {:?}", v.len())
-                    }
-                }
+//                debug!("Genotypes {:?}", genotypes);
+//                for (key, var) in genotypes.iter() {
+//                    println!("position {}, number of Genotypes {:?}", key, var.keys());
+////                    for v in var.values(){
+////                        println!(" {:?}", v.len())
+////                    }
+//                }
+                *genotypes_per_position = genotypes
             }
         }
     }
@@ -832,9 +836,11 @@ impl PileupFunctions for PileupStats {
                 variants_in_reads,
                 depth,
                 tid,
+                genotypes_per_position,
                 ..
 
             } => {
+                println!("tid\tpos\tvar\tref\tabundance\tdepth\tgenotypes\tconnected_bases");
                 for (position, hash) in variant_abundances.iter() {
                     let position = *position as usize;
                     let d = depth[position];
@@ -846,6 +852,24 @@ impl PileupFunctions for PileupStats {
                                        &ref_sequence[position..position
                                            + var.len() as usize]).unwrap(),
                                    abundance, d);
+
+                            // Print number of genotypes associated with that position and variant
+                            match genotypes_per_position.get(&position) {
+                                Some(gtype_hash) => {
+                                    match gtype_hash.get(&var.to_string()) {
+                                        Some(gtype_vec) => {
+                                            print!("{}\t", gtype_vec.len());
+                                        },
+                                        None => {
+                                            print!("0\t");
+                                        }
+                                    }
+                                },
+                                None => {
+                                    print!("0\t");
+                                },
+                            };
+
 
                             let read_ids =
                                 match indels[position].get(var) {
@@ -869,6 +893,24 @@ impl PileupFunctions for PileupStats {
                                    var,
                                    ref_sequence[position] as char,
                                    abundance, d);
+
+                            // Print number of genotypes associated with that position and variant
+                            match genotypes_per_position.get(&position) {
+                                Some(gtype_hash) => {
+                                    match gtype_hash.get(&var.to_string()) {
+                                        Some(gtype_vec) => {
+                                            print!("{}\t", gtype_vec.len());
+                                        },
+                                        None => {
+                                            print!("No var either\t");
+                                        }
+                                    }
+                                },
+                                None => {
+                                    print!("No var\t");
+                                },
+                            };
+
                             let read_ids =
                                 match nucfrequency[position]
                                     .get(&(var.clone().into_bytes()[0] as char)){
