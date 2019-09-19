@@ -41,15 +41,19 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut bam_generated = bam_generator.start();
 
         {
-            let header = bam_generated.header().clone();
-            let target_names = header.target_names();
-            let bam_pileups = bam_generated.pileups();
-            let mut ref_seq: Vec<u8> = Vec::new();
+
+            let header = bam_generated.header().clone(); // bam header
+            let target_names = header.target_names(); // contig names
+            let bam_pileups = bam_generated.pileups(); // pileups for each genomic pos
+            let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
+
+            // for each genomic position, only has hashmap when variants are present. Includes read ids
             let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
             let mut indels = Vec::new();
-            let mut read_starts = HashMap::new();
-            let mut tet_freq = BTreeMap::new();
-            let mut depth = Vec::new();
+
+            let mut read_starts = HashMap::new(); // read start map
+            let mut tet_freq = BTreeMap::new(); // kmer frequencies
+            let mut depth = Vec::new(); // genomic depth
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
             let mut read_cnt_id = 0;
@@ -78,7 +82,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     debug!("nuc frequency: {:?}", nuc_freq);
 
 
-
+                    // adds contig info to pileup struct
                     pileup_struct.add_contig(nuc_freq,
                                                tet_freq,
                                                depth,
@@ -88,13 +92,18 @@ pub fn pileup_variants<R: NamedBamReader,
                                                contig_name,
                                                contig_len);
 
+                    // calculates coverage across contig
                     pileup_struct.calc_coverage();
 
+                    // filters variants across contig
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
 //                    pileup_struct.generate_variant_matrix();
+
+                    // calculates minimum number of genotypes possible for each variant location
                     pileup_struct.generate_genotypes();
 
+                    // prints results of variants calling
                     pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
 
                     let contig_n = ">".to_owned() + &str::from_utf8(target_names[last_tid as usize]).unwrap().to_string() + "\n";

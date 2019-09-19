@@ -833,12 +833,16 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                println!("tid\tpos\tvar\tref\tabundance\tdepth\tgenotypes\tconnected_bases");
+                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\ttype\tconnected_bases");
                 for (position, hash) in variant_abundances.iter() {
+                    // loop through each position that has variants
                     let position = *position as usize;
                     let d = depth[position];
+
                     for (var, abundance) in hash.iter() {
+                        // for each variant at a location
                         if indels[position].contains_key(var) {
+                            // How does this print N for insertions?
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
                                    var,
                                    str::from_utf8(
