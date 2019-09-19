@@ -703,13 +703,6 @@ impl PileupFunctions for PileupStats {
                         }
                     }
                 }
-//                debug!("Genotypes {:?}", genotypes);
-//                for (key, var) in genotypes.iter() {
-//                    println!("position {}, number of Genotypes {:?}", key, var.keys());
-////                    for v in var.values(){
-////                        println!(" {:?}", v.len())
-////                    }
-//                }
                 *genotypes_per_position = genotypes
             }
         }
@@ -902,12 +895,12 @@ impl PileupFunctions for PileupStats {
                                             print!("{}\t", gtype_vec.len());
                                         },
                                         None => {
-                                            print!("No var either\t");
+                                            print!("0\t");
                                         }
                                     }
                                 },
                                 None => {
-                                    print!("No var\t");
+                                    print!("0\t");
                                 },
                             };
 
