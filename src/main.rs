@@ -1,16 +1,16 @@
-extern crate strainm;
-use strainm::mosdepth_genome_coverage_estimators::*;
-use strainm::bam_generator::*;
-use strainm::filter;
-use strainm::external_command_checker;
-use strainm::coverage_takers::*;
-use strainm::mapping_parameters::*;
-use strainm::coverage_printer::*;
-use strainm::shard_bam_reader::*;
-use strainm::FlagFilter;
-use strainm::CONCATENATED_FASTA_FILE_SEPARATOR;
-use strainm::genomes_and_contigs::GenomesAndContigs;
-use strainm::genome_exclusion::*;
+extern crate lorikeet;
+use lorikeet::mosdepth_genome_coverage_estimators::*;
+use lorikeet::bam_generator::*;
+use lorikeet::filter;
+use lorikeet::external_command_checker;
+use lorikeet::coverage_takers::*;
+use lorikeet::mapping_parameters::*;
+use lorikeet::coverage_printer::*;
+use lorikeet::shard_bam_reader::*;
+use lorikeet::FlagFilter;
+use lorikeet::CONCATENATED_FASTA_FILE_SEPARATOR;
+use lorikeet::genomes_and_contigs::GenomesAndContigs;
+use lorikeet::genome_exclusion::*;
 
 extern crate rust_htslib;
 use rust_htslib::bam;
@@ -43,10 +43,10 @@ use tempfile::NamedTempFile;
 #[macro_use]
 extern crate lazy_static;
 
-const CONCATENATED_REFERENCE_CACHE_STEM: &str = "strainm-genome";
+const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 
 fn filter_full_help() -> &'static str {
-    "strainm filter: Remove alignments with insufficient identity.
+    "lorikeet filter: Remove alignments with insufficient identity.
 
 Only primary, non-supplementary alignments are considered, and output files
 are grouped by reference, but not sorted by position.
@@ -89,13 +89,13 @@ Other:
 
 Example usage:
 
-  strainm filter -b in.bam -o out.bam --min-read-aligned-length 75
+  lorikeet filter -b in.bam -o out.bam --min-read-aligned-length 75
 
 Ben J. Woodcroft <benjwoodcroft near gmail.com>"
 }
 
 fn contig_full_help() -> &'static str {
-    "strainm contig: Calculate read coverage per-contig
+    "lorikeet contig: Calculate read coverage per-contig
 
 Define mapping(s) (required):
   Either define BAM:
@@ -172,7 +172,7 @@ Other arguments (optional):
                                            reads_per_base
                                          A more thorough description of the different
                                          methods is available at
-                                         https://github.com/wwood/strainm
+                                         https://github.com/wwood/lorikeet
 
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
@@ -200,7 +200,7 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>"
 }
 
 fn genome_full_help() -> &'static str {
-    "strainm genome: Calculate read coverage per-genome
+    "lorikeet genome: Calculate read coverage per-genome
 
 Define the contigs in each genome (exactly one of the following is required):
    -s, --separator <CHARACTER>           This character separates genome names
@@ -292,7 +292,7 @@ Other arguments (optional):
                                               reads_per_base
                                          A more thorough description of the different
                                          methods is available at
-                                         https://github.com/wwood/strainm
+                                         https://github.com/wwood/lorikeet
 
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
@@ -350,7 +350,7 @@ fn main(){
                 false => {
                     let genome_fasta_files: Vec<String> = parse_list_of_genome_fasta_files(m);
                     info!("Reading contig names for {} genomes ..", genome_fasta_files.len());
-                    Some(strainm::read_genome_fasta_files(
+                    Some(lorikeet::read_genome_fasta_files(
                         &genome_fasta_files.iter().map(|s| s.as_str()).collect()))
                 }
             };
@@ -423,7 +423,7 @@ fn main(){
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
                     run_genome(
-                        strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                        lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
                             bam_files,
                             filter_params.flag_filters,
                             filter_params.min_aligned_length_single,
@@ -445,7 +445,7 @@ fn main(){
                     match genome_exclusion_type {
                         GenomeExclusionTypes::NoneType => {
                             run_genome(
-                                strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                                lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                                     bam_files,
                                     sort_threads,
                                     &genome_exclusion_filter_non_type.unwrap()),
@@ -456,7 +456,7 @@ fn main(){
                         },
                         GenomeExclusionTypes::SeparatorType => {
                             run_genome(
-                                strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                                lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                                     bam_files,
                                     sort_threads,
                                     &genome_exclusion_filter_separator_type.unwrap()),
@@ -467,7 +467,7 @@ fn main(){
                         },
                         GenomeExclusionTypes::GenomesAndContigsType => {
                             run_genome(
-                                strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                                lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                                     bam_files,
                                     sort_threads,
                                     &genome_exclusion_genomes_and_contigs.unwrap()),
@@ -479,7 +479,7 @@ fn main(){
                     }
                 } else {
                     run_genome(
-                        strainm::bam_generator::generate_named_bam_readers_from_bam_files(
+                        lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                             bam_files),
                         m,
                         &mut estimators_and_taker,
@@ -496,7 +496,7 @@ fn main(){
                     info!("Generating reference FASTA file of concatenated genomes ..");
                     let list_of_genome_fasta_files = parse_list_of_genome_fasta_files(m);
                     concatenated_genomes = Some(
-                        strainm::bwa_index_maintenance::generate_concatenated_fasta_file(
+                        lorikeet::bwa_index_maintenance::generate_concatenated_fasta_file(
                             &list_of_genome_fasta_files));
                 }
 
@@ -635,7 +635,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -652,7 +652,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_contig(
                         &mut estimators_and_taker,
@@ -660,7 +660,7 @@ fn main(){
                         print_zeros,
                         filter_params.flag_filters);
                 } else {
-                    let bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_contig(
                         &mut estimators_and_taker,
@@ -715,8 +715,8 @@ fn main(){
                 }
             }
         },
-        Some("pileup") => {
-            let m = matches.subcommand_matches("pileup").unwrap();
+        Some("polymorph") => {
+            let m = matches.subcommand_matches("polymorph").unwrap();
             if m.is_present("full-help") {
                 println!("{}", contig_full_help());
                 process::exit(1);
@@ -755,7 +755,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = strainm::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -779,7 +779,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = strainm::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(
                         bam_readers,
@@ -794,7 +794,7 @@ fn main(){
                         contig_end_exclusion,
                         variant_consensus_file);
                 } else {
-                    let bam_readers = strainm::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(
                         bam_readers,
@@ -934,12 +934,12 @@ fn main(){
 
             for reference_wise_params in params {
                 let mut bam_readers = vec![];
-                let index = strainm::bwa_index_maintenance::generate_bwa_index(
+                let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
                     reference_wise_params.reference);
 
                 for p in reference_wise_params {
                     bam_readers.push(
-                        strainm::bam_generator::generate_bam_maker_generator_from_reads(
+                        lorikeet::bam_generator::generate_bam_maker_generator_from_reads(
                             index.index_path(),
                             p.read1,
                             p.read2,
@@ -1161,7 +1161,7 @@ fn parse_separator(m: &clap::ArgMatches) -> Option<u8> {
         // files.
         None
     } else {
-        // Separator is set by strainm and written into the generated reference
+        // Separator is set by lorikeet and written into the generated reference
         // fasta file.
         Some(CONCATENATED_FASTA_FILE_SEPARATOR.as_bytes()[0])
     }
@@ -1214,8 +1214,8 @@ fn parse_list_of_genome_fasta_files(m: &clap::ArgMatches) -> Vec<String> {
 
 
 fn run_genome<'a,
-              R: strainm::bam_generator::NamedBamReader,
-              T: strainm::bam_generator::NamedBamReaderGenerator<R>> (
+              R: lorikeet::bam_generator::NamedBamReader,
+              T: lorikeet::bam_generator::NamedBamReaderGenerator<R>> (
     bam_generators: Vec<T>,
     m: &clap::ArgMatches,
     estimators_and_taker: &'a mut EstimatorsAndTaker<'a>,
@@ -1227,7 +1227,7 @@ fn run_genome<'a,
     let single_genome = m.is_present("single-genome");
     let reads_mapped = match separator.is_some() || single_genome {
         true => {
-            strainm::genome::mosdepth_genome_coverage(
+            lorikeet::genome::mosdepth_genome_coverage(
                 bam_generators,
                 separator.unwrap(),
                 &mut estimators_and_taker.taker,
@@ -1240,7 +1240,7 @@ fn run_genome<'a,
         false => {
             match genomes_and_contigs_option {
                 Some(gc) =>
-                    strainm::genome::mosdepth_genome_coverage_with_contig_names(
+                    lorikeet::genome::mosdepth_genome_coverage_with_contig_names(
                         bam_generators,
                         gc,
                         &mut estimators_and_taker.taker,
@@ -1359,7 +1359,7 @@ where T: GenomeExclusion {
     let mut bam_readers = vec![];
 
     for reference_wise_params in params {
-        let index = strainm::bwa_index_maintenance::generate_bwa_index(
+        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
             reference_wise_params.reference);
 
         let reference = reference_wise_params.reference;
@@ -1383,7 +1383,7 @@ where T: GenomeExclusion {
 
         for p in reference_wise_params {
             bam_readers.push(
-                strainm::shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
+                lorikeet::shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
                         index.index_path(),
                         p.read1,
                         p.read2,
@@ -1421,7 +1421,7 @@ fn get_streamed_bam_readers<'a>(
     let mut generator_set = vec!();
     for reference_wise_params in params {
         let mut bam_readers = vec![];
-        let index = strainm::bwa_index_maintenance::generate_bwa_index(
+        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
             reference_wise_params.reference);
 
         let reference = reference_wise_params.reference;
@@ -1445,7 +1445,7 @@ fn get_streamed_bam_readers<'a>(
 
         for p in reference_wise_params {
             bam_readers.push(
-                strainm::bam_generator::generate_named_bam_readers_from_reads(
+                lorikeet::bam_generator::generate_named_bam_readers_from_reads(
                     index.index_path(),
                     p.read1,
                     p.read2,
@@ -1546,7 +1546,7 @@ fn get_streamed_filtered_bam_readers(
     for reference_wise_params in params {
         let mut bam_readers = vec![];
         let filter_params = FilterParameters::generate_from_clap(m);
-        let index = strainm::bwa_index_maintenance::generate_bwa_index(
+        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
             reference_wise_params.reference);
 
         let reference = reference_wise_params.reference;
@@ -1570,7 +1570,7 @@ fn get_streamed_filtered_bam_readers(
 
         for p in reference_wise_params {
             bam_readers.push(
-                strainm::bam_generator::generate_filtered_named_bam_readers_from_reads(
+                lorikeet::bam_generator::generate_filtered_named_bam_readers_from_reads(
                     index.index_path(),
                     p.read1,
                     p.read2,
@@ -1600,8 +1600,8 @@ fn get_streamed_filtered_bam_readers(
 }
 
 fn run_pileup<'a,
-    R: strainm::bam_generator::NamedBamReader,
-    T: strainm::bam_generator::NamedBamReaderGenerator<R>>(
+    R: lorikeet::bam_generator::NamedBamReader,
+    T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
     bam_readers: Vec<T>,
     reference: bio::io::fasta::IndexedReader<File>,
     print_zeros: bool,
@@ -1613,7 +1613,7 @@ fn run_pileup<'a,
     contig_end_exclusion: u32,
     variant_consensus_file: String) {
 
-    strainm::pileups::pileup_variants(
+    lorikeet::pileups::pileup_variants(
         bam_readers,
         reference,
         print_zeros,
@@ -1637,14 +1637,14 @@ fn run_pileup<'a,
 
 
 fn run_contig<'a,
-              R: strainm::bam_generator::NamedBamReader,
-              T: strainm::bam_generator::NamedBamReaderGenerator<R>>(
+              R: lorikeet::bam_generator::NamedBamReader,
+              T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
     estimators_and_taker: &'a mut EstimatorsAndTaker<'a>,
     bam_readers: Vec<T>,
     print_zeros: bool,
     flag_filters: FlagFilter) {
 
-    strainm::contig::contig_coverage(
+    lorikeet::contig::contig_coverage(
         bam_readers,
         &mut estimators_and_taker.taker,
         &mut estimators_and_taker.estimators,
@@ -1683,7 +1683,7 @@ fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {
         }
     }
     if is_last {
-        info!("strainm version {}", crate_version!());
+        info!("lorikeet version {}", crate_version!());
     }
 }
 
@@ -1697,17 +1697,17 @@ fn build_cli() -> App<'static, 'static> {
 
 {}
 
-  strainm contig --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna
+  lorikeet contig --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna
 
 {}
 
-  strainm contig --method metabat --bam-files my.bam
+  lorikeet contig --method metabat --bam-files my.bam
     --bam-file-cache-directory saved_bam_files
 
-See strainm contig --full-help for further options and further detail.
+See lorikeet contig --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "strainm contig"),
+                "lorikeet contig"),
             ansi_term::Colour::Green.paint(
                 "Calculate coverage of individual contigs"),
             ansi_term::Colour::Purple.paint(
@@ -1724,17 +1724,17 @@ the unfiltered BAM files in the saved_bam_files folder:")
 
 {}
 
-  strainm genome --coupled read1.fastq.gz read2.fastq.gz
+  lorikeet genome --coupled read1.fastq.gz read2.fastq.gz
     --reference assembly.fna --separator '~'
 
 {}
 
-  strainm genome --bam-files my.bam --genome-fasta-directory genomes_directory/
+  lorikeet genome --bam-files my.bam --genome-fasta-directory genomes_directory/
 
-See strainm genome --full-help for further options and further detail.
+See lorikeet genome --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "strainm genome"),
+                "lorikeet genome"),
             ansi_term::Colour::Green.paint(
                 "Calculate coverage of individual genomes"),
             ansi_term::Colour::Purple.paint(
@@ -1752,18 +1752,18 @@ genomes_directory/ from a sorted BAM file:"),
 
 {}
 
-  strainm filter --bam-files input.bam --output-bam filtered.bam
+  lorikeet filter --bam-files input.bam --output-bam filtered.bam
     --min-read-aligned-length 50
 
 {}
 
-  strainm filter -b input.bam -o inverse_filtered.bam --inverse
+  lorikeet filter -b input.bam -o inverse_filtered.bam --inverse
     --min-read-percent-identity 0.95 --threads 16
 
-See strainm filter --full-help for further options and further detail.
+See lorikeet filter --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "strainm filter"),
+                "lorikeet filter"),
             ansi_term::Colour::Green.paint(
                 "Filter BAM file alignments"),
             ansi_term::Colour::Purple.paint(
@@ -1777,7 +1777,7 @@ See strainm filter --full-help for further options and further detail.
     }
 
     let make_help: &'static str =
-        "strainm make: Generate BAM files through mapping.
+        "lorikeet make: Generate BAM files through mapping.
 
 Output (required):
    -o, --output-directory <DIR>          Where generated BAM files will go
@@ -1804,11 +1804,11 @@ Mapping parameters:
 
 Example usage:
 
-  strainm make -r combined_genomes.fna -1 read1.fq -2 read2.fq
+  lorikeet make -r combined_genomes.fna -1 read1.fq -2 read2.fq
 
 Ben J. Woodcroft <benjwoodcroft near gmail.com>";
 
-    return App::new("strainm")
+    return App::new("lorikeet")
         .version(crate_version!())
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
         .about("Mapping coverage analysis for metagenomics")
@@ -1817,7 +1817,7 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>";
         .help("
 Mapping coverage analysis for metagenomics
 
-Usage: strainm <subcommand> ...
+Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tcontig\tCalculate coverage of contigs
@@ -2292,8 +2292,8 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                      .allow_hyphen_values(true)
                      .requires("reference")))
         .subcommand(
-            SubCommand::with_name("pileup")
-                .about("Perform pileup analysis")
+            SubCommand::with_name("polymorph")
+                .about("Perform variant calling analysis")
 //                .help(CONTIG_HELP.as_str())
 
                 .arg(Arg::with_name("full-help")
