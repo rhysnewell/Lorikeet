@@ -8,9 +8,12 @@ Input can either be reads and reference genome, or MAG. Or a BAM file and associ
 # Usage
 
 `lorikeet polymorph -b input.bam -r input_genome.fna`
+
 OR
+
 `lorikeet polymorph -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq`
 
 # Output 
 The output of polymorph is a tab-delimited file with 9 fields
+
 `tid  pos variant reference abundance depth genotypes type  connected_bases`
