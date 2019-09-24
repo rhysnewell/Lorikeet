@@ -28,12 +28,14 @@ pub enum PileupStats {
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
         genotypes_per_position: HashMap<usize, HashMap<String, Vec<Genotype>>>,
+        mean_genotypes: f32,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
         target_len: usize,
         variations_per_base: f32,
         coverage: f32,
+        variance: f32,
         observed_contig_length: u32,
         num_covered_bases: i32,
         contig_end_exclusion: u32,
@@ -54,12 +56,14 @@ impl PileupStats {
             depth: vec!(),
             indels: vec!(),
             genotypes_per_position: HashMap::new(),
+            mean_genotypes: 0.0,
             tid: 0,
             total_indels: 0,
             target_name: vec!(),
             target_len: 0,
             variations_per_base: 0.00,
             coverage: 0.00,
+            variance: 0.00,
             observed_contig_length: 0,
             num_covered_bases: 0,
             contig_end_exclusion: contig_end_exclusion,
@@ -338,11 +342,14 @@ impl PileupFunctions for PileupStats {
                 ref mut indels,
                 ref mut variants_in_reads,
                 ref mut genotypes_per_position,
+                ref mut mean_genotypes,
                 ..
             } => {
                 let mut genotype_record;
                 let mut genotypes = HashMap::new();
                 let mut position_map;
+                let mut variant_count = 0;
+                let mut genotype_count = 0;
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
@@ -350,6 +357,7 @@ impl PileupFunctions for PileupStats {
                                             .or_insert(HashMap::new());
 
                     for (var, _abundance) in variants.iter() {
+                        variant_count += 1;
                         let mut genotype_var = genotype_pos.entry(var.to_string())
                             .or_insert(Vec::new());
 
@@ -701,8 +709,11 @@ impl PileupFunctions for PileupStats {
                                 }
                             }
                         }
+                        genotype_count += genotype_var.len();
                     }
                 }
+                //Calc the mean number of genotypes per variant
+                *mean_genotypes = (genotype_count/variant_count) as f32;
                 *genotypes_per_position = genotypes
             }
         }
@@ -714,6 +725,7 @@ impl PileupFunctions for PileupStats {
                 ref mut depth,
                 target_len,
                 ref mut coverage,
+                ref mut variance,
                 observed_contig_length,
                 num_covered_bases,
                 contig_end_exclusion,
@@ -756,9 +768,12 @@ impl PileupFunctions for PileupStats {
                 debug!("Calculating coverage with num_covered_bases {}, observed_length {} and counts {:?}",
                        num_covered_bases, observed_contig_length, counts);
                 let answer = match total_bases {
-                    0 => 0.0,
+                    0 => {
+                        *variance = 0.0;
+                        0.0},
                     _ => {
                         if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
+                            *variance = 0.0;
                             0.0
                         } else {
                             let min_index: usize = (*min * total_bases as f32).floor() as usize;
@@ -770,8 +785,24 @@ impl PileupFunctions for PileupStats {
                             let mut total: usize = 0;
                             let mut started = false;
                             let mut i = 0;
-                            for num_covered in counts.iter() {
-                                num_accounted_for += *num_covered as usize;
+
+                            let mut k = 0;
+                            // Ensure K is within the range of coverages - take the
+                            // lowest coverage.
+                            while counts[k] == 0 {
+                                k += 1;
+                            }
+                            let mut ex = 0;
+                            let mut ex2 = 0;
+
+                            for (x, num_covered) in counts.iter().enumerate() {
+                                num_accounted_for += num_covered.clone() as usize;
+
+                                if num_covered > &0 {
+                                    let nc = *num_covered as usize;
+                                    ex += (x-k) * nc;
+                                    ex2 += (x-k)*(x-k) * nc;
+                                }
                                 debug!("start: i {}, num_accounted_for {}, total {}, min {}, max {}",
                                        i, num_accounted_for, total, min_index, max_index);
                                 if num_accounted_for >= min_index {
@@ -810,6 +841,10 @@ impl PileupFunctions for PileupStats {
 
                                 i += 1;
                             }
+                            // Return sample variance not population variance since
+                            // almost all MAGs are incomplete.
+                            *variance =
+                                (ex2 as f32 - (ex*ex) as f32/total_bases as f32) / (total_bases - 1) as f32;
                             total as f32 / (max_index - min_index) as f32
                         }
                     }
