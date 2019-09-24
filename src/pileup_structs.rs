@@ -1090,6 +1090,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut target_len,
                         ref mut coverage,
                         ref mut variations_per_base,
+                        ref mut mean_genotypes,
+                        ref mut variance,
                         ..
                     } => {
                         variants.push(*variations_per_base);
@@ -1127,6 +1129,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut target_len,
                         ref mut variations_per_base,
                         ref mut coverage,
+                        ref mut mean_genotypes,
+                        ref mut variance,
                         ..
                     } => {
                         variants.push(*variations_per_base);
