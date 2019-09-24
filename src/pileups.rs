@@ -106,9 +106,17 @@ pub fn pileup_variants<R: NamedBamReader,
                     // prints results of variants calling
                     pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
 
-                    let contig_n = ">".to_owned() + &str::from_utf8(target_names[last_tid as usize]).unwrap().to_string() + "\n";
+
+                    // Write consensus contig to fasta
+                    // i.e. the most abundant variant at each position from this set of reads
+                    let contig_n = ">".to_owned() +
+                        &str::from_utf8(target_names[last_tid as usize]).unwrap().to_string() +
+                        "\n";
+
                     let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
                     consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+
+
                     pileup_struct.generate_variant_contig(ref_sequence.clone(),
                                                           consensus_clone);
 
