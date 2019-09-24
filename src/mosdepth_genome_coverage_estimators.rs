@@ -205,7 +205,6 @@ pub trait MosdepthGenomeCoverageEstimator {
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32;
 
-//    fn get_core(&mut self, coverage: f32) -> Vec<i32>;
 
     fn print_coverage<T: CoverageTaker>(
         &self,
@@ -336,7 +335,6 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                         *total_count += cumulative_sum as u32;
                     }
                 }
-//                println!("{:?}", cumulative_array);
 
                 *pileup_counts = cumulative_array;
                 debug!("After adding contig, have total_count {}, total_bases {}, \
@@ -383,8 +381,8 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
                 let end_at = len1 - *contig_end_exclusion as usize - 1;
                 for (i, current) in ups_and_downs.iter().enumerate() {
                     if *current != 0 {
-//                        debug!("cumulative sum {} and current {}", cumulative_sum, current);
-//                        debug!("At i some, ups and downs {:?}", ups_and_downs);
+                        debug!("cumulative sum {} and current {}", cumulative_sum, current);
+                        debug!("At i some, ups and downs {:?}", ups_and_downs);
                     }
                     cumulative_sum += current;
                     if i >= start_from && i <= end_at {
@@ -455,10 +453,6 @@ impl MosdepthGenomeCoverageEstimator for CoverageEstimator {
             }
         }
     }
-
-//    fn get_core(&mut self, coverage: f32) -> Vec<i32>{
-//
-//    }
 
     fn calculate_coverage(&mut self, unobserved_contig_length: u32) -> f32 {
         match self {
