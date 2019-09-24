@@ -281,9 +281,8 @@ pub fn pileup_contigs<R: NamedBamReader,
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-
+        let stoit_name = bam_generated.name().to_string();
         {
-
             let header = bam_generated.header().clone(); // bam header
             let target_names = header.target_names(); // contig names
             let bam_pileups = bam_generated.pileups(); // pileups for each genomic pos
@@ -346,7 +345,11 @@ pub fn pileup_contigs<R: NamedBamReader,
                     pileup_struct.generate_genotypes();
 
                     // prints results of variants calling
-                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
+//                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
+
+                    pileup_matrix.add_contig(pileup_struct,
+                                             target_names.len() as usize,
+                                             stoit_name);
 
                 }
             };
