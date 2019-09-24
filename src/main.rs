@@ -722,10 +722,14 @@ fn main(){
                 process::exit(1);
             }
             set_log_level(m, true);
+            let mut variant_consensus_file = "uninit.fna".to_string();
             let print_zeros = !m.is_present("no-zeros");
             let filter_params = FilterParameters::generate_from_clap(m);
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
-            let variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+            let print_consensus = m.is_present("variant-consensus-fasta");
+            if print_consensus {
+                variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+            }
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
@@ -775,7 +779,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -792,7 +797,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 } else {
                     let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -807,7 +813,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -835,7 +842,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
@@ -850,7 +858,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -873,7 +882,8 @@ fn main(){
                         max,
                         min_fraction_covered,
                         contig_end_exclusion,
-                        variant_consensus_file);
+                        variant_consensus_file,
+                        print_consensus);
                 }
             }
         }
@@ -1611,7 +1621,8 @@ fn run_pileup<'a,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
-    variant_consensus_file: String) {
+    variant_consensus_file: String,
+    print_consensus: bool) {
 
     lorikeet::pileups::pileup_variants(
         bam_readers,
@@ -1624,15 +1635,9 @@ fn run_pileup<'a,
         max,
         min_fraction_covered_bases,
         contig_end_exclusion,
-        variant_consensus_file);
+        variant_consensus_file,
+        print_consensus);
 
-    debug!("Finalising printing ..");
-//
-//    estimators_and_taker.printer.finalise_printing(
-//        &estimators_and_taker.taker,
-//        &mut std::io::stdout(),
-//        None,
-//        &estimators_and_taker.columns_to_normalise);
 }
 
 
@@ -2393,7 +2398,7 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                 .arg(Arg::with_name("variant-consensus-fasta")
                     .long("variant-consensus-fasta")
                     .takes_value(true)
-                    .default_value("variant_fasta.fna"))
+                    .required(false))
                 .arg(Arg::with_name("methods")
                     .short("m")
                     .long("method")
