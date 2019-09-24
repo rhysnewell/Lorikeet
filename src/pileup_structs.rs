@@ -974,20 +974,26 @@ pub enum PileupMatrix {
         variants: Vec<f32>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
         coverages: Vec<f32>,
+        average_genotypes: Vec<f32>,
+        variances: Vec<f32>,
         tids: Vec<i32>,
         total_indels_across_contigs: Vec<usize>,
         target_names: Vec<Vec<u8>>,
         target_lengths: Vec<usize>,
+        sample_names: Vec<String>,
     },
     PileupVariantMatrix {
         variants: Vec<f32>,
         read_variants: Vec<HashMap<i32, BTreeMap<i32, String>>>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
         coverages: Vec<f32>,
+        average_genotypes: Vec<f32>,
+        variances: Vec<f32>,
         tids: Vec<i32>,
         total_indels_across_contigs: Vec<usize>,
         target_names: Vec<Vec<u8>>,
         target_lengths: Vec<usize>,
+        sample_names: Vec<String>,
     }
 }
 
@@ -997,10 +1003,13 @@ impl PileupMatrix {
             variants: vec!(),
             kfrequencies: BTreeMap::new(),
             coverages: vec!(),
+            average_genotypes: vec!(),
+            variances: vec!(),
             tids: vec!(),
             total_indels_across_contigs: vec!(),
             target_names: vec!(),
             target_lengths: vec!(),
+            sample_names: vec!(),
         }
     }
     pub fn new_contig_variants() -> PileupMatrix {
@@ -1009,10 +1018,13 @@ impl PileupMatrix {
             read_variants: vec!(),
             kfrequencies: BTreeMap::new(),
             coverages: vec!(),
+            average_genotypes: vec!(),
+            variances: vec!(),
             tids: vec!(),
             total_indels_across_contigs: vec!(),
             target_names: vec!(),
             target_lengths: vec!(),
+            sample_names: vec!(),
         }
     }
 }
@@ -1022,7 +1034,8 @@ pub trait PileupMatrixFunctions {
 
     fn add_contig(&mut self,
                   pileup_stats: PileupStats,
-                  number_of_contigs: usize);
+                  number_of_contigs: usize,
+                  sample_name: String);
 
     fn print_matrix(&self);
 
@@ -1035,51 +1048,68 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut variants,
                 ref mut kfrequencies,
                 ref mut coverages,
+                ref mut average_genotypes,
+                ref mut variances,
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
                 ref mut target_lengths,
+                ref mut sample_names,
             } => {
                 *variants = vec!();
                 *kfrequencies = BTreeMap::new();
                 *coverages = vec!();
+                *average_genotypes = vec!();
+                *variances = vec!();
                 *tids = vec!();
                 *total_indels_across_contigs = vec!();
                 *target_names = vec!();
                 *target_lengths = vec!();
+                *sample_names = vec!();
             },
             PileupMatrix::PileupVariantMatrix {
                 ref mut variants,
                 ref mut read_variants,
                 ref mut kfrequencies,
                 ref mut coverages,
+                ref mut average_genotypes,
+                ref mut variances,
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
                 ref mut target_lengths,
+                ref mut sample_names,
             } => {
                 *variants = vec!();
                 *read_variants = vec!();
                 *kfrequencies = BTreeMap::new();
                 *coverages = vec!();
+                *average_genotypes = vec!();
+                *variances = vec!();
                 *tids = vec!();
                 *total_indels_across_contigs = vec!();
                 *target_names = vec!();
                 *target_lengths = vec!();
+                *sample_names = vec!();
             }
         }
     }
 
-    fn add_contig(&mut self, mut pileup_stats: PileupStats, number_of_contigs: usize) {
+    fn add_contig(&mut self, mut pileup_stats: PileupStats,
+                  number_of_contigs: usize,
+                  sample_name: String) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variants,
                 ref mut kfrequencies,
                 ref mut coverages,
+                ref mut average_genotypes,
+                ref mut variances,
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
                 ref mut target_lengths,
+                ref mut sample_names,
             } => {
                 match pileup_stats {
                     PileupStats::PileupContigStats {
@@ -1095,6 +1125,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ..
                     } => {
                         variants.push(*variations_per_base);
+                        average_genotypes.push(*mean_gentoypes);
+                        variances.push(*variance);
                         let contig_order_id = variants.len() as usize - 1;
                         for (tet, count) in kfrequency.iter() {
                             let count_vec = kfrequencies.entry(tet.to_vec())
@@ -1106,6 +1138,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         total_indels_across_contigs.push(*total_indels);
                         target_names.push(target_name.clone());
                         target_lengths.push(target_len.clone());
+                        sample_names.push(sample_name)
                     }
                 }
             },
@@ -1114,6 +1147,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut read_variants,
                 ref mut kfrequencies,
                 ref mut coverages,
+                ref mut average_genotypes,
+                ref mut variances,
                 ref mut tids,
                 ref mut total_indels_across_contigs,
                 ref mut target_names,
@@ -1134,6 +1169,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ..
                     } => {
                         variants.push(*variations_per_base);
+                        average_genotypes.push(*mean_gentoypes);
+                        variances.push(*variance);
                         read_variants.push(variants_in_reads.clone());
                         let contig_order_id = variants.len() as usize - 1;
                         for (tet, count) in kfrequency.iter() {
