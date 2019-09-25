@@ -5,7 +5,7 @@ use std::str;
 use std::fs::File;
 use std::io::prelude::*;
 
-
+#[derive(Debug, Clone)]
 pub enum PileupMatrix {
     PileupContigMatrix {
         coverages: HashMap<i32, Vec<f32>>,
@@ -19,7 +19,7 @@ pub enum PileupMatrix {
 }
 
 impl PileupMatrix {
-    pub fn new_contig_stats() -> PileupMatrix {
+    pub fn new_matrix() -> PileupMatrix {
         PileupMatrix::PileupContigMatrix {
             coverages: HashMap::new(),
             average_genotypes: HashMap::new(),
