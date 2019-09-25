@@ -22,7 +22,6 @@ pub struct Genotype {
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
-        kfrequency: BTreeMap<Vec<u8>, usize>,
         variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
@@ -50,7 +49,6 @@ impl PileupStats {
                             contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: vec!(),
-            kfrequency: BTreeMap::new(),
             variants_in_reads: HashMap::new(),
             variant_abundances: BTreeMap::new(),
             depth: vec!(),
@@ -79,7 +77,6 @@ pub trait PileupFunctions {
 
     fn add_contig(&mut self,
                   nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                  k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
                   indels_positions: Vec<HashMap<String, HashSet<i32>>>,
                   tid: i32,
@@ -109,7 +106,6 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
-                ref mut kfrequency,
                 ref mut variants_in_reads,
                 ref mut variant_abundances,
                 ref mut depth,
@@ -124,7 +120,6 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 *nucfrequency = vec!();
-                *kfrequency = BTreeMap::new();
                 *variants_in_reads = HashMap::new();
                 *variant_abundances = BTreeMap::new();
                 *depth = vec!();
@@ -141,7 +136,6 @@ impl PileupFunctions for PileupStats {
     }
 
     fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                  k_freq: BTreeMap<Vec<u8>, usize>,
                   read_depth: Vec<usize>,
                   indel_positions: Vec<HashMap<String, HashSet<i32>>>,
                   target_id: i32,
@@ -151,7 +145,6 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
-                ref mut kfrequency,
                 ref mut depth,
                 ref mut indels,
                 ref mut tid,
@@ -161,7 +154,6 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 *nucfrequency = nuc_freq;
-                *kfrequency = k_freq;
                 *depth = read_depth;
                 *indels = indel_positions;
                 *tid = target_id;
