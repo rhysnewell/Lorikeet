@@ -264,7 +264,7 @@ pub fn pileup_contigs<R: NamedBamReader,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32) {
 
-    let mut pileup_matrix = PileupMatrix::new_contig_stats();
+    let mut pileup_matrix = PileupMatrix::new_matrix();
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
@@ -294,6 +294,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth: Vec<usize>,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
+                                                tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig,
                                                 ref_sequence: Vec<u8>| {
@@ -311,7 +312,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                     pileup_struct.add_contig(nuc_freq,
                                              depth,
                                              indels,
-                                             last_tid,
+                                             last_tid.clone(),
                                              total_indels_in_current_contig,
                                              contig_name,
                                              contig_len);
@@ -325,6 +326,10 @@ pub fn pileup_contigs<R: NamedBamReader,
 
                     // calculates minimum number of genotypes possible for each variant location
                     pileup_struct.generate_genotypes();
+
+                    pileup_matrix.add_kmers(last_tid,
+                                            target_names.len() as usize,
+                                            tet_freq);
 
                     pileup_matrix.add_contig(pileup_struct);
 
@@ -343,6 +348,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                         last_tid,
                         depth,
                         nuc_freq,
+                        tet_freq,
                         indels,
                         total_indels_in_current_contig,
                         ref_seq);
@@ -374,9 +380,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                     for (tet, loc) in kmers.iter(){
                         tet_freq.entry(tet.to_vec()).or_insert(loc.len());
                     }
-                    pileup_matrix.add_kmers(tid.clone(),
-                                            target_names.len() as usize,
-                                            tet_freq);
+
                 } else {
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
                 }
@@ -449,6 +453,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                 last_tid,
                 depth,
                 nuc_freq,
+                tet_freq,
                 indels,
                 total_indels_in_current_contig,
                 ref_seq);
