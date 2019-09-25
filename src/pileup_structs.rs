@@ -969,30 +969,14 @@ impl PileupFunctions for PileupStats {
     }
 }
 
+
 pub enum PileupMatrix {
     PileupContigMatrix {
-        variants: Vec<f32>,
-        kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
-        coverages: Vec<f32>,
-        average_genotypes: Vec<f32>,
-        variances: Vec<f32>,
-        tids: Vec<i32>,
-        total_indels_across_contigs: Vec<usize>,
-        target_names: Vec<Vec<u8>>,
-        target_lengths: Vec<usize>,
-        sample_names: Vec<String>,
-    },
-    PileupVariantMatrix {
-        variants: Vec<f32>,
-        read_variants: Vec<HashMap<i32, BTreeMap<i32, String>>>,
-        kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
-        coverages: Vec<f32>,
-        average_genotypes: Vec<f32>,
-        variances: Vec<f32>,
-        tids: Vec<i32>,
-        total_indels_across_contigs: Vec<usize>,
-        target_names: Vec<Vec<u8>>,
-        target_lengths: Vec<usize>,
+        coverages: HashMap<i32, Vec<f32>>,
+        average_genotypes: HashMap<i32, Vec<f32>>,
+        variances: HashMap<i32, Vec<f32>>,
+        target_names: HashMap<i32, String>,
+        target_lengths: HashMap<i32, usize>,
         sample_names: Vec<String>,
     }
 }
@@ -1000,30 +984,11 @@ pub enum PileupMatrix {
 impl PileupMatrix {
     pub fn new_contig_stats() -> PileupMatrix {
         PileupMatrix::PileupContigMatrix {
-            variants: vec!(),
-            kfrequencies: BTreeMap::new(),
-            coverages: vec!(),
-            average_genotypes: vec!(),
-            variances: vec!(),
-            tids: vec!(),
-            total_indels_across_contigs: vec!(),
-            target_names: vec!(),
-            target_lengths: vec!(),
-            sample_names: vec!(),
-        }
-    }
-    pub fn new_contig_variants() -> PileupMatrix {
-        PileupMatrix::PileupVariantMatrix {
-            variants: vec!(),
-            read_variants: vec!(),
-            kfrequencies: BTreeMap::new(),
-            coverages: vec!(),
-            average_genotypes: vec!(),
-            variances: vec!(),
-            tids: vec!(),
-            total_indels_across_contigs: vec!(),
-            target_names: vec!(),
-            target_lengths: vec!(),
+            coverages: HashMap::new(),
+            average_genotypes: HashMap::new(),
+            variances: HashMap::new(),
+            target_names: HashMap::new(),
+            target_lengths: HashMap::new(),
             sample_names: vec!(),
         }
     }
@@ -1032,10 +997,11 @@ impl PileupMatrix {
 pub trait PileupMatrixFunctions {
     fn setup(&mut self);
 
+    fn add_sample(&mut self, sample_name: String);
+
     fn add_contig(&mut self,
                   pileup_stats: PileupStats,
-                  number_of_contigs: usize,
-                  sample_name: String);
+                  number_of_contigs: usize);
 
     fn print_matrix(&self);
 
@@ -1045,144 +1011,65 @@ impl PileupMatrixFunctions for PileupMatrix{
     fn setup(&mut self) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                ref mut variants,
-                ref mut kfrequencies,
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut variances,
-                ref mut tids,
-                ref mut total_indels_across_contigs,
                 ref mut target_names,
                 ref mut target_lengths,
                 ref mut sample_names,
             } => {
-                *variants = vec!();
-                *kfrequencies = BTreeMap::new();
-                *coverages = vec!();
-                *average_genotypes = vec!();
-                *variances = vec!();
-                *tids = vec!();
-                *total_indels_across_contigs = vec!();
-                *target_names = vec!();
-                *target_lengths = vec!();
-                *sample_names = vec!();
-            },
-            PileupMatrix::PileupVariantMatrix {
-                ref mut variants,
-                ref mut read_variants,
-                ref mut kfrequencies,
-                ref mut coverages,
-                ref mut average_genotypes,
-                ref mut variances,
-                ref mut tids,
-                ref mut total_indels_across_contigs,
-                ref mut target_names,
-                ref mut target_lengths,
-                ref mut sample_names,
-            } => {
-                *variants = vec!();
-                *read_variants = vec!();
-                *kfrequencies = BTreeMap::new();
-                *coverages = vec!();
-                *average_genotypes = vec!();
-                *variances = vec!();
-                *tids = vec!();
-                *total_indels_across_contigs = vec!();
-                *target_names = vec!();
-                *target_lengths = vec!();
+                *coverages = HashMap::new();
+                *average_genotypes = HashMap::new();
+                *variances = HashMap::new();
+                *target_names = HashMap::new();
+                *target_lengths = HashMap::new();
                 *sample_names = vec!();
             }
         }
     }
 
-    fn add_contig(&mut self, mut pileup_stats: PileupStats,
-                  number_of_contigs: usize,
-                  sample_name: String) {
+    fn add_sample(&mut self, sample_name: String) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                ref mut variants,
-                ref mut kfrequencies,
-                ref mut coverages,
-                ref mut average_genotypes,
-                ref mut variances,
-                ref mut tids,
-                ref mut total_indels_across_contigs,
-                ref mut target_names,
-                ref mut target_lengths,
                 ref mut sample_names,
+                ..
             } => {
-                match pileup_stats {
-                    PileupStats::PileupContigStats {
-                        ref mut kfrequency,
-                        ref mut tid,
-                        ref mut total_indels,
-                        ref mut target_name,
-                        ref mut target_len,
-                        ref mut coverage,
-                        ref mut variations_per_base,
-                        ref mut mean_genotypes,
-                        ref mut variance,
-                        ..
-                    } => {
-                        variants.push(*variations_per_base);
-                        average_genotypes.push(*mean_gentoypes);
-                        variances.push(*variance);
-                        let contig_order_id = variants.len() as usize - 1;
-                        for (tet, count) in kfrequency.iter() {
-                            let count_vec = kfrequencies.entry(tet.to_vec())
-                                .or_insert(vec![0; number_of_contigs]);
-                            count_vec[contig_order_id] = *count;
-                        }
-                        coverages.push(*coverage);
-                        tids.push(*tid);
-                        total_indels_across_contigs.push(*total_indels);
-                        target_names.push(target_name.clone());
-                        target_lengths.push(target_len.clone());
-                        sample_names.push(sample_name)
-                    }
-                }
-            },
-            PileupMatrix::PileupVariantMatrix {
-                ref mut variants,
-                ref mut read_variants,
-                ref mut kfrequencies,
+                *sample_names.push(sample_name);
+            }
+        }
+    }
+
+    fn add_contig(&mut self, mut pileup_stats: PileupStats,
+                  number_of_contigs: usize) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut variances,
-                ref mut tids,
-                ref mut total_indels_across_contigs,
                 ref mut target_names,
                 ref mut target_lengths,
+                ..
             } => {
                 match pileup_stats {
                     PileupStats::PileupContigStats {
-                        ref mut kfrequency,
-                        ref mut variants_in_reads,
                         ref mut tid,
-                        ref mut total_indels,
                         ref mut target_name,
                         ref mut target_len,
-                        ref mut variations_per_base,
                         ref mut coverage,
+                        ref mut variations_per_base,
                         ref mut mean_genotypes,
                         ref mut variance,
                         ..
                     } => {
-                        variants.push(*variations_per_base);
-                        average_genotypes.push(*mean_gentoypes);
-                        variances.push(*variance);
-                        read_variants.push(variants_in_reads.clone());
-                        let contig_order_id = variants.len() as usize - 1;
-                        for (tet, count) in kfrequency.iter() {
-                            let count_vec = kfrequencies.entry(tet.to_vec())
-                                                            .or_insert(vec![0; number_of_contigs]);
-                            count_vec[contig_order_id] = *count;
-                        }
-                        coverages.push(*coverage);
-                        tids.push(*tid);
-                        total_indels_across_contigs.push(*total_indels);
-                        target_names.push(target_name.clone());
-                        target_lengths.push(target_len.clone());
+                        let ag = average_genotypes.entry(*tid).or_insert(vec!());
+                        ag.push(*mean_gentoypes);
+                        let var = variances.entry(*tid).or_insert(vec!());
+                        var.push(*variance);
+                        let cov = coverages.entry(*tid).or_insert(vec!());
+                        cov.push(*coverage);
+                        target_names.insert(*tid,
+                                            str::from_utf8(target_name).unwrap().to_string());
+                        target_lengths.insert(*tid, target_len.clone());
                     }
                 }
             }
@@ -1192,12 +1079,12 @@ impl PileupMatrixFunctions for PileupMatrix{
     fn print_matrix(&self) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                variants,
-                kfrequencies,
+                variances,
+                average_genotypes,
                 coverages,
                 target_names,
                 target_lengths,
-                ..
+                sample_names,
             } => {
                 for i in 0..variants.len() {
                     print!("{}\t",
@@ -1206,30 +1093,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                             coverages[i],
 //                             total_indels_across_contigs[i]
                     );
-                    for (_kmer, counts) in kfrequencies.iter(){
-                        print!("{}\t", (counts[i] as f32/target_lengths[i] as f32)*(coverages[i]));
-                    }
-                    print!("\n");
-                }
-
-            },
-            PileupMatrix::PileupVariantMatrix {
-                variants,
-                kfrequencies,
-                coverages,
-                total_indels_across_contigs,
-                target_names,
-                ..
-            } => {
-                for i in 0..variants.len() {
-                    print!("{}\t{}\t{}\t{}\t",
-                           std::str::from_utf8(&target_names[i][..]).unwrap(),
-                           variants[i],
-                           coverages[i],
-                           total_indels_across_contigs[i]);
-                    for (_kmer, counts) in kfrequencies.iter(){
-                        print!("{}\t", counts[i]);
-                    }
                     print!("\n");
                 }
 
