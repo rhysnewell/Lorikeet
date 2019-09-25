@@ -898,6 +898,7 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
             let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+            let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
                 Ok(reader) => reader,
@@ -944,7 +945,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -960,7 +962,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 } else {
                     let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -974,7 +977,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -1001,7 +1005,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
@@ -1015,7 +1020,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -1037,7 +1043,8 @@ fn main(){
                         min,
                         max,
                         min_fraction_covered,
-                        contig_end_exclusion);
+                        contig_end_exclusion,
+                        kmer_size);
                 }
             }
         },
@@ -1805,7 +1812,8 @@ fn run_pileup_contigs<'a,
     depth_threshold: usize,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32) {
+    contig_end_exclusion: u32,
+    kmer_size: usize) {
 
     lorikeet::pileups::pileup_contigs(
         bam_readers,
@@ -1817,7 +1825,8 @@ fn run_pileup_contigs<'a,
         min,
         max,
         min_fraction_covered_bases,
-        contig_end_exclusion);
+        contig_end_exclusion,
+        kmer_size);
 
 }
 
@@ -2760,6 +2769,10 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("depth-threshold")
                     .short("d")
                     .default_value("10"))
+                .arg(Arg::with_name("kmer-size")
+                    .long("kmer-size")
+                    .short("k")
+                    .default_value("4"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))

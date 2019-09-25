@@ -262,7 +262,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     var_fraction: f64,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32) {
+    contig_end_exclusion: u32,
+    kmer_size: usize) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
 
@@ -375,7 +376,8 @@ pub fn pileup_contigs<R: NamedBamReader,
                             println!("Cannot read sequence from reference {:?}", e);
                             std::process::exit(1)},
                     };
-                    let kmers = hash_kmers(&ref_seq, 4);
+                    let kmers = hash_kmers(&ref_seq,
+                                                                            kmer_size.clone());
                     tet_freq = BTreeMap::new();
                     for (tet, loc) in kmers.iter(){
                         tet_freq.entry(tet.to_vec()).or_insert(loc.len());
