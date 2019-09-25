@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use rust_htslib::bam;
 
 use pileup_structs::*;
+use pileup_matrix::*;
 use bam_generator::*;
 use FlagFilter;
 use std::str;
@@ -282,6 +283,7 @@ pub fn pileup_contigs<R: NamedBamReader,
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
         let stoit_name = bam_generated.name().to_string();
+        pileup_matrix.add_sample(stoit_name);
         {
             let header = bam_generated.header().clone(); // bam header
             let target_names = header.target_names(); // contig names
@@ -348,8 +350,7 @@ pub fn pileup_contigs<R: NamedBamReader,
 //                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
 
                     pileup_matrix.add_contig(pileup_struct,
-                                             target_names.len() as usize,
-                                             stoit_name);
+                                             target_names.len() as usize);
 
                 }
             };
