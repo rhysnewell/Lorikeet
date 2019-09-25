@@ -31,7 +31,7 @@ pub fn pileup_variants<R: NamedBamReader,
     variant_file_name: String,
     print_consensus: bool) {
 
-    let mut pileup_matrix = PileupMatrix::new_contig_stats();
+//    let mut pileup_matrix = PileupMatrix::new_contig_stats();
 
     let consensus_variant_fasta = match File::create(variant_file_name.clone()) {
         Ok(fasta) => fasta,
@@ -61,7 +61,6 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut indels = Vec::new();
 
             let mut read_starts = HashMap::new(); // read start map
-            let mut tet_freq = BTreeMap::new(); // kmer frequencies
             let mut depth = Vec::new(); // genomic depth
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
@@ -74,7 +73,6 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth: Vec<usize>,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                                                tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig,
                                                 ref_sequence: Vec<u8>| {
@@ -93,7 +91,6 @@ pub fn pileup_variants<R: NamedBamReader,
 
                     // adds contig info to pileup struct
                     pileup_struct.add_contig(nuc_freq,
-                                               tet_freq,
                                                depth,
                                                indels,
                                                last_tid,
@@ -128,8 +125,8 @@ pub fn pileup_variants<R: NamedBamReader,
                                                               consensus_clone);
                     }
 
-                    pileup_matrix.add_contig(pileup_struct,
-                                             target_names.len() as usize);
+//                    pileup_matrix.add_contig(pileup_struct,
+//                                             target_names.len() as usize);
 
                 }
             };
@@ -146,7 +143,6 @@ pub fn pileup_variants<R: NamedBamReader,
                         last_tid,
                         depth,
                         nuc_freq,
-                        tet_freq,
                         indels,
                         total_indels_in_current_contig,
                         ref_seq);
@@ -173,11 +169,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             println!("Cannot read sequence from reference {:?}", e);
                             std::process::exit(1)},
                     };
-                    let kmers = hash_kmers(&ref_seq, 4);
-                    tet_freq = BTreeMap::new();
-                    for (tet, loc) in kmers.iter(){
-                        tet_freq.entry(tet.to_vec()).or_insert(loc.len());
-                    }
+
                 } else {
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
                 }
@@ -250,18 +242,16 @@ pub fn pileup_variants<R: NamedBamReader,
                 last_tid,
                 depth,
                 nuc_freq,
-                tet_freq,
                 indels,
                 total_indels_in_current_contig,
                 ref_seq);
         }
         bam_generated.finish();
     }
-//    pileup_matrix.print_matrix();
 
 }
 
-// Method for printing out contig statistics, including genotype per variant
+// Method for printing out contig statistics, including genotype per variant in metabat format
 pub fn pileup_contigs<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
@@ -275,10 +265,6 @@ pub fn pileup_contigs<R: NamedBamReader,
     contig_end_exclusion: u32) {
 
     let mut pileup_matrix = PileupMatrix::new_contig_stats();
-    // Check to see if we are writing a consensus genome
-    if !print_consensus {
-        fs::remove_file(variant_file_name);
-    }
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
@@ -308,7 +294,6 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth: Vec<usize>,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                                                tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig,
                                                 ref_sequence: Vec<u8>| {
@@ -321,13 +306,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                                                                           max,
                                                                           min_fraction_covered_bases,
                                                                           contig_end_exclusion);
-                    debug!("INDELS: {:?}", indels);
-                    debug!("nuc frequency: {:?}", nuc_freq);
-
 
                     // adds contig info to pileup struct
                     pileup_struct.add_contig(nuc_freq,
-                                             tet_freq,
                                              depth,
                                              indels,
                                              last_tid,
@@ -341,16 +322,11 @@ pub fn pileup_contigs<R: NamedBamReader,
                     // filters variants across contig
                     pileup_struct.calc_variants(depth_threshold,
                                                 var_fraction);
-//                    pileup_struct.generate_variant_matrix();
 
                     // calculates minimum number of genotypes possible for each variant location
                     pileup_struct.generate_genotypes();
 
-                    // prints results of variants calling
-//                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
-
-                    pileup_matrix.add_contig(pileup_struct,
-                                             target_names.len() as usize);
+                    pileup_matrix.add_contig(pileup_struct);
 
                 }
             };
@@ -367,7 +343,6 @@ pub fn pileup_contigs<R: NamedBamReader,
                         last_tid,
                         depth,
                         nuc_freq,
-                        tet_freq,
                         indels,
                         total_indels_in_current_contig,
                         ref_seq);
@@ -399,6 +374,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                     for (tet, loc) in kmers.iter(){
                         tet_freq.entry(tet.to_vec()).or_insert(loc.len());
                     }
+                    pileup_matrix.add_kmers(tid.clone(),
+                                            target_names.len() as usize,
+                                            tet_freq);
                 } else {
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
                 }
@@ -471,11 +449,12 @@ pub fn pileup_contigs<R: NamedBamReader,
                 last_tid,
                 depth,
                 nuc_freq,
-                tet_freq,
                 indels,
                 total_indels_in_current_contig,
                 ref_seq);
         }
         bam_generated.finish();
     }
+    pileup_matrix.print_stats();
+    pileup_matrix.print_kmers();
 }
