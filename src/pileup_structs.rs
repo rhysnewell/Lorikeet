@@ -345,12 +345,12 @@ impl PileupFunctions for PileupStats {
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
-                    let mut genotype_pos = genotypes.entry(position)
+                    let genotype_pos = genotypes.entry(position)
                                             .or_insert(HashMap::new());
 
                     for (var, _abundance) in variants.iter() {
                         variant_count += 1;
-                        let mut genotype_var = genotype_pos.entry(var.to_string())
+                        let genotype_var = genotype_pos.entry(var.to_string())
                             .or_insert(Vec::new());
 
                         genotype_record = Genotype {

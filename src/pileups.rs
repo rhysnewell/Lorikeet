@@ -43,7 +43,13 @@ pub fn pileup_variants<R: NamedBamReader,
 
     // Check to see if we are writing a consensus genome
     if !print_consensus {
-        fs::remove_file(variant_file_name);
+        match fs::remove_file(variant_file_name) {
+            Ok(removed) => removed,
+            Err(_err) => {
+                println!("Incorrect file read/write permission");
+                std::process::exit(1)
+            }
+        };
     }
 
     for bam_generator in bam_readers {
@@ -70,7 +76,7 @@ pub fn pileup_variants<R: NamedBamReader,
 //            let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
             let mut base;
 
-            let mut process_previous_contigs = |last_tid: i32,
+            let process_previous_contigs = |last_tid: i32,
                                                 depth: Vec<usize>,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
                                                 indels,
@@ -298,8 +304,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
                                                 tet_freq,
                                                 indels,
-                                                total_indels_in_current_contig,
-                                                ref_sequence: Vec<u8>| {
+                                                total_indels_in_current_contig| {
                 if last_tid != -2 {
 
                     let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
@@ -352,8 +357,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                         nuc_freq,
                         tet_freq,
                         indels,
-                        total_indels_in_current_contig,
-                        ref_seq);
+                        total_indels_in_current_contig);
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -458,11 +462,10 @@ pub fn pileup_contigs<R: NamedBamReader,
                 nuc_freq,
                 tet_freq,
                 indels,
-                total_indels_in_current_contig,
-                ref_seq);
+                total_indels_in_current_contig);
         }
         bam_generated.finish();
     }
     pileup_matrix.print_stats(output_prefix);
-    pileup_matrix.print_kmers(output_prefix);
+    pileup_matrix.print_kmers(output_prefix, &kmer_size);
 }
