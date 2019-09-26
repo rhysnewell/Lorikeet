@@ -263,7 +263,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
-    kmer_size: usize) {
+    kmer_size: usize,
+    output_prefix: &str) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
 
@@ -462,6 +463,6 @@ pub fn pileup_contigs<R: NamedBamReader,
         }
         bam_generated.finish();
     }
-    pileup_matrix.print_stats();
-    pileup_matrix.print_kmers();
+    pileup_matrix.print_stats(output_prefix);
+    pileup_matrix.print_kmers(output_prefix);
 }
