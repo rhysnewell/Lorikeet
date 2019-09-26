@@ -705,7 +705,11 @@ impl PileupFunctions for PileupStats {
                     }
                 }
                 //Calc the mean number of genotypes per variant
-                *mean_genotypes = (genotype_count/variant_count) as f32;
+                if variant_count > 0 {
+                    *mean_genotypes = (genotype_count / variant_count) as f32;
+                } else {
+                    *mean_genotypes = 0.0 as f32;
+                }
                 *genotypes_per_position = genotypes
             }
         }
