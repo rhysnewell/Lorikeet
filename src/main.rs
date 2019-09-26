@@ -24,7 +24,6 @@ use std::str;
 use std::process;
 use std::collections::{HashSet, BTreeMap};
 use std::path::Path;
-use std::fs::File;
 
 extern crate itertools;
 use itertools::Itertools;

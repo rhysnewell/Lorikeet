@@ -125,6 +125,7 @@ pub fn mash_sequence(
     return hashes
 }
 
+#[allow(dead_code)]
 fn calc_sketch_distances(
     query_sketches: &[&Sketch],
     ref_sketches: &[Sketch],

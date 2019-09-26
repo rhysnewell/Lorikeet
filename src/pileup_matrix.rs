@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet};
-use std::collections::BTreeMap;
+use std::collections::{HashMap, BTreeMap};
 use pileup_structs::*;
 use std::str;
+use std::path::Path;
 use std::fs::File;
 use std::io::prelude::*;
 use itertools::izip;
@@ -48,7 +48,7 @@ pub trait PileupMatrixFunctions {
 
     fn print_stats(&self, output_prefix: &str);
 
-    fn print_kmers(&self, output_prefix: &str);
+    fn print_kmers(&self, output_prefix: &str, kmer_size: &usize);
 
 }
 
@@ -121,7 +121,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut target_name,
                         ref mut target_len,
                         ref mut coverage,
-                        ref mut variations_per_base,
                         ref mut mean_genotypes,
                         ref mut variance,
                         ..
@@ -152,20 +151,32 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 ..
             } => {
-                print!("contigName\tcontigLen\ttotalAvgDepth\ttotalAvgGeno");
+                let file_name = output_prefix.to_string() + &"_".to_owned()
+                    + &"contig_stats".to_owned()
+                    + &".tsv".to_owned();
+                let file_path = Path::new(&file_name);
+                let mut file_open = match File::create(file_path) {
+                    Ok(fasta) => fasta,
+                    Err(e) => {
+                        println!("Cannot create file {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+                write!(file_open, "contigName\tcontigLen\ttotalAvgDepth\ttotalAvgGeno").unwrap();
                 for sample_name in sample_names.iter(){
-                    print!("\t{}.bam\t{}.bam-var\t{}.bam-gen", &sample_name, &sample_name, &sample_name);
+                    write!(file_open, "\t{}.bam\t{}.bam-var\t{}.bam-gen",
+                           &sample_name, &sample_name, &sample_name).unwrap();
                 }
-                print!("\n");
+                write!(file_open, "\n").unwrap();
                 for (tid, contig_name) in target_names.iter() {
-                    print!("{}\t{}", contig_name, target_lengths[tid]);
+                    write!(file_open, "{}\t{}", contig_name, target_lengths[tid]).unwrap();
                     let placeholder = vec!(0.0 as f32);
                     let coverage_vec = match coverages.get(tid) {
                         Some(vector) => vector,
                         None => &placeholder,
                     };
                     let coverage_sum: f32 = coverage_vec.iter().sum();
-                    print!("\t{}", coverage_sum/coverage_vec.len() as f32);
+                    write!(file_open, "\t{}", coverage_sum/coverage_vec.len() as f32).unwrap();
                     let variance_vec = match variances.get(tid) {
                         Some(vector) => vector,
                         None => &placeholder,
@@ -175,40 +186,44 @@ impl PileupMatrixFunctions for PileupMatrix{
                         None => &placeholder,
                     };
                     let genotype_sum: f32 = genotype_vec.iter().sum();
-                    print!("\t{}", genotype_sum/genotype_vec.len() as f32);
+                    write!(file_open, "\t{}", genotype_sum/genotype_vec.len() as f32).unwrap();
 
                     for (coverage, variance, genotypes) in izip!(coverage_vec,
                                                                  variance_vec,
                                                                  genotype_vec){
-                        print!("\t{}\t{}\t{}", coverage, variance, genotypes);
+                        write!(file_open, "\t{}\t{}\t{}", coverage, variance, genotypes).unwrap();
                     }
-                    print!("\n");
+                    write!(file_open, "\n").unwrap();
                 }
             }
         }
     }
 
-    fn print_kmers(&self, output_prefix: &str) {
+    fn print_kmers(&self, output_prefix: &str, kmer_size: &usize) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 kfrequencies,
                 target_names,
                 ..
             } => {
-//                let consensus_variant_fasta = match File::create(variant_file_name.clone()) {
-//                    Ok(fasta) => fasta,
-//                    Err(e) => {
-//                        println!("Cannot create file {:?}", e);
-//                        std::process::exit(1)
-//                    },
-//                };
+                let file_name = output_prefix.to_string() + &"_".to_owned()
+                                + &kmer_size.clone().to_string() + &"mer_counts".to_owned()
+                                + &".tsv".to_owned();
+                let file_path = Path::new(&file_name);
+                let mut file_open = match File::create(file_path) {
+                    Ok(fasta) => fasta,
+                    Err(e) => {
+                        println!("Cannot create file {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
                 for (tid, name) in target_names.iter() {
-                    print!("{}\t",
-                           name);
+                    write!(file_open, "{}\t",
+                           name).unwrap();
                     for (_kmer, counts) in kfrequencies.iter(){
-                        print!("{}\t", counts[*tid as usize]);
+                        write!(file_open, "{}\t", counts[*tid as usize]).unwrap();
                     }
-                    print!("\n");
+                    write!(file_open, "\n").unwrap();
                 }
             }
         }
