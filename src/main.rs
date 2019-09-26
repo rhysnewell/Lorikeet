@@ -722,39 +722,7 @@ fn main(){
                 process::exit(1);
             }
             set_log_level(m, true);
-            let mut variant_consensus_file = "uninit.fna".to_string();
-            let print_zeros = !m.is_present("no-zeros");
             let filter_params = FilterParameters::generate_from_clap(m);
-            let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
-            let print_consensus = m.is_present("variant-consensus-fasta");
-            if print_consensus {
-                variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
-            }
-            let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
-            let reference_path = Path::new(m.value_of("reference").unwrap());
-//            let index_path = reference_path.clone().to_owned() + ".fai";
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-                Ok(reader) => reader,
-                Err(e) => {
-                    eprintln!("Missing or corrupt fasta file {}", e);
-                    process::exit(1);
-                },
-            };
-
-
-            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
-
-            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-                process::exit(1)
-            }
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!("error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}", min, max);
-            }
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -768,53 +736,23 @@ fn main(){
                         filter_params.min_aligned_length_pair,
                         filter_params.min_percent_identity_pair,
                         filter_params.min_aligned_percent_pair);
-                    run_pileup(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               bam_readers,
+                               filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
                     let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
-                    run_pileup(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               bam_readers,
+                               filter_params.flag_filters);
                 } else {
                     let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
-                    run_pileup(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               bam_readers,
+                               filter_params.flag_filters);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -831,35 +769,15 @@ fn main(){
                         }
                     }
                     debug!("Finished collecting generators.");
-                    run_pileup(
-                        all_generators,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               all_generators,
+                               filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
-                    run_pileup(
-                        generator_sets,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               generator_sets,
+                               filter_params.flag_filters);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -871,19 +789,9 @@ fn main(){
                             all_generators.push(g)
                         }
                     }
-                    run_pileup(
-                        all_generators,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters.clone(),
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        variant_consensus_file,
-                        print_consensus);
+                    run_pileup(m,
+                               all_generators,
+                               filter_params.flag_filters.clone());
                 }
             }
         },
@@ -894,34 +802,7 @@ fn main(){
                 process::exit(1);
             }
             set_log_level(m, true);
-            let print_zeros = !m.is_present("no-zeros");
             let filter_params = FilterParameters::generate_from_clap(m);
-            let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
-            let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
-            let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
-            let reference_path = Path::new(m.value_of("reference").unwrap());
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-                Ok(reader) => reader,
-                Err(e) => {
-                    eprintln!("Missing or corrupt fasta file {}", e);
-                    process::exit(1);
-                },
-            };
-
-
-            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
-
-            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-                process::exit(1)
-            }
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!("error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}", min, max);
-            }
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -935,50 +816,23 @@ fn main(){
                         filter_params.min_aligned_length_pair,
                         filter_params.min_percent_identity_pair,
                         filter_params.min_aligned_percent_pair);
-                    run_pileup_contigs(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
                     let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
-                    run_pileup_contigs(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
                 } else {
                     let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
-                    run_pileup_contigs(
-                        bam_readers,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
                 }
             } else {
                 external_command_checker::check_for_bwa();
@@ -995,33 +849,15 @@ fn main(){
                         }
                     }
                     debug!("Finished collecting generators.");
-                    run_pileup_contigs(
-                        all_generators,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       all_generators,
+                                       filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m, &None, &NoExclusionGenomeFilter{});
-                    run_pileup_contigs(
-                        generator_sets,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters,
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       generator_sets,
+                                       filter_params.flag_filters);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, &None);
@@ -1033,18 +869,9 @@ fn main(){
                             all_generators.push(g)
                         }
                     }
-                    run_pileup_contigs(
-                        all_generators,
-                        fasta_reader,
-                        print_zeros,
-                        filter_params.flag_filters.clone(),
-                        var_fraction,
-                        depth_threshold,
-                        min,
-                        max,
-                        min_fraction_covered,
-                        contig_end_exclusion,
-                        kmer_size);
+                    run_pileup_contigs(m,
+                                       all_generators,
+                                       filter_params.flag_filters.clone());
                 }
             }
         },
@@ -1773,28 +1600,53 @@ fn get_streamed_filtered_bam_readers(
 fn run_pileup<'a,
     R: lorikeet::bam_generator::NamedBamReader,
     T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
+    m: &clap::ArgMatches,
     bam_readers: Vec<T>,
-    reference: bio::io::fasta::IndexedReader<File>,
-    print_zeros: bool,
-    flag_filters: FlagFilter,
-    variant_fraction: f64,
-    depth_threshold: usize,
-    min: f32, max: f32,
-    min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32,
-    variant_consensus_file: String,
-    print_consensus: bool) {
+    flag_filters: FlagFilter) {
+
+    let mut variant_consensus_file = "uninit.fna".to_string();
+    let print_zeros = !m.is_present("no-zeros");
+    let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
+    let print_consensus = m.is_present("variant-consensus-fasta");
+    if print_consensus {
+        variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+    }
+    let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+    let reference_path = Path::new(m.value_of("reference").unwrap());
+//            let index_path = reference_path.clone().to_owned() + ".fai";
+    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+        Ok(reader) => reader,
+        Err(e) => {
+            eprintln!("Missing or corrupt fasta file {}", e);
+            process::exit(1);
+        },
+    };
+
+
+    let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+
+    if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+        eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+        process::exit(1)
+    }
+    let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+    let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+    let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+    if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+        panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+    }
 
     lorikeet::pileups::pileup_variants(
         bam_readers,
-        reference,
+        fasta_reader,
         print_zeros,
         flag_filters,
         depth_threshold,
-        variant_fraction,
+        var_fraction,
         min,
         max,
-        min_fraction_covered_bases,
+        min_fraction_covered,
         contig_end_exclusion,
         variant_consensus_file,
         print_consensus);
@@ -1804,29 +1656,51 @@ fn run_pileup<'a,
 fn run_pileup_contigs<'a,
     R: lorikeet::bam_generator::NamedBamReader,
     T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
+    m: &clap::ArgMatches,
     bam_readers: Vec<T>,
-    reference: bio::io::fasta::IndexedReader<File>,
-    print_zeros: bool,
-    flag_filters: FlagFilter,
-    variant_fraction: f64,
-    depth_threshold: usize,
-    min: f32, max: f32,
-    min_fraction_covered_bases: f32,
-    contig_end_exclusion: u32,
-    kmer_size: usize) {
+    flag_filters: FlagFilter) {
+
+    let print_zeros = !m.is_present("no-zeros");
+    let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
+    let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+    let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
+    let reference_path = Path::new(m.value_of("reference").unwrap());
+    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+        Ok(reader) => reader,
+        Err(e) => {
+            eprintln!("Missing or corrupt fasta file {}", e);
+            process::exit(1);
+        },
+    };
+    let output_prefix = m.value_of("output-prefix").unwrap();
+
+    let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+
+    if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+        eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+        process::exit(1)
+    }
+    let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+    let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+    let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+    if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+        panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+    }
 
     lorikeet::pileups::pileup_contigs(
         bam_readers,
-        reference,
+        fasta_reader,
         print_zeros,
         flag_filters,
         depth_threshold,
-        variant_fraction,
+        var_fraction,
         min,
         max,
-        min_fraction_covered_bases,
+        min_fraction_covered,
         contig_end_exclusion,
-        kmer_size);
+        kmer_size,
+        output_prefix);
 
 }
 
@@ -2631,10 +2505,6 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only")
                     .long("proper-pairs-only"))
-                .arg(Arg::with_name("output-format")
-                    .long("output-format")
-                    .possible_values(&["sparse","dense"])
-                    .default_value("dense"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))
@@ -2786,10 +2656,10 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only")
                     .long("proper-pairs-only"))
-                .arg(Arg::with_name("output-format")
-                    .long("output-format")
-                    .possible_values(&["sparse","dense"])
-                    .default_value("dense"))
+                .arg(Arg::with_name("output-prefix")
+                    .long("output-prefix")
+                    .short("o")
+                    .default_value("output"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))

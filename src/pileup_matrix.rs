@@ -46,9 +46,9 @@ pub trait PileupMatrixFunctions {
     fn add_contig(&mut self,
                   pileup_stats: PileupStats);
 
-    fn print_stats(&self);
+    fn print_stats(&self, output_prefix: &str);
 
-    fn print_kmers(&self);
+    fn print_kmers(&self, output_prefix: &str);
 
 }
 
@@ -141,7 +141,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn print_stats(&self) {
+    fn print_stats(&self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variances,
@@ -188,13 +188,20 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn print_kmers(&self) {
+    fn print_kmers(&self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 kfrequencies,
                 target_names,
                 ..
             } => {
+//                let consensus_variant_fasta = match File::create(variant_file_name.clone()) {
+//                    Ok(fasta) => fasta,
+//                    Err(e) => {
+//                        println!("Cannot create file {:?}", e);
+//                        std::process::exit(1)
+//                    },
+//                };
                 for (tid, name) in target_names.iter() {
                     print!("{}\t",
                            name);
