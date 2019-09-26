@@ -4,6 +4,7 @@ use pileup_structs::*;
 use std::str;
 use std::fs::File;
 use std::io::prelude::*;
+use itertools::izip;
 
 #[derive(Debug, Clone)]
 pub enum PileupMatrix {
@@ -151,15 +152,38 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 ..
             } => {
-//                for i in 0..variants.len() {
-//                    print!("{}\t",
-//                           std::str::from_utf8(&target_names[i][..]).unwrap(),
-////                             variants[i],
-////                             coverages[i],
-////                             total_indels_across_contigs[i]
-//                    );
-//                    print!("\n");
-//                }
+                print!("contigName\tcontigLen\ttotalAvgDepth\ttotalAvgGeno");
+                for sample_name in sample_names.iter(){
+                    print!("\t{}.bam\t{}.bam-var\t{}.bam-gen", &sample_name, &sample_name, &sample_name);
+                }
+                print!("\n");
+                for (tid, contig_name) in target_names.iter() {
+                    print!("{}\t{}", contig_name, target_lengths[tid]);
+                    let placeholder = vec!(0.0 as f32);
+                    let coverage_vec = match coverages.get(tid) {
+                        Some(vector) => vector,
+                        None => &placeholder,
+                    };
+                    let coverage_sum: f32 = coverage_vec.iter().sum();
+                    print!("\t{}", coverage_sum/coverage_vec.len() as f32);
+                    let variance_vec = match variances.get(tid) {
+                        Some(vector) => vector,
+                        None => &placeholder,
+                    };
+                    let genotype_vec = match average_genotypes.get(tid) {
+                        Some(vector) => vector,
+                        None => &placeholder,
+                    };
+                    let genotype_sum: f32 = genotype_vec.iter().sum();
+                    print!("\t{}", genotype_sum/genotype_vec.len() as f32);
+
+                    for (coverage, variance, genotypes) in izip!(coverage_vec,
+                                                                 variance_vec,
+                                                                 genotype_vec){
+                        print!("\t{}\t{}\t{}", coverage, variance, genotypes);
+                    }
+                    print!("\n");
+                }
             }
         }
     }
