@@ -376,8 +376,8 @@ impl PileupFunctions for PileupStats {
                                 position_map = match variants_in_reads.get(&read_id){
                                     Some(positions) => positions,
                                     None => {
-                                        println!("Position not recorded in variant map");
-                                        std::process::exit(1)
+                                        debug!("read id not recorded in variant map {}, {}", var, read_id);
+                                        break
                                     },
                                 };
                                 if genotype_var.len() == 0 {
@@ -546,8 +546,8 @@ impl PileupFunctions for PileupStats {
                                 position_map = match variants_in_reads.get(&read_id){
                                     Some(positions) => positions,
                                     None => {
-                                        println!("Position not recorded in variant map");
-                                        std::process::exit(1)
+                                        debug!("read id not recorded in variant map {}, {}", var, read_id);
+                                        break
                                     },
                                 };
                                 if genotype_var.len() == 0 {
