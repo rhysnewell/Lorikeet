@@ -1667,7 +1667,7 @@ fn run_pileup_contigs<'a,
     let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
         Ok(reader) => reader,
         Err(e) => {
-            eprintln!("Missing or corrupt fasta file {}", e);
+            eprintln!("Missing or corrupt fasta file or no index file {}", e);
             process::exit(1);
         },
     };
