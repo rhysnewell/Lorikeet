@@ -269,7 +269,6 @@ pub fn pileup_contigs<R: NamedBamReader,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
-    kmer_size: usize,
     output_prefix: &str) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
@@ -289,7 +288,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut indels = Vec::new();
 
             let mut read_starts = HashMap::new(); // read start map
-            let mut tet_freq = BTreeMap::new(); // kmer frequencies
+//            let mut tet_freq = BTreeMap::new(); // kmer frequencies
             let mut depth = Vec::new(); // genomic depth
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
@@ -302,7 +301,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut process_previous_contigs = |last_tid: i32,
                                                 depth: Vec<usize>,
                                                 nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                                                tet_freq,
+//                                                tet_freq,
                                                 indels,
                                                 total_indels_in_current_contig| {
                 if last_tid != -2 {
@@ -334,9 +333,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                     // calculates minimum number of genotypes possible for each variant location
                     pileup_struct.generate_genotypes();
 
-                    pileup_matrix.add_kmers(last_tid,
-                                            target_names.len() as usize,
-                                            tet_freq);
+//                    pileup_matrix.add_kmers(last_tid,
+//                                            target_names.len() as usize,
+//                                            tet_freq);
 
                     pileup_matrix.add_contig(pileup_struct);
 
@@ -350,12 +349,11 @@ pub fn pileup_contigs<R: NamedBamReader,
                 // if reference has changed, print the last record
                 if tid != last_tid {
 
-
                     process_previous_contigs(
                         last_tid,
                         depth,
                         nuc_freq,
-                        tet_freq,
+//                        tet_freq,
                         indels,
                         total_indels_in_current_contig);
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -381,12 +379,12 @@ pub fn pileup_contigs<R: NamedBamReader,
                             println!("Cannot read sequence from reference {:?}", e);
                             std::process::exit(1)},
                     };
-                    let kmers = hash_kmers(&ref_seq,
-                                                                            kmer_size.clone());
-                    tet_freq = BTreeMap::new();
-                    for (tet, loc) in kmers.iter(){
-                        tet_freq.entry(tet.to_vec()).or_insert(loc.len());
-                    }
+//                    let kmers = hash_kmers(&ref_seq,
+//                                                                            kmer_size.clone());
+//                    tet_freq = BTreeMap::new();
+//                    for (tet, loc) in kmers.iter(){
+//                        tet_freq.entry(tet.to_vec()).or_insert(loc.len());
+//                    }
 
                 } else {
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
@@ -460,12 +458,12 @@ pub fn pileup_contigs<R: NamedBamReader,
                 last_tid,
                 depth,
                 nuc_freq,
-                tet_freq,
+//                tet_freq,
                 indels,
                 total_indels_in_current_contig);
         }
         bam_generated.finish();
     }
     pileup_matrix.print_stats(output_prefix);
-    pileup_matrix.print_kmers(output_prefix, &kmer_size);
+//    pileup_matrix.print_kmers(output_prefix, &kmer_size);
 }

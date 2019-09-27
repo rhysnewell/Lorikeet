@@ -23,6 +23,8 @@ use std::env;
 use std::str;
 use std::process;
 use std::collections::{HashSet, BTreeMap};
+use std::io::Write;
+use std::fs::File;
 use std::path::Path;
 
 extern crate itertools;
@@ -1664,13 +1666,14 @@ fn run_pileup_contigs<'a,
     let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
     let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
     let reference_path = Path::new(m.value_of("reference").unwrap());
-    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+    let fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
         Ok(reader) => reader,
         Err(e) => {
-            eprintln!("Missing or corrupt fasta file or no index file {}", e);
+            eprintln!("Missing or corrupt fasta file {}", e);
             process::exit(1);
         },
     };
+
     let output_prefix = m.value_of("output-prefix").unwrap();
 
     let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
@@ -1687,6 +1690,53 @@ fn run_pileup_contigs<'a,
                                     min must be less than max, found {} and {}", min, max);
     }
 
+    let contigs = fasta_reader.records().collect_vec();
+    // Initialize bound contig variable
+    let mut tet_freq = BTreeMap::new();
+    let contig_count = contigs.len();
+    let mut contig_idx = 0 as usize;
+    let mut contig_names = vec![String::new(); contig_count];
+    for contig in contigs{
+        let contig = contig.unwrap();
+        contig_names[contig_idx] = contig.id().to_string();
+        debug!("Parsing contig: {}", contig.id());
+        let kmers = hash_kmers(contig.seq(), kmer_size);
+        // Get kmer counts in a contig
+        for (kmer, pos) in kmers {
+            let k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
+            k[contig_idx] = pos.len();
+        }
+        contig_idx += 1;
+    }
+
+    let file_name = output_prefix.to_string() + &"_".to_owned()
+        + &kmer_size.clone().to_string() + &"mer_counts".to_owned()
+        + &".tsv".to_owned();
+    let file_path = Path::new(&file_name);
+    let mut file_open = match File::create(file_path) {
+        Ok(fasta) => fasta,
+        Err(e) => {
+            println!("Cannot create file {:?}", e);
+            std::process::exit(1)
+        },
+    };
+    for (tid, name) in contig_names.iter().enumerate() {
+        write!(file_open, "{}\t",
+               name).unwrap();
+        for (_kmer, counts) in tet_freq.iter(){
+            write!(file_open, "{}\t", counts[tid]).unwrap();
+        }
+        write!(file_open, "\n").unwrap();
+    }
+
+    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+        Ok(reader) => reader,
+        Err(e) => {
+            eprintln!("Missing or corrupt fasta file or no index file {}", e);
+            process::exit(1);
+        },
+    };
+
     lorikeet::pileups::pileup_contigs(
         bam_readers,
         fasta_reader,
@@ -1698,7 +1748,6 @@ fn run_pileup_contigs<'a,
         max,
         min_fraction_covered,
         contig_end_exclusion,
-        kmer_size,
         output_prefix);
 
 }
