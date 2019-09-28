@@ -84,26 +84,27 @@ pub fn pileup_variants<R: NamedBamReader,
                 // if reference has changed, print the last record
                 if tid != last_tid {
 
+                    if last_tid != -2 {
+                        let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                        let contig_name = target_names[last_tid as usize].to_vec();
 
-                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-                    let contig_name = target_names[last_tid as usize].to_vec();
-
-                    process_previous_contigs_var(
-                        last_tid,
-                        depth,
-                        nuc_freq,
-                        indels,
-                        min, max,
-                        total_indels_in_current_contig,
-                        min_fraction_covered_bases,
-                        contig_end_exclusion,
-                        depth_threshold,
-                        var_fraction,
-                        contig_len,
-                        contig_name,
-                        ref_seq,
-                        &consensus_variant_fasta,
-                        print_consensus);
+                        process_previous_contigs_var(
+                            last_tid,
+                            depth,
+                            nuc_freq,
+                            indels,
+                            min, max,
+                            total_indels_in_current_contig,
+                            min_fraction_covered_bases,
+                            contig_end_exclusion,
+                            depth_threshold,
+                            var_fraction,
+                            contig_len,
+                            contig_name,
+                            ref_seq,
+                            &consensus_variant_fasta,
+                            print_consensus);
+                    }
 
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -197,25 +198,27 @@ pub fn pileup_variants<R: NamedBamReader,
                 }
             }
 
-            let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-            let contig_name = target_names[last_tid as usize].to_vec();
+            if last_tid != -2 {
+                let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                let contig_name = target_names[last_tid as usize].to_vec();
 
-            process_previous_contigs_var(
-                last_tid,
-                depth,
-                nuc_freq,
-                indels,
-                min, max,
-                total_indels_in_current_contig,
-                min_fraction_covered_bases,
-                contig_end_exclusion,
-                depth_threshold,
-                var_fraction,
-                contig_len,
-                contig_name,
-                ref_seq,
-                &consensus_variant_fasta,
-                print_consensus);
+                process_previous_contigs_var(
+                    last_tid,
+                    depth,
+                    nuc_freq,
+                    indels,
+                    min, max,
+                    total_indels_in_current_contig,
+                    min_fraction_covered_bases,
+                    contig_end_exclusion,
+                    depth_threshold,
+                    var_fraction,
+                    contig_len,
+                    contig_name,
+                    ref_seq,
+                    &consensus_variant_fasta,
+                    print_consensus);
+            }
         }
         bam_generated.finish();
     }
