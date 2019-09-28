@@ -76,66 +76,6 @@ pub fn pileup_variants<R: NamedBamReader,
 //            let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
             let mut base;
 
-            let process_previous_contigs = |last_tid: i32,
-                                                depth: Vec<usize>,
-                                                nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                                                indels,
-                                                total_indels_in_current_contig,
-                                                ref_sequence: Vec<u8>| {
-                if last_tid != -2 {
-
-                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-                    let contig_name = target_names[last_tid as usize].to_vec();
-
-                    let mut pileup_struct = PileupStats::new_contig_stats(min,
-                                                                          max,
-                                                                          min_fraction_covered_bases,
-                                                                          contig_end_exclusion);
-                    debug!("INDELS: {:?}", indels);
-                    debug!("nuc frequency: {:?}", nuc_freq);
-
-
-                    // adds contig info to pileup struct
-                    pileup_struct.add_contig(nuc_freq,
-                                               depth,
-                                               indels,
-                                               last_tid,
-                                               total_indels_in_current_contig,
-                                               contig_name,
-                                               contig_len);
-
-                    // calculates coverage across contig
-                    pileup_struct.calc_coverage();
-
-                    // filters variants across contig
-                    pileup_struct.calc_variants(depth_threshold,
-                                                var_fraction);
-//                    pileup_struct.generate_variant_matrix();
-
-                    // calculates minimum number of genotypes possible for each variant location
-                    pileup_struct.generate_genotypes();
-
-                    // prints results of variants calling
-                    pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
-
-                    if print_consensus {
-                        // Write consensus contig to fasta
-                        // i.e. the most abundant variant at each position from this set of reads
-                        let contig_n = ">".to_owned() +
-                            &str::from_utf8(target_names[last_tid as usize]).unwrap().to_string() +
-                            "\n";
-
-                        let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
-                        consensus_clone.write_all(contig_n.as_bytes()).unwrap();
-                        pileup_struct.generate_variant_contig(ref_sequence.clone(),
-                                                              consensus_clone);
-                    }
-
-//                    pileup_matrix.add_contig(pileup_struct,
-//                                             target_names.len() as usize);
-
-                }
-            };
 
             for p in bam_pileups {
 
