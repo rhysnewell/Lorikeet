@@ -902,14 +902,14 @@ impl PileupFunctions for PileupStats {
                             };
 
 
-                            let read_ids =
-                                match indels[position].get(var) {
-                                    Some(ids) => ids,
-                                    None => {
-                                        println!("Variant not in indel hash");
-                                        std::process::exit(1)
-                                    },
-                                };
+//                            let read_ids =
+//                                match indels[position].get(var) {
+//                                    Some(ids) => ids,
+//                                    None => {
+//                                        println!("Variant not in indel hash");
+//                                        std::process::exit(1)
+//                                    },
+//                                };
 //                            let mut connected_bases = HashSet::new();
 //                            for read_id in read_ids {
 //                                if variants_in_reads.contains_key(&read_id) {
@@ -942,14 +942,14 @@ impl PileupFunctions for PileupStats {
                                 },
                             };
 
-                            let read_ids =
-                                match nucfrequency[position]
-                                    .get(&(var.clone().into_bytes()[0] as char)){
-                                Some(ids) => ids,
-                                None => {
-                                    println!("Variant not in frequency Hash");
-                                    std::process::exit(1)},
-                            };
+//                            let read_ids =
+//                                match nucfrequency[position]
+//                                    .get(&(var.clone().into_bytes()[0] as char)){
+//                                Some(ids) => ids,
+//                                None => {
+//                                    println!("Variant not in frequency Hash");
+//                                    std::process::exit(1)},
+//                            };
 
 //                            let mut connected_bases = HashSet::new();
 //                            for read_id in read_ids{

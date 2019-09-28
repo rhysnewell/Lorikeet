@@ -145,13 +145,26 @@ pub fn pileup_variants<R: NamedBamReader,
                 if tid != last_tid {
 
 
-                    process_previous_contigs(
+                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                    let contig_name = target_names[last_tid as usize].to_vec();
+
+                    process_previous_contigs_var(
                         last_tid,
                         depth,
                         nuc_freq,
                         indels,
+                        min, max,
                         total_indels_in_current_contig,
-                        ref_seq);
+                        min_fraction_covered_bases,
+                        contig_end_exclusion,
+                        depth_threshold,
+                        var_fraction,
+                        contig_len,
+                        contig_name,
+                        ref_seq,
+                        &consensus_variant_fasta,
+                        print_consensus);
+
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -244,13 +257,25 @@ pub fn pileup_variants<R: NamedBamReader,
                 }
             }
 
-            process_previous_contigs(
+            let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+            let contig_name = target_names[last_tid as usize].to_vec();
+
+            process_previous_contigs_var(
                 last_tid,
                 depth,
                 nuc_freq,
                 indels,
+                min, max,
                 total_indels_in_current_contig,
-                ref_seq);
+                min_fraction_covered_bases,
+                contig_end_exclusion,
+                depth_threshold,
+                var_fraction,
+                contig_len,
+                contig_name,
+                ref_seq,
+                &consensus_variant_fasta,
+                print_consensus);
         }
         bam_generated.finish();
     }
@@ -296,45 +321,6 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut previous_read_positions = HashMap::new();
             let mut base;
 
-            let mut process_previous_contigs = |last_tid: i32,
-                                                depth: Vec<usize>,
-                                                nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                                                indels,
-                                                total_indels_in_current_contig| {
-                if last_tid != -2 {
-
-                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-                    let contig_name = target_names[last_tid as usize].to_vec();
-
-                    let mut pileup_struct = PileupStats::new_contig_stats(min,
-                                                                          max,
-                                                                          min_fraction_covered_bases,
-                                                                          contig_end_exclusion);
-
-                    // adds contig info to pileup struct
-                    pileup_struct.add_contig(nuc_freq,
-                                             depth,
-                                             indels,
-                                             last_tid.clone(),
-                                             total_indels_in_current_contig,
-                                             contig_name,
-                                             contig_len);
-
-                    // calculates coverage across contig
-                    pileup_struct.calc_coverage();
-
-                    // filters variants across contig
-                    pileup_struct.calc_variants(depth_threshold,
-                                                var_fraction);
-
-                    // calculates minimum number of genotypes possible for each variant location
-                    pileup_struct.generate_genotypes();
-
-                    pileup_matrix.add_contig(pileup_struct);
-
-                }
-            };
-
             for p in bam_pileups {
 
                 let pileup = p.unwrap();
@@ -342,12 +328,23 @@ pub fn pileup_contigs<R: NamedBamReader,
                 // if reference has changed, print the last record
                 if tid != last_tid {
 
+                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                    let contig_name = target_names[last_tid as usize].to_vec();
+
                     process_previous_contigs(
                         last_tid,
                         depth,
                         nuc_freq,
                         indels,
-                        total_indels_in_current_contig);
+                        min, max,
+                        total_indels_in_current_contig,
+                        min_fraction_covered_bases,
+                        contig_end_exclusion,
+                        depth_threshold,
+                        var_fraction,
+                        contig_len,
+                        contig_name,
+                        &mut pileup_matrix);
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -438,14 +435,133 @@ pub fn pileup_contigs<R: NamedBamReader,
                 }
             }
 
+            let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+            let contig_name = target_names[last_tid as usize].to_vec();
+
             process_previous_contigs(
                 last_tid,
                 depth,
                 nuc_freq,
                 indels,
-                total_indels_in_current_contig);
+                min, max,
+                total_indels_in_current_contig,
+                min_fraction_covered_bases,
+                contig_end_exclusion,
+                depth_threshold,
+                var_fraction,
+                contig_len,
+                contig_name,
+                &mut pileup_matrix);
         }
         bam_generated.finish();
     }
     pileup_matrix.print_stats(output_prefix);
+}
+
+fn process_previous_contigs_var(
+    last_tid: i32,
+    depth: Vec<usize>,
+    nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
+    indels: Vec<HashMap<String, HashSet<i32>>>,
+    min: f32, max: f32,
+    total_indels_in_current_contig: usize,
+    min_fraction_covered_bases: f32,
+    contig_end_exclusion: u32,
+    depth_threshold: usize,
+    var_fraction: f64,
+    contig_len: usize,
+    contig_name: Vec<u8>,
+    ref_sequence: Vec<u8>,
+    consensus_variant_fasta: &File,
+    print_consensus: bool) {
+
+    if last_tid != -2 {
+
+        let mut pileup_struct = PileupStats::new_contig_stats(min,
+                                                              max,
+                                                              min_fraction_covered_bases,
+                                                              contig_end_exclusion);
+
+        // adds contig info to pileup struct
+        pileup_struct.add_contig(nuc_freq,
+                                 depth,
+                                 indels,
+                                 last_tid.clone(),
+                                 total_indels_in_current_contig,
+                                 contig_name.clone(),
+                                 contig_len);
+
+        // calculates coverage across contig
+        pileup_struct.calc_coverage();
+
+        // filters variants across contig
+        pileup_struct.calc_variants(depth_threshold,
+                                    var_fraction);
+
+        // calculates minimum number of genotypes possible for each variant location
+        pileup_struct.generate_genotypes();
+
+        // prints results of variants calling
+        pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
+
+        if print_consensus {
+            // Write consensus contig to fasta
+            // i.e. the most abundant variant at each position from this set of reads
+            let contig_n = ">".to_owned() +
+                &str::from_utf8(&contig_name).unwrap().to_string() +
+                "\n";
+
+            let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
+            consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+            pileup_struct.generate_variant_contig(ref_sequence.clone(),
+                                                  consensus_clone);
+        }
+    }
+}
+
+
+
+fn process_previous_contigs(
+        last_tid: i32,
+        depth: Vec<usize>,
+        nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
+        indels: Vec<HashMap<String, HashSet<i32>>>,
+        min: f32, max: f32,
+        total_indels_in_current_contig: usize,
+        min_fraction_covered_bases: f32,
+        contig_end_exclusion: u32,
+        depth_threshold: usize,
+        var_fraction: f64,
+        contig_len: usize,
+        contig_name: Vec<u8>,
+        pileup_matrix: &mut PileupMatrix) {
+
+        if last_tid != -2 {
+
+            let mut pileup_struct = PileupStats::new_contig_stats(min,
+                                                                             max,
+                                                                             min_fraction_covered_bases,
+                                                                             contig_end_exclusion);
+
+            // adds contig info to pileup struct
+            pileup_struct.add_contig(nuc_freq,
+                                    depth,
+                                    indels,
+                                    last_tid.clone(),
+                                    total_indels_in_current_contig,
+                                    contig_name,
+                                    contig_len);
+
+            // calculates coverage across contig
+            pileup_struct.calc_coverage();
+
+            // filters variants across contig
+            pileup_struct.calc_variants(depth_threshold,
+                                        var_fraction);
+
+            // calculates minimum number of genotypes possible for each variant location
+            pileup_struct.generate_genotypes();
+
+            pileup_matrix.add_contig(pileup_struct);
+    }
 }
