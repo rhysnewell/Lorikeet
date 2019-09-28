@@ -26,7 +26,7 @@ pub enum PileupStats {
         variant_abundances: BTreeMap<i32, HashMap<String, f32>>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
-        genotypes_per_position: HashMap<usize, HashMap<String, Vec<Genotype>>>,
+        genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
         mean_genotypes: f32,
         tid: i32,
         total_indels: usize,
@@ -341,7 +341,7 @@ impl PileupFunctions for PileupStats {
                 let mut genotypes = HashMap::new();
                 let mut position_map;
                 let mut variant_count = 0;
-                let mut genotype_count = 0;
+                let mut total_genotype_count = 0;
 
                 for (position, variants) in variant_abundances.iter() {
                     let position = *position as usize;
@@ -350,8 +350,10 @@ impl PileupFunctions for PileupStats {
 
                     for (var, _abundance) in variants.iter() {
                         variant_count += 1;
-                        let genotype_var = genotype_pos.entry(var.to_string())
-                            .or_insert(Vec::new());
+                        let genotype_count = genotype_pos.entry(var.to_string())
+                            .or_insert(0);
+
+                        let mut genotype_vec = Vec::new();
 
                         genotype_record = Genotype {
                             read_ids: HashSet::new(),
@@ -380,14 +382,14 @@ impl PileupFunctions for PileupStats {
                                         break
                                     },
                                 };
-                                if genotype_var.len() == 0 {
+                                if genotype_vec.len() == 0 {
                                     genotype_record.read_ids.insert(*read_id);
                                     for (pos, variant) in position_map.iter(){
                                         genotype_record.base_positions.push(pos.clone());
                                         genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
                                     }
                                     genotype_record.base_positions.sort();
-                                    genotype_var.push(genotype_record.clone());
+                                    genotype_vec.push(genotype_record.clone());
 
                                 } else {
 //                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
@@ -396,7 +398,7 @@ impl PileupFunctions for PileupStats {
 
                                     let mut new_genotype = false;
 
-                                    for genotype in genotype_var.iter_mut(){
+                                    for genotype in genotype_vec.iter_mut(){
                                         let genotype_position_set =
                                             genotype.base_positions.iter().cloned().collect::<HashSet<i32>>();
 
@@ -519,7 +521,7 @@ impl PileupFunctions for PileupStats {
                                         }
                                     }
                                     if genotype_record.base_positions.len() > 0 {
-                                        genotype_var.push(genotype_record);
+                                        genotype_vec.push(genotype_record);
 
                                         genotype_record = Genotype {
                                             read_ids: HashSet::new(),
@@ -550,14 +552,14 @@ impl PileupFunctions for PileupStats {
                                         break
                                     },
                                 };
-                                if genotype_var.len() == 0 {
+                                if genotype_vec.len() == 0 {
                                     genotype_record.read_ids.insert(*read_id);
                                     for (pos, variant) in position_map.iter(){
                                         genotype_record.base_positions.push(pos.clone());
                                         genotype_record.ordered_variants.insert(pos.clone(), variant.to_string());
                                     }
                                     genotype_record.base_positions.sort();
-                                    genotype_var.push(genotype_record.clone());
+                                    genotype_vec.push(genotype_record.clone());
 
                                 } else {
 //                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
@@ -566,7 +568,7 @@ impl PileupFunctions for PileupStats {
 
                                     let mut new_genotype = false;
 
-                                    for genotype in genotype_var.iter_mut(){
+                                    for genotype in genotype_vec.iter_mut(){
                                         let genotype_position_set =
                                             genotype.base_positions.iter().cloned().collect::<HashSet<i32>>();
 
@@ -689,7 +691,7 @@ impl PileupFunctions for PileupStats {
                                         }
                                     }
                                     if genotype_record.base_positions.len() > 0 {
-                                        genotype_var.push(genotype_record);
+                                        genotype_vec.push(genotype_record);
 
                                         genotype_record = Genotype {
                                             read_ids: HashSet::new(),
@@ -701,12 +703,13 @@ impl PileupFunctions for PileupStats {
                                 }
                             }
                         }
-                        genotype_count += genotype_var.len();
+                        *genotype_count += genotype_vec.len();
+                        total_genotype_count += genotype_vec.len()
                     }
                 }
                 //Calc the mean number of genotypes per variant
                 if variant_count > 0 {
-                    *mean_genotypes = (genotype_count / variant_count) as f32;
+                    *mean_genotypes = total_genotype_count as f32 / variant_count as f32;
                 } else {
                     *mean_genotypes = 0.0 as f32;
                 }
@@ -864,7 +867,7 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\ttype\tconnected_bases");
+                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tconnected_bases");
                 for (position, hash) in variant_abundances.iter() {
                     // loop through each position that has variants
                     let position = *position as usize;
@@ -885,8 +888,8 @@ impl PileupFunctions for PileupStats {
                             match genotypes_per_position.get(&position) {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
-                                        Some(gtype_vec) => {
-                                            print!("{}\t", gtype_vec.len());
+                                        Some(gtype_count) => {
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
@@ -926,8 +929,8 @@ impl PileupFunctions for PileupStats {
                             match genotypes_per_position.get(&position) {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
-                                        Some(gtype_vec) => {
-                                            print!("{}\t", gtype_vec.len());
+                                        Some(gtype_count) => {
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
