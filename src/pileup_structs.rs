@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::str;
 //use std::fs::File;
 use std::io::prelude::*;
+use rayon::prelude::*;
 //use std::iter::FromIterator;
 //use rust_htslib::bam::record::{Cigar, CigarStringView};
 
@@ -171,7 +172,7 @@ impl PileupFunctions for PileupStats {
                 ref mut nucfrequency,
                 ref mut variants_in_reads,
                 ref mut variant_abundances,
-                ref mut depth,
+                depth,
                 ref mut indels,
                 total_indels,
                 target_len,
@@ -183,13 +184,12 @@ impl PileupFunctions for PileupStats {
                 let mut read_variants = HashMap::new(); // The reads with variants and their positions
                 let mut variant_count = 0;
                 let mut cursor = 0;
-                let mut depth_sum = 0;
 
                 // for each location calculate if there is a variant based on read depth
-                for (i, d) in depth.iter().enumerate(){
+                depth.into_par_iter().enumerate().for_each(|(i, d)| {
                     let mut rel_abundance = HashMap::new();
                     if *coverage * 0.75 < *d as f32 && *d as f32 <= *coverage * 1.25 {
-                        if d >= &depth_thresh {
+                        if d >= &mut depth_thresh.clone() {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     variant_count += 1;
@@ -228,8 +228,7 @@ impl PileupFunctions for PileupStats {
                     }
 
                     cursor += 1;
-                    depth_sum += d;
-                }
+                });
 
                 debug!("read variants {:?}", read_variants);
                 *variants_in_reads = read_variants;

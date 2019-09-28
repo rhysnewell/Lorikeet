@@ -33,6 +33,7 @@ extern crate simhash;
 extern crate murmurhash3;
 extern crate itertools;
 extern crate ndarray;
+extern crate rayon;
 
 
 use std::path::Path;
