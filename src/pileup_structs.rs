@@ -867,7 +867,7 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tconnected_bases");
+                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes");
                 for (position, hash) in variant_abundances.iter() {
                     // loop through each position that has variants
                     let position = *position as usize;
@@ -910,15 +910,15 @@ impl PileupFunctions for PileupStats {
                                         std::process::exit(1)
                                     },
                                 };
-                            let mut connected_bases = HashSet::new();
-                            for read_id in read_ids {
-                                if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
-                                        .cloned().collect::<HashSet<i32>>();
-                                }
-                            }
-                            print!("{:?}\n", connected_bases)
+//                            let mut connected_bases = HashSet::new();
+//                            for read_id in read_ids {
+//                                if variants_in_reads.contains_key(&read_id) {
+//                                    connected_bases = connected_bases.union(
+//                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
+//                                        .cloned().collect::<HashSet<i32>>();
+//                                }
+//                            }
+//                            print!("{:?}\n", connected_bases)
                         } else if var.len() == 1{
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
                                    var,
@@ -951,15 +951,15 @@ impl PileupFunctions for PileupStats {
                                     std::process::exit(1)},
                             };
 
-                            let mut connected_bases = HashSet::new();
-                            for read_id in read_ids{
-                                if variants_in_reads.contains_key(&read_id) {
-                                    connected_bases = connected_bases.union(
-                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
-                                        .cloned().collect::<HashSet<i32>>();
-                                }
-                            }
-                            print!("{:?}\n", connected_bases)
+//                            let mut connected_bases = HashSet::new();
+//                            for read_id in read_ids{
+//                                if variants_in_reads.contains_key(&read_id) {
+//                                    connected_bases = connected_bases.union(
+//                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
+//                                        .cloned().collect::<HashSet<i32>>();
+//                                }
+//                            }
+//                            print!("{:?}\n", connected_bases)
                         }
                     }
                 };
