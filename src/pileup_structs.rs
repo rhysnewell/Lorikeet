@@ -186,6 +186,7 @@ impl PileupFunctions for PileupStats {
                 let mut variant_count = Arc::new(Mutex::new(0));
 
                 // for each location calculate if there is a variant based on read depth
+                // Uses rayon multithreading
                 depth.into_par_iter().enumerate().for_each(|(i, d)| {
                     let mut variant = Arc::clone(&variants);
                     let mut read_variants = Arc::clone(&read_variants);
@@ -348,19 +349,24 @@ impl PileupFunctions for PileupStats {
                 ref mut mean_genotypes,
                 ..
             } => {
-                let mut genotype_record;
-                let mut genotypes = HashMap::new();
-                let mut position_map;
-                let mut variant_count = 0;
-                let mut total_genotype_count = 0;
+                let mut genotypes =
+                    Arc::new(Mutex::new(HashMap::new()));
+                let mut variant_count =
+                    Arc::new(Mutex::new(0));
+                let mut total_genotype_count =
+                    Arc::new(Mutex::new(0));
 
-                for (position, variants) in variant_abundances.iter() {
+                variant_abundances.par_iter().for_each(|(position, variants)| {
                     let position = *position as usize;
-                    let genotype_pos = genotypes.entry(position)
-                                            .or_insert(HashMap::new());
+                    let mut genotype_record;
+
+                    let mut genotypes = Arc::clone(&genotypes);
+                    let mut variant_count = Arc::clone(&variant_count);
+                    let mut total_genotype_count = Arc::clone(&total_genotype_count);
+
+                    let mut genotype_pos = HashMap::new();
 
                     for (var, _abundance) in variants.iter() {
-                        variant_count += 1;
                         let genotype_count = genotype_pos.entry(var.to_string())
                             .or_insert(0);
 
@@ -386,7 +392,7 @@ impl PileupFunctions for PileupStats {
                             read_vec.sort();
 
                             for read_id in read_vec {
-                                position_map = match variants_in_reads.get(&read_id){
+                                let mut position_map = match variants_in_reads.get(&read_id){
                                     Some(positions) => positions,
                                     None => {
                                         debug!("read id not recorded in variant map {}, {}", var, read_id);
@@ -556,7 +562,7 @@ impl PileupFunctions for PileupStats {
                             read_vec.sort();
 
                             for read_id in read_vec {
-                                position_map = match variants_in_reads.get(&read_id){
+                                let mut position_map = match variants_in_reads.get(&read_id){
                                     Some(positions) => positions,
                                     None => {
                                         debug!("read id not recorded in variant map {}, {}", var, read_id);
@@ -590,7 +596,8 @@ impl PileupFunctions for PileupStats {
                                             // Check if new genotype
                                             for pos in diff.iter() {
 
-                                                if (genotype.base_positions.iter().min() < Some(pos)) && (Some(pos) < genotype.base_positions.iter().max()) {
+                                                if (genotype.base_positions.iter().min() < Some(pos))
+                                                    && (Some(pos) < genotype.base_positions.iter().max()) {
                                                     // possible new genotype detected
                                                     genotype_record.read_ids = HashSet::new();
                                                     genotype_record.read_ids.insert(*read_id);
@@ -715,16 +722,23 @@ impl PileupFunctions for PileupStats {
                             }
                         }
                         *genotype_count += genotype_vec.len();
-                        total_genotype_count += genotype_vec.len()
+                        let mut total_genotype_count = total_genotype_count.lock().unwrap();
+                        *total_genotype_count += genotype_vec.len();
+                        let mut variant_count = variant_count.lock().unwrap();
+                        *variant_count += 1;
                     }
-                }
+                    let mut genotypes = genotypes.lock().unwrap();
+                    genotypes.insert(position, genotype_pos);
+                });
                 //Calc the mean number of genotypes per variant
-                if variant_count > 0 {
-                    *mean_genotypes = total_genotype_count as f32 / variant_count as f32;
+                let mut variant_count = variant_count.lock().unwrap();
+                let mut total_genotype_count = total_genotype_count.lock().unwrap();
+                if *variant_count > 0 {
+                    *mean_genotypes = *total_genotype_count as f32 / *variant_count as f32;
                 } else {
                     *mean_genotypes = 0.0 as f32;
                 }
-                *genotypes_per_position = genotypes
+                *genotypes_per_position = genotypes.lock().unwrap().clone();
             }
         }
     }
