@@ -724,6 +724,8 @@ fn main(){
             }
             set_log_level(m, true);
             let filter_params = FilterParameters::generate_from_clap(m);
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+            rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -804,6 +806,8 @@ fn main(){
             }
             set_log_level(m, true);
             let filter_params = FilterParameters::generate_from_clap(m);
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+            rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -2529,6 +2533,11 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                         "metabat",
                         "reads_per_base"])
                     .default_value("mean"))
+                .arg(Arg::with_name("threads")
+                    .short("-t")
+                    .long("threads")
+                    .default_value("1")
+                    .takes_value(true))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
@@ -2676,6 +2685,11 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                         "metabat",
                         "reads_per_base"])
                     .default_value("mean"))
+                .arg(Arg::with_name("threads")
+                    .short("-t")
+                    .long("threads")
+                    .default_value("1")
+                    .takes_value(true))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
