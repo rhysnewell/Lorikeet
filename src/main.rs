@@ -2533,11 +2533,6 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                         "metabat",
                         "reads_per_base"])
                     .default_value("mean"))
-                .arg(Arg::with_name("threads")
-                    .short("-t")
-                    .long("threads")
-                    .default_value("1")
-                    .takes_value(true))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
@@ -2685,11 +2680,6 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                         "metabat",
                         "reads_per_base"])
                     .default_value("mean"))
-                .arg(Arg::with_name("threads")
-                    .short("-t")
-                    .long("threads")
-                    .default_value("1")
-                    .takes_value(true))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))

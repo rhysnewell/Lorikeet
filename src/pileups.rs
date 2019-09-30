@@ -273,24 +273,25 @@ pub fn pileup_contigs<R: NamedBamReader,
                 let tid = pileup.tid() as i32;
                 // if reference has changed, print the last record
                 if tid != last_tid {
+                    if last_tid != -2 {
+                        let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                        let contig_name = target_names[last_tid as usize].to_vec();
 
-                    let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-                    let contig_name = target_names[last_tid as usize].to_vec();
-
-                    process_previous_contigs(
-                        last_tid,
-                        depth,
-                        nuc_freq,
-                        indels,
-                        min, max,
-                        total_indels_in_current_contig,
-                        min_fraction_covered_bases,
-                        contig_end_exclusion,
-                        depth_threshold,
-                        var_fraction,
-                        contig_len,
-                        contig_name,
-                        &mut pileup_matrix);
+                        process_previous_contigs(
+                            last_tid,
+                            depth,
+                            nuc_freq,
+                            indels,
+                            min, max,
+                            total_indels_in_current_contig,
+                            min_fraction_covered_bases,
+                            contig_end_exclusion,
+                            depth_threshold,
+                            var_fraction,
+                            contig_len,
+                            contig_name,
+                            &mut pileup_matrix);
+                    };
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -303,17 +304,18 @@ pub fn pileup_contigs<R: NamedBamReader,
                         Ok(reference) => reference,
                         Err(e) => {
                             println!("Cannot read sequence from reference {:?}", e);
-                            std::process::exit(1)},
+                            std::process::exit(1)
+                        },
                     };
                     ref_seq = Vec::new();
                     match reference.read(&mut ref_seq) {
                         Ok(reference) => reference,
                         Err(e) => {
                             println!("Cannot read sequence from reference {:?}", e);
-                            std::process::exit(1)},
+                            std::process::exit(1)
+                        },
                     };
-
-                } else {
+                }  else {
                     depth[pileup.pos() as usize] = pileup.depth() as usize;
                 }
 
@@ -380,24 +382,25 @@ pub fn pileup_contigs<R: NamedBamReader,
                     }
                 }
             }
+            if last_tid != -2 {
+                let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+                let contig_name = target_names[last_tid as usize].to_vec();
 
-            let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-            let contig_name = target_names[last_tid as usize].to_vec();
-
-            process_previous_contigs(
-                last_tid,
-                depth,
-                nuc_freq,
-                indels,
-                min, max,
-                total_indels_in_current_contig,
-                min_fraction_covered_bases,
-                contig_end_exclusion,
-                depth_threshold,
-                var_fraction,
-                contig_len,
-                contig_name,
-                &mut pileup_matrix);
+                process_previous_contigs(
+                    last_tid,
+                    depth,
+                    nuc_freq,
+                    indels,
+                    min, max,
+                    total_indels_in_current_contig,
+                    min_fraction_covered_bases,
+                    contig_end_exclusion,
+                    depth_threshold,
+                    var_fraction,
+                    contig_len,
+                    contig_name,
+                    &mut pileup_matrix);
+            };
         }
         bam_generated.finish();
     }
