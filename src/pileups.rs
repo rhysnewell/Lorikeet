@@ -7,11 +7,13 @@ use pileup_structs::*;
 use pileup_matrix::*;
 use bam_generator::*;
 use FlagFilter;
-use std::str;
 
+use std::str;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+
+use rayon::prelude::*;
 
 use bio::alignment::sparse::*;
 
@@ -31,29 +33,32 @@ pub fn pileup_variants<R: NamedBamReader,
     variant_file_name: String,
     print_consensus: bool) {
 
-//    let mut pileup_matrix = PileupMatrix::new_contig_stats();
-
-    let consensus_variant_fasta = match File::create(variant_file_name.clone()) {
-        Ok(fasta) => fasta,
-        Err(e) => {
-            println!("Cannot create file {:?}", e);
-            std::process::exit(1)
-        },
-    };
-
-    // Check to see if we are writing a consensus genome
-    if !print_consensus {
-        match fs::remove_file(variant_file_name) {
-            Ok(removed) => removed,
-            Err(_err) => {
-                println!("Incorrect file read/write permission");
-                std::process::exit(1)
-            }
-        };
-    }
-
+    // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
+        let stoit_name = bam_generated.name().to_string();
+
+        let stoit_file_name = stoit_name + &variant_file_name;
+        // Pre-emptively create variant fasta
+        let consensus_variant_fasta = match File::create(&stoit_file_name) {
+            Ok(fasta) => fasta,
+            Err(e) => {
+                println!("Cannot create file {:?}", e);
+                std::process::exit(1)
+            },
+        };
+
+        // Check to see if we are writing a consensus genome
+        if !print_consensus {
+            match fs::remove_file(&stoit_file_name) {
+                Ok(removed) => removed,
+                Err(_err) => {
+                    println!("Incorrect file read/write permission");
+                    std::process::exit(1)
+                }
+            };
+        }
+
 
         {
 
@@ -136,7 +141,6 @@ pub fn pileup_variants<R: NamedBamReader,
 
                 for alignment in pileup.alignments() {
                     // Check if new read to id
-
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
                             .or_insert(read_cnt_id);
@@ -221,8 +225,7 @@ pub fn pileup_variants<R: NamedBamReader,
             }
         }
         bam_generated.finish();
-    }
-
+    };
 }
 
 // Method for printing out contig statistics, including genotype per variant in metabat format
