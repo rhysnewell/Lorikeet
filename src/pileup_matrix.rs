@@ -4,6 +4,7 @@ use std::str;
 use std::path::Path;
 use std::fs::File;
 use std::io::prelude::*;
+use rayon::prelude::*;
 use itertools::izip;
 
 #[derive(Debug, Clone)]
@@ -175,7 +176,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         Some(vector) => vector,
                         None => &placeholder,
                     };
-                    let coverage_sum: f32 = coverage_vec.iter().sum();
+                    let coverage_sum: f32 = coverage_vec.par_iter().sum();
                     write!(file_open, "\t{}", coverage_sum/coverage_vec.len() as f32).unwrap();
                     let variance_vec = match variances.get(tid) {
                         Some(vector) => vector,
@@ -185,7 +186,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         Some(vector) => vector,
                         None => &placeholder,
                     };
-                    let genotype_sum: f32 = genotype_vec.iter().sum();
+                    let genotype_sum: f32 = genotype_vec.par_iter().sum();
                     write!(file_open, "\t{}", genotype_sum/genotype_vec.len() as f32).unwrap();
 
                     for (coverage, variance, genotypes) in izip!(coverage_vec,
