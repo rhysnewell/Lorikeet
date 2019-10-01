@@ -31,11 +31,13 @@ pub fn pileup_variants<R: NamedBamReader,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
     variant_file_name: String,
-    print_consensus: bool) {
+    print_consensus: bool,
+    n_threads: usize) {
 
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
+        bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
 
         let stoit_file_name = stoit_name + &variant_file_name;
@@ -71,7 +73,7 @@ pub fn pileup_variants<R: NamedBamReader,
             let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
             let mut indels = Vec::new();
 
-            let mut read_starts = HashMap::new(); // read start map
+//            let mut read_starts = HashMap::new(); // read start map
             let mut depth = Vec::new(); // genomic depth
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
@@ -144,7 +146,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
                             .or_insert(read_cnt_id);
-                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
+//                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
                         read_cnt_id += 1;
                     }
 
@@ -240,12 +242,14 @@ pub fn pileup_contigs<R: NamedBamReader,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
-    output_prefix: &str) {
+    output_prefix: &str,
+    n_threads: usize) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
+        bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
         pileup_matrix.add_sample(stoit_name);
         {
@@ -258,7 +262,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
             let mut indels = Vec::new();
 
-            let mut read_starts = HashMap::new(); // read start map
+//            let mut read_starts = HashMap::new(); // read start map
             let mut depth = Vec::new(); // genomic depth
             let mut last_tid: i32 = -2; // no such tid in a real BAM file
             let mut total_indels_in_current_contig = 0;
@@ -325,7 +329,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
                                   .or_insert(read_cnt_id);
-                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
+//                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
                         read_cnt_id += 1;
                     }
 

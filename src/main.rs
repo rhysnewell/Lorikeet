@@ -1626,7 +1626,7 @@ fn run_pileup<'a,
             process::exit(1);
         },
     };
-
+    let threads = m.value_of("threads").unwrap().parse().unwrap();
 
     let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
 
@@ -1654,7 +1654,8 @@ fn run_pileup<'a,
         min_fraction_covered,
         contig_end_exclusion,
         variant_consensus_file,
-        print_consensus);
+        print_consensus,
+        threads);
 
 }
 
@@ -1679,6 +1680,7 @@ fn run_pileup_contigs<'a,
     };
 
     let output_prefix = m.value_of("output-prefix").unwrap();
+    let threads = m.value_of("threads").unwrap().parse().unwrap();
 
     let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
 
@@ -1752,7 +1754,8 @@ fn run_pileup_contigs<'a,
         max,
         min_fraction_covered,
         contig_end_exclusion,
-        output_prefix);
+        output_prefix,
+        threads);
 
 }
 
