@@ -33,6 +33,7 @@ murmurhash3 = "~0.0.5"
 itertools = "*"
 ndarray = "0.12.*"
 rayon = "1.2.0"
+permutation = "0.2.5"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
