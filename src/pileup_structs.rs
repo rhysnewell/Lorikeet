@@ -91,8 +91,6 @@ pub trait PileupFunctions {
                      depth_thresh: usize,
                      variant_fraction: f64);
 
-    fn generate_variant_matrix(&mut self);
-
     fn generate_variant_contig(&mut self,
                                original_contig: Vec<u8>,
                                consensus_genome: std::fs::File);
@@ -180,6 +178,7 @@ impl PileupFunctions for PileupStats {
                 target_len,
                 ref mut variations_per_base,
                 ref mut coverage,
+                tid,
                 ..
             } => {
                 let mut variants = Arc::new(Mutex::new(BTreeMap::new())); // The relative abundance of each variant
@@ -242,43 +241,12 @@ impl PileupFunctions for PileupStats {
                 });
 
                 let mut read_variants = read_variants.lock().unwrap();
-                debug!("read variants {:?}", read_variants);
                 *variants_in_reads = read_variants.clone();
                 let mut variants = variants.lock().unwrap();
-                debug!("variants abundances {:?}", variants);
                 *variant_abundances = variants.clone();
                 let mut variant_count = variant_count.lock().unwrap();
+                debug!("Total variants for {}: {:?}", tid, variant_count);
                 *variations_per_base = (*variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
-            }
-        }
-    }
-
-    fn generate_variant_matrix(&mut self){
-        match self {
-            PileupStats::PileupContigStats {
-                variants_in_reads: _,
-                target_len: _,
-                ..
-            } => {
-//                let mut position_covariance = BTreeMap::new();
-//                let mut covar_array = Array2::<usize>::zeros((*target_len, *target_len));
-//
-//                for (_read_id, positions) in variants_in_reads{
-//                    for position in positions.keys().collect().iter().combinations(2){
-//
-//                        covar_array[[*position[0] as usize, *position[1] as usize]] += 1 as usize;
-//                        covar_array[[*position[1] as usize, *position[0] as usize]] += 1 as usize;
-//
-//                    }
-//                }
-////                println!("{:?}", covar_array);
-//                for row in covar_array.genrows(){
-////                    for col in row{
-////                        print!("{},")
-////                    }
-//                    println!("{}", row.iter().fold(String::new(), |acc, &num| acc + &num.to_string() + "\t"));
-////                    row.iter().fold(String::new(),|mut s,&n| {print!(format!((s,"{},",n).ok()); s});
-//                }
             }
         }
     }
@@ -357,6 +325,8 @@ impl PileupFunctions for PileupStats {
                 let mut total_genotype_count =
                     Arc::new(Mutex::new(0));
 
+                debug!("starting genotyping");
+
                 variant_abundances.par_iter().for_each(|(position, variants)| {
                     let position = *position as usize;
                     let mut genotype_record;
@@ -418,7 +388,6 @@ impl PileupFunctions for PileupStats {
                         let permuted = permutation::sort(&left_most_variants[..]);
                         let read_vec_sorted = permuted.apply_slice(&read_vec[..]);
 
-                        debug!("read vec {:?}", read_vec_sorted);
                         for read_id in read_vec_sorted.iter() {
                             let mut position_map = match variants_in_reads.get(read_id) {
                                 Some(positions) => positions,
@@ -427,7 +396,6 @@ impl PileupFunctions for PileupStats {
                                     break
                                 },
                             };
-                            debug!("read id {} positions {:?}", read_id, position_map);
                             if genotype_vec.len() == 0 {
                                 genotype_record.read_ids.insert(*read_id);
                                 for (pos, variant) in position_map.iter(){
@@ -689,7 +657,6 @@ impl PileupFunctions for PileupStats {
                                 debug!("start: i {}, num_accounted_for {}, total {}, min {}, max {}",
                                        i, num_accounted_for, total, min_index, max_index);
                                 if num_accounted_for >= min_index {
-                                    debug!("inside");
                                     if started {
                                         if num_accounted_for > max_index {
                                             debug!("num_accounted_for {}, *num_covered {}",
@@ -785,24 +752,6 @@ impl PileupFunctions for PileupStats {
                                 },
                             };
 
-
-//                            let read_ids =
-//                                match indels[position].get(var) {
-//                                    Some(ids) => ids,
-//                                    None => {
-//                                        println!("Variant not in indel hash");
-//                                        std::process::exit(1)
-//                                    },
-//                                };
-//                            let mut connected_bases = HashSet::new();
-//                            for read_id in read_ids {
-//                                if variants_in_reads.contains_key(&read_id) {
-//                                    connected_bases = connected_bases.union(
-//                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
-//                                        .cloned().collect::<HashSet<i32>>();
-//                                }
-//                            }
-//                            print!("{:?}\n", connected_bases)
                         } else if var.len() == 1{
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
                                    var,
@@ -826,24 +775,6 @@ impl PileupFunctions for PileupStats {
                                 },
                             };
 
-//                            let read_ids =
-//                                match nucfrequency[position]
-//                                    .get(&(var.clone().into_bytes()[0] as char)){
-//                                Some(ids) => ids,
-//                                None => {
-//                                    println!("Variant not in frequency Hash");
-//                                    std::process::exit(1)},
-//                            };
-
-//                            let mut connected_bases = HashSet::new();
-//                            for read_id in read_ids{
-//                                if variants_in_reads.contains_key(&read_id) {
-//                                    connected_bases = connected_bases.union(
-//                                        &variants_in_reads[&read_id].keys().cloned().collect::<HashSet<i32>>())
-//                                        .cloned().collect::<HashSet<i32>>();
-//                                }
-//                            }
-//                            print!("{:?}\n", connected_bases)
                         }
                     }
                 };
