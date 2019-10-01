@@ -34,6 +34,7 @@ extern crate murmurhash3;
 extern crate itertools;
 extern crate ndarray;
 extern crate rayon;
+extern crate permutation;
 
 
 use std::path::Path;
