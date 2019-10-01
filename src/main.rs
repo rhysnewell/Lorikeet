@@ -1617,6 +1617,8 @@ fn run_pileup<'a,
         variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
     }
     let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+    let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+
     let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
     let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
@@ -1648,6 +1650,7 @@ fn run_pileup<'a,
         print_zeros,
         flag_filters,
         depth_threshold,
+        mapq_threshold,
         var_fraction,
         min,
         max,
@@ -1669,6 +1672,7 @@ fn run_pileup_contigs<'a,
     let print_zeros = !m.is_present("no-zeros");
     let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
     let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+    let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
     let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
     let reference_path = Path::new(m.value_of("reference").unwrap());
     let fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
@@ -1749,6 +1753,7 @@ fn run_pileup_contigs<'a,
         print_zeros,
         flag_filters,
         depth_threshold,
+        mapq_threshold,
         var_fraction,
         min,
         max,
@@ -2547,6 +2552,10 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("depth-threshold")
                     .short("d")
                     .default_value("10"))
+                .arg(Arg::with_name("mapq-threshold")
+                    .long("mapq-threshold")
+                    .short("q")
+                    .default_value("40"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))
@@ -2564,7 +2573,6 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .short("v")
                     .long("verbose"))
                 .arg(Arg::with_name("quiet")
-                    .short("q")
                     .long("quiet")))
         .subcommand(
             SubCommand::with_name("binning")
@@ -2694,6 +2702,10 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .long("depth-threshold")
                     .short("d")
                     .default_value("10"))
+                .arg(Arg::with_name("mapq-threshold")
+                    .long("mapq-threshold")
+                    .short("q")
+                    .default_value("40"))
                 .arg(Arg::with_name("kmer-size")
                     .long("kmer-size")
                     .short("k")
@@ -2719,7 +2731,6 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
                     .short("v")
                     .long("verbose"))
                 .arg(Arg::with_name("quiet")
-                    .short("q")
                     .long("quiet")))
         .subcommand(
         SubCommand::with_name("kmer")
