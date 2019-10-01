@@ -257,7 +257,7 @@ impl PileupFunctions for PileupStats {
                 *variant_abundances = variants.clone();
                 let mut variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
-                *variations_per_base = (*variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
+                *variations_per_base = (*variant_count) as f32/target_len.clone() as f32;
                 let mut nucfrequency_backup = nucfrequency_backup.lock().unwrap();
                 *nucfrequency = nucfrequency_backup.clone();
                 let mut indels_backup = indels_backup.lock().unwrap();
