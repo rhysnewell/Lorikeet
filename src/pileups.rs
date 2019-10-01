@@ -275,6 +275,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut read_to_id = HashMap::new();
             let mut previous_read_positions = HashMap::new();
             let mut base;
+            let mut read_name = Vec::new();
 
             for p in bam_pileups {
 
@@ -336,10 +337,11 @@ pub fn pileup_contigs<R: NamedBamReader,
                         debug!("Low quality mapping MAPQ {}", alignment.record().mapq());
                         continue
                     }
+                    read_name = alignment.record().qname().to_vec();
 
                     // Check if new read to id
-                    if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
-                        read_to_id.entry(alignment.record().qname().to_vec())
+                    if !read_to_id.contains_key(&read_name) {
+                        read_to_id.entry(read_name.clone())
                                   .or_insert(read_cnt_id);
 //                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
                         read_cnt_id += 1;
@@ -347,12 +349,12 @@ pub fn pileup_contigs<R: NamedBamReader,
 
                     let qpos = match alignment.qpos() {
                         Some(position) => {
-                            previous_read_positions.insert(read_to_id[&alignment.record().qname().to_vec()], position);
+                            previous_read_positions.insert(read_to_id[&read_name], position);
                             position
                         },
                         None => {
                             let position = previous_read_positions.entry(
-                                read_to_id[&alignment.record().qname().to_vec()]).or_insert(0);
+                                read_to_id[&read_name]).or_insert(0);
                             *position
                         },
                     };
@@ -362,7 +364,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                         if base != ref_seq[pileup.pos() as usize] as char {
                             let id = nuc_freq[pileup.pos() as usize].entry(base)
                                                                     .or_insert(HashSet::new());
-                            id.insert(read_to_id[&alignment.record().qname().to_vec()]);
+                            id.insert(read_to_id[&read_name]);
                         }
                     }
                     // mark indel start
