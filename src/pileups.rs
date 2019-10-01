@@ -26,6 +26,7 @@ pub fn pileup_variants<R: NamedBamReader,
     _print_zero_coverage_contigs: bool,
     _flag_filters: FlagFilter,
     depth_threshold: usize,
+    mapq_threshold: u8,
     var_fraction: f64,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
@@ -142,6 +143,13 @@ pub fn pileup_variants<R: NamedBamReader,
                 }
 
                 for alignment in pileup.alignments() {
+                    if alignment.record().seq().len() == 0 {
+                        debug!("Zero length read: {:?}, MAPQ {}", alignment.record().seq(), alignment.record().mapq());
+                        continue
+                    } else if alignment.record().mapq() < mapq_threshold {
+                        debug!("Low quality mapping MAPQ {}", alignment.record().mapq());
+                        continue
+                    }
                     // Check if new read to id
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
@@ -162,10 +170,6 @@ pub fn pileup_variants<R: NamedBamReader,
                         },
                     };
                     if !alignment.is_del() && !alignment.is_refskip() {
-                        if alignment.record().seq().len() == 0 {
-                            debug!("Zero length read: {:?}", alignment.record().seq());
-                            break
-                        }
                         base = alignment.record().seq()[qpos] as char;
                         if base != ref_seq[pileup.pos() as usize] as char {
                             let id = nuc_freq[pileup.pos() as usize].entry(base)
@@ -238,6 +242,7 @@ pub fn pileup_contigs<R: NamedBamReader,
     _print_zero_coverage_contigs: bool,
     _flag_filters: FlagFilter,
     depth_threshold: usize,
+    mapq_threshold: u8,
     var_fraction: f64,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
@@ -324,8 +329,15 @@ pub fn pileup_contigs<R: NamedBamReader,
                 }
 
                 for alignment in pileup.alignments() {
-                    // Check if new read to id
+                    if alignment.record().seq().len() == 0 {
+                        debug!("Zero length read: {:?}, MAPQ {}", alignment.record().seq(), alignment.record().mapq());
+                        continue
+                    } else if alignment.record().mapq() < mapq_threshold {
+                        debug!("Low quality mapping MAPQ {}", alignment.record().mapq());
+                        continue
+                    }
 
+                    // Check if new read to id
                     if !read_to_id.contains_key(&alignment.record().qname().to_vec()) {
                         read_to_id.entry(alignment.record().qname().to_vec())
                                   .or_insert(read_cnt_id);
@@ -345,10 +357,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                         },
                     };
                     if !alignment.is_del() && !alignment.is_refskip() {
-                        if alignment.record().seq().len() == 0 {
-                            debug!("Zero length read: {:?}", alignment.record().seq());
-                            break
-                        }
+
                         base = alignment.record().seq()[qpos] as char;
                         if base != ref_seq[pileup.pos() as usize] as char {
                             let id = nuc_freq[pileup.pos() as usize].entry(base)
