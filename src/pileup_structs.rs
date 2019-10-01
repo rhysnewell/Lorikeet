@@ -209,7 +209,6 @@ impl PileupFunctions for PileupStats {
                                     }
                                     let mut variant_count = variant_count.lock().unwrap();
                                     *variant_count += 1;
-
                                 }
                             };
                             if indels[i].len() > 0 {
