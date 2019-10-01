@@ -316,6 +316,10 @@ impl PileupFunctions for PileupStats {
                 ref mut variants_in_reads,
                 ref mut genotypes_per_position,
                 ref mut mean_genotypes,
+                tid,
+                target_len,
+                variations_per_base,
+                coverage,
                 ..
             } => {
                 let mut genotypes =
@@ -325,7 +329,8 @@ impl PileupFunctions for PileupStats {
                 let mut total_genotype_count =
                     Arc::new(Mutex::new(0));
 
-                debug!("starting genotyping");
+                debug!("starting genotyping of tid {}, of length {}, and var per b {} at {} times coverage",
+                        tid, target_len, variations_per_base, coverage);
 
                 variant_abundances.par_iter().for_each(|(position, variants)| {
                     let position = *position as usize;
