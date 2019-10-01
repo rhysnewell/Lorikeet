@@ -184,6 +184,8 @@ impl PileupFunctions for PileupStats {
                 let mut variants = Arc::new(Mutex::new(BTreeMap::new())); // The relative abundance of each variant
                 let mut read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
                 let mut variant_count = Arc::new(Mutex::new(0));
+                let mut indels_backup = Arc::new(Mutex::new(indels.clone()));
+                let mut nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
 
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
@@ -197,36 +199,46 @@ impl PileupFunctions for PileupStats {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
-                                    if count as f64 / depth_thresh as f64 >= variant_fraction {
+                                    if count as f32 / depth_thresh as f32 >= variant_fraction as f32 {
                                         rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
                                         for read in read_ids {
-                                            let mut read_variants = read_variants.lock().unwrap();
+                                            let mut read_variants
+                                                = read_variants.lock().unwrap();
                                             let read_vec = read_variants
                                                 .entry(read.clone())
                                                 .or_insert(BTreeMap::new());
                                             read_vec.insert(i as i32, base.to_string());
                                         }
+                                        let mut variant_count = variant_count.lock().unwrap();
+                                        *variant_count += 1;
+                                    } else {
+                                        let mut nucfrequency_backup
+                                            = nucfrequency_backup.lock().unwrap();
+                                        nucfrequency_backup[i].remove(base);
                                     }
-                                    let mut variant_count = variant_count.lock().unwrap();
-                                    *variant_count += 1;
                                 }
                             };
                             if indels[i].len() > 0 {
                                 for (indel, read_ids) in indels[i].iter() {
                                     let count = read_ids.len();
-                                    if count as f64 / depth_thresh as f64 >= variant_fraction {
+                                    if count as f32 / depth_thresh as f32 >= variant_fraction as f32 {
                                         rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
                                         for read in read_ids {
-                                            let mut read_variants = read_variants.lock().unwrap();
+                                            let mut read_variants
+                                                = read_variants.lock().unwrap();
 
                                             let read_vec = read_variants
                                                 .entry(read.clone())
                                                 .or_insert(BTreeMap::new());
                                             read_vec.insert(i as i32, indel.clone());
                                         }
+                                        let mut variant_count = variant_count.lock().unwrap();
+                                        *variant_count += 1;
+                                    } else {
+                                        let mut indels_backup
+                                            = indels_backup.lock().unwrap();
+                                        indels_backup[i].remove(indel);
                                     }
-                                    let mut variant_count = variant_count.lock().unwrap();
-                                    *variant_count += 1;
                                 }
                             }
                         }
@@ -246,6 +258,10 @@ impl PileupFunctions for PileupStats {
                 let mut variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
                 *variations_per_base = (*variant_count+*total_indels as i32) as f32/target_len.clone() as f32;
+                let mut nucfrequency_backup = nucfrequency_backup.lock().unwrap();
+                *nucfrequency = nucfrequency_backup.clone();
+                let mut indels_backup = indels_backup.lock().unwrap();
+                *indels = indels_backup.clone();
             }
         }
     }
@@ -363,8 +379,8 @@ impl PileupFunctions for PileupStats {
                                         std::process::exit(1)
                                     },
                                 };
-
-                        } else if var.len() == 1 {
+                        } else if nucfrequency[position].contains_key(
+                            &(var.clone().into_bytes()[0] as char)) {
                             read_ids =
                                 match nucfrequency[position]
                                     .get(&(var.clone().into_bytes()[0] as char)) {
@@ -593,7 +609,6 @@ impl PileupFunctions for PileupStats {
                 let len1 = target_len;
                 match *contig_end_exclusion * 2 < *len1 as u32 {
                     true => {
-                        debug!("Adding len1 {}", len1);
                         *observed_contig_length += *len1 as u32 - 2 * *contig_end_exclusion
                     },
                     false => {
@@ -658,19 +673,15 @@ impl PileupFunctions for PileupStats {
                                     ex += (x-k) * nc;
                                     ex2 += (x-k)*(x-k) * nc;
                                 }
-                                debug!("start: i {}, num_accounted_for {}, total {}, min {}, max {}",
-                                       i, num_accounted_for, total, min_index, max_index);
                                 if num_accounted_for >= min_index {
                                     if started {
                                         if num_accounted_for > max_index {
-                                            debug!("num_accounted_for {}, *num_covered {}",
-                                                   num_accounted_for, *num_covered);
+
                                             let num_excess = num_accounted_for - *num_covered as usize;
                                             let num_wanted = match max_index >= num_excess {
                                                 true => max_index - num_excess + 1,
                                                 false => 0
                                             };
-                                            debug!("num wanted1: {}", num_wanted);
                                             total += num_wanted * i;
                                             break;
                                         } else {
@@ -685,14 +696,11 @@ impl PileupFunctions for PileupStats {
                                             debug!("too few on first")
                                         } else {
                                             let num_wanted = num_accounted_for - min_index + 1;
-                                            debug!("num wanted2: {}", num_wanted);
                                             total = num_wanted * i;
                                             started = true;
                                         }
                                     }
                                 }
-                                debug!("end i {}, num_accounted_for {}, total {}", i, num_accounted_for, total);
-
                                 i += 1;
                             }
                             // Return sample variance not population variance since
