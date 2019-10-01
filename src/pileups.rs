@@ -144,10 +144,8 @@ pub fn pileup_variants<R: NamedBamReader,
 
                 for alignment in pileup.alignments() {
                     if alignment.record().seq().len() == 0 {
-                        debug!("Zero length read: {:?}, MAPQ {}", alignment.record().seq(), alignment.record().mapq());
                         continue
                     } else if alignment.record().mapq() < mapq_threshold {
-                        debug!("Low quality mapping MAPQ {}", alignment.record().mapq());
                         continue
                     }
                     // Check if new read to id
@@ -331,10 +329,8 @@ pub fn pileup_contigs<R: NamedBamReader,
 
                 for alignment in pileup.alignments() {
                     if alignment.record().seq().len() == 0 {
-                        debug!("Zero length read: {:?}, MAPQ {}", alignment.record().seq(), alignment.record().mapq());
                         continue
                     } else if alignment.record().mapq() < mapq_threshold {
-                        debug!("Low quality mapping MAPQ {}", alignment.record().mapq());
                         continue
                     }
                     read_name = alignment.record().qname().to_vec();
