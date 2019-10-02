@@ -45,7 +45,9 @@ pub trait PileupMatrixFunctions {
                  k_freq: BTreeMap<Vec<u8>, usize>);
 
     fn add_contig(&mut self,
-                  pileup_stats: PileupStats);
+                  pileup_stats: PileupStats,
+                  sample_count: usize,
+                  sample_idx: usize);
 
     fn print_stats(&self, output_prefix: &str);
 
@@ -106,7 +108,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn add_contig(&mut self, mut pileup_stats: PileupStats) {
+    fn add_contig(&mut self, mut pileup_stats: PileupStats, sample_count: usize, sample_idx: usize) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut coverages,
@@ -126,12 +128,17 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ref mut variance,
                         ..
                     } => {
-                        let ag = average_genotypes.entry(*tid).or_insert(vec!());
-                        ag.push(*mean_genotypes);
-                        let var = variances.entry(*tid).or_insert(vec!());
-                        var.push(*variance);
-                        let cov = coverages.entry(*tid).or_insert(vec!());
-                        cov.push(*coverage);
+                        let ag = average_genotypes.entry(*tid).or_insert(
+                            vec![0.0 as f32; sample_count]);
+                        ag[sample_idx] = *mean_genotypes;
+                        let var = variances.entry(*tid).or_insert(
+                            vec![0.0 as f32; sample_count]
+                        );
+                        var[sample_idx] = *variance;
+                        let cov = coverages.entry(*tid).or_insert(
+                            vec![0.0 as f32; sample_count]
+                        );
+                        cov[sample_idx] = *coverage;
                         target_names.insert(*tid,
                                             str::from_utf8(target_name).unwrap().to_string());
                         target_lengths.insert(*tid, target_len.clone());

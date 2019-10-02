@@ -249,6 +249,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     n_threads: usize) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
+    let sample_count = bam_readers.len();
+    let mut sample_idx = 0;
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
@@ -298,7 +300,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                             var_fraction,
                             contig_len,
                             contig_name,
-                            &mut pileup_matrix);
+                            &mut pileup_matrix,
+                            sample_count,
+                            sample_idx);
                     };
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -410,10 +414,13 @@ pub fn pileup_contigs<R: NamedBamReader,
                     var_fraction,
                     contig_len,
                     contig_name,
-                    &mut pileup_matrix);
+                    &mut pileup_matrix,
+                    sample_count,
+                    sample_idx);
             };
         }
         bam_generated.finish();
+        sample_idx += 1;
     }
     pileup_matrix.print_stats(output_prefix);
 }
@@ -494,7 +501,9 @@ fn process_previous_contigs(
         var_fraction: f64,
         contig_len: usize,
         contig_name: Vec<u8>,
-        pileup_matrix: &mut PileupMatrix) {
+        pileup_matrix: &mut PileupMatrix,
+        sample_count: usize,
+        sample_idx: usize) {
 
         if last_tid != -2 {
 
@@ -522,6 +531,6 @@ fn process_previous_contigs(
             // calculates minimum number of genotypes possible for each variant location
             pileup_struct.generate_genotypes();
 
-            pileup_matrix.add_contig(pileup_struct);
+            pileup_matrix.add_contig(pileup_struct, sample_count, sample_idx);
     }
 }
