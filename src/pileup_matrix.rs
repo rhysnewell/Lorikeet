@@ -171,7 +171,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 write!(file_open, "\n").unwrap();
                 for (tid, contig_name) in target_names.iter() {
                     write!(file_open, "{}\t{}", contig_name, target_lengths[tid]).unwrap();
-                    let placeholder = vec!(0.0 as f32);
+                    let placeholder = vec![0.0 as f32; sample_names.len() as usize];
                     let coverage_vec = match coverages.get(tid) {
                         Some(vector) => vector,
                         None => &placeholder,
