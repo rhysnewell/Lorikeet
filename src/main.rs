@@ -1421,59 +1421,58 @@ fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {
 fn build_cli() -> App<'static, 'static> {
     // specify static lazily because need to define it at runtime.
     lazy_static! {
-        static ref CONTIG_HELP: String = format!(
+        static ref POLYMORPH_HELP: String = format!(
             "
                             {}
               {}
 
 {}
 
-  lorikeet contig --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna
+  lorikeet polymorph --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
 
 {}
 
-  lorikeet contig --method metabat --bam-files my.bam
-    --bam-file-cache-directory saved_bam_files
+  lorikeet polymorph --method metabat --bam-files my.bam --reference assembly.fna
+    --bam-file-cache-directory saved_bam_files --threads 10
 
-See lorikeet contig --full-help for further options and further detail.
+See lorikeet polymorph --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet contig"),
+                "lorikeet polymorph"),
             ansi_term::Colour::Green.paint(
-                "Calculate coverage of individual contigs"),
+                "Generate variant positions along contigs with a sample"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate mean coverage from reads and assembly:"),
+                "Example: Calculate variant positions from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate MetaBAT adjusted coverage from a sorted BAM file, saving
+                "Example: Calculate variant positions using MetaBAT adjusted coverage from a sorted BAM file, saving
 the unfiltered BAM files in the saved_bam_files folder:")
         ).to_string();
 
-        static ref GENOME_HELP: String = format!(
+        static ref SUMMARIZE_HELP: String = format!(
             "
                             {}
-               {}
+              {}
 
 {}
 
-  lorikeet genome --coupled read1.fastq.gz read2.fastq.gz
-    --reference assembly.fna --separator '~'
+  lorikeet summarize --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
 
 {}
 
-  lorikeet genome --bam-files my.bam --genome-fasta-directory genomes_directory/
+  lorikeet summarize --method metabat --bam-files my.bam --reference assembly.fna
+    --bam-file-cache-directory saved_bam_files --threads 10
 
-See lorikeet genome --full-help for further options and further detail.
+See lorikeet summarize --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet genome"),
+                "lorikeet summarize"),
             ansi_term::Colour::Green.paint(
-                "Calculate coverage of individual genomes"),
+                "Summarizes contigs stats including mean coverage, mean genotypes \
+                and kmer frequencies"),
             ansi_term::Colour::Purple.paint(
-                "Example: Map paired reads to a reference where the FASTA header separates
-the genome name from the contig name with '~' e.g. >genome10~contig15"),
+                "Example: Map paired reads to a reference and generate contig stats across samples"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate coverage of genomes defined as .fna files in
-genomes_directory/ from a sorted BAM file:"),
+                "Example: Summarizes contigs defined in reference from a sorted BAM file:"),
         ).to_string();
 
         static ref FILTER_HELP: String = format!(
@@ -1507,38 +1506,6 @@ See lorikeet filter --full-help for further options and further detail.
         ).to_string();
     }
 
-    let make_help: &'static str =
-        "lorikeet make: Generate BAM files through mapping.
-
-Output (required):
-   -o, --output-directory <DIR>          Where generated BAM files will go
-
-Mapping parameters:
-   -r, --reference <PATH>                FASTA file(s) of contig(s) or BWA index stem.
-                                         If multiple reference FASTA files are provided,
-                                         reads will be mapped to each reference separately
-                                         and create sharded BAM files.
-   -t, --threads <INT>                   Number of threads to use for mapping
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]
-   --discard-unmapped                    Exclude unmapped reads from generated BAM files.
-
-Example usage:
-
-  lorikeet make -r combined_genomes.fna -1 read1.fq -2 read2.fq
-
-Ben J. Woodcroft <benjwoodcroft near gmail.com>";
-
     return App::new("lorikeet")
         .version(crate_version!())
         .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
@@ -1551,23 +1518,23 @@ Mapping coverage analysis for metagenomics
 Usage: lorikeet <subcommand> ...
 
 Main subcommands:
-\tcontig\tCalculate coverage of contigs
-\tgenome\tCalculate coverage of genomes
+\tpolymorph\tCalculate variants along contig positions
+\tsummarize\tSummarizes contig stats from multiple samples
 
 Less used utility subcommands:
-\tmake\tGenerate BAM files through alignment
+\tkmer\tCalculate kmer frequencies within contigs
 \tfilter\tRemove (or only keep) alignments with insufficient identity
 
 Other options:
 \t-V, --version\tPrint version information
 
-Ben J. Woodcroft <benjwoodcroft near gmail.com>
+Rhys J. P. Newell <r.newell near uq.edu.au>
 ")
         .global_setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("polymorph")
                 .about("Perform variant calling analysis")
-//                .help(POLYMORPH_HELP.as_str())
+                .help(POLYMORPH_HELP.as_str())
 
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
@@ -1713,7 +1680,7 @@ Ben J. Woodcroft <benjwoodcroft near gmail.com>
         .subcommand(
             SubCommand::with_name("summarize")
                 .about("Perform variant calling analysis and then binning")
-//                .help(SUMMARIZE_HELP.as_str())
+                .help(SUMMARIZE_HELP.as_str())
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
 
