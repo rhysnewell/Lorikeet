@@ -99,7 +99,7 @@ pub trait PileupFunctions {
 
     fn calc_coverage(&mut self) -> f32;
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, depth_thresh: usize);
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_name: String);
 }
 
 impl PileupFunctions for PileupStats {
@@ -174,25 +174,23 @@ impl PileupFunctions for PileupStats {
                 ref mut variant_abundances,
                 depth,
                 ref mut indels,
-                total_indels,
                 target_len,
                 ref mut variations_per_base,
                 ref mut coverage,
                 tid,
                 ..
             } => {
-                let mut variants = Arc::new(Mutex::new(BTreeMap::new())); // The relative abundance of each variant
-                let mut read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
-                let mut variant_count = Arc::new(Mutex::new(0));
-                let mut indels_backup = Arc::new(Mutex::new(indels.clone()));
-                let mut nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
+                let variants = Arc::new(Mutex::new(BTreeMap::new())); // The relative abundance of each variant
+                let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
+                let variant_count = Arc::new(Mutex::new(0));
+                let indels_backup = Arc::new(Mutex::new(indels.clone()));
+                let nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
 
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.into_par_iter().enumerate().for_each(|(i, d)| {
-                    let mut variant = Arc::clone(&variants);
-                    let mut read_variants = Arc::clone(&read_variants);
-                    let mut variant_count = Arc::clone(&variant_count);
+                    let read_variants = Arc::clone(&read_variants);
+                    let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
                     if *coverage * 0.75 < *d as f32 && *d as f32 <= *coverage * 1.25 {
                         if d >= &mut depth_thresh.clone() {
@@ -251,16 +249,16 @@ impl PileupFunctions for PileupStats {
 
                 });
 
-                let mut read_variants = read_variants.lock().unwrap();
+                let read_variants = read_variants.lock().unwrap();
                 *variants_in_reads = read_variants.clone();
-                let mut variants = variants.lock().unwrap();
+                let variants = variants.lock().unwrap();
                 *variant_abundances = variants.clone();
-                let mut variant_count = variant_count.lock().unwrap();
+                let variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
                 *variations_per_base = (*variant_count) as f32/target_len.clone() as f32;
-                let mut nucfrequency_backup = nucfrequency_backup.lock().unwrap();
+                let nucfrequency_backup = nucfrequency_backup.lock().unwrap();
                 *nucfrequency = nucfrequency_backup.clone();
-                let mut indels_backup = indels_backup.lock().unwrap();
+                let indels_backup = indels_backup.lock().unwrap();
                 *indels = indels_backup.clone();
             }
         }
@@ -337,11 +335,11 @@ impl PileupFunctions for PileupStats {
                 coverage,
                 ..
             } => {
-                let mut genotypes =
+                let genotypes =
                     Arc::new(Mutex::new(HashMap::new()));
-                let mut variant_count =
+                let variant_count =
                     Arc::new(Mutex::new(0));
-                let mut total_genotype_count =
+                let total_genotype_count =
                     Arc::new(Mutex::new(0));
 
                 debug!("starting genotyping of tid {}, of length {}, and var per b {} at {} times coverage",
@@ -351,9 +349,9 @@ impl PileupFunctions for PileupStats {
                     let position = *position as usize;
                     let mut genotype_record;
 
-                    let mut genotypes = Arc::clone(&genotypes);
-                    let mut variant_count = Arc::clone(&variant_count);
-                    let mut total_genotype_count = Arc::clone(&total_genotype_count);
+                    let genotypes = Arc::clone(&genotypes);
+                    let variant_count = Arc::clone(&variant_count);
+                    let total_genotype_count = Arc::clone(&total_genotype_count);
 
                     let mut genotype_pos = HashMap::new();
 
@@ -392,10 +390,10 @@ impl PileupFunctions for PileupStats {
                                 };
                         }
                         let mut left_most_variants: Vec<i32> = Vec::new();
-                        let mut read_vec = read_ids.into_iter().collect::<Vec<i32>>();
+                        let read_vec = read_ids.into_iter().collect::<Vec<i32>>();
 
                         for read_id in read_vec.iter() {
-                            let mut position_map = match variants_in_reads.get(read_id) {
+                            let position_map = match variants_in_reads.get(read_id) {
                                 Some(positions) => positions,
                                 None => {
                                     debug!("read id not recorded in variant map {}, {}", var, read_id);
@@ -409,7 +407,7 @@ impl PileupFunctions for PileupStats {
                         let read_vec_sorted = permuted.apply_slice(&read_vec[..]);
 
                         for read_id in read_vec_sorted.iter() {
-                            let mut position_map = match variants_in_reads.get(read_id) {
+                            let position_map = match variants_in_reads.get(read_id) {
                                 Some(positions) => positions,
                                 None => {
                                     debug!("read id not recorded in variant map {}, {}", var, read_id);
@@ -578,8 +576,8 @@ impl PileupFunctions for PileupStats {
                     genotypes.insert(position, genotype_pos);
                 });
                 //Calc the mean number of genotypes per variant
-                let mut variant_count = variant_count.lock().unwrap();
-                let mut total_genotype_count = total_genotype_count.lock().unwrap();
+                let variant_count = variant_count.lock().unwrap();
+                let total_genotype_count = total_genotype_count.lock().unwrap();
                 if *variant_count > 0 {
                     *mean_genotypes = *total_genotype_count as f32 / *variant_count as f32;
                 } else {
@@ -717,20 +715,18 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, _depth_thresh: usize){
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_name: String){
         match self {
             PileupStats::PileupContigStats {
-                nucfrequency,
                 indels,
                 variant_abundances,
-                variants_in_reads,
                 depth,
                 tid,
                 genotypes_per_position,
                 ..
 
             } => {
-                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes");
+                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample");
                 for (position, hash) in variant_abundances.iter() {
                     // loop through each position that has variants
                     let position = *position as usize;
@@ -752,17 +748,18 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{}\n", gtype_count);
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
-                                            print!("0\n");
+                                            print!("0\t");
                                         }
                                     }
                                 },
                                 None => {
-                                    print!("0\n");
+                                    print!("0\t");
                                 },
                             };
+                            println!{"{}", sample_name};
 
                         } else if var.len() == 1{
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
@@ -775,18 +772,18 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{}\n", gtype_count);
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
-                                            print!("0\n");
+                                            print!("0\t");
                                         }
                                     }
                                 },
                                 None => {
-                                    print!("0\n");
+                                    print!("0\t");
                                 },
                             };
-
+                            println!{"{}", sample_name};
                         }
                     }
                 };
