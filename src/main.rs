@@ -1,15 +1,10 @@
 extern crate lorikeet;
-use lorikeet::mosdepth_genome_coverage_estimators::*;
 use lorikeet::bam_generator::*;
 use lorikeet::filter;
 use lorikeet::external_command_checker;
-use lorikeet::coverage_takers::*;
 use lorikeet::mapping_parameters::*;
-use lorikeet::coverage_printer::*;
 use lorikeet::shard_bam_reader::*;
 use lorikeet::FlagFilter;
-use lorikeet::CONCATENATED_FASTA_FILE_SEPARATOR;
-use lorikeet::genomes_and_contigs::GenomesAndContigs;
 use lorikeet::genome_exclusion::*;
 
 extern crate rust_htslib;
@@ -22,7 +17,7 @@ use bio::alignment::sparse::*;
 use std::env;
 use std::str;
 use std::process;
-use std::collections::{HashSet, BTreeMap};
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::fs::File;
 use std::path::Path;
@@ -317,7 +312,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>"}
 fn main(){
     let mut app = build_cli();
     let matches = app.clone().get_matches();
-    let mut print_stream = &mut std::io::stdout();
     set_log_level(&matches, false);
 
     match matches.subcommand_name() {
@@ -580,288 +574,6 @@ fn main(){
     }
 }
 
-struct EstimatorsAndTaker<'a> {
-    estimators: Vec<CoverageEstimator>,
-    taker: CoverageTakerType<'a>,
-    columns_to_normalise: Vec<usize>,
-    printer: CoveragePrinter,
-}
-
-impl<'a> EstimatorsAndTaker<'a> {
-    pub fn generate_from_clap(
-        m: &clap::ArgMatches, stream: &'a mut std::io::Stdout)
-        -> EstimatorsAndTaker<'a> {
-        let mut estimators = vec!();
-        let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
-
-        if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-            eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-            process::exit(1)
-        }
-        let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
-
-        let methods: Vec<&str> = m.values_of("methods").unwrap().collect();
-        let mut columns_to_normalise: Vec<usize> = vec!();
-
-        let taker;
-        let output_format = m.value_of("output-format").unwrap();
-        let printer;
-
-        if doing_metabat(&m) {
-            estimators.push(CoverageEstimator::new_estimator_length());
-            estimators.push(CoverageEstimator::new_estimator_mean(
-                min_fraction_covered, contig_end_exclusion, false));
-            estimators.push(CoverageEstimator::new_estimator_variance(
-                min_fraction_covered, contig_end_exclusion));
-
-            debug!("Cached regular coverage taker for metabat mode being used");
-            taker = CoverageTakerType::new_cached_single_float_coverage_taker(
-                estimators.len());
-            printer = CoveragePrinter::MetabatAdjustedCoveragePrinter;
-        } else {
-            for (i, method) in methods.iter().enumerate() {
-                match method {
-                    &"mean" => {
-                        estimators.push(CoverageEstimator::new_estimator_mean(
-                            min_fraction_covered,
-                            contig_end_exclusion,
-                            false)); // TODO: Parameterise exclude_mismatches
-                    },
-                    &"coverage_histogram" => {
-                        estimators.push(CoverageEstimator::new_estimator_pileup_counts(
-                            min_fraction_covered, contig_end_exclusion));
-                    },
-                    &"trimmed_mean" => {
-                        let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-                        let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-                        if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                            panic!("error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}", min, max);
-                        }
-                        estimators.push(CoverageEstimator::new_estimator_trimmed_mean(
-                            min, max, min_fraction_covered, contig_end_exclusion));
-                    },
-                    &"covered_fraction" => {
-                        estimators.push(CoverageEstimator::new_estimator_covered_fraction(
-                            min_fraction_covered, contig_end_exclusion));
-                    },
-                    &"covered_bases" => {
-                        estimators.push(CoverageEstimator::new_estimator_covered_bases(
-                            min_fraction_covered, contig_end_exclusion));
-                    },
-                    &"variance" =>{
-                        estimators.push(CoverageEstimator::new_estimator_variance(
-                            min_fraction_covered, contig_end_exclusion));
-                    },
-                    &"length" =>{
-                        estimators.push(CoverageEstimator::new_estimator_length());
-                    },
-                    &"relative_abundance" => {
-                        columns_to_normalise.push(i);
-                        estimators.push(CoverageEstimator::new_estimator_mean(
-                            min_fraction_covered, contig_end_exclusion, false));
-                        // TODO: Parameterise exclude_mismatches
-                    },
-                    &"count" => {
-                        estimators.push(CoverageEstimator::new_estimator_read_count());
-                    },
-                    &"reads_per_base" => {
-                        estimators.push(CoverageEstimator::new_estimator_reads_per_base());
-                    }
-                    _ => unreachable!()
-                };
-            }
-
-            if methods.contains(&"coverage_histogram") {
-                if methods.len() > 1 {
-                    panic!("Cannot specify the coverage_histogram method with any other coverage methods")
-                } else {
-                    debug!("Coverage histogram type coverage taker being used");
-                    taker = CoverageTakerType::new_pileup_coverage_coverage_printer(stream);
-                    printer = CoveragePrinter::StreamedCoveragePrinter;
-                }
-            } else if columns_to_normalise.len() == 0 && output_format == "sparse" {
-                debug!("Streaming regular coverage output");
-                taker = CoverageTakerType::new_single_float_coverage_streaming_coverage_printer(
-                    stream);
-                printer = CoveragePrinter::StreamedCoveragePrinter;
-            } else {
-                debug!("Cached regular coverage taker with columns to normlise: {:?}",
-                       columns_to_normalise);
-                taker = CoverageTakerType::new_cached_single_float_coverage_taker(
-                    estimators.len());
-                printer = match output_format {
-                    "sparse" => CoveragePrinter::SparseCachedCoveragePrinter,
-                    "dense" => CoveragePrinter::DenseCachedCoveragePrinter {
-                        entry_type: None, estimator_headers: None},
-                    _ => unreachable!()
-                }
-            }
-
-        }
-
-        // Check that min-covered-fraction is being used as expected
-        if min_fraction_covered != 0.0 {
-            let die = |estimator_name| {
-                error!("The '{}' coverage estimator cannot be used when \
-                        --min-covered-fraction is > 0 as it does not calculate \
-                        the covered fraction. You may wish to set the \
-                        --min-covered-fraction to 0 and/or run this estimator \
-                        separately.", estimator_name);
-                process::exit(1)
-            };
-            for e in &estimators {
-                match e {
-                    CoverageEstimator::ReadCountCalculator{..} => { die("counts") },
-                    CoverageEstimator::ReferenceLengthCalculator{..} => { die("length") },
-                    CoverageEstimator::ReadsPerBaseCalculator{..} => { die("reads_per_base") }
-                    _ => {}
-                }
-            }
-        }
-
-        return EstimatorsAndTaker {
-            estimators: estimators,
-            taker: taker,
-            columns_to_normalise: columns_to_normalise,
-            printer: printer,
-        }
-    }
-
-    pub fn print_headers(
-        mut self,
-        entry_type: &str,
-        print_stream: &mut std::io::Write) -> Self {
-
-        let mut headers: Vec<String> = vec!();
-        for e in self.estimators.iter() {
-            for h in e.column_headers() {
-                headers.push(h.to_string())
-            }
-        }
-        for i in self.columns_to_normalise.iter() {
-            headers[*i] = "Relative Abundance (%)".to_string();
-        }
-        self.printer.print_headers(&entry_type, headers, print_stream);
-        return self;
-    }
-}
-
-fn parse_separator(m: &clap::ArgMatches) -> Option<u8> {
-    let single_genome = m.is_present("single-genome");
-    if single_genome {
-        Some("0".as_bytes()[0])
-    } else if m.is_present("separator") {
-        let separator_str = m.value_of("separator").unwrap().as_bytes();
-        if separator_str.len() != 1 {
-            eprintln!(
-                "error: Separator can only be a single character, found {} ({}).",
-                separator_str.len(),
-                str::from_utf8(separator_str).unwrap());
-            process::exit(1);
-        }
-        Some(separator_str[0])
-    } else if m.is_present("bam-files") || m.is_present("reference") {
-        // Argument parsing enforces that genomes have been specified as FASTA
-        // files.
-        None
-    } else {
-        // Separator is set by lorikeet and written into the generated reference
-        // fasta file.
-        Some(CONCATENATED_FASTA_FILE_SEPARATOR.as_bytes()[0])
-    }
-}
-
-
-fn parse_list_of_genome_fasta_files(m: &clap::ArgMatches) -> Vec<String> {
-    match m.is_present("genome-fasta-files") {
-        true => {
-            m.values_of("genome-fasta-files").unwrap().map(|s| s.to_string()).collect()
-        },
-        false => {
-            if m.is_present("genome-fasta-directory") {
-                let dir = m.value_of("genome-fasta-directory").unwrap();
-                let paths = std::fs::read_dir(dir).unwrap();
-                let mut genome_fasta_files: Vec<String> = vec!();
-                let extension = m.value_of("genome-fasta-extension").unwrap();
-                for path in paths {
-                    let file = path.unwrap().path();
-                    match file.extension() {
-                        Some(ext) => {
-                            if ext == extension {
-                                let s = String::from(file.to_string_lossy());
-                                genome_fasta_files.push(s);
-                            } else {
-                                info!(
-                                    "Not using directory entry '{}' as a genome FASTA file, as \
-                                     it does not end with the extension '{}'",
-                                    file.to_str().expect("UTF8 error in filename"),
-                                    extension);
-                            }
-                        },
-                        None => {
-                            info!("Not using directory entry '{}' as a genome FASTA file",
-                                  file.to_str().expect("UTF8 error in filename"));
-                        }
-                    }
-                }
-                if genome_fasta_files.len() == 0 {
-                    panic!("Found 0 genomes from the genome-fasta-directory, cannot continue.");
-                }
-                genome_fasta_files // return
-            } else {
-                panic!("Either a separator (-s) or path(s) to genome FASTA files \
-                        (with -d or -f) must be given");
-            }
-        }
-    }
-}
-
-
-fn run_genome<'a,
-              R: lorikeet::bam_generator::NamedBamReader,
-              T: lorikeet::bam_generator::NamedBamReaderGenerator<R>> (
-    bam_generators: Vec<T>,
-    m: &clap::ArgMatches,
-    estimators_and_taker: &'a mut EstimatorsAndTaker<'a>,
-    separator: Option<u8>,
-    genomes_and_contigs_option: &Option<GenomesAndContigs>) {
-
-    let print_zeros = !m.is_present("no-zeros");
-    let proper_pairs_only = m.is_present("allow-improper-pairs");
-    let single_genome = m.is_present("single-genome");
-    let reads_mapped = match separator.is_some() || single_genome {
-        true => {
-            lorikeet::genome::mosdepth_genome_coverage(
-                bam_generators,
-                separator.unwrap(),
-                &mut estimators_and_taker.taker,
-                print_zeros,
-                &mut estimators_and_taker.estimators,
-                proper_pairs_only,
-                single_genome)
-        },
-
-        false => {
-            match genomes_and_contigs_option {
-                Some(gc) =>
-                    lorikeet::genome::mosdepth_genome_coverage_with_contig_names(
-                        bam_generators,
-                        gc,
-                        &mut estimators_and_taker.taker,
-                        print_zeros,
-                        proper_pairs_only,
-                        &mut estimators_and_taker.estimators),
-                None => unreachable!()
-            }
-        }
-    };
-
-    debug!("Finalising printing ..");
-    estimators_and_taker.printer.finalise_printing(
-        &estimators_and_taker.taker, &mut std::io::stdout(), Some(&reads_mapped),
-        &estimators_and_taker.columns_to_normalise);
-}
 
 fn doing_metabat(m: &clap::ArgMatches) -> bool {
     match m.subcommand_name() {
@@ -1364,31 +1076,6 @@ fn run_pileup_contigs<'a,
         output_prefix,
         threads);
 
-}
-
-
-fn run_contig<'a,
-              R: lorikeet::bam_generator::NamedBamReader,
-              T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
-    estimators_and_taker: &'a mut EstimatorsAndTaker<'a>,
-    bam_readers: Vec<T>,
-    print_zeros: bool,
-    flag_filters: FlagFilter) {
-
-    lorikeet::contig::contig_coverage(
-        bam_readers,
-        &mut estimators_and_taker.taker,
-        &mut estimators_and_taker.estimators,
-        print_zeros,
-        flag_filters);
-
-    debug!("Finalising printing ..");
-
-    estimators_and_taker.printer.finalise_printing(
-        &estimators_and_taker.taker,
-        &mut std::io::stdout(),
-        None,
-        &estimators_and_taker.columns_to_normalise);
 }
 
 
