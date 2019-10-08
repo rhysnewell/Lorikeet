@@ -1,6 +1,5 @@
 use std;
 use std::collections::{HashMap, HashSet};
-use std::collections::BTreeMap;
 use rust_htslib::bam;
 
 use pileup_structs::*;
@@ -12,10 +11,6 @@ use std::str;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
-
-use rayon::prelude::*;
-
-use bio::alignment::sparse::*;
 
 
 
@@ -41,7 +36,7 @@ pub fn pileup_variants<R: NamedBamReader,
         bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
 
-        let stoit_file_name = stoit_name + &variant_file_name;
+        let stoit_file_name = stoit_name.clone() + &variant_file_name;
         // Pre-emptively create variant fasta
         let consensus_variant_fasta = match File::create(&stoit_file_name) {
             Ok(fasta) => fasta,
@@ -111,7 +106,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             contig_name,
                             ref_seq,
                             &consensus_variant_fasta,
-                            print_consensus);
+                            print_consensus,
+                            stoit_name.clone());
                     }
 
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -225,7 +221,8 @@ pub fn pileup_variants<R: NamedBamReader,
                     contig_name,
                     ref_seq,
                     &consensus_variant_fasta,
-                    print_consensus);
+                    print_consensus,
+                    stoit_name.clone());
             }
         }
         bam_generated.finish();
@@ -275,7 +272,7 @@ pub fn pileup_contigs<R: NamedBamReader,
             let mut read_to_id = HashMap::new();
             let mut previous_read_positions = HashMap::new();
             let mut base;
-            let mut read_name = Vec::new();
+            let mut read_name;
 
             for p in bam_pileups {
 
@@ -440,7 +437,8 @@ fn process_previous_contigs_var(
     contig_name: Vec<u8>,
     ref_sequence: Vec<u8>,
     consensus_variant_fasta: &File,
-    print_consensus: bool) {
+    print_consensus: bool,
+    sample_name: String) {
 
     if last_tid != -2 {
 
@@ -469,7 +467,7 @@ fn process_previous_contigs_var(
         pileup_struct.generate_genotypes();
 
         // prints results of variants calling
-        pileup_struct.print_variants(ref_sequence.clone(), depth_threshold);
+        pileup_struct.print_variants(ref_sequence.clone(), sample_name);
 
         if print_consensus {
             // Write consensus contig to fasta
