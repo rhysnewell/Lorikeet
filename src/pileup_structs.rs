@@ -99,7 +99,7 @@ pub trait PileupFunctions {
 
     fn calc_coverage(&mut self) -> f32;
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_name: String);
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32);
 }
 
 impl PileupFunctions for PileupStats {
@@ -715,7 +715,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_name: String){
+    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32){
         match self {
             PileupStats::PileupContigStats {
                 indels,
@@ -726,7 +726,7 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample");
+                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
                 for (position, hash) in variant_abundances.iter() {
                     // loop through each position that has variants
                     let position = *position as usize;
@@ -759,7 +759,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!{"{}", sample_name};
+                            println!{"{}", sample_idx};
 
                         } else if var.len() == 1{
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
@@ -783,7 +783,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!{"{}", sample_name};
+                            println!{"{}", sample_idx};
                         }
                     }
                 };
