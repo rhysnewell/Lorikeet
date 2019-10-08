@@ -1330,7 +1330,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .possible_values(&[
                         "trimmed_mean",
                         "metabat"])
-                    .default_value("mean"))
+                    .default_value("trimmed_mean"))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
