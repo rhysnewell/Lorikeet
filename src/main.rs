@@ -163,17 +163,11 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   -d, --depth-threshold <INT>           Minimum number of reads needed to verify
-                                         a variant. [default: 50]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 40]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --variant-fraction-threshold      Minimum percentage fraction of the depth
-                                         threshold value a variant must occur at
-                                         for it to be verified. I.e. If depth threshold
-                                         is 50 and variant fraction is 0.1, then
-                                         at least 5 reads need to contain a variant
-                                         for it to be whitelisted [default: 0.1]
+   -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
+                                         for it to be considered. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -273,17 +267,11 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   -d, --depth-threshold <INT>           Minimum number of reads needed to verify
-                                         a variant. [default: 50]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 40]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --variant-fraction-threshold      Minimum percentage fraction of the depth
-                                         threshold value a variant must occur at
-                                         for it to be verified. I.e. If depth threshold
-                                         is 50 and variant fraction is 0.1, then
-                                         at least 5 reads need to contain a variant
-                                         for it to be whitelisted [default: 0.1]
+   -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
+                                         for it to be considered. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -925,12 +913,11 @@ fn run_pileup<'a,
 
     let mut variant_consensus_file = "uninit.fna".to_string();
     let print_zeros = !m.is_present("no-zeros");
-    let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
+    let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
     let print_consensus = m.is_present("variant-consensus-fasta");
     if print_consensus {
         variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
     }
-    let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
 
     let reference_path = Path::new(m.value_of("reference").unwrap());
@@ -963,7 +950,6 @@ fn run_pileup<'a,
         fasta_reader,
         print_zeros,
         flag_filters,
-        depth_threshold,
         mapq_threshold,
         var_fraction,
         min,
@@ -984,8 +970,7 @@ fn run_pileup_contigs<'a,
     flag_filters: FlagFilter) {
 
     let print_zeros = !m.is_present("no-zeros");
-    let var_fraction = m.value_of("variant-fraction-threshold").unwrap().parse().unwrap();
-    let depth_threshold = m.value_of("depth-threshold").unwrap().parse().unwrap();
+    let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
     let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
     let reference_path = Path::new(m.value_of("reference").unwrap());
@@ -1066,7 +1051,6 @@ fn run_pileup_contigs<'a,
         fasta_reader,
         print_zeros,
         flag_filters,
-        depth_threshold,
         mapq_threshold,
         var_fraction,
         min,
@@ -1195,8 +1179,8 @@ See lorikeet filter --full-help for further options and further detail.
 
     return App::new("lorikeet")
         .version(crate_version!())
-        .author("Ben J. Woodcroft <benjwoodcroft near gmail.com>")
-        .about("Mapping coverage analysis for metagenomics")
+        .author("Rhys J.P. Newell <r.newell near uq.edu.au>")
+        .about("Variant analysis of metagenomic datasets")
         .args_from_usage("-v, --verbose       'Print extra debug logging information'
              -q, --quiet         'Unless there is an error, do not print logging information'")
         .help("
@@ -1222,15 +1206,15 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
             SubCommand::with_name("polymorph")
                 .about("Perform variant calling analysis")
                 .help(POLYMORPH_HELP.as_str())
-
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
-
                 .arg(Arg::with_name("bam-files")
                     .short("b")
                     .long("bam-files")
                     .multiple(true)
-                    .takes_value(true))
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["read1","read2","coupled","interleaved","single","full-help"]))
                 .arg(Arg::with_name("sharded")
                     .long("sharded")
                     .required(false))
@@ -1276,7 +1260,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
-                    .required(true))
+                    .required_unless_one(
+                        &["full-help"]))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .takes_value(true)
@@ -1334,10 +1319,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
-                .arg(Arg::with_name("variant-fraction-threshold")
-                    .long("variant-fraction-threshold")
+                .arg(Arg::with_name("min-variant-depth")
+                    .long("min-variant-depth")
                     .short("f")
-                    .default_value("0.1"))
+                    .default_value("10"))
                 .arg(Arg::with_name("depth-threshold")
                     .long("depth-threshold")
                     .short("d")
@@ -1375,7 +1360,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("b")
                     .long("bam-files")
                     .multiple(true)
-                    .takes_value(true))
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["read1","read2","coupled","interleaved","single","full-help"]))
                 .arg(Arg::with_name("sharded")
                     .long("sharded")
                     .required(false))
@@ -1421,7 +1408,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
-                    .required(true))
+                    .required_unless_one(&["full-help"]))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .takes_value(true)
@@ -1475,10 +1462,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
-                .arg(Arg::with_name("variant-fraction-threshold")
-                    .long("variant-fraction-threshold")
+                .arg(Arg::with_name("min-variant-depth")
+                    .long("min-variant-depth")
                     .short("f")
-                    .default_value("0.1"))
+                    .default_value("10"))
                 .arg(Arg::with_name("depth-threshold")
                     .long("depth-threshold")
                     .short("d")
