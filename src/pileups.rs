@@ -31,6 +31,8 @@ pub fn pileup_variants<R: NamedBamReader,
     n_threads: usize) {
 
     let mut sample_idx = 0;
+    // Print file header
+    println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
