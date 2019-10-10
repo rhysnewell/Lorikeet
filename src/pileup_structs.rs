@@ -734,12 +734,22 @@ impl PileupFunctions for PileupStats {
                         // for each variant at a location
                         if indels[position].contains_key(var) {
                             // How does this print N for insertions?
-                            print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
-                                   var,
-                                   str::from_utf8(
-                                       &ref_sequence[position..position
-                                           + var.len() as usize]).unwrap(),
-                                   abundance, d);
+                            if var.to_owned().contains("N"){
+                                print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                                       var,
+                                       str::from_utf8(
+                                           &ref_sequence[position..position
+                                               + var.len() as usize]).unwrap(),
+                                       abundance, d);
+
+                            } else {
+                                print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position-1,
+                                       str::from_utf8(
+                                           &[ref_sequence[position-1]]).unwrap().to_owned() + var,
+                                       str::from_utf8(
+                                           &[ref_sequence[position-1]]).unwrap(),
+                                       abundance, d);
+                            }
 
                             // Print number of genotypes associated with that position and variant
                             match genotypes_per_position.get(&position) {
