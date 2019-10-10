@@ -726,7 +726,6 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
                 for (position, hash) in variant_abundances.iter() {
                     // loop through each position that has variants
                     let position = *position as usize;
