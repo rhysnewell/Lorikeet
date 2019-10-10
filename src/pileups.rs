@@ -20,9 +20,8 @@ pub fn pileup_variants<R: NamedBamReader,
     mut reference: bio::io::fasta::IndexedReader<File>,
     _print_zero_coverage_contigs: bool,
     _flag_filters: FlagFilter,
-    depth_threshold: usize,
     mapq_threshold: u8,
-    var_fraction: f64,
+    min_var_depth: usize,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
@@ -103,8 +102,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             total_indels_in_current_contig,
                             min_fraction_covered_bases,
                             contig_end_exclusion,
-                            depth_threshold,
-                            var_fraction,
+                            min_var_depth,
                             contig_len,
                             contig_name,
                             ref_seq,
@@ -218,8 +216,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     total_indels_in_current_contig,
                     min_fraction_covered_bases,
                     contig_end_exclusion,
-                    depth_threshold,
-                    var_fraction,
+                    min_var_depth,
                     contig_len,
                     contig_name,
                     ref_seq,
@@ -240,9 +237,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     mut reference: bio::io::fasta::IndexedReader<File>,
     _print_zero_coverage_contigs: bool,
     _flag_filters: FlagFilter,
-    depth_threshold: usize,
     mapq_threshold: u8,
-    var_fraction: f64,
+    min_var_depth: usize,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
@@ -297,8 +293,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                             total_indels_in_current_contig,
                             min_fraction_covered_bases,
                             contig_end_exclusion,
-                            depth_threshold,
-                            var_fraction,
+                            min_var_depth,
                             contig_len,
                             contig_name,
                             &mut pileup_matrix,
@@ -411,8 +406,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                     total_indels_in_current_contig,
                     min_fraction_covered_bases,
                     contig_end_exclusion,
-                    depth_threshold,
-                    var_fraction,
+                    min_var_depth,
                     contig_len,
                     contig_name,
                     &mut pileup_matrix,
@@ -435,8 +429,7 @@ fn process_previous_contigs_var(
     total_indels_in_current_contig: usize,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
-    depth_threshold: usize,
-    var_fraction: f64,
+    min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
     ref_sequence: Vec<u8>,
@@ -464,8 +457,8 @@ fn process_previous_contigs_var(
         pileup_struct.calc_coverage();
 
         // filters variants across contig
-        pileup_struct.calc_variants(depth_threshold,
-                                    var_fraction);
+        pileup_struct.calc_variants(
+                                    min_var_depth);
 
         // calculates minimum number of genotypes possible for each variant location
         pileup_struct.generate_genotypes();
@@ -499,8 +492,7 @@ fn process_previous_contigs(
         total_indels_in_current_contig: usize,
         min_fraction_covered_bases: f32,
         contig_end_exclusion: u32,
-        depth_threshold: usize,
-        var_fraction: f64,
+        min_var_depth: usize,
         contig_len: usize,
         contig_name: Vec<u8>,
         pileup_matrix: &mut PileupMatrix,
@@ -527,8 +519,8 @@ fn process_previous_contigs(
             pileup_struct.calc_coverage();
 
             // filters variants across contig
-            pileup_struct.calc_variants(depth_threshold,
-                                        var_fraction);
+            pileup_struct.calc_variants(
+                                        min_var_depth);
 
             // calculates minimum number of genotypes possible for each variant location
             pileup_struct.generate_genotypes();

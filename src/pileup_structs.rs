@@ -88,8 +88,7 @@ pub trait PileupFunctions {
                   contig_len: usize);
 
     fn calc_variants(&mut self,
-                     depth_thresh: usize,
-                     variant_fraction: f64);
+                     min_variant_depth: usize);
 
     fn generate_variant_contig(&mut self,
                                original_contig: Vec<u8>,
@@ -166,7 +165,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn calc_variants(&mut self, depth_thresh: usize, variant_fraction: f64){
+    fn calc_variants(&mut self, min_variant_depth: usize){
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
@@ -192,12 +191,12 @@ impl PileupFunctions for PileupStats {
                     let read_variants = Arc::clone(&read_variants);
                     let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
-                    if *coverage * 0.75 < *d as f32 && *d as f32 <= *coverage * 1.25 {
-                        if d >= &mut depth_thresh.clone() {
+                    if *coverage * 0.75 <= *d as f32 && *d as f32 <= *coverage * 1.25 {
+//                        if d >= &mut depth_thresh.clone() {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
-                                    if count as f32 / depth_thresh as f32 >= variant_fraction as f32 {
+                                    if count >= min_variant_depth {
                                         rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
                                         for read in read_ids {
                                             let mut read_variants
@@ -219,7 +218,7 @@ impl PileupFunctions for PileupStats {
                             if indels[i].len() > 0 {
                                 for (indel, read_ids) in indels[i].iter() {
                                     let count = read_ids.len();
-                                    if count as f32 / depth_thresh as f32 >= variant_fraction as f32 {
+                                    if count >= min_variant_depth {
                                         rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
                                         for read in read_ids {
                                             let mut read_variants
@@ -239,7 +238,7 @@ impl PileupFunctions for PileupStats {
                                     }
                                 }
                             }
-                        }
+//                        }
                     }
 
                     if rel_abundance.len() > 0 {
