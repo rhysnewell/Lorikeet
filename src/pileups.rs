@@ -27,7 +27,8 @@ pub fn pileup_variants<R: NamedBamReader,
     contig_end_exclusion: u32,
     variant_file_name: String,
     print_consensus: bool,
-    n_threads: usize) {
+    n_threads: usize,
+    method: &str) {
 
     let mut sample_idx = 0;
     let include_soft_clipping = false;
@@ -115,6 +116,8 @@ pub fn pileup_variants<R: NamedBamReader,
                         let contig_len = header.target_len(last_tid as u32)
                                                 .expect("Corrupt BAM file?") as usize;
                         let contig_name = target_names[last_tid as usize].to_vec();
+                        let total_mismatches = total_edit_distance_in_current_contig -
+                            total_indels_in_current_contig;
 
                         process_previous_contigs_var(
                             last_tid,
@@ -122,7 +125,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             nuc_freq,
                             indels,
                             min, max,
-                            total_indels_in_current_contig,
+                            total_indels_in_current_contig as usize,
                             min_fraction_covered_bases,
                             contig_end_exclusion,
                             min_var_depth,
@@ -131,7 +134,9 @@ pub fn pileup_variants<R: NamedBamReader,
                             ref_seq,
                             &consensus_variant_fasta,
                             print_consensus,
-                            sample_idx);
+                            sample_idx,
+                            method,
+                            total_mismatches);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -196,7 +201,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             id.insert(read_to_id[&record.qname().to_vec()]);
 
                             cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len() as usize;
+                            total_indels_in_current_contig += cig.len();
                         },
                         Cigar::RefSkip(_) => {
                             // if D or N, move the cursor
@@ -213,7 +218,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                                                   .or_insert(HashSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
                             read_cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len() as usize;
+                            total_indels_in_current_contig += cig.len();
                         },
                         Cigar::SoftClip(_) => {
                             // soft clipped portions of reads can be included as insertions
@@ -228,7 +233,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                 let id = indels[cursor as usize].entry(insert)
                                                                 .or_insert(HashSet::new());
                                 id.insert(read_to_id[&record.qname().to_vec()]);
-                                total_indels_in_current_contig += cig.len() as usize;
+                                total_indels_in_current_contig += cig.len();
                             }
                             read_cursor += cig.len() as usize;
                         },
@@ -255,6 +260,8 @@ pub fn pileup_variants<R: NamedBamReader,
         } if last_tid != -2 {
             let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
             let contig_name = target_names[last_tid as usize].to_vec();
+            let total_mismatches = total_edit_distance_in_current_contig -
+                total_indels_in_current_contig;
 
             process_previous_contigs_var(
                 last_tid,
@@ -262,7 +269,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 nuc_freq,
                 indels,
                 min, max,
-                total_indels_in_current_contig,
+                total_indels_in_current_contig as usize,
                 min_fraction_covered_bases,
                 contig_end_exclusion,
                 min_var_depth,
@@ -271,7 +278,10 @@ pub fn pileup_variants<R: NamedBamReader,
                 ref_seq,
                 &consensus_variant_fasta,
                 print_consensus,
-                sample_idx);
+                sample_idx,
+                method,
+                total_mismatches);
+
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
 
@@ -310,7 +320,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
     output_prefix: &str,
-    n_threads: usize) {
+    n_threads: usize,
+    method: &str) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
     let include_soft_clipping = false;
@@ -377,6 +388,8 @@ pub fn pileup_contigs<R: NamedBamReader,
                         let contig_len = header.target_len(last_tid as u32)
                                                .expect("Corrupt BAM file?") as usize;
                         let contig_name = target_names[last_tid as usize].to_vec();
+                        let total_mismatches = total_edit_distance_in_current_contig -
+                            total_indels_in_current_contig;
 
                         process_previous_contigs(
                             last_tid,
@@ -384,7 +397,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                             nuc_freq,
                             indels,
                             min, max,
-                            total_indels_in_current_contig,
+                            total_indels_in_current_contig as usize,
                             min_fraction_covered_bases,
                             contig_end_exclusion,
                             min_var_depth,
@@ -392,7 +405,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                             contig_name,
                             &mut pileup_matrix,
                             sample_count,
-                            sample_idx);
+                            sample_idx,
+                            method,
+                            total_mismatches);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -457,7 +472,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                             id.insert(read_to_id[&record.qname().to_vec()]);
 
                             cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len() as usize;
+                            total_indels_in_current_contig += cig.len();
                         },
                         Cigar::RefSkip(_) => {
                             // if D or N, move the cursor
@@ -474,7 +489,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                                                             .or_insert(HashSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
                             read_cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len() as usize;
+                            total_indels_in_current_contig += cig.len();
                         },
                         Cigar::SoftClip(_) => {
                             // soft clipped portions of reads can be included as insertions
@@ -489,7 +504,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                                 let id = indels[cursor as usize].entry(insert)
                                                                 .or_insert(HashSet::new());
                                 id.insert(read_to_id[&record.qname().to_vec()]);
-                                total_indels_in_current_contig += cig.len() as usize;
+                                total_indels_in_current_contig += cig.len();
                             }
                             read_cursor += cig.len() as usize;
                         },
@@ -516,6 +531,8 @@ pub fn pileup_contigs<R: NamedBamReader,
         } if last_tid != -2 {
             let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
             let contig_name = target_names[last_tid as usize].to_vec();
+            let total_mismatches = total_edit_distance_in_current_contig -
+                total_indels_in_current_contig;
 
             process_previous_contigs(
                 last_tid,
@@ -523,7 +540,7 @@ pub fn pileup_contigs<R: NamedBamReader,
                 nuc_freq,
                 indels,
                 min, max,
-                total_indels_in_current_contig,
+                total_indels_in_current_contig as usize,
                 min_fraction_covered_bases,
                 contig_end_exclusion,
                 min_var_depth,
@@ -531,7 +548,9 @@ pub fn pileup_contigs<R: NamedBamReader,
                 contig_name,
                 &mut pileup_matrix,
                 sample_count,
-                sample_idx);
+                sample_idx,
+                method,
+                total_mismatches);
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
 
@@ -573,7 +592,9 @@ fn process_previous_contigs_var(
     ref_sequence: Vec<u8>,
     consensus_variant_fasta: &File,
     print_consensus: bool,
-    sample_idx: i32) {
+    sample_idx: i32,
+    method: &str,
+    total_mismatches: u32) {
 
     if last_tid != -2 {
 
@@ -592,7 +613,7 @@ fn process_previous_contigs_var(
                                  contig_len);
 
         // calculates coverage across contig
-        pileup_struct.calc_coverage();
+        pileup_struct.calc_coverage(total_mismatches, method);
 
         // filters variants across contig
         pileup_struct.calc_variants(
@@ -635,7 +656,9 @@ fn process_previous_contigs(
         contig_name: Vec<u8>,
         pileup_matrix: &mut PileupMatrix,
         sample_count: usize,
-        sample_idx: usize) {
+        sample_idx: usize,
+        method: &str,
+        total_mismatches: u32) {
 
         if last_tid != -2 {
 
@@ -654,7 +677,7 @@ fn process_previous_contigs(
                                     contig_len);
 
             // calculates coverage across contig
-            pileup_struct.calc_coverage();
+            pileup_struct.calc_coverage(total_mismatches, method);
 
             // filters variants across contig
             pileup_struct.calc_variants(
