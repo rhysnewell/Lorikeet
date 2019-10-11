@@ -96,7 +96,7 @@ pub trait PileupFunctions {
 
     fn generate_genotypes(&mut self);
 
-    fn calc_coverage(&mut self) -> f32;
+    fn calc_coverage(&mut self, total_mismatches: u32, method: &str) -> f32;
 
     fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32);
 }
@@ -192,7 +192,7 @@ impl PileupFunctions for PileupStats {
                     let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
                     if *coverage * 0.75 <= *d as f32 && *d as f32 <= *coverage * 1.25 {
-//                        if d >= &mut depth_thresh.clone() {
+//                        if d >= &mut min_variant_depth.clone() {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
@@ -587,7 +587,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn calc_coverage(&mut self) -> f32 {
+    fn calc_coverage(&mut self, total_mismatches: u32, method: &str) -> f32 {
         match self {
             PileupStats::PileupContigStats {
                 ref mut depth,
@@ -618,6 +618,7 @@ impl PileupFunctions for PileupStats {
                 let start_from = *contig_end_exclusion as usize;
                 let end_at = *len1 - *contig_end_exclusion as usize - 1;
                 let mut cumulative_sum;
+                let mut total_count = 0;
                 for (i, current) in depth.iter().enumerate() {
                     cumulative_sum = *current;
                     if i >= start_from && i <= end_at {
@@ -627,89 +628,142 @@ impl PileupFunctions for PileupStats {
                         if counts.len() <= cumulative_sum {
                             (counts).resize(cumulative_sum + 1, 0);
                         }
-                        (counts)[cumulative_sum] += 1
+                        (counts)[cumulative_sum] += 1;
+                        total_count += cumulative_sum;
                     }
                 }
 
                 let total_bases = *observed_contig_length;
                 debug!("Calculating coverage with num_covered_bases {}, observed_length {} and counts {:?}",
                        num_covered_bases, observed_contig_length, counts);
-                let answer = match total_bases {
-                    0 => {
-                        *variance = 0.0;
-                        0.0},
-                    _ => {
-                        if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
-                            *variance = 0.0;
-                            0.0
-                        } else {
-                            let min_index: usize = (*min * total_bases as f32).floor() as usize;
-                            let max_index: usize = (*max * total_bases as f32).ceil() as usize;
-                            if *num_covered_bases == 0 { return 0.0; }
+
+                let mut answer;
+                match method {
+                    "trimmed_mean" => {
+
+                        answer = match total_bases {
+                            0 => {
+                                *variance = 0.0;
+                                0.0
+                            },
+                            _ => {
+                                if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
+                                    *variance = 0.0;
+                                    0.0
+                                } else {
+                                    let min_index: usize = (*min * total_bases as f32).floor() as usize;
+                                    let max_index: usize = (*max * total_bases as f32).ceil() as usize;
+                                    if *num_covered_bases == 0 { return 0.0; }
 //                            counts[0] += 0;
 
-                            let mut num_accounted_for: usize = 0;
-                            let mut total: usize = 0;
-                            let mut started = false;
-                            let mut i = 0;
+                                    let mut num_accounted_for: usize = 0;
+                                    let mut total: usize = 0;
+                                    let mut started = false;
+                                    let mut i = 0;
 
-                            let mut k = 0;
-                            // Ensure K is within the range of coverages - take the
-                            // lowest coverage.
-                            while counts[k] == 0 {
-                                k += 1;
-                            }
-                            let mut ex = 0;
-                            let mut ex2 = 0;
-
-                            for (x, num_covered) in counts.iter().enumerate() {
-                                num_accounted_for += num_covered.clone() as usize;
-
-                                if num_covered > &0 {
-                                    let nc = *num_covered as usize;
-                                    ex += (x-k) * nc;
-                                    ex2 += (x-k)*(x-k) * nc;
-                                }
-                                if num_accounted_for >= min_index {
-                                    if started {
-                                        if num_accounted_for > max_index {
-
-                                            let num_excess = num_accounted_for - *num_covered as usize;
-                                            let num_wanted = match max_index >= num_excess {
-                                                true => max_index - num_excess + 1,
-                                                false => 0
-                                            };
-                                            total += num_wanted * i;
-                                            break;
-                                        } else {
-                                            total += *num_covered as usize * i;
-                                        }
-                                    } else {
-                                        if num_accounted_for > max_index {
-                                            // all coverages are the same in the trimmed set
-                                            total = (max_index - min_index + 1) * i;
-                                            started = true
-                                        } else if num_accounted_for < min_index {
-                                            debug!("too few on first")
-                                        } else {
-                                            let num_wanted = num_accounted_for - min_index + 1;
-                                            total = num_wanted * i;
-                                            started = true;
-                                        }
+                                    let mut k = 0;
+                                    // Ensure K is within the range of coverages - take the
+                                    // lowest coverage.
+                                    while counts[k] == 0 {
+                                        k += 1;
                                     }
+                                    let mut ex = 0;
+                                    let mut ex2 = 0;
+
+                                    for (x, num_covered) in counts.iter().enumerate() {
+                                        num_accounted_for += num_covered.clone() as usize;
+
+                                        if num_covered > &0 {
+                                            let nc = *num_covered as usize;
+                                            ex += (x - k) * nc;
+                                            ex2 += (x - k) * (x - k) * nc;
+                                        }
+                                        if num_accounted_for >= min_index {
+                                            if started {
+                                                if num_accounted_for > max_index {
+                                                    let num_excess = num_accounted_for - *num_covered as usize;
+                                                    let num_wanted = match max_index >= num_excess {
+                                                        true => max_index - num_excess + 1,
+                                                        false => 0
+                                                    };
+                                                    total += num_wanted * i;
+                                                    break;
+                                                } else {
+                                                    total += *num_covered as usize * i;
+                                                }
+                                            } else {
+                                                if num_accounted_for > max_index {
+                                                    // all coverages are the same in the trimmed set
+                                                    total = (max_index - min_index + 1) * i;
+                                                    started = true
+                                                } else if num_accounted_for < min_index {
+                                                    debug!("too few on first")
+                                                } else {
+                                                    let num_wanted = num_accounted_for - min_index + 1;
+                                                    total = num_wanted * i;
+                                                    started = true;
+                                                }
+                                            }
+                                        }
+                                        i += 1;
+                                    }
+                                    // Return sample variance not population variance since
+                                    // almost all MAGs are incomplete.
+                                    *variance =
+                                        (ex2 as f32 - (ex * ex) as f32 / total_bases as f32) / (total_bases - 1) as f32;
+                                    total as f32 / (max_index - min_index) as f32
                                 }
-                                i += 1;
                             }
-                            // Return sample variance not population variance since
-                            // almost all MAGs are incomplete.
-                            *variance =
-                                (ex2 as f32 - (ex*ex) as f32/total_bases as f32) / (total_bases - 1) as f32;
-                            total as f32 / (max_index - min_index) as f32
-                        }
-                    }
-                };
-                *coverage = answer.clone();
-                return answer
+                        };
+                        *coverage = answer.clone();
+                        return answer
+                    },
+                    _ => {
+                        let exclude_mismatches = false;
+
+                        answer = match total_bases {
+                            0 => {
+                                *variance = 0.0;
+                                0.0
+                            },
+                            _ => {
+                                if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
+                                    *variance = 0.0;
+                                    0.0
+                                } else {
+                                    // Calculate variance using the shifted method
+                                    let mut k = 0;
+                                    // Ensure K is within the range of coverages - take the
+                                    // lowest coverage.
+                                    while counts[k] == 0 {
+                                        k += 1;
+                                    }
+                                    let mut ex = 0;
+                                    let mut ex2 = 0;
+                                    for (x, num_covered) in counts.iter().enumerate() {
+                                        if *num_covered == 0 { continue }
+                                        let nc = *num_covered as usize;
+                                        ex += (x-k) * nc;
+                                        ex2 += (x-k)*(x-k) * nc;
+                                    }
+
+
+                                    // Return sample variance not population variance since
+                                    // almost all MAGs are incomplete.
+                                    *variance =
+                                        (ex2 as f32 - (ex * ex) as f32 / total_bases as f32) / (total_bases - 1) as f32;
+
+                                    (match exclude_mismatches {
+                                        true => (total_count - total_mismatches as usize) as f32,
+                                        false => total_count as f32
+                                    }) / total_bases as f32
+                                }
+                            }
+                        };
+                        *coverage = answer.clone();
+                        return answer
+                    },
+                }
             }
         }
     }
