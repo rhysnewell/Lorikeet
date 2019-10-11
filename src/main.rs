@@ -154,12 +154,13 @@ Alignment filtering (optional):
    --allow-improper-pairs                Allows reads to be mapped as improper pairs
 
 Other arguments (optional):
-   -m, --methods <METHOD> [METHOD ..]    Method(s) for calculating coverage.
+   -m, --method <METHOD>                 Method for calculating coverage.
                                          One or more (space separated) of:
                                            trimmed_mean
+                                           mean
                                            metabat (\"MetaBAT adjusted coverage\")
                                          A more thorough description of the different
-                                         methods is available at
+                                         method is available at
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
@@ -258,9 +259,10 @@ Alignment filtering (optional):
    --allow-improper-pairs                Allows reads to be mapped as improper pairs
 
 Other arguments (optional):
-   -m, --methods <METHOD> [METHOD ..]    Method(s) for calculating coverage.
+   -m, --method <METHOD>                 Method for calculating coverage.
                                          One or more (space separated) of:
                                            trimmed_mean
+                                           mean
                                            metabat (\"MetaBAT adjusted coverage\")
                                          A more thorough description of the different
                                          methods is available at
@@ -566,14 +568,10 @@ fn main(){
 fn doing_metabat(m: &clap::ArgMatches) -> bool {
     match m.subcommand_name() {
         Some("contig") | None => {
-            if !m.is_present("methods") { return false; }
-            let methods: Vec<&str> = m.values_of("methods").unwrap().collect();
+            if !m.is_present("method") { return false; }
+            let methods: &str = m.value_of("method").unwrap();
             if methods.contains(&"metabat") {
-                if methods.len() > 1 {
-                    panic!("Cannot specify the metabat method with any other coverage methods")
-                } else {
-                    return true
-                }
+                return true
             }
             return false
         },
@@ -919,6 +917,7 @@ fn run_pileup<'a,
         variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
     }
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+    let method = m.value_of("method").unwrap();
 
     let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
@@ -958,7 +957,8 @@ fn run_pileup<'a,
         contig_end_exclusion,
         variant_consensus_file,
         print_consensus,
-        threads);
+        threads,
+        method);
 
 }
 
@@ -986,6 +986,7 @@ fn run_pileup_contigs<'a,
     let threads = m.value_of("threads").unwrap().parse().unwrap();
 
     let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+    let method = m.value_of("method").unwrap();
 
     if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
         eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
@@ -1058,7 +1059,8 @@ fn run_pileup_contigs<'a,
         min_fraction_covered,
         contig_end_exclusion,
         output_prefix,
-        threads);
+        threads,
+        method);
 
 }
 
@@ -1306,14 +1308,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("variant-consensus-fasta")
                     .takes_value(true)
                     .required(false))
-                .arg(Arg::with_name("methods")
+                .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
-                    .long("methods")
                     .takes_value(true)
-                    .multiple(true)
+                    .multiple(false)
                     .possible_values(&[
                         "trimmed_mean",
+                        "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
                 .arg(Arg::with_name("min-covered-fraction")
@@ -1449,14 +1451,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
                     .conflicts_with("allow-improper-pairs"))
-                .arg(Arg::with_name("methods")
+                .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
-                    .long("methods")
                     .takes_value(true)
-                    .multiple(true)
                     .possible_values(&[
                         "trimmed_mean",
+                        "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
                 .arg(Arg::with_name("min-covered-fraction")
