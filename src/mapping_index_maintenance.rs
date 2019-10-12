@@ -47,7 +47,7 @@ impl TemporaryIndexStruct {
 
         // Generate a BWA/minimap index in a temporary directory, where the
         // temporary directory does not go out of scope until the struct does.
-        let td = TempDir::new("coverm-mapping-index")
+        let td = TempDir::new("lorikeet-mapping-index")
             .expect("Unable to create temporary directory");
         let index_path = std::path::Path::new(td.path())
             .join(std::path::Path::new(reference_path).file_name()
