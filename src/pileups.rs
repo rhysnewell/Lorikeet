@@ -37,7 +37,9 @@ pub fn pileup_variants<R: NamedBamReader,
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        bam_generated.set_threads(n_threads);
+        if n_threads > 1 {
+            bam_generated.set_threads(n_threads-1);
+        }
         let stoit_name = bam_generated.name().to_string();
 
         let stoit_file_name = stoit_name.clone() + &variant_file_name;
@@ -75,13 +77,11 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
         let mut indels = Vec::new();
 
-//            let mut read_starts = HashMap::new(); // read start map
         let mut depth = Vec::new(); // genomic depth
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
         let mut read_cnt_id = 0;
         let mut read_to_id = HashMap::new();
-//            let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
         let mut base;
 
         // for record in records
@@ -106,7 +106,6 @@ pub fn pileup_variants<R: NamedBamReader,
                 if !read_to_id.contains_key(&record.qname().to_vec()) {
                     read_to_id.entry(record.qname().to_vec())
                               .or_insert(read_cnt_id);
-//                        read_starts.entry(read_cnt_id).or_insert(pileup.pos());
                     read_cnt_id += 1;
                 }
 
@@ -149,7 +148,6 @@ pub fn pileup_variants<R: NamedBamReader,
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-//                        depth[pileup.pos() as usize] = pileup.depth() as usize;
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
                         Ok(reference) => reference,
@@ -240,7 +238,6 @@ pub fn pileup_variants<R: NamedBamReader,
                         Cigar::HardClip(_) | Cigar::Pad(_) => {}
                     }
                 }
-//                print!("{:?}", pileups);
                 // Determine the number of mismatching bases in this read by
                 // looking at the NM tag.
                 total_edit_distance_in_current_contig += match
@@ -285,16 +282,12 @@ pub fn pileup_variants<R: NamedBamReader,
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
 
-//            let reads_mapped = ReadsMapped {
-//                num_mapped_reads: num_mapped_reads_total,
-//                num_reads: bam_generated.num_detected_primary_alignments()
-//            };
+
         info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%)",
               stoit_name, num_mapped_reads_total,
               bam_generated.num_detected_primary_alignments(), 2,
               (num_mapped_reads_total * 100) as f64 /
                   bam_generated.num_detected_primary_alignments() as f64);
-//            reads_mapped_vector.push(reads_mapped);
 
         if bam_generated.num_detected_primary_alignments() == 0 {
             warn!("No primary alignments were observed for sample {} \
@@ -330,8 +323,9 @@ pub fn pileup_contigs<R: NamedBamReader,
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        bam_generated.set_threads(n_threads);
-        let stoit_name = bam_generated.name().to_string();
+        if n_threads > 1 {
+            bam_generated.set_threads(n_threads-1);
+        }        let stoit_name = bam_generated.name().to_string();
         pileup_matrix.add_sample(stoit_name.clone());
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
@@ -347,13 +341,11 @@ pub fn pileup_contigs<R: NamedBamReader,
         let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
         let mut indels = Vec::new();
 
-//            let mut read_starts = HashMap::new(); // read start map
         let mut depth = Vec::new(); // genomic depth
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
         let mut read_cnt_id = 0;
         let mut read_to_id = HashMap::new();
-//            let mut indel_start_sites: HashMap<i32, Vec<Indel>> = HashMap::new();
         let mut base;
 
         // for record in records
@@ -420,7 +412,6 @@ pub fn pileup_contigs<R: NamedBamReader,
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-//                        depth[pileup.pos() as usize] = pileup.depth() as usize;
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
                         Ok(reference) => reference,
@@ -511,7 +502,6 @@ pub fn pileup_contigs<R: NamedBamReader,
                         Cigar::HardClip(_) | Cigar::Pad(_) => {}
                     }
                 }
-//                print!("{:?}", pileups);
                 // Determine the number of mismatching bases in this read by
                 // looking at the NM tag.
                 total_edit_distance_in_current_contig += match
@@ -554,16 +544,11 @@ pub fn pileup_contigs<R: NamedBamReader,
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
 
-//            let reads_mapped = ReadsMapped {
-//                num_mapped_reads: num_mapped_reads_total,
-//                num_reads: bam_generated.num_detected_primary_alignments()
-//            };
         info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%)",
               stoit_name, num_mapped_reads_total,
               bam_generated.num_detected_primary_alignments(), 2,
               (num_mapped_reads_total * 100) as f64 /
                   bam_generated.num_detected_primary_alignments() as f64);
-//            reads_mapped_vector.push(reads_mapped);
 
         if bam_generated.num_detected_primary_alignments() == 0 {
             warn!("No primary alignments were observed for sample {} \
