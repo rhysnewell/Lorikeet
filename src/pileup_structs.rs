@@ -1,18 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::BTreeMap;
-//use ndarray::Array2;
-//use simhash::*;
-//use mash::*;
-//use distance::*;
-//use itertools::Itertools;
 use std::str;
-//use std::fs::File;
 use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
 use rayon::prelude::*;
 use permutation::*;
-//use std::iter::FromIterator;
-//use rust_htslib::bam::record::{Cigar, CigarStringView};
+
 
 #[derive(Debug, Clone)]
 pub struct Genotype {
