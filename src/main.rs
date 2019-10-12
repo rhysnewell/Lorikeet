@@ -66,23 +66,23 @@ Files (both required):
 
 Thresholds:
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                         aligned bases [default: 0]
+                                              aligned bases [default: 0]
    --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                         identity e.g. 0.95 for 95%. [default 0.0]
+                                              identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.0]
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned. [default 0.0]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                         aligned bases.
-                                         Implies --proper-pairs-only. [default: 0]
+                                              aligned bases.
+                                              Implies --proper-pairs-only. [default: 0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                         identity e.g. 0.95 for 95%.
-                                         Implies --proper-pairs-only. [default 0.0]
+                                              identity e.g. 0.95 for 95%.
+                                              Implies --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned.
-                                         Implies --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                   Require reads to be mapped as proper pairs
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned.
+                                              Implies --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                        Require reads to be mapped as proper pairs
 
 Other:
    -t, --threads <INT>                   Number of threads for output compression
@@ -104,7 +104,9 @@ Rhys J.P. Newell <r.newell near uq.edu.au>"
 }
 
 fn polymorph_full_help() -> &'static str {
-    "lorikeet contig: Calculate read coverage per-contig
+    lazy_static! {
+        static ref POLYMORPH_HELP: String = format!(
+    "lorikeet polymorph: Calculate read coverage per-contig
 
 Define mapping(s) (required):
   Either define BAM:
@@ -130,6 +132,7 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+{}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
                                          mapping. Note that usage of this parameter
@@ -156,23 +159,23 @@ Sharding i.e. multiple reference sets (optional):
 
 Alignment filtering (optional):
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                         aligned bases [default: 0]
+                                              aligned bases [default: 0]
    --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                         identity e.g. 0.95 for 95%. [default 0.0]
+                                              identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.0]
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned. [default 0.0]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                         aligned bases.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                              aligned bases.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                         identity e.g. 0.95 for 95%.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                              identity e.g. 0.95 for 95%.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
-   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
+   --allow-improper-pairs                     Allows reads to be mapped as improper pairs
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -213,10 +216,14 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>"
+Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+    }
+    &POLYMORPH_HELP
 }
 
 fn summarize_full_help() -> &'static str {
+    lazy_static! {
+        static ref SUMMARIZE_HELP: String = format!(
     "lorikeet contig: Calculate read coverage per-contig
 
 Define mapping(s) (required):
@@ -243,6 +250,7 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+{}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
                                          mapping. Note that usage of this parameter
@@ -326,7 +334,10 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>"}
+Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+    }
+    &SUMMARIZE_HELP
+}
 
 fn main(){
     let mut app = build_cli();
@@ -606,7 +617,10 @@ fn main(){
                                        bam_readers,
                                        filter_params.flag_filters);
                 }
-            } else {
+            } else if m.is_present("read1") |
+                m.is_present("interleaved") |
+                m.is_present("coupled") |
+                m.is_present("single"){
                 let mapping_program = parse_mapping_program(&m);
                 external_command_checker::check_for_samtools();
                 if filter_params.doing_filtering() {
