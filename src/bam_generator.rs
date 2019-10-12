@@ -238,7 +238,7 @@ pub fn generate_named_bam_readers_from_reads(
     mapping_options: Option<&str>,
     include_reference_in_stoit_name: bool) -> StreamingNamedBamReaderGenerator {
 
-    let tmp_dir = TempDir::new("coverm_fifo")
+    let tmp_dir = TempDir::new("lorikeet_fifo")
         .expect("Unable to create temporary directory");
     let fifo_path = tmp_dir.path().join("foo.pipe");
 
@@ -283,7 +283,7 @@ pub fn generate_named_bam_readers_from_reads(
         mapping_options
     );
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("coverm-make-samtools-sort")
+        .prefix("lorikeet-make-samtools-sort")
         .tempfile_in(tmp_dir.path())
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(
@@ -613,7 +613,7 @@ pub fn generate_bam_maker_generator_from_reads(
     );
 
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("coverm-make-samtools-sort")
+        .prefix("lorikeet-make-samtools-sort")
         .tempfile()
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(

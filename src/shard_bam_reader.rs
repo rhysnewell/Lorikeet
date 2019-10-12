@@ -227,7 +227,7 @@ impl<'a, T> ReadSortedShardedBamReader<'a, T>
             } else if winning_indices.len() == 1 {
                 winning_index = winning_indices[0];
             } else {
-                error!("CoverM cannot currently deal with reads that only map to excluded genomes");
+                error!("lorikeet cannot currently deal with reads that only map to excluded genomes");
                 process::exit(1);
             }
             debug!("Choosing winning index {} from winner pool {:?}",
@@ -300,7 +300,7 @@ impl<'a, T> NamedBamReaderGenerator<ShardedBamReader> for ShardedBamReaderGenera
             current_tid_offset += header.target_count() as i32;
         }
 
-        let tmp_dir = TempDir::new("coverm_fifo")
+        let tmp_dir = TempDir::new("lorikeet_fifo")
             .expect("Unable to create samtools sort temporary directory");
         // let tmp_dir = std::path::Path::new("/tmp/miner");
         // std::fs::create_dir(tmp_dir).expect("Failed to make dummy dir");
@@ -509,7 +509,7 @@ pub fn generate_named_sharded_bam_readers_from_reads(
     discard_unmapped: bool,
     mapping_options: Option<&str>) -> bam::Reader {
 
-    let tmp_dir = TempDir::new("coverm_fifo")
+    let tmp_dir = TempDir::new("lorikeet_fifo")
         .expect("Unable to create temporary directory");
 
     let fifo_path = tmp_dir.path().join("foo.pipe");
@@ -558,7 +558,7 @@ pub fn generate_named_sharded_bam_readers_from_reads(
         mapping_options);
 
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("coverm-make-samtools-sort")
+        .prefix("lorikeet-make-samtools-sort")
         .tempfile_in(tmp_dir.path())
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(
