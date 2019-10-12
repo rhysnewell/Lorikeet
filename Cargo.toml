@@ -16,8 +16,8 @@ exclude = [ # Max upload is 10MB, as of writing test data was 15MB
 
 [dependencies]
 rusty-machine = "0.5.4"
-bio = "0.25.*"
-rust-htslib = "0.22.*"
+bio = "0.29.*"
+rust-htslib = "0.26.*"
 clap = "2.*"
 log = "0.4.*"
 env_logger = "0.6.*"
@@ -32,7 +32,7 @@ simhash = "0.2"
 murmurhash3 = "~0.0.5"
 itertools = "*"
 ndarray = "0.12.*"
-rayon = "1.2.0"
+rayon = "1.2.*"
 permutation = "0.2.5"
 
 [dev-dependencies]

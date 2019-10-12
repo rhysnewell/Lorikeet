@@ -1,30 +1,28 @@
 use std;
 use std::io::Read;
+use std::process;
 
 use filter::*;
-use bwa_index_maintenance::BwaIndexStruct;
+use mapping_index_maintenance::MappingIndex;
 use mapping_parameters::ReadFormat;
 use FlagFilter;
 
 use rust_htslib::bam;
 use rust_htslib::bam::Read as BamRead;
-//use rust_htslib::bam::pileup::Pileups;
 
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
 use tempfile;
 
+use rust_htslib::bam::errors::Result as HtslibResult;
 
 pub trait NamedBamReader {
     // Name of the stoit
     fn name(&self) -> &str;
 
     // Read a record into record parameter
-    fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError>;
-
-    // Get pileups
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>;
+    fn read(&mut self, record: &mut bam::record::Record) -> HtslibResult<bool>;
 
     // Return the bam header of the final BAM file
     fn header(&self) -> &bam::HeaderView;
@@ -43,6 +41,16 @@ pub trait NamedBamReaderGenerator<T> {
     fn start(self) -> T;
 }
 
+#[derive(Debug, Clone, Copy)]
+#[allow(non_camel_case_types)]
+pub enum MappingProgram {
+    BWA_MEM,
+    MINIMAP2_SR,
+    MINIMAP2_ONT,
+    MINIMAP2_PB,
+    MINIMAP2_NO_PRESET,
+}
+
 pub struct BamFileNamedReader {
     stoit_name: String,
     bam_reader: bam::Reader,
@@ -53,20 +61,13 @@ impl NamedBamReader for BamFileNamedReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
-
-    fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    fn read(&mut self, record: &mut bam::record::Record) -> HtslibResult<bool> {
         let res = self.bam_reader.read(record);
-        if res.is_ok() && !record.is_secondary() && !record.is_supplementary() {
+        if res == Ok(true) && !record.is_secondary() && !record.is_supplementary() {
             self.num_detected_primary_alignments += 1;
         }
         return res;
     }
-
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.bam_reader.pileup();
-        return res;
-    }
-
     fn header(&self) -> &bam::HeaderView {
         self.bam_reader.header()
     }
@@ -75,6 +76,7 @@ impl NamedBamReader for BamFileNamedReader {
     fn set_threads(&mut self, n_threads: usize) {
         self.bam_reader.set_threads(n_threads).unwrap();
     }
+
 
     fn num_detected_primary_alignments(&self) -> u64 {
         return self.num_detected_primary_alignments
@@ -162,7 +164,8 @@ pub fn complete_processes(
                 error!("The STDERR for the {:} part was: {}",
                        description, contents);
             }
-            panic!("Cannot continue since mapping failed.");
+            error!("Cannot continue since mapping failed.");
+            process::exit(1);
         }
     }
     // Close tempdir explicitly. Maybe not needed.
@@ -178,19 +181,13 @@ impl NamedBamReader for StreamingNamedBamReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
-    fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    fn read(&mut self, record: &mut bam::record::Record) -> HtslibResult<bool> {
         let res = self.bam_reader.read(record);
-        if res.is_ok() && !record.is_secondary() && !record.is_supplementary() {
+        if res == Ok(true) && !record.is_secondary() && !record.is_supplementary() {
             self.num_detected_primary_alignments += 1;
         }
         return res;
     }
-
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.bam_reader.pileup();
-        return res;
-    }
-
     fn header(&self) -> &bam::HeaderView {
         self.bam_reader.header()
     }
@@ -207,6 +204,7 @@ impl NamedBamReader for StreamingNamedBamReader {
         self.bam_reader.set_threads(n_threads).unwrap();
     }
 
+
     fn num_detected_primary_alignments(&self) -> u64 {
         return self.num_detected_primary_alignments
     }
@@ -218,17 +216,18 @@ pub fn generate_named_bam_readers_from_bam_files(
     bam_paths.iter().map(
         |path|
 
-       BamFileNamedReader {
-           stoit_name: std::path::Path::new(path).file_stem().unwrap().to_str().expect(
-               "failure to convert bam file name to stoit name - UTF8 error maybe?").to_string(),
-           bam_reader: bam::Reader::from_path(path).expect(
-               &format!("Unable to find BAM file {}", path)),
-           num_detected_primary_alignments: 0,
-       }
+            BamFileNamedReader {
+                stoit_name: std::path::Path::new(path).file_stem().unwrap().to_str().expect(
+                    "failure to convert bam file name to stoit name - UTF8 error maybe?").to_string(),
+                bam_reader: bam::Reader::from_path(path).expect(
+                    &format!("Unable to find BAM file {}", path)),
+                num_detected_primary_alignments: 0,
+            }
     ).collect()
 }
 
 pub fn generate_named_bam_readers_from_reads(
+    mapping_program: MappingProgram,
     reference: &str,
     read1_path: &str,
     read2_path: Option<&str>,
@@ -236,10 +235,10 @@ pub fn generate_named_bam_readers_from_reads(
     threads: u16,
     cached_bam_file: Option<&str>,
     discard_unmapped: bool,
-    bwa_options: Option<&str>,
+    mapping_options: Option<&str>,
     include_reference_in_stoit_name: bool) -> StreamingNamedBamReaderGenerator {
 
-    let tmp_dir = TempDir::new("strainm_fifo")
+    let tmp_dir = TempDir::new("coverm_fifo")
         .expect("Unable to create temporary directory");
     let fifo_path = tmp_dir.path().join("foo.pipe");
 
@@ -249,8 +248,8 @@ pub fn generate_named_bam_readers_from_reads(
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-    let bwa_log = tempfile::NamedTempFile::new()
-        .expect("Failed to create BWA log tempfile");
+    let mapping_log = tempfile::NamedTempFile::new()
+        .expect(&format!("Failed to create {:?} log tempfile", mapping_program));
     let samtools2_log = tempfile::NamedTempFile::new()
         .expect("Failed to create second samtools log tempfile");
     // tempfile does not need to be created but easier to create than get around
@@ -273,23 +272,28 @@ pub fn generate_named_bam_readers_from_reads(
         },
         None => format!("> {:?}", fifo_path)
     };
-    let bwa_read_params = match read_format {
-        ReadFormat::Interleaved => format!("-p '{}'", read1_path),
-        ReadFormat::Coupled => format!("'{}' '{}'", read1_path, read2_path.unwrap()),
-        ReadFormat::Single => format!("'{}'", read1_path),
-    };
+
+    let mapping_command = build_mapping_command(
+        mapping_program,
+        read_format,
+        threads,
+        read1_path,
+        reference,
+        read2_path,
+        mapping_options
+    );
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("strainm-make-samtools-sort")
+        .prefix("coverm-make-samtools-sort")
         .tempfile_in(tmp_dir.path())
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(
         "set -e -o pipefail; \
-         bwa mem {} -t {} '{}' {} 2>{} \
+         {} 2>{} \
          | samtools sort -T '{}' -l0 -@ {} 2>{} \
          {}",
-        // BWA
-        bwa_options.unwrap_or(""), threads, reference, bwa_read_params,
-        bwa_log.path().to_str().expect("Failed to convert tempfile path to str"),
+        // Mapping program
+        mapping_command,
+        mapping_log.path().to_str().expect("Failed to convert tempfile path to str"),
         // samtools
         bwa_sort_prefix.path().to_str()
             .expect("Failed to convert bwa_sort_prefix tempfile to str"),
@@ -305,9 +309,9 @@ pub fn generate_named_bam_readers_from_reads(
         .stderr(std::process::Stdio::piped());
 
     let mut log_descriptions = vec![
-        "BWA".to_string(),
+        format!("{:?}", mapping_program).to_string(),
         "samtools sort".to_string()];
-    let mut log_files = vec![bwa_log, samtools2_log];
+    let mut log_files = vec![mapping_log, samtools2_log];
     if cached_bam_file.is_some() {
         log_descriptions.push("samtools view for cache".to_string());
         log_files.push(samtools_view_cache_log);
@@ -343,24 +347,16 @@ impl NamedBamReader for FilteredBamReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
-    fn read(&mut self, mut record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    fn read(&mut self, mut record: &mut bam::record::Record) -> HtslibResult<bool> {
         self.filtered_stream.read(&mut record)
     }
-
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.filtered_stream.pileups();
-        return res;
-    }
-
     fn header(&self) -> &bam::HeaderView {
         &self.filtered_stream.reader.header()
     }
     fn finish(self) {;}
-
     fn set_threads(&mut self, n_threads: usize) {
         self.filtered_stream.reader.set_threads(n_threads).unwrap();
     }
-
     fn num_detected_primary_alignments(&self) -> u64 {
         return self.filtered_stream.num_detected_primary_alignments
     }
@@ -417,6 +413,18 @@ pub fn generate_filtered_bam_readers_from_bam_files(
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 pub struct StreamingFilteredNamedBamReader {
     stoit_name: String,
     filtered_stream: ReferenceSortedBamFilter,
@@ -450,8 +458,8 @@ impl NamedBamReaderGenerator<StreamingFilteredNamedBamReader> for StreamingFilte
         let mut processes = vec![];
         for mut preprocess in self.pre_processes {
             processes.push(preprocess
-                           .spawn()
-                           .expect("Unable to execute bash"));
+                .spawn()
+                .expect("Unable to execute bash"));
         }
         let bam_reader = bam::Reader::from_path(&self.fifo_path)
             .expect(&format!("Unable to find BAM file {:?}", self.fifo_path));
@@ -481,15 +489,9 @@ impl NamedBamReader for StreamingFilteredNamedBamReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
-    fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    fn read(&mut self, record: &mut bam::record::Record) -> HtslibResult<bool> {
         self.filtered_stream.read(record)
     }
-
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.filtered_stream.pileups();
-        return res;
-    }
-
     fn header(&self) -> &bam::HeaderView {
         self.filtered_stream.reader.header()
     }
@@ -505,7 +507,6 @@ impl NamedBamReader for StreamingFilteredNamedBamReader {
     fn set_threads(&mut self, n_threads: usize) {
         self.filtered_stream.reader.set_threads(n_threads).unwrap();
     }
-
     fn num_detected_primary_alignments(&self) -> u64 {
         return self.filtered_stream.num_detected_primary_alignments
     }
@@ -513,6 +514,7 @@ impl NamedBamReader for StreamingFilteredNamedBamReader {
 
 
 pub fn generate_filtered_named_bam_readers_from_reads(
+    mapping_program: MappingProgram,
     reference: &str,
     read1_path: &str,
     read2_path: Option<&str>,
@@ -532,6 +534,7 @@ pub fn generate_filtered_named_bam_readers_from_reads(
     -> StreamingFilteredNamedBamReaderGenerator {
 
     let streaming = generate_named_bam_readers_from_reads(
+        mapping_program,
         reference, read1_path, read2_path, read_format, threads,
         cached_bam_file, discard_unmapped, bwa_options,
         include_reference_in_stoit_name);
@@ -558,7 +561,7 @@ pub fn generate_filtered_named_bam_readers_from_reads(
 
 pub struct BamGeneratorSet<T> {
     pub generators: Vec<T>,
-    pub index: Box<BwaIndexStruct>,
+    pub index: Option<Box<dyn MappingIndex>>,
 }
 
 
@@ -580,6 +583,7 @@ pub struct NamedBamMakerGenerator {
 }
 
 pub fn generate_bam_maker_generator_from_reads(
+    mapping_program: MappingProgram,
     reference: &str,
     read1_path: &str,
     read2_path: Option<&str>,
@@ -587,10 +591,10 @@ pub fn generate_bam_maker_generator_from_reads(
     threads: u16,
     cached_bam_file: &str,
     discard_unmapped: bool,
-    bwa_options: Option<&str>) -> NamedBamMakerGenerator {
+    mapping_options: Option<&str>) -> NamedBamMakerGenerator {
 
-    let bwa_log = tempfile::NamedTempFile::new()
-        .expect("Failed to create BWA log tempfile");
+    let mapping_log = tempfile::NamedTempFile::new()
+        .expect(&format!("Failed to create {:?} log tempfile", mapping_program));
     let samtools2_log = tempfile::NamedTempFile::new()
         .expect("Failed to create second samtools log tempfile");
     // tempfile does not need to be created but easier to create than get around
@@ -598,23 +602,28 @@ pub fn generate_bam_maker_generator_from_reads(
     let samtools_view_cache_log = tempfile::NamedTempFile::new()
         .expect("Failed to create cache samtools view log tempfile");
 
-    let bwa_read_params = match read_format {
-        ReadFormat::Interleaved => format!("-p '{}'", read1_path),
-        ReadFormat::Coupled => format!("'{}' '{}'", read1_path, read2_path.unwrap()),
-        ReadFormat::Single => format!("'{}'", read1_path),
-    };
+    let mapping_command = build_mapping_command(
+        mapping_program,
+        read_format,
+        threads,
+        read1_path,
+        reference,
+        read2_path,
+        mapping_options
+    );
+
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("strainm-make-samtools-sort")
+        .prefix("coverm-make-samtools-sort")
         .tempfile()
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(
         "set -e -o pipefail; \
-         bwa mem {} -t {} '{}' {} 2>{} \
+         {} 2>{} \
          | samtools sort -T '{}' -l0 -@ {} 2>{} \
          | samtools view {} -b -t {} -o '{}' 2>{}",
-        // BWA
-        bwa_options.unwrap_or(""), threads, reference, bwa_read_params,
-        bwa_log.path().to_str().expect("Failed to convert tempfile path to str"),
+        // Mapping program
+        mapping_command,
+        mapping_log.path().to_str().expect("Failed to convert tempfile path to str"),
         // samtools
         bwa_sort_prefix.path().to_str()
             .expect("Failed to convert bwa_sort_prefix tempfile to str"),
@@ -634,11 +643,11 @@ pub fn generate_bam_maker_generator_from_reads(
         .stderr(std::process::Stdio::piped());
 
     let log_descriptions = vec![
-        "BWA".to_string(),
+        format!("{:?}",mapping_program).to_string(),
         "samtools sort".to_string(),
         "samtools view for cache".to_string()];
     let log_files = vec![
-        bwa_log,
+        mapping_log,
         samtools2_log,
         samtools_view_cache_log];
 
@@ -647,8 +656,8 @@ pub fn generate_bam_maker_generator_from_reads(
             .expect("Unable to convert reference to file name").to_str()
             .expect("Unable to covert file name into str").to_string()+"/"+
             &std::path::Path::new(read1_path).file_name()
-            .expect("Unable to convert read1 name to file name").to_str()
-            .expect("Unable to covert file name into str").to_string(),
+                .expect("Unable to convert read1 name to file name").to_str()
+                .expect("Unable to covert file name into str").to_string(),
         pre_processes: vec![cmd],
         command_strings: vec![format!("bash -c {}", cmd_string)],
         log_file_descriptions: log_descriptions,
@@ -665,8 +674,8 @@ impl NamedBamReaderGenerator<NamedBamMaker> for NamedBamMakerGenerator {
             debug!("Running mapping command: {}", self.command_strings[i]);
             i += 1;
             processes.push(preprocess
-                           .spawn()
-                           .expect("Unable to execute bash"));
+                .spawn()
+                .expect("Unable to execute bash"));
         }
         return NamedBamMaker {
             stoit_name: self.stoit_name,
@@ -694,3 +703,46 @@ impl NamedBamMaker {
     }
 }
 
+pub fn build_mapping_command(
+    mapping_program: MappingProgram,
+    read_format: ReadFormat,
+    threads: u16,
+    read1_path: &str,
+    reference: &str,
+    read2_path: Option<&str>,
+    mapping_options: Option<&str>
+) -> String {
+
+    let read_params1 = match mapping_program {
+        // minimap2 auto-detects interleaved based on read names
+        MappingProgram::MINIMAP2_SR |
+        MappingProgram::MINIMAP2_ONT |
+        MappingProgram::MINIMAP2_PB |
+        MappingProgram::MINIMAP2_NO_PRESET => "",
+        MappingProgram::BWA_MEM => match read_format {
+            ReadFormat::Interleaved => "-p",
+            ReadFormat::Coupled | ReadFormat::Single => ""
+        }
+    };
+
+    let read_params2 = match read_format {
+        ReadFormat::Interleaved => format!("'{}'", read1_path),
+        ReadFormat::Coupled => format!("'{}' '{}'", read1_path, read2_path.unwrap()),
+        ReadFormat::Single => format!("'{}'", read1_path),
+    };
+
+    return format!(
+        "{} {} -t {} {} '{}' {}",
+        match mapping_program {
+            MappingProgram::BWA_MEM => "bwa mem",
+            MappingProgram::MINIMAP2_SR => "minimap2 -a -x sr",
+            MappingProgram::MINIMAP2_ONT => "minimap2 -a -x map-ont",
+            MappingProgram::MINIMAP2_PB => "minimap2 -a -x map-pb",
+            MappingProgram::MINIMAP2_NO_PRESET => "minimap2 -a",
+        },
+        mapping_options.unwrap_or(""),
+        threads,
+        read_params1,
+        reference,
+        read_params2)
+}

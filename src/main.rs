@@ -41,6 +41,19 @@ extern crate lazy_static;
 
 const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 
+const MAPPING_SOFTWARE_LIST: &[&str] = &["bwa-mem", "minimap2-sr", "minimap2-ont", "minimap2-pb","minimap2-no-preset"];
+const DEFAULT_MAPPING_SOFTWARE: &str = "minimap2-sr";
+const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMAP2_SR;
+
+const MAPPER_HELP: &'static str =
+    "   -p, --mapper <NAME>                   Underlying mapping software used
+                                         (\"minimap2-sr\", \"bwa-mem\", \"minimap2-ont\",
+                                         \"minimap2-pb\", or \"minimap2-no-preset\").
+                                         minimap2 -sr, -ont, -pb, -no-preset specify
+                                         '-x' preset of minimap2 to be used
+                                         (with map-ont, map-pb for -ont, -pb).
+                                         [default: \"minimap2-sr\"]";
+
 fn filter_full_help() -> &'static str {
     "lorikeet filter: Remove alignments with insufficient identity.
 
@@ -117,6 +130,14 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         both indexing command (if used) and for
+                                         mapping. Note that usage of this parameter
+                                         has security implications if untrusted input
+                                         is specified. '-a' is always specified.
+                                         [default \"\"]
+   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
+                                         as a FASTA file.
    --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
                                          that usage of this parameter has security
                                          implications if untrusted input is specified.
@@ -222,6 +243,14 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         both indexing command (if used) and for
+                                         mapping. Note that usage of this parameter
+                                         has security implications if untrusted input
+                                         is specified. '-a' is always specified.
+                                         [default \"\"]
+   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
+                                         as a FASTA file.
    --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
                                          that usage of this parameter has security
                                          implications if untrusted input is specified.
@@ -330,9 +359,12 @@ fn main(){
                 let header = bam::header::Header::from_template(reader.header());
                 let mut writer = bam::Writer::from_path(
                     output,
-                    &header
-                ).expect(&format!("Failed to write BAM file {}", output));
-                writer.set_threads(num_threads as usize).expect("Failed to set num threads in writer");
+                    &header,
+                    rust_htslib::bam::Format::BAM)
+                    .expect(&format!("Failed to write BAM file {}", output));
+                writer
+                    .set_threads(num_threads as usize)
+                    .expect("Failed to set num threads in writer");
                 let mut filtered = filter::ReferenceSortedBamFilter::new(
                     reader,
                     filter_params.flag_filters.clone(),
@@ -393,11 +425,16 @@ fn main(){
                                filter_params.flag_filters);
                 }
             } else {
-                external_command_checker::check_for_bwa();
+                let mapping_program = parse_mapping_program(&m);
                 external_command_checker::check_for_samtools();
                 if filter_params.doing_filtering() {
                     debug!("Filtering..");
-                    let generator_sets = get_streamed_filtered_bam_readers(m, &None);
+                    let generator_sets = get_streamed_filtered_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &filter_params,
+                    );
                     let mut all_generators = vec!();
                     let mut indices = vec!(); // Prevent indices from being dropped
                     for set in generator_sets {
@@ -412,13 +449,17 @@ fn main(){
                                filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
-                        m, &None, &NoExclusionGenomeFilter{});
+                        m,
+                        mapping_program,
+                        &None,
+                        &NoExclusionGenomeFilter {},
+                    );
                     run_pileup(m,
                                generator_sets,
                                filter_params.flag_filters);
                 } else {
                     debug!("Not filtering..");
-                    let generator_sets = get_streamed_bam_readers(m, &None);
+                    let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
                     let mut all_generators = vec!();
                     let mut indices = vec!(); // Prevent indices from being dropped
                     for set in generator_sets {
@@ -475,11 +516,16 @@ fn main(){
                                        filter_params.flag_filters);
                 }
             } else {
-                external_command_checker::check_for_bwa();
+                let mapping_program = parse_mapping_program(&m);
                 external_command_checker::check_for_samtools();
                 if filter_params.doing_filtering() {
                     debug!("Filtering..");
-                    let generator_sets = get_streamed_filtered_bam_readers(m, &None);
+                    let generator_sets = get_streamed_filtered_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &filter_params,
+                    );
                     let mut all_generators = vec!();
                     let mut indices = vec!(); // Prevent indices from being dropped
                     for set in generator_sets {
@@ -494,13 +540,108 @@ fn main(){
                                        filter_params.flag_filters);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
-                        m, &None, &NoExclusionGenomeFilter{});
+                        m,
+                        mapping_program,
+                        &None,
+                        &NoExclusionGenomeFilter {},
+                    );
                     run_pileup_contigs(m,
                                        generator_sets,
                                        filter_params.flag_filters);
                 } else {
                     debug!("Not filtering..");
-                    let generator_sets = get_streamed_bam_readers(m, &None);
+                    let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
+                    let mut all_generators = vec!();
+                    let mut indices = vec!(); // Prevent indices from being dropped
+                    for set in generator_sets {
+                        indices.push(set.index);
+                        for g in set.generators {
+                            all_generators.push(g)
+                        }
+                    }
+                    run_pileup_contigs(m,
+                                       all_generators,
+                                       filter_params.flag_filters.clone());
+                }
+            }
+        },
+        Some("codons") => {
+            let m = matches.subcommand_matches("codons").unwrap();
+            if m.is_present("full-help") {
+                println!("{}", summarize_full_help());
+                process::exit(1);
+            }
+            set_log_level(m, true);
+            let filter_params = FilterParameters::generate_from_clap(m);
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+            rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+
+            if m.is_present("bam-files") {
+                let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
+                if filter_params.doing_filtering() {
+                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                        bam_files,
+                        filter_params.flag_filters.clone(),
+                        filter_params.min_aligned_length_single,
+                        filter_params.min_percent_identity_single,
+                        filter_params.min_aligned_percent_single,
+                        filter_params.min_aligned_length_pair,
+                        filter_params.min_percent_identity_pair,
+                        filter_params.min_aligned_percent_pair);
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
+                } else if m.is_present("sharded") {
+                    external_command_checker::check_for_samtools();
+                    let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
+                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                        bam_files, sort_threads, &NoExclusionGenomeFilter{});
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
+                } else {
+                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                        bam_files);
+                    run_pileup_contigs(m,
+                                       bam_readers,
+                                       filter_params.flag_filters);
+                }
+            } else {
+                let mapping_program = parse_mapping_program(&m);
+                external_command_checker::check_for_samtools();
+                if filter_params.doing_filtering() {
+                    debug!("Filtering..");
+                    let generator_sets = get_streamed_filtered_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &filter_params,
+                    );
+                    let mut all_generators = vec!();
+                    let mut indices = vec!(); // Prevent indices from being dropped
+                    for set in generator_sets {
+                        indices.push(set.index);
+                        for g in set.generators {
+                            all_generators.push(g)
+                        }
+                    }
+                    debug!("Finished collecting generators.");
+                    run_pileup_contigs(m,
+                                       all_generators,
+                                       filter_params.flag_filters);
+                } else if m.is_present("sharded") {
+                    let generator_sets = get_sharded_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &NoExclusionGenomeFilter {},
+                    );
+                    run_pileup_contigs(m,
+                                       generator_sets,
+                                       filter_params.flag_filters);
+                } else {
+                    debug!("Not filtering..");
+                    let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
                     let mut all_generators = vec!();
                     let mut indices = vec!(); // Prevent indices from being dropped
                     for set in generator_sets {
@@ -564,6 +705,83 @@ fn main(){
     }
 }
 
+fn setup_mapping_index(
+    reference_wise_params: &SingleReferenceMappingParameters,
+    m: &clap::ArgMatches,
+    mapping_program: MappingProgram,
+) -> Option<Box<dyn lorikeet::mapping_index_maintenance::MappingIndex>> {
+    match mapping_program {
+        MappingProgram::BWA_MEM => Some(lorikeet::mapping_index_maintenance::generate_bwa_index(
+            reference_wise_params.reference,
+            None
+        )),
+        MappingProgram::MINIMAP2_SR |
+        MappingProgram::MINIMAP2_ONT |
+        MappingProgram::MINIMAP2_PB |
+        MappingProgram::MINIMAP2_NO_PRESET => {
+            if m.is_present("minimap2-reference-is-index") || reference_wise_params.len() == 1 {
+                info!("Not pre-generating minimap2 index");
+                if m.is_present("minimap2-reference-is-index") {
+                    warn!("Minimap2 uses mapping parameters defined when the index was created, \
+                    not parameters defined when mapping. Proceeding on the assumption that you \
+                    passed the correct parameters when creating the minimap2 index.");
+                }
+                None
+            } else {
+                Some(lorikeet::mapping_index_maintenance::generate_minimap2_index(
+                    reference_wise_params.reference,
+                    Some(m.value_of("minimap2-params").unwrap_or("")),
+                    mapping_program,
+                ))
+            }
+        }
+    }
+}
+
+fn parse_mapping_program(m: &clap::ArgMatches) -> MappingProgram {
+    let mapping_program = match m.value_of("mapper") {
+        Some("bwa-mem") => MappingProgram::BWA_MEM,
+        Some("minimap2-sr") => MappingProgram::MINIMAP2_SR,
+        Some("minimap2-ont") => MappingProgram::MINIMAP2_ONT,
+        Some("minimap2-pb") => MappingProgram::MINIMAP2_PB,
+        Some("minimap2-no-preset") => MappingProgram::MINIMAP2_NO_PRESET,
+        None => DEFAULT_MAPPING_SOFTWARE_ENUM,
+        _ => panic!(
+            "Unexpected definition for --mapper: {:?}",
+            m.value_of("mapper")
+        ),
+    };
+    match mapping_program {
+        MappingProgram::BWA_MEM => {
+            external_command_checker::check_for_bwa();
+        }
+        MappingProgram::MINIMAP2_SR |
+        MappingProgram::MINIMAP2_ONT |
+        MappingProgram::MINIMAP2_PB |
+        MappingProgram::MINIMAP2_NO_PRESET => {
+            external_command_checker::check_for_minimap2();
+        }
+    }
+    return mapping_program;
+}
+
+fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
+    match m.is_present(parameter) {
+        true => {
+            let mut percentage = value_t!(m.value_of(parameter), f32).unwrap();
+            if percentage >= 1.0 && percentage <= 100.0 {
+                percentage = percentage / 100.0;
+            } else if percentage < 0.0 || percentage > 100.0 {
+                error!("Invalid alignment percentage: '{}'", percentage);
+                process::exit(1);
+            }
+            info!("Using {} {}%", parameter, percentage * 100.0);
+            percentage
+        }
+        false => 0.0,
+    }
+}
+
 
 fn doing_metabat(m: &clap::ArgMatches) -> bool {
     match m.subcommand_name() {
@@ -596,38 +814,28 @@ impl FilterParameters {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: m.is_present("allow-improper-pairs"),
+                include_improper_pairs: !m.is_present("proper-pairs-only"),
                 include_secondary: false,
                 include_supplementary: false,
             },
             min_aligned_length_single: match m.is_present("min-read-aligned-length") {
                 true => value_t!(m.value_of("min-read-aligned-length"), u32).unwrap(),
-                false => 0
+                false => 0,
             },
-            min_percent_identity_single: match m.is_present("min-read-percent-identity") {
-                true => value_t!(m.value_of("min-read-percent-identity"), f32).unwrap(),
-                false => 0.0
-            },
-            min_aligned_percent_single: match m.is_present("min-read-aligned-percent") {
-                true => value_t!(m.value_of("min-read-aligned-percent"), f32).unwrap(),
-                false => 0.0
-            },
+            min_percent_identity_single: parse_percentage(&m, "min-read-percent-identity"),
+            min_aligned_percent_single: parse_percentage(&m, "min-read-aligned-percent"),
             min_aligned_length_pair: match m.is_present("min-read-aligned-length-pair") {
                 true => value_t!(m.value_of("min-read-aligned-length-pair"), u32).unwrap(),
-                false => 0
+                false => 0,
             },
-            min_percent_identity_pair: match m.is_present("min-read-percent-identity-pair") {
-                true => value_t!(m.value_of("min-read-percent-identity-pair"), f32).unwrap(),
-                false => 0.0
-            },
-            min_aligned_percent_pair: match m.is_present("min-read-aligned-percent-pair") {
-                true => value_t!(m.value_of("min-read-aligned-percent-pair"), f32).unwrap(),
-                false => 0.0
-            }
+            min_percent_identity_pair: parse_percentage(&m, "min-read-percent-identity-pair"),
+            min_aligned_percent_pair: parse_percentage(&m, "min-read-aligned-percent-pair"),
         };
         if doing_metabat(&m) {
-            debug!("Setting single read percent identity threshold at 0.97 for \
-                    MetaBAT adjusted coverage.");
+            debug!(
+                "Setting single read percent identity threshold at 0.97 for \
+                 MetaBAT adjusted coverage."
+            );
             // we use >= where metabat uses >. Gah.
             f.min_percent_identity_single = 0.97001;
             f.flag_filters.include_improper_pairs = true;
@@ -635,37 +843,53 @@ impl FilterParameters {
             f.flag_filters.include_secondary = true;
         }
         debug!("Filter parameters set as {:?}", f);
-        return f
+        return f;
     }
 
     pub fn doing_filtering(&self) -> bool {
-        return self.min_percent_identity_single > 0.0 || self.min_percent_identity_pair > 0.0 ||
-            self.min_aligned_percent_single > 0.0 || self.min_aligned_percent_pair > 0.0 ||
-            self.min_aligned_length_single > 0 || self.min_aligned_length_pair > 0
+        return self.min_percent_identity_single > 0.0
+            || self.min_percent_identity_pair > 0.0
+            || self.min_aligned_percent_single > 0.0
+            || self.min_aligned_percent_pair > 0.0
+            || self.min_aligned_length_single > 0
+            || self.min_aligned_length_pair > 0;
     }
 }
 
 fn get_sharded_bam_readers<'a, 'b, T>(
     m: &'a clap::ArgMatches,
+    mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
-    genome_exclusion: &'b T)
-    -> Vec<ShardedBamReaderGenerator<'b, T>>
-where T: GenomeExclusion {
-
+    genome_exclusion: &'b T,
+) -> Vec<ShardedBamReaderGenerator<'b, T>>
+    where
+        T: GenomeExclusion,
+{
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
         setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
     }
     let discard_unmapped = m.is_present("discard-unmapped");
     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-    let params = MappingParameters::generate_from_clap(&m, &reference_tempfile);
+    let params = MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile);
     let mut bam_readers = vec![];
+    let mut concatenated_reference_name: Option<String> = None;
+    let mut concatenated_read_names: Option<String> = None;
 
     for reference_wise_params in params {
-        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
-            reference_wise_params.reference);
+        let index = setup_mapping_index(&reference_wise_params, &m, mapping_program);
 
         let reference = reference_wise_params.reference;
+        let reference_name = std::path::Path::new(reference)
+            .file_name()
+            .expect("Unable to convert reference to file name")
+            .to_str()
+            .expect("Unable to covert file name into str")
+            .to_string();
+        concatenated_reference_name = match concatenated_reference_name {
+            Some(prev) => Some(format!("{}|{}", prev, reference_name)),
+            None => Some(reference_name),
+        };
         let bam_file_cache = |naming_readset| -> Option<String> {
             let bam_file_cache_path;
             match m.is_present("bam-file-cache-directory") {
@@ -675,9 +899,10 @@ where T: GenomeExclusion {
                         m.value_of("bam-file-cache-directory").unwrap(),
                         match reference_tempfile {
                             Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
-                            None => reference
+                            None => reference,
                         },
-                        naming_readset);
+                        naming_readset,
+                    );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
                 }
@@ -687,45 +912,63 @@ where T: GenomeExclusion {
         for p in reference_wise_params {
             bam_readers.push(
                 lorikeet::shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
-                        index.index_path(),
-                        p.read1,
-                        p.read2,
-                        p.read_format.clone(),
-                        p.threads,
-                        bam_file_cache(p.read1).as_ref().map(String::as_ref),
-                        discard_unmapped,
-                        p.bwa_options,
-                        reference_tempfile.is_none()));
+                    mapping_program,
+                    match index {
+                        Some(ref index) => index.index_path(),
+                        None => reference,
+                    },
+                    p.read1,
+                    p.read2,
+                    p.read_format.clone(),
+                    p.threads,
+                    bam_file_cache(p.read1).as_ref().map(String::as_ref),
+                    discard_unmapped,
+                    p.mapping_options,
+                ),
+            );
+            let name = &std::path::Path::new(p.read1)
+                .file_name()
+                .expect("Unable to convert read1 name to file name")
+                .to_str()
+                .expect("Unable to covert file name into str")
+                .to_string();
+            concatenated_read_names = match concatenated_read_names {
+                Some(prev) => Some(format!("{}|{}", prev, name)),
+                None => Some(name.to_string()),
+            };
         }
 
         debug!("Finished BAM setup");
-    };
+    }
     let gen = ShardedBamReaderGenerator {
-        stoit_name: "stoita".to_string(),
+        stoit_name: format!(
+            "{}/{}",
+            concatenated_reference_name.unwrap(),
+            concatenated_read_names.unwrap()
+        ),
         read_sorted_bam_readers: bam_readers,
         sort_threads: sort_threads,
         genome_exclusion: genome_exclusion,
     };
-    return vec!(gen);
+    return vec![gen];
 }
 
 fn get_streamed_bam_readers<'a>(
     m: &'a clap::ArgMatches,
-    reference_tempfile: &'a Option<NamedTempFile>)
-    -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
-
+    mapping_program: MappingProgram,
+    reference_tempfile: &'a Option<NamedTempFile>,
+) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
         setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
-    let params = MappingParameters::generate_from_clap(&m, &reference_tempfile);
-    let mut generator_set = vec!();
+    let params = MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile);
+    let mut generator_set = vec![];
     for reference_wise_params in params {
         let mut bam_readers = vec![];
-        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
-            reference_wise_params.reference);
+        let index = setup_mapping_index(&reference_wise_params, &m, mapping_program);
 
         let reference = reference_wise_params.reference;
         let bam_file_cache = |naming_readset| -> Option<String> {
@@ -737,9 +980,10 @@ fn get_streamed_bam_readers<'a>(
                         m.value_of("bam-file-cache-directory").unwrap(),
                         match reference_tempfile {
                             Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
-                            None => reference
+                            None => reference,
                         },
-                        naming_readset);
+                        naming_readset,
+                    );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
                 }
@@ -749,27 +993,32 @@ fn get_streamed_bam_readers<'a>(
         for p in reference_wise_params {
             bam_readers.push(
                 lorikeet::bam_generator::generate_named_bam_readers_from_reads(
-                    index.index_path(),
+                    mapping_program,
+                    match index {
+                        Some(ref index) => index.index_path(),
+                        None => reference,
+                    },
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
                     p.threads,
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     discard_unmapped,
-                    p.bwa_options,
-                    reference_tempfile.is_none()));
+                    p.mapping_options,
+                    reference_tempfile.is_none(),
+                ),
+            );
         }
 
         debug!("Finished BAM setup");
         let to_return = BamGeneratorSet {
             generators: bam_readers,
-            index: index
+            index: index,
         };
         generator_set.push(to_return);
-    };
+    }
     return generator_set;
 }
-
 fn generate_cached_bam_file_name(directory: &str, reference: &str, read1_path: &str) -> String {
     debug!("Constructing BAM file cache name in directory {}, reference {}, read1_path {}",
            directory, reference, read1_path);
@@ -835,22 +1084,21 @@ fn setup_bam_cache_directory(cache_directory: &str) {
 
 fn get_streamed_filtered_bam_readers(
     m: &clap::ArgMatches,
-    reference_tempfile: &Option<NamedTempFile>)
-    -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
-
+    mapping_program: MappingProgram,
+    reference_tempfile: &Option<NamedTempFile>,
+    filter_params: &FilterParameters,
+) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
         setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
-    let params = MappingParameters::generate_from_clap(&m, &reference_tempfile);
-    let mut generator_set = vec!();
+    let params = MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile);
+    let mut generator_set = vec![];
     for reference_wise_params in params {
         let mut bam_readers = vec![];
-        let filter_params = FilterParameters::generate_from_clap(m);
-        let index = lorikeet::bwa_index_maintenance::generate_bwa_index(
-            reference_wise_params.reference);
+        let index = setup_mapping_index(&reference_wise_params, &m, mapping_program);
 
         let reference = reference_wise_params.reference;
         let bam_file_cache = |naming_readset| -> Option<String> {
@@ -862,9 +1110,10 @@ fn get_streamed_filtered_bam_readers(
                         m.value_of("bam-file-cache-directory").unwrap(),
                         match reference_tempfile {
                             Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
-                            None => reference
+                            None => reference,
                         },
-                        naming_readset);
+                        naming_readset,
+                    );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
                 }
@@ -874,7 +1123,11 @@ fn get_streamed_filtered_bam_readers(
         for p in reference_wise_params {
             bam_readers.push(
                 lorikeet::bam_generator::generate_filtered_named_bam_readers_from_reads(
-                    index.index_path(),
+                    mapping_program,
+                    match index {
+                        Some(ref index) => index.index_path(),
+                        None => reference,
+                    },
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
@@ -887,20 +1140,23 @@ fn get_streamed_filtered_bam_readers(
                     filter_params.min_aligned_length_pair,
                     filter_params.min_percent_identity_pair,
                     filter_params.min_aligned_percent_pair,
-                    p.bwa_options,
+                    p.mapping_options,
                     discard_unmapped,
-                    reference_tempfile.is_none()));
+                    reference_tempfile.is_none(),
+                ),
+            );
         }
 
         debug!("Finished BAM setup");
         let to_return = BamGeneratorSet {
             generators: bam_readers,
-            index: index
+            index: index,
         };
         generator_set.push(to_return);
     }
     return generator_set;
 }
+
 
 fn run_pileup<'a,
     R: lorikeet::bam_generator::NamedBamReader,
@@ -1273,12 +1529,33 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("threads")
                     .default_value("1")
                     .takes_value(true))
-                .arg(Arg::with_name("bwa-params")
-                    .long("bwa-params")
-                    .long("bwa-parameters")
-                    .takes_value(true)
-                    .allow_hyphen_values(true)
-                    .requires("reference"))
+                .arg(
+                    Arg::with_name("mapper")
+                        .short("p")
+                        .long("mapper")
+                        .possible_values(MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("minimap2-params")
+                        .long("minimap2-params")
+                        .long("minimap2-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true),
+                )
+                .arg(
+                    Arg::with_name("minimap2-reference-is-index")
+                        .long("minimap2-reference-is-index")
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("bwa-params")
+                        .long("bwa-params")
+                        .long("bwa-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true)
+                        .requires("reference"),
+                )
                 .arg(Arg::with_name("discard-unmapped")
                     .long("discard-unmapped")
                     .requires("bam-file-cache-directory"))
@@ -1420,12 +1697,33 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("threads")
                     .default_value("1")
                     .takes_value(true))
-                .arg(Arg::with_name("bwa-params")
-                    .long("bwa-params")
-                    .long("bwa-parameters")
-                    .takes_value(true)
-                    .allow_hyphen_values(true)
-                    .requires("reference"))
+                .arg(
+                    Arg::with_name("mapper")
+                        .short("p")
+                        .long("mapper")
+                        .possible_values(MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("minimap2-params")
+                        .long("minimap2-params")
+                        .long("minimap2-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true),
+                )
+                .arg(
+                    Arg::with_name("minimap2-reference-is-index")
+                        .long("minimap2-reference-is-index")
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("bwa-params")
+                        .long("bwa-params")
+                        .long("bwa-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true)
+                        .requires("reference"),
+                )
                 .arg(Arg::with_name("discard-unmapped")
                     .long("discard-unmapped")
                     .requires("bam-file-cache-directory"))
