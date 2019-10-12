@@ -1,12 +1,14 @@
 use std::rc::Rc;
 use std::str;
 use std::collections::BTreeMap;
+use std::process;
 
 use FlagFilter;
 
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
 use rust_htslib::bam::record::Cigar;
+use rust_htslib::bam::errors::Result as HtslibResult;
 
 pub struct ReferenceSortedBamFilter {
     first_set: BTreeMap<Rc<String>, Rc<bam::Record>>,
@@ -40,12 +42,12 @@ impl ReferenceSortedBamFilter {
 
         let filtering_single =
             min_aligned_length_single > 0 ||
-            min_percent_identity_single > 0.0 ||
-            min_aligned_percent_single > 0.0;
+                min_percent_identity_single > 0.0 ||
+                min_aligned_percent_single > 0.0;
         let filtering_pairs =
             min_aligned_length_pair > 0 ||
-            min_percent_identity_pair > 0.0 ||
-            min_aligned_percent_pair > 0.0;
+                min_percent_identity_pair > 0.0 ||
+                min_aligned_percent_pair > 0.0;
 
         ReferenceSortedBamFilter {
             first_set: BTreeMap::new(),
@@ -68,19 +70,24 @@ impl ReferenceSortedBamFilter {
 }
 
 impl ReferenceSortedBamFilter {
-    pub fn read(&mut self, mut record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    pub fn read(&mut self, mut record: &mut bam::record::Record) -> HtslibResult<bool> {
         // if doing only singles, remove filter them and return
         if self.filter_single_reads && !self.filter_pairs {
             loop {
-                self.reader.read(&mut record)?;
+                let res = self.reader.read(&mut record).expect("Failed to read BAM record");
+                if res == false {
+                    return Ok(false)
+                }
+                if !record.is_supplementary() && !record.is_secondary() {
+                    self.num_detected_primary_alignments += 1;
+                }
                 if record.is_unmapped() && !self.filter_out {
-                    return Ok(())
+                    return Ok(true)
                 }
                 let passes_filter1 = !record.is_unmapped() &&
                     (self.flag_filters.include_supplementary || !record.is_supplementary()) &&
                     (self.flag_filters.include_secondary || !record.is_secondary());
                 if passes_filter1 {
-                    self.num_detected_primary_alignments += 1;
                     let passes_filter2 = single_read_passes_filter(
                         &record,
                         self.min_aligned_length_single,
@@ -88,9 +95,9 @@ impl ReferenceSortedBamFilter {
                         self.min_aligned_percent_single);
                     if (passes_filter2 && self.filter_out) ||
                         (!passes_filter2 && !self.filter_out) {
-                            return Ok(())
-                        }
+                        return Ok(true)
                     }
+                }
                 // else this read shall not pass, try another
             }
         }
@@ -98,7 +105,9 @@ impl ReferenceSortedBamFilter {
         // else doing pairs, so do as before except maybe filter out single reads too
         else {
             if self.known_next_read.is_none() {
-                while self.reader.read(&mut record).is_ok() {
+                while self.reader
+                    .read(&mut record)
+                    .expect("Failure to read BAM record") == true {
                     debug!("record: {:?}", record);
 
                     debug!("passed flags, {} {} {}",
@@ -106,21 +115,24 @@ impl ReferenceSortedBamFilter {
                            record.is_supplementary(),
                            !record.is_proper_pair());
 
+                    if !record.is_supplementary() && !record.is_secondary() {
+                        self.num_detected_primary_alignments += 1;
+                    }
+
                     if record.is_unmapped() && !self.filter_out {
-                        return Ok(())
+                        return Ok(true)
                     }
 
                     // TODO: make usage ensure flag_filtering when mapping
                     if record.is_secondary() ||
                         record.is_supplementary() {
-                            continue
-                        }
-                    self.num_detected_primary_alignments += 1;
+                        continue
+                    }
                     if !record.is_proper_pair() {
                         if self.filter_out {
                             continue
                         } else {
-                            return Ok(())
+                            return Ok(true)
                         }
                     }
 
@@ -137,7 +149,7 @@ impl ReferenceSortedBamFilter {
                     }
 
                     let qname = String::from(str::from_utf8(record.qname())
-                                             .expect("UTF8 error in conversion of read name"));
+                        .expect("UTF8 error in conversion of read name"));
 
                     match self.first_set.remove(&qname) {
                         None => {
@@ -162,16 +174,16 @@ impl ReferenceSortedBamFilter {
                             // both must pass QC, as well as the pair
                             // together.
                             let passes_filter = (!self.filter_single_reads ||
-                                                 (single_read_passes_filter(
-                                                     &record1,
-                                                     self.min_aligned_length_single,
-                                                     self.min_percent_identity_single,
-                                                     self.min_aligned_percent_single) &&
-                                                  single_read_passes_filter(
-                                                      &record,
-                                                      self.min_aligned_length_single,
-                                                      self.min_percent_identity_single,
-                                                      self.min_aligned_percent_single))) &&
+                                (single_read_passes_filter(
+                                    &record1,
+                                    self.min_aligned_length_single,
+                                    self.min_percent_identity_single,
+                                    self.min_aligned_percent_single) &&
+                                    single_read_passes_filter(
+                                        &record,
+                                        self.min_aligned_length_single,
+                                        self.min_percent_identity_single,
+                                        self.min_aligned_percent_single))) &&
                                 read_pair_passes_filter(
                                     &record,
                                     &record1,
@@ -180,34 +192,34 @@ impl ReferenceSortedBamFilter {
                                     self.min_aligned_percent_pair);
                             if (passes_filter && self.filter_out) ||
                                 (!passes_filter && !self.filter_out) {
-                                    debug!("Read pair passed QC");
-                                    self.known_next_read = Some(record.clone());
-                                    record.clone_from(
-                                        &Rc::try_unwrap(record1).expect("Cannot get strong RC pointer"));
-                                    debug!("Returning..");
-                                    return Ok(())
-                                } else {
-                                    debug!("Read pair did not pass QC");
-                                }
+                                debug!("Read pair passed QC");
+                                self.known_next_read = Some(record.clone());
+                                record.clone_from(
+                                    &Rc::try_unwrap(record1).expect("Cannot get strong RC pointer"));
+                                debug!("Returning..");
+                                return Ok(true)
+                            } else {
+                                debug!("Read pair did not pass QC");
+                            }
                         }
                     }
                 }
 
                 // No more records, we are finished.
-                return Err(bam::ReadError::NoMoreRecord)
+                return Ok(false)
             }
 
 
             else {
                 record.clone_from(self.known_next_read.as_ref().unwrap());
                 self.known_next_read = None;
-                return Ok(())
+                return Ok(true)
             }
         }
     }
-    pub fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.reader.pileup();
-        return res;
+
+    pub fn set_threads(&mut self, n_threads: usize) {
+        self.reader.set_threads(n_threads).unwrap();
     }
 }
 
@@ -219,7 +231,10 @@ fn single_read_passes_filter(
 
     let edit_distance1 = match record.aux(b"NM") {
         Some(i) => i.integer(),
-        None => {panic!("Alignment of read {:?} did not have an NM aux tag", record.qname())}
+        None => {
+            error!("Alignment of read {:?} did not have an NM aux tag", record.qname());
+            process::exit(1);
+        }
     };
 
     let mut aligned: u32 = 0;
@@ -255,11 +270,17 @@ fn read_pair_passes_filter(
 
     let edit_distance1 = match record1.aux(b"NM") {
         Some(i) => i.integer(),
-        None => {panic!("Alignment of read {:?} did not have an NM aux tag", record1.qname())}
+        None => {
+            error!("Alignment of read {:?} did not have an NM aux tag", record1.qname());
+            process::exit(1);
+        }
     };
     let edit_distance2 = match record2.aux(b"NM") {
         Some(i) => i.integer(),
-        None => {panic!("Alignment of read {:?} did not have an NM aux tag", record2.qname())}
+        None => {
+            error!("Alignment of read {:?} did not have an NM aux tag", record2.qname());
+            process::exit(1);
+        }
     };
 
     let mut aligned_length1: u32 = 0;
@@ -348,7 +369,7 @@ mod tests {
             sorted.read(&mut record).expect("");
             assert_eq!(i, str::from_utf8(record.qname()).unwrap());
         }
-        assert!(sorted.read(&mut record).is_err())
+        assert!(sorted.read(&mut record) == Ok(false))
     }
 
     #[test]
@@ -370,7 +391,7 @@ mod tests {
             sorted.read(&mut record).expect("");
             assert_eq!(i, str::from_utf8(record.qname()).unwrap());
         }
-        assert!(sorted.read(&mut record).is_err())
+        assert!(sorted.read(&mut record) == Ok(false))
     }
 
     #[test]
@@ -658,7 +679,7 @@ mod tests {
         assert_eq!(true, sorted.filter_pairs);
         let mut num_passing: u64 = 0;
         let mut record = bam::record::Record::new();
-        while sorted.read(&mut record).is_ok() {
+        while sorted.read(&mut record) == Ok(true) {
             num_passing += 1;
         }
         assert_eq!(11192, num_passing);

@@ -1,5 +1,6 @@
 use std::str;
 use std;
+use std::process;
 
 use rand::prelude::*;
 
@@ -7,6 +8,7 @@ use rust_htslib::bam;
 use rust_htslib::bam::Record;
 use rust_htslib::bam::record::CigarString;
 use rust_htslib::bam::Read as BamRead;
+use rust_htslib::bam::errors::Result as HtslibResult;
 
 use mapping_parameters::ReadFormat;
 
@@ -33,7 +35,7 @@ fn bam_header_target_name(header: &bam::HeaderView, tid: usize) -> &[u8] {
 }
 
 pub struct ReadSortedShardedBamReader<'a, T>
-where T: GenomeExclusion {
+    where T: GenomeExclusion {
     shard_bam_readers: Vec<bam::Reader>,
     previous_read_records: Option<Vec<bam::Record>>,
     next_record_to_return: Option<bam::Record>,
@@ -43,7 +45,7 @@ where T: GenomeExclusion {
 }
 
 impl<'a, T> ReadSortedShardedBamReader<'a, T>
-where T: GenomeExclusion {
+    where T: GenomeExclusion {
     // Return a Vec of read in BAM records, or None if there are no more.
     fn read_a_record_set(&mut self) -> Option<Vec<Record>> {
         let mut current_alignments: Vec<Record> = Vec::with_capacity(
@@ -53,13 +55,14 @@ where T: GenomeExclusion {
         let mut some_finished = false;
         let mut record;
         let mut res;
+        let mut current_alignment;
         for (i, reader) in self.shard_bam_readers.iter_mut().enumerate() {
             // loop until there is a primary alignment or the BAM file ends.
             loop {
                 {
-                    current_alignments.push(bam::Record::new());
-                    res = reader.read(&mut current_alignments[i]);
-                    if res.is_err() {
+                    current_alignment = bam::Record::new();
+                    res = reader.read(&mut current_alignment);
+                    if res.expect("Failure to read from a shard BAM file") == false {
                         debug!("BAM reader #{} appears to be finished", i);
                         some_finished = true;
                         break;
@@ -67,26 +70,40 @@ where T: GenomeExclusion {
                 }
 
                 {
-                    record = current_alignments[i].clone();
+                    record = current_alignment.clone();
                     if !record.is_paired() {
-                        panic!("This code can only handle paired-end \
-                                input (at the moment), sorry.")
+                        error!("This code can only handle paired-end \
+                                input (at the moment), sorry. Found \
+                                record {:?}",
+                               record);
+                        process::exit(1);
                     }
                     if !record.is_secondary() && !record.is_supplementary() {
                         some_unfinished = true;
-                         match current_qname.clone() {
-                             None => {current_qname = Some(str::from_utf8(record.qname()).unwrap().to_string())},
-                             Some(prev) => {
-                                 if prev != str::from_utf8(record.qname()).unwrap().to_string() {
-                                     panic!(
-                                         "BAM files do not appear to be \
-                                          properly sorted by read name. \
-                                          Expected read name {:?} from a \
-                                          previous reader but found {:?} \
-                                          in the current.", prev, str::from_utf8(record.qname()).unwrap().to_string());
-                                 }
-                             }
-                         }
+                        match current_qname.clone() {
+                            None => {
+                                current_qname = Some(
+                                    str::from_utf8(record.qname())
+                                        .unwrap()
+                                        .to_string())},
+                            Some(prev) => {
+                                if prev != str::from_utf8(record.qname())
+                                    .unwrap()
+                                    .to_string() {
+                                    error!(
+                                        "BAM files do not appear to be \
+                                              properly sorted by read name. \
+                                              Expected read name {:?} from a \
+                                              previous reader but found {:?} \
+                                              in the current.",
+                                        prev,
+                                        str::from_utf8(
+                                            record.qname()).unwrap().to_string());
+                                    process::exit(1);
+                                }
+                            }
+                        }
+                        current_alignments.push(current_alignment);
                         break;
                     }
                     // else we have a non-primary alignment, so loop again.
@@ -95,8 +112,10 @@ where T: GenomeExclusion {
         }
         // check we are properly finished.
         if some_unfinished && some_finished {
-            panic!("Unexpectedly one BAM file input finished while another had further reads")
+            error!("Unexpectedly one BAM file input finished while another had further reads");
+            process::exit(1);
         }
+        debug!("Read records {:?}", current_alignments);
         return match some_unfinished {
             true => Some(current_alignments),
             false => None
@@ -108,7 +127,7 @@ where T: GenomeExclusion {
     fn clone_record_into(from: &Record, to: &mut Record) {
         //Clone record using set() also add cigar and push aux tags NM
         to.set(from.qname(),
-               &CigarString::from_str(from.cigar().to_string().as_str()).unwrap(),
+               Some(&CigarString::from_str(from.cigar().to_string().as_str()).unwrap()),
                from.seq().as_bytes().as_slice(),
                from.qual());
         to.set_pos(from.pos());
@@ -121,13 +140,13 @@ where T: GenomeExclusion {
         to.set_tid(from.tid());
         match &from.aux("NM".as_bytes()) {
             Some(aux) => {
-                to.push_aux("NM".as_bytes(), aux)
-                    .expect(&format!(
-                        "Error writing AUX record from{:?} to {:?}", from, to));
+                to.push_aux("NM".as_bytes(), aux);
             },
             None => {
-                if from.tid() >= 0 {
-                    panic!("record {:?} had no NM tag", from)
+                if from.tid() >= 0 && from.cigar_len() != 0 {
+                    error!("record {:?} with name {} had no NM tag",
+                           from, str::from_utf8(from.qname()).unwrap());
+                    process::exit(1);
                 }
             },
         }
@@ -136,8 +155,8 @@ where T: GenomeExclusion {
 }
 
 impl<'a, T> ReadSortedShardedBamReader<'a, T>
-where T: GenomeExclusion {
-    fn read(&mut self, to_return: &mut bam::Record) -> Result<(), bam::ReadError> {
+    where T: GenomeExclusion {
+    fn read(&mut self, to_return: &mut bam::Record) -> HtslibResult<bool> {
         if self.next_record_to_return.is_some() {
             {
                 let record = self.next_record_to_return.as_ref().unwrap();
@@ -146,19 +165,22 @@ where T: GenomeExclusion {
             self.next_record_to_return = None;
             let tid_now = to_return.tid();
             to_return.set_tid(tid_now + self.tid_offsets[self.winning_index.unwrap()]);
-            return Ok(());
+            return Ok(true);
         } else {
             if self.previous_read_records.is_none() {
                 self.previous_read_records = self.read_a_record_set();
                 if self.previous_read_records.is_none() {
                     // All finished all the input files.
-                    return Err(bam::ReadError::NoMoreRecord);
+                    return Ok(false);
                 }
             }
             // Read the second set
             // If we get None, then croak
             let second_read_alignments = self.read_a_record_set()
                 .expect("Unexpectedly was able to read a first read set, but not a second. Hmm.");
+
+            debug!("Previous records {:?}", self.previous_read_records);
+            debug!("Second read records {:?}", second_read_alignments);
 
             // Decide which pair is the winner
             // Cannot use max_by_key() here since we want a random winner
@@ -172,14 +194,20 @@ where T: GenomeExclusion {
                         if tid < 0 || !self.genome_exclusion.is_excluded(
                             bam_header_target_name(&self.shard_bam_readers[i].header(), tid as usize)) {
                             let mut score: i64 = 0;
-                            score += aln1.aux(b"AS")
-                                .expect(&format!(
-                                    "Record {:#?} (read1) unexpectedly did not have AS tag, which is needed for \
-                                     ranking pairs of alignments", aln1.qname())).integer();
-                            score += second_read_alignments[i].aux(b"AS")
-                                .expect(&format!(
-                                    "Record {:#?} (read2) unexpectedly did not have AS tag, which is needed for \
-                                     ranking pairs of alignments", aln1.qname())).integer();
+                            // Unlike BWA-MEM, Minimap2 does not have AS tags
+                            // when the read is unmapped.
+                            if !aln1.is_unmapped() {
+                                score += aln1.aux(b"AS")
+                                    .expect(&format!(
+                                        "Record {:#?} (read1) unexpectedly did not have AS tag, which is needed for \
+                                        ranking pairs of alignments", aln1.qname())).integer();
+                            }
+                            if !second_read_alignments[i].is_unmapped() {
+                                score += second_read_alignments[i].aux(b"AS")
+                                    .expect(&format!(
+                                        "Record {:#?} (read2) unexpectedly did not have AS tag, which is needed for \
+                                        ranking pairs of alignments", aln1.qname())).integer();
+                            }
                             if max_score.is_none() || score > max_score.unwrap() {
                                 max_score = Some(score);
                                 winning_indices = vec![i]
@@ -199,7 +227,8 @@ where T: GenomeExclusion {
             } else if winning_indices.len() == 1 {
                 winning_index = winning_indices[0];
             } else {
-                panic!("strainm cannot currently deal with reads that only map to excluded genomes")
+                error!("CoverM cannot currently deal with reads that only map to excluded genomes");
+                process::exit(1);
             }
             debug!("Choosing winning index {} from winner pool {:?}",
                    winning_index, winning_indices);
@@ -228,13 +257,13 @@ where T: GenomeExclusion {
             self.previous_read_records = None;
 
             // Return the first of the pair
-            return Ok(());
+            return Ok(true);
         }
     }
 }
 
 pub struct ShardedBamReaderGenerator<'a, T>
-where T: GenomeExclusion {
+    where T: GenomeExclusion {
     pub stoit_name: String,
     pub read_sorted_bam_readers: Vec<bam::Reader>,
     pub sort_threads: i32,
@@ -242,7 +271,7 @@ where T: GenomeExclusion {
 }
 
 impl<'a, T> NamedBamReaderGenerator<ShardedBamReader> for ShardedBamReaderGenerator<'a, T>
-where T: GenomeExclusion {
+    where T: GenomeExclusion {
     fn start(self) -> ShardedBamReader {
         let mut new_header = bam::header::Header::new();
         let mut tid_offsets: Vec<i32> = vec!();
@@ -271,7 +300,7 @@ where T: GenomeExclusion {
             current_tid_offset += header.target_count() as i32;
         }
 
-        let tmp_dir = TempDir::new("strainm_fifo")
+        let tmp_dir = TempDir::new("coverm_fifo")
             .expect("Unable to create samtools sort temporary directory");
         // let tmp_dir = std::path::Path::new("/tmp/miner");
         // std::fs::create_dir(tmp_dir).expect("Failed to make dummy dir");
@@ -332,14 +361,14 @@ where T: GenomeExclusion {
                 .expect("Failed to convert sort tempfile tempfile path to str"),
             &self.sort_threads,
             //sort_log_file.path().to_str()
-             //   .expect("Failed to convert tempfile log path to str")
+            //   .expect("Failed to convert tempfile log path to str")
         );
         debug!("Running cmd_string: {}", sort_command_string);
         let mut cmd = std::process::Command::new("bash");
         cmd
             .arg("-c")
             .arg(&sort_command_string);
-            //.stderr(std::process::Stdio::piped())
+        //.stderr(std::process::Stdio::piped())
         let sort_child = cmd.spawn().expect("Unable to execute bash");
 
 
@@ -351,11 +380,18 @@ where T: GenomeExclusion {
         {
             // Write in a scope so writer drops before we start reading from the sort.
             debug!("Opening BAM writer to {}", &sort_input_fifo_path.to_str().unwrap());
-            let mut writer = bam::Writer::from_path(&sort_input_fifo_path, &new_header)
+            let mut writer = bam::Writer::from_path(
+                &sort_input_fifo_path,
+                &new_header,
+                rust_htslib::bam::Format::BAM)
                 .expect("Failed to open BAM to write to samtools sort process");
+            // Do not compress since these records are just read back in again -
+            // compression would be wasteful of CPU (and IO with samtools sort)
+            writer.set_compression_level(bam::CompressionLevel::Uncompressed)
+                .expect("Failure to set BAM writer compression level - programming bug?");
             debug!("Writing records to samtools sort input FIFO..");
             let mut record = bam::Record::new();
-            while demux.read(&mut record).is_ok() {
+            while demux.read(&mut record) == Ok(true) {
                 debug!("Writing tid {} for qname {}", record.tid(), str::from_utf8(record.qname()).unwrap());
                 writer.write(&record)
                     .expect("Failed to write BAM record to samtools sort input fifo");
@@ -394,16 +430,11 @@ impl NamedBamReader for ShardedBamReader {
     fn name(&self) -> &str {
         &(self.stoit_name)
     }
-    fn read(&mut self, record: &mut bam::record::Record) -> Result<(), bam::ReadError> {
+    fn read(&mut self, record: &mut bam::record::Record) -> HtslibResult<bool> {
         let res = self.bam_reader.read(record);
-        if res.is_ok() && !record.is_secondary() && !record.is_supplementary() {
+        if res == Ok(true) && !record.is_secondary() && !record.is_supplementary() {
             self.num_detected_primary_alignments += 1;
         }
-        return res;
-    }
-
-    fn pileups(&mut self) -> bam::pileup::Pileups<bam::Reader>{
-        let res = self.bam_reader.pileup();
         return res;
     }
     fn header(&self) -> &bam::HeaderView {
@@ -421,7 +452,6 @@ impl NamedBamReader for ShardedBamReader {
     fn set_threads(&mut self, n_threads: usize) {
         self.bam_reader.set_threads(n_threads).unwrap();
     }
-
     fn num_detected_primary_alignments(&self) -> u64 {
         return self.num_detected_primary_alignments
     }
@@ -433,7 +463,7 @@ impl NamedBamReader for ShardedBamReader {
 pub fn generate_sharded_bam_reader_from_bam_files<'a, T>(
     bam_paths: Vec<&str>, sort_threads: i32, genome_exclusion: &'a T)
     -> Vec<ShardedBamReaderGenerator<'a, T>>
-where T: GenomeExclusion {
+    where T: GenomeExclusion {
     // open an output BAM file that gets put to samtools sort without -n
     // For each BAM path,
     // open the path
@@ -447,9 +477,19 @@ where T: GenomeExclusion {
                 .expect(&format!("Unable to open bam file {}", f))
         }
     ).collect();
+    let stoit_name = bam_paths.iter().map(
+        |f| std::path::Path::new(f).file_stem().unwrap().to_str().expect(
+            "failure to convert bam file name to stoit name - UTF8 error maybe?").to_string())
+        .fold(
+            None,
+            { |acc, s| match acc {
+                None => Some(s),
+                Some(prev) => Some(format!("{}|{}",prev,s))
+            }}
+        ).unwrap();
     debug!("Opened all input BAM files");
     let gen = ShardedBamReaderGenerator {
-        stoit_name: "stoita".to_string(),
+        stoit_name: stoit_name,
         read_sorted_bam_readers: bam_readers,
         sort_threads: sort_threads,
         genome_exclusion: genome_exclusion,
@@ -459,6 +499,7 @@ where T: GenomeExclusion {
 }
 
 pub fn generate_named_sharded_bam_readers_from_reads(
+    mapping_program: MappingProgram,
     reference: &str,
     read1_path: &str,
     read2_path: Option<&str>,
@@ -466,10 +507,9 @@ pub fn generate_named_sharded_bam_readers_from_reads(
     threads: u16,
     cached_bam_file: Option<&str>,
     discard_unmapped: bool,
-    bwa_options: Option<&str>,
-    include_reference_in_stoit_name: bool) -> bam::Reader {
+    mapping_options: Option<&str>) -> bam::Reader {
 
-    let tmp_dir = TempDir::new("strainm_fifo")
+    let tmp_dir = TempDir::new("coverm_fifo")
         .expect("Unable to create temporary directory");
 
     let fifo_path = tmp_dir.path().join("foo.pipe");
@@ -480,8 +520,8 @@ pub fn generate_named_sharded_bam_readers_from_reads(
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-    let bwa_log = tempfile::NamedTempFile::new()
-        .expect("Failed to create BWA log tempfile");
+    let mapping_log = tempfile::NamedTempFile::new()
+        .expect(&format!("Failed to create {:?} log tempfile", mapping_program));
     let samtools2_log = tempfile::NamedTempFile::new()
         .expect("Failed to create second samtools log tempfile");
     // tempfile does not need to be created but easier to create than get around
@@ -507,30 +547,35 @@ pub fn generate_named_sharded_bam_readers_from_reads(
         },
         None => format!("> {:?}", fifo_path)
     };
-    let bwa_read_params = match read_format {
-        ReadFormat::Interleaved => format!("-p '{}'", read1_path),
-        ReadFormat::Coupled => format!("'{}' '{}'", read1_path, read2_path.unwrap()),
-        ReadFormat::Single => format!("'{}'", read1_path),
-    };
+
+    let mapping_command = build_mapping_command(
+        mapping_program,
+        read_format,
+        threads,
+        read1_path,
+        reference,
+        read2_path,
+        mapping_options);
+
     let bwa_sort_prefix = tempfile::Builder::new()
-        .prefix("strainm-make-samtools-sort")
+        .prefix("coverm-make-samtools-sort")
         .tempfile_in(tmp_dir.path())
         .expect("Failed to create tempfile as samtools sort prefix");
     let cmd_string = format!(
-            "set -e -o pipefail; \
-             bwa mem {} -t {} '{}' {} 2>{} \
-             | samtools sort -n -T '{}' -l0 -@ {} 2>{} \
-             {}",
-            // BWA
-            bwa_options.unwrap_or(""), threads, reference, bwa_read_params,
-            bwa_log.path().to_str().expect("Failed to convert tempfile path to str"),
-            // samtools
-            bwa_sort_prefix.path().to_str()
-                .expect("Failed to convert bwa_sort_prefix tempfile to str"),
-            threads - 1,
-            samtools2_log.path().to_str().expect("Failed to convert tempfile path to str"),
-            // Caching (or not)
-            cached_bam_file_args);
+        "set -e -o pipefail; \
+         {} 2>{} \
+         | samtools sort -n -T '{}' -l0 -@ {} 2>{} \
+         {}",
+        // Mapping
+        mapping_command,
+        mapping_log.path().to_str().expect("Failed to convert tempfile path to str"),
+        // samtools
+        bwa_sort_prefix.path().to_str()
+            .expect("Failed to convert bwa_sort_prefix tempfile to str"),
+        threads - 1,
+        samtools2_log.path().to_str().expect("Failed to convert tempfile path to str"),
+        // Caching (or not)
+        cached_bam_file_args);
     debug!("Queuing cmd_string: {}", cmd_string);
     let mut cmd = std::process::Command::new("bash");
     cmd
@@ -539,22 +584,13 @@ pub fn generate_named_sharded_bam_readers_from_reads(
         .stderr(std::process::Stdio::piped());
 
     let mut log_descriptions = vec![
-        "BWA".to_string(),
+        format!("{:?}",mapping_program).to_string(),
         "samtools sort".to_string()];
-    let mut log_files = vec![bwa_log, samtools2_log];
+    let mut log_files = vec![mapping_log, samtools2_log];
     if cached_bam_file.is_some() {
         log_descriptions.push("samtools view for cache".to_string());
         log_files.push(samtools_view_cache_log);
     }
-
-    let _stoit_name = match include_reference_in_stoit_name {
-        true => std::path::Path::new(reference).file_name()
-            .expect("Unable to convert reference to file name").to_str()
-            .expect("Unable to covert file name into str").to_string() + "/",
-        false => "".to_string()
-    } + &std::path::Path::new(read1_path).file_name()
-        .expect("Unable to convert read1 name to file name").to_str()
-        .expect("Unable to covert file name into str").to_string();
 
     debug!("Starting mapping processes");
     let pre_processes = vec![cmd];
@@ -581,7 +617,7 @@ mod tests {
     fn test_shard_hello_world() {
         //This test needs to be revisited. It seems busted.
         let gen = ShardedBamReaderGenerator {
-            stoit_name: "stoita".to_string(),
+            stoit_name: "stoiter".to_string(),
             read_sorted_bam_readers: vec![
                 bam::Reader::from_path("tests/data/2seqs.fastaVbad_read.bam").unwrap(),
                 bam::Reader::from_path("tests/data/7seqs.fnaVbad_read.bam").unwrap()
@@ -590,7 +626,7 @@ mod tests {
             genome_exclusion: &NoExclusionGenomeFilter{},
         };
         let mut reader = gen.start();
-        assert_eq!("stoita".to_string(), reader.stoit_name);
+        assert_eq!("stoiter".to_string(), reader.stoit_name);
         let mut r = bam::Record::new();
         reader.bam_reader.read(&mut r).unwrap();
         println!("{}",str::from_utf8(r.qname()).unwrap());
