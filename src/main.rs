@@ -6,12 +6,14 @@ use lorikeet::mapping_parameters::*;
 use lorikeet::shard_bam_reader::*;
 use lorikeet::FlagFilter;
 use lorikeet::genome_exclusion::*;
+use lorikeet::genes_and_codons::*;
 
 extern crate rust_htslib;
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
 
 extern crate bio;
+use bio::io::gff;
 use bio::alignment::sparse::*;
 
 use std::env;
@@ -586,6 +588,16 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+            let gff_file = m.value("gff").unwrap();
+            let gff_reader = match gff::Reader::from_file(gff_file,
+                                                          gff::GffType::GFF3) {
+                Ok(file) => file,
+                Err(err) => {
+                    println!("gff file not found {}", err);
+                    process::exit(1)
+                }
+            };
+
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -599,7 +611,8 @@ fn main(){
                         filter_params.min_aligned_length_pair,
                         filter_params.min_percent_identity_pair,
                         filter_params.min_aligned_percent_pair);
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        bam_readers,
                                        filter_params.flag_filters);
                 } else if m.is_present("sharded") {
@@ -1171,6 +1184,67 @@ fn get_streamed_filtered_bam_readers(
     return generator_set;
 }
 
+fn run_codons<'a,
+    R: lorikeet::bam_generator::NamedBamReader,
+    T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
+    m: &clap::ArgMatches,
+    gff_reader: bio::io::gff::Reader<File>,
+    bam_readers: Vec<T>,
+    flag_filters: FlagFilter) {
+
+    let mut variant_consensus_file = "uninit.fna".to_string();
+    let print_zeros = !m.is_present("no-zeros");
+    let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+    let print_consensus = m.is_present("variant-consensus-fasta");
+    if print_consensus {
+        variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+    }
+    let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+    let method = m.value_of("method").unwrap();
+
+    let reference_path = Path::new(m.value_of("reference").unwrap());
+//            let index_path = reference_path.clone().to_owned() + ".fai";
+    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+        Ok(reader) => reader,
+        Err(e) => {
+            eprintln!("Missing or corrupt fasta file {}", e);
+            process::exit(1);
+        },
+    };
+    let threads = m.value_of("threads").unwrap().parse().unwrap();
+
+    let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+
+    if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+        eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+        process::exit(1)
+    }
+    let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+    let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+    let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+    if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+        panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+    }
+
+    lorikeet::genes_and_codons::predict_evolution(
+        bam_readers,
+        gff_reader,
+        fasta_reader,
+        print_zeros,
+        flag_filters,
+        mapq_threshold,
+        var_fraction,
+        min,
+        max,
+        min_fraction_covered,
+        contig_end_exclusion,
+        variant_consensus_file,
+        print_consensus,
+        threads,
+        method);
+
+}
 
 fn run_pileup<'a,
     R: lorikeet::bam_generator::NamedBamReader,
@@ -1637,6 +1711,191 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("verbose")
+                    .short("v")
+                    .long("verbose"))
+                .arg(Arg::with_name("quiet")
+                    .long("quiet")))
+        .subcommand(
+            SubCommand::with_name("codons")
+                .about("Pinpoint sites of synonymous and non-synonymous mutations")
+                .help(SUMMARIZE_HELP.as_str())
+                .arg(Arg::with_name("full-help")
+                    .long("full-help"))
+
+                .arg(Arg::with_name("bam-files")
+                    .short("b")
+                    .long("bam-files")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["read1","read2","coupled","interleaved","single","full-help"]))
+                .arg(Arg::with_name("gff")
+                    .short("g")
+                    .long("gff")
+                    .takes_value(true)
+                    .required_unless(
+                        "gene-caller"))
+                .arg(Arg::with_name("gene-caller")
+                    .long("gene-caller")
+                    .takes_value(true)
+                    .required_unless("gff")
+                    .possible_values(&[
+                        "prokka",
+                        "prodigal",
+                        "roary"]))
+                .arg(Arg::with_name("sharded")
+                    .long("sharded")
+                    .required(false))
+                .arg(Arg::with_name("read1")
+                    .short("-1")
+                    .multiple(true)
+                    .takes_value(true)
+                    .requires("read2")
+                    .required_unless_one(
+                        &["bam-files","coupled","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("read2")
+                    .short("-2")
+                    .multiple(true)
+                    .takes_value(true)
+                    .requires("read1")
+                    .required_unless_one(
+                        &["bam-files","coupled","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("coupled")
+                    .short("-c")
+                    .long("coupled")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("interleaved")
+                    .long("interleaved")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","coupled","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("single")
+                    .long("single")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","coupled","interleaved","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("reference")
+                    .short("-r")
+                    .long("reference")
+                    .takes_value(true)
+                    .required_unless_one(&["full-help"]))
+                .arg(Arg::with_name("bam-file-cache-directory")
+                    .long("bam-file-cache-directory")
+                    .takes_value(true)
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("threads")
+                    .short("-t")
+                    .long("threads")
+                    .default_value("1")
+                    .takes_value(true))
+                .arg(
+                    Arg::with_name("mapper")
+                        .short("p")
+                        .long("mapper")
+                        .possible_values(MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("minimap2-params")
+                        .long("minimap2-params")
+                        .long("minimap2-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true),
+                )
+                .arg(
+                    Arg::with_name("minimap2-reference-is-index")
+                        .long("minimap2-reference-is-index")
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("bwa-params")
+                        .long("bwa-params")
+                        .long("bwa-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true)
+                        .requires("reference"),
+                )
+                .arg(Arg::with_name("discard-unmapped")
+                    .long("discard-unmapped")
+                    .requires("bam-file-cache-directory"))
+
+                .arg(Arg::with_name("min-read-aligned-length")
+                    .long("min-read-aligned-length")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-percent-identity")
+                    .long("min-read-percent-identity")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-aligned-percent")
+                    .long("min-read-aligned-percent")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-aligned-length-pair")
+                    .long("min-read-aligned-length-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("min-read-percent-identity-pair")
+                    .long("min-read-percent-identity-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("min-read-aligned-percent-pair")
+                    .long("min-read-aligned-percent-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("method")
+                    .short("m")
+                    .long("method")
+                    .takes_value(true)
+                    .possible_values(&[
+                        "trimmed_mean",
+                        "mean",
+                        "metabat"])
+                    .default_value("trimmed_mean"))
+                .arg(Arg::with_name("min-covered-fraction")
+                    .long("min-covered-fraction")
+                    .default_value("0.0"))
+                .arg(Arg::with_name("min-variant-depth")
+                    .long("min-variant-depth")
+                    .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("depth-threshold")
+                    .long("depth-threshold")
+                    .short("d")
+                    .default_value("50"))
+                .arg(Arg::with_name("mapq-threshold")
+                    .long("mapq-threshold")
+                    .short("q")
+                    .default_value("40"))
+                .arg(Arg::with_name("kmer-size")
+                    .long("kmer-size")
+                    .short("k")
+                    .default_value("4"))
+                .arg(Arg::with_name("contig-end-exclusion")
+                    .long("contig-end-exclusion")
+                    .default_value("75"))
+                .arg(Arg::with_name("trim-min")
+                    .long("trim-min")
+                    .default_value("0.05"))
+                .arg(Arg::with_name("trim-max")
+                    .long("trim-max")
+                    .default_value("0.95"))
+                .arg(Arg::with_name("no-zeros")
+                    .long("no-zeros"))
+                .arg(Arg::with_name("allow-improper-pairs")
+                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("output-prefix")
+                    .long("output-prefix")
+                    .short("o")
+                    .default_value("output"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))
