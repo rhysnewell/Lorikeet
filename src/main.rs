@@ -588,7 +588,7 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-            let gff_file = m.value("gff").unwrap();
+            let gff_file = m.value_of("gff").unwrap();
             let gff_reader = match gff::Reader::from_file(gff_file,
                                                           gff::GffType::GFF3) {
                 Ok(file) => file,

@@ -39,9 +39,7 @@ pub fn predict_evolution<R: NamedBamReader,
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        if n_threads > 1 {
-            bam_generated.set_threads(n_threads-1);
-        }
+        bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
 
         let stoit_file_name = stoit_name.clone() + &variant_file_name;
@@ -300,4 +298,67 @@ pub fn predict_evolution<R: NamedBamReader,
         bam_generated.finish();
         sample_idx += 1;
     };
+}
+
+fn process_previous_contigs_var(
+    last_tid: i32,
+    depth: Vec<usize>,
+    nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
+    indels: Vec<HashMap<String, HashSet<i32>>>,
+    min: f32, max: f32,
+    total_indels_in_current_contig: usize,
+    min_fraction_covered_bases: f32,
+    contig_end_exclusion: u32,
+    min_var_depth: usize,
+    contig_len: usize,
+    contig_name: Vec<u8>,
+    ref_sequence: Vec<u8>,
+    consensus_variant_fasta: &File,
+    print_consensus: bool,
+    sample_idx: i32,
+    method: &str,
+    total_mismatches: u32) {
+
+    if last_tid != -2 {
+
+        let mut pileup_struct = PileupStats::new_contig_stats(min,
+                                                              max,
+                                                              min_fraction_covered_bases,
+                                                              contig_end_exclusion);
+
+        // adds contig info to pileup struct
+        pileup_struct.add_contig(nuc_freq,
+                                 depth,
+                                 indels,
+                                 last_tid.clone(),
+                                 total_indels_in_current_contig,
+                                 contig_name.clone(),
+                                 contig_len);
+
+        // calculates coverage across contig
+        pileup_struct.calc_coverage(total_mismatches, method);
+
+        // filters variants across contig
+        pileup_struct.calc_variants(
+            min_var_depth);
+
+        // calculates minimum number of genotypes possible for each variant location
+        pileup_struct.generate_genotypes();
+
+        // prints results of variants calling
+        pileup_struct.print_variants(ref_sequence.clone(), sample_idx);
+
+        if print_consensus {
+            // Write consensus contig to fasta
+            // i.e. the most abundant variant at each position from this set of reads
+            let contig_n = ">".to_owned() +
+                &str::from_utf8(&contig_name).unwrap().to_string() +
+                "\n";
+
+            let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
+            consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+            pileup_struct.generate_variant_contig(ref_sequence.clone(),
+                                                  consensus_clone);
+        }
+    }
 }

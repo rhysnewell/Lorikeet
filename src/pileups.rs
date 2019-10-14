@@ -37,9 +37,7 @@ pub fn pileup_variants<R: NamedBamReader,
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        if n_threads > 1 {
-            bam_generated.set_threads(n_threads-1);
-        }
+        bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
 
         let stoit_file_name = stoit_name.clone() + &variant_file_name;
@@ -324,9 +322,9 @@ pub fn pileup_contigs<R: NamedBamReader,
 
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
-        if n_threads > 1 {
-            bam_generated.set_threads(n_threads-1);
-        }        let stoit_name = bam_generated.name().to_string();
+        bam_generated.set_threads(n_threads);
+
+        let stoit_name = bam_generated.name().to_string();
         pileup_matrix.add_sample(stoit_name.clone());
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
