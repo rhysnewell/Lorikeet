@@ -620,13 +620,15 @@ fn main(){
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
                     let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        bam_readers,
                                        filter_params.flag_filters);
                 } else {
                     let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        bam_readers,
                                        filter_params.flag_filters);
                 }
@@ -653,7 +655,8 @@ fn main(){
                         }
                     }
                     debug!("Finished collecting generators.");
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        all_generators,
                                        filter_params.flag_filters);
                 } else if m.is_present("sharded") {
@@ -663,7 +666,8 @@ fn main(){
                         &None,
                         &NoExclusionGenomeFilter {},
                     );
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        generator_sets,
                                        filter_params.flag_filters);
                 } else {
@@ -677,7 +681,8 @@ fn main(){
                             all_generators.push(g)
                         }
                     }
-                    run_pileup_contigs(m,
+                    run_codons(m,
+                                       gff_reader,
                                        all_generators,
                                        filter_params.flag_filters.clone());
                 }
