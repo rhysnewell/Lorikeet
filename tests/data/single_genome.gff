@@ -1,0 +1,4 @@
+##gff-version  3
+# Sequence Data: seqnum=1;seqlen=1000;seqhdr="genome5~seq2"
+# Model Data: version=Prodigal.v2.6.3;run_type=Metagenomic;model="29|Methylacidiphilum_infernorum_V4|B|45.5|11|0";gc_cont=45.50;transl_table=11;uses_sd=0
+genome5~seq2	Prodigal_v2.6.3	CDS	870	998	8.7	+	0	ID=1_1;partial=01;start_type=ATG;rbs_motif=AATAA;rbs_spacer=4bp;gc_cont=0.465;conf=88.04;score=8.69;cscore=0.21;sscore=8.47;rscore=7.42;uscore=-3.20;tscore=4.25;

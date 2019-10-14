@@ -18,7 +18,7 @@ use std::io::prelude::*;
 pub fn predict_evolution<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_readers: Vec<G>,
-    gff_reader: bio::io::gff::Reader<File>,
+    mut gff_reader: bio::io::gff::Reader<File>,
     mut reference: bio::io::fasta::IndexedReader<File>,
     print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
@@ -34,8 +34,16 @@ pub fn predict_evolution<R: NamedBamReader,
 
     let mut sample_idx = 0;
     let include_soft_clipping = false;
+    let mut gff_map = HashMap::new();
     // Print file header
     println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
+    for record in gff_reader.records() {
+        let rec = record.unwrap();
+        let contig_genes = gff_map.entry(rec.seqname().to_owned())
+            .or_insert(Vec::new());
+        contig_genes.push(rec);
+    }
+
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
