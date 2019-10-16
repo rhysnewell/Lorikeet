@@ -22,6 +22,8 @@ use std::process;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::io::Read as ioRead;
+use std::io::{BufRead, BufReader, Error, ErrorKind};
+use std::process::Stdio;
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
@@ -728,22 +730,19 @@ fn main(){
                      prodigal -f gff -i {} -o {} {}",
                     // prodigal
                     m.value_of("reference").unwrap(),
-                    m.value_of("reference").unwrap().to_owned()+".gff",
+                    "lorikeet.gff",
                     m.value_of("prodigal-params").unwrap_or(""));
                 debug!("Queuing cmd_string: {}", cmd_string);
                 let mut prodigal_out = std::process::Command::new("bash")
                     .arg("-c")
                     .arg(&cmd_string)
+                    .stdout(Stdio::piped())
                     .output()
-                    .expect("Failed to run prodigal");
-//                let mut buffer = Vec::new();
-//                let mut prodigal_file = prodigal_out.stdout
-//                    .to_string().as_bytes()
-//                    .read(&mut buffer).unwrap();
+                    .expect("Unable to execute bash");
 
-                gff_reader = gff::Reader::from_file(m.value_of("reference").unwrap().to_owned()+".gff",
+                gff_reader = gff::Reader::from_file("lorikeet.gff",
                                               gff::GffType::GFF3)
-                                                .expect("Failed to create GFF file");
+                    .expect("Failed to read prodigal output");
             }
 
 
