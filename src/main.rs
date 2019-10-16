@@ -21,6 +21,8 @@ use std::str;
 use std::process;
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::io::Read as ioRead;
+use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 
@@ -222,6 +224,131 @@ Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
     }
     &POLYMORPH_HELP
 }
+
+fn evolve_full_help() -> &'static str {
+    lazy_static! {
+        static ref EVOLVE_HELP: String = format!(
+    "lorikeet polymorph: Calculate read coverage per-contig
+
+Define mapping(s) (required):
+  Either define BAM:
+   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
+                                         reference sorted (e.g. with samtools sort)
+                                         unless --sharded is specified, in which
+                                         case they must be read name sorted (e.g.
+                                         with samtools sort -n).
+
+  Or do mapping:
+   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
+                                         e.g. concatenated genomes or assembly.
+                                         If multiple references FASTA files are
+                                         provided and --sharded is specified,
+                                         then reads will be mapped to references
+                                         separately as sharded BAMs
+   -t, --threads <INT>                   Number of threads for mapping / sorting
+   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
+   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
+   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
+                                         FASTA/Q files for mapping in order
+                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
+                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
+   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
+   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   --gff, -g <PATH>                      GFF3 file containing gene locations
+                                         present in reference genome.
+   --prodigal-params                     Paramaters passed onto prodigal to call
+                                         gene locations on reference genome.
+                                         -i and -f are already set. Only used if
+                                         not GFF file is not premade.
+{}
+   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         both indexing command (if used) and for
+                                         mapping. Note that usage of this parameter
+                                         has security implications if untrusted input
+                                         is specified. '-a' is always specified.
+                                         [default \"\"]
+   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
+                                         as a FASTA file.
+   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
+                                         that usage of this parameter has security
+                                         implications if untrusted input is specified.
+                                         [default \"\"]
+
+Sharding i.e. multiple reference sets (optional):
+   --sharded                             If -b/--bam-files was used:
+                                           Input BAM files are read-sorted alignments
+                                           of a set of reads mapped to multiple
+                                           reference contig sets. Choose the best
+                                           hit for each read pair.
+
+                                         Otherwise if mapping was carried out:
+                                           Map reads to each reference, choosing the
+                                           best hit for each pair.
+
+Alignment filtering (optional):
+   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
+                                              aligned bases [default: 0]
+   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
+                                              identity e.g. 0.95 for 95%. [default 0.0]
+   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned. [default 0.0]
+   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
+                                              aligned bases.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
+                                              identity e.g. 0.95 for 95%.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
+                                              bases e.g. 0.95 means 95% of the read's
+                                              bases must be aligned.
+                                              Conflicts --allow-improper-pairs. [default 0.0]
+   --allow-improper-pairs                     Allows reads to be mapped as improper pairs
+
+Other arguments (optional):
+   -m, --method <METHOD>                 Method for calculating coverage.
+                                         One or more (space separated) of:
+                                           trimmed_mean
+                                           mean
+                                           metabat (\"MetaBAT adjusted coverage\")
+                                         A more thorough description of the different
+                                         method is available at
+                                         https://github.com/rhysnewell/lorikeet
+   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
+                                         table. [default: 4]
+   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+                                         a variant. [default: 40]
+   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
+   -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
+                                         for it to be considered. [default: 10]
+   --output-format FORMAT                Shape of output: 'sparse' for long format,
+                                         'dense' for species-by-site.
+                                         [default: dense]
+   --min-covered-fraction FRACTION       Contigs with less coverage than this
+                                         reported as having zero coverage.
+                                         [default: 0]
+   --contig-end-exclusion                Exclude bases at the ends of reference
+                                         sequences from calculation [default: 75]
+   --trim-min FRACTION                   Remove this smallest fraction of positions
+                                         when calculating trimmed_mean
+                                         [default: 0.05]
+   --trim-max FRACTION                   Maximum fraction for trimmed_mean
+                                         calculations [default: 0.95]
+   -t, --threads                         Number of threads used. [default: 1]
+   --no-zeros                            Omit printing of genomes that have zero
+                                         coverage
+   --bam-file-cache-directory            Output BAM files generated during
+                                         alignment to this directory
+   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
+   -v, --verbose                         Print extra debugging information
+   -q, --quiet                           Unless there is an error, do not print
+                                         log messages
+
+Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+    }
+    &EVOLVE_HELP
+}
+
 
 fn summarize_full_help() -> &'static str {
     lazy_static! {
@@ -578,8 +705,8 @@ fn main(){
                 }
             }
         },
-        Some("codons") => {
-            let m = matches.subcommand_matches("codons").unwrap();
+        Some("evolve") => {
+            let m = matches.subcommand_matches("evolve").unwrap();
             if m.is_present("full-help") {
                 println!("{}", summarize_full_help());
                 process::exit(1);
@@ -588,15 +715,36 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-            let gff_file = m.value_of("gff").unwrap();
-            let gff_reader = match gff::Reader::from_file(gff_file,
-                                                          gff::GffType::GFF3) {
-                Ok(file) => file,
-                Err(err) => {
-                    println!("gff file not found {}", err);
-                    process::exit(1)
-                }
-            };
+            let mut gff_reader;
+            if m.is_present("gff") {
+                let gff_file = m.value_of("gff").unwrap();
+                gff_reader = gff::Reader::from_file(gff_file,
+                                                    gff::GffType::GFF3)
+                                                    .expect("GFF File not found");
+            } else {
+                external_command_checker::check_for_prodigal();
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     prodigal -f gff -i {} -o {} {}",
+                    // prodigal
+                    m.value_of("reference").unwrap(),
+                    m.value_of("reference").unwrap().to_owned()+".gff",
+                    m.value_of("prodigal-params").unwrap_or(""));
+                debug!("Queuing cmd_string: {}", cmd_string);
+                let mut prodigal_out = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .output()
+                    .expect("Failed to run prodigal");
+//                let mut buffer = Vec::new();
+//                let mut prodigal_file = prodigal_out.stdout
+//                    .to_string().as_bytes()
+//                    .read(&mut buffer).unwrap();
+
+                gff_reader = gff::Reader::from_file(m.value_of("reference").unwrap().to_owned()+".gff",
+                                              gff::GffType::GFF3)
+                                                .expect("Failed to create GFF file");
+            }
 
 
             if m.is_present("bam-files") {
@@ -1470,6 +1618,34 @@ See lorikeet polymorph --full-help for further options and further detail.
 the unfiltered BAM files in the saved_bam_files folder:")
         ).to_string();
 
+        static ref EVOLVE_HELP: String = format!(
+            "
+                            {}
+              {}
+
+{}
+
+  lorikeet evolve --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
+
+{}
+
+  lorikeet evolve --method metabat --bam-files my.bam --reference assembly.fna
+    --bam-file-cache-directory saved_bam_files --threads 10
+
+See lorikeet evolve --full-help for further options and further detail.
+",
+            ansi_term::Colour::Green.paint(
+                "lorikeet evolve"),
+            ansi_term::Colour::Green.paint(
+                "Generate variant positions along contigs with a sample"),
+            ansi_term::Colour::Purple.paint(
+                "Example: Calculate variant positions from reads and assembly:"),
+            ansi_term::Colour::Purple.paint(
+                "Example: Calculate variant positions using MetaBAT adjusted coverage from a sorted BAM file, saving
+the unfiltered BAM files in the saved_bam_files folder:")
+        ).to_string();
+
+
         static ref SUMMARIZE_HELP: String = format!(
             "
                             {}
@@ -1722,9 +1898,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("quiet")
                     .long("quiet")))
         .subcommand(
-            SubCommand::with_name("codons")
+            SubCommand::with_name("evolve")
                 .about("Pinpoint sites of synonymous and non-synonymous mutations")
-                .help(SUMMARIZE_HELP.as_str())
+                .help(EVOLVE_HELP.as_str())
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
 
@@ -1738,17 +1914,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("gff")
                     .short("g")
                     .long("gff")
+                    .takes_value(true))
+                .arg(Arg::with_name("prodigal-params")
+                    .long("prodigal-params")
                     .takes_value(true)
-                    .required_unless(
-                        "gene-caller"))
-                .arg(Arg::with_name("gene-caller")
-                    .long("gene-caller")
-                    .takes_value(true)
-                    .required_unless("gff")
-                    .possible_values(&[
-                        "prokka",
-                        "prodigal",
-                        "roary"]))
+                    .conflicts_with("gff"))
                 .arg(Arg::with_name("sharded")
                     .long("sharded")
                     .required(false))
