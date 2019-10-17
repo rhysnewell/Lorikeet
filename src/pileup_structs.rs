@@ -5,6 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
 use rayon::prelude::*;
 use permutation::*;
+use codon_structs::*;
+use bio::io::gff;
+
 
 
 #[derive(Debug, Clone)]
@@ -90,6 +93,11 @@ pub trait PileupFunctions {
     fn generate_genotypes(&mut self);
 
     fn calc_coverage(&mut self, total_mismatches: u32, method: &str) -> f32;
+
+    fn calc_gene_mutations(&mut self,
+                           gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
+                           ref_sequence: Vec<u8>,
+                           codon_table: &CodonTable);
 
     fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32);
 }
@@ -759,6 +767,13 @@ impl PileupFunctions for PileupStats {
                 }
             }
         }
+    }
+
+    fn calc_gene_mutations(&mut self,
+                           gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
+                           ref_sequence: Vec<u8>,
+                           codon_table: &CodonTable) {
+
     }
 
     fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32){
