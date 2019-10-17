@@ -57,6 +57,9 @@ impl CodonTable {
 
 pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
+    fn find_mutations(&mut self,
+                      gene: bio::io::gff::Record,
+                      variant_abundances: Vec<HashMap<String, f32>>)
 }
 
 impl Translations for CodonTable {
@@ -76,5 +79,22 @@ impl Translations for CodonTable {
         }
         self.aminos = amino_hash;
         self.starts = start_hash;
+    }
+
+    fn find_mutations(&self,
+                      gene: &bio::io::gff::Record,
+                      variant_abundances: Vec<HashMap<String, f32>>) {
+        let strand = gene.strand().expect("No strandedness found");
+        // bio::gff documentation says start and end positions are 1-based, so we minus 1
+        // Additionally, end position is non-inclusive
+        let start = gene.start().clone() as usize - 1;
+        let end = gene.end().clone() as usize - 1;
+        let frame = gene.frame();
+        for variant_map in variant_abundances[start..end] {
+            if variant_map.len() > 0 {
+
+            }
+
+        }
     }
 }

@@ -788,10 +788,7 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 for gene in gff_records{
-                    let strand = gene.strand().expect("No strandedness found");
-                    let start = gene.start().clone() as usize - 1;
-                    let end = gene.end().clone() as usize - 1;
-//                    codon_table.find_mutations(gene, indels, variant_abundance)
+                    codon_table.find_mutations(gene, variant_abundance)
                 }
             }
         }
