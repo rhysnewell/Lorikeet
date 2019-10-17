@@ -6,6 +6,7 @@ use rust_htslib::bam::record::Cigar;
 
 use pileup_structs::*;
 use pileup_matrix::*;
+use codon_structs::*;
 use bam_generator::*;
 use FlagFilter;
 
@@ -13,6 +14,7 @@ use std::str;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use bio::io::gff::Record;
 
 
 pub fn predict_evolution<R: NamedBamReader,
@@ -43,6 +45,8 @@ pub fn predict_evolution<R: NamedBamReader,
             .or_insert(Vec::new());
         contig_genes.push(rec);
     }
+    let mut codon_table = CodonTable::setup();
+    codon_table.get_codon_table(11);
 
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
@@ -127,7 +131,7 @@ pub fn predict_evolution<R: NamedBamReader,
                         let total_mismatches = total_edit_distance_in_current_contig -
                             total_indels_in_current_contig;
 
-                        process_previous_contigs_var(
+                        process_previous_contigs_mut(
                             last_tid,
                             depth,
                             nuc_freq,
@@ -144,7 +148,9 @@ pub fn predict_evolution<R: NamedBamReader,
                             print_consensus,
                             sample_idx,
                             method,
-                            total_mismatches);
+                            total_mismatches,
+                            &gff_map,
+                            &codon_table);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -269,7 +275,7 @@ pub fn predict_evolution<R: NamedBamReader,
             let total_mismatches = total_edit_distance_in_current_contig -
                 total_indels_in_current_contig;
 
-            process_previous_contigs_var(
+            process_previous_contigs_mut(
                 last_tid,
                 depth,
                 nuc_freq,
@@ -286,7 +292,9 @@ pub fn predict_evolution<R: NamedBamReader,
                 print_consensus,
                 sample_idx,
                 method,
-                total_mismatches);
+                total_mismatches,
+                &gff_map,
+                &codon_table);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -308,7 +316,7 @@ pub fn predict_evolution<R: NamedBamReader,
     };
 }
 
-fn process_previous_contigs_var(
+fn process_previous_contigs_mut(
     last_tid: i32,
     depth: Vec<usize>,
     nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
@@ -325,7 +333,9 @@ fn process_previous_contigs_var(
     print_consensus: bool,
     sample_idx: i32,
     method: &str,
-    total_mismatches: u32) {
+    total_mismatches: u32,
+    gff_map: &HashMap<String, Vec<Record>>,
+    codon_table: &CodonTable) {
 
     if last_tid != -2 {
 
@@ -352,6 +362,9 @@ fn process_previous_contigs_var(
 
         // calculates minimum number of genotypes possible for each variant location
         pileup_struct.generate_genotypes();
+
+        // calculate in gene mutations
+        pileup_struct.calc_gene_mutations(gff_map, ref_sequence.clone(), codon_table);
 
         // prints results of variants calling
         pileup_struct.print_variants(ref_sequence.clone(), sample_idx);

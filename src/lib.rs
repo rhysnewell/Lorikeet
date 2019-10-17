@@ -12,6 +12,7 @@ pub mod bwa_index_maintenance;
 pub mod coverage_takers;
 pub mod mapping_parameters;
 pub mod genes_and_codons;
+pub mod codon_structs;
 pub mod mapping_index_maintenance;
 pub mod coverage_printer;
 pub mod shard_bam_reader;
