@@ -12,6 +12,9 @@ extern crate rust_htslib;
 use rust_htslib::bam;
 use rust_htslib::bam::Read;
 
+extern crate seq_io;
+use seq_io::fasta;
+
 extern crate bio;
 use bio::io::gff;
 use bio::alignment::sparse::*;
@@ -1470,7 +1473,7 @@ fn run_pileup_contigs<'a,
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
     let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
     let reference_path = Path::new(m.value_of("reference").unwrap());
-    let fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path){
+    let fasta_reader = match fasta::Reader::from_path(reference_path){
         Ok(reader) => reader,
         Err(e) => {
             eprintln!("Missing or corrupt fasta file {}", e);
@@ -1496,7 +1499,7 @@ fn run_pileup_contigs<'a,
                                     min must be less than max, found {} and {}", min, max);
     }
 
-    let contigs = fasta_reader.records().collect_vec();
+    let contigs = fasta_reader.into_records().collect_vec();
     // Initialize bound contig variable
     let mut tet_freq = BTreeMap::new();
     let contig_count = contigs.len();
@@ -1504,9 +1507,8 @@ fn run_pileup_contigs<'a,
     let mut contig_names = vec![String::new(); contig_count];
     for contig in contigs{
         let contig = contig.unwrap();
-        contig_names[contig_idx] = contig.id().to_string();
-        debug!("Parsing contig: {}", contig.id());
-        let kmers = hash_kmers(contig.seq(), kmer_size);
+        contig_names[contig_idx] = String::from_utf8(contig.head).unwrap();
+        let kmers = hash_kmers(&contig.seq, kmer_size);
         // Get kmer counts in a contig
         for (kmer, pos) in kmers {
             let k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);

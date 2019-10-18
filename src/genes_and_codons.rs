@@ -1,4 +1,5 @@
 use bio::io::gff;
+use bio::alphabets::dna;
 use std;
 use std::collections::{HashMap, HashSet};
 use rust_htslib::bam;
