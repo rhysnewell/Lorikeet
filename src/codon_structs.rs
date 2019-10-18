@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::str;
-use itertools::izip;
+use itertools::{izip, Itertools};
 
 pub struct CodonTable {
     aminos: HashMap<char, HashSet<String>>,
@@ -57,9 +57,10 @@ impl CodonTable {
 
 pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
-    fn find_mutations(&mut self,
-                      gene: bio::io::gff::Record,
-                      variant_abundances: Vec<HashMap<String, f32>>)
+    fn find_mutations(&self,
+                      gene: &bio::io::gff::Record,
+                      variant_abundances: &Vec<HashMap<String, f32>>,
+                      ref_sequence: &Vec<u8>);
 }
 
 impl Translations for CodonTable {
@@ -83,18 +84,26 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: Vec<HashMap<String, f32>>) {
+                      variant_abundances: &Vec<HashMap<String, f32>>,
+                      ref_sequence: &Vec<u8>) {
         let strand = gene.strand().expect("No strandedness found");
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
         // Additionally, end position is non-inclusive
         let start = gene.start().clone() as usize - 1;
         let end = gene.end().clone() as usize - 1;
-        let frame = gene.frame();
-        for variant_map in variant_abundances[start..end] {
+        let frame: usize = gene.frame().parse().unwrap();
+        let gene_sequence = ref_sequence[start..end].to_vec();
+        for variant_map in variant_abundances[start..end].to_vec() {
             if variant_map.len() > 0 {
 
             }
 
         }
     }
+}
+
+pub fn get_codons(sequence: Vec<u8>, frame: usize) -> Vec<Vec<u8>> {
+    let codons = sequence[0+frame..].chunks(3)
+        .map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>();
+    return codons
 }
