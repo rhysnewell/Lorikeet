@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::str;
 use itertools::{izip, Itertools};
+use bio::alphabets::dna;
+use bio_types::strand;
+
 
 pub struct CodonTable {
     aminos: HashMap<char, HashSet<String>>,
@@ -87,6 +90,7 @@ impl Translations for CodonTable {
                       variant_abundances: &Vec<HashMap<String, f32>>,
                       ref_sequence: &Vec<u8>) {
         let strand = gene.strand().expect("No strandedness found");
+
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
         // Additionally, end position is non-inclusive
         let start = gene.start().clone() as usize - 1;
@@ -102,8 +106,16 @@ impl Translations for CodonTable {
     }
 }
 
-pub fn get_codons(sequence: Vec<u8>, frame: usize) -> Vec<Vec<u8>> {
-    let codons = sequence[0+frame..].chunks(3)
-        .map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>();
+pub fn get_codons(sequence: Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
+
+    let codons = match strandedness{
+        strand::Strand::Forward | strand::Strand::Unknown => {
+            sequence[0+frame..].chunks(3).map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>()
+        },
+        strand::Strand::Reverse => {
+            let rc = dna::revcomp(sequence);
+            rc[0+frame..].chunks(3).map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>()
+        }
+    };
     return codons
 }
