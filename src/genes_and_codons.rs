@@ -368,7 +368,7 @@ fn process_previous_contigs_mut(
         pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
 
         // prints results of variants calling
-        pileup_struct.print_variants(&ref_sequence, sample_idx);
+//        pileup_struct.print_variants(&ref_sequence, sample_idx);
 
         if print_consensus {
             // Write consensus contig to fasta
