@@ -1,13 +1,13 @@
 [package]
 
 name = "lorikeet"
-version = "0.2.1"
+version = "0.2.5"
 authors = ["Rhys Newell <r.newell@uq.net.au>"]
 license = "GPL-3.0"
 description = "Strain resolver for metagenomics"
-homepage = "https://github.com/rhysnewell/StrainM"
-repository = "https://github.com/rhysnewell/StrainM"
-documentation = "https://github.com/rhysnewell/StrainM"
+homepage = "rhysnewell.github.io/Lorikeet/"
+repository = "https://github.com/rhysnewell/Lorikeet"
+documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
 exclude = [ # Max upload is 10MB, as of writing test data was 15MB
   "tests/*"
@@ -17,6 +17,7 @@ exclude = [ # Max upload is 10MB, as of writing test data was 15MB
 [dependencies]
 rusty-machine = "0.5.4"
 bio = "0.29.*"
+bio-types = "0.5.*"
 rust-htslib = "0.26.*"
 clap = "2.*"
 log = "0.4.*"
@@ -34,6 +35,7 @@ itertools = "*"
 ndarray = "0.12.*"
 rayon = "1.2.*"
 permutation = "0.2.5"
+seq_io = "0.3.*"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
