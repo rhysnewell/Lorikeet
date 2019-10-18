@@ -608,7 +608,7 @@ fn process_previous_contigs_var(
         pileup_struct.generate_genotypes();
 
         // prints results of variants calling
-        pileup_struct.print_variants(ref_sequence.clone(), sample_idx);
+        pileup_struct.print_variants(&ref_sequence, sample_idx);
 
         if print_consensus {
             // Write consensus contig to fasta

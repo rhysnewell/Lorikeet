@@ -96,10 +96,10 @@ pub trait PileupFunctions {
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
-                           ref_sequence: Vec<u8>,
+                           ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable);
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32);
+    fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32);
 }
 
 impl PileupFunctions for PileupStats {
@@ -770,7 +770,7 @@ impl PileupFunctions for PileupStats {
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
-                           ref_sequence: Vec<u8>,
+                           ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable) {
         match self {
             PileupStats::PileupContigStats {
@@ -788,14 +788,14 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 for gene in gff_records{
-                    codon_table.find_mutations(gene, variant_abundance)
+                    codon_table.find_mutations(gene, variant_abundances, ref_sequence)
                 }
             }
         }
 
     }
 
-    fn print_variants(&mut self, ref_sequence: Vec<u8>, sample_idx: i32){
+    fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32){
         match self {
             PileupStats::PileupContigStats {
                 indels,
