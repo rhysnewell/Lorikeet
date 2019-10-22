@@ -153,10 +153,8 @@ impl Translations for CodonTable {
             let codon_cursor = gene_cursor % 3;
 
             if codon_cursor == 0 {
-                debug!("Starting new codon {}", codon_idx);
                 for new_codon in new_codons {
-
-                    if (codon.len() == 3) & (new_codon.len() == 3) {
+                    if (codon.len() == 3) & (new_codon.len() == 3) & (codon != new_codon){
                         // get indices of different locations
                         let mut pos = 0 as usize;
                         let mut diffs = vec!();
@@ -167,7 +165,6 @@ impl Translations for CodonTable {
                             pos += 1;
                         }
                         // get permuations of positions
-                        debug!("different positions {:?}", diffs);
                         let heap = Heap::new(&mut diffs);
                         let mut permutations = Vec::new();
                         for data in heap {
@@ -176,10 +173,10 @@ impl Translations for CodonTable {
                         // calculate synonymous and non-synonymous for each permutation
                         let mut ns = 0;
                         let mut ss = 0;
+                        debug!("positional difference {:?} permutations {:?}", diffs, permutations);
                         for permutation in permutations.iter() {
                             let mut shifting = codon.clone();
                             let mut old_shift;
-                            debug!("new permutation {:?}", permutation);
                             for pos in permutation {
                                 old_shift = shifting.clone();
                                 shifting[*pos] = new_codon[*pos];
@@ -202,10 +199,13 @@ impl Translations for CodonTable {
                 new_codons = Vec::new();
                 new_codons.push(codon.clone());
             }
-            debug!("variant_map {:?}", variant_map);
             if variant_map.len() > 0 {
+                debug!("variant map {:?}", variant_map);
                 let mut variant_count = 0;
-                for variant in variant_map.keys() {
+                let mut variant_vec: Vec<_> = variant_map.iter().collect();
+                // We look at the most abundant variant first for consistency
+                variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+                for (variant, frac) in variant_vec.iter() {
                     if (variant.len() > 1) | variant.contains("N") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
@@ -215,14 +215,15 @@ impl Translations for CodonTable {
                     let variant = variant.as_bytes().to_vec();
                     if variant_count > 0 {
                         // Create a copy of codon up to this point
-                        new_codons.push(new_codons[variant_count - 1].clone());
+                        // Not sure if reusing previous variants is bad, but
+                        // not doing so can cause randomness to dN/dS values
+                        new_codons.push(new_codons[0].clone());
                         debug!("multi variant codon {:?}", new_codons);
                     }
-                    for variant_codon in 0..variant_count {
-                        new_codons[variant_codon][codon_cursor] = variant[0];
-                        debug!("variant codon {:?}", new_codons);
-
+                    for var_idx in 0..new_codons.len() {
+                        new_codons[var_idx][codon_cursor] = variant[0];
                     }
+                    debug!("variant codons {:?}", new_codons);
                     variant_count += 1;
                 }
             }
