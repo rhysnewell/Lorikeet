@@ -39,7 +39,7 @@ pub fn predict_evolution<R: NamedBamReader,
     let include_soft_clipping = false;
     let mut gff_map = HashMap::new();
     // Print file header
-    println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
+//    println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
     for record in gff_reader.records() {
         let rec = record.unwrap();
         let contig_genes = gff_map.entry(rec.seqname().to_owned())
@@ -100,7 +100,6 @@ pub fn predict_evolution<R: NamedBamReader,
         // for record in records
         while bam_generated.read(&mut record)
             .expect("Error while reading BAM record") == true {
-            debug!("Starting with a new read.. {:?}", record);
             if (!flag_filters.include_supplementary && record.is_supplementary()) ||
                 (!flag_filters.include_secondary && record.is_secondary()) ||
                 (!flag_filters.include_improper_pairs && !record.is_proper_pair()){
@@ -183,15 +182,13 @@ pub fn predict_evolution<R: NamedBamReader,
                 num_mapped_reads_in_current_contig += 1;
 
                 // for each chunk of the cigar string
-                debug!("read name {:?}", std::str::from_utf8(record.qname()).unwrap());
+//                debug!("read name {:?}", std::str::from_utf8(record.qname()).unwrap());
                 let mut cursor: usize = record.pos() as usize;
                 let mut read_cursor: usize = 0;
                 for cig in record.cigar().iter() {
-                    debug!("Found cigar {:} from {}", cig, cursor);
                     match cig {
                         Cigar::Match(_) | Cigar::Diff(_) | Cigar::Equal(_) => {
                             // if M, X, or = increment start and decrement end index
-                            debug!("Adding M, X, or = at {} and {}", cursor, cursor + cig.len() as usize);
                             ups_and_downs[cursor] += 1;
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 base = record.seq()[qpos] as char;
@@ -268,7 +265,6 @@ pub fn predict_evolution<R: NamedBamReader,
                     }
                 };
 
-                debug!("At end of loop")
             }
         } if last_tid != -2 {
             let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
