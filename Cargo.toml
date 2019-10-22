@@ -36,6 +36,7 @@ ndarray = "0.12.*"
 rayon = "1.2.*"
 permutation = "0.2.5"
 seq_io = "0.3.*"
+permutohedron = "0.2.4"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
