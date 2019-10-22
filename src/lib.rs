@@ -24,6 +24,7 @@ pub mod distance;
 extern crate bio;
 extern crate bio_types;
 extern crate seq_io;
+extern crate permutohedron;
 #[macro_use]
 extern crate log;
 extern crate rusty_machine as rm;

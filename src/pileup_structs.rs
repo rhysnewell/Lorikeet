@@ -778,6 +778,7 @@ impl PileupFunctions for PileupStats {
                 variant_abundances,
                 tid,
                 target_name,
+                depth,
                 ..
             } => {
                 let contig_name = String::from_utf8(target_name.clone())
@@ -788,7 +789,7 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 for gene in gff_records{
-                    codon_table.find_mutations(gene, variant_abundances, ref_sequence)
+                    codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth)
                 }
             }
         }
