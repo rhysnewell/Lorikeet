@@ -634,8 +634,6 @@ impl PileupFunctions for PileupStats {
                 }
 
                 let total_bases = *observed_contig_length;
-                debug!("Calculating coverage with num_covered_bases {}, observed_length {} and counts {:?}",
-                       num_covered_bases, observed_contig_length, counts);
 
                 let mut answer;
                 match method {

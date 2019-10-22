@@ -89,7 +89,8 @@ impl Translations for CodonTable {
         self.aminos = amino_hash;
         self.starts = start_hash;
 
-        let nucleotides: Vec<u8> = vec!(41, 54, 43, 47);
+        let nucleotides: Vec<u8> = vec!(65, 84, 67, 71);
+        debug!("nucleotides: {} ", String::from_utf8_lossy(&nucleotides));
         for (codon, aa) in self.aminos.iter(){
             let mut n = 0.0;
             for (pos, cod) in codon.iter().enumerate() {
@@ -123,7 +124,7 @@ impl Translations for CodonTable {
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
         // Additionally, end position is non-inclusive
         let start = gene.start().clone() as usize - 1;
-        let end = gene.end().clone() as usize - 1;
+        let end = gene.end().clone() as usize;
         let frame: usize = gene.frame().parse().unwrap();
         let gene_sequence = ref_sequence[start..end].to_vec();
         debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
@@ -132,6 +133,7 @@ impl Translations for CodonTable {
         // Calculate N and S
         let mut N: f32 = 0.0;
         let mut S: f32 = 0.0;
+        debug!("getting ns_sites");
         for codon in codon_sequence.iter() {
             let n = self.ns_sites[codon];
             N += n;
@@ -151,7 +153,9 @@ impl Translations for CodonTable {
             let codon_cursor = gene_cursor % 3;
 
             if codon_cursor == 0 {
+                debug!("Starting new codon {}", codon_idx);
                 for new_codon in new_codons {
+
                     if (codon.len() == 3) & (new_codon.len() == 3) {
                         // get indices of different locations
                         let mut pos = 0 as usize;
@@ -163,6 +167,7 @@ impl Translations for CodonTable {
                             pos += 1;
                         }
                         // get permuations of positions
+                        debug!("different positions {:?}", diffs);
                         let heap = Heap::new(&mut diffs);
                         let mut permutations = Vec::new();
                         for data in heap {
@@ -174,9 +179,11 @@ impl Translations for CodonTable {
                         for permutation in permutations.iter() {
                             let mut shifting = codon.clone();
                             let mut old_shift;
+                            debug!("new permutation {:?}", permutation);
                             for pos in permutation {
                                 old_shift = shifting.clone();
                                 shifting[*pos] = new_codon[*pos];
+                                debug!("Old shift {:?}, new {:?}", old_shift, shifting);
                                 if self.aminos[&old_shift] != self.aminos[&shifting] {
                                     ns += 1;
                                 } else {
@@ -195,11 +202,11 @@ impl Translations for CodonTable {
                 new_codons = Vec::new();
                 new_codons.push(codon.clone());
             }
-
+            debug!("variant_map {:?}", variant_map);
             if variant_map.len() > 0 {
                 let mut variant_count = 0;
                 for variant in variant_map.keys() {
-                    if variant.len() > 1 {
+                    if (variant.len() > 1) | variant.contains("N") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
                         debug!("Frameshift mutation variant {:?}", variant);
@@ -208,21 +215,28 @@ impl Translations for CodonTable {
                     let variant = variant.as_bytes().to_vec();
                     if variant_count > 0 {
                         // Create a copy of codon up to this point
-                        new_codons.push(new_codons[variant_count - 1].clone())
+                        new_codons.push(new_codons[variant_count - 1].clone());
+                        debug!("multi variant codon {:?}", new_codons);
                     }
                     for variant_codon in 0..variant_count {
                         new_codons[variant_codon][codon_cursor] = variant[0];
+                        debug!("variant codon {:?}", new_codons);
+
                     }
                     variant_count += 1;
                 }
             }
         }
 
+        debug!("Nd {} N {}, Sd {} S {}", Nd, N, Sd, S);
         let pn = Nd/N;
         let ps = Sd/S;
-        let dN = -(3.0/4.0)*(1.0-(4.0*pn)/3.0).ln();
-        let dS = -(3.0/4.0)*(1.0-(4.0*ps)/3.0).ln();
-        return dN/dS
+        debug!("pn {} ps {}", pn, ps);
+        let d_n = -(3.0/4.0)*(1.0-(4.0*pn)/3.0).ln();
+        let d_s = -(3.0/4.0)*(1.0-(4.0*ps)/3.0).ln();
+        debug!("dN {} dS {}", d_n, d_s);
+
+        return d_n/d_s
     }
 }
 
