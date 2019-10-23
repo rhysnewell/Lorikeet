@@ -1638,7 +1638,7 @@ See lorikeet evolve --full-help for further options and further detail.
             ansi_term::Colour::Green.paint(
                 "lorikeet evolve"),
             ansi_term::Colour::Green.paint(
-                "Generate variant positions along contigs with a sample"),
+                "Calculate dN/dS values of genes based on read mappings"),
             ansi_term::Colour::Purple.paint(
                 "Example: Calculate variant positions from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
@@ -1719,7 +1719,7 @@ Usage: lorikeet <subcommand> ...
 Main subcommands:
 \tpolymorph\tCalculate variants along contig positions
 \tsummarize\tSummarizes contig stats from multiple samples
-\tevolve\tCalculate dN/dS values for genes from read mappings
+\tevolve   \tCalculate dN/dS values for genes from read mappings
 
 Less used utility subcommands:
 \tkmer\tCalculate kmer frequencies within contigs
