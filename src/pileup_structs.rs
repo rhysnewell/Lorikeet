@@ -816,7 +816,7 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
-                variant_abundances.par_iter().enumerate().for_each(|(position, hash)|{
+                variant_abundances.iter().enumerate().for_each(|(position, hash)|{
                     // loop through each position that has variants
 //                    let position = *position as usize;
                     let d = depth[position];
