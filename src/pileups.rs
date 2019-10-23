@@ -559,6 +559,7 @@ pub fn pileup_contigs<R: NamedBamReader,
         bam_generated.finish();
         sample_idx += 1;
     }
+    info!("Writing out contig statistics");
     pileup_matrix.print_stats(output_prefix);
 }
 

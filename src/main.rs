@@ -1339,6 +1339,26 @@ fn get_streamed_filtered_bam_readers(
     return generator_set;
 }
 
+fn generate_faidx(m: &clap::ArgMatches) -> bio::io::fasta::IndexedReader<File> {
+    external_command_checker::check_for_samtools();
+    info!("Generating reference index");
+    let cmd_string = format!(
+        "set -e -o pipefail; \
+                     samtools faidx {}",
+        m.value_of("reference").unwrap());
+    debug!("Queuing cmd_string: {}", cmd_string);
+    let mut prodigal_out = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(&cmd_string)
+        .stdout(Stdio::piped())
+        .output()
+        .expect("Unable to execute bash");
+
+    let reference_path = Path::new(m.value_of("reference").unwrap());
+    return bio::io::fasta::IndexedReader::from_file(&reference_path).expect(
+        "Unable to generate index")
+}
+
 fn run_codons<'a,
     R: lorikeet::bam_generator::NamedBamReader,
     T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
@@ -1361,10 +1381,7 @@ fn run_codons<'a,
 //            let index_path = reference_path.clone().to_owned() + ".fai";
     let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
         Ok(reader) => reader,
-        Err(e) => {
-            eprintln!("Missing or corrupt fasta file {}", e);
-            process::exit(1);
-        },
+        Err(e) => generate_faidx(m),
     };
     let threads = m.value_of("threads").unwrap().parse().unwrap();
 
@@ -1422,10 +1439,7 @@ fn run_pileup<'a,
 //            let index_path = reference_path.clone().to_owned() + ".fai";
     let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
         Ok(reader) => reader,
-        Err(e) => {
-            eprintln!("Missing or corrupt fasta file {}", e);
-            process::exit(1);
-        },
+        Err(e) => generate_faidx(m),
     };
     let threads = m.value_of("threads").unwrap().parse().unwrap();
 
@@ -1539,10 +1553,7 @@ fn run_pileup_contigs<'a,
 
     let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
         Ok(reader) => reader,
-        Err(e) => {
-            eprintln!("Missing or corrupt fasta file or no index file {}", e);
-            process::exit(1);
-        },
+        Err(e) => generate_faidx(m),
     };
 
     lorikeet::pileups::pileup_contigs(
@@ -1640,9 +1651,9 @@ See lorikeet evolve --full-help for further options and further detail.
             ansi_term::Colour::Green.paint(
                 "Calculate dN/dS values of genes based on read mappings"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate variant positions from reads and assembly:"),
+                "Example: Calculate gene dN/dS values from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate variant positions using MetaBAT adjusted coverage from a sorted BAM file, saving
+                "Example: Calculate gene dN/dS values using MetaBAT adjusted coverage from a sorted BAM file, saving
 the unfiltered BAM files in the saved_bam_files folder:")
         ).to_string();
 
