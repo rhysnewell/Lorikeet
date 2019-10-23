@@ -133,12 +133,14 @@ impl Translations for CodonTable {
         // Calculate N and S
         let mut N: f32 = 0.0;
         let mut S: f32 = 0.0;
-        debug!("getting ns_sites");
         for codon in codon_sequence.iter() {
             let n = self.ns_sites[codon];
             N += n;
             S += 3.0 - n;
         }
+
+        debug!("getting ns_sites N {} S {}", N, S);
+
         // Create Nd and Sd values
         let mut Nd: f32 = 0.0;
         let mut Sd: f32 = 0.0;
@@ -148,6 +150,8 @@ impl Translations for CodonTable {
         // Note, we don't normalize for depth here
         let mut codon: Vec<u8> = vec!();
         let mut new_codons: Vec<Vec<u8>> = vec!();
+        let mut positionals = 0;
+        let mut total_variants = 0;
         for (gene_cursor, variant_map) in variant_abundances[start..end].to_vec().iter().enumerate() {
             let codon_idx = gene_cursor / 3 as usize;
             let codon_cursor = gene_cursor % 3;
@@ -164,6 +168,7 @@ impl Translations for CodonTable {
                             }
                             pos += 1;
                         }
+                        total_variants += diffs.len();
                         // get permuations of positions
                         let heap = Heap::new(&mut diffs);
                         let mut permutations = Vec::new();
@@ -173,11 +178,13 @@ impl Translations for CodonTable {
                         // calculate synonymous and non-synonymous for each permutation
                         let mut ns = 0;
                         let mut ss = 0;
-                        debug!("positional difference {:?} permutations {:?}", diffs, permutations);
+                        debug!("positional difference {:?} permutations {:?}", diffs, permutations.len());
+                        positionals += permutations.len();
                         for permutation in permutations.iter() {
                             let mut shifting = codon.clone();
                             let mut old_shift;
                             for pos in permutation {
+                                // Check if one amino acid change causes an syn or non-syn
                                 old_shift = shifting.clone();
                                 shifting[*pos] = new_codon[*pos];
                                 debug!("Old shift {:?}, new {:?}", old_shift, shifting);
@@ -217,11 +224,13 @@ impl Translations for CodonTable {
                         // Create a copy of codon up to this point
                         // Not sure if reusing previous variants is bad, but
                         // not doing so can cause randomness to dN/dS values
-                        new_codons.push(new_codons[0].clone());
+                        new_codons.push(codon.clone());
+                        new_codons[variant_count][codon_cursor] = variant[0];
                         debug!("multi variant codon {:?}", new_codons);
-                    }
-                    for var_idx in 0..new_codons.len() {
-                        new_codons[var_idx][codon_cursor] = variant[0];
+                    } else {
+                        for var_idx in 0..new_codons.len() {
+                            new_codons[var_idx][codon_cursor] = variant[0];
+                        }
                     }
                     debug!("variant codons {:?}", new_codons);
                     variant_count += 1;
@@ -229,7 +238,8 @@ impl Translations for CodonTable {
             }
         }
 
-        debug!("Nd {} N {}, Sd {} S {}", Nd, N, Sd, S);
+        debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
+               Nd, N, Sd, S, positionals, total_variants);
         let pn = Nd/N;
         let ps = Sd/S;
         debug!("pn {} ps {}", pn, ps);
