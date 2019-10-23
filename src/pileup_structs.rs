@@ -346,8 +346,9 @@ impl PileupFunctions for PileupStats {
                         tid, target_len, variations_per_base, coverage);
 
                 variant_abundances.par_iter().enumerate().for_each(|(position, variants)| {
+                    // For each variant we calculate the minimum number of genotypes possible
+                    // based on variants in reads mapping to this variant location
                     if variants.len() > 0 {
-//                        let position = position as usize;
                         let mut genotype_record;
 
                         let genotypes = Arc::clone(&genotypes);
@@ -404,9 +405,12 @@ impl PileupFunctions for PileupStats {
                                 left_most_variants.push(
                                     *position_map.keys().cloned().collect::<Vec<i32>>().iter().min().unwrap());
                             }
+                            // Generate the permutation of read id indices that create this list ordering
                             let permuted = permutation::sort(&left_most_variants[..]);
+                            // Order the read vec by this permutation
                             let read_vec_sorted = permuted.apply_slice(&read_vec[..]);
 
+                            // Loop through reads based on their left most variant position
                             for read_id in read_vec_sorted.iter() {
                                 let position_map = match variants_in_reads.get(read_id) {
                                     Some(positions) => positions,
@@ -415,7 +419,9 @@ impl PileupFunctions for PileupStats {
                                         break
                                     },
                                 };
+
                                 if genotype_vec.len() == 0 {
+                                    // No genotype observed yet, so create one
                                     genotype_record.read_ids.insert(*read_id);
                                     for (pos, variant) in position_map.iter() {
                                         genotype_record.base_positions.push(pos.clone());
@@ -431,11 +437,14 @@ impl PileupFunctions for PileupStats {
                                     let mut new_genotype = false;
 
                                     for genotype in genotype_vec.iter_mut() {
+
+                                        // Create HashSets of variant positions to use intersection
                                         let genotype_position_set =
                                             genotype.base_positions.iter().cloned().collect::<HashSet<i32>>();
 
                                         let diff: Vec<i32> = genotype_position_set
                                             .symmetric_difference(&position_set).cloned().collect();
+
                                         if diff.len() > 0 {
                                             // Positional difference found
                                             // Check if new genotype
@@ -552,6 +561,7 @@ impl PileupFunctions for PileupStats {
                                         }
                                     }
                                     if genotype_record.base_positions.len() > 0 {
+                                        // New genotype detected
                                         genotype_vec.push(genotype_record);
 
                                         genotype_record = Genotype {
@@ -786,10 +796,10 @@ impl PileupFunctions for PileupStats {
                     Some(records) => records,
                     None => &placeholder,
                 };
-                for gene in gff_records{
+                gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     println!("for gene {} {}-{}, dN/dS is {}", gene.seqname(), gene.start(), gene.end(), dnds);
-                }
+                })
             }
         }
 
