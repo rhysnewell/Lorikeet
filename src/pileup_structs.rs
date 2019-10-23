@@ -789,7 +789,6 @@ impl PileupFunctions for PileupStats {
                 for gene in gff_records{
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     println!("for gene {} {}-{}, dN/dS is {}", gene.seqname(), gene.start(), gene.end(), dnds);
-                    break
                 }
             }
         }

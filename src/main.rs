@@ -1712,13 +1712,14 @@ See lorikeet filter --full-help for further options and further detail.
         .args_from_usage("-v, --verbose       'Print extra debug logging information'
              -q, --quiet         'Unless there is an error, do not print logging information'")
         .help("
-Mapping coverage analysis for metagenomics
+Strain genotyping analysis for metagenomics
 
 Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tpolymorph\tCalculate variants along contig positions
 \tsummarize\tSummarizes contig stats from multiple samples
+\tevolve\tCalculate dN/dS values for genes from read mappings
 
 Less used utility subcommands:
 \tkmer\tCalculate kmer frequencies within contigs
