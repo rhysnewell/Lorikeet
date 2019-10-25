@@ -7,6 +7,8 @@ use rayon::prelude::*;
 use permutation::*;
 use codon_structs::*;
 use bio::io::gff;
+use bio_types::strand;
+
 
 
 
@@ -36,10 +38,13 @@ pub enum PileupStats {
         variance: f32,
         observed_contig_length: u32,
         num_covered_bases: i32,
+        num_mapped_reads: u64,
+        total_mismatches: u32,
         contig_end_exclusion: u32,
         min_fraction_covered_bases: f32,
         min: f32,
         max: f32,
+        method: String,
     }
 }
 
@@ -64,6 +69,8 @@ impl PileupStats {
             observed_contig_length: 0,
             num_covered_bases: 0,
             contig_end_exclusion: contig_end_exclusion,
+            num_mapped_reads: 0,
+            total_mismatches: 0,
             min_fraction_covered_bases: min_fraction_covered_bases,
             min: min,
             max: max,
@@ -76,15 +83,18 @@ pub trait PileupFunctions {
 
     fn add_contig(&mut self,
                   nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                  read_depth: Vec<usize>,
                   indels_positions: Vec<HashMap<String, HashSet<i32>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
-                  contig_len: usize);
+                  contig_len: usize,
+                  method: &str,
+                  coverages: Vec<f32>,
+                  ups_and_downs: Vec<i32>);
 
     fn calc_variants(&mut self,
-                     min_variant_depth: usize);
+                     min_variant_depth: usize,
+                     coverage_fold: f32);
 
     fn generate_variant_contig(&mut self,
                                original_contig: Vec<u8>,
@@ -118,6 +128,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variations_per_base,
                 ref mut coverage,
                 ref mut num_covered_bases,
+                ref mut num_mapped_reads,
                 ..
             } => {
                 *nucfrequency = vec!();
@@ -132,17 +143,21 @@ impl PileupFunctions for PileupStats {
                 *variations_per_base = 0.00;
                 *coverage = 0.00;
                 *num_covered_bases = 0;
+                *num_mapped_reads = 0;
+
             }
         }
     }
 
     fn add_contig(&mut self, nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-                  read_depth: Vec<usize>,
                   indel_positions: Vec<HashMap<String, HashSet<i32>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
-                  contig_len: usize) {
+                  contig_len: usize,
+                  method: &str,
+                  coverages: Vec<f32>,
+                  ups_and_downs: Vec<i32>) {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
@@ -152,21 +167,24 @@ impl PileupFunctions for PileupStats {
                 ref mut total_indels,
                 ref mut target_name,
                 ref mut target_len,
+                ref mut coverage,
+                ref mut depth,
+                ref mut method,
                 ..
             } => {
                 *nucfrequency = nuc_freq;
-                *depth = read_depth;
                 *indels = indel_positions;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
                 *target_len = contig_len;
-
+                *coverage = coverages[0];
+                *method = method.to_string();
             }
         }
     }
 
-    fn calc_variants(&mut self, min_variant_depth: usize){
+    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f32){
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
@@ -192,7 +210,7 @@ impl PileupFunctions for PileupStats {
                     let read_variants = Arc::clone(&read_variants);
                     let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
-                    if *coverage * 0.75 <= *d as f32 && *d as f32 <= *coverage * 1.25 {
+//                    if *coverage * (1.0 - coverage_fold) <= *d as f32 && *d as f32 <= *coverage * (1.0 + coverage_fold) {
 //                        if d >= &mut min_variant_depth.clone() {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
@@ -240,7 +258,7 @@ impl PileupFunctions for PileupStats {
                                 }
                             }
 //                        }
-                    }
+//                    }
 
                     if rel_abundance.len() > 0 {
                         let mut variants = variants.lock().unwrap();
@@ -602,6 +620,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 ref mut depth,
                 target_len,
+                target_name,
                 ref mut coverage,
                 ref mut variance,
                 observed_contig_length,
@@ -724,6 +743,8 @@ impl PileupFunctions for PileupStats {
                             }
                         };
                         *coverage = answer.clone();
+                        info!("Calculated mean coverage of {} for contig {:?}",
+                              answer, String::from_utf8_lossy(target_name));
                         return answer
                     },
                     _ => {
@@ -769,6 +790,8 @@ impl PileupFunctions for PileupStats {
                             }
                         };
                         *coverage = answer.clone();
+                        info!("Calculated mean coverage of {} for contig {:?}",
+                              answer, String::from_utf8_lossy(target_name));
                         return answer
                     },
                 }
@@ -798,7 +821,21 @@ impl PileupFunctions for PileupStats {
                 };
                 gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
-                    println!("for gene {} {}-{}, dN/dS is {}", gene.seqname(), gene.start(), gene.end(), dnds);
+                    let strand = gene.strand().expect("No strandedness found");
+                    let frame: usize = gene.frame().parse().unwrap();
+
+                    let strand_symbol = match strand {
+                        strand::Strand::Forward | strand::Strand::Unknown => {
+                            '+'.to_string()
+                        },
+                        strand::Strand::Reverse => {
+                            '-'.to_string()
+                        }
+
+                    };
+
+                    println!("{} {} {} {} {} {}",
+                             gene.seqname(), gene.start(), gene.end(), frame, strand_symbol, dnds);
                 })
             }
         }

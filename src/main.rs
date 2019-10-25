@@ -7,6 +7,7 @@ use lorikeet::shard_bam_reader::*;
 use lorikeet::FlagFilter;
 use lorikeet::genome_exclusion::*;
 use lorikeet::genes_and_codons::*;
+use lorikeet::mosdepth_genome_coverage_estimators::*;
 
 extern crate rust_htslib;
 use rust_htslib::bam;
@@ -45,6 +46,8 @@ use env_logger::Builder;
 
 extern crate tempfile;
 use tempfile::NamedTempFile;
+use bio::io::gff::GffType;
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -208,6 +211,11 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0]
+   --coverage-fold                       Percentage value of coverage to look above and below
+                                         when calculating variant locations. e.g. if coverage-fold
+                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
+                                         coverage * (1.0 + 0.1) will be considered.
+                                         [default: 0.1]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -332,6 +340,11 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0]
+   --coverage-fold                       Percentage value of coverage to look above and below
+                                         when calculating variant locations. e.g. if coverage-fold
+                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
+                                         coverage * (1.0 + 0.1) will be considered.
+                                         [default: 0.1]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -451,6 +464,11 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0]
+   --coverage-fold                       Percentage value of coverage to look above and below
+                                         when calculating variant locations. e.g. if coverage-fold
+                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
+                                         coverage * (1.0 + 0.1) will be considered.
+                                         [default: 0.1]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -530,6 +548,8 @@ fn main(){
         },
         Some("polymorph") => {
             let m = matches.subcommand_matches("polymorph").unwrap();
+            let mode = "polymorph";
+            let mut estimators = EstimatorsAndTaker::generate_from_clap(m);
             if m.is_present("full-help") {
                 println!("{}", polymorph_full_help());
                 process::exit(1);
@@ -552,6 +572,8 @@ fn main(){
                         filter_params.min_percent_identity_pair,
                         filter_params.min_aligned_percent_pair);
                     run_pileup(m,
+                               mode,
+                               &mut estimators,
                                bam_readers,
                                filter_params.flag_filters);
                 } else if m.is_present("sharded") {
@@ -735,7 +757,7 @@ fn main(){
                     m.value_of("reference").unwrap(),
                     "lorikeet.gff",
                     m.value_of("prodigal-params").unwrap_or(""));
-                debug!("Queuing cmd_string: {}", cmd_string);
+                info!("Queuing cmd_string: {}", cmd_string);
                 let mut prodigal_out = std::process::Command::new("bash")
                     .arg("-c")
                     .arg(&cmd_string)
@@ -979,6 +1001,188 @@ fn doing_metabat(m: &clap::ArgMatches) -> bool {
             debug!("Not running in contig mode so cannot be in metabat mode");
             return false
         }
+    }
+}
+
+struct EstimatorsAndTaker<'a> {
+    estimators: Vec<CoverageEstimator>,
+    columns_to_normalise: Vec<usize>,
+    rpkm_column: Option<usize>,
+}
+
+impl<'a> EstimatorsAndTaker<'a> {
+    pub fn generate_from_clap(m: &clap::ArgMatches) -> EstimatorsAndTaker<'a> {
+        let mut estimators = vec![];
+        let min_fraction_covered = parse_percentage(&m, "min-covered-fraction");
+        let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+
+        let methods: Vec<&str> = m.values_of("methods").unwrap().collect();
+        let mut columns_to_normalise: Vec<usize> = vec![];
+
+        let output_format = m.value_of("output-format").unwrap();
+        let mut rpkm_column = None;
+
+        if doing_metabat(&m) {
+            estimators.push(CoverageEstimator::new_estimator_length());
+            estimators.push(CoverageEstimator::new_estimator_mean(
+                min_fraction_covered,
+                contig_end_exclusion,
+                false,
+            ));
+            estimators.push(CoverageEstimator::new_estimator_variance(
+                min_fraction_covered,
+                contig_end_exclusion,
+            ));
+
+            debug!("Cached regular coverage taker for metabat mode being used");
+
+        } else {
+            for (i, method) in methods.iter().enumerate() {
+                match method {
+                    &"mean" => {
+                        estimators.push(CoverageEstimator::new_estimator_mean(
+                            min_fraction_covered,
+                            contig_end_exclusion,
+                            false,
+                        )); // TODO: Parameterise exclude_mismatches
+                    }
+                    &"coverage_histogram" => {
+                        estimators.push(CoverageEstimator::new_estimator_pileup_counts(
+                            min_fraction_covered,
+                            contig_end_exclusion,
+                        ));
+                    }
+                    &"trimmed_mean" => {
+                        let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+                        let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+                        if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                            error!(
+                                "error: Trim bounds must be between 0 and 1, and \
+                                 min must be less than max, found {} and {}",
+                                min, max
+                            );
+                            process::exit(1);
+                        }
+                        estimators.push(CoverageEstimator::new_estimator_trimmed_mean(
+                            min,
+                            max,
+                            min_fraction_covered,
+                            contig_end_exclusion,
+                        ));
+                    }
+                    &"covered_fraction" => {
+                        estimators.push(CoverageEstimator::new_estimator_covered_fraction(
+                            min_fraction_covered,
+                        ));
+                    }
+                    &"covered_bases" => {
+                        estimators.push(CoverageEstimator::new_estimator_covered_bases(
+                            min_fraction_covered,
+                        ));
+                    }
+                    &"rpkm" => {
+                        if rpkm_column.is_some() {
+                            error!("The RPKM column cannot be specified more than once");
+                            process::exit(1);
+                        }
+                        rpkm_column = Some(i);
+                        estimators.push(CoverageEstimator::new_estimator_rpkm(
+                            min_fraction_covered))
+                    }
+                    &"variance" => {
+                        estimators.push(CoverageEstimator::new_estimator_variance(
+                            min_fraction_covered,
+                            contig_end_exclusion,
+                        ));
+                    }
+                    &"length" => {
+                        estimators.push(CoverageEstimator::new_estimator_length());
+                    }
+                    &"relative_abundance" => {
+                        columns_to_normalise.push(i);
+                        estimators.push(CoverageEstimator::new_estimator_mean(
+                            min_fraction_covered,
+                            contig_end_exclusion,
+                            false,
+                        ));
+                        // TODO: Parameterise exclude_mismatches
+                    }
+                    &"count" => {
+                        estimators.push(CoverageEstimator::new_estimator_read_count());
+                    }
+                    &"reads_per_base" => {
+                        estimators.push(CoverageEstimator::new_estimator_reads_per_base());
+                    }
+                    _ => unreachable!(),
+                };
+            }
+
+            if methods.contains(&"coverage_histogram") {
+                if methods.len() > 1 {
+                    error!("Cannot specify the coverage_histogram method with any other coverage methods");
+                    process::exit(1);
+                } else {
+                    debug!("Coverage histogram type coverage taker being used");
+                }
+            } else if columns_to_normalise.len() == 0 && rpkm_column.is_none() && output_format == "sparse" {
+                debug!("Streaming regular coverage output");
+
+            } else {
+                debug!(
+                    "Cached regular coverage taker with columns to normlise: {:?} and rpkm_column: {:?}",
+                    columns_to_normalise, rpkm_column
+                );
+
+            }
+        }
+
+        // Check that min-covered-fraction is being used as expected
+        if min_fraction_covered != 0.0 {
+            let die = |estimator_name| {
+                error!(
+                    "The '{}' coverage estimator cannot be used when \
+                     --min-covered-fraction is > 0 as it does not calculate \
+                     the covered fraction. You may wish to set the \
+                     --min-covered-fraction to 0 and/or run this estimator \
+                     separately.",
+                    estimator_name
+                );
+                process::exit(1)
+            };
+            for e in &estimators {
+                match e {
+                    CoverageEstimator::ReadCountCalculator { .. } => die("counts"),
+                    CoverageEstimator::ReferenceLengthCalculator { .. } => die("length"),
+                    CoverageEstimator::ReadsPerBaseCalculator { .. } => die("reads_per_base"),
+                    _ => {}
+                }
+            }
+        }
+
+        return EstimatorsAndTaker {
+            estimators: estimators,
+            columns_to_normalise: columns_to_normalise,
+            rpkm_column: rpkm_column,
+        };
+    }
+
+    pub fn print_headers(
+        mut self,
+        entry_type: &str,
+        print_stream: &mut dyn std::io::Write,
+    ) -> Self {
+        let mut headers: Vec<String> = vec![];
+        for e in self.estimators.iter() {
+            for h in e.column_headers() {
+                headers.push(h.to_string())
+            }
+        }
+        for i in self.columns_to_normalise.iter() {
+            headers[*i] = "Relative Abundance (%)".to_string();
+        }
+        self.printer
+            .print_headers(&entry_type, headers, print_stream);
+        return self;
     }
 }
 
@@ -1375,6 +1579,7 @@ fn run_codons<'a,
         variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
     }
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+    let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
     let method = m.value_of("method").unwrap();
 
     let reference_path = Path::new(m.value_of("reference").unwrap());
@@ -1399,6 +1604,7 @@ fn run_codons<'a,
                                     min must be less than max, found {} and {}", min, max);
     }
 
+    info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
     lorikeet::genes_and_codons::predict_evolution(
         bam_readers,
         gff_reader,
@@ -1414,7 +1620,8 @@ fn run_codons<'a,
         variant_consensus_file,
         print_consensus,
         threads,
-        method);
+        method,
+        coverage_fold);
 
 }
 
@@ -1422,56 +1629,244 @@ fn run_pileup<'a,
     R: lorikeet::bam_generator::NamedBamReader,
     T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
     m: &clap::ArgMatches,
+    mode: &str,
+    estimators: &mut EstimatorsAndTaker,
     bam_readers: Vec<T>,
     flag_filters: FlagFilter) {
+    match mode {
+        "polymorph" => {
+            let mut variant_consensus_file = "uninit.fna".to_string();
+            let print_zeros = !m.is_present("no-zeros");
+            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+            let print_consensus = m.is_present("variant-consensus-fasta");
+            if print_consensus {
+                variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+            }
+            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
+            let method = m.value_of("method").unwrap();
 
-    let mut variant_consensus_file = "uninit.fna".to_string();
-    let print_zeros = !m.is_present("no-zeros");
-    let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-    let print_consensus = m.is_present("variant-consensus-fasta");
-    if print_consensus {
-        variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
-    }
-    let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-    let method = m.value_of("method").unwrap();
-
-    let reference_path = Path::new(m.value_of("reference").unwrap());
+            let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
-    let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-        Ok(reader) => reader,
-        Err(e) => generate_faidx(m),
-    };
-    let threads = m.value_of("threads").unwrap().parse().unwrap();
+            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+                Ok(reader) => reader,
+                Err(e) => generate_faidx(m),
+            };
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
 
-    let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
 
-    if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-        eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-        process::exit(1)
-    }
-    let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
-    let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-    let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-    if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-        panic!("error: Trim bounds must be between 0 and 1, and \
+            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+                process::exit(1)
+            }
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                panic!("error: Trim bounds must be between 0 and 1, and \
                                     min must be less than max, found {} and {}", min, max);
-    }
+            }
 
-    lorikeet::pileups::pileup_variants(
-        bam_readers,
-        fasta_reader,
-        print_zeros,
-        flag_filters,
-        mapq_threshold,
-        var_fraction,
-        min,
-        max,
-        min_fraction_covered,
-        contig_end_exclusion,
-        variant_consensus_file,
-        print_consensus,
-        threads,
-        method);
+
+            info!("Beginning polymorph with {} bam readers and {} threads", bam_readers.len(), threads);
+            lorikeet::pileups::pileup_variants(
+                m,
+                bam_readers,
+                mode,
+                &mut estimators.estimators,
+                fasta_reader,
+                print_zeros,
+                flag_filters,
+                mapq_threshold,
+                var_fraction,
+                min,
+                max,
+                min_fraction_covered,
+                contig_end_exclusion,
+                variant_consensus_file,
+                print_consensus,
+                threads,
+                method,
+                coverage_fold);
+        },
+        "summarize" => {
+            let print_zeros = !m.is_present("no-zeros");
+            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
+            let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
+            let reference_path = Path::new(m.value_of("reference").unwrap());
+            let fasta_reader = match fasta::Reader::from_path(reference_path){
+                Ok(reader) => reader,
+                Err(e) => {
+                    eprintln!("Missing or corrupt fasta file {}", e);
+                    process::exit(1);
+                },
+            };
+
+            let output_prefix = m.value_of("output-prefix").unwrap();
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+
+            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+            let method = m.value_of("method").unwrap();
+
+            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+                process::exit(1)
+            }
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+            }
+
+            let contigs = fasta_reader.into_records().collect_vec();
+            // Initialize bound contig variable
+            let mut tet_freq = BTreeMap::new();
+            let contig_count = contigs.len();
+            let mut contig_idx = 0 as usize;
+            let mut contig_names = vec![String::new(); contig_count];
+            info!("Calculating K-mer frequencies");
+            for contig in contigs{
+                let contig = contig.unwrap();
+                contig_names[contig_idx] = String::from_utf8(contig.head).unwrap();
+                let kmers = hash_kmers(&contig.seq, kmer_size);
+                // Get kmer counts in a contig
+                for (kmer, pos) in kmers {
+                    let k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
+                    k[contig_idx] = pos.len();
+                }
+                contig_idx += 1;
+            }
+
+            let file_name = output_prefix.to_string() + &"_".to_owned()
+                + &kmer_size.clone().to_string() + &"mer_counts".to_owned()
+                + &".tsv".to_owned();
+            let file_path = Path::new(&file_name);
+            let mut file_open = match File::create(file_path) {
+                Ok(fasta) => fasta,
+                Err(e) => {
+                    println!("Cannot create file {:?}", e);
+                    std::process::exit(1)
+                },
+            };
+            for (tid, name) in contig_names.iter().enumerate() {
+                write!(file_open, "{}\t",
+                       name).unwrap();
+                for (_kmer, counts) in tet_freq.iter(){
+                    write!(file_open, "{}\t", counts[tid]).unwrap();
+                }
+                write!(file_open, "\n").unwrap();
+            }
+
+            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+                Ok(reader) => reader,
+                Err(e) => generate_faidx(m),
+            };
+
+            info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
+            lorikeet::pileups::pileup_contigs(
+                bam_readers,
+                fasta_reader,
+                print_zeros,
+                flag_filters,
+                mapq_threshold,
+                var_fraction,
+                min,
+                max,
+                min_fraction_covered,
+                contig_end_exclusion,
+                output_prefix,
+                threads,
+                method,
+                coverage_fold);
+        },
+        "evolve" => {
+            let mut variant_consensus_file = "uninit.fna".to_string();
+            let print_zeros = !m.is_present("no-zeros");
+            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+            let print_consensus = m.is_present("variant-consensus-fasta");
+            if print_consensus {
+                variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
+            }
+            let mut gff_reader;
+            if m.is_present("gff") {
+                let gff_file = m.value_of("gff").unwrap();
+                gff_reader = gff::Reader::from_file(gff_file,
+                                                    gff::GffType::GFF3)
+                    .expect("GFF File not found");
+            } else {
+                external_command_checker::check_for_prodigal();
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     prodigal -f gff -i {} -o {} {}",
+                    // prodigal
+                    m.value_of("reference").unwrap(),
+                    "lorikeet.gff",
+                    m.value_of("prodigal-params").unwrap_or(""));
+                info!("Queuing cmd_string: {}", cmd_string);
+                let mut prodigal_out = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stdout(Stdio::piped())
+                    .output()
+                    .expect("Unable to execute bash");
+
+                gff_reader = gff::Reader::from_file("lorikeet.gff",
+                                                    gff::GffType::GFF3)
+                    .expect("Failed to read prodigal output");
+            }
+
+            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
+            let method = m.value_of("method").unwrap();
+
+            let reference_path = Path::new(m.value_of("reference").unwrap());
+//            let index_path = reference_path.clone().to_owned() + ".fai";
+            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+                Ok(reader) => reader,
+                Err(e) => generate_faidx(m),
+            };
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+
+            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
+
+            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
+                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
+                process::exit(1)
+            }
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
+            }
+
+            info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
+            lorikeet::genes_and_codons::predict_evolution(
+                bam_readers,
+                gff_reader,
+                fasta_reader,
+                print_zeros,
+                flag_filters,
+                mapq_threshold,
+                var_fraction,
+                min,
+                max,
+                min_fraction_covered,
+                contig_end_exclusion,
+                variant_consensus_file,
+                print_consensus,
+                threads,
+                method,
+                coverage_fold);
+        },
+        _ => panic!("Unknown lorikeet mode"),
+    }
 
 }
 
@@ -1485,6 +1880,7 @@ fn run_pileup_contigs<'a,
     let print_zeros = !m.is_present("no-zeros");
     let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
     let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+    let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
     let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
     let reference_path = Path::new(m.value_of("reference").unwrap());
     let fasta_reader = match fasta::Reader::from_path(reference_path){
@@ -1519,6 +1915,7 @@ fn run_pileup_contigs<'a,
     let contig_count = contigs.len();
     let mut contig_idx = 0 as usize;
     let mut contig_names = vec![String::new(); contig_count];
+    info!("Calculating K-mer frequencies");
     for contig in contigs{
         let contig = contig.unwrap();
         contig_names[contig_idx] = String::from_utf8(contig.head).unwrap();
@@ -1556,6 +1953,7 @@ fn run_pileup_contigs<'a,
         Err(e) => generate_faidx(m),
     };
 
+    info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
     lorikeet::pileups::pileup_contigs(
         bam_readers,
         fasta_reader,
@@ -1569,7 +1967,8 @@ fn run_pileup_contigs<'a,
         contig_end_exclusion,
         output_prefix,
         threads,
-        method);
+        method,
+        coverage_fold);
 
 }
 
@@ -1880,6 +2279,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
+                .arg(Arg::with_name("coverage-fold")
+                    .long("coverage-fold")
+                    .default_value("0.1"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
@@ -2051,6 +2453,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
+                .arg(Arg::with_name("coverage-fold")
+                    .long("coverage-fold")
+                    .default_value("0.1"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
@@ -2222,6 +2627,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
+                .arg(Arg::with_name("coverage-fold")
+                    .long("coverage-fold")
+                    .default_value("0.1"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
