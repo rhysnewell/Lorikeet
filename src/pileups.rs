@@ -438,13 +438,10 @@ fn process_previous_contigs_var(
             min_var_depth,
             coverage_fold);
 
-
-
-
         match mode {
             "polymorph" => {
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_struct.generate_genotypes();
+                pileup_struct.generate_minimum_genotypes();
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
 
@@ -463,7 +460,7 @@ fn process_previous_contigs_var(
             },
             "summarize" => {
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_struct.generate_genotypes();
+                pileup_struct.generate_minimum_genotypes();
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
                                          sample_idx as usize);
