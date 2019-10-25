@@ -9,6 +9,7 @@ use pileup_matrix::*;
 use codon_structs::*;
 use bam_generator::*;
 use FlagFilter;
+use rayon::prelude::*;
 
 use std::str;
 use std::fs;
@@ -34,7 +35,6 @@ pub fn pileup_variants<R: NamedBamReader,
     mapq_threshold: u8,
     min_var_depth: usize,
     min: f32, max: f32,
-    min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
     output_prefix: &str,
     variant_file_name: String,
@@ -187,7 +187,6 @@ pub fn pileup_variants<R: NamedBamReader,
                             coverage_estimators,
                             min, max,
                             total_indels_in_current_contig as usize,
-                            min_fraction_covered_bases,
                             contig_end_exclusion,
                             min_var_depth,
                             contig_len,
@@ -307,7 +306,6 @@ pub fn pileup_variants<R: NamedBamReader,
                             read_cursor += cig.len() as usize;
                         },
                         Cigar::HardClip(_) | Cigar::Pad(_) => {
-                            read_cursor += cig.len() as usize;
                         }
                     }
                 }
@@ -342,7 +340,6 @@ pub fn pileup_variants<R: NamedBamReader,
                 coverage_estimators,
                 min, max,
                 total_indels_in_current_contig as usize,
-                min_fraction_covered_bases,
                 contig_end_exclusion,
                 min_var_depth,
                 contig_len,
@@ -393,7 +390,6 @@ fn process_previous_contigs_var(
     coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
     total_indels_in_current_contig: usize,
-    min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
     min_var_depth: usize,
     contig_len: usize,
@@ -412,19 +408,18 @@ fn process_previous_contigs_var(
     sample_count: usize) {
 
     if last_tid != -2 {
-        for estimator in coverage_estimators.iter_mut() {
+        coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.add_contig(
                 &ups_and_downs,
                 num_mapped_reads_in_current_contig,
                 total_mismatches)
-        }
+        });
 
-        let coverages: Vec<f32> = coverage_estimators.iter_mut()
+        let coverages: Vec<f32> = coverage_estimators.par_iter_mut()
             .map(|estimator| estimator.calculate_coverage(&vec![0])).collect();
 
         let mut pileup_struct = PileupStats::new_contig_stats(min,
                                                               max,
-                                                              min_fraction_covered_bases,
                                                               contig_end_exclusion);
 
         // adds contig info to pileup struct
@@ -437,20 +432,19 @@ fn process_previous_contigs_var(
                                  coverages,
                                  ups_and_downs);
 
-//        // calculates coverage across contig
-//        pileup_struct.calc_coverage(total_mismatches, method);
 
         // filters variants across contig
         pileup_struct.calc_variants(
             min_var_depth,
             coverage_fold);
 
-        // calculates minimum number of genotypes possible for each variant location
-        pileup_struct.generate_genotypes();
+
 
 
         match mode {
             "polymorph" => {
+                // calculates minimum number of genotypes possible for each variant location
+                pileup_struct.generate_genotypes();
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
 
@@ -468,6 +462,8 @@ fn process_previous_contigs_var(
                 }
             },
             "summarize" => {
+                // calculates minimum number of genotypes possible for each variant location
+                pileup_struct.generate_genotypes();
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
                                          sample_idx as usize);

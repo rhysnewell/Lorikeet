@@ -41,7 +41,6 @@ pub enum PileupStats {
         num_mapped_reads: u64,
         total_mismatches: u32,
         contig_end_exclusion: u32,
-        min_fraction_covered_bases: f32,
         min: f32,
         max: f32,
         method: String,
@@ -49,7 +48,7 @@ pub enum PileupStats {
 }
 
 impl PileupStats {
-    pub fn new_contig_stats(min: f32, max: f32, min_fraction_covered_bases: f32,
+    pub fn new_contig_stats(min: f32, max: f32,
                             contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: vec!(),
@@ -71,7 +70,6 @@ impl PileupStats {
             contig_end_exclusion: contig_end_exclusion,
             num_mapped_reads: 0,
             total_mismatches: 0,
-            min_fraction_covered_bases: min_fraction_covered_bases,
             min: min,
             max: max,
             method: "".to_string(),
@@ -640,6 +638,7 @@ impl PileupFunctions for PileupStats {
                     Some(records) => records,
                     None => &placeholder,
                 };
+                info!("Calculating population dN/dS from reads for {} genes", gff_records.len());
                 gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
