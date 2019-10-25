@@ -32,7 +32,7 @@ pub enum PileupStats {
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
-        target_len: usize,
+        target_len: f32,
         variations_per_base: f32,
         coverage: f32,
         variance: f32,
@@ -62,7 +62,7 @@ impl PileupStats {
             tid: 0,
             total_indels: 0,
             target_name: vec!(),
-            target_len: 0,
+            target_len: 0.0,
             variations_per_base: 0.00,
             coverage: 0.00,
             variance: 0.00,
@@ -74,6 +74,7 @@ impl PileupStats {
             min_fraction_covered_bases: min_fraction_covered_bases,
             min: min,
             max: max,
+            method: "".to_string(),
         }
     }
 }
@@ -87,7 +88,6 @@ pub trait PileupFunctions {
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
-                  contig_len: usize,
                   method: &str,
                   coverages: Vec<f32>,
                   ups_and_downs: Vec<i32>);
@@ -101,8 +101,6 @@ pub trait PileupFunctions {
                                consensus_genome: std::fs::File);
 
     fn generate_genotypes(&mut self);
-
-    fn calc_coverage(&mut self, total_mismatches: u32, method: &str) -> f32;
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
@@ -139,7 +137,7 @@ impl PileupFunctions for PileupStats {
                 *tid = 0;
                 *total_indels = 0;
                 *target_name = vec!();
-                *target_len = 0;
+                *target_len = 0.0;
                 *variations_per_base = 0.00;
                 *coverage = 0.00;
                 *num_covered_bases = 0;
@@ -154,7 +152,6 @@ impl PileupFunctions for PileupStats {
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
-                  contig_len: usize,
                   method: &str,
                   coverages: Vec<f32>,
                   ups_and_downs: Vec<i32>) {
@@ -167,8 +164,8 @@ impl PileupFunctions for PileupStats {
                 ref mut total_indels,
                 ref mut target_name,
                 ref mut target_len,
+                ref mut variance,
                 ref mut coverage,
-                ref mut depth,
                 ref mut method,
                 ..
             } => {
@@ -177,9 +174,16 @@ impl PileupFunctions for PileupStats {
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
-                *target_len = contig_len;
-                *coverage = coverages[0];
+                *target_len = coverages[0];
+                *coverage = coverages[1];
+                *variance = coverages[2];
                 *method = method.to_string();
+                *depth = vec![0; ups_and_downs.len()];
+                let mut cumulative_sum = 0;
+                for (pos, current) in ups_and_downs.iter().enumerate() {
+                    cumulative_sum += *current;
+                    depth[pos] = cumulative_sum as usize;
+                }
             }
         }
     }
@@ -198,7 +202,7 @@ impl PileupFunctions for PileupStats {
                 tid,
                 ..
             } => {
-                let variants = Arc::new(Mutex::new(vec![HashMap::new(); *target_len])); // The relative abundance of each variant
+                let variants = Arc::new(Mutex::new(vec![HashMap::new(); depth.len()])); // The relative abundance of each variant
                 let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
                 let variant_count = Arc::new(Mutex::new(0));
                 let indels_backup = Arc::new(Mutex::new(indels.clone()));
@@ -611,190 +615,6 @@ impl PileupFunctions for PileupStats {
                     *mean_genotypes = 0.0 as f32;
                 }
                 *genotypes_per_position = genotypes.lock().unwrap().clone();
-            }
-        }
-    }
-
-    fn calc_coverage(&mut self, total_mismatches: u32, method: &str) -> f32 {
-        match self {
-            PileupStats::PileupContigStats {
-                ref mut depth,
-                target_len,
-                target_name,
-                ref mut coverage,
-                ref mut variance,
-                observed_contig_length,
-                num_covered_bases,
-                contig_end_exclusion,
-                min_fraction_covered_bases,
-                min,
-                max,
-                ..
-
-            } => {
-                let len1 = target_len;
-                match *contig_end_exclusion * 2 < *len1 as u32 {
-                    true => {
-                        *observed_contig_length += *len1 as u32 - 2 * *contig_end_exclusion
-                    },
-                    false => {
-                        debug!("Contig too short - less than twice the contig-end-exclusion");
-                    }
-                }
-
-                debug!("Total observed length now {}", *observed_contig_length);
-                let mut counts: Vec<usize> = vec!();
-                let start_from = *contig_end_exclusion as usize;
-                let end_at = *len1 - *contig_end_exclusion as usize - 1;
-                let mut cumulative_sum;
-                let mut total_count = 0;
-                for (i, current) in depth.iter().enumerate() {
-                    cumulative_sum = *current;
-                    if i >= start_from && i <= end_at {
-                        if cumulative_sum > 0 {
-                            *num_covered_bases += 1
-                        }
-                        if counts.len() <= cumulative_sum {
-                            (counts).resize(cumulative_sum + 1, 0);
-                        }
-                        (counts)[cumulative_sum] += 1;
-                        total_count += cumulative_sum;
-                    }
-                }
-
-                let total_bases = *observed_contig_length;
-
-                let mut answer;
-                match method {
-                    "trimmed_mean" => {
-
-                        answer = match total_bases {
-                            0 => {
-                                *variance = 0.0;
-                                0.0
-                            },
-                            _ => {
-                                if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
-                                    *variance = 0.0;
-                                    0.0
-                                } else {
-                                    let min_index: usize = (*min * total_bases as f32).floor() as usize;
-                                    let max_index: usize = (*max * total_bases as f32).ceil() as usize;
-                                    if *num_covered_bases == 0 { return 0.0; }
-//                            counts[0] += 0;
-
-                                    let mut num_accounted_for: usize = 0;
-                                    let mut total: usize = 0;
-                                    let mut started = false;
-                                    let mut i = 0;
-
-                                    let mut k = 0;
-                                    // Ensure K is within the range of coverages - take the
-                                    // lowest coverage.
-                                    while counts[k] == 0 {
-                                        k += 1;
-                                    }
-                                    let mut ex = 0;
-                                    let mut ex2 = 0;
-
-                                    for (x, num_covered) in counts.iter().enumerate() {
-                                        num_accounted_for += num_covered.clone() as usize;
-
-                                        if num_covered > &0 {
-                                            let nc = *num_covered as usize;
-                                            ex += (x - k) * nc;
-                                            ex2 += (x - k) * (x - k) * nc;
-                                        }
-                                        if num_accounted_for >= min_index {
-                                            if started {
-                                                if num_accounted_for > max_index {
-                                                    let num_excess = num_accounted_for - *num_covered as usize;
-                                                    let num_wanted = match max_index >= num_excess {
-                                                        true => max_index - num_excess + 1,
-                                                        false => 0
-                                                    };
-                                                    total += num_wanted * i;
-                                                    break;
-                                                } else {
-                                                    total += *num_covered as usize * i;
-                                                }
-                                            } else {
-                                                if num_accounted_for > max_index {
-                                                    // all coverages are the same in the trimmed set
-                                                    total = (max_index - min_index + 1) * i;
-                                                    started = true
-                                                } else if num_accounted_for < min_index {
-                                                    debug!("too few on first")
-                                                } else {
-                                                    let num_wanted = num_accounted_for - min_index + 1;
-                                                    total = num_wanted * i;
-                                                    started = true;
-                                                }
-                                            }
-                                        }
-                                        i += 1;
-                                    }
-                                    // Return sample variance not population variance since
-                                    // almost all MAGs are incomplete.
-                                    *variance =
-                                        (ex2 as f32 - (ex * ex) as f32 / total_bases as f32) / (total_bases - 1) as f32;
-                                    total as f32 / (max_index - min_index) as f32
-                                }
-                            }
-                        };
-                        *coverage = answer.clone();
-                        info!("Calculated mean coverage of {} for contig {:?}",
-                              answer, String::from_utf8_lossy(target_name));
-                        return answer
-                    },
-                    _ => {
-                        let exclude_mismatches = false;
-
-                        answer = match total_bases {
-                            0 => {
-                                *variance = 0.0;
-                                0.0
-                            },
-                            _ => {
-                                if (*num_covered_bases as f32 / total_bases as f32) < *min_fraction_covered_bases {
-                                    *variance = 0.0;
-                                    0.0
-                                } else {
-                                    // Calculate variance using the shifted method
-                                    let mut k = 0;
-                                    // Ensure K is within the range of coverages - take the
-                                    // lowest coverage.
-                                    while counts[k] == 0 {
-                                        k += 1;
-                                    }
-                                    let mut ex = 0;
-                                    let mut ex2 = 0;
-                                    for (x, num_covered) in counts.iter().enumerate() {
-                                        if *num_covered == 0 { continue }
-                                        let nc = *num_covered as usize;
-                                        ex += (x-k) * nc;
-                                        ex2 += (x-k)*(x-k) * nc;
-                                    }
-
-
-                                    // Return sample variance not population variance since
-                                    // almost all MAGs are incomplete.
-                                    *variance =
-                                        (ex2 as f32 - (ex * ex) as f32 / total_bases as f32) / (total_bases - 1) as f32;
-
-                                    (match exclude_mismatches {
-                                        true => (total_count - total_mismatches as usize) as f32,
-                                        false => total_count as f32
-                                    }) / total_bases as f32
-                                }
-                            }
-                        };
-                        *coverage = answer.clone();
-                        info!("Calculated mean coverage of {} for contig {:?}",
-                              answer, String::from_utf8_lossy(target_name));
-                        return answer
-                    },
-                }
             }
         }
     }

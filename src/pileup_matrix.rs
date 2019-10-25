@@ -14,7 +14,7 @@ pub enum PileupMatrix {
         average_genotypes: HashMap<i32, Vec<f32>>,
         variances: HashMap<i32, Vec<f32>>,
         target_names: HashMap<i32, String>,
-        target_lengths: HashMap<i32, usize>,
+        target_lengths: HashMap<i32, f32>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
     }

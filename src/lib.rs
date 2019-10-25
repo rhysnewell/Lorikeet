@@ -1,5 +1,3 @@
-pub mod contig;
-pub mod genome;
 pub mod pileups;
 pub mod pileup_structs;
 pub mod pileup_matrix;
@@ -11,7 +9,6 @@ pub mod external_command_checker;
 pub mod bwa_index_maintenance;
 pub mod coverage_takers;
 pub mod mapping_parameters;
-pub mod genes_and_codons;
 pub mod codon_structs;
 pub mod mapping_index_maintenance;
 pub mod coverage_printer;
