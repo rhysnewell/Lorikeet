@@ -98,7 +98,7 @@ pub trait PileupFunctions {
                                original_contig: Vec<u8>,
                                consensus_genome: std::fs::File);
 
-    fn generate_genotypes(&mut self);
+    fn generate_minimum_genotypes(&mut self);
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
@@ -209,12 +209,40 @@ impl PileupFunctions for PileupStats {
 
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
-                depth.into_par_iter().enumerate().for_each(|(i, d)| {
+                depth.par_iter_mut().enumerate().for_each(|(i, d)| {
                     let read_variants = Arc::clone(&read_variants);
                     let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
 //                    if *coverage * (1.0 - coverage_fold) <= *d as f32 && *d as f32 <= *coverage * (1.0 + coverage_fold) {
 //                        if d >= &mut min_variant_depth.clone() {
+                            // INDELS act differently to normal variants
+                            // The reads containing this variant don't contribute to coverage values
+                            // So we need to readjust the depth at these locations to show true
+                            // read depth. i.e. variant depth + reference depth
+                            if indels[i].len() > 0 {
+                                for (indel, read_ids) in indels[i].iter() {
+                                    let count = read_ids.len();
+                                    *d += count;
+                                    if count >= min_variant_depth {
+                                        rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
+                                        for read in read_ids {
+                                            let mut read_variants
+                                                = read_variants.lock().unwrap();
+
+                                            let read_vec = read_variants
+                                                .entry(read.clone())
+                                                .or_insert(BTreeMap::new());
+                                            read_vec.insert(i as i32, indel.clone());
+                                        }
+                                        let mut variant_count = variant_count.lock().unwrap();
+                                        *variant_count += 1;
+                                    } else {
+                                        let mut indels_backup
+                                            = indels_backup.lock().unwrap();
+                                        indels_backup[i].remove(indel);
+                                    }
+                                }
+                            }
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
@@ -237,29 +265,7 @@ impl PileupFunctions for PileupStats {
                                     }
                                 }
                             };
-                            if indels[i].len() > 0 {
-                                for (indel, read_ids) in indels[i].iter() {
-                                    let count = read_ids.len();
-                                    if count >= min_variant_depth {
-                                        rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
-                                        for read in read_ids {
-                                            let mut read_variants
-                                                = read_variants.lock().unwrap();
 
-                                            let read_vec = read_variants
-                                                .entry(read.clone())
-                                                .or_insert(BTreeMap::new());
-                                            read_vec.insert(i as i32, indel.clone());
-                                        }
-                                        let mut variant_count = variant_count.lock().unwrap();
-                                        *variant_count += 1;
-                                    } else {
-                                        let mut indels_backup
-                                            = indels_backup.lock().unwrap();
-                                        indels_backup[i].remove(indel);
-                                    }
-                                }
-                            }
 //                        }
 //                    }
 
@@ -341,7 +347,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn generate_genotypes(&mut self) {
+    fn generate_minimum_genotypes(&mut self) {
         match self {
             PileupStats::PileupContigStats {
                 ref mut variant_abundances,
