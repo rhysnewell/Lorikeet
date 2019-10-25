@@ -3,8 +3,10 @@ use std::collections::{HashMap, HashSet};
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
+use external_command_checker;
 use pileup_structs::*;
 use pileup_matrix::*;
+use codon_structs::*;
 use bam_generator::*;
 use FlagFilter;
 
@@ -12,11 +14,20 @@ use std::str;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use std::process;
+use std::process::Stdio;
+use mosdepth_genome_coverage_estimators::*;
+use bio::io::gff::Record;
+use bio::io::gff::GffType;
 
 
 pub fn pileup_variants<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
+    m: &clap::ArgMatches,
     bam_readers: Vec<G>,
+    mode: &str,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
+    mut gff_reader: bio::io::gff::Reader<File>,
     mut reference: bio::io::fasta::IndexedReader<File>,
     print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
@@ -25,15 +36,65 @@ pub fn pileup_variants<R: NamedBamReader,
     min: f32, max: f32,
     min_fraction_covered_bases: f32,
     contig_end_exclusion: u32,
+    output_prefix: &str,
     variant_file_name: String,
     print_consensus: bool,
     n_threads: usize,
-    method: &str) {
+    method: &str,
+    coverage_fold: f32) {
 
     let mut sample_idx = 0;
     let include_soft_clipping = false;
+    let sample_count = bam_readers.len();
+    let mut sample_idx = 0;
     // Print file header
-    println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
+    let mut pileup_matrix = PileupMatrix::new_matrix();
+
+    let mut gff_map = HashMap::new();
+
+    match mode {
+        "polymorph" => {
+            println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
+        },
+        "evolve" => {
+            let mut gff_reader;
+            if m.is_present("gff") {
+                let gff_file = m.value_of("gff").unwrap();
+                gff_reader = gff::Reader::from_file(gff_file,
+                                                    bio::io::gff::GffType::GFF3)
+                    .expect("GFF File not found");
+            } else {
+                external_command_checker::check_for_prodigal();
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     prodigal -f gff -i {} -o {} {}",
+                    // prodigal
+                    m.value_of("reference").unwrap(),
+                    "lorikeet.gff",
+                    m.value_of("prodigal-params").unwrap_or(""));
+                info!("Queuing cmd_string: {}", cmd_string);
+                let mut prodigal_out = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stdout(Stdio::piped())
+                    .output()
+                    .expect("Unable to execute bash");
+
+                gff_reader = gff::Reader::from_file("lorikeet.gff",
+                                                    bio::io::gff::GffType::GFF3)
+                    .expect("Failed to read prodigal output");
+            }
+            for record in gff_reader.records() {
+                let rec = record.unwrap();
+                let contig_genes = gff_map.entry(rec.seqname().to_owned())
+                    .or_insert(Vec::new());
+                contig_genes.push(rec);
+            }
+        },
+        _ => {}
+    }
+    let mut codon_table = CodonTable::setup();
+    codon_table.get_codon_table(11);
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
@@ -118,10 +179,13 @@ pub fn pileup_variants<R: NamedBamReader,
                             total_indels_in_current_contig;
 
                         process_previous_contigs_var(
+                            mode,
                             last_tid,
                             depth,
                             nuc_freq,
                             indels,
+                            ups_and_downs,
+                            coverage_estimators,
                             min, max,
                             total_indels_in_current_contig as usize,
                             min_fraction_covered_bases,
@@ -129,12 +193,16 @@ pub fn pileup_variants<R: NamedBamReader,
                             min_var_depth,
                             contig_len,
                             contig_name,
+                            &mut pileup_matrix,
                             ref_seq,
                             &consensus_variant_fasta,
                             print_consensus,
                             sample_idx,
                             method,
-                            total_mismatches);
+                            total_mismatches,
+                            &gff_map,
+                            &codon_table,
+                            coverage_fold);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -260,10 +328,13 @@ pub fn pileup_variants<R: NamedBamReader,
                 total_indels_in_current_contig;
 
             process_previous_contigs_var(
+                mode,
                 last_tid,
                 depth,
                 nuc_freq,
                 indels,
+                ups_and_downs,
+                coverage_estimators,
                 min, max,
                 total_indels_in_current_contig as usize,
                 min_fraction_covered_bases,
@@ -271,12 +342,16 @@ pub fn pileup_variants<R: NamedBamReader,
                 min_var_depth,
                 contig_len,
                 contig_name,
+                &mut pileup_matrix,
                 ref_seq,
                 &consensus_variant_fasta,
                 print_consensus,
                 sample_idx,
                 method,
-                total_mismatches);
+                total_mismatches,
+                &gff_map,
+                &codon_table,
+                coverage_fold);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -296,6 +371,10 @@ pub fn pileup_variants<R: NamedBamReader,
         bam_generated.finish();
         sample_idx += 1;
     };
+    if mode=="summarize" {
+        info!("Writing out contig statistics");
+        pileup_matrix.print_stats(output_prefix);
+    }
 }
 
 
@@ -313,7 +392,8 @@ pub fn pileup_contigs<R: NamedBamReader,
     contig_end_exclusion: u32,
     output_prefix: &str,
     n_threads: usize,
-    method: &str) {
+    method: &str,
+    coverage_fold: f32) {
 
     let mut pileup_matrix = PileupMatrix::new_matrix();
     let include_soft_clipping = false;
@@ -399,7 +479,8 @@ pub fn pileup_contigs<R: NamedBamReader,
                             sample_count,
                             sample_idx,
                             method,
-                            total_mismatches);
+                            total_mismatches,
+                            coverage_fold);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -540,7 +621,8 @@ pub fn pileup_contigs<R: NamedBamReader,
                 sample_count,
                 sample_idx,
                 method,
-                total_mismatches);
+                total_mismatches,
+                coverage_fold);
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
 
@@ -564,10 +646,13 @@ pub fn pileup_contigs<R: NamedBamReader,
 }
 
 fn process_previous_contigs_var(
+    mode: &str,
     last_tid: i32,
     depth: Vec<usize>,
     nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
     indels: Vec<HashMap<String, HashSet<i32>>>,
+    ups_and_downs: Vec<i32>,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
     total_indels_in_current_contig: usize,
     min_fraction_covered_bases: f32,
@@ -575,14 +660,28 @@ fn process_previous_contigs_var(
     min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
+    pileup_matrix: &mut PileupMatrix,
     ref_sequence: Vec<u8>,
     consensus_variant_fasta: &File,
     print_consensus: bool,
     sample_idx: i32,
     method: &str,
-    total_mismatches: u32) {
+    total_mismatches: u32,
+    gff_map: &HashMap<String, Vec<Record>>,
+    codon_table: &CodonTable,
+    coverage_fold: f32) {
 
     if last_tid != -2 {
+        for estimator in coverage_estimators.iter_mut() {
+            estimator.add_contig(
+                &ups_and_downs,
+                num_mapped_reads_in_current_contig,
+                total_edit_distance_in_current_contig -
+                    total_indels_in_current_contig)
+        }
+
+        let coverages: Vec<f32> = coverage_estimators.iter_mut()
+            .map(|estimator| estimator.calculate_coverage(&vec![0])).collect();
 
         let mut pileup_struct = PileupStats::new_contig_stats(min,
                                                               max,
@@ -591,19 +690,22 @@ fn process_previous_contigs_var(
 
         // adds contig info to pileup struct
         pileup_struct.add_contig(nuc_freq,
-                                 depth,
                                  indels,
                                  last_tid.clone(),
                                  total_indels_in_current_contig,
                                  contig_name.clone(),
-                                 contig_len);
+                                 contig_len,
+                                 method,
+                                 coverages,
+                                 ups_and_downs);
 
-        // calculates coverage across contig
-        pileup_struct.calc_coverage(total_mismatches, method);
+//        // calculates coverage across contig
+//        pileup_struct.calc_coverage(total_mismatches, method);
 
         // filters variants across contig
         pileup_struct.calc_variants(
-                                    min_var_depth);
+            min_var_depth,
+            coverage_fold);
 
         // calculates minimum number of genotypes possible for each variant location
         pileup_struct.generate_genotypes();
@@ -611,17 +713,30 @@ fn process_previous_contigs_var(
         // prints results of variants calling
         pileup_struct.print_variants(&ref_sequence, sample_idx);
 
-        if print_consensus {
-            // Write consensus contig to fasta
-            // i.e. the most abundant variant at each position from this set of reads
-            let contig_n = ">".to_owned() +
-                &str::from_utf8(&contig_name).unwrap().to_string() +
-                "\n";
+        match mode {
+            "polymorph" => {
+                if print_consensus {
+                    // Write consensus contig to fasta
+                    // i.e. the most abundant variant at each position from this set of reads
+                    let contig_n = ">".to_owned() +
+                        &str::from_utf8(&contig_name).unwrap().to_string() +
+                        "\n";
 
-            let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
-            consensus_clone.write_all(contig_n.as_bytes()).unwrap();
-            pileup_struct.generate_variant_contig(ref_sequence.clone(),
-                                                  consensus_clone);
+                    let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
+                    consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+                    pileup_struct.generate_variant_contig(ref_sequence.clone(),
+                                                          consensus_clone);
+                }
+            },
+            "summarize" => {
+                pileup_matrix.add_contig(pileup_struct,
+                                         sample_count,
+                                         sample_idx as usize);
+            },
+            "evolve" => {
+                pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
+            },
+            _ => panic!("unknown mode {}", mode);
         }
     }
 }
@@ -644,7 +759,8 @@ fn process_previous_contigs(
         sample_count: usize,
         sample_idx: usize,
         method: &str,
-        total_mismatches: u32) {
+        total_mismatches: u32,
+        coverage_fold: f32) {
 
         if last_tid != -2 {
 
@@ -667,7 +783,8 @@ fn process_previous_contigs(
 
             // filters variants across contig
             pileup_struct.calc_variants(
-                                        min_var_depth);
+                                        min_var_depth,
+                                        coverage_fold);
 
             // calculates minimum number of genotypes possible for each variant location
             pileup_struct.generate_genotypes();

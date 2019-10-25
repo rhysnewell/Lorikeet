@@ -33,7 +33,8 @@ pub fn predict_evolution<R: NamedBamReader,
     variant_file_name: String,
     print_consensus: bool,
     n_threads: usize,
-    method: &str) {
+    method: &str,
+    coverage_fold: f32) {
 
     let mut sample_idx = 0;
     let include_soft_clipping = false;
@@ -150,7 +151,8 @@ pub fn predict_evolution<R: NamedBamReader,
                             method,
                             total_mismatches,
                             &gff_map,
-                            &codon_table);
+                            &codon_table,
+                            coverage_fold);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -291,7 +293,8 @@ pub fn predict_evolution<R: NamedBamReader,
                 method,
                 total_mismatches,
                 &gff_map,
-                &codon_table);
+                &codon_table,
+                coverage_fold);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -332,7 +335,8 @@ fn process_previous_contigs_mut(
     method: &str,
     total_mismatches: u32,
     gff_map: &HashMap<String, Vec<Record>>,
-    codon_table: &CodonTable) {
+    codon_table: &CodonTable,
+    coverage_fold: f32) {
 
     if last_tid != -2 {
 
@@ -355,10 +359,11 @@ fn process_previous_contigs_mut(
 
         // filters variants across contig
         pileup_struct.calc_variants(
-            min_var_depth);
+            min_var_depth,
+            coverage_fold);
 
         // calculates minimum number of genotypes possible for each variant location
-        pileup_struct.generate_genotypes();
+//        pileup_struct.generate_genotypes();
 
         // calculate in gene mutations
         pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
