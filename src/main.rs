@@ -209,7 +209,7 @@ Other arguments (optional):
                                          [default: dense]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
-                                         [default: 0]
+                                         [default: 0.0]
    --coverage-fold                       Percentage value of coverage to look above and below
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
@@ -338,7 +338,7 @@ Other arguments (optional):
                                          [default: dense]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
-                                         [default: 0]
+                                         [default: 0.0]
    --coverage-fold                       Percentage value of coverage to look above and below
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
@@ -462,7 +462,7 @@ Other arguments (optional):
                                          [default: dense]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
-                                         [default: 0]
+                                         [default: 0.0]
    --coverage-fold                       Percentage value of coverage to look above and below
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
@@ -1522,12 +1522,7 @@ fn run_pileup<'a,
             };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
-            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
 
-            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-                process::exit(1)
-            }
             let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
@@ -1550,7 +1545,6 @@ fn run_pileup<'a,
                 var_fraction,
                 min,
                 max,
-                min_fraction_covered,
                 contig_end_exclusion,
                 "",
                 variant_consensus_file,
@@ -1577,13 +1571,8 @@ fn run_pileup<'a,
             let output_prefix = m.value_of("output-prefix").unwrap();
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
-            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
             let method = m.value_of("method").unwrap();
 
-            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-                process::exit(1)
-            }
             let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
@@ -1649,7 +1638,6 @@ fn run_pileup<'a,
                 var_fraction,
                 min,
                 max,
-                min_fraction_covered,
                 contig_end_exclusion,
                 output_prefix,
                 "".to_string(),
@@ -1666,33 +1654,6 @@ fn run_pileup<'a,
             if print_consensus {
                 variant_consensus_file = m.value_of("variant-consensus-fasta").unwrap().to_string();
             }
-            let mut gff_reader;
-            if m.is_present("gff") {
-                let gff_file = m.value_of("gff").unwrap();
-                gff_reader = gff::Reader::from_file(gff_file,
-                                                    gff::GffType::GFF3)
-                    .expect("GFF File not found");
-            } else {
-                external_command_checker::check_for_prodigal();
-                let cmd_string = format!(
-                    "set -e -o pipefail; \
-                     prodigal -f gff -i {} -o {} {}",
-                    // prodigal
-                    m.value_of("reference").unwrap(),
-                    "lorikeet.gff",
-                    m.value_of("prodigal-params").unwrap_or(""));
-                info!("Queuing cmd_string: {}", cmd_string);
-                let mut prodigal_out = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&cmd_string)
-                    .stdout(Stdio::piped())
-                    .output()
-                    .expect("Unable to execute bash");
-
-                gff_reader = gff::Reader::from_file("lorikeet.gff",
-                                                    gff::GffType::GFF3)
-                    .expect("Failed to read prodigal output");
-            }
 
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
@@ -1706,12 +1667,6 @@ fn run_pileup<'a,
             };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
-            let min_fraction_covered = value_t!(m.value_of("min-covered-fraction"), f32).unwrap();
-
-            if min_fraction_covered > 1.0 || min_fraction_covered < 0.0 {
-                eprintln!("Minimum fraction covered parameter cannot be < 0 or > 1, found {}", min_fraction_covered);
-                process::exit(1)
-            }
             let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
@@ -1733,7 +1688,6 @@ fn run_pileup<'a,
                 var_fraction,
                 min,
                 max,
-                min_fraction_covered,
                 contig_end_exclusion,
                 "",
                 variant_consensus_file,
