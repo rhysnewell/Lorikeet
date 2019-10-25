@@ -184,6 +184,7 @@ impl PileupFunctions for PileupStats {
                     cumulative_sum += *current;
                     depth[pos] = cumulative_sum as usize;
                 }
+                info!("new contig added {} with coverage {} and variance {}", tid, coverage, variance);
             }
         }
     }

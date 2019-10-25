@@ -135,7 +135,6 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
         let mut indels = Vec::new();
 
-        let mut depth = Vec::new(); // genomic depth
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
         let mut read_cnt_id = 0;
@@ -143,6 +142,7 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut base;
 
         // for record in records
+        let mut skipped_reads = 0;
         while bam_generated.read(&mut record)
             .expect("Error while reading BAM record") == true {
             debug!("Starting with a new read.. {:?}", record);
@@ -150,6 +150,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 (!flag_filters.include_secondary && record.is_secondary()) ||
                 (!flag_filters.include_improper_pairs && !record.is_proper_pair()){
                 debug!("Skipping read based on flag filtering");
+                skipped_reads += 1;
                 continue;
             }
 
@@ -180,7 +181,6 @@ pub fn pileup_variants<R: NamedBamReader,
                         process_previous_contigs_var(
                             mode,
                             last_tid,
-                            depth,
                             nuc_freq,
                             indels,
                             ups_and_downs,
@@ -214,7 +214,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     total_edit_distance_in_current_contig = 0;
                     total_indels_in_current_contig = 0;
                     nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-                    depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+//                    depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
@@ -245,6 +245,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             // if M, X, or = increment start and decrement end index
                             debug!("Adding M, X, or = at {} and {}", cursor, cursor + cig.len() as usize);
                             ups_and_downs[cursor] += 1;
+                            let final_pos = cursor + cig.len() as usize;
+
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 base = record.seq()[qpos] as char;
                                 if base != ref_seq[cursor as usize] as char {
@@ -255,8 +257,8 @@ pub fn pileup_variants<R: NamedBamReader,
 //                                depth[cursor] += 1;
                                 cursor += 1;
                             }
-                            if cursor < ups_and_downs.len() { // True unless the read hits the contig end.
-                                ups_and_downs[cursor] -= 1;
+                            if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
+                                ups_and_downs[final_pos] -= 1;
                             }
                             read_cursor += cig.len() as usize;
                         },
@@ -267,6 +269,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             id.insert(read_to_id[&record.qname().to_vec()]);
 
                             cursor += cig.len() as usize;
+
                             total_indels_in_current_contig += cig.len();
                         },
                         Cigar::RefSkip(_) => {
@@ -303,7 +306,9 @@ pub fn pileup_variants<R: NamedBamReader,
                             }
                             read_cursor += cig.len() as usize;
                         },
-                        Cigar::HardClip(_) | Cigar::Pad(_) => {}
+                        Cigar::HardClip(_) | Cigar::Pad(_) => {
+                            read_cursor += cig.len() as usize;
+                        }
                     }
                 }
                 // Determine the number of mismatching bases in this read by
@@ -331,7 +336,6 @@ pub fn pileup_variants<R: NamedBamReader,
             process_previous_contigs_var(
                 mode,
                 last_tid,
-                depth,
                 nuc_freq,
                 indels,
                 ups_and_downs,
@@ -360,11 +364,11 @@ pub fn pileup_variants<R: NamedBamReader,
         }
 
 
-        info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%)",
+        info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and skipped {}",
               stoit_name, num_mapped_reads_total,
               bam_generated.num_detected_primary_alignments(), 2,
               (num_mapped_reads_total * 100) as f64 /
-                  bam_generated.num_detected_primary_alignments() as f64);
+                  bam_generated.num_detected_primary_alignments() as f64, skipped_reads);
 
         if bam_generated.num_detected_primary_alignments() == 0 {
             warn!("No primary alignments were observed for sample {} \
@@ -383,7 +387,6 @@ pub fn pileup_variants<R: NamedBamReader,
 fn process_previous_contigs_var(
     mode: &str,
     last_tid: i32,
-    depth: Vec<usize>,
     nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
     indels: Vec<HashMap<String, HashSet<i32>>>,
     ups_and_downs: Vec<i32>,

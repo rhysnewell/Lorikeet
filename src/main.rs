@@ -200,7 +200,7 @@ Other arguments (optional):
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
-                                         a variant. [default: 40]
+                                         a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -329,7 +329,7 @@ Other arguments (optional):
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
-                                         a variant. [default: 40]
+                                         a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -453,7 +453,7 @@ Other arguments (optional):
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
-                                         a variant. [default: 40]
+                                         a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -1130,7 +1130,7 @@ impl FilterParameters {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: !m.is_present("proper-pairs-only"),
+                include_improper_pairs: m.is_present("allow-improper-pairs"),
                 include_secondary: false,
                 include_supplementary: false,
             },
@@ -2067,7 +2067,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
-                    .default_value("40"))
+                    .default_value("10"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))
@@ -2241,7 +2241,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
-                    .default_value("40"))
+                    .default_value("10"))
                 .arg(Arg::with_name("kmer-size")
                     .long("kmer-size")
                     .short("k")
@@ -2415,7 +2415,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
-                    .default_value("40"))
+                    .default_value("10"))
                 .arg(Arg::with_name("kmer-size")
                     .long("kmer-size")
                     .short("k")
