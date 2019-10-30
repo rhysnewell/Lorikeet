@@ -151,7 +151,7 @@ impl Translations for CodonTable {
 
         // dN/dS calculations when using NGS reads outlined here:
         // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
-        // Note, we don't normalize for depth here
+        // Note, we don't normalize for depth here and instead just use Jukes-Cantor model
         let mut codon: Vec<u8> = vec!();
         let mut new_codons: Vec<Vec<u8>> = vec!();
         let mut positionals = 0;

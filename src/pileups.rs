@@ -57,6 +57,7 @@ pub fn pileup_variants<R: NamedBamReader,
             println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
         },
         "evolve" => {
+            println!("contig\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
             let mut gff_reader;
             if m.is_present("gff") {
                 let gff_file = m.value_of("gff").unwrap();
@@ -82,7 +83,6 @@ pub fn pileup_variants<R: NamedBamReader,
                 gff_reader = gff::Reader::from_file("lorikeet.gff",
                                                     bio::io::gff::GffType::GFF3)
                     .expect("Failed to read prodigal output");
-                println!("contig\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
 
             }
             for record in gff_reader.records() {
