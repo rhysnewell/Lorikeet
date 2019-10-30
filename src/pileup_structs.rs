@@ -597,7 +597,7 @@ impl PileupFunctions for PileupStats {
                                     if genotype_record.ordered_variants.len() > 0 {
                                         // New genotype detected
                                         genotype_vec.push(genotype_record);
-                                        debug!("genotypes {:?}", genotype_vec);
+//                                        debug!("genotypes {:?}", genotype_vec);
 
                                         genotype_record = Genotype::start(position);
                                     }
@@ -648,7 +648,6 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 info!("Calculating population dN/dS from reads for {} genes", gff_records.len());
-                println!("contig\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
                 gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
@@ -693,7 +692,12 @@ impl PileupFunctions for PileupStats {
                             }
                         }
                     }
-                })
+                });
+
+//
+//                let d_n: f64 = -(3.0/4.0)*(1.0-(4.0*0.75)/3.0);
+//                let d_s: f64 = -(3.0/4.0)*(1.0-(4.0*0.75)/3.0);
+//                debug!("when 0.75 dN {} dS {} and dnds {}", d_n, d_s, d_n/d_s);
             }
         }
 
