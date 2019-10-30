@@ -265,7 +265,9 @@ impl PileupFunctions for PileupStats {
                     let read_variants = Arc::clone(&read_variants);
                     let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = HashMap::new();
-//                    if *coverage * (1.0 - coverage_fold) <= *d as f32 && *d as f32 <= *coverage * (1.0 + coverage_fold) {
+                    if (*coverage * (1.0 - coverage_fold) <= *d as f32
+                        && *d as f32 <= *coverage * (1.0 + coverage_fold))
+                        || (coverage_fold == 0.0) {
 //                        if d >= &mut min_variant_depth.clone() {
                             // INDELS act differently to normal variants
                             // The reads containing this variant don't contribute to coverage values
@@ -319,7 +321,7 @@ impl PileupFunctions for PileupStats {
                             };
 
 //                        }
-//                    }
+                    }
 
                     if rel_abundance.len() > 0 {
                         let mut variants = variants.lock().unwrap();
@@ -646,6 +648,7 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 info!("Calculating population dN/dS from reads for {} genes", gff_records.len());
+                println!("contig\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
                 gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
@@ -660,9 +663,36 @@ impl PileupFunctions for PileupStats {
                         }
 
                     };
+                    for (cursor, variant_map) in
+                        variant_abundances[*gene.start() as usize..*gene.end() as usize].to_vec().iter().enumerate() {
+                        if variant_map.len() > 0 {
+                            for (variant, abundance) in variant_map {
+                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+                                         gene.seqname(), gene.start(),
+                                         gene.end(), frame, strand_symbol, dnds, cursor);
+                                if variant.to_owned().contains("N") {
+                                    println!("{}\t{}\t{}\t{}",
+                                           variant,
+                                           str::from_utf8(
+                                               &ref_sequence[cursor..cursor
+                                                   + variant.len() as usize]).unwrap(),
+                                           abundance, depth[cursor]);
 
-                    println!("{} {} {} {} {} {}",
-                             gene.seqname(), gene.start(), gene.end(), frame, strand_symbol, dnds);
+                                } else if variant.len() > 1 {
+                                    println!("{}\t{}\t{}\t{}",
+                                           str::from_utf8(
+                                               &[ref_sequence[cursor-1]]).unwrap().to_owned() + variant,
+                                           str::from_utf8(
+                                               &[ref_sequence[cursor-1]]).unwrap(),
+                                           abundance, depth[cursor]);
+                                } else {
+                                    println!("{}\t{}\t{}\t{}",
+                                             variant,
+                                             ref_sequence[cursor] as char, abundance, depth[cursor]);
+                                }
+                            }
+                        }
+                    }
                 })
             }
         }
