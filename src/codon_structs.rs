@@ -247,14 +247,29 @@ impl Translations for CodonTable {
 
         debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
                Nd, N, Sd, S, positionals, total_variants);
-        let pn = Nd/N;
-        let ps = Sd/S;
+        let mut pn = Nd/N;
+        let mut ps = Sd/S;
         debug!("pn {} ps {}", pn, ps);
+        // Weirdly in the Jukes-Cantor model if pn or ps are 0.75 then the nat log does not resolve
+        // No one talks about this in the literature for some reason
+        if pn == 0.75 {
+            pn = 0.7499
+        }
+        if ps == 0.75 {
+            ps = 0.7499
+        }
         let d_n = -(3.0/4.0)*(1.0-(4.0*pn)/3.0).ln();
         let d_s = -(3.0/4.0)*(1.0-(4.0*ps)/3.0).ln();
         debug!("dN {} dS {}", d_n, d_s);
+        let mut dnds = d_n/d_s;
 
-        return d_n/d_s
+        // negative dnds values make no sense, but occur nonetheless
+        // Just make them 0.0
+        if dnds < 0.0 {
+            dnds = 0.0
+        }
+
+        return dnds
     }
 }
 
