@@ -648,10 +648,13 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 info!("Calculating population dN/dS from reads for {} genes", gff_records.len());
+                let mut print_stream = &mut Mutex::new(std::io::stdout());
                 gff_records.par_iter().for_each(|gene| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
                     let frame: usize = gene.frame().parse().unwrap();
+                    let start = gene.start().clone() as usize - 1;
+                    let end = gene.end().clone() as usize;
 
                     let strand_symbol = match strand {
                         strand::Strand::Forward | strand::Strand::Unknown => {
@@ -663,14 +666,16 @@ impl PileupFunctions for PileupStats {
 
                     };
                     for (cursor, variant_map) in
-                        variant_abundances[*gene.start() as usize..*gene.end() as usize].to_vec().iter().enumerate() {
+                        variant_abundances[start..end].to_vec().iter().enumerate() {
+                        let cursor = cursor + start;
                         if variant_map.len() > 0 {
+                            let mut print_stream = print_stream.lock().unwrap();
                             for (variant, abundance) in variant_map {
-                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                                          gene.seqname(), gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
                                 if variant.to_owned().contains("N") {
-                                    println!("{}\t{}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{}\t{}",
                                            variant,
                                            str::from_utf8(
                                                &ref_sequence[cursor..cursor
@@ -678,14 +683,14 @@ impl PileupFunctions for PileupStats {
                                            abundance, depth[cursor]);
 
                                 } else if variant.len() > 1 {
-                                    println!("{}\t{}\t{}\t{}",
+                                     writeln!(print_stream,"{}\t{}\t{}\t{}",
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap().to_owned() + variant,
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap(),
                                            abundance, depth[cursor]);
                                 } else {
-                                    println!("{}\t{}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{}\t{}",
                                              variant,
                                              ref_sequence[cursor] as char, abundance, depth[cursor]);
                                 }
