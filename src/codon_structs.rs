@@ -134,9 +134,13 @@ impl Translations for CodonTable {
         let mut N: f32 = 0.0;
         let mut S: f32 = 0.0;
         for codon in codon_sequence.iter() {
-            let n = self.ns_sites[codon];
-            N += n;
-            S += 3.0 - n;
+            if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
+                continue
+            } else {
+                let n = self.ns_sites[codon];
+                N += n;
+                S += 3.0 - n;
+            }
         }
 
         debug!("getting ns_sites N {} S {}", N, S);
@@ -155,6 +159,9 @@ impl Translations for CodonTable {
         for (gene_cursor, variant_map) in variant_abundances[start..end].to_vec().iter().enumerate() {
             let codon_idx = gene_cursor / 3 as usize;
             let codon_cursor = gene_cursor % 3;
+            if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
+                continue
+            }
 
             if codon_cursor == 0 {
                 for new_codon in new_codons {
