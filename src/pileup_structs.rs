@@ -643,13 +643,13 @@ impl PileupFunctions for PileupStats {
                 let contig_name = String::from_utf8(target_name.clone())
                     .expect("Cannot create string from target_name");
                 let placeholder = Vec::new();
-                let gff_records = match gff_map.get(&contig_name){
+                let mut gff_records = match gff_map.get(&contig_name){
                     Some(records) => records,
                     None => &placeholder,
                 };
-                info!("Calculating population dN/dS from reads for {} genes", gff_records.len());
+                debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
                 let mut print_stream = &mut Mutex::new(std::io::stdout());
-                gff_records.par_iter().for_each(|gene| {
+                gff_records.par_iter().enumerate().for_each(|(id, gene)| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
                     let frame: usize = gene.frame().parse().unwrap();
@@ -665,6 +665,8 @@ impl PileupFunctions for PileupStats {
                         }
 
                     };
+                    let gene_id = &gene.attributes()["ID"];
+
                     for (cursor, variant_map) in
                         variant_abundances[start..end].to_vec().iter().enumerate() {
                         let cursor = cursor + start;
@@ -672,7 +674,7 @@ impl PileupFunctions for PileupStats {
                             let mut print_stream = print_stream.lock().unwrap();
                             for (variant, abundance) in variant_map {
                                 write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                         gene.seqname(), gene.start(),
+                                         gene.seqname().clone().to_owned()+gene_id, gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
                                 if variant.to_owned().contains("N") {
                                     writeln!(print_stream, "{}\t{}\t{}\t{}",
@@ -699,10 +701,6 @@ impl PileupFunctions for PileupStats {
                     }
                 });
 
-//
-//                let d_n: f64 = -(3.0/4.0)*(1.0-(4.0*0.75)/3.0);
-//                let d_s: f64 = -(3.0/4.0)*(1.0-(4.0*0.75)/3.0);
-//                debug!("when 0.75 dN {} dS {} and dnds {}", d_n, d_s, d_n/d_s);
             }
         }
 
