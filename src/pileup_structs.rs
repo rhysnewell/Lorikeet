@@ -665,7 +665,9 @@ impl PileupFunctions for PileupStats {
                         }
 
                     };
-                    let gene_id = &gene.attributes()["ID"];
+                    let gene_id = &gene.attributes()["ID"].split("_").collect::<Vec<&str>>()[1];
+                    let mut contig = gene.seqname().to_owned();
+                    contig = contig + "_";
 
                     for (cursor, variant_map) in
                         variant_abundances[start..end].to_vec().iter().enumerate() {
@@ -674,7 +676,7 @@ impl PileupFunctions for PileupStats {
                             let mut print_stream = print_stream.lock().unwrap();
                             for (variant, abundance) in variant_map {
                                 write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                         gene.seqname().clone().to_owned()+gene_id, gene.start(),
+                                         contig.clone()+gene_id, gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
                                 if variant.to_owned().contains("N") {
                                     writeln!(print_stream, "{}\t{}\t{}\t{}",
