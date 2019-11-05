@@ -57,7 +57,7 @@ pub fn pileup_variants<R: NamedBamReader,
             println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
         },
         "evolve" => {
-            println!("contig\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
+            println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
             let mut gff_reader;
             if m.is_present("gff") {
                 let gff_file = m.value_of("gff").unwrap();
@@ -358,7 +358,7 @@ pub fn pileup_variants<R: NamedBamReader,
         }
 
 
-        info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and skipped {}",
+        info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
               stoit_name, num_mapped_reads_total,
               bam_generated.num_detected_primary_alignments(), 2,
               (num_mapped_reads_total * 100) as f64 /
