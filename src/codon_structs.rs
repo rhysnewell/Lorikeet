@@ -67,7 +67,7 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &Vec<HashMap<String, f32>>,
+                      variant_abundances: &Vec<HashMap<String, f64>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32;
 }
@@ -116,7 +116,7 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &Vec<HashMap<String, f32>>,
+                      variant_abundances: &Vec<HashMap<String, f64>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32 {
         let strand = gene.strand().expect("No strandedness found");
