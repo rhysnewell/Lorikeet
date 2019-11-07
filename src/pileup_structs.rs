@@ -8,8 +8,7 @@ use permutation::*;
 use codon_structs::*;
 use bio::io::gff;
 use bio_types::strand;
-
-
+use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 
 
 #[derive(Debug, Clone)]
@@ -75,8 +74,8 @@ pub enum PileupStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
         variant_abundances: Vec<HashMap<String, f32>>,
-        variant_count: Vec<usize>,
-        depth: Vec<usize>,
+        variant_count: Vec<f64>,
+        depth: Vec<f64>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
         genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
         mean_genotypes: f32,
@@ -95,6 +94,7 @@ pub enum PileupStats {
         min: f32,
         max: f32,
         method: String,
+        read_error_rate: f64,
     }
 }
 
@@ -125,6 +125,7 @@ impl PileupStats {
             min: min,
             max: max,
             method: "".to_string(),
+            read_error_rate: 0.0,
         }
     }
 }
@@ -234,27 +235,29 @@ impl PileupFunctions for PileupStats {
                 *coverage = coverages[1];
                 *variance = coverages[2];
                 *method = method.to_string();
-                let mut variant_count_safe = Arc::new(Mutex::new(vec![0; ups_and_downs.len()]));
-                *depth = vec![0; ups_and_downs.len()];
+                let mut variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
+                *depth = vec![0.; ups_and_downs.len()];
                 let mut cumulative_sum = 0;
                 for (pos, current) in ups_and_downs.iter().enumerate() {
                     cumulative_sum += *current;
-                    depth[pos] = cumulative_sum as usize;
+                    depth[pos] = cumulative_sum as f64;
                 }
+                let mut adjusted_depth = Arc::new(Mutex::new(depth.clone()));
 
                 // Calculate how many reads have variant at each position
                 // to go into linear regression predicting read error rate
                 nucfrequency.par_iter().zip(indels.par_iter()).enumerate().for_each(
                     |(pos, (snp_map, indel_map))|{
                         let mut variant_count_safe = variant_count_safe.lock().unwrap();
+                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
                         if snp_map.len() > 0 {
                             for reads in snp_map.values() {
-                                variant_count_safe[pos] += reads.len();
+                                variant_count_safe[pos] += reads.len() as f64;
                             }
                         }
                         if indel_map.len() > 0 {
                             for reads in indel_map.values() {
-                                variant_count_safe[pos] += reads.len();
+                                variant_count_safe[pos] += reads.len() as f64;
                             }
                         }
                 });
@@ -270,8 +273,26 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 variant_count,
                 depth,
+                read_error_rate,
                 ..
             } => {
+                let mut data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
+                let data = RegressionDataBuilder::new()
+                    .build_from(data).expect("Unable to build regression from data");
+                let formula = "Y ~ X";
+                let model = FormulaRegressionBuilder::new()
+                    .data(&data)
+                    .formula(formula)
+                    .fit()
+                    .expect("Unable to fit data to formula");
+                let parameters = model.parameters;
+                let standard_errors = model.se;
+                let pvalues = model.pvalues;
+                debug!("Liner regression results: \n params {:?} \n se {:?} \n p-values {:?}",
+                         parameters,
+                         standard_errors.pairs(),
+                         pvalues.pairs());
+                *read_error_rate = parameters.pairs()[0].1.clone()
 
             }
         }
@@ -289,6 +310,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variations_per_base,
                 ref mut coverage,
                 tid,
+                read_error_rate,
                 ..
             } => {
                 let variants = Arc::new(Mutex::new(vec![HashMap::new(); depth.len()])); // The relative abundance of each variant
@@ -314,8 +336,8 @@ impl PileupFunctions for PileupStats {
                             if indels[i].len() > 0 {
                                 for (indel, read_ids) in indels[i].iter() {
                                     let count = read_ids.len();
-                                    *d += count;
-                                    if count >= min_variant_depth {
+                                    *d += count as f64;
+                                    if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
                                         rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
                                         for read in read_ids {
                                             let mut read_variants
@@ -338,7 +360,7 @@ impl PileupFunctions for PileupStats {
                             if nucfrequency[i].len() > 0 {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
-                                    if count >= min_variant_depth {
+                                    if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate) {
                                         rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
                                         for read in read_ids {
                                             let mut read_variants
