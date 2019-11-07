@@ -75,6 +75,7 @@ pub enum PileupStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
         variant_abundances: Vec<HashMap<String, f32>>,
+        variant_count: Vec<usize>,
         depth: Vec<usize>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
         genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
@@ -104,6 +105,7 @@ impl PileupStats {
             nucfrequency: vec!(),
             variants_in_reads: HashMap::new(),
             variant_abundances: Vec::new(),
+            variant_count: Vec::new(),
             depth: vec!(),
             indels: vec!(),
             genotypes_per_position: HashMap::new(),
@@ -140,6 +142,8 @@ pub trait PileupFunctions {
                   coverages: Vec<f32>,
                   ups_and_downs: Vec<i32>);
 
+    fn calc_error(&mut self);
+
     fn calc_variants(&mut self,
                      min_variant_depth: usize,
                      coverage_fold: f32);
@@ -167,6 +171,7 @@ impl PileupFunctions for PileupStats {
                 ref mut nucfrequency,
                 ref mut variants_in_reads,
                 ref mut variant_abundances,
+                ref mut variant_count,
                 ref mut depth,
                 ref mut indels,
                 ref mut tid,
@@ -182,6 +187,7 @@ impl PileupFunctions for PileupStats {
                 *nucfrequency = vec!();
                 *variants_in_reads = HashMap::new();
                 *variant_abundances = Vec::new();
+                *variant_count = Vec::new();
                 *depth = vec!();
                 *indels = vec!();
                 *tid = 0;
@@ -192,7 +198,6 @@ impl PileupFunctions for PileupStats {
                 *coverage = 0.00;
                 *num_covered_bases = 0;
                 *num_mapped_reads = 0;
-
             }
         }
     }
@@ -208,6 +213,7 @@ impl PileupFunctions for PileupStats {
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
+                ref mut variant_count,
                 ref mut depth,
                 ref mut indels,
                 ref mut tid,
@@ -228,13 +234,45 @@ impl PileupFunctions for PileupStats {
                 *coverage = coverages[1];
                 *variance = coverages[2];
                 *method = method.to_string();
+                let mut variant_count_safe = Arc::new(Mutex::new(vec![0; ups_and_downs.len()]));
                 *depth = vec![0; ups_and_downs.len()];
                 let mut cumulative_sum = 0;
                 for (pos, current) in ups_and_downs.iter().enumerate() {
                     cumulative_sum += *current;
                     depth[pos] = cumulative_sum as usize;
                 }
+
+                // Calculate how many reads have variant at each position
+                // to go into linear regression predicting read error rate
+                nucfrequency.par_iter().zip(indels.par_iter()).enumerate().for_each(
+                    |(pos, (snp_map, indel_map))|{
+                        let mut variant_count_safe = variant_count_safe.lock().unwrap();
+                        if snp_map.len() > 0 {
+                            for reads in snp_map.values() {
+                                variant_count_safe[pos] += reads.len();
+                            }
+                        }
+                        if indel_map.len() > 0 {
+                            for reads in indel_map.values() {
+                                variant_count_safe[pos] += reads.len();
+                            }
+                        }
+                });
+                *variant_count = variant_count_safe.lock().unwrap().to_vec();
+
                 debug!("new contig added {} with coverage {} and variance {}", tid, coverage, variance);
+            }
+        }
+    }
+
+    fn calc_error(&mut self) {
+        match self {
+            PileupStats::PileupContigStats {
+                variant_count,
+                depth,
+                ..
+            } => {
+
             }
         }
     }
