@@ -82,7 +82,7 @@ Thresholds:
                                               identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
                                               bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.0]
+                                              bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                               aligned bases.
                                               Implies --proper-pairs-only. [default: 0]
@@ -175,7 +175,7 @@ Alignment filtering (optional):
                                               identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
                                               bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.0]
+                                              bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                               aligned bases.
                                               Conflicts --allow-improper-pairs. [default 0.0]
@@ -304,7 +304,7 @@ Alignment filtering (optional):
                                               identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
                                               bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.0]
+                                              bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                               aligned bases.
                                               Conflicts --allow-improper-pairs. [default 0.0]
@@ -428,7 +428,7 @@ Alignment filtering (optional):
                                          identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.0]
+                                         bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
                                          Conflicts --allow-improper-pairs. [default 0.0]
@@ -1977,7 +1977,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
-                    .takes_value(true))
+                    .takes_value(true)
+                    .default_value("0.97"))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
@@ -2156,6 +2157,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
+                    .default_value("0.97")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
@@ -2330,6 +2332,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
+                    .default_value("0.97")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
@@ -2441,6 +2444,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
+                    .default_value("0.97")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
