@@ -18,6 +18,7 @@ pub mod mash;
 pub mod minhashes;
 pub mod distance;
 
+extern crate linregress;
 extern crate bio;
 extern crate bio_types;
 extern crate seq_io;

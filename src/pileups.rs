@@ -104,24 +104,19 @@ pub fn pileup_variants<R: NamedBamReader,
 
         let stoit_file_name = stoit_name.clone() + &variant_file_name;
         // Pre-emptively create variant fasta
-        let consensus_variant_fasta = match File::create(&stoit_file_name) {
-            Ok(fasta) => fasta,
-            Err(e) => {
-                println!("Cannot create file {:?}", e);
-                std::process::exit(1)
-            },
-        };
-
-        // Check to see if we are writing a consensus genome
-        if !print_consensus {
-            match fs::remove_file(&stoit_file_name) {
-                Ok(removed) => removed,
-                Err(_err) => {
-                    println!("Incorrect file read/write permission");
-                    std::process::exit(1)
-                }
-            };
-        }
+//        let consensus_variant_fasta = File::create(&stoit_file_name)
+//            .expect("Cannot create consensus file");
+//
+//        // Check to see if we are writing a consensus genome
+//        if !print_consensus {
+//            match fs::remove_file(&stoit_file_name) {
+//                Ok(removed) => removed,
+//                Err(_err) => {
+//                    println!("Incorrect file read/write permission");
+//                    std::process::exit(1)
+//                }
+//            };
+//        }
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
@@ -194,8 +189,6 @@ pub fn pileup_variants<R: NamedBamReader,
                             contig_name,
                             &mut pileup_matrix,
                             ref_seq,
-                            &consensus_variant_fasta,
-                            print_consensus,
                             sample_idx,
                             method,
                             total_mismatches,
@@ -343,8 +336,6 @@ pub fn pileup_variants<R: NamedBamReader,
                 contig_name,
                 &mut pileup_matrix,
                 ref_seq,
-                &consensus_variant_fasta,
-                print_consensus,
                 sample_idx,
                 method,
                 total_mismatches,
@@ -393,8 +384,6 @@ fn process_previous_contigs_var(
     contig_name: Vec<u8>,
     pileup_matrix: &mut PileupMatrix,
     ref_sequence: Vec<u8>,
-    consensus_variant_fasta: &File,
-    print_consensus: bool,
     sample_idx: i32,
     method: &str,
     total_mismatches: u32,
@@ -429,6 +418,8 @@ fn process_previous_contigs_var(
                                  coverages,
                                  ups_and_downs);
 
+        pileup_struct.calc_error();
+
 
         // filters variants across contig
         pileup_struct.calc_variants(
@@ -442,18 +433,18 @@ fn process_previous_contigs_var(
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
 
-                if print_consensus {
-                    // Write consensus contig to fasta
-                    // i.e. the most abundant variant at each position from this set of reads
-                    let contig_n = ">".to_owned() +
-                        &str::from_utf8(&contig_name).unwrap().to_string() +
-                        "\n";
-
-                    let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
-                    consensus_clone.write_all(contig_n.as_bytes()).unwrap();
-                    pileup_struct.generate_variant_contig(ref_sequence.clone(),
-                                                          consensus_clone);
-                }
+//                if print_consensus {
+//                    // Write consensus contig to fasta
+//                    // i.e. the most abundant variant at each position from this set of reads
+//                    let contig_n = ">".to_owned() +
+//                        &str::from_utf8(&contig_name).unwrap().to_string() +
+//                        "\n";
+//
+//                    let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
+//                    consensus_clone.write_all(contig_n.as_bytes()).unwrap();
+//                    pileup_struct.generate_variant_contig(ref_sequence.clone(),
+//                                                          consensus_clone);
+//                }
             },
             "summarize" => {
                 // calculates minimum number of genotypes possible for each variant location

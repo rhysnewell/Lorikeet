@@ -69,7 +69,7 @@ pub trait Translations {
                       gene: &bio::io::gff::Record,
                       variant_abundances: &Vec<HashMap<String, f32>>,
                       ref_sequence: &Vec<u8>,
-                      depth: &Vec<usize>) -> f32;
+                      depth: &Vec<f64>) -> f32;
 }
 
 impl Translations for CodonTable {
@@ -118,7 +118,7 @@ impl Translations for CodonTable {
                       gene: &bio::io::gff::Record,
                       variant_abundances: &Vec<HashMap<String, f32>>,
                       ref_sequence: &Vec<u8>,
-                      depth: &Vec<usize>) -> f32 {
+                      depth: &Vec<f64>) -> f32 {
         let strand = gene.strand().expect("No strandedness found");
 
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
