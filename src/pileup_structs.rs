@@ -16,7 +16,7 @@ pub struct Genotype {
     read_ids: HashSet<i32>,
     start_var_pos: usize,
     ordered_variants: HashMap<i32, String>,
-    frequencies: Vec<f32>,
+    frequencies: Vec<f64>,
 }
 
 impl Genotype {
@@ -29,7 +29,7 @@ impl Genotype {
         }
     }
 
-    fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>, variant_abundances: &Vec<HashMap<String, f32>>) {
+    fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>, variant_abundances: &Vec<HashMap<String, f64>>) {
         self.read_ids = HashSet::new();
         self.read_ids.insert(read_id);
         for (pos, variant) in position_map.iter() {
@@ -73,11 +73,11 @@ pub enum PileupStats {
     PileupContigStats {
         nucfrequency: Vec<HashMap<char, HashSet<i32>>>,
         variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
-        variant_abundances: Vec<HashMap<String, f32>>,
+        variant_abundances: Vec<HashMap<String, f64>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
-        genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
+        genotypes_per_position: HashMap<usize, HashMap<String, f64>>,
         mean_genotypes: f32,
         tid: i32,
         total_indels: usize,
@@ -161,6 +161,8 @@ pub trait PileupFunctions {
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
                            ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable);
+
+    fn cluster_variants(&mut self);
 
     fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32);
 }
@@ -338,7 +340,7 @@ impl PileupFunctions for PileupStats {
                                     let count = read_ids.len();
                                     *d += count as f64;
                                     if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
-                                        rel_abundance.insert(indel.clone(), count as f32 / *d as f32);
+                                        rel_abundance.insert(indel.clone(), count as f64 / *d);
                                         for read in read_ids {
                                             let mut read_variants
                                                 = read_variants.lock().unwrap();
@@ -361,7 +363,7 @@ impl PileupFunctions for PileupStats {
                                 for (base, read_ids) in nucfrequency[i].iter() {
                                     let count = read_ids.len();
                                     if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate) {
-                                        rel_abundance.insert(base.to_string(), count as f32 / *d as f32);
+                                        rel_abundance.insert(base.to_string(), count as f64 / *d);
                                         for read in read_ids {
                                             let mut read_variants
                                                 = read_variants.lock().unwrap();
@@ -524,7 +526,7 @@ impl PileupFunctions for PileupStats {
 
                         for (var, _abundance) in variants.iter() {
                             let genotype_count = genotype_pos.entry(var.to_string())
-                                .or_insert(0);
+                                .or_insert(0.);
 
                             let mut genotype_vec = Vec::new();
 
@@ -554,9 +556,15 @@ impl PileupFunctions for PileupStats {
                             let mut left_most_variants: Vec<i32> = Vec::new();
                             let read_vec = read_ids.into_iter().collect::<Vec<i32>>();
 
+                            let mut surrounding_variants = HashSet::new();
+
                             for read_id in read_vec.iter() {
                                 let position_map = match variants_in_reads.get(read_id) {
-                                    Some(positions) => positions,
+                                    Some(positions) => {
+                                        surrounding_variants.extend(
+                                            positions.into_iter()
+                                                .map(|(pos, var)|{(pos.clone(), var.clone())}));
+                                        positions},
                                     None => {
                                         debug!("read id not recorded in variant map {}, {}", var, read_id);
                                         break
@@ -664,7 +672,7 @@ impl PileupFunctions for PileupStats {
                                 }
                             }
 
-                            *genotype_count += genotype_vec.len();
+                            *genotype_count += genotype_vec.len() as f64/surrounding_variants.len() as f64;
                             let mut total_genotype_count = total_genotype_count.lock().unwrap();
                             *total_genotype_count += genotype_vec.len();
                             let mut variant_count = variant_count.lock().unwrap();
@@ -735,7 +743,7 @@ impl PileupFunctions for PileupStats {
                         if variant_map.len() > 0 {
                             let mut print_stream = print_stream.lock().unwrap();
                             for (variant, abundance) in variant_map {
-                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
                                          contig.clone()+gene_id, gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
                                 if variant.to_owned().contains("N") {
@@ -747,14 +755,14 @@ impl PileupFunctions for PileupStats {
                                            abundance, depth[cursor]);
 
                                 } else if variant.len() > 1 {
-                                     writeln!(print_stream,"{}\t{}\t{}\t{}",
+                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}",
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap().to_owned() + variant,
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap(),
                                            abundance, depth[cursor]);
                                 } else {
-                                    writeln!(print_stream, "{}\t{}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}",
                                              variant,
                                              ref_sequence[cursor] as char, abundance, depth[cursor]);
                                 }
@@ -766,6 +774,16 @@ impl PileupFunctions for PileupStats {
             }
         }
 
+    }
+
+    fn cluster_variants(&mut self) {
+        match self{
+            PileupStats::PileupContigStats {
+                variant_abundances,
+                ..} => {
+
+            }
+        }
     }
 
     fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32){
@@ -789,7 +807,7 @@ impl PileupFunctions for PileupStats {
                         if indels[position].contains_key(var) {
                             // How does this print N for insertions?
                             if var.to_owned().contains("N"){
-                                print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
                                        var,
                                        str::from_utf8(
                                            &ref_sequence[position..position
@@ -797,7 +815,7 @@ impl PileupFunctions for PileupStats {
                                        abundance, d);
 
                             } else {
-                                print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position-1,
+                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position-1,
                                        str::from_utf8(
                                            &[ref_sequence[position-1]]).unwrap().to_owned() + var,
                                        str::from_utf8(
@@ -810,7 +828,7 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{}\t", gtype_count);
+                                            print!("{:.3}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
@@ -824,7 +842,7 @@ impl PileupFunctions for PileupStats {
                             println!{"{}", sample_idx};
 
                         } else if var.len() == 1{
-                            print!("{}\t{}\t{}\t{}\t{}\t{}\t", tid, position,
+                            print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
                                    var,
                                    ref_sequence[position] as char,
                                    abundance, d);
@@ -834,7 +852,7 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{}\t", gtype_count);
+                                            print!("{:.3}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
