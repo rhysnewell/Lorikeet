@@ -77,7 +77,7 @@ pub enum PileupStats {
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
-        genotypes_per_position: HashMap<usize, HashMap<String, f64>>,
+        genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
         mean_genotypes: f32,
         tid: i32,
         total_indels: usize,
@@ -526,7 +526,7 @@ impl PileupFunctions for PileupStats {
 
                         for (var, _abundance) in variants.iter() {
                             let genotype_count = genotype_pos.entry(var.to_string())
-                                .or_insert(0.);
+                                .or_insert(0);
 
                             let mut genotype_vec = Vec::new();
 
@@ -556,14 +556,10 @@ impl PileupFunctions for PileupStats {
                             let mut left_most_variants: Vec<i32> = Vec::new();
                             let read_vec = read_ids.into_iter().collect::<Vec<i32>>();
 
-                            let mut surrounding_variants = HashSet::new();
 
                             for read_id in read_vec.iter() {
                                 let position_map = match variants_in_reads.get(read_id) {
                                     Some(positions) => {
-                                        surrounding_variants.extend(
-                                            positions.into_iter()
-                                                .map(|(pos, var)|{(pos.clone(), var.clone())}));
                                         positions},
                                     None => {
                                         debug!("read id not recorded in variant map {}, {}", var, read_id);
@@ -672,7 +668,7 @@ impl PileupFunctions for PileupStats {
                                 }
                             }
 
-                            *genotype_count += genotype_vec.len() as f64/surrounding_variants.len() as f64;
+                            *genotype_count += genotype_vec.len();
                             let mut total_genotype_count = total_genotype_count.lock().unwrap();
                             *total_genotype_count += genotype_vec.len();
                             let mut variant_count = variant_count.lock().unwrap();
@@ -828,7 +824,7 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{:.3}\t", gtype_count);
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
@@ -852,7 +848,7 @@ impl PileupFunctions for PileupStats {
                                 Some(gtype_hash) => {
                                     match gtype_hash.get(&var.to_string()) {
                                         Some(gtype_count) => {
-                                            print!("{:.3}\t", gtype_count);
+                                            print!("{}\t", gtype_count);
                                         },
                                         None => {
                                             print!("0\t");
