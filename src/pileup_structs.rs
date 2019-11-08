@@ -9,6 +9,10 @@ use codon_structs::*;
 use bio::io::gff;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
+use rusty_machine::learning::dbscan::DBSCAN;
+use rusty_machine::learning::UnSupModel;
+use rusty_machine::linalg::Matrix;
+
 
 
 #[derive(Debug, Clone)]
@@ -292,9 +296,9 @@ impl PileupFunctions for PileupStats {
                 let pvalues = model.pvalues;
                 debug!("Liner regression results: \n params {:?} \n se {:?} \n p-values {:?}",
                          parameters,
-                         standard_errors.pairs(),
+                         standard_errors,
                          pvalues.pairs());
-                *read_error_rate = parameters.pairs()[0].1.clone()
+                *read_error_rate = parameters.pairs()[0].1.clone() + 2.*standard_errors.pairs()[0].1.clone();
 
             }
         }
@@ -776,7 +780,69 @@ impl PileupFunctions for PileupStats {
         match self{
             PileupStats::PileupContigStats {
                 variant_abundances,
+                genotypes_per_position,
+                depth,
                 ..} => {
+
+                let mut abundance_lnddivg =
+                    Arc::new(
+                    Mutex::new(
+                        Vec::new()));
+
+                let mut variant_info =
+                    Arc::new(
+                        Mutex::new(
+                            Vec::new()));
+
+                variant_abundances.iter().enumerate().for_each(
+                    |(position, hash)|{
+                        // loop through each position that has variants
+                        let mut abundance_lnddivg = abundance_lnddivg.lock().unwrap();
+                        let mut variant_info = variant_info.lock().unwrap();
+
+                        let d = depth[position];
+
+                        for (var, abundance) in hash.iter() {
+                            variant_info.push((position, var.clone()));
+                            // for each variant at a location
+
+                            // genotypes associated with that position and variant
+                            let mut g_count = 0.;
+                            match genotypes_per_position.get(&position) {
+                                Some(gtype_hash) => {
+                                    match gtype_hash.get(var) {
+                                        Some(gtype_count) => {
+                                            g_count = gtype_count.clone() as f64;
+                                        },
+                                        None => {
+                                            g_count = 0.;
+                                        }
+                                    }
+                                },
+                                None => {
+                                    g_count = 0.;
+                                },
+                            };
+                            abundance_lnddivg.push(abundance.clone());
+                            abundance_lnddivg.push((d/g_count).ln());
+                        }
+                });
+                let abundance_lnddivg = abundance_lnddivg.lock().unwrap();
+                let variant_info = variant_info.lock().unwrap();
+                // Put inputs into matrix form
+                let inputs = Matrix::new(
+                    abundance_lnddivg.len()/2, 2, abundance_lnddivg);
+
+                let mut model = DBSCAN::new(0.1, 2);
+                model.train(&inputs).unwrap();
+                let clustering = model.clusters().unwrap();
+                for (cluster, info) in clustering.iter().zip(variant_info){
+                    let cluster = match cluster {
+                        Some(c) => *c as i32,
+                        None => -1,
+                    };
+                    println!("{}", cluster);
+                }
 
             }
         }

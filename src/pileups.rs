@@ -433,6 +433,8 @@ fn process_previous_contigs_var(
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
 
+                pileup_struct.cluster_variants();
+
 //                if print_consensus {
 //                    // Write consensus contig to fasta
 //                    // i.e. the most abundant variant at each position from this set of reads
