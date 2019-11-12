@@ -6,7 +6,6 @@ use std::io::prelude::*;
 use rayon::prelude::*;
 use permutation::*;
 use codon_structs::*;
-use bio::io::gff;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use rusty_machine::learning::dbscan::DBSCAN;
@@ -37,8 +36,12 @@ impl Genotype {
         self.read_ids = HashSet::new();
         self.read_ids.insert(read_id);
         for (pos, variant) in position_map.iter() {
-            self.frequencies.push(variant_abundances[*pos as usize][variant].clone());
-            self.ordered_variants.insert(pos.clone(), variant.to_string());
+            let variant_map = &variant_abundances[*pos as usize];
+            if variant_map.len() > 0 {
+                debug!("Fetching position: {:?} {:?} {:?}", pos, variant_map, variant);
+                self.frequencies.push(variant_map[variant].clone());
+                self.ordered_variants.insert(pos.clone(), variant.to_string());
+            }
         }
     }
 
@@ -256,9 +259,11 @@ impl PileupFunctions for PileupStats {
                     |(pos, (snp_map, indel_map))|{
                         let mut variant_count_safe = variant_count_safe.lock().unwrap();
                         let mut adjusted_depth = adjusted_depth.lock().unwrap();
-                        if snp_map.len() > 0 {
-                            for reads in snp_map.values() {
-                                variant_count_safe[pos] += reads.len() as f64;
+                        if snp_map.len() > 1 {
+                            for (key, reads) in snp_map.iter() {
+                                if key != &"R".chars().collect::<Vec<char>>()[0] {
+                                    variant_count_safe[pos] += reads.len() as f64;
+                                }
                             }
                         }
                         if indel_map.len() > 0 {
@@ -294,7 +299,7 @@ impl PileupFunctions for PileupStats {
                 let parameters = model.parameters;
                 let standard_errors = model.se;
                 let pvalues = model.pvalues;
-                debug!("Liner regression results: \n params {:?} \n se {:?} \n p-values {:?}",
+                debug!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
                          parameters,
                          standard_errors,
                          pvalues.pairs());
@@ -368,6 +373,7 @@ impl PileupFunctions for PileupStats {
                                     let count = read_ids.len();
                                     if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate) {
                                         rel_abundance.insert(base.to_string(), count as f64 / *d);
+
                                         for read in read_ids {
                                             let mut read_variants
                                                 = read_variants.lock().unwrap();
@@ -376,8 +382,10 @@ impl PileupFunctions for PileupStats {
                                                 .or_insert(BTreeMap::new());
                                             read_vec.insert(i as i32, base.to_string());
                                         }
-                                        let mut variant_count = variant_count.lock().unwrap();
-                                        *variant_count += 1;
+                                        if base != &"R".chars().collect::<Vec<char>>()[0] {
+                                            let mut variant_count = variant_count.lock().unwrap();
+                                            *variant_count += 1;
+                                        }
                                     } else {
                                         let mut nucfrequency_backup
                                             = nucfrequency_backup.lock().unwrap();
@@ -389,9 +397,12 @@ impl PileupFunctions for PileupStats {
 //                        }
                     }
 
-                    if rel_abundance.len() > 0 {
+                    if rel_abundance.len() > 1 {
                         let mut variants = variants.lock().unwrap();
+                        debug!("Relative Abundances: {:?}", rel_abundance);
                         variants[i] = rel_abundance;
+                    } else {
+
                     }
 
                 });
@@ -590,6 +601,7 @@ impl PileupFunctions for PileupStats {
 
                                 if genotype_vec.len() == 0 {
                                     // No genotype observed yet, so create one
+                                    debug!("Read ID : {} Position Map: {:?}", read_id, position_map);
                                     genotype_record.new(*read_id, position_map, &variant_abundances);
 
                                     genotype_vec.push(genotype_record.clone());
@@ -600,7 +612,7 @@ impl PileupFunctions for PileupStats {
 
                                     let mut new_genotype = false;
 
-                                    for genotype in genotype_vec.iter_mut() {
+                                    'outer: for genotype in genotype_vec.iter_mut() {
 
                                         // Create HashSets of variant positions to use intersection
                                         let genotype_position_set =
@@ -617,7 +629,7 @@ impl PileupFunctions for PileupStats {
                                                     && (Some(pos) < genotype.ordered_variants.keys().max()) {
                                                     // possible new genotype detected
                                                     genotype_record.new(*read_id, position_map, &variant_abundances);
-                                                    break
+                                                    break 'outer;
                                                 }
                                             }
                                             if (genotype.ordered_variants.keys().min() == diff.iter().min())
@@ -633,10 +645,11 @@ impl PileupFunctions for PileupStats {
 
                                                     for (new_position, new_variant) in position_map.iter() {
                                                         if !(genotype.ordered_variants.contains_key(&new_position)) {
+                                                            let variant_map = &variant_abundances[*new_position as usize];
                                                             genotype.ordered_variants
                                                                 .insert(new_position.clone(), new_variant.clone());
                                                             genotype_record.frequencies.push(
-                                                                variant_abundances[*new_position as usize][new_variant])
+                                                                variant_map[new_variant])
                                                         }
                                                     };
 
@@ -831,19 +844,18 @@ impl PileupFunctions for PileupStats {
                 let variant_info = variant_info.lock().unwrap();
                 // Put inputs into matrix form
                 let inputs = Matrix::new(
-                    abundance_lnddivg.len()/2, 2, abundance_lnddivg);
+                    abundance_lnddivg.len()/2, 2, abundance_lnddivg.to_vec());
 
                 let mut model = DBSCAN::new(0.1, 2);
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
-                for (cluster, info) in clustering.iter().zip(variant_info){
+                for (cluster, info) in clustering.iter().zip(variant_info.iter()){
                     let cluster = match cluster {
                         Some(c) => *c as i32,
                         None => -1,
                     };
-                    println!("{}", cluster);
+//                    println!("Cluster: {} Pos: {} Var: {}", cluster, info.0, info.1);
                 }
-
             }
         }
     }
