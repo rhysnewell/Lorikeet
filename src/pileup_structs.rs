@@ -47,10 +47,10 @@ impl Genotype {
         }
     }
 
-    fn check_variants(&self, position_map: &BTreeMap<i32, String>) -> bool {
-        // check variants against stored variants for a genotype
+    fn check_variants(&self, position_map: &BTreeMap<i32, String>, intersection: Vec<i32>) -> bool {
+        // check variants against stored variants for a genotype along the shared positions
         let mut new_var= false;
-        for (check_pos, check_var) in position_map.iter() {
+        for check_pos in intersection.iter() {
             if self.ordered_variants.contains_key(&check_pos) {
                 let current_var = match self
                     .ordered_variants
@@ -61,6 +61,9 @@ impl Genotype {
                         std::process::exit(1)
                     }
                 };
+                let check_var = position_map.get(check_pos)
+                    .expect("No variant at that position while checking genotypes");
+
                 if current_var != check_var {
                     //Then this is a new genotype
                     new_var = true;
@@ -624,41 +627,39 @@ impl PileupFunctions for PileupStats {
                                         let genotype_position_set =
                                             genotype.ordered_variants.keys().cloned().collect::<HashSet<i32>>();
 
-                                        let test_diff: Vec<i32> = position_set
-                                            .difference(&genotype_position_set).cloned().collect();
-
-                                        let curr_diff: Vec<i32> = genotype_position_set
-                                            .difference(&position_set).cloned().collect();
+                                        let diff: Vec<i32> = position_set
+                                            .symmetric_difference(&genotype_position_set).cloned().collect();
 
                                         // If there is a difference between positions of current read
                                         // and previous genotype
-                                        if test_diff.len() > 0 && curr_diff.len() > 0 {
+                                        if diff.len() > 0  {
                                             // Unique positions in both current genotype and
                                             // current read
-                                            let inside_difference = test_diff
+                                            // check for internal differences
+                                            if diff
                                                 .iter()
                                                 .any(|read_pos|
-                                                    (Some(read_pos) > genotype_position_set.iter().min())
-                                                    && (Some(read_pos) < genotype_position_set.iter().max()));
-
-                                        }  else if test_diff.len() > 0 {
-                                            // Positional difference found
-                                            // Check if read is new genotype
-
-                                            // check if differences are only inside current
-                                            // If so, then it is a new genotype
-                                            if (genotype.ordered_variants.keys().min() < diff.iter().min())
-                                                && (diff.iter().max() < genotype.ordered_variants.keys().max()) {
+                                                    (Some(read_pos) >= genotype_position_set.iter().min())
+                                                    && (Some(read_pos) <= genotype_position_set.iter().max())){
+                                                // difference against current
+                                                genotype_record.new(*read_id, position_map, &variant_abundances);
+                                            } else if diff
+                                                .iter()
+                                                .any(|read_pos|
+                                                    (Some(read_pos) >= position_set.iter().min())
+                                                        && (Some(read_pos) <= position_set.iter().max())){
+                                                // difference against read
                                                 // possible new genotype detected
                                                 genotype_record.new(*read_id, position_map, &variant_abundances);
 
                                             // Check if variant location sits outside current genotype bounds
                                             // But contains no differences within
-                                            } else if ((genotype.ordered_variants.keys().max() < diff.iter().max())
-                                                || (diff.iter().min() < genotype.ordered_variants.keys().min()))
-                                                && (internal.iter().min() < position_set.iter().min()) {
+                                            } else if (genotype.ordered_variants.keys().max() < diff.iter().max())
+                                                || (diff.iter().min() < genotype.ordered_variants.keys().min()) {
                                                 // check variants against stored variants for a genotype
-                                                new_genotype = genotype.check_variants(position_map);
+                                                let mut shared_positions: Vec<i32> = position_set
+                                                    .intersection(&genotype_position_set).cloned().collect();
+                                                new_genotype = genotype.check_variants(position_map, shared_positions);
                                                 if new_genotype {
                                                     // possible new genotype detected
                                                     genotype_record.new(*read_id, position_map, &variant_abundances);
@@ -671,20 +672,22 @@ impl PileupFunctions for PileupStats {
                                                             let variant_map = &variant_abundances[*new_position as usize];
                                                             genotype.ordered_variants
                                                                 .insert(new_position.clone(), new_variant.clone());
-                                                            genotype_record.frequencies.push(
+                                                            genotype.frequencies.push(
                                                                 variant_map[new_variant])
                                                         }
                                                     };
 
                                                     // reset genotype_record
                                                     genotype_record = Genotype::start(position);
-                                                    genotype.read_ids.insert(*read_id);
+//                                                    genotype.read_ids.insert(*read_id);
                                                     break
                                                 }
                                             }
                                         } else {
                                             // check variants against stored variants for a genotype
-                                            new_genotype = genotype.check_variants(position_map);
+                                            let mut shared_positions: Vec<i32> = position_set
+                                                .intersection(&genotype_position_set).cloned().collect();
+                                            new_genotype = genotype.check_variants(position_map, shared_positions);
 
                                             if new_genotype {
                                                 // possible new genotype detected
@@ -709,7 +712,7 @@ impl PileupFunctions for PileupStats {
                             }
 
                             *genotype_count += genotype_vec.len();
-//                            println!("genotyeps {:?}", genotype_vec);
+                            println!("genotypes {:?}", genotype_vec);
 
                             let mut total_genotype_count = total_genotype_count.lock().unwrap();
                             *total_genotype_count += genotype_vec.len();
