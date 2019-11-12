@@ -34,6 +34,8 @@ impl Genotype {
 
     fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>, variant_abundances: &Vec<HashMap<String, f64>>) {
         self.read_ids = HashSet::new();
+        self.frequencies = Vec::new();
+        self.ordered_variants = HashMap::new();
         self.read_ids.insert(read_id);
         for (pos, variant) in position_map.iter() {
             let variant_map = &variant_abundances[*pos as usize];
@@ -84,7 +86,7 @@ pub enum PileupStats {
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: Vec<HashMap<String, HashSet<i32>>>,
-        genotypes_per_position: HashMap<usize, HashMap<String, usize>>,
+        genotypes_per_position: HashMap<usize, usize>,
         mean_genotypes: f32,
         tid: i32,
         total_indels: usize,
@@ -162,7 +164,7 @@ pub trait PileupFunctions {
                                original_contig: Vec<u8>,
                                consensus_genome: std::fs::File);
 
-    fn generate_minimum_genotypes(&mut self);
+    fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>;
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
@@ -401,8 +403,12 @@ impl PileupFunctions for PileupStats {
                         let mut variants = variants.lock().unwrap();
                         debug!("Relative Abundances: {:?}", rel_abundance);
                         variants[i] = rel_abundance;
-                    } else {
-
+                    } else if rel_abundance.len() == 1 {
+                        if !(rel_abundance.contains_key(&"R".to_string())) {
+                            let mut variants = variants.lock().unwrap();
+                            debug!("Relative Abundances: {:?}", rel_abundance);
+                            variants[i] = rel_abundance;
+                        }
                     }
 
                 });
@@ -502,7 +508,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn generate_minimum_genotypes(&mut self) {
+    fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>{
         match self {
             PileupStats::PileupContigStats {
                 ref mut variant_abundances,
@@ -557,10 +563,10 @@ impl PileupFunctions for PileupStats {
                                         },
                                     };
                             } else if nucfrequency[position].contains_key(
-                                &(var.clone().into_bytes()[0] as char)) {
+                                &(var.chars().collect::<Vec<char>>()[0])) {
                                 read_ids =
                                     match nucfrequency[position]
-                                        .get(&(var.clone().into_bytes()[0] as char)) {
+                                        .get(&(var.chars().collect::<Vec<char>>()[0])) {
                                         Some(ids) => ids.clone(),
                                         None => {
                                             println!("Variant not in frequency Hash");
@@ -618,22 +624,39 @@ impl PileupFunctions for PileupStats {
                                         let genotype_position_set =
                                             genotype.ordered_variants.keys().cloned().collect::<HashSet<i32>>();
 
-                                        let diff: Vec<i32> = genotype_position_set
-                                            .symmetric_difference(&position_set).cloned().collect();
+                                        let test_diff: Vec<i32> = position_set
+                                            .difference(&genotype_position_set).cloned().collect();
 
-                                        if diff.len() > 0 {
+                                        let curr_diff: Vec<i32> = genotype_position_set
+                                            .difference(&position_set).cloned().collect();
+
+                                        // If there is a difference between positions of current read
+                                        // and previous genotype
+                                        if test_diff.len() > 0 && curr_diff.len() > 0 {
+                                            // Unique positions in both current genotype and
+                                            // current read
+                                            let inside_difference = test_diff
+                                                .iter()
+                                                .any(|read_pos|
+                                                    (Some(read_pos) > genotype_position_set.iter().min())
+                                                    && (Some(read_pos) < genotype_position_set.iter().max()));
+
+                                        }  else if test_diff.len() > 0 {
                                             // Positional difference found
-                                            // Check if new genotype
-                                            for pos in diff.iter() {
-                                                if (genotype.ordered_variants.keys().min() < Some(pos))
-                                                    && (Some(pos) < genotype.ordered_variants.keys().max()) {
-                                                    // possible new genotype detected
-                                                    genotype_record.new(*read_id, position_map, &variant_abundances);
-                                                    break 'outer;
-                                                }
-                                            }
-                                            if (genotype.ordered_variants.keys().min() == diff.iter().min())
-                                                || (diff.iter().max() > genotype.ordered_variants.keys().max()) {
+                                            // Check if read is new genotype
+
+                                            // check if differences are only inside current
+                                            // If so, then it is a new genotype
+                                            if (genotype.ordered_variants.keys().min() < diff.iter().min())
+                                                && (diff.iter().max() < genotype.ordered_variants.keys().max()) {
+                                                // possible new genotype detected
+                                                genotype_record.new(*read_id, position_map, &variant_abundances);
+
+                                            // Check if variant location sits outside current genotype bounds
+                                            // But contains no differences within
+                                            } else if ((genotype.ordered_variants.keys().max() < diff.iter().max())
+                                                || (diff.iter().min() < genotype.ordered_variants.keys().min()))
+                                                && (internal.iter().min() < position_set.iter().min()) {
                                                 // check variants against stored variants for a genotype
                                                 new_genotype = genotype.check_variants(position_map);
                                                 if new_genotype {
@@ -686,13 +709,19 @@ impl PileupFunctions for PileupStats {
                             }
 
                             *genotype_count += genotype_vec.len();
+//                            println!("genotyeps {:?}", genotype_vec);
+
                             let mut total_genotype_count = total_genotype_count.lock().unwrap();
                             *total_genotype_count += genotype_vec.len();
                             let mut variant_count = variant_count.lock().unwrap();
                             *variant_count += 1;
                         }
                         let mut genotypes = genotypes.lock().unwrap();
-                        genotypes.insert(position, genotype_pos);
+                        let mut genotypes_at_position: usize = 0;
+                        for value in genotype_pos.values(){
+                            genotypes_at_position += *value;
+                        };
+                        genotypes.insert(position, genotypes_at_position);
                     }
                 });
                 //Calc the mean number of genotypes per variant
@@ -704,6 +733,8 @@ impl PileupFunctions for PileupStats {
                     *mean_genotypes = 0.0 as f32;
                 }
                 *genotypes_per_position = genotypes.lock().unwrap().clone();
+                let to_return = genotypes.lock().unwrap().clone();
+                return to_return
             }
         }
     }
@@ -822,15 +853,8 @@ impl PileupFunctions for PileupStats {
                             // genotypes associated with that position and variant
                             let mut g_count = 0.;
                             match genotypes_per_position.get(&position) {
-                                Some(gtype_hash) => {
-                                    match gtype_hash.get(var) {
-                                        Some(gtype_count) => {
-                                            g_count = gtype_count.clone() as f64;
-                                        },
-                                        None => {
-                                            g_count = 0.;
-                                        }
-                                    }
+                                Some(gtype_count) => {
+                                    g_count = gtype_count.clone() as f64;
                                 },
                                 None => {
                                     g_count = 0.;
@@ -899,15 +923,8 @@ impl PileupFunctions for PileupStats {
 
                             // Print number of genotypes associated with that position and variant
                             match genotypes_per_position.get(&position) {
-                                Some(gtype_hash) => {
-                                    match gtype_hash.get(&var.to_string()) {
-                                        Some(gtype_count) => {
-                                            print!("{}\t", gtype_count);
-                                        },
-                                        None => {
-                                            print!("0\t");
-                                        }
-                                    }
+                                Some(gtype_count) => {
+                                    print!("{}\t", gtype_count);
                                 },
                                 None => {
                                     print!("0\t");
@@ -915,7 +932,7 @@ impl PileupFunctions for PileupStats {
                             };
                             println!{"{}", sample_idx};
 
-                        } else if var.len() == 1{
+                        } else if var.len() == 1 && var != &"R".to_string(){
                             print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
                                    var,
                                    ref_sequence[position] as char,
@@ -923,15 +940,8 @@ impl PileupFunctions for PileupStats {
 
                             // Print number of genotypes associated with that position and variant
                             match genotypes_per_position.get(&position) {
-                                Some(gtype_hash) => {
-                                    match gtype_hash.get(&var.to_string()) {
-                                        Some(gtype_count) => {
-                                            print!("{}\t", gtype_count);
-                                        },
-                                        None => {
-                                            print!("0\t");
-                                        }
-                                    }
+                                Some(gtype_count) => {
+                                    print!("{}\t", gtype_count);
                                 },
                                 None => {
                                     print!("0\t");
@@ -943,5 +953,107 @@ impl PileupFunctions for PileupStats {
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_genotypes_two_positions() {
+        let mut contig = PileupStats::new_contig_stats(0.,
+                                                              1.,
+                                                              0);
+        let mut nuc_freq = vec![HashMap::new(); 2];
+        nuc_freq[0].insert("A".chars().collect::<Vec<char>>()[0],
+                           [0, 1, 2].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[0].insert("R".chars().collect::<Vec<char>>()[0],
+                           [3, 4, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("T".chars().collect::<Vec<char>>()[0],
+                           [0, 1].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("A".chars().collect::<Vec<char>>()[0],
+                           [2, 3].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("R".chars().collect::<Vec<char>>()[0],
+                           [4, 5].iter().cloned().collect::<HashSet<i32>>());
+
+        contig.add_contig(nuc_freq,
+                           vec![HashMap::new(); 2],
+                           0,
+                           0,
+                           "contig_name".as_bytes().to_vec(),
+                           "mean",
+                           vec![2., 6., 0.],
+                           vec![6,0]);
+
+        match contig {
+            PileupStats::PileupContigStats {
+                ref mut read_error_rate,
+                ..
+            } => {
+                *read_error_rate = 0.0;
+            }
+        }
+
+        // filters variants across contig
+        contig.calc_variants(
+            1,
+            0.);
+        let genotypes = contig.generate_minimum_genotypes();
+        println!("{:?}", genotypes);
+
+        assert_eq!(genotypes[&0], 4);
+        assert_eq!(genotypes[&1], 4);
+    }
+
+    #[test]
+    fn test_genotypes_three_positions() {
+        let mut contig = PileupStats::new_contig_stats(0.,
+                                                       1.,
+                                                       0);
+        let mut nuc_freq = vec![HashMap::new(); 3];
+        nuc_freq[0].insert("A".chars().collect::<Vec<char>>()[0],
+                           [0, 1, 2].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[0].insert("R".chars().collect::<Vec<char>>()[0],
+                           [3, 4, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("T".chars().collect::<Vec<char>>()[0],
+                           [0, 1].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("A".chars().collect::<Vec<char>>()[0],
+                           [2, 3].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("R".chars().collect::<Vec<char>>()[0],
+                           [4, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[2].insert("G".chars().collect::<Vec<char>>()[0],
+                           [1, 2, 4, 5].iter().cloned().collect::<HashSet<i32>>());
+
+
+        contig.add_contig(nuc_freq,
+                          vec![HashMap::new(); 3],
+                          0,
+                          0,
+                          "contig_name".as_bytes().to_vec(),
+                          "mean",
+                          vec![2., 6., 0.],
+                          vec![6,4,0]);
+
+        match contig {
+            PileupStats::PileupContigStats {
+                ref mut read_error_rate,
+                ..
+            } => {
+                *read_error_rate = 0.0;
+            }
+        }
+
+        // filters variants across contig
+        contig.calc_variants(
+            1,
+            0.);
+        let genotypes = contig.generate_minimum_genotypes();
+        println!("{:?}", genotypes);
+
+        assert_eq!(genotypes[&0], 4);
+        assert_eq!(genotypes[&1], 4);
+        assert_eq!(genotypes[&2], 3);
+
     }
 }
