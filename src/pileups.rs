@@ -12,15 +12,11 @@ use FlagFilter;
 use rayon::prelude::*;
 
 use std::str;
-use std::fs;
 use std::fs::File;
-use std::io::prelude::*;
-use std::process;
-use std::process::Stdio;
 use mosdepth_genome_coverage_estimators::*;
 use bio::io::gff;
 use bio::io::gff::Record;
-use bio::io::gff::GffType;
+
 
 
 pub fn pileup_variants<R: NamedBamReader,
@@ -103,20 +99,6 @@ pub fn pileup_variants<R: NamedBamReader,
         let stoit_name = bam_generated.name().to_string();
 
         let stoit_file_name = stoit_name.clone() + &variant_file_name;
-        // Pre-emptively create variant fasta
-//        let consensus_variant_fasta = File::create(&stoit_file_name)
-//            .expect("Cannot create consensus file");
-//
-//        // Check to see if we are writing a consensus genome
-//        if !print_consensus {
-//            match fs::remove_file(&stoit_file_name) {
-//                Ok(removed) => removed,
-//                Err(_err) => {
-//                    println!("Incorrect file read/write permission");
-//                    std::process::exit(1)
-//                }
-//            };
-//        }
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
@@ -137,6 +119,7 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut read_cnt_id = 0;
         let mut read_to_id = HashMap::new();
         let mut base;
+        let mut refr;
 
         // for record in records
         let mut skipped_reads = 0;
@@ -239,9 +222,15 @@ pub fn pileup_variants<R: NamedBamReader,
 
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 base = record.seq()[qpos] as char;
-                                if base != ref_seq[cursor as usize] as char {
+                                refr = ref_seq[cursor as usize] as char;
+                                if base != refr {
                                     let id = nuc_freq[cursor as usize].entry(base)
                                                                             .or_insert(HashSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                } else {
+                                    let id = nuc_freq[cursor as usize]
+                                        .entry("R".chars().collect::<Vec<char>>()[0])
+                                        .or_insert(HashSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
 //                                depth[cursor] += 1;
