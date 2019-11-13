@@ -67,7 +67,7 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &Vec<HashMap<String, f64>>,
+                      variant_abundances: &HashMap<i32, HashMap<String, f64>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32;
 }
@@ -81,7 +81,7 @@ impl Translations for CodonTable {
         for (aa, s, b1, b2, b3) in izip!(ncbi_format.AAs.as_bytes(), ncbi_format.Starts.as_bytes(),
                                         ncbi_format.Base1.as_bytes(), ncbi_format.Base2.as_bytes(),
                                         ncbi_format.Base3.as_bytes()) {
-            let mut codon = vec!(*b1, *b2, *b3);
+            let codon = vec!(*b1, *b2, *b3);
             amino_hash.insert(codon.clone(), *aa as char);
             start_hash.insert(codon, *s as char);
         }
@@ -116,7 +116,7 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &Vec<HashMap<String, f64>>,
+                      variant_abundances: &HashMap<i32, HashMap<String, f64>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32 {
         let strand = gene.strand().expect("No strandedness found");
@@ -131,23 +131,23 @@ impl Translations for CodonTable {
         let codon_sequence = get_codons(gene_sequence, frame, strand);
 
         // Calculate N and S
-        let mut N: f32 = 0.0;
-        let mut S: f32 = 0.0;
+        let mut big_n: f32 = 0.0;
+        let mut big_s: f32 = 0.0;
         for codon in codon_sequence.iter() {
             if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
                 continue
             } else {
                 let n = self.ns_sites[codon];
-                N += n;
-                S += 3.0 - n;
+                big_n += n;
+                big_s += 3.0 - n;
             }
         }
 
-        debug!("getting ns_sites N {} S {}", N, S);
+        debug!("getting ns_sites N {} S {}", big_n, big_s);
 
         // Create Nd and Sd values
-        let mut Nd: f32 = 0.0;
-        let mut Sd: f32 = 0.0;
+        let mut big_nd: f32 = 0.0;
+        let mut big_sd: f32 = 0.0;
 
         // dN/dS calculations when using NGS reads outlined here:
         // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
@@ -156,10 +156,12 @@ impl Translations for CodonTable {
         let mut new_codons: Vec<Vec<u8>> = vec!();
         let mut positionals = 0;
         let mut total_variants = 0;
-        for (gene_cursor, variant_map) in variant_abundances[start..end].to_vec().iter().enumerate() {
+        for (gene_cursor, cursor) in (start..(end+1)).into_iter().enumerate() {
+            let variant_map = &variant_abundances[&(cursor as i32)];
             let codon_idx = gene_cursor / 3 as usize;
             let codon_cursor = gene_cursor % 3;
-            if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
+            if String::from_utf8(codon.clone())
+                .expect("Unable to interpret codon").contains("N") {
                 continue
             }
 
@@ -204,8 +206,8 @@ impl Translations for CodonTable {
                         }
                         let nd = ns as f32 / permutations.len() as f32;
                         let sd = ss as f32 / permutations.len() as f32;
-                        Nd += nd;
-                        Sd += sd;
+                        big_nd += nd;
+                        big_sd += sd;
                     }
                 }
                 // begin working on new codon
@@ -246,9 +248,9 @@ impl Translations for CodonTable {
         }
 
         debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
-               Nd, N, Sd, S, positionals, total_variants);
-        let mut pn = Nd/N;
-        let mut ps = Sd/S;
+               big_nd, big_n, big_sd, big_s, positionals, total_variants);
+        let mut pn = big_nd/big_n;
+        let mut ps = big_sd/big_s;
         debug!("pn {} ps {}", pn, ps);
         // Weirdly in the Jukes-Cantor model if pn or ps are 0.75 then the nat log does not resolve
         // No one talks about this in the literature for some reason

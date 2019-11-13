@@ -111,8 +111,8 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
-        let mut nuc_freq: Vec<HashMap<char, HashSet<i32>>> = Vec::new();
-        let mut indels = Vec::new();
+        let mut nuc_freq: HashMap<i32, HashMap<char, HashSet<i32>>> = HashMap::new();
+        let mut indels = HashMap::new();
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
@@ -189,9 +189,9 @@ pub fn pileup_variants<R: NamedBamReader,
                     num_mapped_reads_in_current_contig = 0;
                     total_edit_distance_in_current_contig = 0;
                     total_indels_in_current_contig = 0;
-                    nuc_freq = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    nuc_freq = HashMap::new();
 //                    depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-                    indels = vec![HashMap::new(); header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                    indels = HashMap::new();
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
                         Ok(reference) => reference,
@@ -223,12 +223,15 @@ pub fn pileup_variants<R: NamedBamReader,
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 base = record.seq()[qpos] as char;
                                 refr = ref_seq[cursor as usize] as char;
+                                let nuc_map = nuc_freq
+                                    .entry(cursor as i32).or_insert(HashMap::new());
                                 if base != refr {
-                                    let id = nuc_freq[cursor as usize].entry(base)
+
+                                    let id = nuc_map.entry(base)
                                                                             .or_insert(HashSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 } else {
-                                    let id = nuc_freq[cursor as usize]
+                                    let id = nuc_map
                                         .entry("R".chars().collect::<Vec<char>>()[0])
                                         .or_insert(HashSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
@@ -242,7 +245,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             read_cursor += cig.len() as usize;
                         },
                         Cigar::Del(_) => {
-                            let id = indels[cursor as usize].entry(
+                            let indel_map = indels.entry(cursor as i32).or_insert(HashMap::new());
+                            let id = indel_map.entry(
                                 std::iter::repeat("N").take(cig.len() as usize).collect::<String>())
                                                                   .or_insert(HashSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
@@ -261,8 +265,10 @@ pub fn pileup_variants<R: NamedBamReader,
                                 Ok(ins) => {ins.to_string()},
                                 Err(_e) => {"".to_string()},
                             };
+                            let indel_map = indels.entry(cursor as i32)
+                                .or_insert(HashMap::new());
 
-                            let id = indels[cursor as usize].entry(insert)
+                            let id = indel_map.entry(insert)
                                                                   .or_insert(HashSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
                             read_cursor += cig.len() as usize;
@@ -277,9 +283,12 @@ pub fn pileup_variants<R: NamedBamReader,
                                     Ok(ins) => {ins.to_string()},
                                     Err(_e) => {"".to_string()},
                                 };
+                                let indel_map = indels.entry(cursor as i32)
+                                    .or_insert(HashMap::new());
 
-                                let id = indels[cursor as usize].entry(insert)
-                                                                .or_insert(HashSet::new());
+                                let id = indel_map.entry(insert)
+                                    .or_insert(HashSet::new());
+
                                 id.insert(read_to_id[&record.qname().to_vec()]);
                                 total_indels_in_current_contig += cig.len();
                             }
@@ -361,8 +370,8 @@ pub fn pileup_variants<R: NamedBamReader,
 fn process_previous_contigs_var(
     mode: &str,
     last_tid: i32,
-    nuc_freq: Vec<HashMap<char, HashSet<i32>>>,
-    indels: Vec<HashMap<String, HashSet<i32>>>,
+    nuc_freq: HashMap<i32, HashMap<char, HashSet<i32>>>,
+    indels: HashMap<i32, HashMap<String, HashSet<i32>>>,
     ups_and_downs: Vec<i32>,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
@@ -424,18 +433,6 @@ fn process_previous_contigs_var(
 
                 pileup_struct.cluster_variants();
 
-//                if print_consensus {
-//                    // Write consensus contig to fasta
-//                    // i.e. the most abundant variant at each position from this set of reads
-//                    let contig_n = ">".to_owned() +
-//                        &str::from_utf8(&contig_name).unwrap().to_string() +
-//                        "\n";
-//
-//                    let mut consensus_clone = consensus_variant_fasta.try_clone().unwrap();
-//                    consensus_clone.write_all(contig_n.as_bytes()).unwrap();
-//                    pileup_struct.generate_variant_contig(ref_sequence.clone(),
-//                                                          consensus_clone);
-//                }
             },
             "summarize" => {
                 // calculates minimum number of genotypes possible for each variant location
