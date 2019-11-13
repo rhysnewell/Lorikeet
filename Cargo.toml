@@ -1,7 +1,7 @@
 [package]
 
 name = "lorikeet"
-version = "0.2.6"
+version = "0.2.7"
 authors = ["Rhys Newell <r.newell@uq.net.au>"]
 license = "GPL-3.0"
 description = "Strain resolver for metagenomics"
@@ -9,7 +9,7 @@ homepage = "rhysnewell.github.io/Lorikeet/"
 repository = "https://github.com/rhysnewell/Lorikeet"
 documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
-exclude = [ # Max upload is 10MB, as of writing test data was 15MB
+exclude = [
   "tests/*"
 ]
 
