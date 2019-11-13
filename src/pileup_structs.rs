@@ -436,6 +436,27 @@ impl PileupFunctions for PileupStats {
                             let mut variants = variants.lock().unwrap();
                             debug!("Relative Abundances: {:?}", rel_abundance);
                             variants.insert(i as i32, rel_abundance);
+                        } else {
+                            // Need to remove R from whitelist
+                            let nuc_map = match nucfrequency.get(&(i as i32)) {
+                                Some(map) => map.to_owned(),
+                                None => HashMap::new(),
+                            };
+                            if nuc_map.len() > 0 {
+                                for (base, read_ids) in nuc_map.iter() {
+                                    let count = read_ids.len();
+                                    if base == &("R".as_bytes()[0] as char) {
+                                        for read in read_ids {
+                                            let mut read_variants
+                                                = read_variants.lock().unwrap();
+                                            let read_vec = read_variants
+                                                .entry(read.clone())
+                                                .or_insert(BTreeMap::new());
+                                            read_vec.remove(&(i as i32));
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -565,7 +586,6 @@ impl PileupFunctions for PileupStats {
                     // For each variant we calculate the minimum number of genotypes possible
                     // based on variants in reads mapping to this variant location
                     if variants.len() > 0 {
-                        let mut genotype_record;
 
                         let genotypes = Arc::clone(&genotypes);
                         let variant_count = Arc::clone(&variant_count);
@@ -577,9 +597,10 @@ impl PileupFunctions for PileupStats {
                             let genotype_count = genotype_pos.entry(var.to_string())
                                 .or_insert(0);
 
-                            let mut genotype_vec = Vec::new();
+                            let mut genotype_vec = Arc::new(
+                                Mutex::new(
+                                    Vec::new()));
 
-                            genotype_record = Genotype::start(*position as usize);
                             let mut read_ids = HashSet::new();
 
                             let indel_map = match indels
@@ -637,14 +658,11 @@ impl PileupFunctions for PileupStats {
                             let read_vec_sorted = permuted.apply_slice(&read_vec[..]);
 
                             // Loop through reads based on their left most variant position
-                            'reads: for read_id in read_vec_sorted.iter() {
-                                let position_map = match variants_in_reads.get(read_id) {
-                                    Some(positions) => positions,
-                                    None => {
-                                        debug!("read id not recorded in variant map {}, {}", var, read_id);
-                                        break
-                                    },
-                                };
+                            read_vec_sorted.par_iter().for_each(|read_id|{
+                                let mut genotype_record= Genotype::start(*position as usize);;
+                                let position_map = variants_in_reads
+                                    .get(read_id).expect("Read ID not found");
+                                let mut genotype_vec = genotype_vec.lock().unwrap();
 
                                 if genotype_vec.len() == 0 {
                                     // No genotype observed yet, so create one
@@ -757,7 +775,9 @@ impl PileupFunctions for PileupStats {
                                         genotype_record = Genotype::start(*position as usize);
                                     }
                                 }
-                            }
+                            });
+
+                            let genotype_vec = genotype_vec.lock().unwrap();
 
                             *genotype_count += genotype_vec.len();
 
