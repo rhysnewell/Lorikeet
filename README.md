@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/rhysnewell/Lorikeet.svg?branch=master)](https://travis-ci.com/rhysnewell/Lorikeet)
 # Lorikeet
 
 
