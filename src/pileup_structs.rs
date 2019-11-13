@@ -41,7 +41,7 @@ impl Genotype {
             let variant_map = &variant_abundances[*pos as usize];
             if variant_map.len() > 0 {
                 debug!("Fetching position: {:?} {:?} {:?}", pos, variant_map, variant);
-                self.frequencies.push(variant_map[variant].clone());
+//                self.frequencies.push(variant_map[variant].clone());
                 self.ordered_variants.insert(pos.clone(), variant.to_string());
             }
         }
@@ -644,6 +644,7 @@ impl PileupFunctions for PileupStats {
                                                 // difference against current
 
                                                 genotype_record.new(*read_id, position_map, &variant_abundances);
+                                                continue
 
                                             } else if diff
                                                 .iter()
@@ -652,8 +653,8 @@ impl PileupFunctions for PileupStats {
                                                         && (Some(read_pos) < position_set.iter().max())){
                                                 // difference against read
                                                 // possible new genotype detected
-
                                                 genotype_record.new(*read_id, position_map, &variant_abundances);
+                                                continue
 
                                                 // Check if variant location sits outside current genotype bounds
                                             // But contains no differences within
@@ -665,8 +666,8 @@ impl PileupFunctions for PileupStats {
                                                 new_genotype = genotype.check_variants(position_map, shared_positions);
                                                 if new_genotype {
                                                     // possible new genotype detected
-
                                                     genotype_record.new(*read_id, position_map, &variant_abundances);
+                                                    continue
 
                                                 } else {
                                                     // Extension of previous genotype
@@ -675,10 +676,11 @@ impl PileupFunctions for PileupStats {
                                                     for new_position in diff.iter() {
                                                         if !(genotype.ordered_variants.contains_key(&new_position)) {
                                                             let variant_map = &variant_abundances[*new_position as usize];
-                                                            genotype.ordered_variants
-                                                                .insert(new_position.clone(), position_map[new_position].clone());
-                                                            genotype.frequencies.push(
-                                                                variant_map[&position_map[new_position]])
+                                                            if variant_map.len() > 0 {
+                                                                genotype.ordered_variants
+                                                                    .insert(new_position.clone(), position_map[new_position].clone());
+                                                            }
+//
                                                         }
                                                     };
 
@@ -695,8 +697,8 @@ impl PileupFunctions for PileupStats {
 
                                             if new_genotype {
                                                 // possible new genotype detected
-
                                                 genotype_record.new(*read_id, position_map, &variant_abundances);
+                                                continue
 
 
                                             } else {
@@ -968,51 +970,51 @@ impl PileupFunctions for PileupStats {
 mod tests {
     use super::*;
 
-//    #[test]
-//    fn test_genotypes_two_positions() {
-//        let mut contig = PileupStats::new_contig_stats(0.,
-//                                                              1.,
-//                                                              0);
-//        let mut nuc_freq = vec![HashMap::new(); 2];
-//        nuc_freq[0].insert("A".chars().collect::<Vec<char>>()[0],
-//                           [0, 1, 2].iter().cloned().collect::<HashSet<i32>>());
-//        nuc_freq[0].insert("R".chars().collect::<Vec<char>>()[0],
-//                           [3, 4, 5].iter().cloned().collect::<HashSet<i32>>());
-//        nuc_freq[1].insert("T".chars().collect::<Vec<char>>()[0],
-//                           [0, 1].iter().cloned().collect::<HashSet<i32>>());
-//        nuc_freq[1].insert("A".chars().collect::<Vec<char>>()[0],
-//                           [2, 3].iter().cloned().collect::<HashSet<i32>>());
-//        nuc_freq[1].insert("R".chars().collect::<Vec<char>>()[0],
-//                           [4, 5].iter().cloned().collect::<HashSet<i32>>());
-//
-//        contig.add_contig(nuc_freq,
-//                           vec![HashMap::new(); 2],
-//                           0,
-//                           0,
-//                           "contig_name".as_bytes().to_vec(),
-//                           "mean",
-//                           vec![2., 6., 0.],
-//                           vec![6,0]);
-//
-//        match contig {
-//            PileupStats::PileupContigStats {
-//                ref mut read_error_rate,
-//                ..
-//            } => {
-//                *read_error_rate = 0.0;
-//            }
-//        }
-//
-//        // filters variants across contig
-//        contig.calc_variants(
-//            1,
-//            0.);
-//        let genotypes = contig.generate_minimum_genotypes();
-//        println!("{:?}", genotypes);
-//
-//        assert_eq!(genotypes[&0], 4);
-//        assert_eq!(genotypes[&1], 4);
-//    }
+    #[test]
+    fn test_genotypes_two_positions() {
+        let mut contig = PileupStats::new_contig_stats(0.,
+                                                              1.,
+                                                              0);
+        let mut nuc_freq = vec![HashMap::new(); 2];
+        nuc_freq[0].insert("A".chars().collect::<Vec<char>>()[0],
+                           [0, 1, 2].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[0].insert("R".chars().collect::<Vec<char>>()[0],
+                           [3, 4, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("T".chars().collect::<Vec<char>>()[0],
+                           [0, 1].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("A".chars().collect::<Vec<char>>()[0],
+                           [2, 3].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("R".chars().collect::<Vec<char>>()[0],
+                           [4, 5].iter().cloned().collect::<HashSet<i32>>());
+
+        contig.add_contig(nuc_freq,
+                           vec![HashMap::new(); 2],
+                           0,
+                           0,
+                           "contig_name".as_bytes().to_vec(),
+                           "mean",
+                           vec![2., 6., 0.],
+                           vec![6,0]);
+
+        match contig {
+            PileupStats::PileupContigStats {
+                ref mut read_error_rate,
+                ..
+            } => {
+                *read_error_rate = 0.0;
+            }
+        }
+
+        // filters variants across contig
+        contig.calc_variants(
+            1,
+            0.);
+        let genotypes = contig.generate_minimum_genotypes();
+        println!("{:?}", genotypes);
+
+        assert_eq!(genotypes[&0], 4);
+        assert_eq!(genotypes[&1], 4);
+    }
 
     #[test]
     fn test_genotypes_three_positions() {
@@ -1062,6 +1064,64 @@ mod tests {
         assert_eq!(genotypes[&0], 4);
         assert_eq!(genotypes[&1], 4);
         assert_eq!(genotypes[&2], 3);
+    }
 
+    #[test]
+    fn test_genotypes_four_positions() {
+        let mut contig = PileupStats::new_contig_stats(0.,
+                                                       1.,
+                                                       0);
+        let mut nuc_freq = vec![HashMap::new(); 4];
+        nuc_freq[0].insert("A".chars().collect::<Vec<char>>()[0],
+                           [0].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[0].insert("R".chars().collect::<Vec<char>>()[0],
+                           [5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("T".chars().collect::<Vec<char>>()[0],
+                           [0, 2].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("A".chars().collect::<Vec<char>>()[0],
+                           [1].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("R".chars().collect::<Vec<char>>()[0],
+                           [3, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[1].insert("C".chars().collect::<Vec<char>>()[0],
+                           [4].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[2].insert("G".chars().collect::<Vec<char>>()[0],
+                           [0, 1, 2, 3].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[2].insert("A".chars().collect::<Vec<char>>()[0],
+                           [4, 5].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[3].insert("C".chars().collect::<Vec<char>>()[0],
+                           [2].iter().cloned().collect::<HashSet<i32>>());
+        nuc_freq[3].insert("T".chars().collect::<Vec<char>>()[0],
+                           [3, 4, 5].iter().cloned().collect::<HashSet<i32>>());
+
+
+        contig.add_contig(nuc_freq,
+                          vec![HashMap::new(); 4],
+                          0,
+                          0,
+                          "contig_name".as_bytes().to_vec(),
+                          "mean",
+                          vec![2., 6., 0.],
+                          vec![3,3,0,-6]);
+
+        match contig {
+            PileupStats::PileupContigStats {
+                ref mut read_error_rate,
+                ..
+            } => {
+                *read_error_rate = 0.0;
+            }
+        }
+
+        // filters variants across contig
+        contig.calc_variants(
+            1,
+            0.);
+        let genotypes = contig.generate_minimum_genotypes();
+        println!("{:?}", genotypes);
+
+        assert_eq!(genotypes[&0], 2);
+        assert_eq!(genotypes[&1], 5);
+        assert_eq!(genotypes[&2], 5);
+        assert_eq!(genotypes[&3], 4);
     }
 }
