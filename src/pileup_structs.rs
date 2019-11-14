@@ -32,7 +32,7 @@ impl Genotype {
         }
     }
 
-    fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>,
+    fn new(&mut self, read_id: i32, position_map: &HashMap<i32, String>,
            variant_abundances: &HashMap<i32, HashMap<String, f64>>) {
         self.read_ids = HashSet::new();
         self.frequencies = Vec::new();
@@ -52,7 +52,7 @@ impl Genotype {
         }
     }
 
-    fn check_variants(&self, position_map: &BTreeMap<i32, String>, intersection: Vec<i32>) -> bool {
+    fn check_variants(&self, position_map: &HashMap<i32, String>, intersection: Vec<i32>) -> bool {
         // check variants against stored variants for a genotype along the shared positions
         let mut new_var= false;
         for check_pos in intersection.iter() {
@@ -89,7 +89,7 @@ impl Genotype {
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: HashMap<i32, HashMap<char, HashSet<i32>>>,
-        variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
+        variants_in_reads: HashMap<i32, HashMap<i32, String>>,
         variant_abundances: HashMap<i32, HashMap<String, f64>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
@@ -378,7 +378,7 @@ impl PileupFunctions for PileupStats {
 
                                         let read_vec = read_variants
                                             .entry(read.clone())
-                                            .or_insert(BTreeMap::new());
+                                            .or_insert(HashMap::new());
                                         read_vec.insert(i as i32, indel.clone());
                                     }
                                     let mut variant_count = variant_count.lock().unwrap();
@@ -407,7 +407,7 @@ impl PileupFunctions for PileupStats {
                                             = read_variants.lock().unwrap();
                                         let read_vec = read_variants
                                             .entry(read.clone())
-                                            .or_insert(BTreeMap::new());
+                                            .or_insert(HashMap::new());
                                         read_vec.insert(i as i32, base.to_string());
                                     }
                                     if base != &"R".chars().collect::<Vec<char>>()[0] {
@@ -451,7 +451,7 @@ impl PileupFunctions for PileupStats {
                                                 = read_variants.lock().unwrap();
                                             let read_vec = read_variants
                                                 .entry(read.clone())
-                                                .or_insert(BTreeMap::new());
+                                                .or_insert(HashMap::new());
                                             read_vec.remove(&(i as i32));
                                         }
                                     }
@@ -666,7 +666,6 @@ impl PileupFunctions for PileupStats {
 
                                 if genotype_vec.len() == 0 {
                                     // No genotype observed yet, so create one
-                                    debug!("Read ID : {} Position Map: {:?}", read_id, position_map);
                                     genotype_record.new(*read_id, position_map, &variant_abundances);
 
                                     genotype_vec.push(genotype_record.clone());
@@ -852,10 +851,16 @@ impl PileupFunctions for PileupStats {
                     contig = contig + "_";
 
                     for cursor in start..end+1 {
-                        let variant_map = &variant_abundances[&(cursor as i32)];
+                        let variant_map = match variant_abundances.get(&(cursor as i32)){
+                            Some(map) => map,
+                            None => continue,
+                        };
                         if variant_map.len() > 0 {
                             let mut print_stream = print_stream.lock().unwrap();
                             for (variant, abundance) in variant_map {
+                                if variant.to_owned().contains("R"){
+                                    continue
+                                }
                                 write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
                                          contig.clone()+gene_id, gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
