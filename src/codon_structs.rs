@@ -68,6 +68,7 @@ pub trait Translations {
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
                       variant_abundances: &HashMap<i32, HashMap<String, f64>>,
+                      indels: &HashMap<i32, HashMap<String, HashSet<i32>>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32;
 }
@@ -117,6 +118,7 @@ impl Translations for CodonTable {
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
                       variant_abundances: &HashMap<i32, HashMap<String, f64>>,
+                      indels: &HashMap<i32, HashMap<String, HashSet<i32>>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32 {
         let strand = gene.strand().expect("No strandedness found");
@@ -156,11 +158,18 @@ impl Translations for CodonTable {
         let mut new_codons: Vec<Vec<u8>> = vec!();
         let mut positionals = 0;
         let mut total_variants = 0;
+        let mut indel_map = HashMap::new();
         for (gene_cursor, cursor) in (start..(end+1)).into_iter().enumerate() {
             let variant_map = match variant_abundances.get(&(cursor as i32)){
                 Some(map) => map,
                 None => continue,
             };
+
+            if indels.contains_key(&(cursor as i32)){
+                indel_map = indels.get(&(cursor as i32))
+                    .expect("No INDEL at this location").to_owned();
+            };
+
             let codon_idx = gene_cursor / 3 as usize;
             let codon_cursor = gene_cursor % 3;
             if String::from_utf8(codon.clone())
@@ -224,8 +233,8 @@ impl Translations for CodonTable {
                 let mut variant_vec: Vec<_> = variant_map.iter().collect();
                 // We look at the most abundant variant first for consistency
                 variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
-                for (variant, frac) in variant_vec.iter() {
-                    if (variant.len() > 1) | variant.contains("N") | variant.contains("R") {
+                for (variant, _frac) in variant_vec {
+                    if indel_map.contains_key(variant) | variant.contains("R") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
                         debug!("Frameshift mutation variant {:?}", variant);
