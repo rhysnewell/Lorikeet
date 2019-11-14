@@ -53,7 +53,7 @@ pub fn pileup_variants<R: NamedBamReader,
             println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
         },
         "evolve" => {
-            println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth");
+            println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
             let mut gff_reader;
             if m.is_present("gff") {
                 let gff_file = m.value_of("gff").unwrap();
@@ -128,7 +128,6 @@ pub fn pileup_variants<R: NamedBamReader,
             if (!flag_filters.include_supplementary && record.is_supplementary()) ||
                 (!flag_filters.include_secondary && record.is_secondary()) ||
                 (!flag_filters.include_improper_pairs && !record.is_proper_pair()){
-                debug!("Skipping read based on flag filtering");
                 skipped_reads += 1;
                 continue;
             }
@@ -231,10 +230,10 @@ pub fn pileup_variants<R: NamedBamReader,
                                                                             .or_insert(HashSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 } else {
-                                    let id = nuc_map
-                                        .entry("R".chars().collect::<Vec<char>>()[0])
-                                        .or_insert(HashSet::new());
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
+//                                    let id = nuc_map
+//                                        .entry("R".chars().collect::<Vec<char>>()[0])
+//                                        .or_insert(HashSet::new());
+//                                    id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
 //                                depth[cursor] += 1;
                                 cursor += 1;

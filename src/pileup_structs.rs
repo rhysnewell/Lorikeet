@@ -831,7 +831,7 @@ impl PileupFunctions for PileupStats {
                 debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
                 let mut print_stream = &mut Mutex::new(std::io::stdout());
                 gff_records.par_iter().enumerate().for_each(|(id, gene)| {
-                    let dnds = codon_table.find_mutations(gene, variant_abundances, ref_sequence, depth);
+                    let dnds = codon_table.find_mutations(gene, variant_abundances, indels, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
                     let frame: usize = gene.frame().parse().unwrap();
                     let start = gene.start().clone() as usize - 1;
@@ -849,14 +849,21 @@ impl PileupFunctions for PileupStats {
                     let gene_id = &gene.attributes()["ID"].split("_").collect::<Vec<&str>>()[1];
                     let mut contig = gene.seqname().to_owned();
                     contig = contig + "_";
+                    let mut indel_map = HashMap::new();
 
                     for cursor in start..end+1 {
                         let variant_map = match variant_abundances.get(&(cursor as i32)){
                             Some(map) => map,
                             None => continue,
                         };
+                        if indels.contains_key(&(cursor as i32)){
+                            indel_map = indels.get(&(cursor as i32))
+                                .expect("No INDEL at this location").to_owned();
+                        };
                         if variant_map.len() > 0 {
                             let mut print_stream = print_stream.lock().unwrap();
+
+
                             for (variant, abundance) in variant_map {
                                 if variant.to_owned().contains("R"){
                                     continue
@@ -864,25 +871,29 @@ impl PileupFunctions for PileupStats {
                                 write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
                                          contig.clone()+gene_id, gene.start(),
                                          gene.end(), frame, strand_symbol, dnds, cursor);
+
+
                                 if variant.to_owned().contains("N") {
-                                    writeln!(print_stream, "{}\t{}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
                                            variant,
                                            str::from_utf8(
                                                &ref_sequence[cursor..cursor
                                                    + variant.len() as usize]).unwrap(),
-                                           abundance, depth[cursor]);
+                                           abundance, depth[cursor], "D");
 
-                                } else if variant.len() > 1 {
-                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}",
+                                } else if indel_map.contains_key(variant) {
+                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap().to_owned() + &variant,
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap(),
-                                           abundance, depth[cursor]);
+                                           abundance, depth[cursor], "I");
                                 } else {
-                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
                                              variant,
-                                             ref_sequence[cursor] as char, abundance, depth[cursor]);
+                                             ref_sequence[cursor] as char,
+                                             abundance,
+                                             depth[cursor], "S");
                                 }
                             }
                         }

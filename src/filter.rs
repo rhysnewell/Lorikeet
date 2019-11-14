@@ -251,10 +251,10 @@ fn single_read_passes_filter(
         }
     }
 
-    debug!("num_bases {}, distance {}, perc id {}, percent aligned {}",
-           aligned, edit_distance1,
-           1.0 - edit_distance1 as f32 / aligned as f32,
-           aligned as f32 / record.seq().len() as f32);
+//    debug!("num_bases {}, distance {}, perc id {}, percent aligned {}",
+//           aligned, edit_distance1,
+//           1.0 - edit_distance1 as f32 / aligned as f32,
+//           aligned as f32 / record.seq().len() as f32);
 
     return aligned >= min_aligned_length_single &&
         aligned as f32 / record.seq().len() as f32 >= min_aligned_percent_single &&
