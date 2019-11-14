@@ -157,7 +157,10 @@ impl Translations for CodonTable {
         let mut positionals = 0;
         let mut total_variants = 0;
         for (gene_cursor, cursor) in (start..(end+1)).into_iter().enumerate() {
-            let variant_map = &variant_abundances[&(cursor as i32)];
+            let variant_map = match variant_abundances.get(&(cursor as i32)){
+                Some(map) => map,
+                None => continue,
+            };
             let codon_idx = gene_cursor / 3 as usize;
             let codon_cursor = gene_cursor % 3;
             if String::from_utf8(codon.clone())
@@ -222,7 +225,7 @@ impl Translations for CodonTable {
                 // We look at the most abundant variant first for consistency
                 variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
                 for (variant, frac) in variant_vec.iter() {
-                    if (variant.len() > 1) | variant.contains("N") {
+                    if (variant.len() > 1) | variant.contains("N") | variant.contains("R") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
                         debug!("Frameshift mutation variant {:?}", variant);
