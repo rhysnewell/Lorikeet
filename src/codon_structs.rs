@@ -234,7 +234,7 @@ impl Translations for CodonTable {
                 // We look at the most abundant variant first for consistency
                 variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
                 for (variant, _frac) in variant_vec {
-                    if indel_map.contains_key(variant) | variant.contains("R") {
+                    if indel_map.contains_key(variant) || variant.contains("R") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
                         debug!("Frameshift mutation variant {:?}", variant);
@@ -245,11 +245,19 @@ impl Translations for CodonTable {
                         // Create a copy of codon up to this point
                         // Not sure if reusing previous variants is bad, but
                         // not doing so can cause randomness to dN/dS values
+//                        println!("{:?} {} {}",
+//                                 new_codons, gene_cursor, cursor);
+
                         new_codons.push(codon.clone());
+//                        println!("when multiple variants var idx {:?} new_C {:?} c_curs {:?} variant {:?}",
+//                                 variant_count, new_codons, codon_cursor, variant);
                         new_codons[variant_count][codon_cursor] = variant[0];
+
                         debug!("multi variant codon {:?}", new_codons);
                     } else {
                         for var_idx in 0..new_codons.len() {
+//                            println!("One or first var idx {:?} new_C {:?} c_curs {:?} variant {:?} {} {}",
+//                                     var_idx, new_codons, codon_cursor, variant, gene_cursor, cursor);
                             new_codons[var_idx][codon_cursor] = variant[0];
                         }
                     }
