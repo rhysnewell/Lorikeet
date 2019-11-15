@@ -17,6 +17,9 @@ use mosdepth_genome_coverage_estimators::*;
 use bio::io::gff;
 use bio::io::gff::Record;
 
+use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
+
 
 
 pub fn pileup_variants<R: NamedBamReader,
@@ -39,7 +42,7 @@ pub fn pileup_variants<R: NamedBamReader,
     method: &str,
     coverage_fold: f32) {
 
-    let mut sample_idx = 0;
+    let sample_idx = 0;
     let include_soft_clipping = false;
     let sample_count = bam_readers.len();
     let mut sample_idx = 0;
@@ -70,7 +73,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     "lorikeet.gff",
                     m.value_of("prodigal-params").unwrap_or(""));
                 info!("Queuing cmd_string: {}", cmd_string);
-                let mut prodigal_out = std::process::Command::new("bash")
+                std::process::Command::new("bash")
                     .arg("-c")
                     .arg(&cmd_string)
                     .output()
@@ -111,15 +114,13 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
-        let mut nuc_freq: HashMap<i32, HashMap<char, HashSet<i32>>> = HashMap::new();
+        let mut nuc_freq: Arc<Mutex<HashMap<i32, HashMap<char, HashSet<i32>>>>> = Arc::new(Mutex::new(HashMap::new()));
         let mut indels = HashMap::new();
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
         let mut read_cnt_id = 0;
         let mut read_to_id = HashMap::new();
-        let mut base;
-        let mut refr;
 
         // for record in records
         let mut skipped_reads = 0;
@@ -159,7 +160,7 @@ pub fn pileup_variants<R: NamedBamReader,
                         process_previous_contigs_var(
                             mode,
                             last_tid,
-                            nuc_freq,
+                            nuc_freq.lock().unwrap().clone(),
                             indels,
                             ups_and_downs,
                             coverage_estimators,
@@ -188,7 +189,7 @@ pub fn pileup_variants<R: NamedBamReader,
                     num_mapped_reads_in_current_contig = 0;
                     total_edit_distance_in_current_contig = 0;
                     total_indels_in_current_contig = 0;
-                    nuc_freq = HashMap::new();
+                    nuc_freq = Arc::new(Mutex::new(HashMap::new()));
 //                    depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = HashMap::new();
 
@@ -219,25 +220,31 @@ pub fn pileup_variants<R: NamedBamReader,
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
 
-                            for qpos in read_cursor..(read_cursor+cig.len() as usize) {
-                                base = record.seq()[qpos] as char;
-                                refr = ref_seq[cursor as usize] as char;
-                                let nuc_map = nuc_freq
-                                    .entry(cursor as i32).or_insert(HashMap::new());
-                                if base != refr {
+                            (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
+                                let threaded_cursor = cursor + qpos;
+                                let base = record.seq()[qpos] as char;
+                                let refr = ref_seq[cursor as usize] as char;
 
-                                    let id = nuc_map.entry(base)
-                                                                            .or_insert(HashSet::new());
+                                if base != refr {
+//                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
+                                    let mut nuc_freq = nuc_freq.lock().unwrap();
+                                    let nuc_map = nuc_freq
+                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
+
+                                    let id = nuc_map.entry(base).or_insert(HashSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 } else {
-//                                    let id = nuc_map
-//                                        .entry("R".chars().collect::<Vec<char>>()[0])
-//                                        .or_insert(HashSet::new());
-//                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                    let mut nuc_freq = nuc_freq.lock().unwrap();
+                                    let nuc_map = nuc_freq
+                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
+                                    let id = nuc_map
+                                        .entry("R".chars().collect::<Vec<char>>()[0])
+                                        .or_insert(HashSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
 //                                depth[cursor] += 1;
-                                cursor += 1;
-                            }
+                            });
+                            cursor = cursor + cig.len() as usize;
                             if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                                 ups_and_downs[final_pos] -= 1;
                             }
@@ -321,7 +328,7 @@ pub fn pileup_variants<R: NamedBamReader,
             process_previous_contigs_var(
                 mode,
                 last_tid,
-                nuc_freq,
+                nuc_freq.lock().unwrap().clone(),
                 indels,
                 ups_and_downs,
                 coverage_estimators,
@@ -426,11 +433,13 @@ fn process_previous_contigs_var(
         match mode {
             "polymorph" => {
                 // calculates minimum number of genotypes possible for each variant location
-//                pileup_struct.generate_minimum_genotypes();
+                pileup_struct.generate_minimum_genotypes();
+
+//                pileup_struct.cluster_variants();
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
 
-//                pileup_struct.cluster_variants();
+
 
             },
             "summarize" => {

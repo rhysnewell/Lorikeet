@@ -1,10 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::str;
-use itertools::{izip, Itertools};
+use itertools::izip;
 use bio::alphabets::dna;
 use bio_types::strand;
 use permutohedron::{Heap};
-use bio::io::gff;
 
 
 pub struct CodonTable {
@@ -15,11 +13,11 @@ pub struct CodonTable {
 
 
 pub struct NCBITable {
-    AAs: String,
-    Starts: String,
-    Base1: String,
-    Base2: String,
-    Base3: String,
+    aas: String,
+    starts: String,
+    base1: String,
+    base2: String,
+    base3: String,
 }
 
 
@@ -31,20 +29,20 @@ impl NCBITable {
         match table_id {
             1 => {
                 NCBITable {
-                    AAs: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
-                    Starts: "---M------**--*----M---------------M----------------------------".to_owned(),
-                    Base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
-                    Base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
-                    Base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
+                    aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
+                    starts: "---M------**--*----M---------------M----------------------------".to_owned(),
+                    base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
+                    base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
+                    base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
                 }
             },
             11 => {
                 NCBITable {
-                    AAs: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
-                    Starts: "---M------**--*----M------------MMMM---------------M------------".to_owned(),
-                    Base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
-                    Base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
-                    Base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
+                    aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
+                    starts: "---M------**--*----M------------MMMM---------------M------------".to_owned(),
+                    base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
+                    base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
+                    base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
                 }
             },
             _ => {
@@ -80,9 +78,9 @@ impl Translations for CodonTable {
         let ncbi_format = NCBITable::get_translation_table(table_id);
         let mut amino_hash = HashMap::new();
         let mut start_hash = HashMap::new();
-        for (aa, s, b1, b2, b3) in izip!(ncbi_format.AAs.as_bytes(), ncbi_format.Starts.as_bytes(),
-                                        ncbi_format.Base1.as_bytes(), ncbi_format.Base2.as_bytes(),
-                                        ncbi_format.Base3.as_bytes()) {
+        for (aa, s, b1, b2, b3) in izip!(ncbi_format.aas.as_bytes(), ncbi_format.starts.as_bytes(),
+                                        ncbi_format.base1.as_bytes(), ncbi_format.base2.as_bytes(),
+                                        ncbi_format.base3.as_bytes()) {
             let codon = vec!(*b1, *b2, *b3);
             amino_hash.insert(codon.clone(), *aa as char);
             start_hash.insert(codon, *s as char);
@@ -93,7 +91,7 @@ impl Translations for CodonTable {
 
         let nucleotides: Vec<u8> = vec!(65, 84, 67, 71);
         debug!("nucleotides: {} ", String::from_utf8_lossy(&nucleotides));
-        for (codon, aa) in self.aminos.iter(){
+        for (codon, _aa) in self.aminos.iter(){
             let mut n = 0.0;
             for (pos, cod) in codon.iter().enumerate() {
                 for nuc in nucleotides.iter() {
@@ -121,7 +119,7 @@ impl Translations for CodonTable {
                       variant_abundances: &HashMap<i32, HashMap<String, f64>>,
                       indels: &HashMap<i32, HashMap<String, HashSet<i32>>>,
                       ref_sequence: &Vec<u8>,
-                      depth: &Vec<f64>) -> f32 {
+                      _depth: &Vec<f64>) -> f32 {
         let strand = gene.strand().expect("No strandedness found");
 
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
