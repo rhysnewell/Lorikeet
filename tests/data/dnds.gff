@@ -1,0 +1,4 @@
+##gff-version  3
+# Sequence Data: seqnum=1;seqlen=18;seqhdr="stoit"
+# Model Data: version=Prodigal.v2.6.3;run_type=Single;model="Ab initio";gc_cont=36.54;transl_table=11;uses_sd=0
+stoit	Prodigal_v2.6.3	CDS	1	18	93.9	+	0	ID=1_1;partial=00;start_type=ATG;rbs_motif=TAAA;rbs_spacer=14bp;gc_cont=0.326;conf=100.00;score=93.95;cscore=85.80;sscore=8.15;rscore=1.58;uscore=1.19;tscore=4.16;
