@@ -3,6 +3,7 @@ use itertools::izip;
 use bio::alphabets::dna;
 use bio_types::strand;
 use permutohedron::{Heap};
+use bio::io::gff;
 
 
 pub struct CodonTable {
