@@ -16,7 +16,6 @@ extern crate seq_io;
 use seq_io::fasta;
 
 extern crate bio;
-use bio::io::gff;
 use bio::alignment::sparse::*;
 
 use std::env;
@@ -24,10 +23,7 @@ use std::str;
 use std::process;
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::io::Read as ioRead;
-use std::io::{BufRead, BufReader, Error, ErrorKind};
 use std::process::Stdio;
-use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
 
@@ -45,7 +41,6 @@ use env_logger::Builder;
 
 extern crate tempfile;
 use tempfile::NamedTempFile;
-use bio::io::gff::GffType;
 
 #[macro_use]
 extern crate lazy_static;
@@ -1039,7 +1034,7 @@ impl EstimatorsAndTaker {
             debug!("Cached regular coverage taker for metabat mode being used");
 
         } else {
-            for (i, method) in methods.iter().enumerate() {
+            for (_i, method) in methods.iter().enumerate() {
                 match method {
                     &"mean" => {
                         estimators.push(CoverageEstimator::new_estimator_length());
@@ -1481,7 +1476,8 @@ fn generate_faidx(m: &clap::ArgMatches) -> bio::io::fasta::IndexedReader<File> {
                      samtools faidx {}",
         m.value_of("reference").unwrap());
     debug!("Queuing cmd_string: {}", cmd_string);
-    let mut prodigal_out = std::process::Command::new("bash")
+
+    std::process::Command::new("bash")
         .arg("-c")
         .arg(&cmd_string)
         .stdout(Stdio::piped())
@@ -1518,7 +1514,7 @@ fn run_pileup<'a,
 //            let index_path = reference_path.clone().to_owned() + ".fai";
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
                 Ok(reader) => reader,
-                Err(e) => generate_faidx(m),
+                Err(_e) => generate_faidx(m),
             };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
@@ -1622,7 +1618,7 @@ fn run_pileup<'a,
 
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
                 Ok(reader) => reader,
-                Err(e) => generate_faidx(m),
+                Err(_e) => generate_faidx(m),
             };
 
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
@@ -1663,7 +1659,7 @@ fn run_pileup<'a,
 //            let index_path = reference_path.clone().to_owned() + ".fai";
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
                 Ok(reader) => reader,
-                Err(e) => generate_faidx(m),
+                Err(_e) => generate_faidx(m),
             };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 

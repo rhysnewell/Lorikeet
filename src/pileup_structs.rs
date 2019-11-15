@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::collections::BTreeMap;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
@@ -261,14 +260,14 @@ impl PileupFunctions for PileupStats {
                     cumulative_sum += *current;
                     depth[pos] = cumulative_sum as f64;
                 }
-                let adjusted_depth = Arc::new(Mutex::new(depth.clone()));
+//                let adjusted_depth = Arc::new(Mutex::new(depth.clone()));
 
                 // Calculate how many reads have variant at each position
                 // to go into linear regression predicting read error rate
                 depth.par_iter().enumerate().for_each(
                     |(pos, _d)|{
                         let mut variant_count_safe = variant_count_safe.lock().unwrap();
-                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
+//                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
                         let snp_map = match nucfrequency.get(&(pos as i32)) {
                             Some(map) => map.to_owned(),
                             None => HashMap::new(),
@@ -305,7 +304,7 @@ impl PileupFunctions for PileupStats {
                 read_error_rate,
                 ..
             } => {
-                let mut data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
+                let data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
                 let data = RegressionDataBuilder::new()
                     .build_from(data).expect("Unable to build regression from data");
                 let formula = "Y ~ X";
@@ -345,8 +344,8 @@ impl PileupFunctions for PileupStats {
                 let variants = Arc::new(Mutex::new(HashMap::new())); // The relative abundance of each variant
                 let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
                 let variant_count = Arc::new(Mutex::new(0));
-                let mut indels_backup = Arc::new(Mutex::new(indels.clone()));
-                let mut nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
+                let indels_backup = Arc::new(Mutex::new(indels.clone()));
+                let nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
 
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
@@ -597,7 +596,7 @@ impl PileupFunctions for PileupStats {
                             let genotype_count = genotype_pos.entry(var.to_string())
                                 .or_insert(0);
 
-                            let mut genotype_vec = Arc::new(
+                            let genotype_vec = Arc::new(
                                 Mutex::new(
                                     Vec::new()));
 
@@ -671,10 +670,10 @@ impl PileupFunctions for PileupStats {
                                     genotype_vec.push(genotype_record.clone());
                                 } else {
 //                                    let position_map_variants: Vec<String> = position_map.values().cloned().collect();
-                                    let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
+//                                    let position_map_positions: Vec<i32> = position_map.keys().cloned().collect();
                                     let position_set = position_map.keys().cloned().collect::<HashSet<i32>>();
 
-                                    let mut new_genotype = false;
+                                    let mut new_genotype;
 
                                     'genotypes: for genotype in genotype_vec.iter_mut() {
 
@@ -716,7 +715,7 @@ impl PileupFunctions for PileupStats {
                                             } else if (genotype.ordered_variants.keys().max() <= diff.iter().max())
                                                 || (diff.iter().min() <= genotype.ordered_variants.keys().min()) {
                                                 // check variants against stored variants for a genotype
-                                                let mut shared_positions: Vec<i32> = position_set
+                                                let shared_positions: Vec<i32> = position_set
                                                     .intersection(&genotype_position_set).cloned().collect();
                                                 new_genotype = genotype.check_variants(position_map, shared_positions);
                                                 if new_genotype {
@@ -732,7 +731,7 @@ impl PileupFunctions for PileupStats {
                                                         if !(genotype.ordered_variants.contains_key(&new_position)) {
                                                             let variant_map = &variant_abundances.get(new_position);
                                                             match variant_map {
-                                                                Some(variant_map) => {
+                                                                Some(_variant_map) => {
                                                                     genotype.ordered_variants
                                                                         .insert(new_position.clone(), position_map[new_position].clone());
                                                                 },
@@ -748,7 +747,7 @@ impl PileupFunctions for PileupStats {
                                             }
                                         } else {
                                             // check variants against stored variants for a genotype
-                                            let mut shared_positions: Vec<i32> = position_set
+                                            let shared_positions: Vec<i32> = position_set
                                                 .intersection(&genotype_position_set).cloned().collect();
                                             new_genotype = genotype.check_variants(position_map, shared_positions);
 
@@ -771,7 +770,7 @@ impl PileupFunctions for PileupStats {
                                         genotype_vec.push(genotype_record);
 //                                        debug!("genotypes {:?}", genotype_vec);
 
-                                        genotype_record = Genotype::start(*position as usize);
+//                                        genotype_record = Genotype::start(*position as usize);
                                     }
                                 }
                             });
@@ -816,7 +815,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 indels,
                 variant_abundances,
-                tid,
+                tid: _,
                 target_name,
                 depth,
                 ..
@@ -824,13 +823,13 @@ impl PileupFunctions for PileupStats {
                 let contig_name = String::from_utf8(target_name.clone())
                     .expect("Cannot create string from target_name");
                 let placeholder = Vec::new();
-                let mut gff_records = match gff_map.get(&contig_name){
+                let gff_records = match gff_map.get(&contig_name){
                     Some(records) => records,
                     None => &placeholder,
                 };
                 debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
                 let mut print_stream = &mut Mutex::new(std::io::stdout());
-                gff_records.par_iter().enumerate().for_each(|(id, gene)| {
+                gff_records.par_iter().enumerate().for_each(|(_id, gene)| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, indels, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
                     let frame: usize = gene.frame().parse().unwrap();
@@ -870,7 +869,7 @@ impl PileupFunctions for PileupStats {
                                 }
                                 write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
                                          contig.clone()+gene_id, gene.start(),
-                                         gene.end(), frame, strand_symbol, dnds, cursor);
+                                         gene.end(), frame, strand_symbol, dnds, cursor).expect("Unable to write to stream");
 
 
                                 if variant.to_owned().contains("N") {
@@ -879,7 +878,7 @@ impl PileupFunctions for PileupStats {
                                            str::from_utf8(
                                                &ref_sequence[cursor..cursor
                                                    + variant.len() as usize]).unwrap(),
-                                           abundance, depth[cursor], "D");
+                                           abundance, depth[cursor], "D").expect("Unable to write to stream");
 
                                 } else if indel_map.contains_key(variant) {
                                      writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
@@ -887,13 +886,13 @@ impl PileupFunctions for PileupStats {
                                                &[ref_sequence[cursor-1]]).unwrap().to_owned() + &variant,
                                            str::from_utf8(
                                                &[ref_sequence[cursor-1]]).unwrap(),
-                                           abundance, depth[cursor], "I");
+                                           abundance, depth[cursor], "I").expect("Unable to write to stream");
                                 } else {
                                     writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
                                              variant,
                                              ref_sequence[cursor] as char,
                                              abundance,
-                                             depth[cursor], "S");
+                                             depth[cursor], "S").expect("Unable to write to stream");
                                 }
                             }
                         }
@@ -909,8 +908,8 @@ impl PileupFunctions for PileupStats {
         match self{
             PileupStats::PileupContigStats {
                 variant_abundances,
-                genotypes_per_position,
-                depth,
+                genotypes_per_position: _,
+                depth: _,
                 ..} => {
 
                 let mut abundance_lnddivg =
@@ -918,7 +917,7 @@ impl PileupFunctions for PileupStats {
                     Mutex::new(
                         Vec::new()));
 
-                let mut variant_info =
+                let variant_info =
                     Arc::new(
                         Mutex::new(
                             Vec::new()));
@@ -929,33 +928,36 @@ impl PileupFunctions for PileupStats {
                         let mut abundance_lnddivg = abundance_lnddivg.lock().unwrap();
                         let mut variant_info = variant_info.lock().unwrap();
 
-                        let d = depth[*position as usize];
+//                        let d = depth[*position as usize];
 
                         for (var, abundance) in hash.iter() {
                             variant_info.push((position, var.clone()));
                             // for each variant at a location
 
                             // genotypes associated with that position and variant
-                            let mut g_count = 0.;
-                            match genotypes_per_position.get(&(*position as usize)) {
-                                Some(gtype_count) => {
-                                    g_count = gtype_count.clone() as f64;
-                                },
-                                None => {
-                                    g_count = 0.;
-                                },
-                            };
+//                            let mut g_count = 0.;
+//                            match genotypes_per_position.get(&(*position as usize)) {
+//                                Some(gtype_count) => {
+//                                    g_count = gtype_count.clone() as f64;
+//                                },
+//                                None => {
+//                                    g_count = 0.;
+//                                },
+//                            };
                             abundance_lnddivg.push(abundance.clone());
-                            abundance_lnddivg.push((d/g_count).ln());
+//                            abundance_lnddivg.push((d/g_count).ln());
                         }
                 });
                 let abundance_lnddivg = abundance_lnddivg.lock().unwrap();
                 let variant_info = variant_info.lock().unwrap();
                 // Put inputs into matrix form
-                let inputs = Matrix::new(
-                    abundance_lnddivg.len()/2, 2, abundance_lnddivg.to_vec());
+//                let inputs = Matrix::new(
+//                    abundance_lnddivg.len()/2, 2, abundance_lnddivg.to_vec());
 
-                let mut model = DBSCAN::new(0.1, 2);
+                let inputs = Matrix::new(
+                    abundance_lnddivg.len(), 1, abundance_lnddivg.to_vec());
+
+                let mut model = DBSCAN::new(0.01, 2);
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
                 for (cluster, info) in clustering.iter().zip(variant_info.iter()){
@@ -963,7 +965,7 @@ impl PileupFunctions for PileupStats {
                         Some(c) => *c as i32,
                         None => -1,
                     };
-//                    println!("Cluster: {} Pos: {} Var: {}", cluster, info.0, info.1);
+                    println!("Cluster: {} Pos: {} Var: {}", cluster, info.0, info.1);
                 }
             }
         }
