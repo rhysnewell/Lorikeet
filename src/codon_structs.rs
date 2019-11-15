@@ -4,6 +4,7 @@ use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
 use permutohedron::{Heap};
+use bio::io::gff;
 
 
 pub struct CodonTable {
@@ -130,7 +131,8 @@ impl Translations for CodonTable {
         let frame: usize = gene.frame().parse().unwrap();
         let gene_sequence = ref_sequence[start..end].to_vec();
         debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
-        let codon_sequence = get_codons(gene_sequence, frame, strand);
+        let codon_sequence = get_codons(&gene_sequence, frame, strand);
+        debug!("Codon Sequence {:?}", codon_sequence);
 
         // Calculate N and S
         let mut big_n: f32 = 0.0;
@@ -159,10 +161,11 @@ impl Translations for CodonTable {
         let mut positionals = 0;
         let mut total_variants = 0;
         let mut indel_map = HashMap::new();
-        for (gene_cursor, cursor) in (start..(end+1)).into_iter().enumerate() {
+        let dummy = HashMap::new();
+        for (gene_cursor, cursor) in (start..end).into_iter().enumerate() {
             let variant_map = match variant_abundances.get(&(cursor as i32)){
                 Some(map) => map,
-                None => continue,
+                None => &dummy,
             };
 
             if indels.contains_key(&(cursor as i32)){
@@ -177,9 +180,12 @@ impl Translations for CodonTable {
                 continue
             }
 
-            if codon_cursor == 0 {
-                for new_codon in new_codons {
-                    if (codon.len() == 3) & (new_codon.len() == 3) & (codon != new_codon){
+            if codon_cursor == 0
+                || new_codons.len() == 0 {
+                for new_codon in new_codons.iter_mut() {
+                    if (codon.len() == 3)
+                        && (new_codon.len() == 3)
+                        && (codon != *new_codon){
                         // get indices of different locations
                         let mut pos = 0 as usize;
                         let mut diffs = vec!();
@@ -223,7 +229,15 @@ impl Translations for CodonTable {
                     }
                 }
                 // begin working on new codon
+                debug!("Codon idx {} codonds {} gene length {} new_codons {:?}",
+                         codon_idx, codon_sequence.len(), gene_sequence.len(), new_codons);
+                if codon_sequence.len() == 268 {
+                    debug!("{:?}", codon_sequence);
+                }
                 codon = codon_sequence[codon_idx].clone();
+                if codon.len() != 3 {
+                    continue
+                }
                 new_codons = Vec::new();
                 new_codons.push(codon.clone());
             }
@@ -234,7 +248,8 @@ impl Translations for CodonTable {
                 // We look at the most abundant variant first for consistency
                 variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
                 for (variant, _frac) in variant_vec {
-                    if indel_map.contains_key(variant) || variant.contains("R") {
+                    if indel_map.contains_key(variant)
+                        || variant.to_owned().contains("R") {
                         // Frameshift mutations are not included in dN/dS calculations?
                         // Seems weird, but all formulas say no
                         debug!("Frameshift mutation variant {:?}", variant);
@@ -245,23 +260,19 @@ impl Translations for CodonTable {
                         // Create a copy of codon up to this point
                         // Not sure if reusing previous variants is bad, but
                         // not doing so can cause randomness to dN/dS values
-//                        println!("{:?} {} {}",
-//                                 new_codons, gene_cursor, cursor);
 
                         new_codons.push(codon.clone());
-//                        println!("when multiple variants var idx {:?} new_C {:?} c_curs {:?} variant {:?}",
-//                                 variant_count, new_codons, codon_cursor, variant);
+
                         new_codons[variant_count][codon_cursor] = variant[0];
 
                         debug!("multi variant codon {:?}", new_codons);
                     } else {
+
                         for var_idx in 0..new_codons.len() {
-//                            println!("One or first var idx {:?} new_C {:?} c_curs {:?} variant {:?} {} {}",
-//                                     var_idx, new_codons, codon_cursor, variant, gene_cursor, cursor);
+
                             new_codons[var_idx][codon_cursor] = variant[0];
                         }
                     }
-                    debug!("variant codons {:?}", new_codons);
                     variant_count += 1;
                 }
             }
@@ -295,7 +306,7 @@ impl Translations for CodonTable {
     }
 }
 
-pub fn get_codons(sequence: Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
+pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
 
     let codons = match strandedness{
         strand::Strand::Forward | strand::Strand::Unknown => {
@@ -307,4 +318,64 @@ pub fn get_codons(sequence: Vec<u8>, frame: usize, strandedness: strand::Strand)
         }
     };
     return codons
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bio::io::gff::GffType;
+
+    #[test]
+    fn test_floor_division() {
+        assert_eq!(0/3 as usize, 0);
+        assert_eq!(803/3 as usize, 267);
+    }
+
+    #[test]
+    fn test_dnds() {
+        let mut codon_table = CodonTable::setup();
+        codon_table.get_codon_table(11);
+//        let mut gene_record = bio::io::gff::Record::new();
+//        gene_record.attributes_mut().entry("ID".to_string()).or_insert("1".to_string());
+//        gene_record.strand_mut() = ("+".to_string());
+//        gene_record.frame_mut() =  ("0".to_string());
+//        gene_record.start_mut() = (1 as u64);
+//        gene_record.end_mut() =  (18 as u64);
+
+        let mut gene_records
+            = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
+        let mut variant_abundances: HashMap<i32, HashMap<String, f64>> = HashMap::new();
+        variant_abundances.insert(13, HashMap::new());
+        variant_abundances.insert(14, HashMap::new());
+        let hash = variant_abundances.entry(7).or_insert(HashMap::new());
+        hash.insert("G".to_string(), 0.5);
+        hash.insert("R".to_string(), 0.5);
+
+        let hash = variant_abundances.entry(11).or_insert(HashMap::new());
+        hash.insert("C".to_string(), 0.5);
+        hash.insert("R".to_string(), 0.5);
+
+        let hash = variant_abundances.entry(13).or_insert(HashMap::new());
+        hash.insert("A".to_string(), 0.5);
+        hash.insert("R".to_string(), 0.5);
+
+        let hash = variant_abundances.entry(14).or_insert(HashMap::new());
+        hash.insert("C".to_string(), 0.5);
+        hash.insert("R".to_string(), 0.5);
+
+        for gene_record in gene_records.records() {
+            let gene_record = gene_record.unwrap();
+            let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
+
+            let dnds = codon_table.find_mutations(
+                &gene_record,
+                &variant_abundances,
+                &HashMap::new(),
+                &ref_sequence,
+                &Vec::new());
+            assert_eq!(format!("{:.4}", dnds), format!("{}", 0.1247));
+        }
+
+    }
 }
