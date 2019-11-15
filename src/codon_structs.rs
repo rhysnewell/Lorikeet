@@ -336,12 +336,6 @@ mod tests {
     fn test_dnds() {
         let mut codon_table = CodonTable::setup();
         codon_table.get_codon_table(11);
-//        let mut gene_record = bio::io::gff::Record::new();
-//        gene_record.attributes_mut().entry("ID".to_string()).or_insert("1".to_string());
-//        gene_record.strand_mut() = ("+".to_string());
-//        gene_record.frame_mut() =  ("0".to_string());
-//        gene_record.start_mut() = (1 as u64);
-//        gene_record.end_mut() =  (18 as u64);
 
         let mut gene_records
             = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
