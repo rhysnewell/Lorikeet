@@ -441,6 +441,7 @@ fn process_previous_contigs_var(
 //                pileup_struct.cluster_variants();
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
+                pileup_struct.generate_distances();
 
 
 
