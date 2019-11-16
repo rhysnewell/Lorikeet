@@ -11,6 +11,7 @@ use rusty_machine::learning::dbscan::DBSCAN;
 use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
 use ndarray::{Array2, Array3};
+use ndarray_linalg::svd;
 
 
 
@@ -440,10 +441,10 @@ impl PileupFunctions for PileupStats {
                             variants.insert(i as i32, rel_abundance);
                         } else {
                             // Need to remove R from whitelist
-                            let nuc_map = match nucfrequency.get(&(i as i32)) {
-                                Some(map) => map.to_owned(),
-                                None => BTreeMap::new(),
-                            };
+                            let mut nucfrequency_backup
+                                = nucfrequency_backup.lock().unwrap();
+                            let nuc_map = nucfrequency_backup
+                                .entry(i as i32).or_insert(BTreeMap::new());
                             if nuc_map.len() > 0 {
                                 for (base, read_ids) in nuc_map.iter() {
                                     let count = read_ids.len();
@@ -825,10 +826,37 @@ impl PileupFunctions for PileupStats {
                 // https://humgenomics.biomedcentral.com/articles/10.1186/s40246-018-0156-4
                 // Note: Assuming haploidy, so cells can either be 0 or 1
                 let n = variants_in_reads.keys().len();
-                let mut reads_by_variants = Array2::<u32>::zeros(
+                let mut reads_by_variants = Array2::<i8>::ones(
                     (n, *variations_per_base));
                 // Set up the distance matrix of size n*n
-                let mut distance = Array2::<u32>::zeros((n, n));
+                let mut distance = Array2::<f32>::ones((n, n));
+                let mut variant_indices = HashMap::new();
+                let mut variant_index = 0usize;
+                let mut read_indices = HashMap::new();
+                let mut read_index = 0usize;
+
+                for (read_id, read_map) in variants_in_reads.iter() {
+                    let row_index = read_indices.entry(read_id).or_insert(read_index);
+                    for (genomic_pos, variant) in read_map.iter() {
+                        if !(variant.contains("R")){
+                            let mut column_index;
+                            if variant_indices.contains_key(&(genomic_pos, variant)) {
+                                column_index = variant_indices
+                                    .entry((genomic_pos, variant))
+                                    .or_insert(variant_index);
+                            } else {
+                                column_index = variant_indices
+                                    .entry((genomic_pos, variant))
+                                    .or_insert(variant_index);
+                                variant_index += 1;
+                            }
+
+                            reads_by_variants[[*row_index, *column_index]] = 0;
+                        }
+                    }
+                    read_index += 1;
+                }
+                // Use SVD from ndarray_linalg
 
 
 

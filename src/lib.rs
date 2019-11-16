@@ -38,6 +38,7 @@ extern crate simhash;
 extern crate murmurhash3;
 extern crate itertools;
 extern crate ndarray;
+extern crate ndarray_linalg;
 extern crate rayon;
 extern crate permutation;
 
