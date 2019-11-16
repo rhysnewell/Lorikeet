@@ -222,25 +222,27 @@ pub fn pileup_variants<R: NamedBamReader,
 
                             (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
                                 let threaded_cursor = cursor + qpos;
-                                let base = record.seq()[qpos] as char;
-                                let refr = ref_seq[cursor as usize] as char;
+                                if threaded_cursor < ups_and_downs.len() {
+                                    let base = record.seq()[qpos] as char;
+                                    let refr = ref_seq[threaded_cursor] as char;
 
-                                if base != refr {
+                                    if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-                                    let mut nuc_freq = nuc_freq.lock().unwrap();
-                                    let nuc_map = nuc_freq
-                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
+                                        let mut nuc_freq = nuc_freq.lock().unwrap();
+                                        let nuc_map = nuc_freq
+                                            .entry(threaded_cursor as i32).or_insert(HashMap::new());
 
-                                    let id = nuc_map.entry(base).or_insert(HashSet::new());
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
-                                } else {
-                                    let mut nuc_freq = nuc_freq.lock().unwrap();
-                                    let nuc_map = nuc_freq
-                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
-                                    let id = nuc_map
-                                        .entry("R".chars().collect::<Vec<char>>()[0])
-                                        .or_insert(HashSet::new());
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                        let id = nuc_map.entry(base).or_insert(HashSet::new());
+                                        id.insert(read_to_id[&record.qname().to_vec()]);
+                                    } else {
+                                        let mut nuc_freq = nuc_freq.lock().unwrap();
+                                        let nuc_map = nuc_freq
+                                            .entry(threaded_cursor as i32).or_insert(HashMap::new());
+                                        let id = nuc_map
+                                            .entry("R".chars().collect::<Vec<char>>()[0])
+                                            .or_insert(HashSet::new());
+                                        id.insert(read_to_id[&record.qname().to_vec()]);
+                                    }
                                 }
 //                                depth[cursor] += 1;
                             });
@@ -433,7 +435,7 @@ fn process_previous_contigs_var(
         match mode {
             "polymorph" => {
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_struct.generate_minimum_genotypes();
+//                pileup_struct.generate_minimum_genotypes();
 
 //                pileup_struct.cluster_variants();
                 // prints results of variants calling

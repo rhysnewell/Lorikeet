@@ -10,6 +10,7 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use rusty_machine::learning::dbscan::DBSCAN;
 use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
+use ndarray::ArrayBase;
 
 
 
@@ -172,6 +173,8 @@ pub trait PileupFunctions {
                                consensus_genome: std::fs::File);
 
     fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>;
+
+    fn generate_distances(&mut self);
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
@@ -807,6 +810,23 @@ impl PileupFunctions for PileupStats {
         }
     }
 
+    fn generate_distances(&mut self) {
+
+        match self {
+            PileupStats::PileupContigStats {
+                indels,
+                nucfrequency,
+                variant_abundances,
+                variants_in_reads,
+                variant_count,
+                ..
+            } => {
+
+            }
+        }
+
+    }
+
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
                            ref_sequence: &Vec<u8>,
@@ -990,7 +1010,6 @@ impl PileupFunctions for PileupStats {
                         Some(hash) => hash,
                         None => continue,
                     };
-
 
                     for (var, abundance) in hash.iter() {
                         // for each variant at a location
