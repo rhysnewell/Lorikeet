@@ -10,9 +10,8 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use rusty_machine::learning::dbscan::DBSCAN;
 use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
-use ndarray::{Array2, Array3};
-use ndarray_linalg::svd;
-
+use nalgebra as na;
+#[macro_use(array)]
 
 
 #[derive(Debug, Clone)]
@@ -175,7 +174,7 @@ pub trait PileupFunctions {
 
     fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>;
 
-    fn generate_distances(&mut self);
+    fn generate_svd(&mut self);
 
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
@@ -811,7 +810,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn generate_distances(&mut self) {
+    fn generate_svd(&mut self) {
 
         match self {
             PileupStats::PileupContigStats {
@@ -824,12 +823,15 @@ impl PileupFunctions for PileupStats {
             } => {
                 // Set up reads (n) by variants (p) matrix as described in
                 // https://humgenomics.biomedcentral.com/articles/10.1186/s40246-018-0156-4
+                // Slight variation: 0 is ref, 1 is allele
                 // Note: Assuming haploidy, so cells can either be 0 or 1
                 let n = variants_in_reads.keys().len();
-                let mut reads_by_variants = Array2::<i8>::ones(
-                    (n, *variations_per_base));
+//                let mut reads_by_variants: Array<i8, Ix2> = Array::ones(
+//                    (n, *variations_per_base));
+                let mut reads_by_variants: na::base::DMatrix<f64>
+                    = na::base::DMatrix::zeros(n, *variations_per_base);
                 // Set up the distance matrix of size n*n
-                let mut distance = Array2::<f32>::ones((n, n));
+//                let mut distance = Array::ones((n, n));
                 let mut variant_indices = HashMap::new();
                 let mut variant_index = 0usize;
                 let mut read_indices = HashMap::new();
@@ -851,12 +853,14 @@ impl PileupFunctions for PileupStats {
                                 variant_index += 1;
                             }
 
-                            reads_by_variants[[*row_index, *column_index]] = 0;
+                            reads_by_variants[(*row_index, *column_index)] = 1.;
                         }
                     }
                     read_index += 1;
                 }
                 // Use SVD from ndarray_linalg
+
+                println!("SVD? {:?}", reads_by_variants.svd(true, true).singular_values);
 
 
 
