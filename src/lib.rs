@@ -37,7 +37,8 @@ extern crate needletail;
 extern crate simhash;
 extern crate murmurhash3;
 extern crate itertools;
-extern crate ndarray;
+extern crate nalgebra;
+extern crate intel_mkl_src;
 extern crate rayon;
 extern crate permutation;
 
