@@ -1,5 +1,5 @@
 use std;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
@@ -114,7 +114,7 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
-        let mut nuc_freq: Arc<Mutex<HashMap<i32, HashMap<char, HashSet<i32>>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let mut nuc_freq: Arc<Mutex<HashMap<i32, BTreeMap<char, BTreeSet<i32>>>>> = Arc::new(Mutex::new(HashMap::new()));
         let mut indels = HashMap::new();
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
@@ -190,7 +190,6 @@ pub fn pileup_variants<R: NamedBamReader,
                     total_edit_distance_in_current_contig = 0;
                     total_indels_in_current_contig = 0;
                     nuc_freq = Arc::new(Mutex::new(HashMap::new()));
-//                    depth = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     indels = HashMap::new();
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
@@ -220,41 +219,42 @@ pub fn pileup_variants<R: NamedBamReader,
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
 
-                            (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
-                                let threaded_cursor = cursor + qpos;
+                            for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 let base = record.seq()[qpos] as char;
                                 let refr = ref_seq[cursor as usize] as char;
+                                let mut nuc_freq = nuc_freq.lock().unwrap();
+                                let nuc_map = nuc_freq
+                                    .entry(cursor as i32).or_insert(BTreeMap::new());
 
                                 if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-                                    let mut nuc_freq = nuc_freq.lock().unwrap();
-                                    let nuc_map = nuc_freq
-                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
 
-                                    let id = nuc_map.entry(base).or_insert(HashSet::new());
+                                    let id = nuc_map.entry(base)
+                                        .or_insert(BTreeSet::new());
+                                    let id = nuc_map.entry(base).or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 } else {
-                                    let mut nuc_freq = nuc_freq.lock().unwrap();
-                                    let nuc_map = nuc_freq
-                                        .entry(threaded_cursor as i32).or_insert(HashMap::new());
                                     let id = nuc_map
                                         .entry("R".chars().collect::<Vec<char>>()[0])
-                                        .or_insert(HashSet::new());
+                                        .or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
-//                                depth[cursor] += 1;
-                            });
-                            cursor = cursor + cig.len() as usize;
+
+                                cursor += 1;
+                            }
+
+
                             if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                                 ups_and_downs[final_pos] -= 1;
                             }
                             read_cursor += cig.len() as usize;
                         },
                         Cigar::Del(_) => {
-                            let indel_map = indels.entry(cursor as i32).or_insert(HashMap::new());
+                            let indel_map = indels
+                                .entry(cursor as i32).or_insert(BTreeMap::new());
                             let id = indel_map.entry(
                                 std::iter::repeat("N").take(cig.len() as usize).collect::<String>())
-                                                                  .or_insert(HashSet::new());
+                                                                  .or_insert(BTreeSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
 
                             cursor += cig.len() as usize;
@@ -272,10 +272,10 @@ pub fn pileup_variants<R: NamedBamReader,
                                 Err(_e) => {"".to_string()},
                             };
                             let indel_map = indels.entry(cursor as i32)
-                                .or_insert(HashMap::new());
+                                .or_insert(BTreeMap::new());
 
                             let id = indel_map.entry(insert)
-                                                                  .or_insert(HashSet::new());
+                                                                  .or_insert(BTreeSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
                             read_cursor += cig.len() as usize;
                             total_indels_in_current_contig += cig.len();
@@ -290,10 +290,10 @@ pub fn pileup_variants<R: NamedBamReader,
                                     Err(_e) => {"".to_string()},
                                 };
                                 let indel_map = indels.entry(cursor as i32)
-                                    .or_insert(HashMap::new());
+                                    .or_insert(BTreeMap::new());
 
                                 let id = indel_map.entry(insert)
-                                    .or_insert(HashSet::new());
+                                    .or_insert(BTreeSet::new());
 
                                 id.insert(read_to_id[&record.qname().to_vec()]);
                                 total_indels_in_current_contig += cig.len();
@@ -376,8 +376,8 @@ pub fn pileup_variants<R: NamedBamReader,
 fn process_previous_contigs_var(
     mode: &str,
     last_tid: i32,
-    nuc_freq: HashMap<i32, HashMap<char, HashSet<i32>>>,
-    indels: HashMap<i32, HashMap<String, HashSet<i32>>>,
+    nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
+    indels: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
     ups_and_downs: Vec<i32>,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
@@ -433,11 +433,12 @@ fn process_previous_contigs_var(
         match mode {
             "polymorph" => {
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_struct.generate_minimum_genotypes();
+//                pileup_struct.generate_minimum_genotypes();
 
 //                pileup_struct.cluster_variants();
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
+                pileup_struct.generate_svd();
 
 
 
