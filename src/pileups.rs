@@ -107,7 +107,6 @@ pub fn pileup_variants<R: NamedBamReader,
         let target_names = header.target_names(); // contig names
         let mut record: bam::record::Record = bam::record::Record::new();
         let mut ups_and_downs: Vec<i32> = Vec::new();
-        let mut depth = Arc::new(Mutex::new(Vec::new()));
         let mut num_mapped_reads_total: u64 = 0;
         let mut num_mapped_reads_in_current_contig: u64 = 0;
         let mut total_edit_distance_in_current_contig: u32 = 0;
@@ -158,18 +157,6 @@ pub fn pileup_variants<R: NamedBamReader,
                         let total_mismatches = total_edit_distance_in_current_contig -
                             total_indels_in_current_contig;
 
-                        let mut test_depth = vec![0; ups_and_downs.len()];
-                        let mut cumulative_sum = 0;
-                        for (pos, current) in ups_and_downs.iter().enumerate() {
-                            cumulative_sum += *current;
-                            test_depth[pos] = cumulative_sum;
-                        }
-                        if depth.lock().unwrap().clone()==test_depth{
-                            println!("equality");
-                        } else {
-                            println!("inequality {:?} {:?}", depth.lock().unwrap().clone(), test_depth);
-                        };
-
                         process_previous_contigs_var(
                             mode,
                             last_tid,
@@ -203,10 +190,6 @@ pub fn pileup_variants<R: NamedBamReader,
                     total_edit_distance_in_current_contig = 0;
                     total_indels_in_current_contig = 0;
                     nuc_freq = Arc::new(Mutex::new(HashMap::new()));
-                    depth = Arc::new(Mutex::new(
-                        vec![0;
-                             header.target_len(tid as u32)
-                                 .expect("Corrupt BAM file?") as usize]));
                     indels = HashMap::new();
 
                     match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
@@ -236,34 +219,6 @@ pub fn pileup_variants<R: NamedBamReader,
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
 
-//                            (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
-//                                let threaded_cursor = cursor + qpos;
-//                                if threaded_cursor < ups_and_downs.len() {
-//                                    let base = record.seq()[qpos] as char;
-//                                    let refr = ref_seq[threaded_cursor] as char;
-//
-//                                    if base != refr {
-//                                        let mut nuc_freq = nuc_freq.lock().unwrap();
-//                                        let nuc_map = nuc_freq
-//                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
-//
-//                                        let id = nuc_map.entry(base).or_insert(BTreeSet::new());
-//                                        id.insert(read_to_id[&record.qname().to_vec()]);
-//
-//                                    } else {
-//                                        let mut nuc_freq = nuc_freq.lock().unwrap();
-//                                        let nuc_map = nuc_freq
-//                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
-//                                        let id = nuc_map
-//                                            .entry("R".chars().collect::<Vec<char>>()[0])
-//                                            .or_insert(BTreeSet::new());
-//                                        id.insert(read_to_id[&record.qname().to_vec()]);
-//                                    }
-////                                    let mut depth = depth.lock().unwrap();
-////                                    depth[threaded_cursor] += 1;
-//                                }
-//
-//                            });
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
                                 let base = record.seq()[qpos] as char;
                                 let refr = ref_seq[cursor as usize] as char;
@@ -284,9 +239,6 @@ pub fn pileup_variants<R: NamedBamReader,
                                         .or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
-                                let mut depth = depth.lock().unwrap();
-
-                                depth[cursor] += 1;
 
                                 cursor += 1;
                             }
@@ -372,22 +324,6 @@ pub fn pileup_variants<R: NamedBamReader,
             let contig_name = target_names[last_tid as usize].to_vec();
             let total_mismatches = total_edit_distance_in_current_contig -
                 total_indels_in_current_contig;
-
-            let mut test_depth = vec![0; ups_and_downs.len()];
-            let mut cumulative_sum = 0;
-            for (pos, current) in ups_and_downs.iter().enumerate() {
-                cumulative_sum += *current;
-                test_depth[pos] = cumulative_sum;
-            }
-            if depth.lock().unwrap().clone()==test_depth{
-                println!("equality");
-            } else {
-                for (d1, d2) in depth.lock().unwrap().iter().zip(test_depth.iter()) {
-                    if d1 != d2 {
-                        println!("inequality {:?} {:?}", d1, d2);
-                    }
-                }
-            };
 
             process_previous_contigs_var(
                 mode,

@@ -835,6 +835,7 @@ impl PileupFunctions for PileupStats {
                     = na::base::DMatrix::zeros(n, *variations_per_base);
                 // Set up the distance matrix of size n*n
 //                let mut distance = Array::ones((n, n));
+                let mut distances: na::base::DMatrix<f64> = na::base::DMatrix::zeros(n, n);
                 let mut variant_indices = HashMap::new();
                 let mut variant_index = 0usize;
                 let mut read_indices = HashMap::new();
@@ -862,10 +863,10 @@ impl PileupFunctions for PileupStats {
                     read_index += 1;
                 }
                 // Use SVD from ndarray_linalg
-                let svd_array = reads_by_variants.svd(false, false);
+                let svd_array = reads_by_variants.svd(false, true);
 
-                println!("SVD? {:?}",
-                         svd_array.singular_values);
+                println!("SVD? {:?} \n  U {:?}",
+                         svd_array.singular_values.iter().cloned().collect::<Vec<f64>>(), svd_array.v_t);
 
 
 
