@@ -371,7 +371,7 @@ impl PileupFunctions for PileupStats {
                         if indel_map.len() > 0 {
                             for (indel, read_ids) in indel_map.iter() {
                                 let count = read_ids.len();
-                                *d += count as f64;
+//                                *d += count as f64;
                                 if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
                                     rel_abundance.insert(indel.clone(), count as f64 / *d);
                                     for read in read_ids {
@@ -940,7 +940,7 @@ impl PileupFunctions for PileupStats {
 
 
                                 if variant.to_owned().contains("N") {
-                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
                                            variant,
                                            str::from_utf8(
                                                &ref_sequence[cursor..cursor
