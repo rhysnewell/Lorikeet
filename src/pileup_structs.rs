@@ -401,7 +401,8 @@ impl PileupFunctions for PileupStats {
                         if nuc_map.len() > 0 {
                             for (base, read_ids) in nuc_map.iter() {
                                 let count = read_ids.len();
-                                if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate) {
+
+                                if (count >= min_variant_depth) & ((count as f64 / *d) > *read_error_rate) {
                                     rel_abundance.insert(base.to_string(), count as f64 / *d);
 
                                     for read in read_ids {
@@ -458,6 +459,8 @@ impl PileupFunctions for PileupStats {
                                         }
                                     }
                                 }
+                            } else {
+                                nucfrequency_backup.remove(&(i as i32));
                             }
                         }
                     }
@@ -859,8 +862,10 @@ impl PileupFunctions for PileupStats {
                     read_index += 1;
                 }
                 // Use SVD from ndarray_linalg
+                let svd_array = reads_by_variants.svd(false, false);
 
-                println!("SVD? {:?}", reads_by_variants.svd(true, true).singular_values);
+                println!("SVD? {:?}",
+                         svd_array.singular_values);
 
 
 
