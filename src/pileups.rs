@@ -236,35 +236,62 @@ pub fn pileup_variants<R: NamedBamReader,
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
 
-                            (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
-                                let threaded_cursor = cursor + qpos;
-                                if threaded_cursor < ups_and_downs.len() {
-                                    let base = record.seq()[qpos] as char;
-                                    let refr = ref_seq[threaded_cursor] as char;
+//                            (read_cursor..(read_cursor+cig.len() as usize)).into_par_iter().for_each(|qpos|{
+//                                let threaded_cursor = cursor + qpos;
+//                                if threaded_cursor < ups_and_downs.len() {
+//                                    let base = record.seq()[qpos] as char;
+//                                    let refr = ref_seq[threaded_cursor] as char;
+//
+//                                    if base != refr {
+//                                        let mut nuc_freq = nuc_freq.lock().unwrap();
+//                                        let nuc_map = nuc_freq
+//                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
+//
+//                                        let id = nuc_map.entry(base).or_insert(BTreeSet::new());
+//                                        id.insert(read_to_id[&record.qname().to_vec()]);
+//
+//                                    } else {
+//                                        let mut nuc_freq = nuc_freq.lock().unwrap();
+//                                        let nuc_map = nuc_freq
+//                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
+//                                        let id = nuc_map
+//                                            .entry("R".chars().collect::<Vec<char>>()[0])
+//                                            .or_insert(BTreeSet::new());
+//                                        id.insert(read_to_id[&record.qname().to_vec()]);
+//                                    }
+////                                    let mut depth = depth.lock().unwrap();
+////                                    depth[threaded_cursor] += 1;
+//                                }
+//
+//                            });
+                            for qpos in read_cursor..(read_cursor+cig.len() as usize) {
+                                let base = record.seq()[qpos] as char;
+                                let refr = ref_seq[cursor as usize] as char;
+                                let mut nuc_freq = nuc_freq.lock().unwrap();
+                                let nuc_map = nuc_freq
+                                    .entry(cursor as i32).or_insert(BTreeMap::new());
 
-                                    if base != refr {
-                                        let mut nuc_freq = nuc_freq.lock().unwrap();
-                                        let nuc_map = nuc_freq
-                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
+                                if base != refr {
+//                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
 
-                                        let id = nuc_map.entry(base).or_insert(BTreeSet::new());
-                                        id.insert(read_to_id[&record.qname().to_vec()]);
-
-                                    } else {
-                                        let mut nuc_freq = nuc_freq.lock().unwrap();
-                                        let nuc_map = nuc_freq
-                                            .entry(threaded_cursor as i32).or_insert(BTreeMap::new());
-                                        let id = nuc_map
-                                            .entry("R".chars().collect::<Vec<char>>()[0])
-                                            .or_insert(BTreeSet::new());
-                                        id.insert(read_to_id[&record.qname().to_vec()]);
-                                    }
-                                    let mut depth = depth.lock().unwrap();
-                                    depth[threaded_cursor] += 1;
+                                    let id = nuc_map.entry(base)
+                                        .or_insert(BTreeSet::new());
+                                    let id = nuc_map.entry(base).or_insert(BTreeSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                } else {
+                                    let id = nuc_map
+                                        .entry("R".chars().collect::<Vec<char>>()[0])
+                                        .or_insert(BTreeSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
+                                let mut depth = depth.lock().unwrap();
 
-                            });
-                            cursor += cig.len() as usize;
+                                depth[cursor] += 1;
+
+                                cursor += 1;
+                            }
+
+
                             if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                                 ups_and_downs[final_pos] -= 1;
                             }
