@@ -12,6 +12,7 @@ use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
 use nalgebra as na;
 use itertools::izip;
+use taxonomy::GeneralTaxonomy;
 #[macro_use(array)]
 
 
@@ -114,6 +115,7 @@ pub enum PileupStats {
         method: String,
         read_error_rate: f64,
         clusters: HashMap<i32, BTreeMap<String, i32>>,
+        clusters_mean: HashMap<i32, f64>,
     }
 }
 
@@ -146,6 +148,7 @@ impl PileupStats {
             method: "".to_string(),
             read_error_rate: 0.0,
             clusters: HashMap::new(),
+            clusters_mean: HashMap::new(),
         }
     }
 }
@@ -172,8 +175,7 @@ pub trait PileupFunctions {
     fn filter_variants(&mut self, max_iter: usize);
 
     fn generate_variant_contig(&mut self,
-                               original_contig: Vec<u8>,
-                               consensus_genome: std::fs::File);
+                               original_contig: Vec<u8>);
 
     fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>;
 
@@ -512,57 +514,66 @@ impl PileupFunctions for PileupStats {
     }
 
     fn generate_variant_contig(&mut self,
-                               original_contig: Vec<u8>,
-                               mut consensus_genome: std::fs::File){
+                               original_contig: Vec<u8>){
         match self {
             PileupStats::PileupContigStats {
                 ref mut variant_abundances,
+                clusters,
+                clusters_mean,
                 ..
             } => {
-                let mut contig = String::new();
+                // First we need to convert cluster ids into taxonomic rank ids
+                // Clusters of higher abundance mutations will be closer to root
+                let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
+                ordered_clusters
+                    .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+                println!("{:?}", ordered_clusters);
 
-                let mut skip_n = 0;
-                let mut skip_cnt = 0;
-                // Generate the consensus genome by checking each variant
-                // Variant has to be in more than 0.5 of population
-                for (pos, base) in original_contig.iter().enumerate() {
-                    if skip_cnt < skip_n {
-                        skip_cnt += 1;
-                    } else {
-                        let mut max_var = "";
-                        let mut max_abund = 0.0;
-                        skip_n = 0;
-                        skip_cnt = 0;
-                        if variant_abundances[&(pos as i32)].len() > 0 {
-                            let hash = &variant_abundances[&(pos as i32)];
-                            for (var, abundance) in hash.iter() {
-                                if abundance > &max_abund {
-                                    max_var = var;
-                                    max_abund = *abundance;
-                                }
-                            }
-                            if max_abund >= 0.5{
-                                if max_var.contains("N") {
-                                    skip_n = max_var.len() - 1;
-                                    skip_cnt = 0;
-                                } else {
-                                    contig = contig + max_var;
-                                }
-                            } else {
-                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                            }
-                        } else {
-                            contig = contig + str::from_utf8(&[*base]).unwrap();
-                        }
-                    }
-                };
-                contig = contig + "\n";
-                match consensus_genome.write_all(contig.as_bytes()) {
-                    Ok(consensus_genome) => consensus_genome,
-                    Err(e) => {
-                        println!("Cannot write to file {:?}", e);
-                        std::process::exit(1)}
-                };
+//
+//                let mut contig = String::new();
+//
+//                let mut skip_n = 0;
+//                let mut skip_cnt = 0;
+//                // Generate the consensus genome by checking each variant
+//                // Variant has to be in more than 0.5 of population
+//                for (pos, base) in original_contig.iter().enumerate() {
+//                    if skip_cnt < skip_n {
+//                        skip_cnt += 1;
+//                    } else {
+//                        let mut max_var = "";
+//                        let mut max_abund = 0.0;
+//                        skip_n = 0;
+//                        skip_cnt = 0;
+//                        if variant_abundances[&(pos as i32)].len() > 0 {
+//                            let hash = &variant_abundances[&(pos as i32)];
+//                            for (var, abundance) in hash.iter() {
+//                                if abundance > &max_abund {
+//                                    max_var = var;
+//                                    max_abund = *abundance;
+//                                }
+//                            }
+//                            if max_abund >= 0.5{
+//                                if max_var.contains("N") {
+//                                    skip_n = max_var.len() - 1;
+//                                    skip_cnt = 0;
+//                                } else {
+//                                    contig = contig + max_var;
+//                                }
+//                            } else {
+//                                contig = contig + str::from_utf8(&[*base]).unwrap();
+//                            }
+//                        } else {
+//                            contig = contig + str::from_utf8(&[*base]).unwrap();
+//                        }
+//                    }
+//                };
+//                contig = contig + "\n";
+//                match consensus_genome.write_all(contig.as_bytes()) {
+//                    Ok(consensus_genome) => consensus_genome,
+//                    Err(e) => {
+//                        println!("Cannot write to file {:?}", e);
+//                        std::process::exit(1)}
+//                };
             }
         }
     }
@@ -868,14 +879,14 @@ impl PileupFunctions for PileupStats {
                     read_index += 1;
                 }
                 // Use SVD from ndarray_linalg
-                let svd_array = reads_by_variants.svd(false, true);
+                let svd_array = reads_by_variants.svd(false, false);
                 // Get the v_t singular vector matrix from SVD
-                let v_t = svd_array.v_t.unwrap();
+                let v_t = svd_array.singular_values.into_iter().cloned().collect::<Vec<_>>();
 
                 let inputs = Matrix::new(
-                    v_t.nrows(), v_t.ncols(), v_t.data);
+                    v_t.len(), 1, v_t);
 
-                let mut model = DBSCAN::new(1.0, 2);
+                let mut model = DBSCAN::new(0.1, 2);
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
                 for (variant_tup, index) in variant_indices.iter(){
@@ -995,6 +1006,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 variant_abundances,
                 ref mut clusters,
+                ref mut clusters_mean,
                 ..} => {
 
                 let mut abundance_lnddivg =
@@ -1034,6 +1046,7 @@ impl PileupFunctions for PileupStats {
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
                 let mut cluster_map = HashMap::new();
+                let mut cluster_hierarchies = HashMap::new();
                 for (cluster, info, abundance) in izip!(clustering.iter(),variant_info.iter(), abundance_lnddivg.iter()) {
                     let cluster = match cluster {
                         Some(c) => *c as i32,
@@ -1041,8 +1054,18 @@ impl PileupFunctions for PileupStats {
                     };
                     let position = cluster_map.entry(*info.0).or_insert(BTreeMap::new());
                     position.insert(info.1.to_string(), cluster);
+                    let cluster_mean = cluster_hierarchies.entry(cluster).or_insert(Vec::new());
+                    cluster_mean.push(abundance.to_owned());
+                }
+
+                let mut means = HashMap::new();
+                for (cluster, abundances) in cluster_hierarchies {
+                    let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
+                    means.insert(cluster, mean);
                 }
                 *clusters = cluster_map;
+                *clusters_mean = means;
+//                println!("clusters {:?}", clusters);
             }
         }
     }
