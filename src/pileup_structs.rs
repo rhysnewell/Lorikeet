@@ -11,6 +11,7 @@ use rusty_machine::learning::dbscan::DBSCAN;
 use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
 use nalgebra as na;
+use itertools::izip;
 #[macro_use(array)]
 
 
@@ -112,6 +113,7 @@ pub enum PileupStats {
         max: f32,
         method: String,
         read_error_rate: f64,
+        clusters: HashMap<i32, BTreeMap<String, i32>>,
     }
 }
 
@@ -143,6 +145,7 @@ impl PileupStats {
             max: max,
             method: "".to_string(),
             read_error_rate: 0.0,
+            clusters: HashMap::new(),
         }
     }
 }
@@ -204,6 +207,7 @@ impl PileupFunctions for PileupStats {
                 ref mut coverage,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
+                ref mut clusters,
                 ..
             } => {
                 *nucfrequency = HashMap::new();
@@ -220,6 +224,7 @@ impl PileupFunctions for PileupStats {
                 *coverage = 0.00;
                 *num_covered_bases = 0;
                 *num_mapped_reads = 0;
+                *clusters = HashMap::new();
             }
         }
     }
@@ -864,9 +869,22 @@ impl PileupFunctions for PileupStats {
                 }
                 // Use SVD from ndarray_linalg
                 let svd_array = reads_by_variants.svd(false, true);
+                // Get the v_t singular vector matrix from SVD
+                let v_t = svd_array.v_t.unwrap();
 
-                println!("SVD? {:?} \n  U {:?}",
-                         svd_array.singular_values.iter().cloned().collect::<Vec<f64>>(), svd_array.v_t);
+                let inputs = Matrix::new(
+                    v_t.nrows(), v_t.ncols(), v_t.data);
+
+                let mut model = DBSCAN::new(1.0, 2);
+                model.train(&inputs).unwrap();
+                let clustering = model.clusters().unwrap();
+                for (variant_tup, index) in variant_indices.iter(){
+                    let cluster = match clustering[*index]{
+                        Some(c) => c as i32,
+                        None => -1,
+                    };
+                    println!("Cluster: {} Pos: {} Var: {} abundance {}", cluster, variant_tup.0, variant_tup.1, variant_abundances[variant_tup.0][variant_tup.1]);
+                }
 
 
 
@@ -976,8 +994,7 @@ impl PileupFunctions for PileupStats {
         match self{
             PileupStats::PileupContigStats {
                 variant_abundances,
-                genotypes_per_position: _,
-                depth: _,
+                ref mut clusters,
                 ..} => {
 
                 let mut abundance_lnddivg =
@@ -996,24 +1013,12 @@ impl PileupFunctions for PileupStats {
                         let mut abundance_lnddivg = abundance_lnddivg.lock().unwrap();
                         let mut variant_info = variant_info.lock().unwrap();
 
-//                        let d = depth[*position as usize];
-
                         for (var, abundance) in hash.iter() {
-                            variant_info.push((position, var.clone()));
-                            // for each variant at a location
+                            if !var.contains("R") {
+                                variant_info.push((position, var.clone()));
 
-                            // genotypes associated with that position and variant
-//                            let mut g_count = 0.;
-//                            match genotypes_per_position.get(&(*position as usize)) {
-//                                Some(gtype_count) => {
-//                                    g_count = gtype_count.clone() as f64;
-//                                },
-//                                None => {
-//                                    g_count = 0.;
-//                                },
-//                            };
-                            abundance_lnddivg.push(abundance.clone());
-//                            abundance_lnddivg.push((d/g_count).ln());
+                                abundance_lnddivg.push(abundance.clone());
+                            }
                         }
                 });
                 let abundance_lnddivg = abundance_lnddivg.lock().unwrap();
@@ -1025,16 +1030,19 @@ impl PileupFunctions for PileupStats {
                 let inputs = Matrix::new(
                     abundance_lnddivg.len(), 1, abundance_lnddivg.to_vec());
 
-                let mut model = DBSCAN::new(0.01, 2);
+                let mut model = DBSCAN::new(0.025, 2);
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
-                for (cluster, info) in clustering.iter().zip(variant_info.iter()){
+                let mut cluster_map = HashMap::new();
+                for (cluster, info, abundance) in izip!(clustering.iter(),variant_info.iter(), abundance_lnddivg.iter()) {
                     let cluster = match cluster {
                         Some(c) => *c as i32,
                         None => -1,
                     };
-                    println!("Cluster: {} Pos: {} Var: {}", cluster, info.0, info.1);
+                    let position = cluster_map.entry(*info.0).or_insert(BTreeMap::new());
+                    position.insert(info.1.to_string(), cluster);
                 }
+                *clusters = cluster_map;
             }
         }
     }
@@ -1047,6 +1055,7 @@ impl PileupFunctions for PileupStats {
                 depth,
                 tid,
                 genotypes_per_position,
+                clusters,
                 ..
 
             } => {
@@ -1059,12 +1068,22 @@ impl PileupFunctions for PileupStats {
                         None => continue,
                     };
 
+                    let cluster_map = match clusters.get(&(position as i32)) {
+                        Some(map) => map,
+                        None => continue,
+                    };
+
                     for (var, abundance) in hash.iter() {
                         // for each variant at a location
                         let indel_map = match indels.get(&(position as i32)) {
                             Some(map) => map.to_owned(),
                             None => BTreeMap::new(),
                         };
+                        let cluster_val = match cluster_map.get(var) {
+                            Some(i) => *i,
+                            None => -1,
+                        };
+
                         if indel_map.contains_key(var) {
                             // How does this print N for insertions?
                             if var.to_owned().contains("N"){
@@ -1093,7 +1112,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!{"{}", sample_idx};
+                            println!("{}", cluster_val);
 
                         } else if var.len() == 1 && var != &"R".to_string(){
                             print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
@@ -1110,7 +1129,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!{"{}", sample_idx};
+                            println!("{}", cluster_val);
                         }
                     }
                 };
