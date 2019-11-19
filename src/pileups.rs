@@ -53,7 +53,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
     match mode {
         "polymorph" => {
-            println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tsample_id");
+            println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tcluster");
         },
         "evolve" => {
             println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
@@ -435,10 +435,13 @@ fn process_previous_contigs_var(
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
 
-//                pileup_struct.cluster_variants();
+                pileup_struct.cluster_variants();
+
+
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
-                pileup_struct.generate_svd();
+//                pileup_struct.generate_svd();
+
 
 
 
