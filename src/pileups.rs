@@ -233,13 +233,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                         .or_insert(BTreeSet::new());
                                     let id = nuc_map.entry(base).or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
-                                } else {
-                                    let id = nuc_map
-                                        .entry("R".chars().collect::<Vec<char>>()[0])
-                                        .or_insert(BTreeSet::new());
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
-
                                 cursor += 1;
                             }
 
@@ -440,7 +434,7 @@ fn process_previous_contigs_var(
 
                 // prints results of variants calling
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
-//                pileup_struct.generate_variant_contig(ref_sequence);
+                pileup_struct.generate_variant_contig(ref_sequence);
 //                pileup_struct.generate_svd();
 
 
