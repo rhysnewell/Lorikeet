@@ -8,11 +8,13 @@ use codon_structs::*;
 use haplotypes_and_genotypes::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
-use rusty_machine::learning::dbscan::DBSCAN;
-use rusty_machine::learning::UnSupModel;
-use rusty_machine::linalg::Matrix;
+//use rusty_machine::learning::dbscan::DBSCAN;
+//use rusty_machine::learning::UnSupModel;
+//use rusty_machine::linalg::Matrix;
+use cogset::{Euclid, Dbscan, BruteScan};
 use nalgebra as na;
 use itertools::{izip, Itertools};
+use itertools::EitherOrBoth::{Both, Left, Right};
 use taxonomy::GeneralTaxonomy;
 #[macro_use(array)]
 
@@ -282,8 +284,8 @@ impl PileupFunctions for PileupStats {
                 let variants = Arc::new(Mutex::new(HashMap::new())); // The relative abundance of each variant
                 let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
                 let variant_count = Arc::new(Mutex::new(0));
-                let indels_backup = Arc::new(Mutex::new(indels.clone()));
-                let nucfrequency_backup = Arc::new(Mutex::new(nucfrequency.clone()));
+                let indels = Arc::new(Mutex::new(indels));
+                let nucfrequency = Arc::new(Mutex::new(nucfrequency));
 
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
@@ -299,6 +301,8 @@ impl PileupFunctions for PileupStats {
                         // The reads containing this variant don't contribute to coverage values
                         // So we need to readjust the depth at these locations to show true
                         // read depth. i.e. variant depth + reference depth
+                        let mut indels
+                            = indels.lock().unwrap();
                         let indel_map = match indels.get(&(i as i32)) {
                             Some(map) => map.to_owned(),
                             None => BTreeMap::new(),
@@ -308,7 +312,7 @@ impl PileupFunctions for PileupStats {
                                 let count = read_ids.len();
 //                                *d += count as f64;
                                 if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
-                                    rel_abundance.insert(indel.clone(), count as f64 / *d);
+                                    rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
                                         let mut read_variants
                                             = read_variants.lock().unwrap();
@@ -321,14 +325,16 @@ impl PileupFunctions for PileupStats {
                                     let mut variant_count = variant_count.lock().unwrap();
                                     *variant_count += 1;
                                 } else {
-                                    let mut indels_backup
-                                        = indels_backup.lock().unwrap();
-                                    let indel_map_back = indels_backup
+
+                                    let indel_map_back = indels
                                         .entry(i as i32).or_insert(BTreeMap::new());
                                     indel_map_back.remove(indel);
                                 }
                             }
                         }
+                        let mut nucfrequency
+                            = nucfrequency.lock().unwrap();
+
                         let nuc_map = match nucfrequency.get(&(i as i32)) {
                             Some(map) => map.to_owned(),
                             None => BTreeMap::new(),
@@ -353,9 +359,8 @@ impl PileupFunctions for PileupStats {
                                         *variant_count += 1;
                                     }
                                 } else {
-                                    let mut nucfrequency_backup
-                                        = nucfrequency_backup.lock().unwrap();
-                                    let nuc_map_back = nucfrequency_backup
+
+                                    let nuc_map_back = nucfrequency
                                         .entry(i as i32).or_insert(BTreeMap::new());
                                     nuc_map_back.remove(base);
                                 }
@@ -367,18 +372,18 @@ impl PileupFunctions for PileupStats {
 
                     if rel_abundance.len() > 1 {
                         let mut variants = variants.lock().unwrap();
-                        debug!("Relative Abundances: {:?}", rel_abundance);
+//                        debug!("Relative Abundances: {:?}", rel_abundance);
                         variants.insert(i as i32, rel_abundance);
                     } else if rel_abundance.len() == 1 {
                         if !(rel_abundance.contains_key(&"R".to_string())) {
                             let mut variants = variants.lock().unwrap();
-                            debug!("Relative Abundances: {:?}", rel_abundance);
+//                            debug!("Relative Abundances: {:?}", rel_abundance);
                             variants.insert(i as i32, rel_abundance);
                         } else {
                             // Need to remove R from whitelist
-                            let mut nucfrequency_backup
-                                = nucfrequency_backup.lock().unwrap();
-                            let nuc_map = nucfrequency_backup
+                            let mut nucfrequency
+                                = nucfrequency.lock().unwrap();
+                            let nuc_map = nucfrequency
                                 .entry(i as i32).or_insert(BTreeMap::new());
                             if nuc_map.len() > 0 {
                                 for (base, read_ids) in nuc_map.iter() {
@@ -395,7 +400,7 @@ impl PileupFunctions for PileupStats {
                                     }
                                 }
                             } else {
-                                nucfrequency_backup.remove(&(i as i32));
+                                nucfrequency.remove(&(i as i32));
                             }
                         }
                     }
@@ -403,16 +408,16 @@ impl PileupFunctions for PileupStats {
                 });
 
                 let read_variants = read_variants.lock().unwrap();
-                *variants_in_reads = read_variants.clone();
+                *variants_in_reads = read_variants.to_owned();
                 let variants = variants.lock().unwrap();
-                *variant_abundances = variants.clone();
+                *variant_abundances = variants.to_owned();
                 let variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
                 *variations_per_base = *variant_count;
-                let nucfrequency_backup = nucfrequency_backup.lock().unwrap();
-                *nucfrequency = nucfrequency_backup.clone();
-                let indels_backup = indels_backup.lock().unwrap();
-                *indels = indels_backup.clone();
+                let mut nucfrequency = nucfrequency.lock().unwrap();
+                **nucfrequency = nucfrequency.to_owned();
+                let mut indels = indels.lock().unwrap();
+                **indels = indels.to_owned();
             }
         }
     }
@@ -489,7 +494,7 @@ impl PileupFunctions for PileupStats {
                                 .expect("No cluster").clone()));
 
                     node_idx += 1;
-                    for (node_level, node_map) in haplotype_tree.iter() {
+                    for (node_level, node_map) in node_level.iter() {
 
                     }
                 }
@@ -847,22 +852,6 @@ impl PileupFunctions for PileupStats {
                 // Get the v_t singular vector matrix from SVD
                 let v_t = svd_array.singular_values.into_iter().cloned().collect::<Vec<_>>();
 
-                let inputs = Matrix::new(
-                    v_t.len(), 1, v_t);
-
-                let mut model = DBSCAN::new(0.1, 2);
-                model.train(&inputs).unwrap();
-                let clustering = model.clusters().unwrap();
-                for (variant_tup, index) in variant_indices.iter(){
-                    let cluster = match clustering[*index]{
-                        Some(c) => c as i32,
-                        None => -1,
-                    };
-                    println!("Cluster: {} Pos: {} Var: {} abundance {}", cluster, variant_tup.0, variant_tup.1, variant_abundances[variant_tup.0][variant_tup.1]);
-                }
-
-
-
             }
         }
 
@@ -974,10 +963,15 @@ impl PileupFunctions for PileupStats {
                 tid,
                 ..} => {
 
-                let mut abundance_lnddivg =
+                let mut abundance_euclid =
                     Arc::new(
                     Mutex::new(
                         Vec::new()));
+
+                let mut abundance_float =
+                    Arc::new(
+                        Mutex::new(
+                            Vec::new()));
 
                 let variant_info =
                     Arc::new(
@@ -987,60 +981,115 @@ impl PileupFunctions for PileupStats {
                 variant_abundances.iter().for_each(
                     |(position, hash)|{
                         // loop through each position that has variants
-                        let mut abundance_lnddivg = abundance_lnddivg.lock().unwrap();
+                        let mut abundance_euclid = abundance_euclid.lock().unwrap();
+                        let mut abundance_float = abundance_float.lock().unwrap();
                         let mut variant_info = variant_info.lock().unwrap();
 
                         for (var, abundance) in hash.iter() {
                             if !var.contains("R") {
-                                variant_info.push((position, var.clone()));
-
-                                abundance_lnddivg.push(abundance.clone());
+                                variant_info.push((position, var.to_string()));
+                                abundance_float.push(*abundance);
+                                abundance_euclid.push(Euclid([*abundance]));
                             }
                         }
                 });
-                let abundance_lnddivg = abundance_lnddivg.lock().unwrap();
-                let variant_info = variant_info.lock().unwrap();
-                // Put inputs into matrix form
-//                let inputs = Matrix::new(
-//                    abundance_lnddivg.len()/2, 2, abundance_lnddivg.to_vec());
-
-                let inputs = Matrix::new(
-                    abundance_lnddivg.len(), 1, abundance_lnddivg.to_vec());
-
                 let eps = 0.05;
                 let min_cluster_size = 2;
+                let abundance_euclid = abundance_euclid.lock().unwrap();
+                let variant_info = variant_info.lock().unwrap();
+                let abundance_float = abundance_float.lock().unwrap();
+                let scanner = BruteScan::new(&abundance_euclid);
+                debug!("Beginning clustering of {} variants", abundance_euclid.len());
+                let mut dbscan = Dbscan::new(scanner,
+                                             eps,
+                                             min_cluster_size);
 
-                let mut model = DBSCAN::new(eps, min_cluster_size);
-                model.train(&inputs).unwrap();
-                let mut clustering = model.clusters().unwrap()
-                    .iter().map(|x| match x {
-                    Some(cluster) => *cluster as i32,
-                    None => -1,
-                }).collect::<Vec<i32>>();
+
+                let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
+
+                let noise = dbscan.noise_points()
+                    .iter().cloned().collect::<Vec<_>>();
+
+//                let mut clustering = model.clusters().unwrap()
+//                    .iter().map(|x| match x {
+//                    Some(cluster) => *cluster as i32,
+//                    None => -1,
+//                }).collect::<Vec<i32>>();
                 // get the number of clusters so we can rescue orphan variants
-                let mut number_of_clusters = clustering.iter()
-                    .unique()
-                    .cloned()
-                    .collect::<Vec<i32>>().len() as i32 - 1 as i32;
+                let mut number_of_clusters = clusters.len() as i32;
+
                 let mut cluster_map = HashMap::new();
                 let mut cluster_hierarchies = HashMap::new();
-                for (cluster, info, abundance) in izip!(clustering.iter_mut(),
-                    variant_info.iter(),
-                    abundance_lnddivg.iter()) {
-                    if *cluster == -1 {
-                        number_of_clusters += 1;
-                        *cluster = number_of_clusters;
-                    };
-                    let position = cluster_map.entry(*info.0).or_insert(BTreeMap::new());
-                    position.insert(info.1.to_string(), *cluster);
-                    let cluster_mean = cluster_hierarchies.entry(*cluster).or_insert(Vec::new());
-                    cluster_mean.push(abundance.to_owned());
+                for zipped in db_clusters.iter().enumerate().zip_longest(noise.iter()) {
+                    match zipped {
+                        Both(cluster_tuple, noise) => {
+                            let index_vec = cluster_tuple.1;
+                            let cluster = cluster_tuple.0;
+
+                            // Deal with unclustered points
+                            let noise_info = &variant_info[*noise];
+                            let noise_abundance = abundance_float[*noise];
+                            let noise_position = cluster_map.entry(*noise_info.0)
+                                                            .or_insert(BTreeMap::new());
+                            noise_position.insert(noise_info.1.to_string(), number_of_clusters);
+                            let noise_mean = cluster_hierarchies
+                                .entry(number_of_clusters).or_insert(Vec::new());
+                            noise_mean.push(noise_abundance.to_owned());
+                            number_of_clusters += 1;
+
+
+                            // Deal with clustered points
+                            for index in index_vec {
+                                let info = &variant_info[*index];
+                                let abundance = abundance_float[*index];
+
+                                let position = cluster_map
+                                    .entry(*info.0).or_insert(BTreeMap::new());
+                                position.insert(info.1.to_string(), cluster as i32);
+
+                                let cluster_mean = cluster_hierarchies
+                                    .entry(cluster as i32).or_insert(Vec::new());
+                                cluster_mean.push(abundance.to_owned());
+                            }
+                        },
+                        Left(cluster_tuple) => {
+                            let index_vec = cluster_tuple.1;
+                            let cluster = cluster_tuple.0;
+
+                            // Deal with clustered points
+                            for index in index_vec {
+                                let info = &variant_info[*index];
+                                let abundance = abundance_float[*index];
+
+                                let position = cluster_map
+                                    .entry(*info.0).or_insert(BTreeMap::new());
+                                position.insert(info.1.to_string(), cluster as i32);
+
+                                let cluster_mean = cluster_hierarchies
+                                    .entry(cluster as i32).or_insert(Vec::new());
+                                cluster_mean.push(abundance.to_owned());
+                            }
+                        },
+                        Right(noise) => {
+                            // Deal with unclustered points
+                            let noise_info = &variant_info[*noise];
+                            let noise_abundance = abundance_float[*noise];
+                            let noise_position = cluster_map.entry(*noise_info.0)
+                                .or_insert(BTreeMap::new());
+                            noise_position.insert(noise_info.1.to_string(), number_of_clusters);
+                            let noise_mean = cluster_hierarchies
+                                .entry(number_of_clusters).or_insert(Vec::new());
+                            noise_mean.push(noise_abundance.to_owned());
+                            number_of_clusters += 1;
+                        }
+                    }
+
                 }
 
                 let mut means = HashMap::new();
                 for (cluster, abundances) in cluster_hierarchies {
                     let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
-                    means.insert(cluster, mean);
+                    means.insert(cluster as i32, mean);
                 }
                 *clusters = cluster_map;
                 *clusters_mean = means;
