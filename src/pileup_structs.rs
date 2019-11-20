@@ -12,7 +12,7 @@ use rusty_machine::learning::dbscan::DBSCAN;
 use rusty_machine::learning::UnSupModel;
 use rusty_machine::linalg::Matrix;
 use nalgebra as na;
-use itertools::izip;
+use itertools::{izip, Itertools};
 use taxonomy::GeneralTaxonomy;
 #[macro_use(array)]
 
@@ -452,14 +452,46 @@ impl PileupFunctions for PileupStats {
             } => {
                 // First we need to convert cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
-                // Ordered from leaf to root
+                // Ordered from root to leaf
                 let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
                 ordered_clusters
-                    .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap().reverse());
-                println!("{:?}", ordered_clusters);
+                    .sort_by(|a, b|
+                        b.1.partial_cmp(a.1).unwrap());
+                debug!("{:?}", ordered_clusters);
 
-                for (idx, cluster) in ordered_clusters.iter().enumerate() {
+                // Clusters is set up as HashMap<Position, BTreeMap<Variant, Cluster_ID>>
+                // In this case we want to rearrange to HashMap<Cluster_ID, BTreeMap<Position, HashSet<Variant>>>
+                // This will allow us to disentangle positions where more than one variant is possible
+                let mut clusters_and_positions = HashMap::new();
+                for (position, variant_map) in clusters.iter() {
+                    for (variant, cluster) in variant_map.iter() {
+                        let clust = clusters_and_positions.entry(*cluster)
+                            .or_insert(HashMap::new());
+                        let pos = clust.entry(*position).or_insert(HashSet::new());
+                        pos.insert(variant.to_string());
+                    }
+                }
 
+                let mut haplotype_tree = HashMap::new();
+                let mut node_idx = 0;
+                for (idx, cluster_tup) in ordered_clusters.iter().enumerate() {
+                    // idx 0 is the root, most abundant variants
+                    // idx also represents the node level
+
+                    let node_level = haplotype_tree.entry(idx)
+                        .or_insert(HashMap::new());
+                    let current_node = node_level.entry(node_idx)
+                        .or_insert(Haplotype::start(
+                            idx,
+                            *cluster_tup.1,
+                            node_idx,
+                            clusters_and_positions.get(cluster_tup.0)
+                                .expect("No cluster").clone()));
+
+                    node_idx += 1;
+                    for (node_level, node_map) in haplotype_tree.iter() {
+
+                    }
                 }
 //
 //                let mut contig = String::new();
@@ -939,6 +971,7 @@ impl PileupFunctions for PileupStats {
                 variant_abundances,
                 ref mut clusters,
                 ref mut clusters_mean,
+                tid,
                 ..} => {
 
                 let mut abundance_lnddivg =
@@ -974,19 +1007,33 @@ impl PileupFunctions for PileupStats {
                 let inputs = Matrix::new(
                     abundance_lnddivg.len(), 1, abundance_lnddivg.to_vec());
 
-                let mut model = DBSCAN::new(0.05, 1);
+                let eps = 0.05;
+                let min_cluster_size = 2;
+
+                let mut model = DBSCAN::new(eps, min_cluster_size);
                 model.train(&inputs).unwrap();
-                let clustering = model.clusters().unwrap();
+                let mut clustering = model.clusters().unwrap()
+                    .iter().map(|x| match x {
+                    Some(cluster) => *cluster as i32,
+                    None => -1,
+                }).collect::<Vec<i32>>();
+                // get the number of clusters so we can rescue orphan variants
+                let mut number_of_clusters = clustering.iter()
+                    .unique()
+                    .cloned()
+                    .collect::<Vec<i32>>().len() as i32 - 1 as i32;
                 let mut cluster_map = HashMap::new();
                 let mut cluster_hierarchies = HashMap::new();
-                for (cluster, info, abundance) in izip!(clustering.iter(),variant_info.iter(), abundance_lnddivg.iter()) {
-                    let cluster = match cluster {
-                        Some(c) => *c as i32,
-                        None => -1,
+                for (cluster, info, abundance) in izip!(clustering.iter_mut(),
+                    variant_info.iter(),
+                    abundance_lnddivg.iter()) {
+                    if *cluster == -1 {
+                        number_of_clusters += 1;
+                        *cluster = number_of_clusters;
                     };
                     let position = cluster_map.entry(*info.0).or_insert(BTreeMap::new());
-                    position.insert(info.1.to_string(), cluster);
-                    let cluster_mean = cluster_hierarchies.entry(cluster).or_insert(Vec::new());
+                    position.insert(info.1.to_string(), *cluster);
+                    let cluster_mean = cluster_hierarchies.entry(*cluster).or_insert(Vec::new());
                     cluster_mean.push(abundance.to_owned());
                 }
 
@@ -997,7 +1044,8 @@ impl PileupFunctions for PileupStats {
                 }
                 *clusters = cluster_map;
                 *clusters_mean = means;
-//                println!("clusters {:?}", clusters);
+                info!("{} Distinct variant frequency clusters found on contig {} at eps {}",
+                      clusters_mean.len(), tid, eps);
             }
         }
     }
@@ -1014,6 +1062,7 @@ impl PileupFunctions for PileupStats {
                 ..
 
             } => {
+                info!("Outputting {} variant locations", variant_abundances.keys().len());
                 for (position, d) in depth.iter().enumerate() {
                     // loop through each position that has variants
 //                    let position = *position as usize;
