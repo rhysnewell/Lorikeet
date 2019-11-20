@@ -1,16 +1,40 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 
+
 #[derive(Debug,Clone)]
 pub struct Haplotype {
-    abundance: f64,
-    parent_node_id: usize,
-    variants: HashMap<i32, (String, f64)>,
-    node_level: usize,
-    node_id: usize,
+    pub abundance: f64,
+    pub parent_node_id: i32,
+    pub parent_variants: HashMap<i32, HashSet<String>>,
+    pub variants: HashMap<i32, HashSet<String>>,
+    pub node_level: usize,
+    pub node_id: i32,
 }
 
 impl Haplotype {
-
+    pub fn new() -> Haplotype {
+        Haplotype {
+            abundance: 0.0,
+            parent_node_id: -1,
+            parent_variants: HashMap::new(),
+            variants: HashMap::new(),
+            node_level: 0,
+            node_id: -1,
+        }
+    }
+    pub fn start(node_level: usize,
+                 abundance: f64,
+                 node_id: i32,
+                 variants: HashMap<i32, HashSet<String>>) -> Haplotype {
+        Haplotype {
+            abundance: abundance,
+            parent_node_id: -1,
+            parent_variants: HashMap::new(),
+            variants: variants,
+            node_level: node_level,
+            node_id: node_id,
+        }
+    }
 }
 
 
