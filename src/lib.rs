@@ -17,6 +17,7 @@ pub mod genome_exclusion;
 pub mod mash;
 pub mod minhashes;
 pub mod distance;
+pub mod haplotypes_and_genotypes;
 
 extern crate linregress;
 extern crate taxonomy;

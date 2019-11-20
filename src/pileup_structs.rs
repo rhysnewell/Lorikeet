@@ -5,6 +5,7 @@ use std::io::prelude::*;
 use rayon::prelude::*;
 use permutation::*;
 use codon_structs::*;
+use haplotypes_and_genotypes::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use rusty_machine::learning::dbscan::DBSCAN;
@@ -14,79 +15,6 @@ use nalgebra as na;
 use itertools::izip;
 use taxonomy::GeneralTaxonomy;
 #[macro_use(array)]
-
-
-#[derive(Debug, Clone)]
-pub struct Genotype {
-    read_ids: HashSet<i32>,
-    start_var_pos: usize,
-    ordered_variants: HashMap<i32, String>,
-    frequencies: Vec<f64>,
-}
-
-impl Genotype {
-    fn start(position: usize) -> Genotype {
-        Genotype {
-            read_ids: HashSet::new(),
-            start_var_pos: position,
-            ordered_variants: HashMap::new(),
-            frequencies: Vec::new(),
-        }
-    }
-
-    fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>,
-           variant_abundances: &HashMap<i32, BTreeMap<String, f64>>) {
-        self.read_ids = HashSet::new();
-        self.frequencies = Vec::new();
-        self.ordered_variants = HashMap::new();
-        self.read_ids.insert(read_id);
-        for (pos, variant) in position_map.iter() {
-            let variant_map = &variant_abundances.get(pos);
-            match variant_map {
-                Some(variant_map) => {
-                    debug!("Fetching position: {:?} {:?} {:?}", pos, variant_map, variant);
-//                self.frequencies.push(variant_map[variant].clone());
-                    self.ordered_variants
-                        .insert(pos.clone(), variant.to_string());
-                },
-                None => continue,
-            }
-        }
-    }
-
-    fn check_variants(&self, position_map: &BTreeMap<i32, String>, intersection: Vec<i32>) -> bool {
-        // check variants against stored variants for a genotype along the shared positions
-        let mut new_var= false;
-        for check_pos in intersection.iter() {
-            if self.ordered_variants.contains_key(&check_pos) {
-                let current_var = match self
-                    .ordered_variants
-                    .get(&check_pos) {
-                    Some(var) => var,
-                    None => {
-                        println!("Position not recorded in variant map");
-                        std::process::exit(1)
-                    }
-                };
-                let check_var = position_map.get(check_pos)
-                    .expect("No variant at that position while checking genotypes");
-
-                if current_var != check_var {
-                    //Then this is a new genotype
-                    new_var = true;
-                    break
-                } else {
-                    new_var = false;
-                }
-            } else {
-                // current variant does not contain this position, must be new genotype
-                new_var = true;
-                break
-            }
-        }
-        return new_var
-    }
-}
 
 pub enum PileupStats {
     PileupContigStats {
@@ -524,11 +452,15 @@ impl PileupFunctions for PileupStats {
             } => {
                 // First we need to convert cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
+                // Ordered from leaf to root
                 let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
                 ordered_clusters
-                    .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
+                    .sort_by(|a, b| b.1.partial_cmp(a.1).unwrap().reverse());
                 println!("{:?}", ordered_clusters);
 
+                for (idx, cluster) in ordered_clusters.iter().enumerate() {
+
+                }
 //
 //                let mut contig = String::new();
 //
@@ -1042,7 +974,7 @@ impl PileupFunctions for PileupStats {
                 let inputs = Matrix::new(
                     abundance_lnddivg.len(), 1, abundance_lnddivg.to_vec());
 
-                let mut model = DBSCAN::new(0.025, 2);
+                let mut model = DBSCAN::new(0.05, 1);
                 model.train(&inputs).unwrap();
                 let clustering = model.clusters().unwrap();
                 let mut cluster_map = HashMap::new();
