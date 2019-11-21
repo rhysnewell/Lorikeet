@@ -978,23 +978,53 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             Vec::new()));
 
+                let mut cluster_map =
+                    Arc::new(
+                    Mutex::new(
+                        HashMap::new()));
+
+                let mut cluster_hierarchies =
+                    Arc::new(
+                        Mutex::new(
+                            HashMap::new()));
+
+                let eps = 0.05;
+                let min_cluster_size = 2;
+
                 variant_abundances.iter().for_each(
                     |(position, hash)|{
                         // loop through each position that has variants
-                        let mut abundance_euclid = abundance_euclid.lock().unwrap();
-                        let mut abundance_float = abundance_float.lock().unwrap();
-                        let mut variant_info = variant_info.lock().unwrap();
+                        let mut abundance_euclid = abundance_euclid
+                            .lock().unwrap();
+                        let mut abundance_float = abundance_float
+                            .lock().unwrap();
+                        let mut variant_info = variant_info
+                            .lock().unwrap();
 
                         for (var, abundance) in hash.iter() {
                             if !var.contains("R") {
-                                variant_info.push((position, var.to_string()));
-                                abundance_float.push(*abundance);
-                                abundance_euclid.push(Euclid([*abundance]));
+                                if abundance >= &eps {
+                                    variant_info.push((position, var.to_string()));
+                                    abundance_float.push(*abundance);
+                                    abundance_euclid.push(Euclid([*abundance]));
+                                } else {
+                                    let mut cluster_map =
+                                        cluster_map.lock().unwrap();
+                                    let mut cluster_hierarchies =
+                                        cluster_hierarchies.lock().unwrap();
+
+                                    let position = cluster_map
+                                        .entry(*position).or_insert(BTreeMap::new());
+                                    position.insert(var.to_string(), 0);
+
+                                    let cluster_mean = cluster_hierarchies
+                                        .entry(0).or_insert(Vec::new());
+                                    cluster_mean.push(abundance.to_owned());
+                                }
                             }
                         }
                 });
-                let eps = 0.05;
-                let min_cluster_size = 2;
+
                 let abundance_euclid = abundance_euclid.lock().unwrap();
                 let variant_info = variant_info.lock().unwrap();
                 let abundance_float = abundance_float.lock().unwrap();
@@ -1006,92 +1036,67 @@ impl PileupFunctions for PileupStats {
 
 
                 let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
+                debug!("{} True clusters found for abundance > eps", db_clusters.len());
 
-                let noise = dbscan.noise_points()
+                let noise_points = dbscan.noise_points()
                     .iter().cloned().collect::<Vec<_>>();
 
-//                let mut clustering = model.clusters().unwrap()
-//                    .iter().map(|x| match x {
-//                    Some(cluster) => *cluster as i32,
-//                    None => -1,
-//                }).collect::<Vec<i32>>();
                 // get the number of clusters so we can rescue orphan variants
-                let mut number_of_clusters = clusters.len() as i32;
-
-                let mut cluster_map = HashMap::new();
-                let mut cluster_hierarchies = HashMap::new();
-                for zipped in db_clusters.iter().enumerate().zip_longest(noise.iter()) {
-                    match zipped {
-                        Both(cluster_tuple, noise) => {
-                            let index_vec = cluster_tuple.1;
-                            let cluster = cluster_tuple.0;
-
-                            // Deal with unclustered points
-                            let noise_info = &variant_info[*noise];
-                            let noise_abundance = abundance_float[*noise];
-                            let noise_position = cluster_map.entry(*noise_info.0)
-                                                            .or_insert(BTreeMap::new());
-                            noise_position.insert(noise_info.1.to_string(), number_of_clusters);
-                            let noise_mean = cluster_hierarchies
-                                .entry(number_of_clusters).or_insert(Vec::new());
-                            noise_mean.push(noise_abundance.to_owned());
-                            number_of_clusters += 1;
+                let mut number_of_clusters =
+                    Arc::new(
+                        Mutex::new(
+                            clusters.len() as i32 + 1));
 
 
+                // All cluster ids are + 1, because we have the variants with abundances < eps
+                // outside of the clustering algorithm already as cluster id 0
+                db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)|{
                             // Deal with clustered points
-                            for index in index_vec {
+                            index_vec.par_iter().for_each(|index|{
                                 let info = &variant_info[*index];
                                 let abundance = abundance_float[*index];
 
-                                let position = cluster_map
-                                    .entry(*info.0).or_insert(BTreeMap::new());
-                                position.insert(info.1.to_string(), cluster as i32);
-
-                                let cluster_mean = cluster_hierarchies
-                                    .entry(cluster as i32).or_insert(Vec::new());
-                                cluster_mean.push(abundance.to_owned());
-                            }
-                        },
-                        Left(cluster_tuple) => {
-                            let index_vec = cluster_tuple.1;
-                            let cluster = cluster_tuple.0;
-
-                            // Deal with clustered points
-                            for index in index_vec {
-                                let info = &variant_info[*index];
-                                let abundance = abundance_float[*index];
+                                let mut cluster_map = cluster_map.lock().unwrap();
+                                let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                                let mut number_of_clusters = number_of_clusters.lock().unwrap();
 
                                 let position = cluster_map
                                     .entry(*info.0).or_insert(BTreeMap::new());
-                                position.insert(info.1.to_string(), cluster as i32);
+                                position.insert(info.1.to_string(), cluster as i32 + 1);
 
                                 let cluster_mean = cluster_hierarchies
-                                    .entry(cluster as i32).or_insert(Vec::new());
+                                    .entry(cluster as i32 + 1).or_insert(Vec::new());
                                 cluster_mean.push(abundance.to_owned());
-                            }
-                        },
-                        Right(noise) => {
-                            // Deal with unclustered points
-                            let noise_info = &variant_info[*noise];
-                            let noise_abundance = abundance_float[*noise];
-                            let noise_position = cluster_map.entry(*noise_info.0)
-                                .or_insert(BTreeMap::new());
-                            noise_position.insert(noise_info.1.to_string(), number_of_clusters);
-                            let noise_mean = cluster_hierarchies
-                                .entry(number_of_clusters).or_insert(Vec::new());
-                            noise_mean.push(noise_abundance.to_owned());
-                            number_of_clusters += 1;
-                        }
-                    }
+                            });
+                });
 
-                }
+                noise_points.par_iter().for_each(|noise|{
 
+                    let mut cluster_map = cluster_map.lock().unwrap();
+                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                    let mut number_of_clusters = number_of_clusters.lock().unwrap();
+
+                    // Deal with unclustered points
+                    let noise_info = &variant_info[*noise];
+                    let noise_abundance = abundance_float[*noise];
+                    let noise_position = cluster_map.entry(*noise_info.0)
+                        .or_insert(BTreeMap::new());
+                    noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+                    let noise_mean = cluster_hierarchies
+                        .entry(*number_of_clusters).or_insert(Vec::new());
+                    noise_mean.push(noise_abundance.to_owned());
+                    *number_of_clusters += 1;
+                });
+
+                let mut cluster_map = cluster_map.lock().unwrap();
+                let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
                 let mut means = HashMap::new();
-                for (cluster, abundances) in cluster_hierarchies {
+
+                for (cluster, abundances) in cluster_hierarchies.iter() {
                     let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
-                    means.insert(cluster as i32, mean);
+                    means.insert(*cluster as i32, mean);
                 }
-                *clusters = cluster_map;
+                *clusters = cluster_map.clone();
                 *clusters_mean = means;
                 info!("{} Distinct variant frequency clusters found on contig {} at eps {}",
                       clusters_mean.len(), tid, eps);
@@ -1113,9 +1118,8 @@ impl PileupFunctions for PileupStats {
             } => {
                 info!("Outputting {} variant locations", variant_abundances.keys().len());
                 for (position, d) in depth.iter().enumerate() {
+
                     // loop through each position that has variants
-//                    let position = *position as usize;
-//                    let d = depth[position];
                     let hash = match variant_abundances.get(&(position as i32)) {
                         Some(hash) => hash,
                         None => continue,
