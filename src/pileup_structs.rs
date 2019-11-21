@@ -12,6 +12,7 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 //use rusty_machine::learning::UnSupModel;
 //use rusty_machine::linalg::Matrix;
 use cogset::{Euclid, Dbscan, BruteScan};
+use kodama::{Method, linkage};
 use nalgebra as na;
 use itertools::{izip, Itertools};
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -310,7 +311,7 @@ impl PileupFunctions for PileupStats {
                         if indel_map.len() > 0 {
                             for (indel, read_ids) in indel_map.iter() {
                                 let count = read_ids.len();
-//                                *d += count as f64;
+                                *d += count as f64;
                                 if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
                                     rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
@@ -809,18 +810,18 @@ impl PileupFunctions for PileupStats {
                 variations_per_base,
                 ..
             } => {
-                // Set up reads (n) by variants (p) matrix as described in
-                // https://humgenomics.biomedcentral.com/articles/10.1186/s40246-018-0156-4
-                // Slight variation: 0 is ref, 1 is allele
-                // Note: Assuming haploidy, so cells can either be 0 or 1
+                // Here we are gonna calculate how 'distant' one variant is from another
+                // Based on which read ids they share
+                // So we need a v by v matrix where each cell is the count of how many
+                // read ids they share
+
+                // total reads
                 let n = variants_in_reads.keys().len();
-//                let mut reads_by_variants: Array<i8, Ix2> = Array::ones(
-//                    (n, *variations_per_base));
-                let mut reads_by_variants: na::base::DMatrix<f64>
-                    = na::base::DMatrix::zeros(n, *variations_per_base);
+
+                let mut variant_distances: na::base::DMatrix<f64>
+                    = na::base::DMatrix::zeros(*variations_per_base, *variations_per_base);
+
                 // Set up the distance matrix of size n*n
-//                let mut distance = Array::ones((n, n));
-                let mut distances: na::base::DMatrix<f64> = na::base::DMatrix::zeros(n, n);
                 let mut variant_indices = HashMap::new();
                 let mut variant_index = 0usize;
                 let mut read_indices = HashMap::new();
@@ -842,13 +843,13 @@ impl PileupFunctions for PileupStats {
                                 variant_index += 1;
                             }
 
-                            reads_by_variants[(*row_index, *column_index)] = 1.;
+                            variant_distances[(*row_index, *column_index)] = 1.;
                         }
                     }
                     read_index += 1;
                 }
                 // Use SVD from ndarray_linalg
-                let svd_array = reads_by_variants.svd(false, false);
+                let svd_array = variant_distances.svd(false, false);
                 // Get the v_t singular vector matrix from SVD
                 let v_t = svd_array.singular_values.into_iter().cloned().collect::<Vec<_>>();
 
@@ -960,6 +961,8 @@ impl PileupFunctions for PileupStats {
                 variant_abundances,
                 ref mut clusters,
                 ref mut clusters_mean,
+                indels,
+                nucfrequency,
                 tid,
                 ..} => {
 
@@ -978,6 +981,11 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             Vec::new()));
 
+//                let variant_info_all =
+//                    Arc::new(
+//                        Mutex::new(
+//                            Vec::new()));
+
                 let mut cluster_map =
                     Arc::new(
                     Mutex::new(
@@ -987,6 +995,8 @@ impl PileupFunctions for PileupStats {
                     Arc::new(
                         Mutex::new(
                             HashMap::new()));
+
+
 
                 let eps = 0.05;
                 let min_cluster_size = 2;
@@ -1000,9 +1010,20 @@ impl PileupFunctions for PileupStats {
                             .lock().unwrap();
                         let mut variant_info = variant_info
                             .lock().unwrap();
+//                        let mut variant_info_all = variant_info_all
+//                            .lock().unwrap();
 
                         for (var, abundance) in hash.iter() {
                             if !var.contains("R") {
+                                // This is a big hack but saves so much time
+                                // Basically, any variant that has an abundance less than 0.05
+                                // Automatically gets thrown into bin 0
+                                // Downsides:
+                                // Variants on border of eps look like they should cluster
+                                // with bin 0, but instead create a new bin
+                                // Upsides:
+                                // Massive speed increase, massive decrease in memory usage
+                                // Low abundant variants are all kind of in the same cluster any way
                                 if abundance >= &eps {
                                     variant_info.push((position, var.to_string()));
                                     abundance_float.push(*abundance);
@@ -1021,12 +1042,15 @@ impl PileupFunctions for PileupStats {
                                         .entry(0).or_insert(Vec::new());
                                     cluster_mean.push(abundance.to_owned());
                                 }
+//                                variant_info_all.push((position, var.to_string()));
+
                             }
                         }
                 });
 
                 let abundance_euclid = abundance_euclid.lock().unwrap();
                 let variant_info = variant_info.lock().unwrap();
+//                let variant_info_all = variant_info_all.lock().unwrap();
                 let abundance_float = abundance_float.lock().unwrap();
                 let scanner = BruteScan::new(&abundance_euclid);
                 debug!("Beginning clustering of {} variants", abundance_euclid.len());
@@ -1087,6 +1111,84 @@ impl PileupFunctions for PileupStats {
                     noise_mean.push(noise_abundance.to_owned());
                     *number_of_clusters += 1;
                 });
+
+                let mut variant_distances: Arc<Mutex<Vec<f64>>>
+                    = Arc::new(
+                    Mutex::new(
+                        vec![0.; (variant_info.len().pow(2) as usize - variant_info.len()) / 2 as usize]));
+
+                // produced condensed pairwise distances
+                // described here: https://docs.rs/kodama/0.2.2/kodama/
+                (0..variant_info.len()-1)
+                    .into_par_iter().enumerate().for_each(|(row_index, row_info)|{
+                    let mut row_variant_set = &BTreeSet::new();
+                    let row_info = &variant_info[row_index];
+                    // lazily get the row variant read id set
+                    if indels.contains_key(&row_info.0) {
+                        if indels[row_info.0].contains_key(&row_info.1){
+                            row_variant_set = &indels[&row_info.0][&row_info.1];
+                        } else if nucfrequency.contains_key(&row_info.0) {
+                            let var_char = row_info.1.as_bytes()[0] as char;
+                            if nucfrequency[&row_info.0].contains_key(&var_char){
+                                row_variant_set = &nucfrequency[&row_info.0][&var_char];
+                            }
+                        }
+                    } else if nucfrequency.contains_key(&row_info.0) {
+                        let var_char = row_info.1.as_bytes()[0] as char;
+                        if nucfrequency[&row_info.0].contains_key(&var_char){
+                            row_variant_set = &nucfrequency[&row_info.0][&var_char];
+                        }
+                    }
+                    (row_index+1..variant_info.len())
+                        .into_par_iter().enumerate().for_each(|(col_index, col_info)|{
+                        let mut col_variant_set= &BTreeSet::new();
+                        let col_info = &variant_info[col_index];
+                        if indels.contains_key(&col_info.0) {
+                            if indels[&col_info.0].contains_key(&col_info.1){
+                                col_variant_set = &indels[&col_info.0][&col_info.1];
+                            } else if nucfrequency.contains_key(&col_info.0) {
+                                let var_char = col_info.1.as_bytes()[0] as char;
+                                if nucfrequency[&col_info.0].contains_key(&var_char){
+                                    col_variant_set = &nucfrequency[&col_info.0][&var_char];
+                                }
+                            }
+                        } else if nucfrequency.contains_key(&col_info.0) {
+                            let var_char = col_info.1.as_bytes()[0] as char;
+                            if nucfrequency[&col_info.0].contains_key(&var_char){
+                                col_variant_set = &nucfrequency[&col_info.0][&var_char];
+                            }
+                        }
+                        let intersection_len = (row_variant_set
+                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                        let union_len = (row_variant_set
+                            .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                        let jaccard = intersection_len / union_len;
+
+                        let distance = 1. - jaccard;
+
+                        match condensed_index(
+                            row_index, col_index, variant_info.len()) {
+                            Some(index) => {
+                                let mut variant_distances = variant_distances.lock().unwrap();
+                                variant_distances[index] = distance;
+                            }
+                            None => {
+                                debug!("No corresponding index for row {} and col {}",
+                                       row_index, col_index);
+                            }
+                        };
+                    });
+                });
+
+                let mut variant_distances = variant_distances.lock().unwrap();
+                let dend = linkage(
+                    &mut variant_distances,
+                                  variant_info.len(),
+                                      Method::Ward);
+                println!("Dendrogram {:?}", dend);
+
 
                 let mut cluster_map = cluster_map.lock().unwrap();
                 let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
@@ -1191,6 +1293,19 @@ impl PileupFunctions for PileupStats {
                     }
                 };
             }
+        }
+    }
+}
+
+// helper function to get the index of condensed matrix from it square form
+fn condensed_index(row_i: usize, col_j: usize, n: usize) -> Option<usize>{
+    if row_i == col_j {
+        return None
+    } else {
+        if row_i < col_j {
+            return Some(n*row_i - row_i*(row_i+1)/2 + col_j - 1 - row_i)
+        } else {
+            return Some(n*col_j - col_j*(col_j+1)/2 + row_i - 1 - col_j)
         }
     }
 }

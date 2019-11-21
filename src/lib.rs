@@ -21,6 +21,7 @@ pub mod haplotypes_and_genotypes;
 
 extern crate linregress;
 extern crate cogset;
+extern crate kodama;
 extern crate taxonomy;
 extern crate rusty_machine;
 extern crate bio;

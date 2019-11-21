@@ -41,6 +41,7 @@ permutohedron = "0.2.4"
 linregress = "0.1.6"
 taxonomy = "0.3.3"
 cogset = "0.2.0"
+kodama = "0.2.2"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
