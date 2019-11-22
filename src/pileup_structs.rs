@@ -12,7 +12,7 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 //use rusty_machine::learning::UnSupModel;
 //use rusty_machine::linalg::Matrix;
 use cogset::{Euclid, Dbscan, BruteScan};
-use kodama::{Method, linkage};
+use kodama::{Method, linkage, Dendrogram};
 use nalgebra as na;
 use itertools::{izip, Itertools};
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -45,8 +45,12 @@ pub enum PileupStats {
         max: f32,
         method: String,
         read_error_rate: f64,
-        clusters: HashMap<i32, BTreeMap<String, i32>>,
+        // Clusters hashmap:
+        // Key = Position
+        // Value = K: Variant, V: (DBSCAN Cluster, HAC Index/initial cluster)
+        clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
         clusters_mean: HashMap<i32, f64>,
+        dendrogram: Dendrogram<f64>,
     }
 }
 
@@ -80,6 +84,7 @@ impl PileupStats {
             read_error_rate: 0.0,
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
+            dendrogram: Dendrogram::new(0),
         }
     }
 }
@@ -311,7 +316,9 @@ impl PileupFunctions for PileupStats {
                         if indel_map.len() > 0 {
                             for (indel, read_ids) in indel_map.iter() {
                                 let count = read_ids.len();
-                                *d += count as f64;
+                                if indel.contains("N") {
+                                    *d += count as f64;
+                                }
                                 if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
                                     rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
@@ -454,11 +461,13 @@ impl PileupFunctions for PileupStats {
                 ref mut variant_abundances,
                 clusters,
                 clusters_mean,
+                dendrogram,
                 ..
             } => {
-                // First we need to convert cluster ids into taxonomic rank ids
+                // First we need to convert DBSCAN cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
                 // Ordered from root to leaf
+                // We can then check how dissimilar two variants are on the hierarchical cluster
                 let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
                 ordered_clusters
                     .sort_by(|a, b|
@@ -468,12 +477,17 @@ impl PileupFunctions for PileupStats {
                 // Clusters is set up as HashMap<Position, BTreeMap<Variant, Cluster_ID>>
                 // In this case we want to rearrange to HashMap<Cluster_ID, BTreeMap<Position, HashSet<Variant>>>
                 // This will allow us to disentangle positions where more than one variant is possible
-                let mut clusters_and_positions = HashMap::new();
+                let mut db_clusters_and_positions = HashMap::new();
                 for (position, variant_map) in clusters.iter() {
                     for (variant, cluster) in variant_map.iter() {
-                        let clust = clusters_and_positions.entry(*cluster)
+
+                        let clust = db_clusters_and_positions.entry(cluster.0)
                             .or_insert(HashMap::new());
-                        let pos = clust.entry(*position).or_insert(HashSet::new());
+
+                        let pos = clust
+                            .entry(*position)
+                            .or_insert(HashSet::new());
+
                         pos.insert(variant.to_string());
                     }
                 }
@@ -491,7 +505,7 @@ impl PileupFunctions for PileupStats {
                             idx,
                             *cluster_tup.1,
                             node_idx,
-                            clusters_and_positions.get(cluster_tup.0)
+                            db_clusters_and_positions.get(cluster_tup.0)
                                 .expect("No cluster").clone()));
 
                     node_idx += 1;
@@ -964,6 +978,7 @@ impl PileupFunctions for PileupStats {
                 indels,
                 nucfrequency,
                 tid,
+                ref mut dendrogram,
                 ..} => {
 
                 let mut abundance_euclid =
@@ -981,10 +996,10 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             Vec::new()));
 
-//                let variant_info_all =
-//                    Arc::new(
-//                        Mutex::new(
-//                            Vec::new()));
+                let variant_info_all =
+                    Arc::new(
+                        Mutex::new(
+                            Vec::new()));
 
                 let mut cluster_map =
                     Arc::new(
@@ -995,7 +1010,6 @@ impl PileupFunctions for PileupStats {
                     Arc::new(
                         Mutex::new(
                             HashMap::new()));
-
 
 
                 let eps = 0.05;
@@ -1010,8 +1024,8 @@ impl PileupFunctions for PileupStats {
                             .lock().unwrap();
                         let mut variant_info = variant_info
                             .lock().unwrap();
-//                        let mut variant_info_all = variant_info_all
-//                            .lock().unwrap();
+                        let mut variant_info_all = variant_info_all
+                            .lock().unwrap();
 
                         for (var, abundance) in hash.iter() {
                             if !var.contains("R") {
@@ -1025,7 +1039,7 @@ impl PileupFunctions for PileupStats {
                                 // Massive speed increase, massive decrease in memory usage
                                 // Low abundant variants are all kind of in the same cluster any way
                                 if abundance >= &eps {
-                                    variant_info.push((position, var.to_string()));
+                                    variant_info.push((position, var.to_string(), abundance));
                                     abundance_float.push(*abundance);
                                     abundance_euclid.push(Euclid([*abundance]));
                                 } else {
@@ -1042,15 +1056,14 @@ impl PileupFunctions for PileupStats {
                                         .entry(0).or_insert(Vec::new());
                                     cluster_mean.push(abundance.to_owned());
                                 }
-//                                variant_info_all.push((position, var.to_string()));
-
+                                variant_info_all.push((position, var.to_string(), abundance));
                             }
                         }
                 });
 
                 let abundance_euclid = abundance_euclid.lock().unwrap();
                 let variant_info = variant_info.lock().unwrap();
-//                let variant_info_all = variant_info_all.lock().unwrap();
+                let variant_info_all = variant_info_all.lock().unwrap();
                 let abundance_float = abundance_float.lock().unwrap();
                 let scanner = BruteScan::new(&abundance_euclid);
                 debug!("Beginning clustering of {} variants", abundance_euclid.len());
@@ -1075,23 +1088,23 @@ impl PileupFunctions for PileupStats {
                 // All cluster ids are + 1, because we have the variants with abundances < eps
                 // outside of the clustering algorithm already as cluster id 0
                 db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)|{
-                            // Deal with clustered points
-                            index_vec.par_iter().for_each(|index|{
-                                let info = &variant_info[*index];
-                                let abundance = abundance_float[*index];
+                    // Deal with clustered points
+                    index_vec.par_iter().for_each(|index|{
+                        let info = &variant_info[*index];
+                        let abundance = abundance_float[*index];
 
-                                let mut cluster_map = cluster_map.lock().unwrap();
-                                let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                                let mut number_of_clusters = number_of_clusters.lock().unwrap();
+                        let mut cluster_map = cluster_map.lock().unwrap();
+                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
 
-                                let position = cluster_map
-                                    .entry(*info.0).or_insert(BTreeMap::new());
-                                position.insert(info.1.to_string(), cluster as i32 + 1);
+                        let position = cluster_map
+                            .entry(*info.0).or_insert(BTreeMap::new());
+                        position.insert(info.1.to_string(), cluster as i32 + 1);
 
-                                let cluster_mean = cluster_hierarchies
-                                    .entry(cluster as i32 + 1).or_insert(Vec::new());
-                                cluster_mean.push(abundance.to_owned());
-                            });
+                        let cluster_mean = cluster_hierarchies
+                            .entry(cluster as i32 + 1).or_insert(Vec::new());
+                        cluster_mean.push(abundance.to_owned());
+                    });
                 });
 
                 noise_points.par_iter().for_each(|noise|{
@@ -1103,9 +1116,11 @@ impl PileupFunctions for PileupStats {
                     // Deal with unclustered points
                     let noise_info = &variant_info[*noise];
                     let noise_abundance = abundance_float[*noise];
+
                     let noise_position = cluster_map.entry(*noise_info.0)
                         .or_insert(BTreeMap::new());
                     noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+
                     let noise_mean = cluster_hierarchies
                         .entry(*number_of_clusters).or_insert(Vec::new());
                     noise_mean.push(noise_abundance.to_owned());
@@ -1115,11 +1130,11 @@ impl PileupFunctions for PileupStats {
                 let mut variant_distances: Arc<Mutex<Vec<f64>>>
                     = Arc::new(
                     Mutex::new(
-                        vec![0.; (variant_info.len().pow(2) as usize - variant_info.len()) / 2 as usize]));
+                        vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
 
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
-                (0..variant_info.len()-1)
+                (0..variant_info_all.len()-1)
                     .into_par_iter().enumerate().for_each(|(row_index, row_info)|{
                     let mut row_variant_set = &BTreeSet::new();
                     let row_info = &variant_info[row_index];
@@ -1139,7 +1154,7 @@ impl PileupFunctions for PileupStats {
                             row_variant_set = &nucfrequency[&row_info.0][&var_char];
                         }
                     }
-                    (row_index+1..variant_info.len())
+                    (row_index+1..variant_info_all.len())
                         .into_par_iter().enumerate().for_each(|(col_index, col_info)|{
                         let mut col_variant_set= &BTreeSet::new();
                         let col_info = &variant_info[col_index];
@@ -1158,15 +1173,22 @@ impl PileupFunctions for PileupStats {
                                 col_variant_set = &nucfrequency[&col_info.0][&var_char];
                             }
                         }
+
                         let intersection_len = (row_variant_set
                             .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
                         let union_len = (row_variant_set
                             .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
+                        // Jaccard Similarity
                         let jaccard = intersection_len / union_len;
 
-                        let distance = 1. - jaccard;
+                        // Distance between abundance values
+                        let dist_f = (row_info.2 - col_info.2).abs();
+
+                        // Distance will be defined as the geometric mean between jaccard dist
+                        // and dist_f
+                        let distance = ((1. - jaccard) * dist_f).powf(0.5);
 
                         match condensed_index(
                             row_index, col_index, variant_info.len()) {
@@ -1182,13 +1204,15 @@ impl PileupFunctions for PileupStats {
                     });
                 });
 
-                let mut variant_distances = variant_distances.lock().unwrap();
+                let mut variant_distances = variant_distances
+                    .lock()
+                    .unwrap();
+
                 let dend = linkage(
                     &mut variant_distances,
                                   variant_info.len(),
                                       Method::Ward);
-                println!("Dendrogram {:?}", dend);
-
+                debug!("Dendrogram {:?}", dend);
 
                 let mut cluster_map = cluster_map.lock().unwrap();
                 let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
@@ -1198,7 +1222,29 @@ impl PileupFunctions for PileupStats {
                     let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
                     means.insert(*cluster as i32, mean);
                 }
-                *clusters = cluster_map.clone();
+
+                // Combine info of both clustering methods for easy access
+                let mut full_cluster_map =
+                    Arc::new(
+                        Mutex::new(
+                            HashMap::new()));
+
+                variant_info_all
+                    .par_iter().enumerate().for_each(|(index, (position, variant, abundance))|{
+                    let db_cluster = cluster_map
+                        .get(position).expect("Position not found when it should be")
+                        .get(variant).expect("Variant not found when it should be");
+                    let mut full_cluster_map = full_cluster_map.lock().unwrap();
+
+                    let position_map = full_cluster_map.entry(**position)
+                        .or_insert(BTreeMap::new());
+
+                    position_map.insert(variant.to_string(), (*db_cluster, index));
+                });
+
+
+                *dendrogram = dend;
+                *clusters = full_cluster_map.lock().unwrap().clone();
                 *clusters_mean = means;
                 info!("{} Distinct variant frequency clusters found on contig {} at eps {}",
                       clusters_mean.len(), tid, eps);
@@ -1239,7 +1285,7 @@ impl PileupFunctions for PileupStats {
                             None => BTreeMap::new(),
                         };
                         let cluster_val = match cluster_map.get(var) {
-                            Some(i) => *i,
+                            Some(i) => i.0,
                             None => -1,
                         };
 
