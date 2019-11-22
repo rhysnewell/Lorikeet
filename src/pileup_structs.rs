@@ -296,8 +296,8 @@ impl PileupFunctions for PileupStats {
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.par_iter_mut().enumerate().for_each(|(i, d)| {
-                    let read_variants = Arc::clone(&read_variants);
-                    let variant_count = Arc::clone(&variant_count);
+//                    let read_variants = Arc::clone(&read_variants);
+//                    let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = BTreeMap::new();
                     if (*coverage * (1.0 - coverage_fold) <= *d as f32
                         && *d as f32 <= *coverage * (1.0 + coverage_fold))
@@ -1066,7 +1066,8 @@ impl PileupFunctions for PileupStats {
                 let variant_info_all = variant_info_all.lock().unwrap();
                 let abundance_float = abundance_float.lock().unwrap();
                 let scanner = BruteScan::new(&abundance_euclid);
-                debug!("Beginning clustering of {} variants", abundance_euclid.len());
+                debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
+                       variant_info_all.len());
                 let mut dbscan = Dbscan::new(scanner,
                                              eps,
                                              min_cluster_size);
