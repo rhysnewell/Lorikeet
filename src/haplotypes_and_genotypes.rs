@@ -12,7 +12,7 @@ pub struct Haplotype {
 impl Haplotype {
     pub fn new() -> Haplotype {
         Haplotype {
-            root_cluster_id: -1,
+            root_cluster_id: 0,
             variant_indices: HashSet::new(),
             variants: HashMap::new(),
             node_size: 0,
@@ -33,7 +33,14 @@ impl Haplotype {
                         dendrogram: &Dendrogram<f64>,
                         clusters: &HashMap<usize, HashMap<i32, HashSet<String>>>) {
         let n_1 = dendrogram.len();
-
+        let step_1 = &dendrogram[self.root_cluster_id];
+//        let mut steps = Vec::new();
+//        let mut searching = true;
+//        let mut current_step = step_1;
+//        while searching {
+//            let step_r = current_step.cluster1;
+//            let step_l = current_step.cluster2;
+//        }
 
     }
 }
