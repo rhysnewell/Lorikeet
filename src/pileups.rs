@@ -244,10 +244,11 @@ pub fn pileup_variants<R: NamedBamReader,
                             read_cursor += cig.len() as usize;
                         },
                         Cigar::Del(_) => {
+                            let refr = (ref_seq[cursor as usize] as char).to_string();
                             let indel_map = indels
                                 .entry(cursor as i32).or_insert(BTreeMap::new());
-                            let id = indel_map.entry(
-                                std::iter::repeat("N").take(cig.len() as usize).collect::<String>())
+                            let id = indel_map.entry(refr +
+                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>())
                                                                   .or_insert(BTreeSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
 
@@ -260,6 +261,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             cursor += cig.len() as usize;
                         },
                         Cigar::Ins(_) => {
+                            let refr = (ref_seq[cursor as usize] as char).to_string();
                             let insert = match str::from_utf8(&record.seq().as_bytes()[
                                 read_cursor..read_cursor + cig.len() as usize]) {
                                 Ok(ins) => {ins.to_string()},
@@ -268,7 +270,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             let indel_map = indels.entry(cursor as i32)
                                 .or_insert(BTreeMap::new());
 
-                            let id = indel_map.entry(insert)
+                            let id = indel_map.entry(refr + &insert)
                                                                   .or_insert(BTreeSet::new());
                             id.insert(read_to_id[&record.qname().to_vec()]);
                             read_cursor += cig.len() as usize;
@@ -278,6 +280,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             // soft clipped portions of reads can be included as insertions
                             // not sure if this correct protocol or not
                             if include_soft_clipping {
+                                let refr = (ref_seq[cursor as usize] as char).to_string();
                                 let insert = match str::from_utf8(&record.seq().as_bytes()[
                                     read_cursor..read_cursor + cig.len() as usize]) {
                                     Ok(ins) => {ins.to_string()},
@@ -286,7 +289,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                 let indel_map = indels.entry(cursor as i32)
                                     .or_insert(BTreeMap::new());
 
-                                let id = indel_map.entry(insert)
+                                let id = indel_map.entry(refr + &insert)
                                     .or_insert(BTreeSet::new());
 
                                 id.insert(read_to_id[&record.qname().to_vec()]);

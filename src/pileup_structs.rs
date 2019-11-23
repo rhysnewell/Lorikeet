@@ -474,7 +474,7 @@ impl PileupFunctions for PileupStats {
                         b.1.partial_cmp(a.1).unwrap());
                 debug!("{:?}", ordered_clusters);
 
-                // Clusters is set up as HashMap<Position, BTreeMap<Variant, Cluster_ID>>
+                // Clusters is set up as HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>
                 // In this case we want to rearrange to HashMap<Cluster_ID, BTreeMap<Position, HashSet<Variant>>>
                 // This will allow us to disentangle positions where more than one variant is possible
                 let mut db_clusters_and_positions = HashMap::new();
@@ -947,10 +947,9 @@ impl PileupFunctions for PileupStats {
 
                                 } else if indel_map.contains_key(variant) {
                                      writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
+                                           variant,
                                            str::from_utf8(
-                                               &[ref_sequence[cursor-1]]).unwrap().to_owned() + &variant,
-                                           str::from_utf8(
-                                               &[ref_sequence[cursor-1]]).unwrap(),
+                                               &[ref_sequence[cursor]]).unwrap(),
                                            abundance, depth[cursor], "I").expect("Unable to write to stream");
                                 } else {
                                     writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
@@ -1138,7 +1137,7 @@ impl PileupFunctions for PileupStats {
                 (0..variant_info_all.len()-1)
                     .into_par_iter().enumerate().for_each(|(row_index, row_info)|{
                     let mut row_variant_set = &BTreeSet::new();
-                    let row_info = &variant_info[row_index];
+                    let row_info = &variant_info_all[row_index];
                     // lazily get the row variant read id set
                     if indels.contains_key(&row_info.0) {
                         if indels[row_info.0].contains_key(&row_info.1){
@@ -1158,7 +1157,7 @@ impl PileupFunctions for PileupStats {
                     (row_index+1..variant_info_all.len())
                         .into_par_iter().enumerate().for_each(|(col_index, col_info)|{
                         let mut col_variant_set= &BTreeSet::new();
-                        let col_info = &variant_info[col_index];
+                        let col_info = &variant_info_all[col_index];
                         if indels.contains_key(&col_info.0) {
                             if indels[&col_info.0].contains_key(&col_info.1){
                                 col_variant_set = &indels[&col_info.0][&col_info.1];
@@ -1211,7 +1210,7 @@ impl PileupFunctions for PileupStats {
 
                 let dend = linkage(
                     &mut variant_distances,
-                                  variant_info.len(),
+                                  variant_info_all.len(),
                                       Method::Ward);
                 debug!("Dendrogram {:?}", dend);
 
@@ -1301,11 +1300,10 @@ impl PileupFunctions for PileupStats {
                                        abundance, d);
 
                             } else {
-                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position-1,
+                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
+                                       var,
                                        str::from_utf8(
-                                           &[ref_sequence[position-1]]).unwrap().to_owned() + var,
-                                       str::from_utf8(
-                                           &[ref_sequence[position-1]]).unwrap(),
+                                           &[ref_sequence[position]]).unwrap(),
                                        abundance, d);
                             }
 
