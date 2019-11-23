@@ -12,7 +12,7 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 //use rusty_machine::learning::UnSupModel;
 //use rusty_machine::linalg::Matrix;
 use cogset::{Euclid, Dbscan, BruteScan};
-use kodama::{Method, linkage, Dendrogram};
+use kodama::{Method, nnchain, Dendrogram};
 use nalgebra as na;
 use itertools::{izip, Itertools};
 use itertools::EitherOrBoth::{Both, Left, Right};
@@ -503,9 +503,10 @@ impl PileupFunctions for PileupStats {
                 let cluster_roots = (n_1 + 1 - 2*k .. n_1 + 1 - k);
                 let mut haplotypes = vec![Haplotype::new(); k];
 
-                for (index, cluster_root_id) in cluster_roots.iter().enumerate() {
-                    let hap_root = dendrogram[cluster_root_id];
+                for (index, cluster_root_id) in cluster_roots.into_iter().enumerate() {
+                    let hap_root = &dendrogram[cluster_root_id];
                     let mut new_haplotype = Haplotype::start(hap_root.size, cluster_root_id);
+                    let mut dendro_ids = dendro_ids.lock().unwrap();
                     new_haplotype.add_variants(dendrogram, &dendro_ids);
                     haplotypes[index] = new_haplotype;
 
@@ -1218,10 +1219,11 @@ impl PileupFunctions for PileupStats {
                     .lock()
                     .unwrap();
 
-                let dend = linkage(
+                let dend = nnchain(
                     &mut variant_distances,
-                                  variant_info_all.len(),
-                                      Method::Ward);
+              variant_info_all.len(),
+                  Method::Ward.into_method_chain()
+                        .expect("Incompatible linkage method"));
                 debug!("Dendrogram {:?}", dend);
 
                 let mut cluster_map = cluster_map.lock().unwrap();
