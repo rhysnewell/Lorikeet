@@ -1,39 +1,40 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
-
+use kodama::Dendrogram;
 
 #[derive(Debug,Clone)]
 pub struct Haplotype {
-    pub abundance: f64,
-    pub parent_node_id: i32,
-    pub parent_variants: HashMap<i32, HashSet<String>>,
+    pub root_cluster_id: usize,
+    pub variant_indices: HashSet<usize>,
     pub variants: HashMap<i32, HashSet<String>>,
-    pub node_level: usize,
-    pub node_id: i32,
+    pub node_size: usize,
 }
 
 impl Haplotype {
     pub fn new() -> Haplotype {
         Haplotype {
-            abundance: 0.0,
-            parent_node_id: -1,
-            parent_variants: HashMap::new(),
+            root_cluster_id: -1,
+            variant_indices: HashSet::new(),
             variants: HashMap::new(),
-            node_level: 0,
-            node_id: -1,
+            node_size: 0,
         }
     }
-    pub fn start(node_level: usize,
-                 abundance: f64,
-                 node_id: i32,
-                 variants: HashMap<i32, HashSet<String>>) -> Haplotype {
+
+    pub fn start(node_size: usize,
+                 node_id: usize) -> Haplotype {
         Haplotype {
-            abundance: abundance,
-            parent_node_id: -1,
-            parent_variants: HashMap::new(),
-            variants: variants,
-            node_level: node_level,
-            node_id: node_id,
+            root_cluster_id: node_id,
+            variant_indices: HashSet::new(),
+            variants: HashMap::new(),
+            node_size: node_size,
         }
+    }
+
+    pub fn add_variants(&mut self,
+                        dendrogram: &Dendrogram<f64>,
+                        clusters: &HashMap<usize, HashMap<i32, HashSet<String>>>) {
+        let n_1 = dendrogram.len();
+
+
     }
 }
 

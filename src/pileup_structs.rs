@@ -468,20 +468,21 @@ impl PileupFunctions for PileupStats {
                 // Clusters of higher abundance mutations will be closer to root
                 // Ordered from root to leaf
                 // We can then check how dissimilar two variants are on the hierarchical cluster
-                let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
-                ordered_clusters
-                    .sort_by(|a, b|
-                        b.1.partial_cmp(a.1).unwrap());
-                debug!("{:?}", ordered_clusters);
+//                let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
+//                ordered_clusters
+//                    .sort_by(|a, b|
+//                        b.1.partial_cmp(a.1).unwrap());
+//                debug!("{:?}", ordered_clusters);
 
                 // Clusters is set up as HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>
-                // In this case we want to rearrange to HashMap<Cluster_ID, BTreeMap<Position, HashSet<Variant>>>
+                // In this case we want to rearrange to HashMap<dendro_ID, BTreeMap<Position, HashSet<Variant>>>
                 // This will allow us to disentangle positions where more than one variant is possible
-                let mut db_clusters_and_positions = HashMap::new();
-                for (position, variant_map) in clusters.iter() {
+                let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
+                clusters.par_iter().for_each(|(position, variant_map)|{
                     for (variant, cluster) in variant_map.iter() {
 
-                        let clust = db_clusters_and_positions.entry(cluster.0)
+                        let mut dendro_ids = dendro_ids.lock().unwrap();
+                        let clust = dendro_ids.entry(cluster.1)
                             .or_insert(HashMap::new());
 
                         let pos = clust
@@ -490,29 +491,38 @@ impl PileupFunctions for PileupStats {
 
                         pos.insert(variant.to_string());
                     }
+                });
+
+                // Numer of minimum clusters as inferred from DBSCAN
+                let k = clusters_mean.keys().len();
+
+                // Beginning roots (indices) of each cluster
+                // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
+                // range of indices [N - 1 - 2k; N - 1 - k)
+                let n_1 = dendrogram.len();
+                let cluster_roots = (n_1 + 1 - 2*k .. n_1 + 1 - k);
+                let mut haplotypes = vec![Haplotype::new(); k];
+
+                for (index, cluster_root_id) in cluster_roots.iter().enumerate() {
+                    let hap_root = dendrogram[cluster_root_id];
+                    let mut new_haplotype = Haplotype::start(hap_root.size, cluster_root_id);
+                    new_haplotype.add_variants(dendrogram, &dendro_ids);
+                    haplotypes[index] = new_haplotype;
+
                 }
+//                print!("[");
+//                for step in dendrogram.steps(){
+//                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
+//                }
+//                println!("]");
+//                print!("{{");
+//                for (pos, cluster) in clusters.iter() {
+//                    println!("{:?}: {:?},", pos, cluster);
+//                }
+//                println!("}}");
 
-                let mut haplotype_tree = HashMap::new();
-                let mut node_idx = 0;
-                for (idx, cluster_tup) in ordered_clusters.iter().enumerate() {
-                    // idx 0 is the root, most abundant variants
-                    // idx also represents the node level
 
-                    let node_level = haplotype_tree.entry(idx)
-                        .or_insert(HashMap::new());
-                    let current_node = node_level.entry(node_idx)
-                        .or_insert(Haplotype::start(
-                            idx,
-                            *cluster_tup.1,
-                            node_idx,
-                            db_clusters_and_positions.get(cluster_tup.0)
-                                .expect("No cluster").clone()));
 
-                    node_idx += 1;
-                    for (node_level, node_map) in node_level.iter() {
-
-                    }
-                }
 //
 //                let mut contig = String::new();
 //
@@ -1186,9 +1196,9 @@ impl PileupFunctions for PileupStats {
                         // Distance between abundance values
                         let dist_f = (row_info.2 - col_info.2).abs();
 
-                        // Distance will be defined as the geometric mean between jaccard dist
+                        // Distance will be defined as the mean between jaccard dist
                         // and dist_f
-                        let distance = ((1. - jaccard) * dist_f).powf(0.5);
+                        let distance = ((1. - jaccard) + dist_f) / 2.;
 
                         match condensed_index(
                             row_index, col_index, variant_info.len()) {
