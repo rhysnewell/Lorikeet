@@ -475,7 +475,7 @@ impl PileupFunctions for PileupStats {
 //                debug!("{:?}", ordered_clusters);
 
                 // Clusters is set up as HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>
-                // In this case we want to rearrange to HashMap<dendro_ID, BTreeMap<Position, HashSet<Variant>>>
+                // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, HashSet<Variant>>>
                 // This will allow us to disentangle positions where more than one variant is possible
                 let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
                 clusters.par_iter().for_each(|(position, variant_map)|{
@@ -508,6 +508,7 @@ impl PileupFunctions for PileupStats {
                     let mut new_haplotype = Haplotype::start(hap_root.size, cluster_root_id);
                     let mut dendro_ids = dendro_ids.lock().unwrap();
                     new_haplotype.add_variants(dendrogram, &dendro_ids);
+                    debug!("{:?}", new_haplotype);
                     haplotypes[index] = new_haplotype;
 
                 }

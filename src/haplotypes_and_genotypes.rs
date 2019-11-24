@@ -32,15 +32,45 @@ impl Haplotype {
     pub fn add_variants(&mut self,
                         dendrogram: &Dendrogram<f64>,
                         clusters: &HashMap<usize, HashMap<i32, HashSet<String>>>) {
-        let n_1 = dendrogram.len();
+        let n = dendrogram.len() + 1;
         let step_1 = &dendrogram[self.root_cluster_id];
-//        let mut steps = Vec::new();
-//        let mut searching = true;
-//        let mut current_step = step_1;
-//        while searching {
-//            let step_r = current_step.cluster1;
-//            let step_l = current_step.cluster2;
-//        }
+        let mut to_search = HashSet::new();
+        to_search.insert(step_1.cluster1);
+        to_search.insert(step_1.cluster2);
+        let mut current_step = step_1;
+        while to_search.len() > 0 {
+            let mut new_search = HashSet::new();
+            for cluster_label in to_search.drain() {
+                // convert cluster label into index
+                let step_index = cluster_label - n;
+                let cur_step = &dendrogram[step_index];
+
+                if cur_step.cluster1 < n {
+                    self.variant_indices.insert(cur_step.cluster1);
+                    let variant_pos =
+                        clusters.get(&step_index).expect("Step ID not found");
+                    for (pos, variant) in variant_pos {
+                        let captured_var = self.variants
+                            .entry(*pos).or_insert(variant.clone());
+                    }
+                } else {
+                    new_search.insert(cur_step.cluster1);
+                }
+
+                if cur_step.cluster2 < n {
+                    self.variant_indices.insert(cur_step.cluster2);
+                    let variant_pos =
+                        clusters.get(&step_index).expect("Step ID not found");
+                    for (pos, variant) in variant_pos {
+                        let captured_var = self.variants
+                            .entry(*pos).or_insert(variant.clone());
+                    }
+                } else {
+                    new_search.insert(cur_step.cluster2);
+                }
+            }
+            to_search = new_search;
+        }
 
     }
 }
