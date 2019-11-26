@@ -5,8 +5,9 @@ use kodama::Dendrogram;
 pub struct Haplotype {
     pub root_cluster_id: usize,
     pub variant_indices: HashSet<usize>,
-    pub variants: HashMap<i32, HashSet<String>>,
+    pub variants: HashMap<i32, BTreeMap<String, (i32, usize)>>,
     pub node_size: usize,
+    pub haplotype_index: usize,
 }
 
 impl Haplotype {
@@ -16,22 +17,27 @@ impl Haplotype {
             variant_indices: HashSet::new(),
             variants: HashMap::new(),
             node_size: 0,
+            haplotype_index: 0,
         }
     }
 
     pub fn start(node_size: usize,
-                 node_id: usize) -> Haplotype {
+                 node_id: usize,
+                 index: usize) -> Haplotype {
         Haplotype {
             root_cluster_id: node_id,
             variant_indices: HashSet::new(),
             variants: HashMap::new(),
             node_size: node_size,
+            haplotype_index: index,
         }
     }
 
     pub fn add_variants(&mut self,
                         dendrogram: &Dendrogram<f64>,
-                        clusters: &HashMap<usize, HashMap<i32, HashSet<String>>>) {
+                        dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>,
+                        clusters: &mut HashMap<i32, BTreeMap<String, (i32, usize)>>)
+        -> HashMap<i32, BTreeMap<String, (i32, usize)>>{
         let n = dendrogram.len() + 1;
         let step_1 = &dendrogram[self.root_cluster_id];
         let mut to_search = HashSet::new();
@@ -48,10 +54,17 @@ impl Haplotype {
                 if cur_step.cluster1 < n {
                     self.variant_indices.insert(cur_step.cluster1);
                     let variant_pos =
-                        clusters.get(&step_index).expect("Step ID not found");
+                        dendro_clusters.get(&step_index).expect("Step ID not found");
                     for (pos, variant) in variant_pos {
                         let captured_var = self.variants
-                            .entry(*pos).or_insert(variant.clone());
+                            .entry(*pos).or_insert(BTreeMap::new());
+                        captured_var.entry(variant.0.clone())
+                            .or_insert((variant.1, self.haplotype_index));
+
+                        let cluster_pos = clusters.entry(*pos)
+                            .or_insert(BTreeMap::new());
+
+                        cluster_pos.insert(variant.0.clone(), (variant.1, self.haplotype_index));
                     }
                 } else {
                     new_search.insert(cur_step.cluster1);
@@ -60,10 +73,17 @@ impl Haplotype {
                 if cur_step.cluster2 < n {
                     self.variant_indices.insert(cur_step.cluster2);
                     let variant_pos =
-                        clusters.get(&step_index).expect("Step ID not found");
+                        dendro_clusters.get(&step_index).expect("Step ID not found");
                     for (pos, variant) in variant_pos {
                         let captured_var = self.variants
-                            .entry(*pos).or_insert(variant.clone());
+                            .entry(*pos).or_insert(BTreeMap::new());
+                        captured_var.entry(variant.0.clone())
+                            .or_insert((variant.1, self.haplotype_index));
+
+                        let cluster_pos = clusters.entry(*pos)
+                            .or_insert(BTreeMap::new());
+
+                        cluster_pos.insert(variant.0.clone(), (variant.1, self.haplotype_index));
                     }
                 } else {
                     new_search.insert(cur_step.cluster2);
@@ -71,6 +91,7 @@ impl Haplotype {
             }
             to_search = new_search;
         }
+        return clusters.clone()
 
     }
 }
