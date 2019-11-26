@@ -16,7 +16,9 @@ use kodama::{Method, nnchain, Dendrogram};
 use nalgebra as na;
 use itertools::{izip, Itertools};
 use itertools::EitherOrBoth::{Both, Left, Right};
-use taxonomy::GeneralTaxonomy;
+use std::path::Path;
+use std::fs::File;
+
 #[macro_use(array)]
 
 pub enum PileupStats {
@@ -51,6 +53,7 @@ pub enum PileupStats {
         clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
         clusters_mean: HashMap<i32, f64>,
         dendrogram: Dendrogram<f64>,
+        haplotypes: Vec<Haplotype>,
     }
 }
 
@@ -85,6 +88,7 @@ impl PileupStats {
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
             dendrogram: Dendrogram::new(0),
+            haplotypes: Vec::new(),
         }
     }
 }
@@ -111,7 +115,8 @@ pub trait PileupFunctions {
     fn filter_variants(&mut self, max_iter: usize);
 
     fn generate_variant_contig(&mut self,
-                               original_contig: Vec<u8>);
+                               original_contig: &Vec<u8>,
+                               output_prefix: &str);
 
     fn generate_minimum_genotypes(&mut self) -> HashMap<usize, usize>;
 
@@ -455,13 +460,16 @@ impl PileupFunctions for PileupStats {
     }
 
     fn generate_variant_contig(&mut self,
-                               original_contig: Vec<u8>){
+                               original_contig: &Vec<u8>,
+                               output_prefix: &str){
         match self {
             PileupStats::PileupContigStats {
                 ref mut variant_abundances,
-                clusters,
+                ref mut clusters,
                 clusters_mean,
                 dendrogram,
+                target_name,
+                ref mut haplotypes,
                 ..
             } => {
                 // First we need to convert DBSCAN cluster ids into taxonomic rank ids
@@ -475,21 +483,17 @@ impl PileupFunctions for PileupStats {
 //                debug!("{:?}", ordered_clusters);
 
                 // Clusters is set up as HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>
-                // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, HashSet<Variant>>>
+                // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, (Variant, db_clust)>>
                 // This will allow us to disentangle positions where more than one variant is possible
                 let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
-                clusters.par_iter().for_each(|(position, variant_map)|{
+                clusters.par_iter().for_each(|(position, variant_map)| {
                     for (variant, cluster) in variant_map.iter() {
-
                         let mut dendro_ids = dendro_ids.lock().unwrap();
                         let clust = dendro_ids.entry(cluster.1)
-                            .or_insert(HashMap::new());
+                            .or_insert(BTreeMap::new());
 
-                        let pos = clust
-                            .entry(*position)
-                            .or_insert(HashSet::new());
-
-                        pos.insert(variant.to_string());
+                        clust.entry(*position)
+                             .or_insert((variant.to_string(), cluster.0));
                     }
                 });
 
@@ -500,18 +504,19 @@ impl PileupFunctions for PileupStats {
                 // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
                 // range of indices [N - 1 - 2k; N - 1 - k)
                 let n_1 = dendrogram.len();
-                let cluster_roots = (n_1 + 1 - 2*k .. n_1 + 1 - k);
-                let mut haplotypes = vec![Haplotype::new(); k];
+                let cluster_roots = (n_1 + 1 - 2 * k..n_1 + 1 - k);
+                let mut haplotypes_vec = vec![Haplotype::new(); k];
 
                 for (index, cluster_root_id) in cluster_roots.into_iter().enumerate() {
                     let hap_root = &dendrogram[cluster_root_id];
-                    let mut new_haplotype = Haplotype::start(hap_root.size, cluster_root_id);
+                    let mut new_haplotype = Haplotype::start(
+                        hap_root.size, cluster_root_id, index);
                     let mut dendro_ids = dendro_ids.lock().unwrap();
-                    new_haplotype.add_variants(dendrogram, &dendro_ids);
+                    *clusters = new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
                     debug!("{:?}", new_haplotype);
-                    haplotypes[index] = new_haplotype;
-
+                    haplotypes_vec[index] = new_haplotype;
                 }
+
 //                print!("[");
 //                for step in dendrogram.steps(){
 //                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
@@ -522,24 +527,35 @@ impl PileupFunctions for PileupStats {
 //                    println!("{:?}: {:?},", pos, cluster);
 //                }
 //                println!("}}");
-
-
-
+//                let file_name = output_prefix.to_string() + &"_".to_owned()
+//                    + &"genotypes".to_owned()
+//                    + &".fna".to_owned();
 //
-//                let mut contig = String::new();
+//                let file_path = Path::new(&file_name);
 //
-//                let mut skip_n = 0;
-//                let mut skip_cnt = 0;
-//                // Generate the consensus genome by checking each variant
-//                // Variant has to be in more than 0.5 of population
-//                for (pos, base) in original_contig.iter().enumerate() {
-//                    if skip_cnt < skip_n {
-//                        skip_cnt += 1;
-//                    } else {
-//                        let mut max_var = "";
-//                        let mut max_abund = 0.0;
-//                        skip_n = 0;
-//                        skip_cnt = 0;
+//                // Open haplotype file or create one
+//                let mut file_open = match File::open(file_path) {
+//                    Ok(fasta) => fasta,
+//                    Err(_e) => {
+//                        match File::create(file_path) {
+//                            Ok(fasta) => fasta,
+//                            Err(e) => {
+//                                println!("Cannot create file {:?}", e);
+//                                std::process::exit(1)
+//                            },
+//                        }
+//                    },
+//                };
+//
+//                for (hap_index, haplotype) in haplotypes_vec.iter().enumerate() {
+//                    writeln!(file_open, ">{}_haplotype_{}",
+//                             str::from_utf8(target_name).expect("UTF-8 error"),
+//                             hap_index);
+//                    let mut contig = original_contig.clone();
+//
+//                    // Generate the new potential genotype
+//                    for (pos, variant_set) in haplotype.variants.iter() {
+//
 //                        if variant_abundances[&(pos as i32)].len() > 0 {
 //                            let hash = &variant_abundances[&(pos as i32)];
 //                            for (var, abundance) in hash.iter() {
@@ -548,7 +564,7 @@ impl PileupFunctions for PileupStats {
 //                                    max_abund = *abundance;
 //                                }
 //                            }
-//                            if max_abund >= 0.5{
+//                            if max_abund >= 0.5 {
 //                                if max_var.contains("N") {
 //                                    skip_n = max_var.len() - 1;
 //                                    skip_cnt = 0;
@@ -561,15 +577,16 @@ impl PileupFunctions for PileupStats {
 //                        } else {
 //                            contig = contig + str::from_utf8(&[*base]).unwrap();
 //                        }
-//                    }
-//                };
-//                contig = contig + "\n";
-//                match consensus_genome.write_all(contig.as_bytes()) {
-//                    Ok(consensus_genome) => consensus_genome,
-//                    Err(e) => {
-//                        println!("Cannot write to file {:?}", e);
-//                        std::process::exit(1)}
-//                };
+//                    };
+//                    contig = contig + "\n \n";
+//                    match file_open.write_all(contig.as_bytes()) {
+//                        Ok(consensus_genome) => consensus_genome,
+//                        Err(e) => {
+//                            println!("Cannot write to file {:?}", e);
+//                            std::process::exit(1)
+//                        }
+//                    };
+                *haplotypes = haplotypes_vec;
             }
         }
     }
@@ -1274,6 +1291,7 @@ impl PileupFunctions for PileupStats {
                 tid,
                 genotypes_per_position,
                 clusters,
+                haplotypes,
                 ..
 
             } => {
@@ -1298,8 +1316,8 @@ impl PileupFunctions for PileupStats {
                             None => BTreeMap::new(),
                         };
                         let cluster_val = match cluster_map.get(var) {
-                            Some(i) => i.0,
-                            None => -1,
+                            Some(i) => *i,
+                            None => (-1, 0),
                         };
 
                         if indel_map.contains_key(var) {
@@ -1329,7 +1347,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!("{}", cluster_val);
+                            println!("{}\t{}", cluster_val.0, cluster_val.1);
 
                         } else if var.len() == 1 && var != &"R".to_string(){
                             print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
@@ -1346,7 +1364,7 @@ impl PileupFunctions for PileupStats {
                                     print!("0\t");
                                 },
                             };
-                            println!("{}", cluster_val);
+                            println!("{}\t{}", cluster_val.0, cluster_val.1);
                         }
                     }
                 };

@@ -52,11 +52,7 @@ pub fn pileup_variants<R: NamedBamReader,
     let mut gff_map = HashMap::new();
 
     match mode {
-        "polymorph" => {
-            println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tcluster");
-        },
         "evolve" => {
-            println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
             let mut gff_reader;
             if m.is_present("gff") {
                 let gff_file = m.value_of("gff").unwrap();
@@ -179,7 +175,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             &codon_table,
                             coverage_fold,
                             num_mapped_reads_in_current_contig,
-                            sample_count);
+                            sample_count,
+                            output_prefix);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -344,7 +341,8 @@ pub fn pileup_variants<R: NamedBamReader,
                 &codon_table,
                 coverage_fold,
                 num_mapped_reads_in_current_contig,
-                sample_count);
+                sample_count,
+                output_prefix);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -392,7 +390,8 @@ fn process_previous_contigs_var(
     codon_table: &CodonTable,
     coverage_fold: f32,
     num_mapped_reads_in_current_contig: u64,
-    sample_count: usize) {
+    sample_count: usize,
+    output_prefix: &str) {
 
     if last_tid != -2 {
         coverage_estimators.par_iter_mut().for_each(|estimator|{
@@ -436,8 +435,9 @@ fn process_previous_contigs_var(
 
 
                 // prints results of variants calling
+                pileup_struct.generate_variant_contig(&ref_sequence, output_prefix);
+
                 pileup_struct.print_variants(&ref_sequence, sample_idx);
-                pileup_struct.generate_variant_contig(ref_sequence);
 //                pileup_struct.generate_svd();
 
 
