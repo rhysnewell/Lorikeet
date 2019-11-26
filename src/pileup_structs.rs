@@ -512,8 +512,14 @@ impl PileupFunctions for PileupStats {
                     let mut new_haplotype = Haplotype::start(
                         hap_root.size, cluster_root_id, index);
                     let mut dendro_ids = dendro_ids.lock().unwrap();
-                    *clusters = new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
+                    new_haplotype.add_variants(dendrogram, &dendro_ids);
                     debug!("{:?}", new_haplotype);
+
+                    for (pos, variants) in new_haplotype.variants.iter(){
+                        let cluster_pos = clusters.entry(*pos)
+                            .or_insert(*variants.clone());
+                        cluster_pos.extend(variants);
+                    }
                     haplotypes_vec[index] = new_haplotype;
                 }
 
