@@ -43,12 +43,16 @@ impl Haplotype {
         to_search.insert(step_1.cluster2);
         let mut current_step = step_1;
         while to_search.len() > 0 {
+            // create new mutable hashset to insert to whilst we drain current hashset
             let mut new_search = HashSet::new();
             for cluster_label in to_search.drain() {
                 // convert cluster label into index
                 let step_index = cluster_label - n;
                 let cur_step = &dendrogram[step_index];
 
+                // Check to see if each cluster id corresponds to a variant index
+                // If it does, then extract the variant
+                // else, add cluster id to search list
                 if cur_step.cluster1 < n {
                     self.variant_indices.insert(cur_step.cluster1);
                     let variant_pos =
