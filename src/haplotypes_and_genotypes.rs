@@ -36,7 +36,7 @@ impl Haplotype {
     pub fn add_variants(&mut self,
                         dendrogram: &Dendrogram<f64>,
                         dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>){
-        let n = dendrogram.len() + 1;
+        let n = dendrogram.len();
         let step_1 = &dendrogram[self.root_cluster_id];
         let mut to_search = HashSet::new();
         to_search.insert(step_1.cluster1);
@@ -53,7 +53,7 @@ impl Haplotype {
                 // Check to see if each cluster id corresponds to a variant index
                 // If it does, then extract the variant
                 // else, add cluster id to search list
-                if cur_step.cluster1 < n {
+                if cur_step.cluster1 <= n + 1 {
                     self.variant_indices.insert(cur_step.cluster1);
                     let variant_pos =
                         dendro_clusters.get(&step_index).expect("Step ID not found");
@@ -67,7 +67,7 @@ impl Haplotype {
                     new_search.insert(cur_step.cluster1);
                 }
 
-                if cur_step.cluster2 < n {
+                if cur_step.cluster2 <= n + 1 {
                     self.variant_indices.insert(cur_step.cluster2);
                     let variant_pos =
                         dendro_clusters.get(&step_index).expect("Step ID not found");

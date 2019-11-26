@@ -504,8 +504,9 @@ impl PileupFunctions for PileupStats {
                 // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
                 // range of indices [N - 1 - 2k; N - 1 - k)
                 let n_1 = dendrogram.len();
-                let cluster_roots = (n_1 + 1 - 2 * k..n_1 + 1 - k);
+                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
                 let mut haplotypes_vec = vec![Haplotype::new(); k];
+                let mut position_count: HashSet<usize> = HashSet::new();
 
                 for (index, cluster_root_id) in cluster_roots.into_iter().enumerate() {
                     let hap_root = &dendrogram[cluster_root_id];
@@ -517,11 +518,17 @@ impl PileupFunctions for PileupStats {
 
                     for (pos, variants) in new_haplotype.variants.iter(){
                         let cluster_pos = clusters.entry(*pos)
-                            .or_insert(*variants.clone());
-                        cluster_pos.extend(variants);
+                            .or_insert(variants.clone());
+                        for (variant, clust) in variants.iter(){
+                            cluster_pos.insert(variant.to_string(), *clust);
+                        }
+
                     }
+
+                    position_count.extend(&new_haplotype.variant_indices);
                     haplotypes_vec[index] = new_haplotype;
                 }
+                debug!("Variants found in tree {}", position_count.len());
 
 //                print!("[");
 //                for step in dendrogram.steps(){
@@ -1169,7 +1176,7 @@ impl PileupFunctions for PileupStats {
 
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
-                (0..variant_info_all.len()-1)
+                (0..variant_info_all.len())
                     .into_par_iter().enumerate().for_each(|(row_index, row_info)|{
                     let mut row_variant_set = &BTreeSet::new();
                     let row_info = &variant_info_all[row_index];
@@ -1189,7 +1196,7 @@ impl PileupFunctions for PileupStats {
                             row_variant_set = &nucfrequency[&row_info.0][&var_char];
                         }
                     }
-                    (row_index+1..variant_info_all.len())
+                    (row_index..variant_info_all.len())
                         .into_par_iter().enumerate().for_each(|(col_index, col_info)|{
                         let mut col_variant_set= &BTreeSet::new();
                         let col_info = &variant_info_all[col_index];
@@ -1239,9 +1246,12 @@ impl PileupFunctions for PileupStats {
                     });
                 });
 
+
                 let mut variant_distances = variant_distances
                     .lock()
                     .unwrap();
+                debug!("Variant Distance Vector {:?}", variant_distances);
+
 
                 let dend = nnchain(
                     &mut variant_distances,
