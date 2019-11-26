@@ -521,10 +521,10 @@ impl PileupFunctions for PileupStats {
                 }
                 debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
 
-                print!("[");
-                for step in dendrogram.steps(){
-                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
-                }
+//                print!("[");
+//                for step in dendrogram.steps(){
+//                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
+//                }
 //                println!("]");
 //                print!("{{");
 //                for (pos, cluster) in clusters.iter() {
@@ -1167,8 +1167,8 @@ impl PileupFunctions for PileupStats {
 
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
-                (0..variant_info_all.len())
-                    .into_par_iter().enumerate().for_each(|(row_index, row_info)|{
+                (0..variant_info_all.len()-1)
+                    .into_par_iter().for_each(|(row_index)|{
                     let mut row_variant_set = &BTreeSet::new();
                     let row_info = &variant_info_all[row_index];
                     // lazily get the row variant read id set
@@ -1187,8 +1187,8 @@ impl PileupFunctions for PileupStats {
                             row_variant_set = &nucfrequency[&row_info.0][&var_char];
                         }
                     }
-                    (row_index..variant_info_all.len())
-                        .into_par_iter().enumerate().for_each(|(col_index, col_info)|{
+                    (row_index+1..variant_info_all.len())
+                        .into_par_iter().for_each(|(col_index)|{
                         let mut col_variant_set= &BTreeSet::new();
                         let col_info = &variant_info_all[col_index];
                         if indels.contains_key(&col_info.0) {
@@ -1241,7 +1241,7 @@ impl PileupFunctions for PileupStats {
                 let mut variant_distances = variant_distances
                     .lock()
                     .unwrap();
-                debug!("Variant Distance Vector {:?}", variant_distances);
+//                debug!("Variant Distance Vector {:?}", variant_distances);
 
 
                 let dend = nnchain(
@@ -1385,11 +1385,8 @@ fn condensed_index(row_i: usize, col_j: usize, n: usize) -> Option<usize>{
     if row_i == col_j {
         return None
     } else {
-        if row_i < col_j {
-            return Some(n*row_i - row_i*(row_i+1)/2 + col_j - 1 - row_i)
-        } else {
-            return Some(n*col_j - col_j*(col_j+1)/2 + row_i - 1 - col_j)
-        }
+        return Some(n*row_i - row_i*(row_i+1)/2 + col_j - 1 - row_i)
+//        return Some(n*(n-1)/2 - (n - row_i)*(n - row_i - 1)/2 + col_j - row_i - 1)
     }
 }
 
