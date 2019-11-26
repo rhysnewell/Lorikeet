@@ -35,9 +35,7 @@ impl Haplotype {
 
     pub fn add_variants(&mut self,
                         dendrogram: &Dendrogram<f64>,
-                        dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>,
-                        clusters: &mut HashMap<i32, BTreeMap<String, (i32, usize)>>)
-        -> HashMap<i32, BTreeMap<String, (i32, usize)>>{
+                        dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>){
         let n = dendrogram.len() + 1;
         let step_1 = &dendrogram[self.root_cluster_id];
         let mut to_search = HashSet::new();
@@ -60,11 +58,6 @@ impl Haplotype {
                             .entry(*pos).or_insert(BTreeMap::new());
                         captured_var.entry(variant.0.clone())
                             .or_insert((variant.1, self.haplotype_index));
-
-                        let cluster_pos = clusters.entry(*pos)
-                            .or_insert(BTreeMap::new());
-
-                        cluster_pos.insert(variant.0.clone(), (variant.1, self.haplotype_index));
                     }
                 } else {
                     new_search.insert(cur_step.cluster1);
@@ -80,10 +73,6 @@ impl Haplotype {
                         captured_var.entry(variant.0.clone())
                             .or_insert((variant.1, self.haplotype_index));
 
-                        let cluster_pos = clusters.entry(*pos)
-                            .or_insert(BTreeMap::new());
-
-                        cluster_pos.insert(variant.0.clone(), (variant.1, self.haplotype_index));
                     }
                 } else {
                     new_search.insert(cur_step.cluster2);
@@ -91,7 +80,6 @@ impl Haplotype {
             }
             to_search = new_search;
         }
-        return clusters.clone()
 
     }
 }
