@@ -506,34 +506,25 @@ impl PileupFunctions for PileupStats {
                 let n_1 = dendrogram.len();
                 let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
                 let mut haplotypes_vec = vec![Haplotype::new(); k];
-                let mut position_count: HashSet<usize> = HashSet::new();
+                let mut position_count: Vec<usize> =Vec::new();
 
                 for (index, cluster_root_id) in cluster_roots.into_iter().enumerate() {
                     let hap_root = &dendrogram[cluster_root_id];
                     let mut new_haplotype = Haplotype::start(
                         hap_root.size, cluster_root_id, index);
                     let mut dendro_ids = dendro_ids.lock().unwrap();
-                    new_haplotype.add_variants(dendrogram, &dendro_ids);
-                    debug!("{:?}", new_haplotype);
+                    new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
+                    debug!("{} {:?}", cluster_root_id, new_haplotype.node_size);
 
-                    for (pos, variants) in new_haplotype.variants.iter(){
-                        let cluster_pos = clusters.entry(*pos)
-                            .or_insert(variants.clone());
-                        for (variant, clust) in variants.iter(){
-                            cluster_pos.insert(variant.to_string(), *clust);
-                        }
-
-                    }
-
-                    position_count.extend(&new_haplotype.variant_indices);
+                    position_count.extend(&new_haplotype.variant_indices.iter().cloned().collect::<Vec<usize>>());
                     haplotypes_vec[index] = new_haplotype;
                 }
-                debug!("Variants found in tree {}", position_count.len());
+                debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
 
-//                print!("[");
-//                for step in dendrogram.steps(){
-//                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
-//                }
+                print!("[");
+                for step in dendrogram.steps(){
+                    println!("[{}, {}, {}, {}],", step.cluster1, step.cluster2, step.dissimilarity, step.size);
+                }
 //                println!("]");
 //                print!("{{");
 //                for (pos, cluster) in clusters.iter() {
