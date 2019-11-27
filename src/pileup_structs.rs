@@ -535,7 +535,7 @@ impl PileupFunctions for PileupStats {
                         hap_root.size, cluster_root_id, index);
                     let mut dendro_ids = dendro_ids.lock().unwrap();
                     new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
-                    debug!("{} {:?} {}", cluster_root_id, new_haplotype.node_size, new_haplotype.variant_indices.len());
+                    debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
 
                     position_count.extend(&new_haplotype.variant_indices);
                     haplotypes_vec[index] = new_haplotype;
@@ -1343,6 +1343,7 @@ impl PileupFunctions for PileupStats {
                             Some(map) => map.to_owned(),
                             None => BTreeMap::new(),
                         };
+
                         let cluster_val = match cluster_map.get(var) {
                             Some(i) => *i,
                             None => (-1, 0),
