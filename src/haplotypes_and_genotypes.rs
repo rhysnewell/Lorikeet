@@ -45,7 +45,7 @@ impl Haplotype {
         if cur_step.cluster1 <= n {
             self.variant_indices.insert(cur_step.cluster1);
             let variant_pos =
-                dendro_clusters.get(&self.root_cluster_id).expect("Step ID not found");
+                dendro_clusters.get(&cur_step.cluster1).expect("Step ID not found");
             for (pos, variant) in variant_pos {
                 let captured_var = self.variants
                     .entry(*pos).or_insert(BTreeMap::new());
@@ -63,7 +63,7 @@ impl Haplotype {
         if cur_step.cluster2 <= n {
             self.variant_indices.insert(cur_step.cluster2);
             let variant_pos =
-                dendro_clusters.get(&self.root_cluster_id).expect("Step ID not found");
+                dendro_clusters.get(&cur_step.cluster2).expect("Step ID not found");
             for (pos, variant) in variant_pos {
                 let captured_var = self.variants
                     .entry(*pos).or_insert(BTreeMap::new());
@@ -96,7 +96,7 @@ impl Haplotype {
                 if cur_step.cluster1 <= n {
                     self.variant_indices.insert(cur_step.cluster1);
                     let variant_pos =
-                        dendro_clusters.get(&step_index).expect("Step ID not found");
+                        dendro_clusters.get(&cur_step.cluster1).expect("Step ID not found");
                     for (pos, variant) in variant_pos {
                         let captured_var = self.variants
                             .entry(*pos).or_insert(BTreeMap::new());
@@ -114,7 +114,7 @@ impl Haplotype {
                 if cur_step.cluster2 <= n {
                     self.variant_indices.insert(cur_step.cluster2);
                     let variant_pos =
-                        dendro_clusters.get(&step_index).expect("Step ID not found");
+                        dendro_clusters.get(&cur_step.cluster2).expect("Step ID not found");
                     for (pos, variant) in variant_pos {
                         let captured_var = self.variants
                             .entry(*pos).or_insert(BTreeMap::new());
