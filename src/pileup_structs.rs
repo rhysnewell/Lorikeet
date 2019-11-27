@@ -96,6 +96,8 @@ impl PileupStats {
 pub trait PileupFunctions {
     fn setup(&mut self);
 
+    fn len(&mut self) -> usize;
+
     fn add_contig(&mut self,
                   nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
                   indels_positions: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
@@ -168,6 +170,17 @@ impl PileupFunctions for PileupStats {
                 *num_covered_bases = 0;
                 *num_mapped_reads = 0;
                 *clusters = HashMap::new();
+            }
+        }
+    }
+
+    fn len(&mut self) -> usize {
+        match self {
+            PileupStats::PileupContigStats {
+                ref mut variant_abundances,
+                ..
+            } => {
+                return variant_abundances.len()
             }
         }
     }
@@ -1138,7 +1151,7 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             clusters.len() as i32 + 1));
 
-
+                debug!("Sorting DBSCAN Clusters");
                 // All cluster ids are + 1, because we have the variants with abundances < eps
                 // outside of the clustering algorithm already as cluster id 0
                 db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)|{
@@ -1186,6 +1199,8 @@ impl PileupFunctions for PileupStats {
                     Mutex::new(
                         vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
 
+                debug!("Filling condensed matrix of length {}",
+                       (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
                 (0..variant_info_all.len()-1)
@@ -1245,7 +1260,7 @@ impl PileupFunctions for PileupStats {
                         let distance = ((1. - jaccard) + dist_f) / 2.;
 
                         match condensed_index(
-                            row_index, col_index, variant_info.len()) {
+                            row_index, col_index, variant_info_all.len()) {
                             Some(index) => {
                                 let mut variant_distances = variant_distances.lock().unwrap();
                                 variant_distances[index] = distance;
@@ -1262,7 +1277,7 @@ impl PileupFunctions for PileupStats {
                 let mut variant_distances = variant_distances
                     .lock()
                     .unwrap();
-//                debug!("Variant Distance Vector {:?}", variant_distances);
+                debug!("Performing HAC");
 
 
                 let dend = nnchain(
@@ -1403,11 +1418,11 @@ impl PileupFunctions for PileupStats {
 }
 
 // helper function to get the index of condensed matrix from it square form
-fn condensed_index(row_i: usize, col_j: usize, n: usize) -> Option<usize>{
-    if row_i == col_j {
+fn condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
+    if i == j {
         return None
     } else {
-        return Some(n*row_i - row_i*(row_i+1)/2 + col_j - 1 - row_i)
+        return Some(n*j - j*(j+1)/2 + i - 1 - j)
 //        return Some(n*(n-1)/2 - (n - row_i)*(n - row_i - 1)/2 + col_j - row_i - 1)
     }
 }
