@@ -38,10 +38,46 @@ impl Haplotype {
                         dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>,
                         clusters: &mut HashMap<i32, BTreeMap<String, (i32, usize)>>) {
         let n = dendrogram.len();
-        let step_1 = &dendrogram[self.root_cluster_id];
+        let cur_step = &dendrogram[self.root_cluster_id];
         let mut to_search = HashSet::new();
-        to_search.insert(step_1.cluster1);
-        to_search.insert(step_1.cluster2);
+        debug!("label {} step {} new labels {} {}",
+               self.root_cluster_id + n + 1, self.root_cluster_id, cur_step.cluster1, cur_step.cluster2);
+        if cur_step.cluster1 <= n {
+            self.variant_indices.insert(cur_step.cluster1);
+            let variant_pos =
+                dendro_clusters.get(&self.root_cluster_id).expect("Step ID not found");
+            for (pos, variant) in variant_pos {
+                let captured_var = self.variants
+                    .entry(*pos).or_insert(BTreeMap::new());
+                captured_var.entry(variant.0.clone())
+                    .or_insert((variant.1, self.haplotype_index));
+
+                let cluster_pos = clusters.entry(*pos)
+                    .or_insert(BTreeMap::new());
+                cluster_pos.insert(variant.0.clone(),(variant.1, self.haplotype_index));
+            }
+        } else {
+            to_search.insert(cur_step.cluster1);
+        }
+
+        if cur_step.cluster2 <= n {
+            self.variant_indices.insert(cur_step.cluster2);
+            let variant_pos =
+                dendro_clusters.get(&self.root_cluster_id).expect("Step ID not found");
+            for (pos, variant) in variant_pos {
+                let captured_var = self.variants
+                    .entry(*pos).or_insert(BTreeMap::new());
+                captured_var.entry(variant.0.clone())
+                    .or_insert((variant.1, self.haplotype_index));
+
+                let cluster_pos = clusters.entry(*pos)
+                    .or_insert(BTreeMap::new());
+                cluster_pos.insert(variant.0.clone(),(variant.1, self.haplotype_index));
+
+            }
+        } else {
+            to_search.insert(cur_step.cluster2);
+        }
 //        let mut current_step = step_1;
         while to_search.len() > 0 {
             // create new mutable hashset to insert to whilst we drain current hashset

@@ -504,11 +504,32 @@ impl PileupFunctions for PileupStats {
                 // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
                 // range of indices [N - 1 - 2k; N - 1 - k)
                 let n_1 = dendrogram.len();
-                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
-                let mut haplotypes_vec = vec![Haplotype::new(); k];
-                let mut position_count: Vec<usize> =Vec::new();
+                // get the first k root labels
+                let mut cluster_root_labels = vec!();
+                let mut step_i = &dendrogram[n_1 - 1];
+                while cluster_root_labels.len() < k {
+                    if cluster_root_labels.len() == 0 {
+                        cluster_root_labels.push(step_i.cluster1);
+                        cluster_root_labels.push(step_i.cluster2);
+                    } else {
+                        let mut cluster_to_check = cluster_root_labels
+                            .iter().max().unwrap().clone();
 
-                for (index, cluster_root_id) in cluster_roots.into_iter().enumerate() {
+                        step_i = &dendrogram[cluster_to_check - n_1 - 1];
+                        cluster_root_labels.push(step_i.cluster1);
+                        cluster_root_labels.push(step_i.cluster2);
+
+                        let cluster_to_check_i = cluster_root_labels.iter()
+                            .position(|x| x==&cluster_to_check).unwrap();
+                        cluster_root_labels.remove(cluster_to_check_i);
+                    }
+                }
+//                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
+                let mut haplotypes_vec = vec![Haplotype::new(); k];
+                let mut position_count: HashSet<usize> = HashSet::new();
+
+                for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
+                    let cluster_root_id = cluster_root - n_1 -1;
                     let hap_root = &dendrogram[cluster_root_id];
                     let mut new_haplotype = Haplotype::start(
                         hap_root.size, cluster_root_id, index);
@@ -516,7 +537,7 @@ impl PileupFunctions for PileupStats {
                     new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
                     debug!("{} {:?} {}", cluster_root_id, new_haplotype.node_size, new_haplotype.variant_indices.len());
 
-                    position_count.extend(&new_haplotype.variant_indices.iter().cloned().collect::<Vec<usize>>());
+                    position_count.extend(&new_haplotype.variant_indices);
                     haplotypes_vec[index] = new_haplotype;
                 }
                 debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
