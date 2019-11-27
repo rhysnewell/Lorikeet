@@ -46,7 +46,7 @@ pub enum PileupStats {
         min: f32,
         max: f32,
         method: String,
-        read_error_rate: f64,
+        regression: (f64, f64, f64),
         // Clusters hashmap:
         // Key = Position
         // Value = K: Variant, V: (DBSCAN Cluster, HAC Index/initial cluster)
@@ -84,7 +84,7 @@ impl PileupStats {
             min: min,
             max: max,
             method: "".to_string(),
-            read_error_rate: 0.0,
+            regression: (0., 0., 0.),
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
             dendrogram: Dendrogram::new(0),
@@ -265,7 +265,7 @@ impl PileupFunctions for PileupStats {
             PileupStats::PileupContigStats {
                 variant_count,
                 depth,
-                read_error_rate,
+                regression,
                 ..
             } => {
                 let data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
@@ -278,13 +278,14 @@ impl PileupFunctions for PileupStats {
                     .fit()
                     .expect("Unable to fit data to formula");
                 let parameters = model.parameters;
-                let standard_errors = model.se;
+                let standard_errors = model.se.pairs();
                 let pvalues = model.pvalues;
                 debug!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
                          parameters,
                          standard_errors,
                          pvalues.pairs());
-                *read_error_rate = parameters.pairs()[0].1.clone() + 2.*standard_errors.pairs()[0].1.clone();
+                // return results as intercept, effect size, se
+                *regression = (parameters.intercept_value, parameters.regressor_values[0], standard_errors[0].1);
 
             }
         }
@@ -302,7 +303,7 @@ impl PileupFunctions for PileupStats {
                 ref mut variations_per_base,
                 ref mut coverage,
                 tid,
-                read_error_rate,
+                regression,
                 ..
             } => {
                 let variants = Arc::new(Mutex::new(HashMap::new())); // The relative abundance of each variant
@@ -310,7 +311,7 @@ impl PileupFunctions for PileupStats {
                 let variant_count = Arc::new(Mutex::new(0));
                 let indels = Arc::new(Mutex::new(indels));
                 let nucfrequency = Arc::new(Mutex::new(nucfrequency));
-
+                let min_variant_fraction = min_variant_depth as f64 / 100.;
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.par_iter_mut().enumerate().for_each(|(i, d)| {
@@ -337,7 +338,7 @@ impl PileupFunctions for PileupStats {
                                 if indel.contains("N") {
                                     *d += count as f64;
                                 }
-                                if (count >= min_variant_depth) & (count as f64 / *d > *read_error_rate){
+                                if (count >= min_variant_depth) & (count as f64 / *d >= min_variant_fraction) & ((count as f64 / *d) > (regression.1 + regression.2)){
                                     rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
                                         let mut read_variants
@@ -369,7 +370,7 @@ impl PileupFunctions for PileupStats {
                             for (base, read_ids) in nuc_map.iter() {
                                 let count = read_ids.len();
 
-                                if (count >= min_variant_depth) & ((count as f64 / *d) > *read_error_rate) {
+                                if (count >= min_variant_depth) & (count as f64 / *d >= min_variant_fraction) & ((count as f64 / *d) > (regression.1 + regression.2)) {
                                     rel_abundance.insert(base.to_string(), count as f64 / *d);
 
                                     for read in read_ids {
@@ -1149,7 +1150,7 @@ impl PileupFunctions for PileupStats {
                 let mut number_of_clusters =
                     Arc::new(
                         Mutex::new(
-                            clusters.len() as i32 + 1));
+                            db_clusters.len() as i32 + 1));
 
                 debug!("Sorting DBSCAN Clusters");
                 // All cluster ids are + 1, because we have the variants with abundances < eps
@@ -1467,10 +1468,10 @@ mod tests {
 
         match contig {
             PileupStats::PileupContigStats {
-                ref mut read_error_rate,
+                ref mut regression,
                 ..
             } => {
-                *read_error_rate = 0.0;
+                *regression = (0., 0., 0.);
             }
         }
 
@@ -1528,10 +1529,10 @@ mod tests {
 
         match contig {
             PileupStats::PileupContigStats {
-                ref mut read_error_rate,
+                ref mut regression,
                 ..
             } => {
-                *read_error_rate = 0.0;
+                *regression = (0., 0., 0.);
             }
         }
 
@@ -1602,10 +1603,10 @@ mod tests {
 
         match contig {
             PileupStats::PileupContigStats {
-                ref mut read_error_rate,
+                ref mut regression,
                 ..
             } => {
-                *read_error_rate = 0.0;
+                *regression = (0., 0., 0.);
             }
         }
 
