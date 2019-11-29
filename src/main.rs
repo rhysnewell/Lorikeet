@@ -209,7 +209,7 @@ Other arguments (optional):
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
                                          coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.1]
+                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -338,7 +338,7 @@ Other arguments (optional):
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
                                          coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.1]
+                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -462,7 +462,7 @@ Other arguments (optional):
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
                                          coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.1]
+                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -2008,7 +2008,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.0"))
                 .arg(Arg::with_name("coverage-fold")
                     .long("coverage-fold")
-                    .default_value("0.1"))
+                    .default_value("0.5"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
@@ -2183,7 +2183,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.0"))
                 .arg(Arg::with_name("coverage-fold")
                     .long("coverage-fold")
-                    .default_value("0.1"))
+                    .default_value("0.5"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
@@ -2358,7 +2358,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.0"))
                 .arg(Arg::with_name("coverage-fold")
                     .long("coverage-fold")
-                    .default_value("0.1"))
+                    .default_value("0.5"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")

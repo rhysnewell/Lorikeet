@@ -245,7 +245,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             let insert = refr +
                                 &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
                             let refr = str::from_utf8(&ref_seq[cursor as usize..
-                                cursor as usize + cig.len() as usize]).to_string();
+                                cursor as usize + cig.len() as usize]).unwrap().to_string();
                             if refr != insert {
                                 let indel_map = indels
                                     .entry(cursor as i32).or_insert(BTreeMap::new());

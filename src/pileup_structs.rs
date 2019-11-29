@@ -318,27 +318,30 @@ impl PileupFunctions for PileupStats {
 //                    let read_variants = Arc::clone(&read_variants);
 //                    let variant_count = Arc::clone(&variant_count);
                     let mut rel_abundance = BTreeMap::new();
-                    if (*coverage * (1.0 - coverage_fold) <= *d as f32
-                        && *d as f32 <= *coverage * (1.0 + coverage_fold))
-                        || (coverage_fold == 0.0) {
 //                        if d >= &mut min_variant_depth.clone() {
-                        // INDELS act differently to normal variants
-                        // The reads containing this variant don't contribute to coverage values
-                        // So we need to readjust the depth at these locations to show true
-                        // read depth. i.e. variant depth + reference depth
-                        let mut indels
-                            = indels.lock().unwrap();
-                        let indel_map = match indels.get(&(i as i32)) {
-                            Some(map) => map.to_owned(),
-                            None => BTreeMap::new(),
-                        };
-                        if indel_map.len() > 0 {
-                            for (indel, read_ids) in indel_map.iter() {
-                                let count = read_ids.len();
-                                if indel.contains("N") {
-                                    *d += count as f64;
-                                }
-                                if (count >= min_variant_depth) & (count as f64 / *d >= min_variant_fraction) & ((count as f64 / *d) > (regression.1 + regression.2)){
+                    // INDELS act differently to normal variants
+                    // The reads containing this variant don't contribute to coverage values
+                    // So we need to readjust the depth at these locations to show true
+                    // read depth. i.e. variant depth + reference depth
+                    let mut indels
+                        = indels.lock().unwrap();
+                    let indel_map = match indels.get(&(i as i32)) {
+                        Some(map) => map.to_owned(),
+                        None => BTreeMap::new(),
+                    };
+                    if indel_map.len() > 0 {
+                        for (indel, read_ids) in indel_map.iter() {
+                            let count = read_ids.len();
+//                                if indel.contains("N") {
+//                                    *d += count as f64;
+//                                }
+                            *d += count as f64;
+                            if (*coverage * (1.0 - coverage_fold) <= *d as f32
+                                && *d as f32 <= *coverage * (1.0 + coverage_fold))
+                                || (coverage_fold == 0.0) {
+                                if (count >= min_variant_depth)
+                                    && (count as f64 / *d >= min_variant_fraction)
+                                    && ((count as f64 / *d) > (regression.1 + regression.2)) {
                                     rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
                                         let mut read_variants
@@ -352,13 +355,16 @@ impl PileupFunctions for PileupStats {
                                     let mut variant_count = variant_count.lock().unwrap();
                                     *variant_count += 1;
                                 } else {
-
                                     let indel_map_back = indels
                                         .entry(i as i32).or_insert(BTreeMap::new());
                                     indel_map_back.remove(indel);
                                 }
                             }
                         }
+                    }
+                    if (*coverage * (1.0 - coverage_fold) <= *d as f32
+                        && *d as f32 <= *coverage * (1.0 + coverage_fold))
+                        || (coverage_fold == 0.0) {
                         let mut nucfrequency
                             = nucfrequency.lock().unwrap();
 
@@ -386,7 +392,6 @@ impl PileupFunctions for PileupStats {
                                         *variant_count += 1;
                                     }
                                 } else {
-
                                     let nuc_map_back = nucfrequency
                                         .entry(i as i32).or_insert(BTreeMap::new());
                                     nuc_map_back.remove(base);
@@ -541,7 +546,7 @@ impl PileupFunctions for PileupStats {
                         }
                     }
 //                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
-                    let mut haplotypes_vec = vec![Haplotype::new(); k];
+                    let mut haplotypes_vec = vec!();
                     let mut position_count: HashSet<usize> = HashSet::new();
 
                     for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
@@ -555,7 +560,7 @@ impl PileupFunctions for PileupStats {
                             debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
 
                             position_count.extend(&new_haplotype.variant_indices);
-                            haplotypes_vec[index] = new_haplotype;
+                            haplotypes_vec.push(new_haplotype);
                         } else {
                             let mut dendro_ids = dendro_ids.lock().unwrap();
                             let variant_pos = dendro_ids.get(&cluster_root).expect("Label not found");
@@ -579,7 +584,7 @@ impl PileupFunctions for PileupStats {
                                 haplotype_index: index,
                             };
                             position_count.extend(&new_haplotype.variant_indices);
-                            haplotypes_vec[index] = new_haplotype;
+                            haplotypes_vec.push(new_haplotype);
                         }
                     }
                     debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
@@ -1109,7 +1114,7 @@ impl PileupFunctions for PileupStats {
                             HashMap::new()));
 
 
-                let eps = 0.05;
+                let eps = 0.025;
                 let min_cluster_size = 2;
 
                 variant_abundances.iter().for_each(
