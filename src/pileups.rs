@@ -242,16 +242,21 @@ pub fn pileup_variants<R: NamedBamReader,
                         },
                         Cigar::Del(_) => {
                             let refr = (ref_seq[cursor as usize] as char).to_string();
-                            let indel_map = indels
-                                .entry(cursor as i32).or_insert(BTreeMap::new());
-                            let id = indel_map.entry(refr +
-                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>())
-                                                                  .or_insert(BTreeSet::new());
-                            id.insert(read_to_id[&record.qname().to_vec()]);
+                            let insert = refr +
+                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
+                            let refr = str::from_utf8(&ref_seq[cursor as usize..
+                                cursor as usize + cig.len() as usize]).to_string();
+                            if refr != insert {
+                                let indel_map = indels
+                                    .entry(cursor as i32).or_insert(BTreeMap::new());
+                                let id = indel_map.entry(insert)
+                                    .or_insert(BTreeSet::new());
+                                id.insert(read_to_id[&record.qname().to_vec()]);
+                                total_indels_in_current_contig += cig.len();
+                            }
 
                             cursor += cig.len() as usize;
 
-                            total_indels_in_current_contig += cig.len();
                         },
                         Cigar::RefSkip(_) => {
                             // if D or N, move the cursor

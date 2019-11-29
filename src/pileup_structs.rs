@@ -499,62 +499,93 @@ impl PileupFunctions for PileupStats {
                 // Clusters is set up as HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>
                 // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, (Variant, db_clust)>>
                 // This will allow us to disentangle positions where more than one variant is possible
-                let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
-                clusters.par_iter().for_each(|(position, variant_map)| {
-                    for (variant, cluster) in variant_map.iter() {
-                        let mut dendro_ids = dendro_ids.lock().unwrap();
-                        let clust = dendro_ids.entry(cluster.1)
-                            .or_insert(BTreeMap::new());
+                if dendrogram.len() > 1 {
+                    debug!("Beginning haplotyping of dendrogram of length: {}", dendrogram.len());
+                    let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
+                    clusters.par_iter().for_each(|(position, variant_map)| {
+                        for (variant, cluster) in variant_map.iter() {
+                            let mut dendro_ids = dendro_ids.lock().unwrap();
+                            let clust = dendro_ids.entry(cluster.1)
+                                .or_insert(BTreeMap::new());
 
-                        clust.entry(*position)
-                             .or_insert((variant.to_string(), cluster.0));
+                            clust.entry(*position)
+                                .or_insert((variant.to_string(), cluster.0));
+                        }
+                    });
+
+                    // Numer of minimum clusters as inferred from DBSCAN
+                    let k = clusters_mean.keys().len();
+
+                    // Beginning roots (indices) of each cluster
+                    // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
+                    // range of indices [N - 1 - 2k; N - 1 - k)
+                    let n_1 = dendrogram.len();
+                    // get the first k root labels
+                    let mut cluster_root_labels = vec!();
+                    let mut step_i = &dendrogram[n_1 - 1];
+                    while cluster_root_labels.len() < k {
+                        if cluster_root_labels.len() == 0 {
+                            cluster_root_labels.push(step_i.cluster1);
+                            cluster_root_labels.push(step_i.cluster2);
+                        } else {
+                            let mut cluster_to_check = cluster_root_labels
+                                .iter().max().unwrap().clone();
+
+                            step_i = &dendrogram[cluster_to_check - n_1 - 1];
+                            cluster_root_labels.push(step_i.cluster1);
+                            cluster_root_labels.push(step_i.cluster2);
+
+                            let cluster_to_check_i = cluster_root_labels.iter()
+                                .position(|x| x == &cluster_to_check).unwrap();
+                            cluster_root_labels.remove(cluster_to_check_i);
+                        }
                     }
-                });
-
-                // Numer of minimum clusters as inferred from DBSCAN
-                let k = clusters_mean.keys().len();
-
-                // Beginning roots (indices) of each cluster
-                // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
-                // range of indices [N - 1 - 2k; N - 1 - k)
-                let n_1 = dendrogram.len();
-                // get the first k root labels
-                let mut cluster_root_labels = vec!();
-                let mut step_i = &dendrogram[n_1 - 1];
-                while cluster_root_labels.len() < k {
-                    if cluster_root_labels.len() == 0 {
-                        cluster_root_labels.push(step_i.cluster1);
-                        cluster_root_labels.push(step_i.cluster2);
-                    } else {
-                        let mut cluster_to_check = cluster_root_labels
-                            .iter().max().unwrap().clone();
-
-                        step_i = &dendrogram[cluster_to_check - n_1 - 1];
-                        cluster_root_labels.push(step_i.cluster1);
-                        cluster_root_labels.push(step_i.cluster2);
-
-                        let cluster_to_check_i = cluster_root_labels.iter()
-                            .position(|x| x==&cluster_to_check).unwrap();
-                        cluster_root_labels.remove(cluster_to_check_i);
-                    }
-                }
 //                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
-                let mut haplotypes_vec = vec![Haplotype::new(); k];
-                let mut position_count: HashSet<usize> = HashSet::new();
+                    let mut haplotypes_vec = vec![Haplotype::new(); k];
+                    let mut position_count: HashSet<usize> = HashSet::new();
 
-                for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
-                    let cluster_root_id = cluster_root - n_1 -1;
-                    let hap_root = &dendrogram[cluster_root_id];
-                    let mut new_haplotype = Haplotype::start(
-                        hap_root.size, cluster_root_id, index);
-                    let mut dendro_ids = dendro_ids.lock().unwrap();
-                    new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
-                    debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
+                    for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
+                        if cluster_root > n_1 {
+                            let cluster_root_id = cluster_root - n_1 - 1;
+                            let hap_root = &dendrogram[cluster_root_id];
+                            let mut new_haplotype = Haplotype::start(
+                                hap_root.size, cluster_root_id, index);
+                            let mut dendro_ids = dendro_ids.lock().unwrap();
+                            new_haplotype.add_variants(dendrogram, &dendro_ids, clusters);
+                            debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
 
-                    position_count.extend(&new_haplotype.variant_indices);
-                    haplotypes_vec[index] = new_haplotype;
+                            position_count.extend(&new_haplotype.variant_indices);
+                            haplotypes_vec[index] = new_haplotype;
+                        } else {
+                            let mut dendro_ids = dendro_ids.lock().unwrap();
+                            let variant_pos = dendro_ids.get(&cluster_root).expect("Label not found");
+                            let mut variant_map = HashMap::new();
+                            for (pos, variant) in variant_pos.iter() {
+                                let captured_var = variant_map.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+                                captured_var.entry(variant.0.clone())
+                                    .or_insert((variant.1, cluster_root));
+
+                                let cluster_pos = clusters.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+                                cluster_pos.insert(variant.0.clone(),(variant.1, cluster_root));
+                            }
+
+                            let mut new_haplotype = Haplotype {
+                                root_cluster_id: cluster_root,
+                                variant_indices: [cluster_root].into_iter().cloned().collect(),
+                                variants: variant_map,
+                                node_size: 1,
+                                haplotype_index: index,
+                            };
+                            position_count.extend(&new_haplotype.variant_indices);
+                            haplotypes_vec[index] = new_haplotype;
+                        }
+                    }
+                    debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
+                    *haplotypes = haplotypes_vec;
+
                 }
-                debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
 
 //                print!("[");
 //                for step in dendrogram.steps(){
@@ -625,7 +656,6 @@ impl PileupFunctions for PileupStats {
 //                            std::process::exit(1)
 //                        }
 //                    };
-                *haplotypes = haplotypes_vec;
             }
         }
     }
@@ -1423,7 +1453,7 @@ fn condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
     if i == j {
         return None
     } else {
-        return Some(n*j - j*(j+1)/2 + i - 1 - j)
+        return Some(n*i - i*(i+1)/2 + j - 1 - i)
 //        return Some(n*(n-1)/2 - (n - row_i)*(n - row_i - 1)/2 + col_j - row_i - 1)
     }
 }
