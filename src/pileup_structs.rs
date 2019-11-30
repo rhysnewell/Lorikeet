@@ -17,7 +17,7 @@ use nalgebra as na;
 use itertools::{izip, Itertools};
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::path::Path;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 
 #[macro_use(array)]
 
@@ -498,13 +498,8 @@ impl PileupFunctions for PileupStats {
 
                 // Open haplotype file or create one
 
-                let mut file_open = match File::create(file_path) {
-                    Ok(fasta) => fasta,
-                    Err(e) => {
-                        println!("Cannot create file {:?}", e);
-                        std::process::exit(1)
-                    },
-                };
+                let mut file_open = OpenOptions::new().append(true)
+                    .open(file_path).expect("No Read or Write Permission in current directory");
                 file_open.write(b">").unwrap();
                 file_open.write(target_name).unwrap();
                 file_open.write(b"\n").unwrap();
