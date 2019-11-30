@@ -116,6 +116,10 @@ pub trait PileupFunctions {
 
     fn filter_variants(&mut self, max_iter: usize);
 
+    fn polish_contig(&mut self,
+                     original_contig: &Vec<u8>,
+                     output_prefix: &str);
+
     fn generate_variant_contig(&mut self,
                                original_contig: &Vec<u8>,
                                output_prefix: &str);
@@ -476,6 +480,91 @@ impl PileupFunctions for PileupStats {
 //                });
 //            }
 //        }
+    }
+
+    fn polish_contig(&mut self,
+                     original_contig: &Vec<u8>,
+                     output_prefix: &str) {
+        match self {
+            PileupStats::PileupContigStats {
+                ref mut variant_abundances,
+                target_name,
+                ..
+            } => {
+                let file_name = output_prefix.to_string()
+                    + &".fna".to_owned();
+
+                let file_path = Path::new(&file_name);
+
+                // Open haplotype file or create one
+
+                let mut file_open = match File::create(file_path) {
+                    Ok(fasta) => fasta,
+                    Err(e) => {
+                        println!("Cannot create file {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+                file_open.write(b">").unwrap();
+                file_open.write(target_name).unwrap();
+                file_open.write(b"\n").unwrap();
+
+
+                let mut contig = String::new();
+
+                let mut skip_n = 0;
+                let mut skip_cnt = 0;
+                let mut char_cnt = 0;
+                // Generate the consensus genome by checking each variant
+                // Variant has to be in more than 0.5 of population
+                for (pos, base) in original_contig.iter().enumerate() {
+                    if skip_cnt < skip_n {
+                        skip_cnt += 1;
+                    } else {
+                        let mut max_var = "";
+                        let mut max_abund = 0.0;
+                        skip_n = 0;
+                        skip_cnt = 0;
+                        if variant_abundances.contains_key(&(pos as i32)){
+                            let hash = &variant_abundances[&(pos as i32)];
+                            for (var, abundance) in hash.iter() {
+                                if abundance > &max_abund {
+                                    max_var = var;
+                                    max_abund = *abundance;
+                                }
+                            }
+                            if max_abund >= 0.5 {
+                                if max_var.contains("N") {
+                                    // Skip the next n bases but rescue the reference prefix
+                                    skip_n = max_var.len() - 1;
+                                    skip_cnt = 0;
+                                    let first_byte = max_var.as_bytes()[0];
+                                    contig = contig + str::from_utf8(
+                                        &[first_byte]).unwrap()
+                                } else if max_var.len() > 1 {
+                                    // Insertions have a reference prefix that needs to be removed
+                                    let removed_first_base = str::from_utf8(
+                                        &max_var.as_bytes()[1..]).unwrap();
+                                    contig = contig + removed_first_base;
+                                } else {
+                                    contig = contig + max_var;
+                                }
+                            } else {
+                                contig = contig + str::from_utf8(&[*base]).unwrap();
+                            }
+                        } else {
+                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                        }
+                    }
+                };
+//                contig = contig + "\n";
+                for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter(){
+                    file_open.write(line).unwrap();
+                    file_open.write(b"\n").unwrap();
+                };
+//                writeln!(file_open, "{:?}", contig);
+            }
+        }
     }
 
     fn generate_variant_contig(&mut self,

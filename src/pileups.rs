@@ -36,8 +36,6 @@ pub fn pileup_variants<R: NamedBamReader,
     min: f32, max: f32,
     contig_end_exclusion: u32,
     output_prefix: &str,
-    variant_file_name: String,
-    print_consensus: bool,
     n_threads: usize,
     method: &str,
     coverage_fold: f32) {
@@ -96,8 +94,6 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut bam_generated = bam_generator.start();
         bam_generated.set_threads(n_threads);
         let stoit_name = bam_generated.name().to_string();
-
-        let stoit_file_name = stoit_name.clone() + &variant_file_name;
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
@@ -269,6 +265,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                 Ok(ins) => {ins.to_string()},
                                 Err(_e) => {"".to_string()},
                             };
+
                             let indel_map = indels.entry(cursor as i32)
                                 .or_insert(BTreeMap::new());
 
@@ -460,6 +457,10 @@ fn process_previous_contigs_var(
             "evolve" => {
                 pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
             },
+            "polish" => {
+                pileup_struct.polish_contig(&ref_sequence,
+                                            output_prefix);
+            }
             _ => {panic!("unknown mode {}", mode);},
         }
     }
