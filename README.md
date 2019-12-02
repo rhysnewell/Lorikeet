@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.com/rhysnewell/Lorikeet.svg?branch=master)](https://travis-ci.com/rhysnewell/Lorikeet)
-# Lorikeet
 
+![](lorikeet_logo_v2.png)
 
 A strain resolver for metagenomics. Currently under active development, StrainM currently acts as a variant caller for reads mapped to a metagenome assembled genome.
 
