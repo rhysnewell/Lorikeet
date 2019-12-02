@@ -1602,6 +1602,17 @@ fn run_pileup<'a,
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
 
+            let output_prefix = m.value_of("output-prefix").unwrap().to_string();
+
+            // Make sure we are dealing with a fresh file
+            let file_name = output_prefix.to_string()
+                + &".fna".to_owned();
+
+            let file_path = Path::new(&file_name);
+
+            let mut file_open = File::create(file_path)
+                .expect("No Read or Write Permission in current directory");
+
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
@@ -1635,7 +1646,7 @@ fn run_pileup<'a,
                 min,
                 max,
                 contig_end_exclusion,
-                "",
+                &output_prefix,
                 threads,
                 method,
                 coverage_fold);
@@ -2127,10 +2138,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
                     .conflicts_with("allow-improper-pairs"))
-                .arg(Arg::with_name("variant-consensus-fasta")
-                    .long("variant-consensus-fasta")
-                    .takes_value(true)
-                    .required(false))
+                .arg(Arg::with_name("output-prefix")
+                    .long("output-prefix")
+                    .short("o")
+                    .default_value("output"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")

@@ -366,7 +366,8 @@ pub fn pileup_variants<R: NamedBamReader,
     };
     if mode=="summarize" {
         info!("Writing out contig statistics");
-        pileup_matrix.print_stats(output_prefix);
+        pileup_matrix.dbscan_cluster();
+        pileup_matrix.generate_genotypes(output_prefix);
     }
 }
 
@@ -449,10 +450,11 @@ fn process_previous_contigs_var(
             },
             "summarize" => {
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_struct.generate_minimum_genotypes();
+//                pileup_struct.generate_minimum_genotypes();
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
-                                         sample_idx as usize);
+                                         sample_idx as usize,
+                                        ref_sequence);
             },
             "evolve" => {
                 pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
