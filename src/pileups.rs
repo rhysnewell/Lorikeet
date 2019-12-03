@@ -48,6 +48,7 @@ pub fn pileup_variants<R: NamedBamReader,
     let mut pileup_matrix = PileupMatrix::new_matrix();
 
     let mut gff_map = HashMap::new();
+    let mut epsilon = 0.05;
 
     match mode {
         "evolve" => {
@@ -85,7 +86,9 @@ pub fn pileup_variants<R: NamedBamReader,
                 contig_genes.push(rec);
             }
         },
-        _ => {}
+        _ => {
+            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
+        }
     }
     let mut codon_table = CodonTable::setup();
     codon_table.get_codon_table(11);
@@ -172,7 +175,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             coverage_fold,
                             num_mapped_reads_in_current_contig,
                             sample_count,
-                            output_prefix);
+                            output_prefix,
+                            epsilon);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -344,7 +348,8 @@ pub fn pileup_variants<R: NamedBamReader,
                 coverage_fold,
                 num_mapped_reads_in_current_contig,
                 sample_count,
-                output_prefix);
+                output_prefix,
+                epsilon);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -366,7 +371,7 @@ pub fn pileup_variants<R: NamedBamReader,
     };
     if mode=="summarize" {
         info!("Writing out contig statistics");
-        pileup_matrix.dbscan_cluster();
+        pileup_matrix.dbscan_cluster(epsilon);
         pileup_matrix.generate_genotypes(output_prefix);
     }
 }
@@ -394,7 +399,8 @@ fn process_previous_contigs_var(
     coverage_fold: f32,
     num_mapped_reads_in_current_contig: u64,
     sample_count: usize,
-    output_prefix: &str) {
+    output_prefix: &str,
+    epsilon: f64) {
 
     if last_tid != -2 {
         coverage_estimators.par_iter_mut().for_each(|estimator|{
@@ -434,7 +440,7 @@ fn process_previous_contigs_var(
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 if pileup_struct.len() > 0 {
-                    pileup_struct.cluster_variants();
+                    pileup_struct.cluster_variants(epsilon);
 
 
                     // prints results of variants calling
