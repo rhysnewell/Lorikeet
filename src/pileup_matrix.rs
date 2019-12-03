@@ -70,7 +70,7 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
-    fn dbscan_cluster(&mut self);
+    fn dbscan_cluster(&mut self, eps: f64);
 
     fn generate_genotypes(&mut self, output_prefix: &str);
 
@@ -195,7 +195,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn dbscan_cluster(&mut self) {
+    fn dbscan_cluster(&mut self, eps: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
@@ -238,7 +238,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                             HashMap::new()));
 
 
-                let eps = 0.025;
                 let min_cluster_size = 2;
 
                 for (tid, variant_abundances) in variants.iter() {

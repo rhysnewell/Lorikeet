@@ -133,7 +133,7 @@ pub trait PileupFunctions {
                            ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable);
 
-    fn cluster_variants(&mut self);
+    fn cluster_variants(&mut self, eps: f64);
 
     fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32);
 }
@@ -1164,7 +1164,7 @@ impl PileupFunctions for PileupStats {
 
     }
 
-    fn cluster_variants(&mut self) {
+    fn cluster_variants(&mut self, eps: f64) {
         match self{
             PileupStats::PileupContigStats {
                 variant_abundances,
@@ -1206,8 +1206,6 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             HashMap::new()));
 
-
-                let eps = 0.025;
                 let min_cluster_size = 2;
 
                 variant_abundances.iter().for_each(
