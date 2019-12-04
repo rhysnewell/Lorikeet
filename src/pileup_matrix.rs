@@ -413,9 +413,20 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
                     let mut number_of_clusters = number_of_clusters.lock().unwrap();
 
-                    // Deal with unclustered points
+
+                    // Deal with unclustered points by finding which cluster they are closest to
                     let noise_info = &variant_info[*noise];
                     let noise_abundance = abundance_float[*noise];
+                    let mut curr_diff = 1.0;
+                    let mut curr_clus = 0;
+                    for (cluster, abundance) in cluster_hierarchies.iter() {
+                        let mean = abundance.iter().sum::<f64>();
+                        let diff = (mean - noise_abundance).abs();
+                        if diff < curr_diff {
+                            curr_diff = diff;
+                            curr_clus = *cluster;
+                        }
+                    }
 
                     let contig_map = cluster_map.entry(*noise_info.3)
                         .or_insert(HashMap::new());
@@ -426,9 +437,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
 
                     let noise_mean = cluster_hierarchies
-                        .entry(*number_of_clusters).or_insert(Vec::new());
+                        .entry(curr_clus).or_insert(Vec::new());
                     noise_mean.push(noise_abundance.to_owned());
-                    *number_of_clusters += 1;
                 });
 
                 let mut variant_distances: Arc<Mutex<Vec<f64>>>
@@ -460,6 +470,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                             row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
                         }
                     }
+
+                    let row_start = *row_info.0 as usize;
+                    let row_end = row_start + row_info.1.len() - 1;
+
                     (row_index+1..variant_info_all.len())
                         .into_par_iter().for_each(|(col_index)|{
                         let mut col_variant_set= &BTreeSet::new();
@@ -480,21 +494,36 @@ impl PileupMatrixFunctions for PileupMatrix{
                             }
                         }
 
-                        let intersection_len = (row_variant_set
-                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                        let col_start = *col_info.0 as usize;
+                        let col_end = col_start + col_info.1.len() - 1;
 
-                        let union_len = (row_variant_set
-                            .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                        let mut distance: f64;
 
-                        // Jaccard Similarity
-                        let jaccard = intersection_len / union_len;
+                        // If the variants share positions, then instantly they can't be in the same
+                        // gentoype so max distance
+                        if row_start <= col_end && col_start <= row_end {
+                            distance = 1.;
+                            let mut number_of_clusters = number_of_clusters.lock().unwrap();
+                            if *number_of_clusters == 1 {
+                                *number_of_clusters += 1;
+                            }
+                        } else {
+                            let intersection_len = (row_variant_set
+                                .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
-                        // Distance between abundance values
-                        let dist_f = (row_info.2 - col_info.2).abs();
+                            let union_len = (row_variant_set
+                                .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
-                        // Distance will be defined as the mean between jaccard dist
-                        // and dist_f
-                        let distance = ((1. - jaccard) + dist_f) / 2.;
+                            // Jaccard Similarity
+                            let jaccard = intersection_len / union_len;
+
+                            // Distance between abundance values
+                            let dist_f = (row_info.2 - col_info.2).abs();
+
+                            // Distance will be defined as the mean between jaccard dist
+                            // and dist_f
+                            distance = ((1. - jaccard) + dist_f) / 2.;
+                        }
 
                         match condensed_index(
                             row_index, col_index, variant_info_all.len()) {
@@ -648,7 +677,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 hap_root.size, cluster_root_id, index);
                             let mut dendro_ids = dendro_ids.lock().unwrap();
                             new_haplotype.add_variants_per_genome(dendrogram, &dendro_ids, clusters);
-                            debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
+                            debug!("{} {:?} {:?}",
+                                   cluster_root_id,
+                                   new_haplotype.node_size,
+                                   new_haplotype.variants.len());
 
                             position_count.extend(&new_haplotype.variant_indices);
                             haplotypes_vec.push(new_haplotype);
