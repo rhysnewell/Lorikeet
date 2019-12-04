@@ -87,6 +87,8 @@ pub fn pileup_variants<R: NamedBamReader,
         },
         _ => {}
     }
+    let mut read_cnt_id = 0;
+    let mut read_to_id = HashMap::new();
     let mut codon_table = CodonTable::setup();
     codon_table.get_codon_table(11);
     // Loop through bam generators in parallel
@@ -111,8 +113,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
-        let mut read_cnt_id = 0;
-        let mut read_to_id = HashMap::new();
+
 
         // for record in records
         let mut skipped_reads = 0;
@@ -356,12 +357,15 @@ pub fn pileup_variants<R: NamedBamReader,
               (num_mapped_reads_total * 100) as f64 /
                   bam_generated.num_detected_primary_alignments() as f64, skipped_reads);
 
+
         if bam_generated.num_detected_primary_alignments() == 0 {
             warn!("No primary alignments were observed for sample {} \
                - perhaps something went wrong in the mapping?",
                   stoit_name);
         }
         bam_generated.finish();
+        pileup_matrix.add_sample(stoit_name);
+
         sample_idx += 1;
     };
     if mode=="summarize" {

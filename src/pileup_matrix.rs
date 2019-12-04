@@ -19,7 +19,7 @@ pub enum PileupMatrix {
         coverages: HashMap<i32, Vec<f32>>,
         average_genotypes: HashMap<i32, Vec<f32>>,
         variances: HashMap<i32, Vec<f32>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, f64>>>,
+        variants: HashMap<i32, HashMap<i32, BTreeMap<String, HashMap<usize, f64>>>>,
         snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i32>>>>,
         indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i32>>>>,
         contigs: HashMap<i32, Vec<u8>>,
@@ -181,12 +181,73 @@ impl PileupMatrixFunctions for PileupMatrix{
                             vec![0.0 as f32; sample_count]
                         );
                         cov[sample_idx] = coverage;
-                        target_names.insert(tid,
-                                            str::from_utf8(&target_name).unwrap().to_string());
-                        target_lengths.insert(tid, target_len);
-                        variants.entry(tid).or_insert(variant_abundances);
-                        indels_map.entry(tid).or_insert(indels);
-                        snps_map.entry(tid).or_insert(nucfrequency);
+                        target_names.entry(tid)
+                            .or_insert(str::from_utf8(&target_name).unwrap().to_string());
+                        target_lengths.entry(tid).or_insert(target_len);
+
+                        let mut contig_variants = variants.entry(tid)
+                            .or_insert(HashMap::new());
+                        // Apppend the sample index to each variant abundance... so many loops >:(
+                        for (pos, abundance_map) in variant_abundances.iter() {
+                            let position_variants = contig_variants.entry(*pos)
+                                .or_insert(BTreeMap::new());
+                            for (variant, abundance) in abundance_map.iter() {
+                                let sample_map = position_variants.entry(variant.clone())
+                                    .or_insert(HashMap::new());
+                                sample_map.insert(sample_idx, *abundance);
+                            }
+                        }
+
+                        let contig_indels = indels_map.entry(tid)
+                            .or_insert(HashMap::new());
+                        if contig_indels.len() == 0 {
+                            *contig_indels = indels;
+                        } else {
+                            for (pos, indel_map) in indels.iter(){
+                                let position_indels = contig_indels.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+                                if position_indels.len() == 0 {
+                                    *position_indels = indel_map.clone();
+                                } else {
+                                    for (indel, read_set) in indel_map.iter() {
+                                        let read_map = position_indels.entry(indel.clone())
+                                            .or_insert(BTreeSet::new());
+                                        if read_map.len() == 0 {
+                                            *read_map = read_set.clone();
+                                        } else {
+                                            let new_read_set = read_map.union(read_set).cloned().collect();
+                                            *read_map = new_read_set;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        let contig_snps = snps_map.entry(tid)
+                            .or_insert(HashMap::new());
+                        if contig_snps.len() == 0 {
+                            *contig_snps = nucfrequency;
+                        } else {
+                            for (pos, snp_map) in nucfrequency.iter(){
+                                let mut position_snps = contig_snps.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+                                if position_snps.len() == 0 {
+                                    *position_snps = snp_map.clone();
+                                } else {
+                                    for (snp, read_set) in snp_map.iter() {
+                                        let read_map = position_snps.entry(*snp)
+                                            .or_insert(BTreeSet::new());
+                                        if read_map.len() == 0 {
+                                            *read_map = read_set.clone();
+                                        } else {
+                                            let new_read_set = read_map.union(read_set).cloned().collect();
+                                            *read_map = new_read_set;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         contigs.entry(tid).or_insert(contig);
                         
                     }
@@ -205,8 +266,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut clusters_mean,
                 ref mut dendrogram,
                 target_names,
+                sample_names,
                 ..
             } => {
+                let sample_count = sample_names.len();
+
                 let mut abundance_euclid =
                     Arc::new(
                         Mutex::new(
@@ -254,8 +318,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let mut variant_info_all = variant_info_all
                                 .lock().unwrap();
 
-                            for (var, abundance) in hash.iter() {
+                            for (var, abundance_map) in hash.iter() {
                                 if !var.contains("R") {
+                                    // Get the mean abundance across samples
+                                    let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
                                     // This is a big hack but saves so much time
                                     // Basically, any variant that has an abundance less than 0.05
                                     // Automatically gets thrown into bin 0
@@ -265,10 +331,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Upsides:
                                     // Massive speed increase, massive decrease in memory usage
                                     // Low abundant variants are all kind of in the same cluster any way
-                                    if abundance >= &eps {
+                                    if abundance >= eps {
                                         variant_info.push((position, var.to_string(), abundance, tid));
-                                        abundance_float.push(*abundance);
-                                        abundance_euclid.push(Euclid([*abundance]));
+                                        abundance_float.push(abundance);
+                                        abundance_euclid.push(Euclid([abundance]));
                                     } else {
                                         let mut cluster_map =
                                             cluster_map.lock().unwrap();
@@ -510,8 +576,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                 contigs,
                 target_names,
                 dendrogram,
+                sample_names,
                 ..
             } => {
+                let sample_count = sample_names.len();
                 // First we need to convert DBSCAN cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
                 // Ordered from root to leaf
@@ -657,9 +725,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     let hash = &haplotype.variants_genome[tid][&(pos as i32)];
                                     for (var, clusters) in hash.iter() {
                                         max_var = var;
-                                        let abundance = &variants[tid][&(pos as i32)][var];
-                                        if abundance > &max_abund {
-                                            max_abund = *abundance;
+                                        let abundance_map = &variants[tid][&(pos as i32)][var];
+                                        let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
+
+                                        if abundance > max_abund {
+                                            max_abund = abundance;
                                         }
                                     }
                                     if max_var.contains("N") {
