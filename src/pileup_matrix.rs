@@ -592,173 +592,172 @@ impl PileupMatrixFunctions for PileupMatrix{
                 // Clusters is set up as HashMap<tid, HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>>
                 // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, (Variant, db_clust, tid)>>
                 // This will allow us to disentangle positions where more than one variant is possible
-                let mut haplotypes_vec: Vec<Haplotype> = vec!();
+                if dendrogram.len() > 0 {
+                    let mut haplotypes_vec: Vec<Haplotype> = vec!();
 
-                debug!("Beginning haplotyping of dendrogram of length: {}", dendrogram.len());
-                let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
-                for (tid, cluster_tid) in clusters.iter() {
-                    cluster_tid.par_iter().for_each(|(position, variant_map)| {
-                        for (variant, cluster) in variant_map.iter() {
-                            let mut dendro_ids = dendro_ids.lock().unwrap();
-                            let clust = dendro_ids.entry(cluster.1)
-                                .or_insert(BTreeMap::new());
+                    debug!("Beginning haplotyping of dendrogram of length: {}", dendrogram.len());
+                    let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
+                    for (tid, cluster_tid) in clusters.iter() {
+                        cluster_tid.par_iter().for_each(|(position, variant_map)| {
+                            for (variant, cluster) in variant_map.iter() {
+                                let mut dendro_ids = dendro_ids.lock().unwrap();
+                                let clust = dendro_ids.entry(cluster.1)
+                                    .or_insert(BTreeMap::new());
 
-                            clust.entry(*position)
-                                .or_insert((variant.to_string(), cluster.0, *tid));
-                        }
-                    });
-                }
-
-                // Numer of minimum clusters as inferred from DBSCAN
-                let k = clusters_mean.keys().len();
-
-                // Beginning roots (indices) of each cluster
-                // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
-                // range of indices [N - 1 - 2k; N - 1 - k)
-                let n_1 = dendrogram.len();
-                // get the first k root labels
-                let mut cluster_root_labels = vec!();
-                let mut step_i = &dendrogram[n_1 - 1];
-                while cluster_root_labels.len() < k {
-                    if cluster_root_labels.len() == 0 {
-                        cluster_root_labels.push(step_i.cluster1);
-                        cluster_root_labels.push(step_i.cluster2);
-                    } else {
-                        let mut cluster_to_check = cluster_root_labels
-                            .iter().max().unwrap().clone();
-
-                        step_i = &dendrogram[cluster_to_check - n_1 - 1];
-                        cluster_root_labels.push(step_i.cluster1);
-                        cluster_root_labels.push(step_i.cluster2);
-
-                        let cluster_to_check_i = cluster_root_labels.iter()
-                            .position(|x| x == &cluster_to_check).unwrap();
-                        cluster_root_labels.remove(cluster_to_check_i);
-                    }
-                }
-//                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
-                let mut position_count: HashSet<usize> = HashSet::new();
-
-                for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
-                    if cluster_root > n_1 {
-                        let cluster_root_id = cluster_root - n_1 - 1;
-                        let hap_root = &dendrogram[cluster_root_id];
-                        let mut new_haplotype = Haplotype::start(
-                            hap_root.size, cluster_root_id, index);
-                        let mut dendro_ids = dendro_ids.lock().unwrap();
-                        new_haplotype.add_variants_per_genome(dendrogram, &dendro_ids, clusters);
-                        debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
-
-                        position_count.extend(&new_haplotype.variant_indices);
-                        haplotypes_vec.push(new_haplotype);
-                    } else {
-                        let mut dendro_ids = dendro_ids.lock().unwrap();
-                        let variant_pos = dendro_ids.get(&cluster_root).expect("Label not found");
-                        let mut variant_map = HashMap::new();
-                        for (pos, variant) in variant_pos.iter() {
-
-                            let captured_tid = variant_map.entry(variant.2)
-                                .or_insert(HashMap::new());
-
-                            let captured_var = captured_tid.entry(*pos)
-                                .or_insert(BTreeMap::new());
-
-                            captured_var.entry(variant.0.clone())
-                                .or_insert((variant.1, cluster_root));
-
-                            let clusters_tid = clusters.entry(variant.2)
-                                .or_insert(HashMap::new());
-
-                            let cluster_pos = clusters_tid.entry(*pos)
-                                .or_insert(BTreeMap::new());
-
-                            cluster_pos.insert(variant.0.clone(), (variant.1, cluster_root));
-                        }
-
-                        let mut new_haplotype = Haplotype {
-                            root_cluster_id: cluster_root,
-                            variant_indices: [cluster_root].into_iter().cloned().collect(),
-                            variants: HashMap::new(),
-                            variants_genome: variant_map,
-                            node_size: 1,
-                            haplotype_index: index,
-                        };
-                        position_count.extend(&new_haplotype.variant_indices);
-                        haplotypes_vec.push(new_haplotype);
-                    }
-                }
-                debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
-
-                for (hap_index, haplotype) in haplotypes_vec.iter().enumerate() {
-
-                    let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), hap_index);
-
-                    let file_path = Path::new(&file_name);
-
-                    // Open haplotype file or create one
-                    let mut file_open = File::create(file_path)
-                        .expect("No Read or Write Permission in current directory");
-
-                    // Generate the consensus genome by checking each variant
-                    // Variant has to be in more than 0.5 of population
-                    for (tid, original_contig) in contigs.iter() {
-
-                        let mut contig = String::new();
-
-                        let mut skip_n = 0;
-                        let mut skip_cnt = 0;
-                        let mut char_cnt = 0;
-                        let mut max_abund = 0.0;
-
-                        for (pos, base) in original_contig.iter().enumerate() {
-                            if skip_cnt < skip_n {
-                                skip_cnt += 1;
-                            } else {
-                                let mut max_var = "";
-
-                                skip_n = 0;
-                                skip_cnt = 0;
-                                if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
-                                    let hash = &haplotype.variants_genome[tid][&(pos as i32)];
-                                    for (var, clusters) in hash.iter() {
-                                        max_var = var;
-                                        let abundance_map = &variants[tid][&(pos as i32)][var];
-                                        let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
-
-                                        if abundance > max_abund {
-                                            max_abund = abundance;
-                                        }
-                                    }
-                                    if max_var.contains("N") {
-                                        // Skip the next n bases but rescue the reference prefix
-                                        skip_n = max_var.len() - 1;
-                                        skip_cnt = 0;
-                                        let first_byte = max_var.as_bytes()[0];
-                                        contig = contig + str::from_utf8(
-                                            &[first_byte]).unwrap()
-                                    } else if max_var.len() > 1 {
-                                        // Insertions have a reference prefix that needs to be removed
-                                        let removed_first_base = str::from_utf8(
-                                            &max_var.as_bytes()[1..]).unwrap();
-                                        contig = contig + removed_first_base;
-                                    } else {
-                                        contig = contig + max_var;
-                                    }
-                                } else {
-                                    contig = contig + str::from_utf8(&[*base]).unwrap();
-                                }
+                                clust.entry(*position)
+                                    .or_insert((variant.to_string(), cluster.0, *tid));
                             }
-                        };
-                        writeln!(file_open, ">{}_strain_{}_{}",
-                                 target_names[tid],
-                                 hap_index,
-                                 max_abund);
+                        });
+                    }
+
+                    // Numer of minimum clusters as inferred from DBSCAN
+                    let k = clusters_mean.keys().len();
+
+                    // Beginning roots (indices) of each cluster
+                    // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
+                    // range of indices [N - 1 - 2k; N - 1 - k)
+                    let n_1 = dendrogram.len();
+                    // get the first k root labels
+                    let mut cluster_root_labels = vec!();
+                    let mut step_i = &dendrogram[n_1 - 1];
+                    while cluster_root_labels.len() < k {
+                        if cluster_root_labels.len() == 0 {
+                            cluster_root_labels.push(step_i.cluster1);
+                            cluster_root_labels.push(step_i.cluster2);
+                        } else {
+                            let mut cluster_to_check = cluster_root_labels
+                                .iter().max().unwrap().clone();
+
+                            step_i = &dendrogram[cluster_to_check - n_1 - 1];
+                            cluster_root_labels.push(step_i.cluster1);
+                            cluster_root_labels.push(step_i.cluster2);
+
+                            let cluster_to_check_i = cluster_root_labels.iter()
+                                .position(|x| x == &cluster_to_check).unwrap();
+                            cluster_root_labels.remove(cluster_to_check_i);
+                        }
+                    }
+//                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
+                    let mut position_count: HashSet<usize> = HashSet::new();
+
+                    for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
+                        if cluster_root > n_1 {
+                            let cluster_root_id = cluster_root - n_1 - 1;
+                            let hap_root = &dendrogram[cluster_root_id];
+                            let mut new_haplotype = Haplotype::start(
+                                hap_root.size, cluster_root_id, index);
+                            let mut dendro_ids = dendro_ids.lock().unwrap();
+                            new_haplotype.add_variants_per_genome(dendrogram, &dendro_ids, clusters);
+                            debug!("{} {:?} {:?}", cluster_root_id, new_haplotype.node_size, new_haplotype.variants.len());
+
+                            position_count.extend(&new_haplotype.variant_indices);
+                            haplotypes_vec.push(new_haplotype);
+                        } else {
+                            let mut dendro_ids = dendro_ids.lock().unwrap();
+                            let variant_pos = dendro_ids.get(&cluster_root).expect("Label not found");
+                            let mut variant_map = HashMap::new();
+                            for (pos, variant) in variant_pos.iter() {
+                                let captured_tid = variant_map.entry(variant.2)
+                                    .or_insert(HashMap::new());
+
+                                let captured_var = captured_tid.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+
+                                captured_var.entry(variant.0.clone())
+                                    .or_insert((variant.1, cluster_root));
+
+                                let clusters_tid = clusters.entry(variant.2)
+                                    .or_insert(HashMap::new());
+
+                                let cluster_pos = clusters_tid.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+
+                                cluster_pos.insert(variant.0.clone(), (variant.1, cluster_root));
+                            }
+
+                            let mut new_haplotype = Haplotype {
+                                root_cluster_id: cluster_root,
+                                variant_indices: [cluster_root].into_iter().cloned().collect(),
+                                variants: HashMap::new(),
+                                variants_genome: variant_map,
+                                node_size: 1,
+                                haplotype_index: index,
+                            };
+                            position_count.extend(&new_haplotype.variant_indices);
+                            haplotypes_vec.push(new_haplotype);
+                        }
+                    }
+                    debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
+
+                    for (hap_index, haplotype) in haplotypes_vec.iter().enumerate() {
+                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), hap_index);
+
+                        let file_path = Path::new(&file_name);
+
+                        // Open haplotype file or create one
+                        let mut file_open = File::create(file_path)
+                            .expect("No Read or Write Permission in current directory");
+
+                        // Generate the consensus genome by checking each variant
+                        // Variant has to be in more than 0.5 of population
+                        for (tid, original_contig) in contigs.iter() {
+                            let mut contig = String::new();
+
+                            let mut skip_n = 0;
+                            let mut skip_cnt = 0;
+                            let mut char_cnt = 0;
+                            let mut max_abund = 0.0;
+
+                            for (pos, base) in original_contig.iter().enumerate() {
+                                if skip_cnt < skip_n {
+                                    skip_cnt += 1;
+                                } else {
+                                    let mut max_var = "";
+
+                                    skip_n = 0;
+                                    skip_cnt = 0;
+                                    if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
+                                        let hash = &haplotype.variants_genome[tid][&(pos as i32)];
+                                        for (var, clusters) in hash.iter() {
+                                            max_var = var;
+                                            let abundance_map = &variants[tid][&(pos as i32)][var];
+                                            let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
+
+                                            if abundance > max_abund {
+                                                max_abund = abundance;
+                                            }
+                                        }
+                                        if max_var.contains("N") {
+                                            // Skip the next n bases but rescue the reference prefix
+                                            skip_n = max_var.len() - 1;
+                                            skip_cnt = 0;
+                                            let first_byte = max_var.as_bytes()[0];
+                                            contig = contig + str::from_utf8(
+                                                &[first_byte]).unwrap()
+                                        } else if max_var.len() > 1 {
+                                            // Insertions have a reference prefix that needs to be removed
+                                            let removed_first_base = str::from_utf8(
+                                                &max_var.as_bytes()[1..]).unwrap();
+                                            contig = contig + removed_first_base;
+                                        } else {
+                                            contig = contig + max_var;
+                                        }
+                                    } else {
+                                        contig = contig + str::from_utf8(&[*base]).unwrap();
+                                    }
+                                }
+                            };
+                            writeln!(file_open, ">{}_strain_{}_{}",
+                                     target_names[tid],
+                                     hap_index,
+                                     max_abund);
 
 
-                        for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                            file_open.write(line).unwrap();
-                            file_open.write(b"\n").unwrap();
-                        };
+                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                                file_open.write(line).unwrap();
+                                file_open.write(b"\n").unwrap();
+                            };
+                        }
                     }
                 }
             }
