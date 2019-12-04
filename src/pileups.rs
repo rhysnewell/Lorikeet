@@ -374,7 +374,7 @@ pub fn pileup_variants<R: NamedBamReader,
         sample_idx += 1;
     };
     if mode=="summarize" {
-        info!("Writing out contig statistics");
+        info!("Clustering Variants with epsilon {}", epsilon);
         pileup_matrix.dbscan_cluster(epsilon);
         pileup_matrix.generate_genotypes(output_prefix);
     }

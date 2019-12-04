@@ -707,6 +707,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let mut skip_cnt = 0;
                             let mut char_cnt = 0;
                             let mut max_abund = 0.0;
+                            let mut variations = 0;
 
                             for (pos, base) in original_contig.iter().enumerate() {
                                 if skip_cnt < skip_n {
@@ -716,41 +717,48 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                     skip_n = 0;
                                     skip_cnt = 0;
-                                    if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
-                                        let hash = &haplotype.variants_genome[tid][&(pos as i32)];
-                                        for (var, clusters) in hash.iter() {
-                                            max_var = var;
-                                            let abundance_map = &variants[tid][&(pos as i32)][var];
-                                            let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
+                                    if haplotype.variants_genome.contains_key(&tid) {
+                                        if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
+                                            let hash = &haplotype.variants_genome[tid][&(pos as i32)];
+                                            for (var, clusters) in hash.iter() {
+                                                max_var = var;
+                                                let abundance_map = &variants[tid][&(pos as i32)][var];
+                                                let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
 
-                                            if abundance > max_abund {
-                                                max_abund = abundance;
+                                                if abundance > max_abund {
+                                                    max_abund = abundance;
+                                                }
+                                                variations += 1;
                                             }
-                                        }
-                                        if max_var.contains("N") {
-                                            // Skip the next n bases but rescue the reference prefix
-                                            skip_n = max_var.len() - 1;
-                                            skip_cnt = 0;
-                                            let first_byte = max_var.as_bytes()[0];
-                                            contig = contig + str::from_utf8(
-                                                &[first_byte]).unwrap()
-                                        } else if max_var.len() > 1 {
-                                            // Insertions have a reference prefix that needs to be removed
-                                            let removed_first_base = str::from_utf8(
-                                                &max_var.as_bytes()[1..]).unwrap();
-                                            contig = contig + removed_first_base;
+                                            if max_var.contains("N") {
+                                                // Skip the next n bases but rescue the reference prefix
+                                                skip_n = max_var.len() - 1;
+                                                skip_cnt = 0;
+                                                let first_byte = max_var.as_bytes()[0];
+                                                contig = contig + str::from_utf8(
+                                                    &[first_byte]).unwrap()
+                                            } else if max_var.len() > 1 {
+                                                // Insertions have a reference prefix that needs to be removed
+                                                let removed_first_base = str::from_utf8(
+                                                    &max_var.as_bytes()[1..]).unwrap();
+                                                contig = contig + removed_first_base;
+                                            } else {
+                                                contig = contig + max_var;
+                                            }
                                         } else {
-                                            contig = contig + max_var;
+                                            contig = contig + str::from_utf8(&[*base]).unwrap();
                                         }
                                     } else {
-                                        contig = contig + str::from_utf8(&[*base]).unwrap();
+                                        contig = str::from_utf8(&original_contig)
+                                            .expect("Can't convert to str").to_string();
                                     }
                                 }
                             };
-                            writeln!(file_open, ">{}_strain_{}_{}",
+                            writeln!(file_open, ">{}_strain_{}\t#max_variant_abundance_{}\t#variants_{}",
                                      target_names[tid],
                                      hap_index,
-                                     max_abund);
+                                     max_abund,
+                                     variations);
 
 
                             for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
