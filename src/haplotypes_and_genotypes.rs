@@ -205,7 +205,6 @@ impl Haplotype {
                 debug!("label {} step {} new labels {} {}",
                        cluster_label, step_index, cur_step.cluster1, cur_step.cluster2);
 
-
                 // Check to see if each cluster id corresponds to a variant index
                 // If it does, then extract the variant
                 // else, add cluster id to search list
