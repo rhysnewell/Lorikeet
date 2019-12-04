@@ -695,9 +695,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let file_path = Path::new(&file_name);
 
-
                     // Open haplotype file or create one
-
                     let mut file_open = File::create(file_path)
                         .expect("No Read or Write Permission in current directory");
 

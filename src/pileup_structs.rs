@@ -1494,7 +1494,10 @@ impl PileupFunctions for PileupStats {
                         if indel_map.contains_key(var) {
                             // How does this print N for insertions?
                             if var.to_owned().contains("N"){
-                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
+                                print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                                       sample_idx,
+                                       tid,
+                                       position,
                                        var,
                                        str::from_utf8(
                                            &ref_sequence[position..position
@@ -1502,7 +1505,9 @@ impl PileupFunctions for PileupStats {
                                        abundance, d);
 
                             } else {
-                                print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
+                                print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                                       sample_idx,
+                                       tid, position,
                                        var,
                                        str::from_utf8(
                                            &[ref_sequence[position]]).unwrap(),
@@ -1521,7 +1526,9 @@ impl PileupFunctions for PileupStats {
                             println!("{}\t{}", cluster_val.0, cluster_val.1);
 
                         } else if var.len() == 1 && var != &"R".to_string(){
-                            print!("{}\t{}\t{}\t{}\t{:.3}\t{}\t", tid, position,
+                            print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                                   sample_idx,
+                                   tid, position,
                                    var,
                                    ref_sequence[position] as char,
                                    abundance, d);

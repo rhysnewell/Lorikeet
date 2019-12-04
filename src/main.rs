@@ -1632,7 +1632,7 @@ fn run_pileup<'a,
 
 
             info!("Beginning polymorph with {} bam readers and {} threads", bam_readers.len(), threads);
-            println!("tid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tvaf_cluster\tgenotype");
+            println!("sample\ttid\tpos\tvariant\treference\tabundance\tdepth\tgenotypes\tvaf_cluster\tgenotype");
             lorikeet::pileups::pileup_variants(
                 m,
                 bam_readers,
