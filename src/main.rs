@@ -2152,6 +2152,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
+                .arg(Arg::with_name("epsilon")
+                    .long("epsilon")
+                    .short("e")
+                    .default_value("0.05"))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
@@ -2502,6 +2506,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
+                .arg(Arg::with_name("epsilon")
+                    .long("epsilon")
+                    .short("e")
+                    .default_value("0.05"))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
