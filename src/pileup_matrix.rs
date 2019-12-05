@@ -70,7 +70,7 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
-    fn dbscan_cluster(&mut self, eps: f64);
+    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
 
     fn generate_genotypes(&mut self, output_prefix: &str);
 
@@ -256,7 +256,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn dbscan_cluster(&mut self, eps: f64) {
+    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
@@ -301,8 +301,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                         Mutex::new(
                             HashMap::new()));
 
+                let mut noise_set = Arc::new(
+                    Mutex::new(
+                        HashSet::new()));
 
-                let min_cluster_size = 2;
 
                 for (tid, variant_abundances) in variants.iter() {
                     variant_abundances.iter().for_each(
@@ -335,21 +337,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         abundance_float.push(abundance);
                                         abundance_euclid.push(Euclid([abundance]));
                                     } else {
-                                        let mut cluster_map =
-                                            cluster_map.lock().unwrap();
-                                        let mut cluster_hierarchies =
-                                            cluster_hierarchies.lock().unwrap();
-
-                                        let contig_map = cluster_map.entry(*tid)
-                                            .or_insert(HashMap::new());
-
-                                        let position = contig_map
-                                            .entry(*position).or_insert(BTreeMap::new());
-                                        position.insert(var.to_string(), 0);
-
-                                        let cluster_mean = cluster_hierarchies
-                                            .entry(0).or_insert(Vec::new());
-                                        cluster_mean.push(abundance.to_owned());
+                                        let mut noise_set = noise_set.lock().unwrap();
+                                        noise_set.insert(variant_info_all.len());
+//
                                     }
                                     variant_info_all.push((position, var.to_string(), abundance, tid));
                                 }
@@ -379,7 +369,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let mut number_of_clusters =
                     Arc::new(
                         Mutex::new(
-                            db_clusters.len() as i32 + 1));
+                            db_clusters.len() as i32));
 
                 debug!("Sorting DBSCAN Clusters");
                 // All cluster ids are + 1, because we have the variants with abundances < eps
@@ -399,10 +389,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                         let position = contig
                             .entry(*info.0).or_insert(BTreeMap::new());
-                        position.insert(info.1.to_string(), cluster as i32 + 1);
+                        position.insert(info.1.to_string(), cluster as i32);
 
                         let cluster_mean = cluster_hierarchies
-                            .entry(cluster as i32 + 1).or_insert(Vec::new());
+                            .entry(cluster as i32).or_insert(Vec::new());
                         cluster_mean.push(abundance.to_owned());
                     });
                 });
@@ -416,7 +406,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     // Deal with unclustered points by finding which cluster they are closest to
                     let noise_info = &variant_info[*noise];
-                    let noise_abundance = abundance_float[*noise];
+                    let noise_abundance = noise_info.2;
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
@@ -440,6 +430,43 @@ impl PileupMatrixFunctions for PileupMatrix{
                         .entry(curr_clus).or_insert(Vec::new());
                     noise_mean.push(noise_abundance.to_owned());
                 });
+
+                let noise_set = noise_set.lock().unwrap();
+
+                noise_set.par_iter().for_each(|noise|{
+
+                    let mut cluster_map = cluster_map.lock().unwrap();
+                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                    let mut number_of_clusters = number_of_clusters.lock().unwrap();
+
+
+                    // Deal with unclustered points by finding which cluster they are closest to
+                    let noise_info = &variant_info_all[*noise];
+                    let noise_abundance = noise_info.2;
+                    let mut curr_diff = 1.0;
+                    let mut curr_clus = 0;
+                    for (cluster, abundance) in cluster_hierarchies.iter() {
+                        let mean = abundance.iter().sum::<f64>();
+                        let diff = (mean - noise_abundance).abs();
+                        if diff < curr_diff {
+                            curr_diff = diff;
+                            curr_clus = *cluster;
+                        }
+                    }
+
+                    let contig_map = cluster_map.entry(*noise_info.3)
+                        .or_insert(HashMap::new());
+
+                    let noise_position = contig_map.entry(*noise_info.0)
+                        .or_insert(BTreeMap::new());
+
+                    noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+
+                    let noise_mean = cluster_hierarchies
+                        .entry(curr_clus).or_insert(Vec::new());
+                    noise_mean.push(noise_abundance.to_owned());
+                });
+
 
                 let mut variant_distances: Arc<Mutex<Vec<f64>>>
                     = Arc::new(
