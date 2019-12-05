@@ -315,7 +315,7 @@ impl PileupFunctions for PileupStats {
                 let variant_count = Arc::new(Mutex::new(0));
                 let indels = Arc::new(Mutex::new(indels));
                 let nucfrequency = Arc::new(Mutex::new(nucfrequency));
-                let min_variant_fraction = min_variant_depth as f64 / 100.;
+//                let min_variant_fraction = min_variant_depth as f64 / 100.;
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.par_iter_mut().enumerate().for_each(|(i, d)| {
@@ -344,7 +344,7 @@ impl PileupFunctions for PileupStats {
                                 && *d as f32 <= *coverage * (1.0 + coverage_fold))
                                 || (coverage_fold == 0.0) {
                                 if (count >= min_variant_depth)
-                                    && (count as f64 / *d >= min_variant_fraction)
+//                                    && (count as f64 / *d >= min_variant_fraction)
                                     && ((count as f64 / *d) > (regression.1 + regression.2)) {
                                     rel_abundance.insert(indel.to_owned(), count as f64 / *d);
                                     for read in read_ids {
@@ -380,7 +380,9 @@ impl PileupFunctions for PileupStats {
                             for (base, read_ids) in nuc_map.iter() {
                                 let count = read_ids.len();
 
-                                if (count >= min_variant_depth) & (count as f64 / *d >= min_variant_fraction) & ((count as f64 / *d) > (regression.1 + regression.2)) {
+                                if (count >= min_variant_depth)
+//                                    && (count as f64 / *d >= min_variant_fraction)
+                                    && ((count as f64 / *d) > (regression.1 + regression.2)) {
                                     rel_abundance.insert(base.to_string(), count as f64 / *d);
 
                                     for read in read_ids {
