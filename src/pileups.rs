@@ -49,6 +49,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
     let mut gff_map = HashMap::new();
     let mut epsilon = 0.05;
+    let mut min_cluster_size= 10;
 
     match mode {
         "evolve" => {
@@ -87,6 +88,7 @@ pub fn pileup_variants<R: NamedBamReader,
             }
         },
         _ => {
+            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
             epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
         }
     }
@@ -374,8 +376,8 @@ pub fn pileup_variants<R: NamedBamReader,
         sample_idx += 1;
     };
     if mode=="summarize" {
-        info!("Clustering Variants with epsilon {}", epsilon);
-        pileup_matrix.dbscan_cluster(epsilon);
+        info!("Clustering Variants with epsilon {} and minimum cluster sizes of {}", epsilon, min_cluster_size);
+        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
         pileup_matrix.generate_genotypes(output_prefix);
     }
 }
