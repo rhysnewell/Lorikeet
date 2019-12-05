@@ -649,22 +649,26 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // get the first k root labels
                     let mut cluster_root_labels = vec!();
                     let mut step_i = &dendrogram[n_1 - 1];
-                    while cluster_root_labels.len() < k {
-                        if cluster_root_labels.len() == 0 {
-                            cluster_root_labels.push(step_i.cluster1);
-                            cluster_root_labels.push(step_i.cluster2);
-                        } else {
-                            let mut cluster_to_check = cluster_root_labels
-                                .iter().max().unwrap().clone();
+                    if k != 1 {
+                        while cluster_root_labels.len() < k {
+                            if cluster_root_labels.len() == 0 {
+                                cluster_root_labels.push(step_i.cluster1);
+                                cluster_root_labels.push(step_i.cluster2);
+                            } else {
+                                let mut cluster_to_check = cluster_root_labels
+                                    .iter().max().unwrap().clone();
 
-                            step_i = &dendrogram[cluster_to_check - n_1 - 1];
-                            cluster_root_labels.push(step_i.cluster1);
-                            cluster_root_labels.push(step_i.cluster2);
+                                step_i = &dendrogram[cluster_to_check - n_1 - 1];
+                                cluster_root_labels.push(step_i.cluster1);
+                                cluster_root_labels.push(step_i.cluster2);
 
-                            let cluster_to_check_i = cluster_root_labels.iter()
-                                .position(|x| x == &cluster_to_check).unwrap();
-                            cluster_root_labels.remove(cluster_to_check_i);
-                        }
+                                let cluster_to_check_i = cluster_root_labels.iter()
+                                    .position(|x| x == &cluster_to_check).unwrap();
+                                cluster_root_labels.remove(cluster_to_check_i);
+                            }
+                        };
+                    } else {
+                        cluster_root_labels.push(n_1+n_1);
                     }
 //                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
                     let mut position_count: HashSet<usize> = HashSet::new();
