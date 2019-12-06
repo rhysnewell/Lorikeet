@@ -1209,7 +1209,11 @@ impl PileupFunctions for PileupStats {
                         Mutex::new(
                             HashMap::new()));
 
-                let min_cluster_size = 2;
+                let mut noise_set = Arc::new(
+                    Mutex::new(
+                        HashSet::new()));
+
+                let min_cluster_size = 20;
 
                 variant_abundances.iter().for_each(
                     |(position, hash)|{
@@ -1239,18 +1243,8 @@ impl PileupFunctions for PileupStats {
                                     abundance_float.push(*abundance);
                                     abundance_euclid.push(Euclid([*abundance]));
                                 } else {
-                                    let mut cluster_map =
-                                        cluster_map.lock().unwrap();
-                                    let mut cluster_hierarchies =
-                                        cluster_hierarchies.lock().unwrap();
-
-                                    let position = cluster_map
-                                        .entry(*position).or_insert(BTreeMap::new());
-                                    position.insert(var.to_string(), 0);
-
-                                    let cluster_mean = cluster_hierarchies
-                                        .entry(0).or_insert(Vec::new());
-                                    cluster_mean.push(abundance.to_owned());
+                                    let mut noise_set = noise_set.lock().unwrap();
+                                    noise_set.insert(variant_info_all.len());
                                 }
                                 variant_info_all.push((position, var.to_string(), abundance));
                             }
@@ -1279,7 +1273,7 @@ impl PileupFunctions for PileupStats {
                 let mut number_of_clusters =
                     Arc::new(
                         Mutex::new(
-                            db_clusters.len() as i32 + 1));
+                            db_clusters.len() as i32));
 
                 debug!("Sorting DBSCAN Clusters");
                 // All cluster ids are + 1, because we have the variants with abundances < eps
@@ -1296,10 +1290,10 @@ impl PileupFunctions for PileupStats {
 
                         let position = cluster_map
                             .entry(*info.0).or_insert(BTreeMap::new());
-                        position.insert(info.1.to_string(), cluster as i32 + 1);
+                        position.insert(info.1.to_string(), cluster as i32);
 
                         let cluster_mean = cluster_hierarchies
-                            .entry(cluster as i32 + 1).or_insert(Vec::new());
+                            .entry(cluster as i32).or_insert(Vec::new());
                         cluster_mean.push(abundance.to_owned());
                     });
                 });
@@ -1316,7 +1310,7 @@ impl PileupFunctions for PileupStats {
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>();
+                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -1326,7 +1320,38 @@ impl PileupFunctions for PileupStats {
 
                     let noise_position = cluster_map.entry(*noise_info.0)
                         .or_insert(BTreeMap::new());
-                    noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+                    noise_position.insert(noise_info.1.to_string(), curr_clus);
+
+                    let noise_mean = cluster_hierarchies
+                        .entry(curr_clus).or_insert(Vec::new());
+                    noise_mean.push(noise_abundance.to_owned());
+                });
+
+                let noise_set = noise_set.lock().unwrap();
+
+                noise_set.par_iter().for_each(|noise|{
+
+                    let mut cluster_map = cluster_map.lock().unwrap();
+                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                    let mut number_of_clusters = number_of_clusters.lock().unwrap();
+
+                    // Deal with unclustered points by finding which cluster they are closest to
+                    let noise_info = &variant_info[*noise];
+                    let noise_abundance = abundance_float[*noise];
+                    let mut curr_diff = 1.0;
+                    let mut curr_clus = 0;
+                    for (cluster, abundance) in cluster_hierarchies.iter() {
+                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                        let diff = (mean - noise_abundance).abs();
+                        if diff < curr_diff {
+                            curr_diff = diff;
+                            curr_clus = *cluster;
+                        }
+                    }
+
+                    let noise_position = cluster_map.entry(*noise_info.0)
+                        .or_insert(BTreeMap::new());
+                    noise_position.insert(noise_info.1.to_string(), curr_clus);
 
                     let noise_mean = cluster_hierarchies
                         .entry(curr_clus).or_insert(Vec::new());
@@ -1504,8 +1529,8 @@ impl PileupFunctions for PileupStats {
                     };
 
                     let cluster_map = match clusters.get(&(position as i32)) {
-                        Some(map) => map,
-                        None => continue,
+                        Some(map) => map.clone(),
+                        None => BTreeMap::new(),
                     };
 
                     for (var, abundance) in hash.iter() {
