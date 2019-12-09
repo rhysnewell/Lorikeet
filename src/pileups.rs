@@ -92,7 +92,7 @@ pub fn pileup_variants<R: NamedBamReader,
             epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
         }
     }
-    let mut read_cnt_id = 0;
+    let mut read_cnt_id: i64 = 0;
     let mut read_to_id = HashMap::new();
     let mut codon_table = CodonTable::setup();
     codon_table.get_codon_table(11);
@@ -113,7 +113,7 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
-        let mut nuc_freq: Arc<Mutex<HashMap<i32, BTreeMap<char, BTreeSet<i32>>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let mut nuc_freq: Arc<Mutex<HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>> = Arc::new(Mutex::new(HashMap::new()));
         let mut indels = HashMap::new();
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
@@ -385,8 +385,8 @@ pub fn pileup_variants<R: NamedBamReader,
 fn process_previous_contigs_var(
     mode: &str,
     last_tid: i32,
-    nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
-    indels: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
+    nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
+    indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
     ups_and_downs: Vec<i32>,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
