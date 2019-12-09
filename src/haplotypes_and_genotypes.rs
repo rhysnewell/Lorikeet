@@ -265,7 +265,7 @@ impl Haplotype {
 
 #[derive(Debug, Clone)]
 pub struct Genotype {
-    pub read_ids: HashSet<i32>,
+    pub read_ids: HashSet<i64>,
     pub start_var_pos: usize,
     pub ordered_variants: HashMap<i32, String>,
     pub frequencies: Vec<f64>,
@@ -281,7 +281,7 @@ impl Genotype {
         }
     }
 
-    pub fn new(&mut self, read_id: i32, position_map: &BTreeMap<i32, String>,
+    pub fn new(&mut self, read_id: i64, position_map: &BTreeMap<i32, String>,
            variant_abundances: &HashMap<i32, BTreeMap<String, f64>>) {
         self.read_ids = HashSet::new();
         self.frequencies = Vec::new();

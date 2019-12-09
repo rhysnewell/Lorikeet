@@ -23,12 +23,12 @@ use std::fs::{File, OpenOptions};
 
 pub enum PileupStats {
     PileupContigStats {
-        nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
-        variants_in_reads: HashMap<i32, BTreeMap<i32, String>>,
+        nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
+        variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
         variant_abundances: HashMap<i32, BTreeMap<String, f64>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
-        indels: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
+        indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
         genotypes_per_position: HashMap<usize, usize>,
         mean_genotypes: f32,
         tid: i32,
@@ -99,8 +99,8 @@ pub trait PileupFunctions {
     fn len(&mut self) -> usize;
 
     fn add_contig(&mut self,
-                  nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
-                  indels_positions: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
+                  nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
+                  indels_positions: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -189,8 +189,8 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn add_contig(&mut self, nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>>,
-                  indel_positions: HashMap<i32, BTreeMap<String, BTreeSet<i32>>>,
+    fn add_contig(&mut self, nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
+                  indel_positions: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -841,7 +841,7 @@ impl PileupFunctions for PileupStats {
                                     };
                             }
                             let mut left_most_variants: Vec<i32> = Vec::new();
-                            let read_vec = read_ids.into_iter().collect::<Vec<i32>>();
+                            let read_vec = read_ids.into_iter().collect::<Vec<i64>>();
 
 
                             for read_id in read_vec.iter() {
