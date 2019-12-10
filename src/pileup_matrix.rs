@@ -372,8 +372,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             db_clusters.len() as i32));
 
                 debug!("Sorting DBSCAN Clusters");
-                // All cluster ids are + 1, because we have the variants with abundances < eps
-                // outside of the clustering algorithm already as cluster id 0
+
                 db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)|{
                     // Deal with clustered points
                     index_vec.par_iter().for_each(|index|{
