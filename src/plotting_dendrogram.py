@@ -288,7 +288,10 @@ for (pos, var_map) in test_dict.items():
 
 
 plt.figure(figsize=[12,10])
-# hierarchy.dendrogram(test, leaf_label_func=lambda id: test_clust[id], color_threshold=0.4*max(test[:,2]))
-hierarchy.dendrogram(test, color_threshold=0.29*max(test[:,2]))
 
-plt.show()
+# hierarchy.dendrogram(test, leaf_label_func=lambda id: test_clust[id], color_threshold=0.4*max(test[:,2]))
+hierarchy.dendrogram(test, color_threshold=0.7*max(test[:,2]))
+
+plt.axis('off')
+plt.gca().set_position([0, 0, 1, 1])
+plt.savefig("test_dendro.svg")

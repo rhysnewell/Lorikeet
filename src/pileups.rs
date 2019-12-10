@@ -446,11 +446,11 @@ fn process_previous_contigs_var(
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 if pileup_struct.len() > 0 {
-                    pileup_struct.cluster_variants(epsilon);
+//                    pileup_struct.cluster_variants(epsilon);
 
 
                     // prints results of variants calling
-                    pileup_struct.generate_variant_contig(&ref_sequence, output_prefix);
+//                    pileup_struct.generate_variant_contig(&ref_sequence, output_prefix);
 
                     pileup_struct.print_variants(&ref_sequence, sample_idx);
                 }

@@ -22,6 +22,7 @@ use bam_generator::complete_processes;
 use genome_exclusion::*;
 
 use std::slice;
+use std::convert::TryFrom;
 use std::ffi;
 
 // Like Header#names() except just return one name
@@ -220,7 +221,7 @@ impl<'a, T> ReadSortedShardedBamReader<'a, T>
                 }
             };
 
-            let winning_index: usize;
+            let mut winning_index: usize = 0;
             if winning_indices.len() > 1 {
                 winning_index = *winning_indices
                     .choose(&mut thread_rng()).unwrap();
