@@ -128,7 +128,7 @@ impl<'a, T> ReadSortedShardedBamReader<'a, T>
     fn clone_record_into(from: &Record, to: &mut Record) {
         //Clone record using set() also add cigar and push aux tags NM
         to.set(from.qname(),
-               Some(&CigarString::from_str(from.cigar().to_string().as_str()).unwrap()),
+               Some(&CigarString::try_from(from.cigar().to_string().as_str()).unwrap()),
                from.seq().as_bytes().as_slice(),
                from.qual());
         to.set_pos(from.pos());
