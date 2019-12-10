@@ -409,7 +409,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>();
+                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -423,7 +423,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let noise_position = contig_map.entry(*noise_info.0)
                         .or_insert(BTreeMap::new());
 
-                    noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+                    noise_position.insert(noise_info.1.to_string(), curr_clus);
 
                     let noise_mean = cluster_hierarchies
                         .entry(curr_clus).or_insert(Vec::new());
@@ -445,7 +445,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>();
+                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -459,7 +459,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let noise_position = contig_map.entry(*noise_info.0)
                         .or_insert(BTreeMap::new());
 
-                    noise_position.insert(noise_info.1.to_string(), *number_of_clusters);
+                    noise_position.insert(noise_info.1.to_string(), curr_clus);
 
                     let noise_mean = cluster_hierarchies
                         .entry(curr_clus).or_insert(Vec::new());
