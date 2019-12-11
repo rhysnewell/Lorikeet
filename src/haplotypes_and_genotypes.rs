@@ -282,7 +282,7 @@ impl Genotype {
     }
 
     pub fn new(&mut self, read_id: i64, position_map: &BTreeMap<i32, String>,
-           variant_abundances: &HashMap<i32, BTreeMap<String, f64>>) {
+           variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>) {
         self.read_ids = HashSet::new();
         self.frequencies = Vec::new();
         self.ordered_variants = HashMap::new();
