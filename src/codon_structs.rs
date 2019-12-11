@@ -67,7 +67,7 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, f64>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32;
@@ -117,7 +117,7 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, f64>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
                       _depth: &Vec<f64>) -> f32 {
@@ -338,24 +338,24 @@ mod tests {
 
         let mut gene_records
             = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
-        let mut variant_abundances: HashMap<i32, BTreeMap<String, f64>> = HashMap::new();
+        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>> = HashMap::new();
         variant_abundances.insert(13, BTreeMap::new());
         variant_abundances.insert(14, BTreeMap::new());
         let hash = variant_abundances.entry(7).or_insert(BTreeMap::new());
-        hash.insert("G".to_string(), 0.5);
-        hash.insert("R".to_string(), 0.5);
+        hash.insert("G".to_string(), (5., 10.));
+        hash.insert("R".to_string(), (5., 10.));
 
         let hash = variant_abundances.entry(11).or_insert(BTreeMap::new());
-        hash.insert("C".to_string(), 0.5);
-        hash.insert("R".to_string(), 0.5);
+        hash.insert("C".to_string(), (5., 10.));
+        hash.insert("R".to_string(), (5., 10.));
 
         let hash = variant_abundances.entry(13).or_insert(BTreeMap::new());
-        hash.insert("A".to_string(), 0.5);
-        hash.insert("R".to_string(), 0.5);
+        hash.insert("A".to_string(), (5., 10.));
+        hash.insert("R".to_string(), (5., 10.));
 
         let hash = variant_abundances.entry(14).or_insert(BTreeMap::new());
-        hash.insert("C".to_string(), 0.5);
-        hash.insert("R".to_string(), 0.5);
+        hash.insert("C".to_string(), (5., 10.));
+        hash.insert("R".to_string(), (5., 10.));
 
         for gene_record in gene_records.records() {
             let gene_record = gene_record.unwrap();

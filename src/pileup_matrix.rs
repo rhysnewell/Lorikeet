@@ -19,7 +19,7 @@ pub enum PileupMatrix {
         coverages: HashMap<i32, Vec<f32>>,
         average_genotypes: HashMap<i32, Vec<f32>>,
         variances: HashMap<i32, Vec<f32>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, HashMap<usize, f64>>>>,
+        variants: HashMap<i32, HashMap<i32, BTreeMap<String, HashMap<usize, (f64, f64)>>>>,
         snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
         indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
         contigs: HashMap<i32, Vec<u8>>,
@@ -140,7 +140,8 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn add_contig(&mut self, mut pileup_stats: PileupStats,
+    fn add_contig(&mut self,
+                  mut pileup_stats: PileupStats,
                   sample_count: usize,
                   sample_idx: usize,
                   contig: Vec<u8>) {
@@ -267,9 +268,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut dendrogram,
                 target_names,
                 sample_names,
+                coverages,
                 ..
             } => {
-                let sample_count = sample_names.len();
+                let sample_count = sample_names.len() as f64;
 
                 let mut abundance_euclid =
                     Arc::new(
@@ -320,9 +322,23 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 .lock().unwrap();
 
                             for (var, abundance_map) in hash.iter() {
+                                let mut abundance: f64;
+                                let mut mean_var: f64 = 0.;
+                                let mut mean_d: f64 = 0.;
                                 if !var.contains("R") {
                                     // Get the mean abundance across samples
-                                    let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
+                                    let depths: Vec<(f64, f64)> = abundance_map.values().cloned().collect::<Vec<(f64, f64)>>();
+
+                                    depths.iter().for_each(|(var, d)|{
+                                        mean_var += *var;
+                                        mean_d += *d;
+                                    });
+
+                                    mean_var = mean_var / sample_count;
+                                    mean_d = mean_d / sample_count;
+                                    abundance = mean_var / mean_d;
+
+
                                     // This is a big hack but saves so much time
                                     // Basically, any variant that has an abundance less than 0.05
                                     // Automatically gets thrown into bin 0
@@ -335,13 +351,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if abundance >= eps {
                                         variant_info.push((position, var.to_string(), abundance, tid));
                                         abundance_float.push(abundance);
-                                        abundance_euclid.push(Euclid([abundance]));
+                                        abundance_euclid.push(Euclid([mean_var, mean_d]));
                                     } else {
                                         let mut noise_set = noise_set.lock().unwrap();
                                         noise_set.insert(variant_info_all.len());
-//
                                     }
-                                    variant_info_all.push((position, var.to_string(), abundance, tid));
+                                    variant_info_all.push(
+                                        (position, var.to_string(), (mean_var, mean_d), tid));
                                 }
                             }
                         });
@@ -410,6 +426,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
                         let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -442,11 +459,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // Deal with unclustered points by finding which cluster they are closest to
                     let noise_info = &variant_info_all[*noise];
                     let noise_abundance = noise_info.2;
+                    let noise_frac = noise_abundance.0 / noise_abundance.1;
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
+
                     for (cluster, abundance) in cluster_hierarchies.iter() {
                         let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
-                        let diff = (mean - noise_abundance).abs();
+
+                        let diff = (mean - noise_frac).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
                             curr_clus = *cluster;
@@ -463,9 +483,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let noise_mean = cluster_hierarchies
                         .entry(curr_clus).or_insert(Vec::new());
-                    noise_mean.push(noise_abundance.to_owned());
+                    noise_mean.push(noise_frac.to_owned());
                 });
-
 
                 let mut variant_distances: Arc<Mutex<Vec<f64>>>
                     = Arc::new(
@@ -474,6 +493,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 debug!("Filling condensed matrix of length {}",
                        (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
+
+                let mut contig_coverage_means = HashMap::new();
+                coverages.iter().map(|(tid, cov_vec)|{
+                   let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
+                });
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
                 (0..variant_info_all.len()-1)
@@ -543,12 +567,20 @@ impl PileupMatrixFunctions for PileupMatrix{
                             // Jaccard Similarity
                             let jaccard = intersection_len / union_len;
 
+//                            let row_cov = contig_coverage_means[&row_info.3];
+//                            let col_cov = contig_coverage_means[&col_info.3];
+
                             // Distance between abundance values
-                            let dist_f = (row_info.2 - col_info.2).abs();
+                            let dist_var = ((row_info.2).0 / (col_info.2).0
+                                - (col_info.2).0 / (row_info.2).0).abs();
+
+                            let dist_cov = ((row_info.2).1 / (col_info.2).1
+                                - (col_info.2).1 / (row_info.2).1).abs();
+
 
                             // Distance will be defined as the mean between jaccard dist
                             // and dist_f
-                            distance = ((1. - jaccard) + dist_f) / 2.;
+                            distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
                         }
 
                         match condensed_index(
@@ -583,8 +615,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
                 let mut means = HashMap::new();
 
-                for (cluster, abundances) in cluster_hierarchies.iter() {
-                    let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
+                for (cluster, abundance) in cluster_hierarchies.iter() {
+                    let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+
                     means.insert(*cluster as i32, mean);
                 }
 
@@ -633,7 +666,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 ..
             } => {
-                let sample_count = sample_names.len();
+                let sample_count = sample_names.len() as f64;
                 // First we need to convert DBSCAN cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
                 // Ordered from root to leaf
@@ -785,7 +818,16 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             for (var, clusters) in hash.iter() {
                                                 max_var = var;
                                                 let abundance_map = &variants[tid][&(pos as i32)][var];
-                                                let abundance: f64 = abundance_map.values().cloned().collect::<Vec<f64>>().iter().sum::<f64>() / sample_count as f64;
+                                                let depths: Vec<(f64, f64)> = abundance_map.values().cloned().collect::<Vec<(f64, f64)>>();
+                                                let mut mean_var: f64 = 0.;
+                                                let mut mean_d: f64 = 0.;
+                                                depths.iter().map(|(var, d)|{
+                                                    mean_var += *var;
+                                                    mean_d += *d;
+                                                });
+                                                mean_var = mean_var / sample_count;
+                                                mean_d = mean_d / sample_count;
+                                                let abundance= mean_var / mean_d;
 
                                                 if abundance > max_abund {
                                                     max_abund = abundance;

@@ -8,9 +8,7 @@ use codon_structs::*;
 use haplotypes_and_genotypes::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
-//use rusty_machine::learning::dbscan::DBSCAN;
-//use rusty_machine::learning::UnSupModel;
-//use rusty_machine::linalg::Matrix;
+
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use nalgebra as na;
@@ -25,7 +23,7 @@ pub enum PileupStats {
     PileupContigStats {
         nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
         variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
-        variant_abundances: HashMap<i32, BTreeMap<String, f64>>,
+        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
@@ -346,7 +344,7 @@ impl PileupFunctions for PileupStats {
                                 if (count >= min_variant_depth)
 //                                    && (count as f64 / *d >= min_variant_fraction)
                                     && ((count as f64 / *d) > (regression.1 + regression.2)) {
-                                    rel_abundance.insert(indel.to_owned(), count as f64 / *d);
+                                    rel_abundance.insert(indel.to_owned(), (count as f64, *d));
                                     for read in read_ids {
                                         let mut read_variants
                                             = read_variants.lock().unwrap();
@@ -383,7 +381,7 @@ impl PileupFunctions for PileupStats {
                                 if (count >= min_variant_depth)
 //                                    && (count as f64 / *d >= min_variant_fraction)
                                     && ((count as f64 / *d) > (regression.1 + regression.2)) {
-                                    rel_abundance.insert(base.to_string(), count as f64 / *d);
+                                    rel_abundance.insert(base.to_string(), (count as f64, *d));
 
                                     for read in read_ids {
                                         let mut read_variants
@@ -525,9 +523,10 @@ impl PileupFunctions for PileupStats {
                         if variant_abundances.contains_key(&(pos as i32)){
                             let hash = &variant_abundances[&(pos as i32)];
                             for (var, abundance) in hash.iter() {
-                                if abundance > &max_abund {
+                                let frac =  abundance.0/abundance.1;
+                                if frac > max_abund {
                                     max_var = var;
-                                    max_abund = *abundance;
+                                    max_abund = frac;
                                 }
                             }
                             if max_abund >= 0.5 {
@@ -724,8 +723,9 @@ impl PileupFunctions for PileupStats {
                                     for (var, clusters) in hash.iter() {
                                         max_var = var;
                                         let abundance = &variant_abundances[&(pos as i32)][var];
-                                        if abundance > &max_abund {
-                                            max_abund = *abundance;
+                                        let frac = abundance.0/abundance.1;
+                                        if frac > max_abund {
+                                            max_abund = frac;
                                         }
                                     }
                                     if max_var.contains("N") {
@@ -1137,25 +1137,24 @@ impl PileupFunctions for PileupStats {
 
 
                                 if variant.to_owned().contains("N") {
-                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
                                            variant,
                                            str::from_utf8(
                                                &ref_sequence[cursor..cursor
                                                    + variant.len() as usize]).unwrap(),
-                                           abundance, depth[cursor], "D").expect("Unable to write to stream");
+                                           abundance.0, abundance.1, "D").expect("Unable to write to stream");
 
                                 } else if indel_map.contains_key(variant) {
                                      writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
                                            variant,
                                            str::from_utf8(
                                                &[ref_sequence[cursor]]).unwrap(),
-                                           abundance, depth[cursor], "I").expect("Unable to write to stream");
+                                           abundance.0, abundance.1, "I").expect("Unable to write to stream");
                                 } else {
-                                    writeln!(print_stream, "{}\t{}\t{:.3}\t{}\t{}",
+                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
                                              variant,
                                              ref_sequence[cursor] as char,
-                                             abundance,
-                                             depth[cursor], "S").expect("Unable to write to stream");
+                                             abundance.0, abundance.1, "S").expect("Unable to write to stream");
                                 }
                             }
                         }
@@ -1228,6 +1227,7 @@ impl PileupFunctions for PileupStats {
                             .lock().unwrap();
 
                         for (var, abundance) in hash.iter() {
+                            let frac = abundance.0 / abundance.1;
                             if !var.contains("R") {
                                 // This is a big hack but saves so much time
                                 // Basically, any variant that has an abundance less than 0.05
@@ -1238,15 +1238,15 @@ impl PileupFunctions for PileupStats {
                                 // Upsides:
                                 // Massive speed increase, massive decrease in memory usage
                                 // Low abundant variants are all kind of in the same cluster any way
-                                if abundance >= &eps {
-                                    variant_info.push((position, var.to_string(), abundance));
-                                    abundance_float.push(*abundance);
-                                    abundance_euclid.push(Euclid([*abundance]));
+                                if frac >= eps {
+                                    variant_info.push((position, var.to_string(), frac));
+                                    abundance_float.push(frac);
+                                    abundance_euclid.push(Euclid([abundance.0, abundance.1]));
                                 } else {
                                     let mut noise_set = noise_set.lock().unwrap();
                                     noise_set.insert(variant_info_all.len());
                                 }
-                                variant_info_all.push((position, var.to_string(), abundance));
+                                variant_info_all.push((position, var.to_string(), frac));
                             }
                         }
                 });
@@ -1520,7 +1520,7 @@ impl PileupFunctions for PileupStats {
 
             } => {
                 info!("Outputting {} variant locations", variant_abundances.keys().len());
-                for (position, d) in depth.iter().enumerate() {
+                for (position, _d) in depth.iter().enumerate() {
 
                     // loop through each position that has variants
                     let hash = match variant_abundances.get(&(position as i32)) {
@@ -1548,7 +1548,7 @@ impl PileupFunctions for PileupStats {
                         if indel_map.contains_key(var) {
                             // How does this print N for insertions?
                             if var.to_owned().contains("N"){
-                                print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                                        sample_idx,
                                        tid,
                                        position,
@@ -1556,16 +1556,16 @@ impl PileupFunctions for PileupStats {
                                        str::from_utf8(
                                            &ref_sequence[position..position
                                                + var.len() as usize]).unwrap(),
-                                       abundance, d);
+                                       abundance.0, abundance.1);
 
                             } else {
-                                print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                                        sample_idx,
                                        tid, position,
                                        var,
                                        str::from_utf8(
                                            &[ref_sequence[position]]).unwrap(),
-                                       abundance, d);
+                                       abundance.0, abundance.1);
                             }
 
                             // Print number of genotypes associated with that position and variant
@@ -1580,12 +1580,12 @@ impl PileupFunctions for PileupStats {
                             println!("{}\t{}", cluster_val.0, cluster_val.1);
 
                         } else if var.len() == 1 && var != &"R".to_string(){
-                            print!("{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+                            print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
                                    sample_idx,
                                    tid, position,
                                    var,
                                    ref_sequence[position] as char,
-                                   abundance, d);
+                                   abundance.0, abundance.1);
 
                             // Print number of genotypes associated with that position and variant
                             match genotypes_per_position.get(&position) {
@@ -1624,25 +1624,25 @@ mod tests {
         let mut contig = PileupStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
-        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>> = HashMap::new();
+        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
         nuc_freq.insert(0, BTreeMap::new());
         nuc_freq.insert(1, BTreeMap::new());
 
         let mut pos = nuc_freq.entry(0).or_insert(BTreeMap::new());
 
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                   [0, 1, 2].iter().cloned().collect::<BTreeSet<i32>>());
+                   [0, 1, 2].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                   [3, 4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                   [3, 4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(1).or_insert(BTreeMap::new());
 
         pos.insert("T".chars().collect::<Vec<char>>()[0],
-                   [0, 1].iter().cloned().collect::<BTreeSet<i32>>());
+                   [0, 1].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                   [2, 3].iter().cloned().collect::<BTreeSet<i32>>());
+                   [2, 3].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                   [4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                   [4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
         contig.add_contig(nuc_freq,
                           HashMap::new(),
@@ -1678,7 +1678,7 @@ mod tests {
         let mut contig = PileupStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
-        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>> = HashMap::new();
+        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
         nuc_freq.insert(0, BTreeMap::new());
         nuc_freq.insert(1, BTreeMap::new());
         nuc_freq.insert(2, BTreeMap::new());
@@ -1686,23 +1686,23 @@ mod tests {
         let mut pos = nuc_freq.entry(0).or_insert(BTreeMap::new());
 
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                   [0, 1, 2].iter().cloned().collect::<BTreeSet<i32>>());
+                   [0, 1, 2].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                   [3, 4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                   [3, 4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(1).or_insert(BTreeMap::new());
 
         pos.insert("T".chars().collect::<Vec<char>>()[0],
-                   [0, 1].iter().cloned().collect::<BTreeSet<i32>>());
+                   [0, 1].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                   [2, 3].iter().cloned().collect::<BTreeSet<i32>>());
+                   [2, 3].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                   [4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                   [4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(2).or_insert(BTreeMap::new());
 
         pos.insert("G".chars().collect::<Vec<char>>()[0],
-                   [1, 2, 4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                   [1, 2, 4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
 
         contig.add_contig(nuc_freq,
@@ -1740,7 +1740,7 @@ mod tests {
         let mut contig = PileupStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
-        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i32>>> = HashMap::new();
+        let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
         nuc_freq.insert(0, BTreeMap::new());
         nuc_freq.insert(1, BTreeMap::new());
         nuc_freq.insert(2, BTreeMap::new());
@@ -1749,34 +1749,34 @@ mod tests {
         let mut pos = nuc_freq.entry(0).or_insert(BTreeMap::new());
 
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                           [0].iter().cloned().collect::<BTreeSet<i32>>());
+                           [0].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                           [5].iter().cloned().collect::<BTreeSet<i32>>());
+                           [5].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(1).or_insert(BTreeMap::new());
 
         pos.insert("T".chars().collect::<Vec<char>>()[0],
-                           [0, 2].iter().cloned().collect::<BTreeSet<i32>>());
+                           [0, 2].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                           [1].iter().cloned().collect::<BTreeSet<i32>>());
+                           [1].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("R".chars().collect::<Vec<char>>()[0],
-                           [3, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                           [3, 5].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("C".chars().collect::<Vec<char>>()[0],
-                           [4].iter().cloned().collect::<BTreeSet<i32>>());
+                           [4].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(2).or_insert(BTreeMap::new());
 
         pos.insert("G".chars().collect::<Vec<char>>()[0],
-                           [0, 1, 2, 3].iter().cloned().collect::<BTreeSet<i32>>());
+                           [0, 1, 2, 3].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("A".chars().collect::<Vec<char>>()[0],
-                           [4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                           [4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
         let mut pos = nuc_freq.entry(3).or_insert(BTreeMap::new());
 
         pos.insert("C".chars().collect::<Vec<char>>()[0],
-                           [2].iter().cloned().collect::<BTreeSet<i32>>());
+                           [2].iter().cloned().collect::<BTreeSet<i64>>());
         pos.insert("T".chars().collect::<Vec<char>>()[0],
-                           [3, 4, 5].iter().cloned().collect::<BTreeSet<i32>>());
+                           [3, 4, 5].iter().cloned().collect::<BTreeSet<i64>>());
 
 
         contig.add_contig(nuc_freq,
