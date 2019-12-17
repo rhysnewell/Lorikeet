@@ -38,7 +38,8 @@ pub fn pileup_variants<R: NamedBamReader,
     output_prefix: &str,
     n_threads: usize,
     method: &str,
-    coverage_fold: f32) {
+    coverage_fold: f32,
+    include_indels: bool) {
 
     let sample_idx = 0;
     let include_soft_clipping = false;
@@ -244,18 +245,20 @@ pub fn pileup_variants<R: NamedBamReader,
                             read_cursor += cig.len() as usize;
                         },
                         Cigar::Del(_) => {
-                            let refr = (ref_seq[cursor as usize] as char).to_string();
-                            let insert = refr +
-                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
-                            let refr = str::from_utf8(&ref_seq[cursor as usize..
-                                cursor as usize + cig.len() as usize]).unwrap().to_string();
-                            if refr != insert {
-                                let indel_map = indels
-                                    .entry(cursor as i32).or_insert(BTreeMap::new());
-                                let id = indel_map.entry(insert)
-                                    .or_insert(BTreeSet::new());
-                                id.insert(read_to_id[&record.qname().to_vec()]);
-                                total_indels_in_current_contig += cig.len();
+                            if include_indels {
+                                let refr = (ref_seq[cursor as usize] as char).to_string();
+                                let insert = refr +
+                                    &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
+                                let refr = str::from_utf8(&ref_seq[cursor as usize..
+                                    cursor as usize + cig.len() as usize]).unwrap().to_string();
+                                if refr != insert {
+                                    let indel_map = indels
+                                        .entry(cursor as i32).or_insert(BTreeMap::new());
+                                    let id = indel_map.entry(insert)
+                                        .or_insert(BTreeSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                    total_indels_in_current_contig += cig.len();
+                                }
                             }
 
                             cursor += cig.len() as usize;
@@ -266,19 +269,21 @@ pub fn pileup_variants<R: NamedBamReader,
                             cursor += cig.len() as usize;
                         },
                         Cigar::Ins(_) => {
-                            let refr = (ref_seq[cursor as usize] as char).to_string();
-                            let insert = match str::from_utf8(&record.seq().as_bytes()[
-                                read_cursor..read_cursor + cig.len() as usize]) {
-                                Ok(ins) => {ins.to_string()},
-                                Err(_e) => {"".to_string()},
-                            };
+                            if include_indels {
+                                let refr = (ref_seq[cursor as usize] as char).to_string();
+                                let insert = match str::from_utf8(&record.seq().as_bytes()[
+                                    read_cursor..read_cursor + cig.len() as usize]) {
+                                    Ok(ins) => { ins.to_string() },
+                                    Err(_e) => { "".to_string() },
+                                };
 
-                            let indel_map = indels.entry(cursor as i32)
-                                .or_insert(BTreeMap::new());
+                                let indel_map = indels.entry(cursor as i32)
+                                    .or_insert(BTreeMap::new());
 
-                            let id = indel_map.entry(refr + &insert)
-                                                                  .or_insert(BTreeSet::new());
-                            id.insert(read_to_id[&record.qname().to_vec()]);
+                                let id = indel_map.entry(refr + &insert)
+                                    .or_insert(BTreeSet::new());
+                                id.insert(read_to_id[&record.qname().to_vec()]);
+                            }
                             read_cursor += cig.len() as usize;
                             total_indels_in_current_contig += cig.len();
                         },

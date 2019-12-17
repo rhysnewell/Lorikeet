@@ -33,7 +33,8 @@ pub enum PileupStats {
         total_indels: usize,
         target_name: Vec<u8>,
         target_len: f32,
-        variations_per_base: usize,
+        variations_per_n: usize,
+        total_variants: usize,
         coverage: f32,
         variance: f32,
         observed_contig_length: u32,
@@ -71,7 +72,8 @@ impl PileupStats {
             total_indels: 0,
             target_name: vec!(),
             target_len: 0.0,
-            variations_per_base: 0,
+            variations_per_n: 0,
+            total_variants: 0,
             coverage: 0.00,
             variance: 0.00,
             observed_contig_length: 0,
@@ -150,7 +152,8 @@ impl PileupFunctions for PileupStats {
                 ref mut total_indels,
                 ref mut target_name,
                 ref mut target_len,
-                ref mut variations_per_base,
+                ref mut variations_per_n,
+                ref mut total_variants,
                 ref mut coverage,
                 ref mut num_covered_bases,
                 ref mut num_mapped_reads,
@@ -167,7 +170,8 @@ impl PileupFunctions for PileupStats {
                 *total_indels = 0;
                 *target_name = vec!();
                 *target_len = 0.0;
-                *variations_per_base = 0;
+                *variations_per_n = 0;
+                *total_variants = 0;
                 *coverage = 0.00;
                 *num_covered_bases = 0;
                 *num_mapped_reads = 0;
@@ -302,7 +306,8 @@ impl PileupFunctions for PileupStats {
                 depth,
                 ref mut indels,
                 target_len,
-                ref mut variations_per_base,
+                ref mut variations_per_n,
+                ref mut total_variants,
                 ref mut coverage,
                 tid,
                 regression,
@@ -449,7 +454,7 @@ impl PileupFunctions for PileupStats {
                 *variant_abundances = variants.to_owned();
                 let variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
-                *variations_per_base = *variant_count;
+                *total_variants = *variant_count;
                 let mut nucfrequency = nucfrequency.lock().unwrap();
                 **nucfrequency = nucfrequency.to_owned();
                 let mut indels = indels.lock().unwrap();
@@ -772,7 +777,7 @@ impl PileupFunctions for PileupStats {
                 ref mut mean_genotypes,
                 tid,
                 target_len,
-                variations_per_base,
+                total_variants,
                 coverage,
                 ..
             } => {
@@ -784,7 +789,7 @@ impl PileupFunctions for PileupStats {
                     Arc::new(Mutex::new(0));
 
                 debug!("starting genotyping of tid {}, of length {}, and var per b {} at {} times coverage",
-                        tid, target_len, variations_per_base, coverage);
+                        tid, target_len, total_variants, coverage);
 
                 variant_abundances.par_iter().for_each(|(position, variants)| {
                     // For each variant we calculate the minimum number of genotypes possible
@@ -1020,7 +1025,7 @@ impl PileupFunctions for PileupStats {
                 nucfrequency,
                 variant_abundances,
                 variants_in_reads,
-                variations_per_base,
+                total_variants,
                 ..
             } => {
                 // Here we are gonna calculate how 'distant' one variant is from another
@@ -1032,7 +1037,7 @@ impl PileupFunctions for PileupStats {
                 let n = variants_in_reads.keys().len();
 
                 let mut variant_distances: na::base::DMatrix<f64>
-                    = na::base::DMatrix::zeros(*variations_per_base, *variations_per_base);
+                    = na::base::DMatrix::zeros(*total_variants, *total_variants);
 
                 // Set up the distance matrix of size n*n
                 let mut variant_indices = HashMap::new();
