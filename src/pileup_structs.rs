@@ -1228,6 +1228,9 @@ impl PileupFunctions for PileupStats {
 
                         for (var, abundance) in hash.iter() {
                             let frac = abundance.0 / abundance.1;
+//                            let mut abundance: f64;
+//                            let mut mean_var: f64 = 0.;
+//                            let mut mean_d: f64 = 0.;
                             if !var.contains("R") {
                                 // This is a big hack but saves so much time
                                 // Basically, any variant that has an abundance less than 0.05
