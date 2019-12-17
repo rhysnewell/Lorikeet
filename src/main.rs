@@ -1603,6 +1603,7 @@ fn run_pileup<'a,
             let method = m.value_of("method").unwrap();
 
             let output_prefix = m.value_of("output-prefix").unwrap().to_string();
+            let include_indels = m.is_present("include-indels");
 
             // Make sure we are dealing with a fresh file
             let file_name = output_prefix.to_string()
@@ -1649,7 +1650,8 @@ fn run_pileup<'a,
                 &output_prefix,
                 threads,
                 method,
-                coverage_fold);
+                coverage_fold,
+                include_indels);
         },
         "summarize" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1667,6 +1669,8 @@ fn run_pileup<'a,
             };
 
             let output_prefix = m.value_of("output-prefix").unwrap();
+            let include_indels = m.is_present("include-indels");
+
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
             let method = m.value_of("method").unwrap();
@@ -1740,7 +1744,8 @@ fn run_pileup<'a,
                 output_prefix,
                 threads,
                 method,
-                coverage_fold);
+                coverage_fold,
+                include_indels);
         },
         "evolve" => {
             let mut variant_consensus_file = "uninit.fna".to_string();
@@ -1757,6 +1762,8 @@ fn run_pileup<'a,
                 Ok(reader) => reader,
                 Err(_e) => generate_faidx(m),
             };
+            let include_indels = m.is_present("include-indels");
+
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
             let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
@@ -1785,7 +1792,8 @@ fn run_pileup<'a,
                 "",
                 threads,
                 method,
-                coverage_fold);
+                coverage_fold,
+                include_indels);
         },
         "polish" => {
             let mut variant_consensus_file = "uninit.fna".to_string();
@@ -1841,7 +1849,8 @@ fn run_pileup<'a,
                 &output_prefix,
                 threads,
                 method,
-                coverage_fold);
+                coverage_fold,
+                true);
         },
         _ => panic!("Unknown lorikeet mode"),
     }
@@ -2074,6 +2083,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
+                    .multiple(true)
                     .required_unless_one(
                         &["full-help"]))
                 .arg(Arg::with_name("bam-file-cache-directory")
@@ -2191,6 +2201,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("include-indels")
+                    .long("include-indels"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))
@@ -2370,6 +2382,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("include-indels")
+                    .long("include-indels"))
                 .arg(Arg::with_name("output-prefix")
                     .long("output-prefix")
                     .short("o")
@@ -2437,6 +2451,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
+                    .multiple(true)
                     .takes_value(true)
                     .required_unless_one(&["full-help"]))
                 .arg(Arg::with_name("bam-file-cache-directory")
@@ -2553,6 +2568,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("include-indels")
+                    .long("include-indels"))
                 .arg(Arg::with_name("output-prefix")
                     .long("output-prefix")
                     .short("o")
