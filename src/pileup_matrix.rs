@@ -329,7 +329,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Get the mean abundance across samples
                                     let depths: Vec<(f64, f64)> = abundance_map.values().cloned().collect::<Vec<(f64, f64)>>();
 
-                                    depths.iter().for_each(|(var, d)|{
+                                    depths.iter().for_each(|(var, d)| {
                                         mean_var += *var;
                                         mean_d += *d;
                                     });
@@ -348,10 +348,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Upsides:
                                     // Massive speed increase, massive decrease in memory usage
                                     // Low abundant variants are all kind of in the same cluster any way
-                                    if abundance >= eps {
+                                    if mean_d >= eps {
                                         variant_info.push((position, var.to_string(), abundance, tid));
                                         abundance_float.push(abundance);
-                                        abundance_euclid.push(Euclid([mean_var, mean_d]));
+                                        abundance_euclid.push(Euclid([mean_var.log10(), mean_d.log10()]));
                                     } else {
                                         let mut noise_set = noise_set.lock().unwrap();
                                         noise_set.insert(variant_info_all.len());
@@ -368,288 +368,288 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let variant_info_all = variant_info_all.lock().unwrap();
                 let abundance_float = abundance_float.lock().unwrap();
                 let scanner = BruteScan::new(&abundance_euclid);
-                debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
-                       variant_info_all.len());
-                let mut dbscan = Dbscan::new(scanner,
-                                             eps,
-                                             min_cluster_size);
+                if variant_info_all.len() > 0 {
+                    debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
+                           variant_info_all.len());
+                    let mut dbscan = Dbscan::new(scanner,
+                                                 eps,
+                                                 min_cluster_size);
 
 
-                let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
-                debug!("{} True clusters found for abundance > eps", db_clusters.len());
+                    let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
+                    debug!("{} True clusters found for abundance > eps", db_clusters.len());
 
-                let noise_points = dbscan.noise_points()
-                    .iter().cloned().collect::<Vec<_>>();
+                    let noise_points = dbscan.noise_points()
+                        .iter().cloned().collect::<Vec<_>>();
 
-                // get the number of clusters so we can rescue orphan variants
-                let mut number_of_clusters =
-                    Arc::new(
-                        Mutex::new(
-                            db_clusters.len() as i32));
+                    // get the number of clusters so we can rescue orphan variants
+                    let mut number_of_clusters =
+                        Arc::new(
+                            Mutex::new(
+                                db_clusters.len() as i32));
 
-                debug!("Sorting DBSCAN Clusters");
+                    debug!("Sorting DBSCAN Clusters");
 
-                db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)|{
-                    // Deal with clustered points
-                    index_vec.par_iter().for_each(|index|{
-                        let info = &variant_info[*index];
-                        let abundance = abundance_float[*index];
+                    db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)| {
+                        // Deal with clustered points
+                        index_vec.par_iter().for_each(|index| {
+                            let info = &variant_info[*index];
+                            let abundance = abundance_float[*index];
 
+                            let mut cluster_map = cluster_map.lock().unwrap();
+                            let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                            let mut number_of_clusters = number_of_clusters.lock().unwrap();
+
+                            let contig = cluster_map.entry(*info.3)
+                                .or_insert(HashMap::new());
+
+                            let position = contig
+                                .entry(*info.0).or_insert(BTreeMap::new());
+                            position.insert(info.1.to_string(), cluster as i32);
+
+                            let cluster_mean = cluster_hierarchies
+                                .entry(cluster as i32).or_insert(Vec::new());
+                            cluster_mean.push(abundance.to_owned());
+                        });
+                    });
+
+                    noise_points.par_iter().for_each(|noise| {
                         let mut cluster_map = cluster_map.lock().unwrap();
                         let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
                         let mut number_of_clusters = number_of_clusters.lock().unwrap();
 
-                        let contig = cluster_map.entry(*info.3)
+
+                        // Deal with unclustered points by finding which cluster they are closest to
+                        let noise_info = &variant_info[*noise];
+                        let noise_abundance = noise_info.2;
+                        let mut curr_diff = 1.0;
+                        let mut curr_clus = 0;
+                        for (cluster, abundance) in cluster_hierarchies.iter() {
+                            let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+
+                            let diff = (mean - noise_abundance).abs();
+                            if diff < curr_diff {
+                                curr_diff = diff;
+                                curr_clus = *cluster;
+                            }
+                        }
+
+                        let contig_map = cluster_map.entry(*noise_info.3)
                             .or_insert(HashMap::new());
 
-                        let position = contig
-                            .entry(*info.0).or_insert(BTreeMap::new());
-                        position.insert(info.1.to_string(), cluster as i32);
+                        let noise_position = contig_map.entry(*noise_info.0)
+                            .or_insert(BTreeMap::new());
 
-                        let cluster_mean = cluster_hierarchies
-                            .entry(cluster as i32).or_insert(Vec::new());
-                        cluster_mean.push(abundance.to_owned());
+                        noise_position.insert(noise_info.1.to_string(), curr_clus);
+
+                        let noise_mean = cluster_hierarchies
+                            .entry(curr_clus).or_insert(Vec::new());
+                        noise_mean.push(noise_abundance.to_owned());
                     });
-                });
 
-                noise_points.par_iter().for_each(|noise|{
+                    let noise_set = noise_set.lock().unwrap();
 
-                    let mut cluster_map = cluster_map.lock().unwrap();
-                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                    let mut number_of_clusters = number_of_clusters.lock().unwrap();
+                    noise_set.par_iter().for_each(|noise| {
+                        let mut cluster_map = cluster_map.lock().unwrap();
+                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
 
 
-                    // Deal with unclustered points by finding which cluster they are closest to
-                    let noise_info = &variant_info[*noise];
-                    let noise_abundance = noise_info.2;
-                    let mut curr_diff = 1.0;
-                    let mut curr_clus = 0;
-                    for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                        // Deal with unclustered points by finding which cluster they are closest to
+                        let noise_info = &variant_info_all[*noise];
+                        let noise_abundance = noise_info.2;
+                        let noise_frac = noise_abundance.0 / noise_abundance.1;
+                        let mut curr_diff = 1.0;
+                        let mut curr_clus = 0;
 
-                        let diff = (mean - noise_abundance).abs();
-                        if diff < curr_diff {
-                            curr_diff = diff;
-                            curr_clus = *cluster;
+                        for (cluster, abundance) in cluster_hierarchies.iter() {
+                            let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+
+                            let diff = (mean - noise_frac).abs();
+                            if diff < curr_diff {
+                                curr_diff = diff;
+                                curr_clus = *cluster;
+                            }
                         }
-                    }
 
-                    let contig_map = cluster_map.entry(*noise_info.3)
-                        .or_insert(HashMap::new());
+                        let contig_map = cluster_map.entry(*noise_info.3)
+                            .or_insert(HashMap::new());
 
-                    let noise_position = contig_map.entry(*noise_info.0)
-                        .or_insert(BTreeMap::new());
+                        let noise_position = contig_map.entry(*noise_info.0)
+                            .or_insert(BTreeMap::new());
 
-                    noise_position.insert(noise_info.1.to_string(), curr_clus);
+                        noise_position.insert(noise_info.1.to_string(), curr_clus);
 
-                    let noise_mean = cluster_hierarchies
-                        .entry(curr_clus).or_insert(Vec::new());
-                    noise_mean.push(noise_abundance.to_owned());
-                });
+                        let noise_mean = cluster_hierarchies
+                            .entry(curr_clus).or_insert(Vec::new());
+                        noise_mean.push(noise_frac.to_owned());
+                    });
 
-                let noise_set = noise_set.lock().unwrap();
+                    let mut variant_distances: Arc<Mutex<Vec<f64>>>
+                        = Arc::new(
+                        Mutex::new(
+                            vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
 
-                noise_set.par_iter().for_each(|noise|{
+                    debug!("Filling condensed matrix of length {}",
+                           (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
 
-                    let mut cluster_map = cluster_map.lock().unwrap();
-                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                    let mut number_of_clusters = number_of_clusters.lock().unwrap();
-
-
-                    // Deal with unclustered points by finding which cluster they are closest to
-                    let noise_info = &variant_info_all[*noise];
-                    let noise_abundance = noise_info.2;
-                    let noise_frac = noise_abundance.0 / noise_abundance.1;
-                    let mut curr_diff = 1.0;
-                    let mut curr_clus = 0;
-
-                    for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
-
-                        let diff = (mean - noise_frac).abs();
-                        if diff < curr_diff {
-                            curr_diff = diff;
-                            curr_clus = *cluster;
-                        }
-                    }
-
-                    let contig_map = cluster_map.entry(*noise_info.3)
-                        .or_insert(HashMap::new());
-
-                    let noise_position = contig_map.entry(*noise_info.0)
-                        .or_insert(BTreeMap::new());
-
-                    noise_position.insert(noise_info.1.to_string(), curr_clus);
-
-                    let noise_mean = cluster_hierarchies
-                        .entry(curr_clus).or_insert(Vec::new());
-                    noise_mean.push(noise_frac.to_owned());
-                });
-
-                let mut variant_distances: Arc<Mutex<Vec<f64>>>
-                    = Arc::new(
-                    Mutex::new(
-                        vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
-
-                debug!("Filling condensed matrix of length {}",
-                       (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
-
-                let mut contig_coverage_means = HashMap::new();
-                coverages.iter().map(|(tid, cov_vec)|{
-                   let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
-                });
-                // produced condensed pairwise distances
-                // described here: https://docs.rs/kodama/0.2.2/kodama/
-                (0..variant_info_all.len()-1)
-                    .into_par_iter().for_each(|(row_index)|{
-                    let mut row_variant_set = &BTreeSet::new();
-                    let row_info = &variant_info_all[row_index];
-                    // lazily get the row variant read id set
-                    if indels_map[&row_info.3].contains_key(&row_info.0) {
-                        if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1){
-                            row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
+                    let mut contig_coverage_means = HashMap::new();
+                    coverages.iter().map(|(tid, cov_vec)| {
+                        let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
+                    });
+                    // produced condensed pairwise distances
+                    // described here: https://docs.rs/kodama/0.2.2/kodama/
+                    (0..variant_info_all.len() - 1)
+                        .into_par_iter().for_each(|(row_index)| {
+                        let mut row_variant_set = &BTreeSet::new();
+                        let row_info = &variant_info_all[row_index];
+                        // lazily get the row variant read id set
+                        if indels_map[&row_info.3].contains_key(&row_info.0) {
+                            if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
+                                row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
+                            } else if snps_map[&row_info.3].contains_key(&row_info.0) {
+                                let var_char = row_info.1.as_bytes()[0] as char;
+                                if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
+                                    row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
+                                }
+                            }
                         } else if snps_map[&row_info.3].contains_key(&row_info.0) {
                             let var_char = row_info.1.as_bytes()[0] as char;
-                            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char){
+                            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
                                 row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
                             }
                         }
-                    } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                        let var_char = row_info.1.as_bytes()[0] as char;
-                        if snps_map[&row_info.3][&row_info.0].contains_key(&var_char){
-                            row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                        }
-                    }
 
-                    let row_start = *row_info.0 as usize;
-                    let row_end = row_start + row_info.1.len() - 1;
+                        let row_start = *row_info.0 as usize;
+                        let row_end = row_start + row_info.1.len() - 1;
 
-                    (row_index+1..variant_info_all.len())
-                        .into_par_iter().for_each(|(col_index)|{
-                        let mut col_variant_set= &BTreeSet::new();
-                        let col_info = &variant_info_all[col_index];
-                        if indels_map[&col_info.3].contains_key(&col_info.0) {
-                            if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1){
-                                col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+                        (row_index + 1..variant_info_all.len())
+                            .into_par_iter().for_each(|(col_index)| {
+                            let mut col_variant_set = &BTreeSet::new();
+                            let col_info = &variant_info_all[col_index];
+                            if indels_map[&col_info.3].contains_key(&col_info.0) {
+                                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
+                                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+                                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                                    let var_char = col_info.1.as_bytes()[0] as char;
+                                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                                    }
+                                }
                             } else if snps_map[&col_info.3].contains_key(&col_info.0) {
                                 let var_char = col_info.1.as_bytes()[0] as char;
-                                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char){
+                                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
                                     col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
                                 }
                             }
-                        } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                            let var_char = col_info.1.as_bytes()[0] as char;
-                            if snps_map[&col_info.3][&col_info.0].contains_key(&var_char){
-                                col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                            }
-                        }
 
-                        let col_start = *col_info.0 as usize;
-                        let col_end = col_start + col_info.1.len() - 1;
+                            let col_start = *col_info.0 as usize;
+                            let col_end = col_start + col_info.1.len() - 1;
 
-                        let mut distance: f64;
+                            let mut distance: f64;
 
-                        // If the variants share positions, then instantly they can't be in the same
-                        // gentoype so max distance
-                        if row_start <= col_end && col_start <= row_end {
-                            distance = 1.;
-                            let mut number_of_clusters = number_of_clusters.lock().unwrap();
-                            if *number_of_clusters == 1 {
-                                *number_of_clusters += 1;
-                            }
-                        } else {
-                            let intersection_len = (row_variant_set
-                                .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                            // If the variants share positions, then instantly they can't be in the same
+                            // gentoype so max distance
+                            if row_start <= col_end && col_start <= row_end {
+                                distance = 1.;
+                                let mut number_of_clusters = number_of_clusters.lock().unwrap();
+                                if *number_of_clusters == 1 {
+                                    *number_of_clusters += 1;
+                                }
+                            } else {
+                                let intersection_len = (row_variant_set
+                                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
-                            let union_len = (row_variant_set
-                                .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                                let union_len = (row_variant_set
+                                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
 
-                            // Jaccard Similarity
-                            let jaccard = intersection_len / union_len;
+                                // Jaccard Similarity
+                                let jaccard = intersection_len / union_len;
 
 //                            let row_cov = contig_coverage_means[&row_info.3];
 //                            let col_cov = contig_coverage_means[&col_info.3];
 
-                            // Distance between abundance values
-                            let dist_var = ((row_info.2).0 / (col_info.2).0
-                                - (col_info.2).0 / (row_info.2).0).abs();
+                                // Distance between abundance values
+                                let dist_var = ((row_info.2).0 / (col_info.2).0
+                                    - (col_info.2).0 / (row_info.2).0).abs();
 
-                            let dist_cov = ((row_info.2).1 / (col_info.2).1
-                                - (col_info.2).1 / (row_info.2).1).abs();
+                                let dist_cov = ((row_info.2).1 / (col_info.2).1
+                                    - (col_info.2).1 / (row_info.2).1).abs();
 
 
-                            // Distance will be defined as the mean between jaccard dist
-                            // and dist_f
-                            distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
-                        }
-
-                        match condensed_index(
-                            row_index, col_index, variant_info_all.len()) {
-                            Some(index) => {
-                                let mut variant_distances = variant_distances.lock().unwrap();
-                                variant_distances[index] = distance;
+                                // Distance will be defined as the mean between jaccard dist
+                                // and dist_f
+                                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
                             }
-                            None => {
-                                debug!("No corresponding index for row {} and col {}",
-                                       row_index, col_index);
-                            }
-                        };
+
+                            match condensed_index(
+                                row_index, col_index, variant_info_all.len()) {
+                                Some(index) => {
+                                    let mut variant_distances = variant_distances.lock().unwrap();
+                                    variant_distances[index] = distance;
+                                }
+                                None => {
+                                    debug!("No corresponding index for row {} and col {}",
+                                           row_index, col_index);
+                                }
+                            };
+                        });
                     });
-                });
 
 
-                let mut variant_distances = variant_distances
-                    .lock()
-                    .unwrap();
-                debug!("Performing HAC");
+                    let mut variant_distances = variant_distances
+                        .lock()
+                        .unwrap();
+                    debug!("Performing HAC");
 
 
-                let dend = nnchain(
-                    &mut variant_distances,
-                    variant_info_all.len(),
-                    Method::Ward.into_method_chain()
-                        .expect("Incompatible linkage method"));
-                debug!("Dendrogram {:?}", dend);
+                    let dend = nnchain(
+                        &mut variant_distances,
+                        variant_info_all.len(),
+                        Method::Ward.into_method_chain()
+                            .expect("Incompatible linkage method"));
+                    debug!("Dendrogram {:?}", dend);
 
-                let mut cluster_map = cluster_map.lock().unwrap();
-                let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                let mut means = HashMap::new();
+                    let mut cluster_map = cluster_map.lock().unwrap();
+                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+                    let mut means = HashMap::new();
 
-                for (cluster, abundance) in cluster_hierarchies.iter() {
-                    let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                    for (cluster, abundance) in cluster_hierarchies.iter() {
+                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
 
-                    means.insert(*cluster as i32, mean);
+                        means.insert(*cluster as i32, mean);
+                    }
+
+                    // Combine info of both clustering methods for easy access
+                    let mut full_cluster_map =
+                        Arc::new(
+                            Mutex::new(
+                                HashMap::new()));
+
+                    variant_info_all
+                        .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))| {
+                        let db_cluster = cluster_map
+                            .get(tid).expect("No contig found when it should be")
+                            .get(position).expect("Position not found when it should be")
+                            .get(variant).expect("Variant not found when it should be");
+                        let mut full_cluster_map = full_cluster_map.lock().unwrap();
+
+                        let contig_map = full_cluster_map.entry(**tid)
+                            .or_insert(HashMap::new());
+
+                        let position_map = contig_map.entry(**position)
+                            .or_insert(BTreeMap::new());
+
+                        position_map.insert(variant.to_string(), (*db_cluster, index));
+                    });
+
+
+                    *dendrogram = dend;
+                    *clusters = full_cluster_map.lock().unwrap().clone();
+                    *clusters_mean = means;
+                    info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
+                          clusters_mean.len(), target_names.len(), eps);
                 }
-
-                // Combine info of both clustering methods for easy access
-                let mut full_cluster_map =
-                    Arc::new(
-                        Mutex::new(
-                            HashMap::new()));
-
-                variant_info_all
-                    .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))|{
-                    let db_cluster = cluster_map
-                        .get(tid).expect("No contig found when it should be")
-                        .get(position).expect("Position not found when it should be")
-                        .get(variant).expect("Variant not found when it should be");
-                    let mut full_cluster_map = full_cluster_map.lock().unwrap();
-
-                    let contig_map = full_cluster_map.entry(**tid)
-                        .or_insert(HashMap::new());
-
-                    let position_map = contig_map.entry(**position)
-                        .or_insert(BTreeMap::new());
-
-                    position_map.insert(variant.to_string(), (*db_cluster, index));
-                });
-
-
-                *dendrogram = dend;
-                *clusters = full_cluster_map.lock().unwrap().clone();
-                *clusters_mean = means;
-                info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
-                      clusters_mean.len(), target_names.len(), eps);
             }
         }
     }
