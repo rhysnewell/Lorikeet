@@ -750,6 +750,111 @@ fn main(){
                 }
             }
         },
+        Some("genotype") => {
+            let m = matches.subcommand_matches("genotype").unwrap();
+            let mode = "genotype";
+            let mut estimators = EstimatorsAndTaker::generate_from_clap(m);
+            if m.is_present("full-help") {
+                println!("{}", summarize_full_help());
+                process::exit(1);
+            }
+            set_log_level(m, true);
+            let filter_params = FilterParameters::generate_from_clap(m);
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+            rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+
+            if m.is_present("bam-files") {
+                let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
+                if filter_params.doing_filtering() {
+                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                        bam_files,
+                        filter_params.flag_filters.clone(),
+                        filter_params.min_aligned_length_single,
+                        filter_params.min_percent_identity_single,
+                        filter_params.min_aligned_percent_single,
+                        filter_params.min_aligned_length_pair,
+                        filter_params.min_percent_identity_pair,
+                        filter_params.min_aligned_percent_pair);
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               bam_readers,
+                               filter_params.flag_filters);
+                } else if m.is_present("sharded") {
+                    external_command_checker::check_for_samtools();
+                    let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
+                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                        bam_files, sort_threads, &NoExclusionGenomeFilter{});
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               bam_readers,
+                               filter_params.flag_filters);
+                } else {
+                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                        bam_files);
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               bam_readers,
+                               filter_params.flag_filters);
+                }
+            } else {
+                let mapping_program = parse_mapping_program(&m);
+                external_command_checker::check_for_samtools();
+                if filter_params.doing_filtering() {
+                    debug!("Filtering..");
+                    let generator_sets = get_streamed_filtered_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &filter_params,
+                    );
+                    let mut all_generators = vec!();
+                    let mut indices = vec!(); // Prevent indices from being dropped
+                    for set in generator_sets {
+                        indices.push(set.index);
+                        for g in set.generators {
+                            all_generators.push(g)
+                        }
+                    }
+                    debug!("Finished collecting generators.");
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               all_generators,
+                               filter_params.flag_filters);
+                } else if m.is_present("sharded") {
+                    let generator_sets = get_sharded_bam_readers(
+                        m,
+                        mapping_program,
+                        &None,
+                        &NoExclusionGenomeFilter {},
+                    );
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               generator_sets,
+                               filter_params.flag_filters);
+                } else {
+                    debug!("Not filtering..");
+                    let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
+                    let mut all_generators = vec!();
+                    let mut indices = vec!(); // Prevent indices from being dropped
+                    for set in generator_sets {
+                        indices.push(set.index);
+                        for g in set.generators {
+                            all_generators.push(g)
+                        }
+                    }
+                    run_pileup(m,
+                               mode,
+                               &mut estimators,
+                               all_generators,
+                               filter_params.flag_filters.clone());
+                }
+            }
+        },
         Some("evolve") => {
             let m = matches.subcommand_matches("evolve").unwrap();
             let mode = "evolve";
@@ -1653,7 +1758,7 @@ fn run_pileup<'a,
                 coverage_fold,
                 include_indels);
         },
-        "summarize" => {
+        "genotype" => {
             let print_zeros = !m.is_present("no-zeros");
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
@@ -1720,6 +1825,53 @@ fn run_pileup<'a,
                     write!(file_open, "{}\t", counts[tid]).unwrap();
                 }
                 write!(file_open, "\n").unwrap();
+            }
+
+            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
+                Ok(reader) => reader,
+                Err(_e) => generate_faidx(m),
+            };
+
+            info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
+            lorikeet::pileups::pileup_variants(
+                m,
+                bam_readers,
+                mode,
+                &mut estimators.estimators,
+                fasta_reader,
+                print_zeros,
+                flag_filters,
+                mapq_threshold,
+                var_fraction,
+                min,
+                max,
+                contig_end_exclusion,
+                output_prefix,
+                threads,
+                method,
+                coverage_fold,
+                include_indels);
+        },
+        "summarize" => {
+            let print_zeros = !m.is_present("no-zeros");
+            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
+            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
+            let reference_path = Path::new(m.value_of("reference").unwrap());
+
+            let output_prefix = m.value_of("output-prefix").unwrap();
+            let include_indels = m.is_present("include-indels");
+
+            let threads = m.value_of("threads").unwrap().parse().unwrap();
+
+            let method = m.value_of("method").unwrap();
+
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
+            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
+            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
+                panic!("error: Trim bounds must be between 0 and 1, and \
+                                    min must be less than max, found {} and {}", min, max);
             }
 
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
@@ -2395,6 +2547,188 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("quiet")))
         .subcommand(
             SubCommand::with_name("summarize")
+                .about("Perform variant calling analysis and then binning")
+                .help(SUMMARIZE_HELP.as_str())
+                .arg(Arg::with_name("full-help")
+                    .long("full-help"))
+
+                .arg(Arg::with_name("bam-files")
+                    .short("b")
+                    .long("bam-files")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["read1","read2","coupled","interleaved","single","full-help"]))
+                .arg(Arg::with_name("sharded")
+                    .long("sharded")
+                    .required(false))
+                .arg(Arg::with_name("read1")
+                    .short("-1")
+                    .multiple(true)
+                    .takes_value(true)
+                    .requires("read2")
+                    .required_unless_one(
+                        &["bam-files","coupled","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("read2")
+                    .short("-2")
+                    .multiple(true)
+                    .takes_value(true)
+                    .requires("read1")
+                    .required_unless_one(
+                        &["bam-files","coupled","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("coupled")
+                    .short("-c")
+                    .long("coupled")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","interleaved","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("interleaved")
+                    .long("interleaved")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","coupled","single","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("single")
+                    .long("single")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(
+                        &["bam-files","read1","coupled","interleaved","full-help"])
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("reference")
+                    .short("-r")
+                    .long("reference")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required_unless_one(&["full-help"]))
+                .arg(Arg::with_name("bam-file-cache-directory")
+                    .long("bam-file-cache-directory")
+                    .takes_value(true)
+                    .conflicts_with("bam-files"))
+                .arg(Arg::with_name("threads")
+                    .short("-t")
+                    .long("threads")
+                    .default_value("1")
+                    .takes_value(true))
+                .arg(
+                    Arg::with_name("mapper")
+                        .short("p")
+                        .long("mapper")
+                        .possible_values(MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("minimap2-params")
+                        .long("minimap2-params")
+                        .long("minimap2-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true),
+                )
+                .arg(
+                    Arg::with_name("minimap2-reference-is-index")
+                        .long("minimap2-reference-is-index")
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("bwa-params")
+                        .long("bwa-params")
+                        .long("bwa-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true)
+                        .requires("reference"),
+                )
+                .arg(Arg::with_name("discard-unmapped")
+                    .long("discard-unmapped")
+                    .requires("bam-file-cache-directory"))
+
+                .arg(Arg::with_name("min-read-aligned-length")
+                    .long("min-read-aligned-length")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-percent-identity")
+                    .long("min-read-percent-identity")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-aligned-percent")
+                    .long("min-read-aligned-percent")
+                    .default_value("0.97")
+                    .takes_value(true))
+                .arg(Arg::with_name("min-read-aligned-length-pair")
+                    .long("min-read-aligned-length-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("min-read-percent-identity-pair")
+                    .long("min-read-percent-identity-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("min-read-aligned-percent-pair")
+                    .long("min-read-aligned-percent-pair")
+                    .takes_value(true)
+                    .conflicts_with("allow-improper-pairs"))
+                .arg(Arg::with_name("method")
+                    .short("m")
+                    .long("method")
+                    .takes_value(true)
+                    .possible_values(&[
+                        "trimmed_mean",
+                        "mean",
+                        "metabat"])
+                    .default_value("trimmed_mean"))
+                .arg(Arg::with_name("epsilon")
+                    .long("epsilon")
+                    .short("e")
+                    .default_value("0.05"))
+                .arg(Arg::with_name("min-cluster-size")
+                    .long("min-cluster-size")
+                    .short("s")
+                    .default_value("10"))
+                .arg(Arg::with_name("min-covered-fraction")
+                    .long("min-covered-fraction")
+                    .default_value("0.0"))
+                .arg(Arg::with_name("coverage-fold")
+                    .long("coverage-fold")
+                    .default_value("0.5"))
+                .arg(Arg::with_name("min-variant-depth")
+                    .long("min-variant-depth")
+                    .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("depth-threshold")
+                    .long("depth-threshold")
+                    .short("d")
+                    .default_value("50"))
+                .arg(Arg::with_name("mapq-threshold")
+                    .long("mapq-threshold")
+                    .short("q")
+                    .default_value("10"))
+                .arg(Arg::with_name("contig-end-exclusion")
+                    .long("contig-end-exclusion")
+                    .default_value("75"))
+                .arg(Arg::with_name("trim-min")
+                    .long("trim-min")
+                    .default_value("0.05"))
+                .arg(Arg::with_name("trim-max")
+                    .long("trim-max")
+                    .default_value("0.95"))
+                .arg(Arg::with_name("no-zeros")
+                    .long("no-zeros"))
+                .arg(Arg::with_name("allow-improper-pairs")
+                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("include-indels")
+                    .long("include-indels"))
+                .arg(Arg::with_name("output-prefix")
+                    .long("output-prefix")
+                    .short("o")
+                    .default_value("output"))
+                .arg(Arg::with_name("verbose")
+                    .short("v")
+                    .long("verbose"))
+                .arg(Arg::with_name("quiet")
+                    .long("quiet")))
+        .subcommand(
+            SubCommand::with_name("genotype")
                 .about("Perform variant calling analysis and then binning")
                 .help(SUMMARIZE_HELP.as_str())
                 .arg(Arg::with_name("full-help")
