@@ -30,6 +30,8 @@ pub enum PileupMatrix {
         dendrogram: Dendrogram<f64>,
         clusters: HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>,
         clusters_mean: HashMap<i32, f64>,
+        variant_counts: HashMap<usize, HashMap<i32, usize>>,
+        variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
     }
 }
 
@@ -50,6 +52,8 @@ impl PileupMatrix {
             dendrogram: Dendrogram::new(0),
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
+            variant_counts: HashMap::new(),
+            variant_sums: HashMap::new(),
         }
     }
 }
@@ -75,6 +79,8 @@ pub trait PileupMatrixFunctions {
     fn generate_genotypes(&mut self, output_prefix: &str);
 
     fn print_stats(&self, output_prefix: &str);
+
+    fn print_variant_stats(&self, output_prefix: &str);
 
     fn print_kmers(&self, output_prefix: &str, kmer_size: &usize);
 
@@ -156,6 +162,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut target_names,
                 ref mut target_lengths,
                 ref mut variances,
+                ref mut variant_counts,
+                ref mut variant_sums,
                 ..
             } => {
                 match pileup_stats {
@@ -169,6 +177,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         variant_abundances,
                         indels,
                         nucfrequency,
+                        total_variants,
+//                        variations_per_n,
                         ..
                     } => {
                         let ag = average_genotypes.entry(tid).or_insert(
@@ -188,15 +198,61 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                         let mut contig_variants = variants.entry(tid)
                             .or_insert(HashMap::new());
-                        // Apppend the sample index to each variant abundance... so many loops >:(
-                        for (pos, abundance_map) in variant_abundances.iter() {
-                            let position_variants = contig_variants.entry(*pos)
-                                .or_insert(BTreeMap::new());
-                            for (variant, abundance) in abundance_map.iter() {
-                                let sample_map = position_variants.entry(variant.clone())
-                                    .or_insert(HashMap::new());
-                                sample_map.insert(sample_idx, *abundance);
+
+                        let mut sample_sums = variant_sums.entry(sample_idx)
+                            .or_insert(HashMap::new());
+                        if total_variants > 0 {
+                            let mut contig_sums = sample_sums.entry(tid)
+                                .or_insert(vec![vec![0.; total_variants as usize]; 3]);
+
+                            // Apppend the sample index to each variant abundance... so many loops >:(
+                            // Initialize the variant position index
+                            // Also turns out to be the total number of variant positions
+                            let mut variant_index = 0;
+                            for (pos, abundance_map) in variant_abundances.iter() {
+                                let position_variants = contig_variants.entry(*pos)
+                                    .or_insert(BTreeMap::new());
+                                for (variant, abundance) in abundance_map.iter() {
+                                    let sample_map = position_variants.entry(variant.clone())
+                                        .or_insert(HashMap::new());
+                                    contig_sums[0][variant_index] += abundance.0;
+                                    contig_sums[1][variant_index] = abundance.1 + 1 as f64;
+                                    sample_map.insert(sample_idx, *abundance);
+                                }
+                                // add pseudocounts
+                                contig_sums[2][variant_index] = contig_sums[1][variant_index]
+                                    - contig_sums[0][variant_index] + 1 as f64;
+                                contig_sums[0][variant_index] += 1 as f64;
+                                variant_index += 1;
                             }
+                            // Get the geometric means of the variant, depth, and reference counts
+                            // at each variant position
+                            let var_geom: f64 = contig_sums[0].iter().product::<f64>()
+                                .powf((1 / variant_index) as f64);
+                            let dep_geom: f64 = contig_sums[1].iter().product::<f64>()
+                                .powf((1 / variant_index) as f64);
+                            let ref_geom: f64 = contig_sums[2].iter().product::<f64>()
+                                .powf((1 / variant_index) as f64);
+
+                            debug!("Ref CLR {:?}", contig_sums[2]);
+
+                            contig_sums[0] = contig_sums[0].iter()
+                                .map(|var| { (*var / var_geom).ln() }).collect();
+                            contig_sums[1] = contig_sums[1].iter()
+                                .map(|dep| { (*dep / dep_geom).ln() }).collect();
+                            contig_sums[2] = contig_sums[2].iter()
+                                .map(|refr| { (*refr / ref_geom).ln() }).collect();
+
+                            let contig_variant_counts = variant_counts.entry(sample_idx)
+                                .or_insert(HashMap::new());
+                            contig_variant_counts.insert(tid, variant_index);
+                        } else {
+                            let mut contig_sums = sample_sums.entry(tid)
+                                .or_insert(vec![vec![0.]; 3]);
+
+                            let contig_variant_counts = variant_counts.entry(sample_idx)
+                                .or_insert(HashMap::new());
+                            contig_variant_counts.insert(tid, 0);
                         }
 
                         let contig_indels = indels_map.entry(tid)
@@ -931,6 +987,75 @@ impl PileupMatrixFunctions for PileupMatrix{
                         write!(file_open, "\t{}\t{}\t{}", coverage, variance, genotypes).unwrap();
                     }
                     write!(file_open, "\n").unwrap();
+                }
+            }
+        }
+    }
+
+    fn print_variant_stats(&self, output_prefix: &str) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
+                variants,
+                target_names,
+                target_lengths,
+                sample_names,
+                variances,
+                variant_counts,
+                variant_sums,
+                ..
+            } => {
+                let file_name = output_prefix.to_string() + &"_".to_owned()
+                    + &"contig_stats".to_owned()
+                    + &".tsv".to_owned();
+                let file_path = Path::new(&file_name);
+                let mut file_open = match File::create(file_path) {
+                    Ok(fasta) => fasta,
+                    Err(e) => {
+                        println!("Cannot create file {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+                write!(file_open, "contigName\tcontigLen").unwrap();
+                for sample_name in sample_names.iter(){
+                    write!(file_open,
+                           "\t{}.subsPer10kb\t{}.variants\t{}.meanRefRatio\
+                            \t{}.refStdDev\t{}.meanVarRatio\t{}.varStdDev",
+                           &sample_name, &sample_name, &sample_name,
+                           &sample_name, &sample_name, &sample_name).unwrap();
+                }
+                write!(file_open, "\n").unwrap();
+                for (tid, contig_name) in target_names.iter() {
+                    let contig_len =  target_lengths[tid];
+                    write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
+                    for (sample_idx, _sample_name) in sample_names.iter().enumerate() {
+                        let ten_kbs = contig_len / 10000.;
+                        let total_variants = variant_counts[&sample_idx][tid] as f32;
+                        if total_variants > 0. {
+                            let var_ten_kbs = total_variants / ten_kbs;
+                            let sample_sums = &variant_sums[&sample_idx][tid];
+
+                            let var_ratios = sample_sums[0]
+                                .iter().zip(&sample_sums[1])
+                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
+
+                            let refr_ratios = sample_sums[2]
+                                .iter().zip(&sample_sums[1])
+                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
+
+                            let var_ratios_mean: f64 = var_ratios.iter().sum::<f64>() / total_variants as f64;
+                            let refr_ratios_mean: f64 = refr_ratios.iter().sum::<f64>() / total_variants as f64;
+
+                            writeln!(file_open,
+                                     "\t{}\t{}\t{}\t{}\t{}\t{}",
+                                     var_ten_kbs, total_variants,
+                                     refr_ratios_mean, 0.,
+                                     var_ratios_mean, 0.).unwrap();
+                        } else {
+                            writeln!(file_open,
+                                     "\t{}\t{}\t{}\t{}\t{}\t{}",
+                                     0., 0., 0., 0., 0., 0.,).unwrap();
+                        }
+                    }
                 }
             }
         }

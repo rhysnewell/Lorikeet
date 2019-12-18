@@ -380,10 +380,12 @@ pub fn pileup_variants<R: NamedBamReader,
 
         sample_idx += 1;
     };
-    if mode=="summarize" {
+    if mode=="genotype" {
         info!("Clustering Variants with epsilon {} and minimum cluster sizes of {}", epsilon, min_cluster_size);
         pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
         pileup_matrix.generate_genotypes(output_prefix);
+    } else if mode=="summarize" {
+        pileup_matrix.print_variant_stats(output_prefix);
     }
 }
 
@@ -461,11 +463,8 @@ fn process_previous_contigs_var(
                 }
 //                pileup_struct.generate_svd();
 
-
-
-
             },
-            "summarize" => {
+            "summarize" | "genotype" => {
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 pileup_matrix.add_contig(pileup_struct,
