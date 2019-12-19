@@ -112,7 +112,7 @@ Rhys J.P. Newell <r.newell near uq.edu.au>"
 fn polymorph_full_help() -> &'static str {
     lazy_static! {
         static ref POLYMORPH_HELP: String = format!(
-    "lorikeet polymorph: Calculate read coverage per-contig
+    "lorikeet polymorph: Print variant sites along a contig
 
 Define mapping(s) (required):
   Either define BAM:
@@ -192,8 +192,6 @@ Other arguments (optional):
                                          A more thorough description of the different
                                          method is available at
                                          https://github.com/rhysnewell/lorikeet
-   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
-                                         table. [default: 4]
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
@@ -205,6 +203,8 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
+   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
+                                         Not recommended if using nanopore long read data.
    --coverage-fold                       Percentage value of coverage to look above and below
                                          when calculating variant locations. e.g. if coverage-fold
                                          is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
@@ -235,7 +235,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
 fn evolve_full_help() -> &'static str {
     lazy_static! {
         static ref EVOLVE_HELP: String = format!(
-    "lorikeet polymorph: Calculate read coverage per-contig
+    "lorikeet evolve: Calculate dN/dS values in coding regions based on variants found in read mappings
 
 Define mapping(s) (required):
   Either define BAM:
@@ -321,8 +321,8 @@ Other arguments (optional):
                                          A more thorough description of the different
                                          method is available at
                                          https://github.com/rhysnewell/lorikeet
-   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
-                                         table. [default: 4]
+   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
+                                         Not recommended if using nanopore long read data.
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
@@ -365,7 +365,120 @@ Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
 fn summarize_full_help() -> &'static str {
     lazy_static! {
         static ref SUMMARIZE_HELP: String = format!(
-    "lorikeet contig: Calculate read coverage per-contig
+    "lorikeet summarize: Provides per contig variant statistics for a metagenome
+
+Define mapping(s) (required):
+  Either define BAM:
+   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
+                                         reference sorted (e.g. with samtools sort)
+                                         unless --sharded is specified, in which
+                                         case they must be read name sorted (e.g.
+                                         with samtools sort -n).
+
+  Or do mapping:
+   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
+                                         e.g. concatenated genomes or assembly.
+                                         If multiple references FASTA files are
+                                         provided and --sharded is specified,
+                                         then reads will be mapped to references
+                                         separately as sharded BAMs
+   -t, --threads <INT>                   Number of threads for mapping / sorting
+   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
+   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
+   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
+                                         FASTA/Q files for mapping in order
+                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
+                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
+   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
+   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+{}
+   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         both indexing command (if used) and for
+                                         mapping. Note that usage of this parameter
+                                         has security implications if untrusted input
+                                         is specified. '-a' is always specified.
+                                         [default \"\"]
+   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
+                                         as a FASTA file.
+   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
+                                         that usage of this parameter has security
+                                         implications if untrusted input is specified.
+                                         [default \"\"]
+
+
+Alignment filtering (optional):
+   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
+                                         aligned bases [default: 0]
+   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
+                                         identity e.g. 0.95 for 95%. [default 0.0]
+   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned. [default 0.97]
+   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
+                                         aligned bases.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
+                                         identity e.g. 0.95 for 95%.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+
+Other arguments (optional):
+   -m, --method <METHOD>                 Method for calculating coverage.
+                                         One or more (space separated) of:
+                                           trimmed_mean
+                                           mean
+                                           metabat (\"MetaBAT adjusted coverage\")
+                                         A more thorough description of the different
+                                         methods is available at
+                                         https://github.com/rhysnewell/lorikeet
+   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+                                         a variant. [default: 10]
+   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
+   -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
+                                         for it to be considered. [default: 10]
+   --output-format FORMAT                Shape of output: 'sparse' for long format,
+                                         'dense' for species-by-site.
+                                         [default: dense]
+   --min-covered-fraction FRACTION       Contigs with less coverage than this
+                                         reported as having zero coverage.
+                                         [default: 0.0]
+   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
+                                         Not recommended if using nanopore long read data.
+   --coverage-fold                       Percentage value of coverage to look above and below
+                                         when calculating variant locations. e.g. if coverage-fold
+                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
+                                         coverage * (1.0 + 0.1) will be considered.
+                                         [default: 0.5]
+   --contig-end-exclusion                Exclude bases at the ends of reference
+                                         sequences from calculation [default: 75]
+   --trim-min FRACTION                   Remove this smallest fraction of positions
+                                         when calculating trimmed_mean
+                                         [default: 0.05]
+   --trim-max FRACTION                   Maximum fraction for trimmed_mean
+                                         calculations [default: 0.95]
+   -t, --threads                         Number of threads used. [default: 1]
+   --no-zeros                            Omit printing of genomes that have zero
+                                         coverage
+   --bam-file-cache-directory            Output BAM files generated during
+                                         alignment to this directory
+   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
+   -v, --verbose                         Print extra debugging information
+   -q, --quiet                           Unless there is an error, do not print
+                                         log messages
+
+Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+    }
+    &SUMMARIZE_HELP
+}
+
+fn genotype_full_help() -> &'static str {
+    lazy_static! {
+        static ref GENOTYPE_HELP: String = format!(
+    "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
 
 Define mapping(s) (required):
   Either define BAM:
@@ -447,6 +560,8 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
+   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
+                                         Not recommended if using nanopore long read data.
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
@@ -482,7 +597,7 @@ Other arguments (optional):
 
 Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
     }
-    &SUMMARIZE_HELP
+    &GENOTYPE_HELP
 }
 
 fn main(){
@@ -755,7 +870,7 @@ fn main(){
             let mode = "genotype";
             let mut estimators = EstimatorsAndTaker::generate_from_clap(m);
             if m.is_present("full-help") {
-                println!("{}", summarize_full_help());
+                println!("{}", genotype_full_help());
                 process::exit(1);
             }
             set_log_level(m, true);
@@ -2112,12 +2227,38 @@ See lorikeet summarize --full-help for further options and further detail.
             ansi_term::Colour::Green.paint(
                 "lorikeet summarize"),
             ansi_term::Colour::Green.paint(
-                "Summarizes contigs stats including mean coverage, mean genotypes \
-                and kmer frequencies"),
+                "Summarizes contigs stats including mean variant abundance, total variants, \
+                and standard deviations"),
             ansi_term::Colour::Purple.paint(
                 "Example: Map paired reads to a reference and generate contig stats across samples"),
             ansi_term::Colour::Purple.paint(
                 "Example: Summarizes contigs defined in reference from a sorted BAM file:"),
+        ).to_string();
+
+        static ref GENOTYPE_HELP: String = format!(
+            "
+                            {}
+              {}
+
+{}
+
+  lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
+
+{}
+
+  lorikeet genotype --method metabat --bam-files my.bam --reference assembly.fna
+    --bam-file-cache-directory saved_bam_files --threads 10
+
+See lorikeet genotype --full-help for further options and further detail.
+",
+            ansi_term::Colour::Green.paint(
+                "lorikeet genotype"),
+            ansi_term::Colour::Green.paint(
+                "*EXPERIMENTAL* Report strain-level genotypes and abundances based on variant read mappings"),
+            ansi_term::Colour::Purple.paint(
+                "Example: Map paired reads to a reference and generate genotypes"),
+            ansi_term::Colour::Purple.paint(
+                "Example: Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file:"),
         ).to_string();
 
         static ref FILTER_HELP: String = format!(
@@ -2163,13 +2304,14 @@ Strain genotyping analysis for metagenomics
 Usage: lorikeet <subcommand> ...
 
 Main subcommands:
-\tpolymorph\tCalculate variants along contig positions
-\tsummarize\tSummarizes contig stats from multiple samples
+\tgenotype \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
+\tpolymorph\tReport variant sites along contigs
+\tsummarize\tSummarizes contig stats from one or multiple samples
 \tevolve   \tCalculate dN/dS values for genes from read mappings
 
 Less used utility subcommands:
-\tkmer\tCalculate kmer frequencies within contigs
-\tfilter\tRemove (or only keep) alignments with insufficient identity
+\tkmer     \tCalculate kmer frequencies within contigs
+\tfilter   \tRemove (or only keep) alignments with insufficient identity
 
 Other options:
 \t-V, --version\tPrint version information
@@ -2730,7 +2872,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
         .subcommand(
             SubCommand::with_name("genotype")
                 .about("Perform variant calling analysis and then binning")
-                .help(SUMMARIZE_HELP.as_str())
+                .help(GENOTYPE_HELP.as_str())
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
 

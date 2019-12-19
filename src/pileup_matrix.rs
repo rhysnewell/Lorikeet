@@ -10,7 +10,7 @@ use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex};
 use haplotypes_and_genotypes::*;
 use std::fs::{File, OpenOptions};
-
+use std::ops::Add;
 
 
 #[derive(Debug)]
@@ -212,36 +212,46 @@ impl PileupMatrixFunctions for PileupMatrix{
                             for (pos, abundance_map) in variant_abundances.iter() {
                                 let position_variants = contig_variants.entry(*pos)
                                     .or_insert(BTreeMap::new());
+                                let mut variant_depth = 0.;
+                                let mut total_depth = 0.;
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(HashMap::new());
-                                    contig_sums[0][variant_index] += abundance.0;
-                                    contig_sums[1][variant_index] = abundance.1 + 1 as f64;
+                                    variant_depth += abundance.0;
+                                    total_depth = abundance.1 + 1 as f64;
                                     sample_map.insert(sample_idx, *abundance);
                                 }
                                 // add pseudocounts
-                                contig_sums[2][variant_index] = contig_sums[1][variant_index]
-                                    - contig_sums[0][variant_index] + 1 as f64;
-                                contig_sums[0][variant_index] += 1 as f64;
+                                let ref_depth = total_depth
+                                                        - variant_depth;
+                                variant_depth += 1.;
+
+                                let geom_mean = ((variant_depth / total_depth)
+                                    * (ref_depth / total_depth)).powf(1./2.);
+
+                                contig_sums[0][variant_index] = ((variant_depth / total_depth));
+                                contig_sums[2][variant_index] = ((ref_depth / total_depth));
+                                contig_sums[1][variant_index] = total_depth;
+
                                 variant_index += 1;
                             }
                             // Get the geometric means of the variant, depth, and reference counts
                             // at each variant position
-                            let var_geom: f64 = contig_sums[0].iter().product::<f64>()
-                                .powf((1 / variant_index) as f64);
-                            let dep_geom: f64 = contig_sums[1].iter().product::<f64>()
-                                .powf((1 / variant_index) as f64);
-                            let ref_geom: f64 = contig_sums[2].iter().product::<f64>()
-                                .powf((1 / variant_index) as f64);
-
-                            debug!("Ref CLR {:?}", contig_sums[2]);
-
-                            contig_sums[0] = contig_sums[0].iter()
-                                .map(|var| { (*var / var_geom).ln() }).collect();
-                            contig_sums[1] = contig_sums[1].iter()
-                                .map(|dep| { (*dep / dep_geom).ln() }).collect();
-                            contig_sums[2] = contig_sums[2].iter()
-                                .map(|refr| { (*refr / ref_geom).ln() }).collect();
+//                            let var_geom: f64 = contig_sums[0].iter().product::<f64>()
+//                                .powf((1 / variant_index) as f64);
+//                            let dep_geom: f64 = contig_sums[1].iter().product::<f64>()
+//                                .powf((1 / variant_index) as f64);
+//                            let ref_geom: f64 = contig_sums[2].iter().product::<f64>()
+//                                .powf((1 / variant_index) as f64);
+//
+//                            debug!("Ref CLR {:?}", contig_sums[2]);
+//
+//                            contig_sums[0] = contig_sums[0].iter()
+//                                .map(|var| { (*var / var_geom).ln() }).collect();
+//                            contig_sums[1] = contig_sums[1].iter()
+//                                .map(|dep| { (*dep / dep_geom).ln() }).collect();
+//                            contig_sums[2] = contig_sums[2].iter()
+//                                .map(|refr| { (*refr / ref_geom).ln() }).collect();
 
                             let contig_variant_counts = variant_counts.entry(sample_idx)
                                 .or_insert(HashMap::new());
@@ -1018,8 +1028,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 write!(file_open, "contigName\tcontigLen").unwrap();
                 for sample_name in sample_names.iter(){
                     write!(file_open,
-                           "\t{}.subsPer10kb\t{}.variants\t{}.meanRefRatio\
-                            \t{}.refStdDev\t{}.meanVarRatio\t{}.varStdDev",
+                           "\t{}.subsPer10kb\t{}.variants\t{}.meanRefAbd\
+                            \t{}.refStdDev\t{}.meanVarAbd\t{}.varStdDev",
                            &sample_name, &sample_name, &sample_name,
                            &sample_name, &sample_name, &sample_name).unwrap();
                 }
@@ -1034,22 +1044,33 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let var_ten_kbs = total_variants / ten_kbs;
                             let sample_sums = &variant_sums[&sample_idx][tid];
 
-                            let var_ratios = sample_sums[0]
-                                .iter().zip(&sample_sums[1])
-                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
+//                            let var_ratios = sample_sums[0]
+//                                .iter().zip(&sample_sums[1])
+//                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
+//
+//                            let refr_ratios = sample_sums[2]
+//                                .iter().zip(&sample_sums[1])
+//                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
 
-                            let refr_ratios = sample_sums[2]
-                                .iter().zip(&sample_sums[1])
-                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
+                            let var_ratios_mean: f64 = sample_sums[0].iter().sum::<f64>()
+                                / sample_sums[1].len() as f64;
 
-                            let var_ratios_mean: f64 = var_ratios.iter().sum::<f64>() / total_variants as f64;
-                            let refr_ratios_mean: f64 = refr_ratios.iter().sum::<f64>() / total_variants as f64;
+                            let refr_ratios_mean: f64 = sample_sums[2].iter().sum::<f64>()
+                                / sample_sums[1].len() as f64;
+
+                            let mut var_std: f64 = sample_sums[0].iter().map(|x|
+                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
+                            var_std = (var_std / (sample_sums[1].len() - 1) as f64).powf(1./2.);
+
+                            let mut ref_std: f64 = sample_sums[2].iter().map(|x|
+                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
+                            ref_std = (ref_std / (sample_sums[1].len() - 1) as f64).powf(1./2.);
 
                             writeln!(file_open,
                                      "\t{}\t{}\t{}\t{}\t{}\t{}",
                                      var_ten_kbs, total_variants,
-                                     refr_ratios_mean, 0.,
-                                     var_ratios_mean, 0.).unwrap();
+                                     refr_ratios_mean, ref_std,
+                                     var_ratios_mean, var_std).unwrap();
                         } else {
                             writeln!(file_open,
                                      "\t{}\t{}\t{}\t{}\t{}\t{}",
