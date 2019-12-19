@@ -1014,8 +1014,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 variant_sums,
                 ..
             } => {
-                let file_name = output_prefix.to_string() + &"_".to_owned()
-                    + &"contig_stats".to_owned()
+                let file_name = output_prefix.to_string()
                     + &".tsv".to_owned();
                 let file_path = Path::new(&file_name);
                 let mut file_open = match File::create(file_path) {
