@@ -1059,11 +1059,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                             let mut var_std: f64 = sample_sums[0].iter().map(|x|
                                 {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-                            var_std = (var_std / (sample_sums[1].len() - 1) as f64).powf(1./2.);
+                            var_std = (var_std / (sample_sums[1].len()) as f64).powf(1./2.);
 
                             let mut ref_std: f64 = sample_sums[2].iter().map(|x|
                                 {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-                            ref_std = (ref_std / (sample_sums[1].len() - 1) as f64).powf(1./2.);
+                            ref_std = (ref_std / (sample_sums[1].len()) as f64).powf(1./2.);
 
                             writeln!(file_open,
                                      "\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}",
