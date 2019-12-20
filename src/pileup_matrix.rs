@@ -229,8 +229,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let geom_mean = ((variant_depth / total_depth)
                                     * (ref_depth / total_depth)).powf(1./2.);
 
-                                contig_sums[0][variant_index] = ((variant_depth / total_depth) / geom_mean).ln();
-                                contig_sums[2][variant_index] = ((ref_depth / total_depth) / geom_mean).ln();
+                                contig_sums[0][variant_index] = ((variant_depth / total_depth));
+                                contig_sums[2][variant_index] = ((ref_depth / total_depth));
                                 contig_sums[1][variant_index] = total_depth;
 
                                 variant_index += 1;
