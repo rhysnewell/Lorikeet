@@ -229,8 +229,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let geom_mean = ((variant_depth / total_depth)
                                     * (ref_depth / total_depth)).powf(1./2.);
 
-                                contig_sums[0][variant_index] = ((variant_depth / total_depth));
-                                contig_sums[2][variant_index] = ((ref_depth / total_depth));
+                                contig_sums[0][variant_index] = ((variant_depth / total_depth) / geom_mean).ln();
+                                contig_sums[2][variant_index] = ((ref_depth / total_depth) / geom_mean).ln();
                                 contig_sums[1][variant_index] = total_depth;
 
                                 variant_index += 1;
@@ -1066,7 +1066,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             ref_std = (ref_std / (sample_sums[1].len() - 1) as f64).powf(1./2.);
 
                             writeln!(file_open,
-                                     "\t{}\t{}\t{}\t{}\t{}\t{}",
+                                     "\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}",
                                      var_ten_kbs, total_variants,
                                      refr_ratios_mean, ref_std,
                                      var_ratios_mean, var_std).unwrap();

@@ -182,6 +182,8 @@ Alignment filtering (optional):
                                               bases must be aligned.
                                               Conflicts --allow-improper-pairs. [default 0.0]
    --allow-improper-pairs                     Allows reads to be mapped as improper pairs
+   --include-supplementary                    Includes read alignments flagged as supplementary
+   --include-secondary                        Includes read alignments flagged as secondary
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -311,6 +313,8 @@ Alignment filtering (optional):
                                               bases must be aligned.
                                               Conflicts --allow-improper-pairs. [default 0.0]
    --allow-improper-pairs                     Allows reads to be mapped as improper pairs
+   --include-supplementary                    Includes read alignments flagged as supplementary
+   --include-secondary                        Includes read alignments flagged as secondary
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -425,6 +429,8 @@ Alignment filtering (optional):
                                          bases must be aligned.
                                          Conflicts --allow-improper-pairs. [default 0.0]
    --allow-improper-pairs                Allows reads to be mapped as improper pairs
+   --include-supplementary               Includes read alignments flagged as supplementary
+   --include-secondary                   Includes read alignments flagged as secondary
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -548,6 +554,8 @@ Alignment filtering (optional):
                                          bases must be aligned.
                                          Conflicts --allow-improper-pairs. [default 0.0]
    --allow-improper-pairs                Allows reads to be mapped as improper pairs
+   --include-supplementary                    Includes read alignments flagged as supplementary
+   --include-secondary                        Includes read alignments flagged as secondary
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -1441,8 +1449,8 @@ impl FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
                 include_improper_pairs: m.is_present("allow-improper-pairs"),
-                include_secondary: false,
-                include_supplementary: false,
+                include_secondary: m.is_present("include-secondary"),
+                include_supplementary: m.is_present("include-supplementary"),
             },
             min_aligned_length_single: match m.is_present("min-read-aligned-length") {
                 true => value_t!(m.value_of("min-read-aligned-length"), u32).unwrap(),
@@ -1456,7 +1464,12 @@ impl FilterParameters {
             },
             min_percent_identity_pair: parse_percentage(&m, "min-read-percent-identity-pair"),
             min_aligned_percent_pair: parse_percentage(&m, "min-read-aligned-percent-pair"),
+
         };
+        if m.is_present("nanopore") {
+            f.flag_filters.include_improper_pairs = true;
+            f.flag_filters.include_supplementary = true;
+        }
         if doing_metabat(&m) {
             debug!(
                 "Setting single read percent identity threshold at 0.97 for \
@@ -2495,6 +2508,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("nanopore")
+                    .long("nanopore"))
+                .arg(Arg::with_name("include-secondary")
+                    .long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary")
+                    .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
                 .arg(Arg::with_name("verbose")
@@ -2676,6 +2695,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("nanopore")
+                    .long("nanopore"))
+                .arg(Arg::with_name("include-secondary")
+                    .long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary")
+                    .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
                 .arg(Arg::with_name("output-prefix")
@@ -2858,6 +2883,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("nanopore")
+                    .long("nanopore"))
+                .arg(Arg::with_name("include-secondary")
+                    .long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary")
+                    .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
                 .arg(Arg::with_name("output-prefix")
@@ -3044,6 +3075,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs")
                     .long("allow-improper-pairs"))
+                .arg(Arg::with_name("nanopore")
+                    .long("nanopore"))
+                .arg(Arg::with_name("include-secondary")
+                    .long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary")
+                    .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
                 .arg(Arg::with_name("output-prefix")

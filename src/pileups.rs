@@ -180,7 +180,8 @@ pub fn pileup_variants<R: NamedBamReader,
                             num_mapped_reads_in_current_contig,
                             sample_count,
                             output_prefix,
-                            epsilon);
+                            epsilon,
+                            &stoit_name);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
@@ -357,7 +358,8 @@ pub fn pileup_variants<R: NamedBamReader,
                 num_mapped_reads_in_current_contig,
                 sample_count,
                 output_prefix,
-                epsilon);
+                epsilon,
+                &stoit_name);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
         }
@@ -413,7 +415,8 @@ fn process_previous_contigs_var(
     num_mapped_reads_in_current_contig: u64,
     sample_count: usize,
     output_prefix: &str,
-    epsilon: f64) {
+    epsilon: f64,
+    stoit_name: &str) {
 
     if last_tid != -2 {
         coverage_estimators.par_iter_mut().for_each(|estimator|{
@@ -436,6 +439,7 @@ fn process_previous_contigs_var(
                                  last_tid.clone(),
                                  total_indels_in_current_contig,
                                  contig_name.clone(),
+                                 contig_len,
                                  method,
                                  coverages,
                                  ups_and_downs);
@@ -459,7 +463,7 @@ fn process_previous_contigs_var(
                     // prints results of variants calling
 //                    pileup_struct.generate_variant_contig(&ref_sequence, output_prefix);
 
-                    pileup_struct.print_variants(&ref_sequence, sample_idx);
+                    pileup_struct.print_variants(&ref_sequence, stoit_name);
                 }
 //                pileup_struct.generate_svd();
 

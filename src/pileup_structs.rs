@@ -104,6 +104,7 @@ pub trait PileupFunctions {
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
+                  contig_len: usize,
                   method: &str,
                   coverages: Vec<f32>,
                   ups_and_downs: Vec<i32>);
@@ -135,7 +136,7 @@ pub trait PileupFunctions {
 
     fn cluster_variants(&mut self, eps: f64);
 
-    fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32);
+    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
 }
 
 impl PileupFunctions for PileupStats {
@@ -196,6 +197,7 @@ impl PileupFunctions for PileupStats {
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
+                  contig_len: usize,
                   method: &str,
                   coverages: Vec<f32>,
                   ups_and_downs: Vec<i32>) {
@@ -219,7 +221,7 @@ impl PileupFunctions for PileupStats {
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
-                *target_len = coverages[0];
+                *target_len = contig_len as f32;
                 *coverage = coverages[1];
                 *variance = coverages[2];
                 *method = method.to_string();
@@ -1514,7 +1516,7 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn print_variants(&mut self, ref_sequence: &Vec<u8>, sample_idx: i32){
+    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str){
         match self {
             PileupStats::PileupContigStats {
                 indels,
@@ -1557,7 +1559,7 @@ impl PileupFunctions for PileupStats {
                             // How does this print N for insertions?
                             if var.to_owned().contains("N"){
                                 print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                       sample_idx,
+                                       stoit_name,
                                        tid,
                                        position,
                                        var,
@@ -1568,7 +1570,7 @@ impl PileupFunctions for PileupStats {
 
                             } else {
                                 print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                       sample_idx,
+                                       stoit_name,
                                        tid, position,
                                        var,
                                        str::from_utf8(
@@ -1589,7 +1591,7 @@ impl PileupFunctions for PileupStats {
 
                         } else if var.len() == 1 && var != &"R".to_string(){
                             print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                   sample_idx,
+                                   stoit_name,
                                    tid, position,
                                    var,
                                    ref_sequence[position] as char,
