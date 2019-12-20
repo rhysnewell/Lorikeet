@@ -1659,6 +1659,7 @@ mod tests {
                           0,
                           0,
                           "contig_name".as_bytes().to_vec(),
+                          2,
                           "mean",
                           vec![2., 6., 0.],
                           vec![6,0]);
@@ -1720,6 +1721,7 @@ mod tests {
                           0,
                           0,
                           "contig_name".as_bytes().to_vec(),
+                          3,
                           "mean",
                           vec![2., 6., 0.],
                           vec![6,4,0]);
@@ -1794,6 +1796,7 @@ mod tests {
                           0,
                           0,
                           "contig_name".as_bytes().to_vec(),
+                          4,
                           "mean",
                           vec![2., 6., 0.],
                           vec![3,3,0,-6]);
