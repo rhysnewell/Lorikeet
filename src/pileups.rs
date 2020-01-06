@@ -386,6 +386,7 @@ pub fn pileup_variants<R: NamedBamReader,
         info!("Clustering Variants with epsilon {} and minimum cluster sizes of {}", epsilon, min_cluster_size);
         pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
         pileup_matrix.generate_genotypes(output_prefix);
+        pileup_matrix.print_matrix();
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);
     }
