@@ -19,7 +19,7 @@ pub enum PileupMatrix {
         coverages: HashMap<i32, Vec<f32>>,
         average_genotypes: HashMap<i32, Vec<f32>>,
         variances: HashMap<i32, Vec<f32>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, HashMap<usize, (f64, f64)>>>>,
+        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f64, f64)>>>>,
         snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
         indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
         contigs: HashMap<i32, Vec<u8>>,
@@ -78,7 +78,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_genotypes(&mut self, output_prefix: &str);
 
-    fn print_stats(&self, output_prefix: &str);
+    fn print_matrix(&self);
 
     fn print_variant_stats(&self, output_prefix: &str);
 
@@ -196,6 +196,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             .or_insert(str::from_utf8(&target_name).unwrap().to_string());
                         target_lengths.entry(tid).or_insert(target_len);
 
+                        // Initialize contig id in variant hashmap
                         let mut contig_variants = variants.entry(tid)
                             .or_insert(HashMap::new());
 
@@ -216,10 +217,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let mut total_depth = 0.;
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
-                                        .or_insert(HashMap::new());
+                                        .or_insert(vec![(0., 0.); sample_count]);
                                     variant_depth += abundance.0;
                                     total_depth = abundance.1 + 1 as f64;
-                                    sample_map.insert(sample_idx, *abundance);
+                                    sample_map[sample_idx] = *abundance;
                                 }
                                 // add pseudocounts
                                 let ref_depth = total_depth
@@ -387,15 +388,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let mut variant_info_all = variant_info_all
                                 .lock().unwrap();
 
-                            for (var, abundance_map) in hash.iter() {
+                            for (var, abundances_vector) in hash.iter() {
                                 let mut abundance: f64;
                                 let mut mean_var: f64 = 0.;
                                 let mut mean_d: f64 = 0.;
                                 if !var.contains("R") {
                                     // Get the mean abundance across samples
-                                    let depths: Vec<(f64, f64)> = abundance_map.values().cloned().collect::<Vec<(f64, f64)>>();
-
-                                    depths.iter().for_each(|(var, d)| {
+                                    abundances_vector.iter().for_each(|(var, d)| {
                                         mean_var += *var;
                                         mean_d += *d;
                                     });
@@ -414,10 +413,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Upsides:
                                     // Massive speed increase, massive decrease in memory usage
                                     // Low abundant variants are all kind of in the same cluster any way
-                                    if mean_d >= eps {
+                                    if mean_d >= 0. {
                                         variant_info.push((position, var.to_string(), abundance, tid));
                                         abundance_float.push(abundance);
-                                        abundance_euclid.push(Euclid([mean_var.log10(), mean_d.log10()]));
+                                        abundance_euclid.push(Euclid([abundance.ln(), mean_var.ln()]));
                                     } else {
                                         let mut noise_set = noise_set.lock().unwrap();
                                         noise_set.insert(variant_info_all.len());
@@ -884,10 +883,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             for (var, clusters) in hash.iter() {
                                                 max_var = var;
                                                 let abundance_map = &variants[tid][&(pos as i32)][var];
-                                                let depths: Vec<(f64, f64)> = abundance_map.values().cloned().collect::<Vec<(f64, f64)>>();
                                                 let mut mean_var: f64 = 0.;
                                                 let mut mean_d: f64 = 0.;
-                                                depths.iter().map(|(var, d)|{
+                                                abundance_map.iter().map(|(var, d)|{
                                                     mean_var += *var;
                                                     mean_d += *d;
                                                 });
@@ -942,61 +940,25 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn print_stats(&self, output_prefix: &str) {
+    fn print_matrix(&self) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
-                average_genotypes,
-                coverages,
                 target_names,
-                target_lengths,
                 sample_names,
-                variances,
                 ..
             } => {
-                let file_name = output_prefix.to_string() + &"_".to_owned()
-                    + &"contig_stats".to_owned()
-                    + &".tsv".to_owned();
-                let file_path = Path::new(&file_name);
-                let mut file_open = match File::create(file_path) {
-                    Ok(fasta) => fasta,
-                    Err(e) => {
-                        println!("Cannot create file {:?}", e);
-                        std::process::exit(1)
-                    },
-                };
-                write!(file_open, "contigName\tcontigLen\ttotalAvgDepth\ttotalAvgGeno").unwrap();
-                for sample_name in sample_names.iter(){
-                    write!(file_open, "\t{}.bam\t{}.bam-var\t{}.bam-gen",
-                           &sample_name, &sample_name, &sample_name).unwrap();
-                }
-                write!(file_open, "\n").unwrap();
-                for (tid, contig_name) in target_names.iter() {
-                    write!(file_open, "{}\t{}", contig_name, target_lengths[tid]).unwrap();
-                    let placeholder = vec![0.0 as f32; sample_names.len() as usize];
-                    let coverage_vec = match coverages.get(tid) {
-                        Some(vector) => vector,
-                        None => &placeholder,
-                    };
-                    let coverage_sum: f32 = coverage_vec.par_iter().sum();
-                    write!(file_open, "\t{}", coverage_sum/coverage_vec.len() as f32).unwrap();
-                    let variance_vec = match variances.get(tid) {
-                        Some(vector) => vector,
-                        None => &placeholder,
-                    };
-                    let genotype_vec = match average_genotypes.get(tid) {
-                        Some(vector) => vector,
-                        None => &placeholder,
-                    };
-                    let genotype_sum: f32 = genotype_vec.par_iter().sum();
-                    write!(file_open, "\t{}", genotype_sum/genotype_vec.len() as f32).unwrap();
 
-                    for (coverage, variance, genotypes) in izip!(coverage_vec,
-                                                                 variance_vec,
-                                                                 genotype_vec){
-                        write!(file_open, "\t{}\t{}\t{}", coverage, variance, genotypes).unwrap();
+                for (tid, contig_name) in target_names.iter() {
+                    for (pos, variant_map) in variants[tid].iter() {
+                        for (variant, variant_depths) in variant_map.iter() {
+                            print!("{}", contig_name);
+                            for sample_depths in variant_depths.iter(){
+                                print!("\t{}", sample_depths.0/sample_depths.1);
+                            }
+                            print!("\n");
+                        }
                     }
-                    write!(file_open, "\n").unwrap();
                 }
             }
         }
