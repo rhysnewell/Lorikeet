@@ -4,13 +4,14 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use itertools::izip;
+use ndarray::Array2;
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex};
 use haplotypes_and_genotypes::*;
-use std::fs::{File, OpenOptions};
-use std::ops::Add;
+use std::fs::File;
+use pyo3::{prelude::*, types::PyModule};
+use numpy::{PyArray, IntoPyArray};
 
 
 #[derive(Debug)]
@@ -73,6 +74,8 @@ pub trait PileupMatrixFunctions {
                   sample_count: usize,
                   sample_idx: usize,
                   contig: Vec<u8>);
+
+    fn generate_distances(&mut self);
 
     fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
 
@@ -230,8 +233,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let geom_mean = ((variant_depth / total_depth)
                                     * (ref_depth / total_depth)).powf(1./2.);
 
-                                contig_sums[0][variant_index] = ((variant_depth / total_depth));
-                                contig_sums[2][variant_index] = ((ref_depth / total_depth));
+                                contig_sums[0][variant_index] = variant_depth / total_depth;
+                                contig_sums[2][variant_index] = ref_depth / total_depth;
                                 contig_sums[1][variant_index] = total_depth;
 
                                 variant_index += 1;
@@ -320,6 +323,166 @@ impl PileupMatrixFunctions for PileupMatrix{
                         
                     }
                 }
+            }
+        }
+    }
+
+    fn generate_distances(&mut self) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
+                variants,
+                indels_map,
+                snps_map,
+                target_names,
+                sample_names,
+                coverages,
+                ..
+            } => {
+                let sample_count = sample_names.len() as f64;
+
+
+                let variant_info_all =
+                    Arc::new(
+                        Mutex::new(
+                            Vec::new()));
+
+                // get basic variant info
+                for (tid, variant_abundances) in variants.iter() {
+                    variant_abundances.iter().for_each(
+                        |(position, hash)| {
+                            // loop through each position that has variants
+
+                            let mut variant_info_all = variant_info_all
+                                .lock().unwrap();
+
+                            for (var, abundances_vector) in hash.iter() {
+                                let mut abundance: f64;
+                                let mut mean_var: f64 = 0.;
+                                let mut mean_d: f64 = 0.;
+                                if !var.contains("R") {
+                                    // Get the mean abundance across samples
+                                    abundances_vector.iter().for_each(|(var, d)| {
+                                        mean_var += *var;
+                                        mean_d += *d;
+                                    });
+
+                                    mean_var = mean_var / sample_count;
+                                    mean_d = mean_d / sample_count;
+                                    abundance = mean_var / mean_d;
+
+                                    variant_info_all.push(
+                                        (position, var.to_string(), (mean_var, mean_d), tid));
+                                }
+                            }
+                        });
+                }
+
+                let variant_info_all = variant_info_all.lock().unwrap();
+
+                let mut variant_distances: Arc<Mutex<Array2<f64>>>
+                    = Arc::new(Mutex::new(Array2::zeros((variant_info_all.len(), variant_info_all.len()))));
+
+
+                // population distance matrix
+                (0..variant_info_all.len())
+                    .into_par_iter().for_each(|row_index| {
+                    let mut row_variant_set = &BTreeSet::new();
+                    let row_info = &variant_info_all[row_index];
+                    // lazily get the row variant read id set
+                    if indels_map[&row_info.3].contains_key(&row_info.0) {
+                        if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
+                            row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
+                        } else if snps_map[&row_info.3].contains_key(&row_info.0) {
+                            let var_char = row_info.1.as_bytes()[0] as char;
+                            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
+                                row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
+                            }
+                        }
+                    } else if snps_map[&row_info.3].contains_key(&row_info.0) {
+                        let var_char = row_info.1.as_bytes()[0] as char;
+                        if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
+                            row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
+                        }
+                    }
+
+                    let row_start = *row_info.0 as usize;
+                    let row_end = row_start + row_info.1.len() - 1;
+
+                    (row_index..variant_info_all.len())
+                        .into_par_iter().for_each(|col_index| {
+                        // set diagonals to 0
+                        if row_index == col_index {
+                            let mut variant_distances = variant_distances.lock().unwrap();
+                            variant_distances[[row_index, col_index]] = 0.
+                        } else {
+                            let mut col_variant_set = &BTreeSet::new();
+                            let col_info = &variant_info_all[col_index];
+                            if indels_map[&col_info.3].contains_key(&col_info.0) {
+                                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
+                                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+                                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                                    let var_char = col_info.1.as_bytes()[0] as char;
+                                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                                    }
+                                }
+                            } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                                let var_char = col_info.1.as_bytes()[0] as char;
+                                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                                    col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                                }
+                            }
+
+                            let col_start = *col_info.0 as usize;
+                            let col_end = col_start + col_info.1.len() - 1;
+
+                            let mut distance: f64;
+
+                            // If the variants share positions, then instantly they can't be in the same
+                            // gentoype so max distance
+                            if row_start <= col_end && col_start <= row_end {
+                                distance = 1.;
+                            } else {
+                                let intersection_len = (row_variant_set
+                                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                                let union_len = (row_variant_set
+                                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                                // Jaccard Similarity
+                                let jaccard = intersection_len / union_len;
+
+//                            let row_cov = contig_coverage_means[&row_info.3];
+//                            let col_cov = contig_coverage_means[&col_info.3];
+
+                                // Distance between abundance values
+                                let dist_var = ((row_info.2).0 / (col_info.2).0
+                                    - (col_info.2).0 / (row_info.2).0).abs();
+
+                                let dist_cov = ((row_info.2).1 / (col_info.2).1
+                                    - (col_info.2).1 / (row_info.2).1).abs();
+
+
+                                // Distance will be defined as the mean between jaccard dist
+                                // and dist_f
+                                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
+                            }
+
+                            let mut variant_distances = variant_distances
+                                .lock().unwrap();
+                            // Set both sides of distance matrix
+                            variant_distances[[row_index, col_index]] = distance;
+                            variant_distances[[col_index, row_index]] = distance;
+                        }
+                    });
+                });
+
+                let variant_distances = variant_distances.lock().unwrap();
+                let gil = pyo3::Python::acquire_gil();
+                let py = gil.python();
+                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
+                let variant_distances = variant_distances.to_owned().into_pyarray(py);
+                nmfpy.call1("perform_nmf", (variant_distances,)).unwrap();
             }
         }
     }
@@ -565,7 +728,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // produced condensed pairwise distances
                     // described here: https://docs.rs/kodama/0.2.2/kodama/
                     (0..variant_info_all.len() - 1)
-                        .into_par_iter().for_each(|(row_index)| {
+                        .into_par_iter().for_each(|row_index| {
                         let mut row_variant_set = &BTreeSet::new();
                         let row_info = &variant_info_all[row_index];
                         // lazily get the row variant read id set
@@ -589,7 +752,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         let row_end = row_start + row_info.1.len() - 1;
 
                         (row_index + 1..variant_info_all.len())
-                            .into_par_iter().for_each(|(col_index)| {
+                            .into_par_iter().for_each(|col_index| {
                             let mut col_variant_set = &BTreeSet::new();
                             let col_info = &variant_info_all[col_index];
                             if indels_map[&col_info.3].contains_key(&col_info.0) {
@@ -952,7 +1115,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 for (tid, contig_name) in target_names.iter() {
                     for (pos, variant_map) in variants[tid].iter() {
                         for (variant, variant_depths) in variant_map.iter() {
-                            print!("{}", contig_name);
+                            print!("{}\t{}", contig_name, pos);
                             for sample_depths in variant_depths.iter(){
                                 print!("\t{}", sample_depths.0/sample_depths.1);
                             }
