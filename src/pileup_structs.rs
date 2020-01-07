@@ -12,10 +12,8 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use nalgebra as na;
-use itertools::{izip, Itertools};
-use itertools::EitherOrBoth::{Both, Left, Right};
 use std::path::Path;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 
 #[macro_use(array)]
 

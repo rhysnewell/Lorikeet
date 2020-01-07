@@ -1,5 +1,5 @@
 use std;
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use rust_htslib::bam;
 use rust_htslib::bam::record::Cigar;
 
@@ -17,7 +17,6 @@ use mosdepth_genome_coverage_estimators::*;
 use bio::io::gff;
 use bio::io::gff::Record;
 
-use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 
 
@@ -384,8 +383,9 @@ pub fn pileup_variants<R: NamedBamReader,
     };
     if mode=="genotype" {
         info!("Clustering Variants with epsilon {} and minimum cluster sizes of {}", epsilon, min_cluster_size);
-        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
-        pileup_matrix.generate_genotypes(output_prefix);
+//        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
+//        pileup_matrix.generate_genotypes(output_prefix);
+        pileup_matrix.generate_distances();
         pileup_matrix.print_matrix();
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);

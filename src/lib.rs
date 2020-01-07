@@ -45,6 +45,9 @@ extern crate nalgebra;
 extern crate intel_mkl_src;
 extern crate rayon;
 extern crate permutation;
+extern crate pyo3;
+extern crate numpy;
+extern crate ndarray;
 
 
 use std::path::Path;
