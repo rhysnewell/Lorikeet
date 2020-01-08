@@ -350,13 +350,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                             Vec::new()));
 
                 // get basic variant info
-                for (tid, variant_abundances) in variants.iter() {
-                    variant_abundances.iter().for_each(
+                variants.par_iter().for_each(|(tid, variant_abundances)|{
+                    variant_abundances.par_iter().for_each(
                         |(position, hash)| {
                         // loop through each position that has variants
 
-                        let mut variant_info_all = variant_info_all
-                            .lock().unwrap();
+
 
                         for (var, abundances_vector) in hash.iter() {
                             let mut abundance: f64;
@@ -373,12 +372,15 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 mean_d = mean_d / sample_count;
                                 abundance = mean_var / mean_d;
 
+                                let mut variant_info_all = variant_info_all
+                                    .lock().unwrap();
+
                                 variant_info_all.push(
                                     (position, var.to_string(), (mean_var, mean_d), tid));
                             }
                         }
                     });
-                }
+                });
 
                 let variant_info_all = variant_info_all.lock().unwrap();
 
@@ -409,12 +411,67 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 
 //                println!("{:?}", variant_distances);
+                let max_rank = 10;
+                let mut ranks_rss = Arc::new(Mutex::new(vec![0.; max_rank]));
+
+                (0..max_rank).into_par_iter().for_each(|rank| {
+                    let cmd_string = format!(
+                        "set -e -o pipefail; \
+                     python3 -W ignore src/nmf.py {} True {} {}",
+                        // NMF
+                        rank+1,
+                        100,
+                        distances_file.path().to_str()
+                            .expect("Failed to convert tempfile path to str"));
+                    info!("Queuing cmd_string: {}", cmd_string);
+                    let mut python = std::process::Command::new("bash")
+                        .arg("-c")
+                        .arg(&cmd_string)
+                        .stderr(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .spawn()
+                        .expect("Unable to execute bash");
+
+                    let es = python.wait().expect("Unable to discern exit status");
+                    if !es.success() {
+                        error!("Error when running NMF: {:?}", cmd_string);
+                        let mut err = String::new();
+                        python.stderr.expect("Failed to grab stderr from NMF")
+                            .read_to_string(&mut err).expect("Failed to read stderr into string");
+                        error!("The overall STDERR was: {:?}", err);
+
+                        process::exit(1);
+                    } else {
+                        let mut out = String::new();
+                        python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                            .expect("Failed to read stdout to string");
+                        let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+                        let rss: f64 = out.trim().parse().unwrap();
+                        ranks_rss[rank as usize] = rss;
+                    }
+                });
+
+                let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+                let mut best_rank = 0;
+                let mut best_rss = 0.;
+
+                for (rank, rss) in ranks_rss.iter().enumerate() {
+                    if best_rank == 0 && best_rss == 0. && rank == 0 {
+                        best_rank = rank + 1;
+                        best_rss = *rss;
+                    } else if &best_rss > rss {
+                        best_rss = *rss;
+                        best_rank = rank + 1;
+                    } else if rss >= &best_rss {
+                        break
+                    }
+                }
+
                 let cmd_string = format!(
                     "set -e -o pipefail; \
-                     python3 -W ignore src/nmf.py {} {} {} {}",
+                     python3 -W ignore src/nmf.py {} False {} {}",
                     // NMF
-                    1,
-                    10,
+                    best_rank,
                     100,
                     distances_file.path().to_str()
                         .expect("Failed to convert tempfile path to str"));
@@ -436,13 +493,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                     error!("The overall STDERR was: {:?}", err);
 
                     process::exit(1);
-
                 } else {
                     let mut out = String::new();
                     python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                         .expect("Failed to read stdout to string");
                     println!("{}", out);
                 }
+
+
                 tmp_dir.close().expect("Unable to close temp directory");
 
 
