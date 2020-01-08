@@ -21,7 +21,7 @@ pub enum PileupStats {
     PileupContigStats {
         nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
         variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
-        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
+        variant_abundances: HashMap<i32, BTreeMap<String, (f32, f32)>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
@@ -43,13 +43,13 @@ pub enum PileupStats {
         min: f32,
         max: f32,
         method: String,
-        regression: (f64, f64, f64),
+        regression: (f32, f32, f32),
         // Clusters hashmap:
         // Key = Position
         // Value = K: Variant, V: (DBSCAN Cluster, HAC Index/initial cluster)
         clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
-        clusters_mean: HashMap<i32, f64>,
-        dendrogram: Dendrogram<f64>,
+        clusters_mean: HashMap<i32, f32>,
+        dendrogram: Dendrogram<f32>,
         haplotypes: Vec<Haplotype>,
     }
 }
@@ -220,8 +220,8 @@ impl PileupFunctions for PileupStats {
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
                 *target_len = contig_len as f32;
-                *coverage = coverages[1];
-                *variance = coverages[2];
+                *coverage = coverages[1] as f32;
+                *variance = coverages[2] as f32;
                 *method = method.to_string();
                 let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
                 *depth = vec![0.; ups_and_downs.len()];
@@ -291,7 +291,9 @@ impl PileupFunctions for PileupStats {
                          standard_errors,
                          pvalues.pairs());
                 // return results as intercept, effect size, se
-                *regression = (parameters.intercept_value, parameters.regressor_values[0], standard_errors[0].1);
+                *regression = (parameters.intercept_value as f32,
+                               parameters.regressor_values[0] as f32,
+                               standard_errors[0].1 as f32);
 
             }
         }
@@ -318,7 +320,7 @@ impl PileupFunctions for PileupStats {
                 let variant_count = Arc::new(Mutex::new(0));
                 let indels = Arc::new(Mutex::new(indels));
                 let nucfrequency = Arc::new(Mutex::new(nucfrequency));
-//                let min_variant_fraction = min_variant_depth as f64 / 100.;
+//                let min_variant_fraction = min_variant_depth as f32 / 100.;
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.par_iter_mut().enumerate().for_each(|(i, d)| {
@@ -340,16 +342,16 @@ impl PileupFunctions for PileupStats {
                         for (indel, read_ids) in indel_map.iter() {
                             let count = read_ids.len();
 //                                if indel.contains("N") {
-//                                    *d += count as f64;
+//                                    *d += count as f32;
 //                                }
                             *d += count as f64;
                             if (*coverage * (1.0 - coverage_fold) <= *d as f32
                                 && *d as f32 <= *coverage * (1.0 + coverage_fold))
                                 || (coverage_fold == 0.0) {
                                 if (count >= min_variant_depth)
-//                                    && (count as f64 / *d >= min_variant_fraction)
-                                    && ((count as f64 / *d) > (regression.1 + regression.2)) {
-                                    rel_abundance.insert(indel.to_owned(), (count as f64, *d));
+//                                    && (count as f32 / *d >= min_variant_fraction)
+                                    && ((count as f32 / *d as f32) > (regression.1 + regression.2)) {
+                                    rel_abundance.insert(indel.to_owned(), (count as f32, *d as f32));
                                     for read in read_ids {
                                         let mut read_variants
                                             = read_variants.lock().unwrap();
@@ -384,9 +386,9 @@ impl PileupFunctions for PileupStats {
                                 let count = read_ids.len();
 
                                 if (count >= min_variant_depth)
-//                                    && (count as f64 / *d >= min_variant_fraction)
-                                    && ((count as f64 / *d) > (regression.1 + regression.2)) {
-                                    rel_abundance.insert(base.to_string(), (count as f64, *d));
+//                                    && (count as f32 / *d >= min_variant_fraction)
+                                    && ((count as f32 / *d as f32) > (regression.1 + regression.2)) {
+                                    rel_abundance.insert(base.to_string(), (count as f32, *d as f32));
 
                                     for read in read_ids {
                                         let mut read_variants
@@ -1036,7 +1038,7 @@ impl PileupFunctions for PileupStats {
                 // total reads
                 let n = variants_in_reads.keys().len();
 
-                let mut variant_distances: na::base::DMatrix<f64>
+                let mut variant_distances: na::base::DMatrix<f32>
                     = na::base::DMatrix::zeros(*total_variants, *total_variants);
 
                 // Set up the distance matrix of size n*n
@@ -1233,9 +1235,9 @@ impl PileupFunctions for PileupStats {
 
                         for (var, abundance) in hash.iter() {
                             let frac = abundance.0 / abundance.1;
-//                            let mut abundance: f64;
-//                            let mut mean_var: f64 = 0.;
-//                            let mut mean_d: f64 = 0.;
+//                            let mut abundance: f32;
+//                            let mut mean_var: f32 = 0.;
+//                            let mut mean_d: f32 = 0.;
                             if !var.contains("R") {
                                 // This is a big hack but saves so much time
                                 // Basically, any variant that has an abundance less than 0.05
@@ -1246,10 +1248,10 @@ impl PileupFunctions for PileupStats {
                                 // Upsides:
                                 // Massive speed increase, massive decrease in memory usage
                                 // Low abundant variants are all kind of in the same cluster any way
-                                if frac >= eps {
+                                if frac >= eps as f32{
                                     variant_info.push((position, var.to_string(), frac));
                                     abundance_float.push(frac);
-                                    abundance_euclid.push(Euclid([abundance.0, abundance.1]));
+                                    abundance_euclid.push(Euclid([abundance.0 as f64, abundance.1 as f64]));
                                 } else {
                                     let mut noise_set = noise_set.lock().unwrap();
                                     noise_set.insert(variant_info_all.len());
@@ -1318,7 +1320,7 @@ impl PileupFunctions for PileupStats {
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                        let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -1349,7 +1351,7 @@ impl PileupFunctions for PileupStats {
                     let mut curr_diff = 1.0;
                     let mut curr_clus = 0;
                     for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                        let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
                         let diff = (mean - noise_abundance).abs();
                         if diff < curr_diff {
                             curr_diff = diff;
@@ -1366,7 +1368,7 @@ impl PileupFunctions for PileupStats {
                     noise_mean.push(noise_abundance.to_owned());
                 });
 
-                let mut variant_distances: Arc<Mutex<Vec<f64>>>
+                let mut variant_distances: Arc<Mutex<Vec<f32>>>
                     = Arc::new(
                     Mutex::new(
                         vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
@@ -1420,7 +1422,7 @@ impl PileupFunctions for PileupStats {
                         let col_start = *col_info.0 as usize;
                         let col_end = col_start + col_info.1.len() - 1;
 
-                        let mut distance: f64;
+                        let mut distance: f32;
 
                         // If the variants share positions, then instantly they can't be in the same
                         // gentoype so max distance
@@ -1432,10 +1434,10 @@ impl PileupFunctions for PileupStats {
                             }
                         } else {
                             let intersection_len = (row_variant_set
-                                .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                                .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
                             let union_len = (row_variant_set
-                                .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                                .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
                             // Jaccard Similarity
                             let jaccard = intersection_len / union_len;
@@ -1481,7 +1483,7 @@ impl PileupFunctions for PileupStats {
                 let mut means = HashMap::new();
 
                 for (cluster, abundances) in cluster_hierarchies.iter() {
-                    let mean = abundances.iter().sum::<f64>()/abundances.len() as f64;
+                    let mean = abundances.iter().sum::<f32>()/abundances.len() as f32;
                     means.insert(*cluster as i32, mean);
                 }
 

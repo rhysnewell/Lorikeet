@@ -50,6 +50,8 @@ extern crate ndarray;
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+
 
 
 

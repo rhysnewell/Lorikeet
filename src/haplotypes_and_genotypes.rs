@@ -37,7 +37,7 @@ impl Haplotype {
     }
 
     pub fn add_variants_per_contig(&mut self,
-                        dendrogram: &Dendrogram<f64>,
+                        dendrogram: &Dendrogram<f32>,
                         dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32)>>,
                         clusters: &mut HashMap<i32, BTreeMap<String, (i32, usize)>>) {
         let n = dendrogram.len();
@@ -138,7 +138,7 @@ impl Haplotype {
     }
 
     pub fn add_variants_per_genome(&mut self,
-                                   dendrogram: &Dendrogram<f64>,
+                                   dendrogram: &Dendrogram<f32>,
                                    dendro_clusters: &HashMap<usize, BTreeMap<i32, (String, i32, i32)>>,
                                    clusters: &mut HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>) {
         let n = dendrogram.len();
@@ -268,7 +268,7 @@ pub struct Genotype {
     pub read_ids: HashSet<i64>,
     pub start_var_pos: usize,
     pub ordered_variants: HashMap<i32, String>,
-    pub frequencies: Vec<f64>,
+    pub frequencies: Vec<f32>,
 }
 
 impl Genotype {
@@ -282,7 +282,7 @@ impl Genotype {
     }
 
     pub fn new(&mut self, read_id: i64, position_map: &BTreeMap<i32, String>,
-           variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>) {
+           variant_abundances: &HashMap<i32, BTreeMap<String, (f32, f32)>>) {
         self.read_ids = HashSet::new();
         self.frequencies = Vec::new();
         self.ordered_variants = HashMap::new();

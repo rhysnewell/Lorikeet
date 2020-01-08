@@ -403,7 +403,6 @@ pub fn pileup_variants<R: NamedBamReader,
         sample_idx += 1;
     };
     if mode=="genotype" {
-        info!("Generating Variant Distances");
 //        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
 //        pileup_matrix.generate_genotypes(output_prefix);
         pileup_matrix.generate_distances();

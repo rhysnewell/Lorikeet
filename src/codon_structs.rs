@@ -69,7 +69,7 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f32, f32)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f32;
@@ -119,7 +119,7 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f32, f32)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
                       _depth: &Vec<f64>) -> f32 {
