@@ -401,7 +401,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                 unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
                     .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-                let mut distances_file = tempfile::NamedTempFile::new()
+                let mut distances_file = tempfile::Builder::new()
+                    .prefix("lorikeet-distances-vec")
+                    .tempfile_in(tmp_dir.path())
                     .expect(&format!("Failed to create distances tempfile"));
                 writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
 
@@ -424,6 +426,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     .expect("Unable to execute bash");
 
                 println!("{:?}", str::from_utf8(&python.stdout[..]).unwrap());
+                tmp_dir.close().expect("Unable to close temp directory");
 
 
 //                let py = gil.python();

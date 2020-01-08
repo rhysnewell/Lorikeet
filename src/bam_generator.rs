@@ -418,19 +418,6 @@ pub fn generate_filtered_bam_readers_from_bam_files(
     return generators;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 pub struct StreamingFilteredNamedBamReader {
     stoit_name: String,
     filtered_stream: ReferenceSortedBamFilter,
