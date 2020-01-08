@@ -4,7 +4,7 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use ndarray::Array2;
+use ndarray::{Array1, ArrayView};
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -23,7 +23,7 @@ pub enum PileupMatrix {
         coverages: HashMap<i32, Vec<f32>>,
         average_genotypes: HashMap<i32, Vec<f32>>,
         variances: HashMap<i32, Vec<f32>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f64, f64)>>>>,
+        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f32, f32)>>>>,
         snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
         indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
         contigs: HashMap<i32, Vec<u8>>,
@@ -31,11 +31,11 @@ pub enum PileupMatrix {
         target_lengths: HashMap<i32, f32>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
-        dendrogram: Dendrogram<f64>,
+        dendrogram: Dendrogram<f32>,
         clusters: HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>,
-        clusters_mean: HashMap<i32, f64>,
+        clusters_mean: HashMap<i32, f32>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
-        variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
+        variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f32>>>>,
     }
 }
 
@@ -219,14 +219,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                             for (pos, abundance_map) in variant_abundances.iter() {
                                 let position_variants = contig_variants.entry(*pos)
                                     .or_insert(BTreeMap::new());
-                                let mut variant_depth = 0.;
-                                let mut total_depth = 0.;
+                                let mut variant_depth: f32 = 0.;
+                                let mut total_depth: f32 = 0.;
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
-                                    variant_depth += abundance.0;
-                                    total_depth = abundance.1 + 1 as f64;
-                                    sample_map[sample_idx] = *abundance;
+                                    variant_depth += abundance.0 as f32;
+                                    total_depth = abundance.1 as f32 + 1 as f32;
+                                    sample_map[sample_idx] = (abundance.0 as f32, abundance.1 as f32);
                                 }
                                 // add pseudocounts
                                 let ref_depth = total_depth
@@ -244,12 +244,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                             }
                             // Get the geometric means of the variant, depth, and reference counts
                             // at each variant position
-//                            let var_geom: f64 = contig_sums[0].iter().product::<f64>()
-//                                .powf((1 / variant_index) as f64);
-//                            let dep_geom: f64 = contig_sums[1].iter().product::<f64>()
-//                                .powf((1 / variant_index) as f64);
-//                            let ref_geom: f64 = contig_sums[2].iter().product::<f64>()
-//                                .powf((1 / variant_index) as f64);
+//                            let var_geom: f32 = contig_sums[0].iter().product::<f32>()
+//                                .powf((1 / variant_index) as f32);
+//                            let dep_geom: f32 = contig_sums[1].iter().product::<f32>()
+//                                .powf((1 / variant_index) as f32);
+//                            let ref_geom: f32 = contig_sums[2].iter().product::<f32>()
+//                                .powf((1 / variant_index) as f32);
 //
 //                            debug!("Ref CLR {:?}", contig_sums[2]);
 //
@@ -341,7 +341,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 coverages,
                 ..
             } => {
-                let sample_count = sample_names.len() as f64;
+                let sample_count = sample_names.len() as f32;
 
 
                 let variant_info_all =
@@ -358,9 +358,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 
                         for (var, abundances_vector) in hash.iter() {
-                            let mut abundance: f64;
-                            let mut mean_var: f64 = 0.;
-                            let mut mean_d: f64 = 0.;
+                            let mut abundance: f32;
+                            let mut mean_var: f32 = 0.;
+                            let mut mean_d: f32 = 0.;
                             if !var.contains("R") {
                                 // Get the mean abundance across samples
                                 abundances_vector.iter().for_each(|(var, d)| {
@@ -383,6 +383,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 });
 
                 let variant_info_all = variant_info_all.lock().unwrap();
+
+                info!("Generating Variant Distances with {} Variants", variant_info_all.len());
 
                 let mut variant_distances =
                     get_condensed_distances(&variant_info_all, indels_map, snps_map);
@@ -446,7 +448,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                             .expect("Failed to read stdout to string");
                         let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                        let rss: f64 = out.trim().parse().unwrap();
+                        let rss: f32 = out.trim().parse().unwrap();
                         ranks_rss[rank as usize] = rss;
                     }
                 });
@@ -526,7 +528,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 coverages,
                 ..
             } => {
-                let sample_count = sample_names.len() as f64;
+                let sample_count = sample_names.len() as f32;
 
                 let mut abundance_euclid =
                     Arc::new(
@@ -577,9 +579,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 .lock().unwrap();
 
                             for (var, abundances_vector) in hash.iter() {
-                                let mut abundance: f64;
-                                let mut mean_var: f64 = 0.;
-                                let mut mean_d: f64 = 0.;
+                                let mut abundance: f32;
+                                let mut mean_var: f32 = 0.;
+                                let mut mean_d: f32 = 0.;
                                 if !var.contains("R") {
                                     // Get the mean abundance across samples
                                     abundances_vector.iter().for_each(|(var, d)| {
@@ -604,13 +606,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if mean_d >= 0. {
                                         variant_info.push((position, var.to_string(), abundance, tid));
                                         abundance_float.push(abundance);
-                                        abundance_euclid.push(Euclid([abundance.ln(), mean_var.ln()]));
+                                        abundance_euclid.push(Euclid([abundance.ln() as f64, mean_var.ln() as f64]));
                                     } else {
                                         let mut noise_set = noise_set.lock().unwrap();
                                         noise_set.insert(variant_info_all.len());
                                     }
                                     variant_info_all.push(
-                                        (position, var.to_string(), (mean_var, mean_d), tid));
+                                        (position, var.to_string(), (mean_var as f32, mean_d as f32), tid));
                                 }
                             }
                         });
@@ -625,7 +627,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
                            variant_info_all.len());
                     let mut dbscan = Dbscan::new(scanner,
-                                                 eps,
+                                                 eps as f64,
                                                  min_cluster_size);
 
 
@@ -678,7 +680,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         let mut curr_diff = 1.0;
                         let mut curr_clus = 0;
                         for (cluster, abundance) in cluster_hierarchies.iter() {
-                            let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
 
                             let diff = (mean - noise_abundance).abs();
                             if diff < curr_diff {
@@ -716,7 +718,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         let mut curr_clus = 0;
 
                         for (cluster, abundance) in cluster_hierarchies.iter() {
-                            let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
+                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
 
                             let diff = (mean - noise_frac).abs();
                             if diff < curr_diff {
@@ -752,52 +754,52 @@ impl PileupMatrixFunctions for PileupMatrix{
                     debug!("Performing HAC");
 
 
-                    let dend = nnchain(
-                        &mut variant_distances,
-                        variant_info_all.len(),
-                        Method::Ward.into_method_chain()
-                            .expect("Incompatible linkage method"));
-                    debug!("Dendrogram {:?}", dend);
-
-                    let mut cluster_map = cluster_map.lock().unwrap();
-                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                    let mut means = HashMap::new();
-
-                    for (cluster, abundance) in cluster_hierarchies.iter() {
-                        let mean = abundance.iter().sum::<f64>() / abundance.len() as f64;
-
-                        means.insert(*cluster as i32, mean);
-                    }
-
-                    // Combine info of both clustering methods for easy access
-                    let mut full_cluster_map =
-                        Arc::new(
-                            Mutex::new(
-                                HashMap::new()));
-
-                    variant_info_all
-                        .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))| {
-                        let db_cluster = cluster_map
-                            .get(tid).expect("No contig found when it should be")
-                            .get(position).expect("Position not found when it should be")
-                            .get(variant).expect("Variant not found when it should be");
-                        let mut full_cluster_map = full_cluster_map.lock().unwrap();
-
-                        let contig_map = full_cluster_map.entry(**tid)
-                            .or_insert(HashMap::new());
-
-                        let position_map = contig_map.entry(**position)
-                            .or_insert(BTreeMap::new());
-
-                        position_map.insert(variant.to_string(), (*db_cluster, index));
-                    });
-
-
-                    *dendrogram = dend;
-                    *clusters = full_cluster_map.lock().unwrap().clone();
-                    *clusters_mean = means;
-                    info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
-                          clusters_mean.len(), target_names.len(), eps);
+//                    let dend = nnchain(
+//                        variant_distances.as_slice().expect("Unable to convert array to slice"),
+//                        variant_info_all.len(),
+//                        Method::Ward.into_method_chain()
+//                            .expect("Incompatible linkage method"));
+//                    debug!("Dendrogram {:?}", dend);
+//
+//                    let mut cluster_map = cluster_map.lock().unwrap();
+//                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+//                    let mut means = HashMap::new();
+//
+//                    for (cluster, abundance) in cluster_hierarchies.iter() {
+//                        let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
+//
+//                        means.insert(*cluster as i32, mean);
+//                    }
+//
+//                    // Combine info of both clustering methods for easy access
+//                    let mut full_cluster_map =
+//                        Arc::new(
+//                            Mutex::new(
+//                                HashMap::new()));
+//
+//                    variant_info_all
+//                        .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))| {
+//                        let db_cluster = cluster_map
+//                            .get(tid).expect("No contig found when it should be")
+//                            .get(position).expect("Position not found when it should be")
+//                            .get(variant).expect("Variant not found when it should be");
+//                        let mut full_cluster_map = full_cluster_map.lock().unwrap();
+//
+//                        let contig_map = full_cluster_map.entry(**tid)
+//                            .or_insert(HashMap::new());
+//
+//                        let position_map = contig_map.entry(**position)
+//                            .or_insert(BTreeMap::new());
+//
+//                        position_map.insert(variant.to_string(), (*db_cluster, index));
+//                    });
+//
+//
+//                    *dendrogram = dend;
+//                    *clusters = full_cluster_map.lock().unwrap().clone();
+//                    *clusters_mean = means;
+//                    info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
+//                          clusters_mean.len(), target_names.len(), eps);
                 }
             }
         }
@@ -815,7 +817,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 ..
             } => {
-                let sample_count = sample_names.len() as f64;
+                let sample_count = sample_names.len() as f32;
                 // First we need to convert DBSCAN cluster ids into taxonomic rank ids
                 // Clusters of higher abundance mutations will be closer to root
                 // Ordered from root to leaf
@@ -967,8 +969,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             for (var, clusters) in hash.iter() {
                                                 max_var = var;
                                                 let abundance_map = &variants[tid][&(pos as i32)][var];
-                                                let mut mean_var: f64 = 0.;
-                                                let mut mean_d: f64 = 0.;
+                                                let mut mean_var: f32 = 0.;
+                                                let mut mean_d: f32 = 0.;
                                                 abundance_map.iter().map(|(var, d)|{
                                                     mean_var += *var;
                                                     mean_d += *d;
@@ -1091,25 +1093,25 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 //                            let var_ratios = sample_sums[0]
 //                                .iter().zip(&sample_sums[1])
-//                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
+//                                .map(|(var, dep)| { var / dep }).collect::<Vec<f32>>();
 //
 //                            let refr_ratios = sample_sums[2]
 //                                .iter().zip(&sample_sums[1])
-//                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
+//                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f32>>();
 
-                            let var_ratios_mean: f64 = sample_sums[0].iter().sum::<f64>()
-                                / sample_sums[1].len() as f64;
+                            let var_ratios_mean: f32 = sample_sums[0].iter().sum::<f32>()
+                                / sample_sums[1].len() as f32;
 
-                            let refr_ratios_mean: f64 = sample_sums[2].iter().sum::<f64>()
-                                / sample_sums[1].len() as f64;
+                            let refr_ratios_mean: f32 = sample_sums[2].iter().sum::<f32>()
+                                / sample_sums[1].len() as f32;
 
-                            let mut var_std: f64 = sample_sums[0].iter().map(|x|
-                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-                            var_std = (var_std / (sample_sums[1].len()) as f64).powf(1./2.);
+                            let mut var_std: f32 = sample_sums[0].iter().map(|x|
+                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f32>>().iter().sum::<f32>();
+                            var_std = (var_std / (sample_sums[1].len()) as f32).powf(1./2.);
 
-                            let mut ref_std: f64 = sample_sums[2].iter().map(|x|
-                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-                            ref_std = (ref_std / (sample_sums[1].len()) as f64).powf(1./2.);
+                            let mut ref_std: f32 = sample_sums[2].iter().map(|x|
+                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f32>>().iter().sum::<f32>();
+                            ref_std = (ref_std / (sample_sums[1].len()) as f32).powf(1./2.);
 
                             writeln!(file_open,
                                      "\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}",
@@ -1158,14 +1160,13 @@ impl PileupMatrixFunctions for PileupMatrix{
     }
 }
 
-fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f64, f64), &i32)>>,
+fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32, f32), &i32)>>,
                            indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
-                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> Arc<Mutex<Vec<f64>>> {
-    let mut variant_distances: Arc<Mutex<Vec<f64>>>
+                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> Arc<Mutex<Array1<f32>>> {
+    let mut variant_distances: Arc<Mutex<Array1<f32>>>
         = Arc::new(
         Mutex::new(
-            vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
-
+            Array1::<f32>::zeros((variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize)));
     debug!("Filling condensed matrix of length {}",
            (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
 
@@ -1218,7 +1219,7 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f64
             let col_start = *col_info.0 as usize;
             let col_end = col_start + col_info.1.len() - 1;
 
-            let mut distance: f64;
+            let mut distance: f32;
 
             // If the variants share positions, then instantly they can't be in the same
             // gentoype so max distance
@@ -1226,10 +1227,10 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f64
                 distance = 1.;
             } else {
                 let intersection_len = (row_variant_set
-                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
                 let union_len = (row_variant_set
-                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
                 // Jaccard Similarity
                 let jaccard = intersection_len / union_len;
@@ -1254,7 +1255,7 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f64
                 row_index, col_index, variant_info_all.len()) {
                 Some(index) => {
                     let mut variant_distances = variant_distances.lock().unwrap();
-                    variant_distances[index] = distance;
+                    variant_distances[[index]] = distance;
                 }
                 None => {
                     debug!("No corresponding index for row {} and col {}",
