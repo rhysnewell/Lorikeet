@@ -25,6 +25,7 @@ install:
 
   - conda create -q -n test-environment bwa samtools minimap2 prodigal
   - source activate test-environment
+  - pip install nimfa scipy
   - cargo build --verbose
 
 cache: cargo
