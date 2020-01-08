@@ -7,32 +7,47 @@ import ast
 
 def perform_nmf(array, k=10, miter=10, rrange=range(2,20)):
     # array = [[] for i in filenames]
-    nsnmf = nimfa.Nsnmf(array, seed='random_vcol', rank=k, max_iter=miter, update='divergence',
-                objective='div')
+    bd = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
+                objective='fro')
+    bd_fit = bd()
+    print('Rss: %5.4f' % bd_fit.fit.rss())
+    print('Evar: %5.4f' % bd_fit.fit.evar())
+    print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
+    print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
+
     # lsnmf = nimfa.SepNmf(array, seed='random_vcol', rank=k, n_run=10)
-    nsnmf_fit = nsnmf()
-    best_rank = nsnmf.estimate_rank(rank_range=rrange)
-    for rank, values in best_rank.items():
+    estimated_ranks = bd.estimate_rank(rank_range=rrange, n_run=miter//2)
+
+    best_rank = 0
+    best_rss = None
+    # Choose the best rank by finding the first inflection point in the RSS values
+    # Quick method is to find first point when RSS is at lowest value
+    for rank, values in estimated_ranks.items():
         print('Rank: %d' % rank)
         print('Rss: %5.4f' % values['rss'])
         print('Evar: %5.4f' % values['evar'])
         print('K-L: %5.4f' % values['kl'])
-    # print(best_rank)
-    print('Rss: %5.4f' % nsnmf_fit.fit.rss())
-    print('Evar: %5.4f' % nsnmf_fit.fit.evar())
-    print('K-L divergence: %5.4f' % nsnmf_fit.distance(metric='kl'))
-    print('Sparseness, W: %5.4f, H: %5.4f' % nsnmf_fit.fit.sparseness())
+        if best_rss is None or values['rss'] < best_rss:
+            best_rank = rank
+            best_rss = values['rss']
+        elif values['rss'] >= best_rss:
+            break
 
-    # predictions = nsnmf_fit.fit.predict(prob=True)
-    # bins = np.array(predictions[0])[0]
-    # bin_dict = {}
-    # prob_idx = 0
-    # for (bin_id, contig_name) in zip(bins, col_ids):
-    #     if predictions[1][prob_idx] >= 0.5:
-    #         try:
-    #             bin_dict[bin_id].append(contig_name)
-    #         except KeyError:
-    #             bin_dict[bin_id] = [contig_name]
+    print("%d strains estimated" % best_rank)
+    bd = nimfa.Nmf(array, seed='nndsvd', rank=best_rank, max_iter=miter, update='euclidean',
+                                         objective='fro')
+
+    bd_fit = bd()
+    print('Rss: %5.4f' % bd_fit.fit.rss())
+    print('Evar: %5.4f' % bd_fit.fit.evar())
+    print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
+    print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
+
+
+
+    #predictions = bd_fit.fit.predict(prob=True)
+    #bins = np.array(predictions[0])[0]
+    #print(predictions)
 
     # return nsnmf_fit, bin_dict, best_rank
 

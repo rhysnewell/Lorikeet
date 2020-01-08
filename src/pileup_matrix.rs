@@ -10,7 +10,7 @@ use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex, MutexGuard};
 use haplotypes_and_genotypes::*;
 use std::fs::File;
-use std::process::{Command, Stdio};
+use std::process;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
@@ -413,19 +413,36 @@ impl PileupMatrixFunctions for PileupMatrix{
                     "set -e -o pipefail; \
                      python3 -W ignore src/nmf.py {} {} {} {}",
                     // NMF
-                    2,
-                    5,
+                    1,
                     10,
+                    100,
                     distances_file.path().to_str()
                         .expect("Failed to convert tempfile path to str"));
                 info!("Queuing cmd_string: {}", cmd_string);
-                let python = std::process::Command::new("bash")
+                let mut python = std::process::Command::new("bash")
                     .arg("-c")
                     .arg(&cmd_string)
-                    .output()
+                    .stderr(process::Stdio::piped())
+                    .stdout(process::Stdio::piped())
+                    .spawn()
                     .expect("Unable to execute bash");
 
-                println!("{:?}", str::from_utf8(&python.stdout[..]).unwrap());
+                let es = python.wait().expect("Unable to discern exit status");
+                if !es.success() {
+                    error!("Error when running NMF: {:?}", cmd_string);
+                    let mut err = String::new();
+                    python.stderr.expect("Failed to grab stderr from NMF")
+                        .read_to_string(&mut err).expect("Failed to read stderr into string");
+                    error!("The overall STDERR was: {:?}", err);
+
+                    process::exit(1);
+
+                } else {
+                    let mut out = String::new();
+                    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                        .expect("Failed to read stdout to string");
+                    println!("{}", out);
+                }
                 tmp_dir.close().expect("Unable to close temp directory");
 
 
