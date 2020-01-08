@@ -7,11 +7,14 @@ use rayon::prelude::*;
 use ndarray::Array2;
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use haplotypes_and_genotypes::*;
 use std::fs::File;
-use pyo3::{prelude::*, types::PyModule};
-use numpy::{PyArray, IntoPyArray};
+use std::process::{Command, Stdio};
+use nix::unistd;
+use nix::sys::stat;
+use tempdir::TempDir;
+use tempfile;
 
 
 #[derive(Debug)]
@@ -350,139 +353,83 @@ impl PileupMatrixFunctions for PileupMatrix{
                 for (tid, variant_abundances) in variants.iter() {
                     variant_abundances.iter().for_each(
                         |(position, hash)| {
-                            // loop through each position that has variants
+                        // loop through each position that has variants
 
-                            let mut variant_info_all = variant_info_all
-                                .lock().unwrap();
+                        let mut variant_info_all = variant_info_all
+                            .lock().unwrap();
 
-                            for (var, abundances_vector) in hash.iter() {
-                                let mut abundance: f64;
-                                let mut mean_var: f64 = 0.;
-                                let mut mean_d: f64 = 0.;
-                                if !var.contains("R") {
-                                    // Get the mean abundance across samples
-                                    abundances_vector.iter().for_each(|(var, d)| {
-                                        mean_var += *var;
-                                        mean_d += *d;
-                                    });
+                        for (var, abundances_vector) in hash.iter() {
+                            let mut abundance: f64;
+                            let mut mean_var: f64 = 0.;
+                            let mut mean_d: f64 = 0.;
+                            if !var.contains("R") {
+                                // Get the mean abundance across samples
+                                abundances_vector.iter().for_each(|(var, d)| {
+                                    mean_var += *var;
+                                    mean_d += *d;
+                                });
 
-                                    mean_var = mean_var / sample_count;
-                                    mean_d = mean_d / sample_count;
-                                    abundance = mean_var / mean_d;
+                                mean_var = mean_var / sample_count;
+                                mean_d = mean_d / sample_count;
+                                abundance = mean_var / mean_d;
 
-                                    variant_info_all.push(
-                                        (position, var.to_string(), (mean_var, mean_d), tid));
-                                }
+                                variant_info_all.push(
+                                    (position, var.to_string(), (mean_var, mean_d), tid));
                             }
-                        });
+                        }
+                    });
                 }
 
                 let variant_info_all = variant_info_all.lock().unwrap();
 
-                let mut variant_distances: Arc<Mutex<Array2<f64>>>
-                    = Arc::new(Mutex::new(Array2::zeros((variant_info_all.len(), variant_info_all.len()))));
+                let mut variant_distances =
+                    get_condensed_distances(&variant_info_all, indels_map, snps_map);
+
+                let mut variant_distances = variant_distances
+                    .lock()
+                    .unwrap();
+
+//                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
+
+                let tmp_dir = TempDir::new("lorikeet_fifo")
+                    .expect("Unable to create temporary directory");
+                let fifo_path = tmp_dir.path().join("foo.pipe");
+
+                // create new fifo and give read, write and execute rights to the owner.
+                // This is required because we cannot open a Rust stream as a BAM file with
+                // rust-htslib.
+                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
+                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
+
+                let mut distances_file = tempfile::NamedTempFile::new()
+                    .expect(&format!("Failed to create distances tempfile"));
+                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
 
 
-                // population distance matrix
-                (0..variant_info_all.len())
-                    .into_par_iter().for_each(|row_index| {
-                    let mut row_variant_set = &BTreeSet::new();
-                    let row_info = &variant_info_all[row_index];
-                    // lazily get the row variant read id set
-                    if indels_map[&row_info.3].contains_key(&row_info.0) {
-                        if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
-                            row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
-                        } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                            let var_char = row_info.1.as_bytes()[0] as char;
-                            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                                row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                            }
-                        }
-                    } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                        let var_char = row_info.1.as_bytes()[0] as char;
-                        if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                            row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                        }
-                    }
+//                println!("{:?}", variant_distances);
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     python3 -W ignore src/nmf.py {} {} {} {}",
+                    // NMF
+                    2,
+                    5,
+                    10,
+                    distances_file.path().to_str()
+                        .expect("Failed to convert tempfile path to str"));
+                info!("Queuing cmd_string: {}", cmd_string);
+                let python = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .output()
+                    .expect("Unable to execute bash");
 
-                    let row_start = *row_info.0 as usize;
-                    let row_end = row_start + row_info.1.len() - 1;
-
-                    (row_index..variant_info_all.len())
-                        .into_par_iter().for_each(|col_index| {
-                        // set diagonals to 0
-                        if row_index == col_index {
-                            let mut variant_distances = variant_distances.lock().unwrap();
-                            variant_distances[[row_index, col_index]] = 0.
-                        } else {
-                            let mut col_variant_set = &BTreeSet::new();
-                            let col_info = &variant_info_all[col_index];
-                            if indels_map[&col_info.3].contains_key(&col_info.0) {
-                                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
-                                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
-                                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                                    let var_char = col_info.1.as_bytes()[0] as char;
-                                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                                    }
-                                }
-                            } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                                let var_char = col_info.1.as_bytes()[0] as char;
-                                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                                    col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                                }
-                            }
-
-                            let col_start = *col_info.0 as usize;
-                            let col_end = col_start + col_info.1.len() - 1;
-
-                            let mut distance: f64;
-
-                            // If the variants share positions, then instantly they can't be in the same
-                            // gentoype so max distance
-                            if row_start <= col_end && col_start <= row_end {
-                                distance = 1.;
-                            } else {
-                                let intersection_len = (row_variant_set
-                                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
-
-                                let union_len = (row_variant_set
-                                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
-
-                                // Jaccard Similarity
-                                let jaccard = intersection_len / union_len;
-
-//                            let row_cov = contig_coverage_means[&row_info.3];
-//                            let col_cov = contig_coverage_means[&col_info.3];
-
-                                // Distance between abundance values
-                                let dist_var = ((row_info.2).0 / (col_info.2).0
-                                    - (col_info.2).0 / (row_info.2).0).abs();
-
-                                let dist_cov = ((row_info.2).1 / (col_info.2).1
-                                    - (col_info.2).1 / (row_info.2).1).abs();
+                println!("{:?}", str::from_utf8(&python.stdout[..]).unwrap());
 
 
-                                // Distance will be defined as the mean between jaccard dist
-                                // and dist_f
-                                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
-                            }
-
-                            let mut variant_distances = variant_distances
-                                .lock().unwrap();
-                            // Set both sides of distance matrix
-                            variant_distances[[row_index, col_index]] = distance;
-                            variant_distances[[col_index, row_index]] = distance;
-                        }
-                    });
-                });
-
-                let variant_distances = variant_distances.lock().unwrap();
-                let gil = pyo3::Python::acquire_gil();
-                let py = gil.python();
-                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
-                let variant_distances = variant_distances.to_owned().into_pyarray(py);
-                nmfpy.call1("perform_nmf", (variant_distances,)).unwrap();
+//                let py = gil.python();
+//                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
+//                let variant_distances = variant_distances.to_owned().into_pyarray(py);
+//                nmfpy.call1("perform_nmf", (variant_distances,)).unwrap();
             }
         }
     }
@@ -713,117 +660,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                         noise_mean.push(noise_frac.to_owned());
                     });
 
-                    let mut variant_distances: Arc<Mutex<Vec<f64>>>
-                        = Arc::new(
-                        Mutex::new(
-                            vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
-
-                    debug!("Filling condensed matrix of length {}",
-                           (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
+                    let mut variant_distances =
+                        get_condensed_distances(&variant_info_all, indels_map, snps_map);
 
                     let mut contig_coverage_means = HashMap::new();
                     coverages.iter().map(|(tid, cov_vec)| {
                         let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
                     });
-                    // produced condensed pairwise distances
-                    // described here: https://docs.rs/kodama/0.2.2/kodama/
-                    (0..variant_info_all.len() - 1)
-                        .into_par_iter().for_each(|row_index| {
-                        let mut row_variant_set = &BTreeSet::new();
-                        let row_info = &variant_info_all[row_index];
-                        // lazily get the row variant read id set
-                        if indels_map[&row_info.3].contains_key(&row_info.0) {
-                            if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
-                                row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
-                            } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                                let var_char = row_info.1.as_bytes()[0] as char;
-                                if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                                    row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                                }
-                            }
-                        } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                            let var_char = row_info.1.as_bytes()[0] as char;
-                            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                                row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                            }
-                        }
-
-                        let row_start = *row_info.0 as usize;
-                        let row_end = row_start + row_info.1.len() - 1;
-
-                        (row_index + 1..variant_info_all.len())
-                            .into_par_iter().for_each(|col_index| {
-                            let mut col_variant_set = &BTreeSet::new();
-                            let col_info = &variant_info_all[col_index];
-                            if indels_map[&col_info.3].contains_key(&col_info.0) {
-                                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
-                                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
-                                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                                    let var_char = col_info.1.as_bytes()[0] as char;
-                                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                                    }
-                                }
-                            } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                                let var_char = col_info.1.as_bytes()[0] as char;
-                                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                                    col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                                }
-                            }
-
-                            let col_start = *col_info.0 as usize;
-                            let col_end = col_start + col_info.1.len() - 1;
-
-                            let mut distance: f64;
-
-                            // If the variants share positions, then instantly they can't be in the same
-                            // gentoype so max distance
-                            if row_start <= col_end && col_start <= row_end {
-                                distance = 1.;
-                                let mut number_of_clusters = number_of_clusters.lock().unwrap();
-                                if *number_of_clusters == 1 {
-                                    *number_of_clusters += 1;
-                                }
-                            } else {
-                                let intersection_len = (row_variant_set
-                                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
-
-                                let union_len = (row_variant_set
-                                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
-
-                                // Jaccard Similarity
-                                let jaccard = intersection_len / union_len;
-
-//                            let row_cov = contig_coverage_means[&row_info.3];
-//                            let col_cov = contig_coverage_means[&col_info.3];
-
-                                // Distance between abundance values
-                                let dist_var = ((row_info.2).0 / (col_info.2).0
-                                    - (col_info.2).0 / (row_info.2).0).abs();
-
-                                let dist_cov = ((row_info.2).1 / (col_info.2).1
-                                    - (col_info.2).1 / (row_info.2).1).abs();
-
-
-                                // Distance will be defined as the mean between jaccard dist
-                                // and dist_f
-                                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
-                            }
-
-                            match condensed_index(
-                                row_index, col_index, variant_info_all.len()) {
-                                Some(index) => {
-                                    let mut variant_distances = variant_distances.lock().unwrap();
-                                    variant_distances[index] = distance;
-                                }
-                                None => {
-                                    debug!("No corresponding index for row {} and col {}",
-                                           row_index, col_index);
-                                }
-                            };
-                        });
-                    });
-
 
                     let mut variant_distances = variant_distances
                         .lock()
@@ -1235,6 +1078,115 @@ impl PileupMatrixFunctions for PileupMatrix{
             }
         }
     }
+}
+
+fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f64, f64), &i32)>>,
+                           indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
+                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> Arc<Mutex<Vec<f64>>> {
+    let mut variant_distances: Arc<Mutex<Vec<f64>>>
+        = Arc::new(
+        Mutex::new(
+            vec![0.; (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize]));
+
+    debug!("Filling condensed matrix of length {}",
+           (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
+
+    // produced condensed pairwise distances
+    // described here: https://docs.rs/kodama/0.2.2/kodama/
+    (0..variant_info_all.len() - 1)
+        .into_par_iter().for_each(|row_index| {
+        let mut row_variant_set = &BTreeSet::new();
+        let row_info = &variant_info_all[row_index];
+        // lazily get the row variant read id set
+        if indels_map[&row_info.3].contains_key(&row_info.0) {
+            if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
+                row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
+            } else if snps_map[&row_info.3].contains_key(&row_info.0) {
+                let var_char = row_info.1.as_bytes()[0] as char;
+                if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
+                    row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
+                }
+            }
+        } else if snps_map[&row_info.3].contains_key(&row_info.0) {
+            let var_char = row_info.1.as_bytes()[0] as char;
+            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
+                row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
+            }
+        }
+
+        let row_start = *row_info.0 as usize;
+        let row_end = row_start + row_info.1.len() - 1;
+
+        (row_index + 1..variant_info_all.len())
+            .into_par_iter().for_each(|col_index| {
+            let mut col_variant_set = &BTreeSet::new();
+            let col_info = &variant_info_all[col_index];
+            if indels_map[&col_info.3].contains_key(&col_info.0) {
+                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
+                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                    let var_char = col_info.1.as_bytes()[0] as char;
+                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                    }
+                }
+            } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                let var_char = col_info.1.as_bytes()[0] as char;
+                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                    col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                }
+            }
+
+            let col_start = *col_info.0 as usize;
+            let col_end = col_start + col_info.1.len() - 1;
+
+            let mut distance: f64;
+
+            // If the variants share positions, then instantly they can't be in the same
+            // gentoype so max distance
+            if row_start <= col_end && col_start <= row_end {
+                distance = 1.;
+            } else {
+                let intersection_len = (row_variant_set
+                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                let union_len = (row_variant_set
+                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f64;
+
+                // Jaccard Similarity
+                let jaccard = intersection_len / union_len;
+
+//                            let row_cov = contig_coverage_means[&row_info.3];
+//                            let col_cov = contig_coverage_means[&col_info.3];
+
+                // Distance between abundance values
+                let dist_var = ((row_info.2).0 / (col_info.2).0
+                    - (col_info.2).0 / (row_info.2).0).abs();
+
+                let dist_cov = ((row_info.2).1 / (col_info.2).1
+                    - (col_info.2).1 / (row_info.2).1).abs();
+
+
+                // Distance will be defined as the mean between jaccard dist
+                // and dist_f
+                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
+            }
+
+            match condensed_index(
+                row_index, col_index, variant_info_all.len()) {
+                Some(index) => {
+                    let mut variant_distances = variant_distances.lock().unwrap();
+                    variant_distances[index] = distance;
+                }
+                None => {
+                    debug!("No corresponding index for row {} and col {}",
+                           row_index, col_index);
+                }
+            };
+        });
+    });
+
+    return variant_distances
 }
 
 // helper function to get the index of condensed matrix from it square form

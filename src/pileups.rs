@@ -386,7 +386,7 @@ pub fn pileup_variants<R: NamedBamReader,
 //        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
 //        pileup_matrix.generate_genotypes(output_prefix);
         pileup_matrix.generate_distances();
-        pileup_matrix.print_matrix();
+//        pileup_matrix.print_matrix();
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);
     }
