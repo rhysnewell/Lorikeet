@@ -16,7 +16,10 @@ use std::fs::File;
 use mosdepth_genome_coverage_estimators::*;
 use bio::io::gff;
 use bio::io::gff::Record;
-
+use nix::unistd;
+use nix::sys::stat;
+use tempdir::TempDir;
+use tempfile;
 use std::sync::{Arc, Mutex};
 
 
@@ -61,12 +64,27 @@ pub fn pileup_variants<R: NamedBamReader,
                     .expect("GFF File not found");
             } else {
                 external_command_checker::check_for_prodigal();
+                let tmp_dir = TempDir::new("lorikeet_fifo")
+                    .expect("Unable to create temporary directory");
+                let fifo_path = tmp_dir.path().join("foo.pipe");
+
+                // create new fifo and give read, write and execute rights to the owner.
+                // This is required because we cannot open a Rust stream as a BAM file with
+                // rust-htslib.
+                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
+                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
+
+                let mut gff_file = tempfile::Builder::new()
+                    .prefix("lorikeet-prodigal-gff")
+                    .tempfile_in(tmp_dir.path())
+                    .expect(&format!("Failed to create distances tempfile"));
                 let cmd_string = format!(
                     "set -e -o pipefail; \
                      prodigal -f gff -i {} -o {} {}",
                     // prodigal
                     m.value_of("reference").unwrap(),
-                    "lorikeet.gff",
+                    gff_file.path().to_str()
+                        .expect("Failed to convert tempfile path to str"),
                     m.value_of("prodigal-params").unwrap_or(""));
                 info!("Queuing cmd_string: {}", cmd_string);
                 std::process::Command::new("bash")
@@ -75,9 +93,12 @@ pub fn pileup_variants<R: NamedBamReader,
                     .output()
                     .expect("Unable to execute bash");
 
-                gff_reader = gff::Reader::from_file("lorikeet.gff",
+                gff_reader = gff::Reader::from_file(gff_file.path().to_str()
+                                                        .expect("Failed to convert tempfile path to str"),
                                                     bio::io::gff::GffType::GFF3)
                     .expect("Failed to read prodigal output");
+
+                tmp_dir.close().expect("Failed to close temo directory");
 
             }
             for record in gff_reader.records() {
