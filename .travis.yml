@@ -2,7 +2,8 @@
 sudo: false
 language: rust
 rust:
-  - nightly-2019-08-15
+  - stable
+  - beta
 
 install:
   # Modified from https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/use-conda-with-travis-ci.html
