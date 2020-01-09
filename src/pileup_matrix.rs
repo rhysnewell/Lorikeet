@@ -4,11 +4,12 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use ndarray::{Array1, ArrayView};
+use ndarray::{Array2, Array1, ArrayView};
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex, MutexGuard};
 use haplotypes_and_genotypes::*;
+use ndarray_npy::write_npy;
 use std::fs::File;
 use std::process;
 use nix::unistd;
@@ -409,8 +410,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                     .prefix("lorikeet-distances-vec")
                     .tempfile_in(tmp_dir.path())
                     .expect(&format!("Failed to create distances tempfile"));
-                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
-
+//                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
+                let tmp_path = distances_file.path().to_str()
+                    .expect("Failed to convert tempfile path to str").to_string();
+                write_npy(&tmp_path, variant_distances.to_owned()).expect("Unable to write to tempfile");
 
 //                println!("{:?}", variant_distances);
                 let max_rank = 10;
@@ -419,12 +422,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                 (0..max_rank).into_par_iter().for_each(|rank| {
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                     python3 -W ignore src/nmf.py {} True {} {}",
+                     nmf.py {} True {} {}",
                         // NMF
                         rank+1,
                         100,
-                        distances_file.path().to_str()
-                            .expect("Failed to convert tempfile path to str"));
+                        tmp_path);
                     info!("Queuing cmd_string: {}", cmd_string);
                     let mut python = std::process::Command::new("bash")
                         .arg("-c")
@@ -471,12 +473,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 let cmd_string = format!(
                     "set -e -o pipefail; \
-                     python3 -W ignore src/nmf.py {} False {} {}",
+                     nmf.py {} False {} {}",
                     // NMF
                     best_rank,
                     100,
-                    distances_file.path().to_str()
-                        .expect("Failed to convert tempfile path to str"));
+                    tmp_path);
                 info!("Queuing cmd_string: {}", cmd_string);
                 let mut python = std::process::Command::new("bash")
                     .arg("-c")
@@ -1166,13 +1167,14 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
     let mut variant_distances: Arc<Mutex<Array1<f32>>>
         = Arc::new(
         Mutex::new(
-            Array1::<f32>::zeros((variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize)));
-    debug!("Filling condensed matrix of length {}",
-           (variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize);
+            Array1::<f32>::zeros(((variant_info_all.len().pow(2) as usize
+                - variant_info_all.len()) / 2 as usize))));
+    debug!("Filling matrix of size {}",
+           ((variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize));
 
     // produced condensed pairwise distances
     // described here: https://docs.rs/kodama/0.2.2/kodama/
-    (0..variant_info_all.len() - 1)
+    (0..variant_info_all.len()-1)
         .into_par_iter().for_each(|row_index| {
         let mut row_variant_set = &BTreeSet::new();
         let row_info = &variant_info_all[row_index];
@@ -1196,72 +1198,80 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
         let row_start = *row_info.0 as usize;
         let row_end = row_start + row_info.1.len() - 1;
 
-        (row_index + 1..variant_info_all.len())
+        (row_index+1..variant_info_all.len())
             .into_par_iter().for_each(|col_index| {
-            let mut col_variant_set = &BTreeSet::new();
-            let col_info = &variant_info_all[col_index];
-            if indels_map[&col_info.3].contains_key(&col_info.0) {
-                if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
-                    col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+            if row_index == col_index {
+//                let mut variant_distances = variant_distances.lock().unwrap();
+//                variant_distances[[row_index, col_index]] = 0.;
+            } else {
+                let mut col_variant_set = &BTreeSet::new();
+                let col_info = &variant_info_all[col_index];
+                if indels_map[&col_info.3].contains_key(&col_info.0) {
+                    if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
+                        col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
+                    } else if snps_map[&col_info.3].contains_key(&col_info.0) {
+                        let var_char = col_info.1.as_bytes()[0] as char;
+                        if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
+                            col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
+                        }
+                    }
                 } else if snps_map[&col_info.3].contains_key(&col_info.0) {
                     let var_char = col_info.1.as_bytes()[0] as char;
                     if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
                         col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
                     }
                 }
-            } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                let var_char = col_info.1.as_bytes()[0] as char;
-                if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                    col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                }
-            }
 
-            let col_start = *col_info.0 as usize;
-            let col_end = col_start + col_info.1.len() - 1;
+                let col_start = *col_info.0 as usize;
+                let col_end = col_start + col_info.1.len() - 1;
 
-            let mut distance: f32;
+                let mut distance: f32;
 
-            // If the variants share positions, then instantly they can't be in the same
-            // gentoype so max distance
-            if row_start <= col_end && col_start <= row_end {
-                distance = 1.;
-            } else {
-                let intersection_len = (row_variant_set
-                    .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+                // If the variants share positions, then instantly they can't be in the same
+                // gentoype so max distance
+                if row_start <= col_end && col_start <= row_end {
+                    distance = 1.;
+                } else {
+                    let intersection_len = (row_variant_set
+                        .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
-                let union_len = (row_variant_set
-                    .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+                    let union_len = (row_variant_set
+                        .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
 
-                // Jaccard Similarity
-                let jaccard = intersection_len / union_len;
+                    // Jaccard Similarity
+                    let jaccard = intersection_len / union_len;
 
 //                            let row_cov = contig_coverage_means[&row_info.3];
 //                            let col_cov = contig_coverage_means[&col_info.3];
 
-                // Distance between abundance values
-                let dist_var = ((row_info.2).0 / (col_info.2).0
-                    - (col_info.2).0 / (row_info.2).0).abs();
+                    // Distance between abundance values
+                    let dist_var = ((row_info.2).0 / (col_info.2).0
+                        - (col_info.2).0 / (row_info.2).0).abs();
 
-                let dist_cov = ((row_info.2).1 / (col_info.2).1
-                    - (col_info.2).1 / (row_info.2).1).abs();
+                    let dist_cov = ((row_info.2).1 / (col_info.2).1
+                        - (col_info.2).1 / (row_info.2).1).abs();
 
 
-                // Distance will be defined as the mean between jaccard dist
-                // and dist_f
-                distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
+                    // Distance will be defined as the mean between jaccard dist
+                    // and dist_f
+                    distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
+                }
+
+                match condensed_index(
+                    row_index, col_index, variant_info_all.len()) {
+                    Some(index) => {
+                        let mut variant_distances = variant_distances.lock().unwrap();
+                        variant_distances[[index]] = distance;
+                    }
+                    None => {
+                        debug!("No corresponding index for row {} and col {}",
+                               row_index, col_index);
+                    }
+                };
+//                let mut variant_distances = variant_distances.lock().unwrap();
+//                variant_distances[[row_index, col_index]] = distance;
+//                variant_distances[[col_index, row_index]] = distance;
             }
-
-            match condensed_index(
-                row_index, col_index, variant_info_all.len()) {
-                Some(index) => {
-                    let mut variant_distances = variant_distances.lock().unwrap();
-                    variant_distances[[index]] = distance;
-                }
-                None => {
-                    debug!("No corresponding index for row {} and col {}",
-                           row_index, col_index);
-                }
-            };
         });
     });
 

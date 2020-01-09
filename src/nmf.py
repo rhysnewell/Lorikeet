@@ -1,10 +1,11 @@
+#!/usr/bin/env python3
+#import warnings
+#warnings.filterwarnings("ignore")
 import nimfa
+#warnings.filterwarnings("always")
 import numpy as np
 from scipy.spatial.distance import squareform
-import sys, os
-import ctypes
-import ast
-import random
+import sys
 
 #random.seed(a=345210)
 
@@ -65,7 +66,7 @@ def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
 
 if __name__=="__main__":
     try:
-        pairwise_distances = sys.argv[4]
+        pairwise_distances = np.load(sys.argv[4])
         minRank = int(sys.argv[1])
         estimateRanks = sys.argv[2]
         miter = int(sys.argv[3])
@@ -73,13 +74,13 @@ if __name__=="__main__":
         print("Usage <Ranks> <Estimate Ranks> <Max Iterations> <Input Pairwise Distance Vector>")
         sys.exit()
 
-    condensed_vec = []
-    with open(pairwise_distances) as f:
-        for line in f:
-            condensed_vec = ast.literal_eval(line)
-            #condensed_vec = line
-    condensed_vec = np.array(condensed_vec)
-    square_vec = squareform(condensed_vec)
+    #condensed_vec = []
+    #with open(pairwise_distances) as f:
+    #    for line in f:
+    #        condensed_vec = ast.literal_eval(line)
+    #        #condensed_vec = line
+    #condensed_vec = np.array(condensed_vec)
+    pairwise_distances = squareform(pairwise_distances)
 
-    perform_nmf(square_vec, minRank, miter, estimateRanks)
+    perform_nmf(pairwise_distances, minRank, miter, estimateRanks)
 
