@@ -275,6 +275,8 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 let data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
+//                println!("{:?}", variant_count.clone());
+//                println!("{:?}", depth.clone());
                 let data = RegressionDataBuilder::new()
                     .build_from(data).expect("Unable to build regression from data");
                 let formula = "Y ~ X";
@@ -350,7 +352,7 @@ impl PileupFunctions for PileupStats {
                                 || (coverage_fold == 0.0) {
                                 if (count >= min_variant_depth)
 //                                    && (count as f32 / *d >= min_variant_fraction)
-                                    && ((count as f32 / *d as f32) > (regression.1 + regression.2)) {
+                                    && ((count as f32) > *d as f32 * 2. * (regression.1 + regression.2)) {
                                     rel_abundance.insert(indel.to_owned(), (count as f32, *d as f32));
                                     for read in read_ids {
                                         let mut read_variants
@@ -387,7 +389,7 @@ impl PileupFunctions for PileupStats {
 
                                 if (count >= min_variant_depth)
 //                                    && (count as f32 / *d >= min_variant_fraction)
-                                    && ((count as f32 / *d as f32) > (regression.1 + regression.2)) {
+                                    && ((count as f32) > *d as f32 * 2. * (regression.1 + regression.2)) {
                                     rel_abundance.insert(base.to_string(), (count as f32, *d as f32));
 
                                     for read in read_ids {

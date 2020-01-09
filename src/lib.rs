@@ -46,7 +46,7 @@ extern crate intel_mkl_src;
 extern crate rayon;
 extern crate permutation;
 extern crate ndarray;
-
+extern crate ndarray_npy;
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;
