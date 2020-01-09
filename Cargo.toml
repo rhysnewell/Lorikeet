@@ -42,6 +42,7 @@ taxonomy = "0.3.3"
 cogset = "0.2.0"
 kodama = "0.2.2"
 ndarray = "0.13.*"
+ndarray-npy = "0.5.*"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
