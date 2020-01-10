@@ -340,7 +340,7 @@ mod tests {
 
         let mut gene_records
             = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
-        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>> = HashMap::new();
+        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f32, f32)>> = HashMap::new();
         variant_abundances.insert(13, BTreeMap::new());
         variant_abundances.insert(14, BTreeMap::new());
         let hash = variant_abundances.entry(7).or_insert(BTreeMap::new());

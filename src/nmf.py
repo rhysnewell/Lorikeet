@@ -16,7 +16,9 @@ def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
     bd_fit = bd()
     if estimateRanks == 'True':
         print(bd_fit.fit.rss())
+
     else:
+
         print('Rss: %5.4f' % bd_fit.fit.rss())
         print('Evar: %5.4f' % bd_fit.fit.evar())
         print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
