@@ -81,7 +81,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self);
 
-    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
+//    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
 
     fn generate_genotypes(&mut self, output_prefix: &str);
 
@@ -359,25 +359,30 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 
                         for (var, abundances_vector) in hash.iter() {
-                            let mut abundance: f32;
+                            let mut abundance: f32 = 0.;
                             let mut mean_var: f32 = 0.;
-                            let mut mean_d: f32 = 0.;
+                            let mut total_d: f32 = 0.;
+                            let mut freqs = Vec::new();
                             if !var.contains("R") {
                                 // Get the mean abundance across samples
                                 abundances_vector.iter().for_each(|(var, d)| {
                                     mean_var += *var;
-                                    mean_d += *d;
+                                    // Total depth of location
+                                    total_d += *d;
+                                    freqs.push(*var / *d);
+                                    abundance += *var / *d;
                                 });
 
                                 mean_var = mean_var / sample_count;
-                                mean_d = mean_d / sample_count;
-                                abundance = mean_var / mean_d;
+                                abundance = abundance / sample_count;
 
                                 let mut variant_info_all = variant_info_all
                                     .lock().unwrap();
 
+
                                 variant_info_all.push(
-                                    (position, var.to_string(), (mean_var, mean_d), tid));
+                                    (position, var.to_string(),
+                                     (abundance, freqs), tid));
                             }
                         }
                     });
@@ -458,6 +463,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
                 let mut best_rank = 0;
                 let mut best_rss = 0.;
+                debug!("RSS Values {:?}", ranks_rss);
 
                 for (rank, rss) in ranks_rss.iter().enumerate() {
                     if best_rank == 0 && best_rss == 0. && rank == 0 {
@@ -515,296 +521,305 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize) {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                variants,
-                indels_map,
-                snps_map,
-                ref mut clusters,
-                ref mut clusters_mean,
-                ref mut dendrogram,
-                target_names,
-                sample_names,
-                coverages,
-                ..
-            } => {
-                let sample_count = sample_names.len() as f32;
-
-                let mut abundance_euclid =
-                    Arc::new(
-                        Mutex::new(
-                            Vec::new()));
-
-                let mut abundance_float =
-                    Arc::new(
-                        Mutex::new(
-                            Vec::new()));
-
-                let variant_info =
-                    Arc::new(
-                        Mutex::new(
-                            Vec::new()));
-
-                let variant_info_all =
-                    Arc::new(
-                        Mutex::new(
-                            Vec::new()));
-
-                let mut cluster_map =
-                    Arc::new(
-                        Mutex::new(
-                            HashMap::new()));
-
-                let mut cluster_hierarchies =
-                    Arc::new(
-                        Mutex::new(
-                            HashMap::new()));
-
-                let mut noise_set = Arc::new(
-                    Mutex::new(
-                        HashSet::new()));
-
-
-                for (tid, variant_abundances) in variants.iter() {
-                    variant_abundances.iter().for_each(
-                        |(position, hash)| {
-                            // loop through each position that has variants
-                            let mut abundance_euclid = abundance_euclid
-                                .lock().unwrap();
-                            let mut abundance_float = abundance_float
-                                .lock().unwrap();
-                            let mut variant_info = variant_info
-                                .lock().unwrap();
-                            let mut variant_info_all = variant_info_all
-                                .lock().unwrap();
-
-                            for (var, abundances_vector) in hash.iter() {
-                                let mut abundance: f32;
-                                let mut mean_var: f32 = 0.;
-                                let mut mean_d: f32 = 0.;
-                                if !var.contains("R") {
-                                    // Get the mean abundance across samples
-                                    abundances_vector.iter().for_each(|(var, d)| {
-                                        mean_var += *var;
-                                        mean_d += *d;
-                                    });
-
-                                    mean_var = mean_var / sample_count;
-                                    mean_d = mean_d / sample_count;
-                                    abundance = mean_var / mean_d;
-
-
-                                    // This is a big hack but saves so much time
-                                    // Basically, any variant that has an abundance less than 0.05
-                                    // Automatically gets thrown into bin 0
-                                    // Downsides:
-                                    // Variants on border of eps look like they should cluster
-                                    // with bin 0, but instead create a new bin
-                                    // Upsides:
-                                    // Massive speed increase, massive decrease in memory usage
-                                    // Low abundant variants are all kind of in the same cluster any way
-                                    if mean_d >= 0. {
-                                        variant_info.push((position, var.to_string(), abundance, tid));
-                                        abundance_float.push(abundance);
-                                        abundance_euclid.push(Euclid([abundance.ln() as f64, mean_var.ln() as f64]));
-                                    } else {
-                                        let mut noise_set = noise_set.lock().unwrap();
-                                        noise_set.insert(variant_info_all.len());
-                                    }
-                                    variant_info_all.push(
-                                        (position, var.to_string(), (mean_var as f32, mean_d as f32), tid));
-                                }
-                            }
-                        });
-                }
-
-                let abundance_euclid = abundance_euclid.lock().unwrap();
-                let variant_info = variant_info.lock().unwrap();
-                let variant_info_all = variant_info_all.lock().unwrap();
-                let abundance_float = abundance_float.lock().unwrap();
-                let scanner = BruteScan::new(&abundance_euclid);
-                if variant_info_all.len() > 0 {
-                    debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
-                           variant_info_all.len());
-                    let mut dbscan = Dbscan::new(scanner,
-                                                 eps as f64,
-                                                 min_cluster_size);
-
-
-                    let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
-                    debug!("{} True clusters found for abundance > eps", db_clusters.len());
-
-                    let noise_points = dbscan.noise_points()
-                        .iter().cloned().collect::<Vec<_>>();
-
-                    // get the number of clusters so we can rescue orphan variants
-                    let mut number_of_clusters =
-                        Arc::new(
-                            Mutex::new(
-                                db_clusters.len() as i32));
-
-                    debug!("Sorting DBSCAN Clusters");
-
-                    db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)| {
-                        // Deal with clustered points
-                        index_vec.par_iter().for_each(|index| {
-                            let info = &variant_info[*index];
-                            let abundance = abundance_float[*index];
-
-                            let mut cluster_map = cluster_map.lock().unwrap();
-                            let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                            let mut number_of_clusters = number_of_clusters.lock().unwrap();
-
-                            let contig = cluster_map.entry(*info.3)
-                                .or_insert(HashMap::new());
-
-                            let position = contig
-                                .entry(*info.0).or_insert(BTreeMap::new());
-                            position.insert(info.1.to_string(), cluster as i32);
-
-                            let cluster_mean = cluster_hierarchies
-                                .entry(cluster as i32).or_insert(Vec::new());
-                            cluster_mean.push(abundance.to_owned());
-                        });
-                    });
-
-                    noise_points.par_iter().for_each(|noise| {
-                        let mut cluster_map = cluster_map.lock().unwrap();
-                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
-
-
-                        // Deal with unclustered points by finding which cluster they are closest to
-                        let noise_info = &variant_info[*noise];
-                        let noise_abundance = noise_info.2;
-                        let mut curr_diff = 1.0;
-                        let mut curr_clus = 0;
-                        for (cluster, abundance) in cluster_hierarchies.iter() {
-                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
-
-                            let diff = (mean - noise_abundance).abs();
-                            if diff < curr_diff {
-                                curr_diff = diff;
-                                curr_clus = *cluster;
-                            }
-                        }
-
-                        let contig_map = cluster_map.entry(*noise_info.3)
-                            .or_insert(HashMap::new());
-
-                        let noise_position = contig_map.entry(*noise_info.0)
-                            .or_insert(BTreeMap::new());
-
-                        noise_position.insert(noise_info.1.to_string(), curr_clus);
-
-                        let noise_mean = cluster_hierarchies
-                            .entry(curr_clus).or_insert(Vec::new());
-                        noise_mean.push(noise_abundance.to_owned());
-                    });
-
-                    let noise_set = noise_set.lock().unwrap();
-
-                    noise_set.par_iter().for_each(|noise| {
-                        let mut cluster_map = cluster_map.lock().unwrap();
-                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
-
-
-                        // Deal with unclustered points by finding which cluster they are closest to
-                        let noise_info = &variant_info_all[*noise];
-                        let noise_abundance = noise_info.2;
-                        let noise_frac = noise_abundance.0 / noise_abundance.1;
-                        let mut curr_diff = 1.0;
-                        let mut curr_clus = 0;
-
-                        for (cluster, abundance) in cluster_hierarchies.iter() {
-                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
-
-                            let diff = (mean - noise_frac).abs();
-                            if diff < curr_diff {
-                                curr_diff = diff;
-                                curr_clus = *cluster;
-                            }
-                        }
-
-                        let contig_map = cluster_map.entry(*noise_info.3)
-                            .or_insert(HashMap::new());
-
-                        let noise_position = contig_map.entry(*noise_info.0)
-                            .or_insert(BTreeMap::new());
-
-                        noise_position.insert(noise_info.1.to_string(), curr_clus);
-
-                        let noise_mean = cluster_hierarchies
-                            .entry(curr_clus).or_insert(Vec::new());
-                        noise_mean.push(noise_frac.to_owned());
-                    });
-
-                    let mut variant_distances =
-                        get_condensed_distances(&variant_info_all, indels_map, snps_map);
-
-                    let mut contig_coverage_means = HashMap::new();
-                    coverages.iter().map(|(tid, cov_vec)| {
-                        let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
-                    });
-
-                    let mut variant_distances = variant_distances
-                        .lock()
-                        .unwrap();
-                    debug!("Performing HAC");
-
-
-//                    let dend = nnchain(
-//                        variant_distances.as_slice().expect("Unable to convert array to slice"),
-//                        variant_info_all.len(),
-//                        Method::Ward.into_method_chain()
-//                            .expect("Incompatible linkage method"));
-//                    debug!("Dendrogram {:?}", dend);
+//    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize) {
+//        match self {
+//            PileupMatrix::PileupContigMatrix {
+//                variants,
+//                indels_map,
+//                snps_map,
+//                ref mut clusters,
+//                ref mut clusters_mean,
+//                ref mut dendrogram,
+//                target_names,
+//                sample_names,
+//                coverages,
+//                ..
+//            } => {
+//                let sample_count = sample_names.len() as f32;
 //
-//                    let mut cluster_map = cluster_map.lock().unwrap();
-//                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
-//                    let mut means = HashMap::new();
+//                let mut abundance_euclid =
+//                    Arc::new(
+//                        Mutex::new(
+//                            Vec::new()));
 //
-//                    for (cluster, abundance) in cluster_hierarchies.iter() {
-//                        let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
+//                let mut abundance_float =
+//                    Arc::new(
+//                        Mutex::new(
+//                            Vec::new()));
 //
-//                        means.insert(*cluster as i32, mean);
-//                    }
+//                let variant_info =
+//                    Arc::new(
+//                        Mutex::new(
+//                            Vec::new()));
 //
-//                    // Combine info of both clustering methods for easy access
-//                    let mut full_cluster_map =
+//                let variant_info_all =
+//                    Arc::new(
+//                        Mutex::new(
+//                            Vec::new()));
+//
+//                let mut cluster_map =
+//                    Arc::new(
+//                        Mutex::new(
+//                            HashMap::new()));
+//
+//                let mut cluster_hierarchies =
+//                    Arc::new(
+//                        Mutex::new(
+//                            HashMap::new()));
+//
+//                let mut noise_set = Arc::new(
+//                    Mutex::new(
+//                        HashSet::new()));
+//
+//
+//                for (tid, variant_abundances) in variants.iter() {
+//                    variant_abundances.iter().for_each(
+//                        |(position, hash)| {
+//                            // loop through each position that has variants
+//                            let mut abundance_euclid = abundance_euclid
+//                                .lock().unwrap();
+//                            let mut abundance_float = abundance_float
+//                                .lock().unwrap();
+//                            let mut variant_info = variant_info
+//                                .lock().unwrap();
+//                            let mut variant_info_all = variant_info_all
+//                                .lock().unwrap();
+//
+//                            for (var, abundances_vector) in hash.iter() {
+//                                let mut abundance: f32;
+//                                let mut mean_var: f32 = 0.;
+//                                let mut mean_d: f32 = 0.;
+//                                if !var.contains("R") {
+//                                    // Get the mean abundance across samples
+//                                    // Get the mean abundance across samples
+//                                    abundances_vector.iter().for_each(|(var, d)| {
+//                                        mean_var += *var;
+//                                        // Total depth of location
+//                                        total_d += *d;
+//                                        freq = *var / *d;
+//                                        abundance += *var / *d;
+//                                    });
+//
+//                                    mean_var = mean_var / sample_count;
+//                                    abundance = abundance / sample_count;
+//
+//                                    let mut variant_info_all = variant_info_all
+//                                        .lock().unwrap();
+//
+//                                    variant_info_all.push(
+//                                        (position, var.to_string(),
+//                                         (abundance, freqs), tid));
+//
+//
+//                                    // This is a big hack but saves so much time
+//                                    // Basically, any variant that has an abundance less than 0.05
+//                                    // Automatically gets thrown into bin 0
+//                                    // Downsides:
+//                                    // Variants on border of eps look like they should cluster
+//                                    // with bin 0, but instead create a new bin
+//                                    // Upsides:
+//                                    // Massive speed increase, massive decrease in memory usage
+//                                    // Low abundant variants are all kind of in the same cluster any way
+//                                    if mean_d >= 0. {
+//                                        variant_info.push((position, var.to_string(), abundance, tid));
+//                                        abundance_float.push(abundance);
+//                                        abundance_euclid.push(Euclid([abundance.ln() as f64, mean_var.ln() as f64]));
+//                                    } else {
+//                                        let mut noise_set = noise_set.lock().unwrap();
+//                                        noise_set.insert(variant_info_all.len());
+//                                    }
+//
+//                                }
+//                            }
+//                        });
+//                }
+//
+//                let abundance_euclid = abundance_euclid.lock().unwrap();
+//                let variant_info = variant_info.lock().unwrap();
+//                let variant_info_all = variant_info_all.lock().unwrap();
+//                let abundance_float = abundance_float.lock().unwrap();
+//                let scanner = BruteScan::new(&abundance_euclid);
+//                if variant_info_all.len() > 0 {
+//                    debug!("Beginning clustering of {} variants out of {}", abundance_euclid.len(),
+//                           variant_info_all.len());
+//                    let mut dbscan = Dbscan::new(scanner,
+//                                                 eps as f64,
+//                                                 min_cluster_size);
+//
+//
+//                    let db_clusters = dbscan.by_ref().collect::<Vec<_>>();
+//                    debug!("{} True clusters found for abundance > eps", db_clusters.len());
+//
+//                    let noise_points = dbscan.noise_points()
+//                        .iter().cloned().collect::<Vec<_>>();
+//
+//                    // get the number of clusters so we can rescue orphan variants
+//                    let mut number_of_clusters =
 //                        Arc::new(
 //                            Mutex::new(
-//                                HashMap::new()));
+//                                db_clusters.len() as i32));
 //
-//                    variant_info_all
-//                        .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))| {
-//                        let db_cluster = cluster_map
-//                            .get(tid).expect("No contig found when it should be")
-//                            .get(position).expect("Position not found when it should be")
-//                            .get(variant).expect("Variant not found when it should be");
-//                        let mut full_cluster_map = full_cluster_map.lock().unwrap();
+//                    debug!("Sorting DBSCAN Clusters");
 //
-//                        let contig_map = full_cluster_map.entry(**tid)
-//                            .or_insert(HashMap::new());
+//                    db_clusters.par_iter().enumerate().for_each(|(cluster, index_vec)| {
+//                        // Deal with clustered points
+//                        index_vec.par_iter().for_each(|index| {
+//                            let info = &variant_info[*index];
+//                            let abundance = abundance_float[*index];
 //
-//                        let position_map = contig_map.entry(**position)
-//                            .or_insert(BTreeMap::new());
+//                            let mut cluster_map = cluster_map.lock().unwrap();
+//                            let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+//                            let mut number_of_clusters = number_of_clusters.lock().unwrap();
 //
-//                        position_map.insert(variant.to_string(), (*db_cluster, index));
+//                            let contig = cluster_map.entry(*info.3)
+//                                .or_insert(HashMap::new());
+//
+//                            let position = contig
+//                                .entry(*info.0).or_insert(BTreeMap::new());
+//                            position.insert(info.1.to_string(), cluster as i32);
+//
+//                            let cluster_mean = cluster_hierarchies
+//                                .entry(cluster as i32).or_insert(Vec::new());
+//                            cluster_mean.push(abundance.to_owned());
+//                        });
 //                    });
 //
+//                    noise_points.par_iter().for_each(|noise| {
+//                        let mut cluster_map = cluster_map.lock().unwrap();
+//                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+//                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
 //
-//                    *dendrogram = dend;
-//                    *clusters = full_cluster_map.lock().unwrap().clone();
-//                    *clusters_mean = means;
-//                    info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
-//                          clusters_mean.len(), target_names.len(), eps);
-                }
-            }
-        }
-    }
+//
+//                        // Deal with unclustered points by finding which cluster they are closest to
+//                        let noise_info = &variant_info[*noise];
+//                        let noise_abundance = noise_info.2;
+//                        let mut curr_diff = 1.0;
+//                        let mut curr_clus = 0;
+//                        for (cluster, abundance) in cluster_hierarchies.iter() {
+//                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
+//
+//                            let diff = (mean - noise_abundance).abs();
+//                            if diff < curr_diff {
+//                                curr_diff = diff;
+//                                curr_clus = *cluster;
+//                            }
+//                        }
+//
+//                        let contig_map = cluster_map.entry(*noise_info.3)
+//                            .or_insert(HashMap::new());
+//
+//                        let noise_position = contig_map.entry(*noise_info.0)
+//                            .or_insert(BTreeMap::new());
+//
+//                        noise_position.insert(noise_info.1.to_string(), curr_clus);
+//
+//                        let noise_mean = cluster_hierarchies
+//                            .entry(curr_clus).or_insert(Vec::new());
+//                        noise_mean.push(noise_abundance.to_owned());
+//                    });
+//
+//                    let noise_set = noise_set.lock().unwrap();
+//
+//                    noise_set.par_iter().for_each(|noise| {
+//                        let mut cluster_map = cluster_map.lock().unwrap();
+//                        let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+//                        let mut number_of_clusters = number_of_clusters.lock().unwrap();
+//
+//
+//                        // Deal with unclustered points by finding which cluster they are closest to
+//                        let noise_info = &variant_info_all[*noise];
+//                        let noise_abundance = noise_info.2;
+//                        let noise_frac = noise_abundance.0 / noise_abundance.1;
+//                        let mut curr_diff = 1.0;
+//                        let mut curr_clus = 0;
+//
+//                        for (cluster, abundance) in cluster_hierarchies.iter() {
+//                            let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
+//
+//                            let diff = (mean - noise_frac).abs();
+//                            if diff < curr_diff {
+//                                curr_diff = diff;
+//                                curr_clus = *cluster;
+//                            }
+//                        }
+//
+//                        let contig_map = cluster_map.entry(*noise_info.3)
+//                            .or_insert(HashMap::new());
+//
+//                        let noise_position = contig_map.entry(*noise_info.0)
+//                            .or_insert(BTreeMap::new());
+//
+//                        noise_position.insert(noise_info.1.to_string(), curr_clus);
+//
+//                        let noise_mean = cluster_hierarchies
+//                            .entry(curr_clus).or_insert(Vec::new());
+//                        noise_mean.push(noise_frac.to_owned());
+//                    });
+//
+//                    let mut variant_distances =
+//                        get_condensed_distances(&variant_info_all, indels_map, snps_map);
+//
+//                    let mut contig_coverage_means = HashMap::new();
+//                    coverages.iter().map(|(tid, cov_vec)| {
+//                        let contig = contig_coverage_means.entry(tid).or_insert(cov_vec.iter().sum::<f32>());
+//                    });
+//
+//                    let mut variant_distances = variant_distances
+//                        .lock()
+//                        .unwrap();
+//                    debug!("Performing HAC");
+//
+//
+////                    let dend = nnchain(
+////                        variant_distances.as_slice().expect("Unable to convert array to slice"),
+////                        variant_info_all.len(),
+////                        Method::Ward.into_method_chain()
+////                            .expect("Incompatible linkage method"));
+////                    debug!("Dendrogram {:?}", dend);
+////
+////                    let mut cluster_map = cluster_map.lock().unwrap();
+////                    let mut cluster_hierarchies = cluster_hierarchies.lock().unwrap();
+////                    let mut means = HashMap::new();
+////
+////                    for (cluster, abundance) in cluster_hierarchies.iter() {
+////                        let mean = abundance.iter().sum::<f32>() / abundance.len() as f32;
+////
+////                        means.insert(*cluster as i32, mean);
+////                    }
+////
+////                    // Combine info of both clustering methods for easy access
+////                    let mut full_cluster_map =
+////                        Arc::new(
+////                            Mutex::new(
+////                                HashMap::new()));
+////
+////                    variant_info_all
+////                        .par_iter().enumerate().for_each(|(index, (position, variant, abundance, tid))| {
+////                        let db_cluster = cluster_map
+////                            .get(tid).expect("No contig found when it should be")
+////                            .get(position).expect("Position not found when it should be")
+////                            .get(variant).expect("Variant not found when it should be");
+////                        let mut full_cluster_map = full_cluster_map.lock().unwrap();
+////
+////                        let contig_map = full_cluster_map.entry(**tid)
+////                            .or_insert(HashMap::new());
+////
+////                        let position_map = contig_map.entry(**position)
+////                            .or_insert(BTreeMap::new());
+////
+////                        position_map.insert(variant.to_string(), (*db_cluster, index));
+////                    });
+////
+////
+////                    *dendrogram = dend;
+////                    *clusters = full_cluster_map.lock().unwrap().clone();
+////                    *clusters_mean = means;
+////                    info!("{} Distinct variant frequency clusters found on {} contigs at eps {}",
+////                          clusters_mean.len(), target_names.len(), eps);
+//                }
+//            }
+//        }
+//    }
 
     fn generate_genotypes(&mut self, output_prefix: &str) {
         match self {
@@ -1161,7 +1176,7 @@ impl PileupMatrixFunctions for PileupMatrix{
     }
 }
 
-fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32, f32), &i32)>>,
+fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32, Vec<f32>), &i32)>>,
                            indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                            snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> Arc<Mutex<Array1<f32>>> {
     let mut variant_distances: Arc<Mutex<Array1<f32>>>
@@ -1232,29 +1247,62 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
                 if row_start <= col_end && col_start <= row_end {
                     distance = 1.;
                 } else {
-                    let intersection_len = (row_variant_set
-                        .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-
-                    let union_len = (row_variant_set
-                        .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-
-                    // Jaccard Similarity
-                    let jaccard = intersection_len / union_len;
-
-//                            let row_cov = contig_coverage_means[&row_info.3];
-//                            let col_cov = contig_coverage_means[&col_info.3];
-
-                    // Distance between abundance values
-                    let dist_var = ((row_info.2).0 / (col_info.2).0
-                        - (col_info.2).0 / (row_info.2).0).abs();
-
-                    let dist_cov = ((row_info.2).1 / (col_info.2).1
-                        - (col_info.2).1 / (row_info.2).1).abs();
-
-
+//                    let intersection_len = (row_variant_set
+//                        .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+//
+//                    let union_len = (row_variant_set
+//                        .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+//
+//                    // Jaccard Similarity Modified for total read depth
+//                    // Calculates the observed frequency of two variants together
+//                    let jaccard = intersection_len /
+//                        ((row_info.2).1 + (col_info.2).1 - intersection_len);
+//
+////                            let row_cov = contig_coverage_means[&row_info.3];
+////                            let col_cov = contig_coverage_means[&col_info.3];
+//
+//                    let p: f32 = (row_info.2).0;
+//                    let q: f32 = (col_info.2).0;
+//                    // p * q = expected frequency
+//                    let pq = p * q;
+//
+//                    // linkage disequilibrium
+//                    let d = jaccard - pq;
+//
+//                    // correlation
+//                    let rho = d.powf(2.) / (pq * (p - 1.) * (q - 1.));
+//
+//                    debug!("p {} q {} x {} D {} rho {} distance {}", p, q, jaccard, d, rho, 1. - rho);
                     // Distance will be defined as the mean between jaccard dist
                     // and dist_f
-                    distance = ((1. - jaccard) + dist_var + dist_cov) / 3.;
+                    let mut corr = 0.;
+                    let mut w = 0;
+                    if (row_info.2).1.len() > 1 {
+                        // Calculate pearson's correlation between two variants based on abundances
+                        let x_bar = (row_info.2).0;
+                        let y_bar = (col_info.2).0;
+                        let mut s_x: f32 = 0.;
+                        let mut s_y: f32 = 0.;
+                        let mut top: f32 = 0.;
+
+                        for (x, y) in (row_info.2).1.iter().zip((col_info.2).1.iter()) {
+                            if (x > &0.) || (y > &0.) {
+                                w += 1;
+                            }
+                            let x_diff = x - x_bar;
+                            let y_diff = y - y_bar;
+                            top += x_diff * y_diff;
+                            s_x += x_diff.powf(2.);
+                            s_y += y_diff.powf(2.)
+                        }
+                        corr = top / (s_x.powf(1. / 2.) * s_y.powf(1. / 2.));
+                        distance = 1. - corr;
+
+                    } else {
+                        distance = ((row_info.2).0 - (col_info.2).0).abs();
+
+                    }
+
                 }
 
                 match condensed_index(
@@ -1274,7 +1322,7 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
             }
         });
     });
-
+    debug!("{:?}", variant_distances);
     return variant_distances
 }
 
