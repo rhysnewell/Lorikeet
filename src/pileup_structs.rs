@@ -458,6 +458,7 @@ impl PileupFunctions for PileupStats {
                 *variant_abundances = variants.to_owned();
                 let variant_count = variant_count.lock().unwrap();
                 debug!("Total variants for {}: {:?}", tid, variant_count);
+                // Total variants is the actual amount of variants that passed all thresholds
                 *total_variants = *variant_count;
                 let mut nucfrequency = nucfrequency.lock().unwrap();
                 **nucfrequency = nucfrequency.to_owned();
