@@ -350,6 +350,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                         Mutex::new(
                             Vec::new()));
 
+                // A vector the length of the number of samples
+                // Cumulatively calculates the product of abundaces from each sample
+                let geom_mean_vec =
+                    Arc::new(
+                        Mutex::new(
+                            vec![1.; sample_count as usize]));
+
                 // get basic variant info
                 variants.par_iter().for_each(|(tid, variant_abundances)|{
                     variant_abundances.par_iter().for_each(
@@ -365,12 +372,20 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let mut freqs = Vec::new();
                             if !var.contains("R") {
                                 // Get the mean abundance across samples
+                                let mut sample_idx: usize = 0;
                                 abundances_vector.iter().for_each(|(var, d)| {
                                     mean_var += *var;
                                     // Total depth of location
                                     total_d += *d;
-                                    freqs.push((*var + 1.) / (*d + 1.));
-                                    abundance += *var / *d;
+                                    if var > &0. {
+                                        let freq = (*var + 1.) / (*d + 1.);
+                                        let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                                        geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
+                                        freqs.push(freq);
+                                        abundance += *var / *d;
+                                    } else {
+                                        freqs.push(0.);
+                                    }
                                 });
 
                                 mean_var = mean_var / sample_count;
@@ -392,8 +407,13 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 info!("Generating Variant Distances with {} Variants", variant_info_all.len());
 
+                let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                let geom_means = geom_mean_vec.iter()
+                    .map(|prod|{
+                        prod / variant_info_all.len() as f32}).collect::<Vec<f32>>();
+
                 let mut variant_distances =
-                    get_condensed_distances(&variant_info_all, indels_map, snps_map);
+                    get_condensed_distances(&variant_info_all[..], indels_map, snps_map, &geom_means);
 
                 let mut variant_distances = variant_distances
                     .lock()
@@ -448,6 +468,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         python.stderr.expect("Failed to grab stderr from NMF")
                             .read_to_string(&mut err).expect("Failed to read stderr into string");
                         error!("The overall STDERR was: {:?}", err);
+                        debug!("The input matrix was {:?}", variant_distances);
 
                         process::exit(1);
                     } else {
@@ -876,9 +897,10 @@ impl PileupMatrixFunctions for PileupMatrix{
     }
 }
 
-fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32, Vec<f32>), &i32)>>,
+fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &i32)],
                            indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
-                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> Arc<Mutex<Array1<f32>>> {
+                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                           geom_means: &[f32]) -> Arc<Mutex<Array1<f32>>> {
     let mut variant_distances: Arc<Mutex<Array1<f32>>>
         = Arc::new(
         Mutex::new(
@@ -886,7 +908,7 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
                 - variant_info_all.len()) / 2 as usize))));
     debug!("Filling matrix of size {}",
            ((variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize));
-
+    debug!("Variant Info {:?}", variant_info_all);
     // produced condensed pairwise distances
     // described here: https://docs.rs/kodama/0.2.2/kodama/
     (0..variant_info_all.len()-1)
@@ -978,25 +1000,25 @@ fn get_condensed_distances(variant_info_all: &MutexGuard<Vec<(&i32, String, (f32
                     let mut corr = 0.;
                     let mut w = 0;
                     if (row_info.2).1.len() > 1 {
-                        // Calculate pearson's correlation between two variants based on abundances
-                        let x_bar = (row_info.2).0;
-                        let y_bar = (col_info.2).0;
-                        let mut s_x: f32 = 0.;
-                        let mut s_y: f32 = 0.;
-                        let mut top: f32 = 0.;
+                        // Calculate the log-ratio variance across compositions
+                        let mut log_vec = Arc::new(
+                            Mutex::new(Vec::new()));
+                        (row_info.2).1.par_iter()
+                            .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
+                            let mut log_vec = log_vec.lock().unwrap();
+                            log_vec.push(((r_freq + 1.)/ (c_freq + 1.)).ln() as f32);
+                        });
+                        let log_vec = log_vec.lock().unwrap();
+                        let sum = log_vec.iter().sum::<f32>();
+                        let mean = sum / log_vec.len() as f32;
+                        // calculate the variance of the log vector
+                        let variance = log_vec.iter().map(|&value|{
+                            let diff = mean - value;
+                            diff * diff
+                        }).sum::<f32>() / log_vec.len() as f32;
 
-                        for (x, y) in (row_info.2).1.iter().zip((col_info.2).1.iter()) {
-                            if (x > &0.) || (y > &0.) {
-                                w += 1;
-                            }
-                            let x_diff = x - x_bar;
-                            let y_diff = y - y_bar;
-                            top += x_diff * y_diff;
-                            s_x += x_diff.powf(2.);
-                            s_y += y_diff.powf(2.)
-                        }
-                        corr = top / (s_x.powf(1. / 2.) * s_y.powf(1. / 2.));
-                        distance = 1. - corr;
+                        distance = variance;
+
 
                     } else {
                         distance = ((row_info.2).0 - (col_info.2).0).abs();
