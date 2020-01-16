@@ -342,6 +342,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 coverages,
                 ..
             } => {
+
                 let sample_count = sample_names.len() as f32;
 
 
@@ -358,98 +359,156 @@ impl PileupMatrixFunctions for PileupMatrix{
                             vec![1.; sample_count as usize]));
 
                 // get basic variant info
-                variants.par_iter().for_each(|(tid, variant_abundances)|{
+                variants.par_iter().for_each(|(tid, variant_abundances)| {
                     variant_abundances.par_iter().for_each(
                         |(position, hash)| {
-                        // loop through each position that has variants
+                            // loop through each position that has variants
 
 
 
-                        for (var, abundances_vector) in hash.iter() {
-                            let mut abundance: f32 = 0.;
-                            let mut mean_var: f32 = 0.;
-                            let mut total_d: f32 = 0.;
-                            let mut freqs = Vec::new();
-                            if !var.contains("R") {
-                                // Get the mean abundance across samples
-                                let mut sample_idx: usize = 0;
-                                abundances_vector.iter().for_each(|(var, d)| {
-                                    mean_var += *var;
-                                    // Total depth of location
-                                    total_d += *d;
-                                    if var > &0. {
-                                        let freq = (*var + 1.) / (*d + 1.);
-                                        let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
-                                        geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
-                                        freqs.push(freq);
-                                        abundance += *var / *d;
-                                    } else {
-                                        freqs.push(0.);
-                                    }
-                                });
+                            for (var, abundances_vector) in hash.iter() {
+                                let mut abundance: f32 = 0.;
+                                let mut mean_var: f32 = 0.;
+                                let mut total_d: f32 = 0.;
+                                let mut freqs = Vec::new();
+                                if !var.contains("R") {
+                                    // Get the mean abundance across samples
+                                    let mut sample_idx: usize = 0;
+                                    abundances_vector.iter().for_each(|(var, d)| {
+                                        mean_var += *var;
+                                        // Total depth of location
+                                        total_d += *d;
+                                        if var > &0. {
+                                            let freq = (*var + 1.) / (*d + 1.);
+                                            let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                                            geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
+                                            freqs.push(freq);
+                                            abundance += *var / *d;
+                                        } else {
+                                            freqs.push(0.);
+                                        }
+                                    });
 
-                                mean_var = mean_var / sample_count;
-                                abundance = abundance / sample_count;
+                                    mean_var = mean_var / sample_count;
+                                    abundance = abundance / sample_count;
 
-                                let mut variant_info_all = variant_info_all
-                                    .lock().unwrap();
+                                    let mut variant_info_all = variant_info_all
+                                        .lock().unwrap();
 
 
-                                variant_info_all.push(
-                                    (position, var.to_string(),
-                                     (abundance, freqs), tid));
+                                    variant_info_all.push(
+                                        (position, var.to_string(),
+                                         (total_d, freqs), tid));
+                                }
                             }
-                        }
-                    });
+                        });
                 });
-
                 let variant_info_all = variant_info_all.lock().unwrap();
+                if variant_info_all.len() > 1 {
 
-                info!("Generating Variant Distances with {} Variants", variant_info_all.len());
+                    info!("Generating Variant Distances with {} Variants", variant_info_all.len());
 
-                let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
-                let geom_means = geom_mean_vec.iter()
-                    .map(|prod|{
-                        prod / variant_info_all.len() as f32}).collect::<Vec<f32>>();
+                    let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                    let geom_means = geom_mean_vec.iter()
+                        .map(|prod| {
+                            prod / variant_info_all.len() as f32
+                        }).collect::<Vec<f32>>();
 
-                let mut variant_distances =
-                    get_condensed_distances(&variant_info_all[..], indels_map, snps_map, &geom_means);
+                    let mut variant_distances =
+                        get_condensed_distances(&variant_info_all[..],
+                                                indels_map,
+                                                snps_map,
+                                                &geom_means,
+                                                &coverages);
 
-                let mut variant_distances = variant_distances
-                    .lock()
-                    .unwrap();
+                    let mut variant_distances = variant_distances
+                        .lock()
+                        .unwrap();
 
 //                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
 
-                let tmp_dir = TempDir::new("lorikeet_fifo")
-                    .expect("Unable to create temporary directory");
-                let fifo_path = tmp_dir.path().join("foo.pipe");
+                    let tmp_dir = TempDir::new("lorikeet_fifo")
+                        .expect("Unable to create temporary directory");
+                    let fifo_path = tmp_dir.path().join("foo.pipe");
 
-                // create new fifo and give read, write and execute rights to the owner.
-                // This is required because we cannot open a Rust stream as a BAM file with
-                // rust-htslib.
-                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
-                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
+                    // create new fifo and give read, write and execute rights to the owner.
+                    // This is required because we cannot open a Rust stream as a BAM file with
+                    // rust-htslib.
+                    unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
+                        .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-                let mut distances_file = tempfile::Builder::new()
-                    .prefix("lorikeet-distances-vec")
-                    .tempfile_in(tmp_dir.path())
-                    .expect(&format!("Failed to create distances tempfile"));
+                    let mut distances_file = tempfile::Builder::new()
+                        .prefix("lorikeet-distances-vec")
+                        .tempfile_in(tmp_dir.path())
+                        .expect(&format!("Failed to create distances tempfile"));
 //                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
-                let tmp_path = distances_file.path().to_str()
-                    .expect("Failed to convert tempfile path to str").to_string();
-                write_npy(&tmp_path, variant_distances.to_owned()).expect("Unable to write to tempfile");
+                    let tmp_path = distances_file.path().to_str()
+                        .expect("Failed to convert tempfile path to str").to_string();
+                    write_npy(&tmp_path, variant_distances.to_owned()).expect("Unable to write to tempfile");
 
 //                println!("{:?}", variant_distances);
-                let max_rank = 10;
-                let mut ranks_rss = Arc::new(Mutex::new(vec![0.; max_rank]));
+                    let max_rank = 10;
+                    let mut ranks_rss = Arc::new(Mutex::new(vec![0.; max_rank]));
 
-                (0..max_rank).into_par_iter().for_each(|rank| {
+                    (0..max_rank).into_par_iter().for_each(|rank| {
+                        let cmd_string = format!(
+                            "set -e -o pipefail; \
+                     nmf.py {} True {} {}",
+                            // NMF
+                            rank + 1,
+                            100,
+                            tmp_path);
+                        info!("Queuing cmd_string: {}", cmd_string);
+                        let mut python = std::process::Command::new("bash")
+                            .arg("-c")
+                            .arg(&cmd_string)
+                            .stderr(process::Stdio::piped())
+                            .stdout(process::Stdio::piped())
+                            .spawn()
+                            .expect("Unable to execute bash");
+
+                        let es = python.wait().expect("Unable to discern exit status");
+                        if !es.success() {
+                            error!("Error when running NMF: {:?}", cmd_string);
+                            let mut err = String::new();
+                            python.stderr.expect("Failed to grab stderr from NMF")
+                                .read_to_string(&mut err).expect("Failed to read stderr into string");
+                            error!("The overall STDERR was: {:?}", err);
+                            debug!("The input matrix was {:?}", variant_distances);
+
+                            process::exit(1);
+                        } else {
+                            let mut out = String::new();
+                            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                                .expect("Failed to read stdout to string");
+                            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+                            let rss: f32 = out.trim().parse().unwrap();
+                            ranks_rss[rank as usize] = rss;
+                        }
+                    });
+
+                    let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+                    let mut best_rank = 0;
+                    let mut best_rss = 0.;
+                    debug!("RSS Values {:?}", ranks_rss);
+
+                    for (rank, rss) in ranks_rss.iter().enumerate() {
+                        if best_rank == 0 && best_rss == 0. && rank == 0 {
+                            best_rank = rank + 1;
+                            best_rss = *rss;
+                        } else if &best_rss > rss {
+                            best_rss = *rss;
+                            best_rank = rank + 1;
+                        } else if rss >= &best_rss {
+                            break
+                        }
+                    }
+
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                     nmf.py {} True {} {}",
+                     nmf.py {} False {} {}",
                         // NMF
-                        rank+1,
+                        best_rank,
                         100,
                         tmp_path);
                     info!("Queuing cmd_string: {}", cmd_string);
@@ -468,76 +527,26 @@ impl PileupMatrixFunctions for PileupMatrix{
                         python.stderr.expect("Failed to grab stderr from NMF")
                             .read_to_string(&mut err).expect("Failed to read stderr into string");
                         error!("The overall STDERR was: {:?}", err);
-                        debug!("The input matrix was {:?}", variant_distances);
 
                         process::exit(1);
                     } else {
                         let mut out = String::new();
                         python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                             .expect("Failed to read stdout to string");
-                        let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                        let rss: f32 = out.trim().parse().unwrap();
-                        ranks_rss[rank as usize] = rss;
+                        println!("{}", out);
                     }
-                });
-
-                let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-                let mut best_rank = 0;
-                let mut best_rss = 0.;
-                debug!("RSS Values {:?}", ranks_rss);
-
-                for (rank, rss) in ranks_rss.iter().enumerate() {
-                    if best_rank == 0 && best_rss == 0. && rank == 0 {
-                        best_rank = rank + 1;
-                        best_rss = *rss;
-                    } else if &best_rss > rss {
-                        best_rss = *rss;
-                        best_rank = rank + 1;
-                    } else if rss >= &best_rss {
-                        break
-                    }
-                }
-
-                let cmd_string = format!(
-                    "set -e -o pipefail; \
-                     nmf.py {} False {} {}",
-                    // NMF
-                    best_rank,
-                    100,
-                    tmp_path);
-                info!("Queuing cmd_string: {}", cmd_string);
-                let mut python = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&cmd_string)
-                    .stderr(process::Stdio::piped())
-                    .stdout(process::Stdio::piped())
-                    .spawn()
-                    .expect("Unable to execute bash");
-
-                let es = python.wait().expect("Unable to discern exit status");
-                if !es.success() {
-                    error!("Error when running NMF: {:?}", cmd_string);
-                    let mut err = String::new();
-                    python.stderr.expect("Failed to grab stderr from NMF")
-                        .read_to_string(&mut err).expect("Failed to read stderr into string");
-                    error!("The overall STDERR was: {:?}", err);
-
-                    process::exit(1);
-                } else {
-                    let mut out = String::new();
-                    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                        .expect("Failed to read stdout to string");
-                    println!("{}", out);
-                }
 
 
-                tmp_dir.close().expect("Unable to close temp directory");
+                    tmp_dir.close().expect("Unable to close temp directory");
 
 
 //                let py = gil.python();
 //                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
 //                let variant_distances = variant_distances.to_owned().into_pyarray(py);
 //                nmfpy.call1("perform_nmf", (variant_distances,)).unwrap();
+                } else {
+                    debug!("Not enough variants found {:?}, Non heterogeneous population", variant_info_all);
+                }
             }
         }
     }
@@ -900,15 +909,17 @@ impl PileupMatrixFunctions for PileupMatrix{
 fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &i32)],
                            indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                            snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                           geom_means: &[f32]) -> Arc<Mutex<Array1<f32>>> {
-    let mut variant_distances: Arc<Mutex<Array1<f32>>>
+                           geom_means: &[f32],
+                           coverages: &HashMap<i32, Vec<f32>>) -> Arc<Mutex<Array2<f32>>> {
+    let mut variant_distances: Arc<Mutex<Array2<f32>>>
         = Arc::new(
         Mutex::new(
-            Array1::<f32>::zeros(((variant_info_all.len().pow(2) as usize
-                - variant_info_all.len()) / 2 as usize))));
+            Array2::<f32>::zeros((variant_info_all.len(), variant_info_all.len()))));
     debug!("Filling matrix of size {}",
-           ((variant_info_all.len().pow(2) as usize - variant_info_all.len()) / 2 as usize));
-    debug!("Variant Info {:?}", variant_info_all);
+           variant_info_all.len().pow(2) as usize);
+
+    // Create variable to store mean of abundance if only one sample
+    let mut vector_mean: f32 = 0.;
     // produced condensed pairwise distances
     // described here: https://docs.rs/kodama/0.2.2/kodama/
     (0..variant_info_all.len()-1)
@@ -962,23 +973,14 @@ fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &
                 let col_start = *col_info.0 as usize;
                 let col_end = col_start + col_info.1.len() - 1;
 
-                let mut distance: f32;
+                let mut distance: f32 = 0.;
 
                 // If the variants share positions, then instantly they can't be in the same
                 // gentoype so max distance
-                if row_start <= col_end && col_start <= row_end {
-                    distance = 1.;
-                } else {
-//                    let intersection_len = (row_variant_set
-//                        .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-//
-//                    let union_len = (row_variant_set
-//                        .union(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-//
-//                    // Jaccard Similarity Modified for total read depth
-//                    // Calculates the observed frequency of two variants together
-//                    let jaccard = intersection_len /
-//                        ((row_info.2).1 + (col_info.2).1 - intersection_len);
+//                if row_start <= col_end && col_start <= row_end {
+//                    distance = 1.;
+                {
+
 //
 ////                            let row_cov = contig_coverage_means[&row_info.3];
 ////                            let col_cov = contig_coverage_means[&col_info.3];
@@ -1001,6 +1003,7 @@ fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &
                     let mut w = 0;
                     if (row_info.2).1.len() > 1 {
                         // Calculate the log-ratio variance across compositions
+                        // Essentially analogous to correlation
                         let mut log_vec = Arc::new(
                             Mutex::new(Vec::new()));
                         (row_info.2).1.par_iter()
@@ -1018,29 +1021,67 @@ fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &
                         }).sum::<f32>() / log_vec.len() as f32;
 
                         distance = variance;
+                        let mut variant_distances = variant_distances.lock().unwrap();
+                        variant_distances[[row_index, col_index]] = distance;
+                        variant_distances[[col_index, row_index]] = distance;
 
 
                     } else {
-                        distance = ((row_info.2).0 - (col_info.2).0).abs();
+//                        if vector_mean == 0. {
+//                            // loop through infos, should only happen once
+//                            vector_mean = vector_info_all.par_iter().map(|info_tup|{
+//                                (info_tup.2).1[0]
+//                            }).sum::<f32>() / vector_info_all.len();
+//                        }
+                        let mut d_kl_a: f32 = 0.;
+                        let mut d_kl_b: f32 = 0.;
+                        let row_freq = (row_info.2).1[0];
+                        let col_freq = (col_info.2).1[0];
+                        if row_freq == 1. || col_freq == 1. {
+                            // since the lim x->0 of xln(x) = 0
+                            d_kl_a = row_freq * (row_freq / col_freq).ln();
+                            d_kl_b = col_freq * (col_freq / row_freq).ln();
+                        } else {
+                            d_kl_a = row_freq * (row_freq / col_freq).ln()
+                                + (1. - row_freq) * ((1. - row_freq) / (1. - col_freq)).ln();
 
+                            d_kl_b = col_freq * (col_freq / row_freq).ln()
+                                + (1. - col_freq) * ((1. - col_freq) / (1. - row_freq)).ln();
+                        }
+//                        let intersection_len = (row_variant_set
+//                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+
+                        // Jaccard Similarity Modified for total read depth
+                        // Calculates the observed frequency of two variants together
+                        // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
+//                        let jaccard_d = ((intersection_len + 1.) /
+//                            ((row_info.2).0 + (col_info.2).0 - intersection_len + 1.));
+                        if d_kl_a < 0. {
+                            d_kl_a = 0.
+                        }
+                        if d_kl_b < 0. {
+                            d_kl_b = 0.
+                        }
+
+                        let mut variant_distances = variant_distances.lock().unwrap();
+                        variant_distances[[row_index, col_index]] = d_kl_a;
+                        variant_distances[[col_index, row_index]] = d_kl_b;
                     }
 
                 }
 
-                match condensed_index(
-                    row_index, col_index, variant_info_all.len()) {
-                    Some(index) => {
-                        let mut variant_distances = variant_distances.lock().unwrap();
-                        variant_distances[[index]] = distance;
-                    }
-                    None => {
-                        debug!("No corresponding index for row {} and col {}",
-                               row_index, col_index);
-                    }
-                };
-//                let mut variant_distances = variant_distances.lock().unwrap();
-//                variant_distances[[row_index, col_index]] = distance;
-//                variant_distances[[col_index, row_index]] = distance;
+//                match condensed_index(
+//                    row_index, col_index, variant_info_all.len()) {
+//                    Some(index) => {
+//                        let mut variant_distances = variant_distances.lock().unwrap();
+//                        variant_distances[[index]] = distance;
+//                    }
+//                    None => {
+//                        debug!("No corresponding index for row {} and col {}",
+//                               row_index, col_index);
+//                    }
+//                };
+
             }
         });
     });
