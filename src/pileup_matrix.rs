@@ -16,6 +16,7 @@ use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
 use tempfile;
+use itertools::Itertools;
 
 
 #[derive(Debug)]
@@ -360,6 +361,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // get basic variant info
                 variants.par_iter().for_each(|(tid, variant_abundances)| {
+                    let contig_coverages = coverages.get(tid)
+                        .expect("Unable to retrieve contig coverage");
+
+                    let max_coverage = contig_coverages.iter().cloned().fold1(f32::max)
+                        .expect("Unable to retrieve max coverage");
+
                     variant_abundances.par_iter().for_each(
                         |(position, hash)| {
                             // loop through each position that has variants
@@ -382,7 +389,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             let freq = (*var + 1.) / (*d + 1.);
                                             let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
                                             geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
-                                            freqs.push(freq);
+                                            let sample_coverage = contig_coverages[sample_idx];
+
+                                            freqs.push(freq * (sample_coverage / max_coverage));
                                             abundance += *var / *d;
                                         } else {
                                             freqs.push(0.);
@@ -533,6 +542,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         let mut out = String::new();
                         python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                             .expect("Failed to read stdout to string");
+                        println!("{}", sample_names[0]);
                         println!("{}", out);
                     }
 
