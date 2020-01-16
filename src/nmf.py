@@ -12,7 +12,7 @@ import sys
 def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
     # array = [[] for i in filenames]
     bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                    objective='fro')
+                    objective='conn')
     bd_fit = bd()
     if estimateRanks == 'True':
         print(bd_fit.fit.rss())
@@ -23,6 +23,8 @@ def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
         print('Evar: %5.4f' % bd_fit.fit.evar())
         print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
         print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
+        print('Connectivity', bd_fit.fit.connectivity())
+
         predictions = bd_fit.fit.predict(prob=True)
         bins = np.array(predictions[0])[0]
         print(predictions)
@@ -82,7 +84,7 @@ if __name__=="__main__":
     #        condensed_vec = ast.literal_eval(line)
     #        #condensed_vec = line
     #condensed_vec = np.array(condensed_vec)
-    pairwise_distances = squareform(pairwise_distances)
+    #pairwise_distances = squareform(pairwise_distances)
 
     perform_nmf(pairwise_distances, minRank, miter, estimateRanks)
 
