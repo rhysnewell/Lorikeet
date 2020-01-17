@@ -18,6 +18,7 @@ pub mod mash;
 pub mod minhashes;
 pub mod distance;
 pub mod haplotypes_and_genotypes;
+pub mod matrix_handling;
 
 extern crate linregress;
 extern crate cogset;

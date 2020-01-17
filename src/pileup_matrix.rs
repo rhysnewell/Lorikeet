@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use pileup_structs::*;
+use matrix_handling::*;
 use std::str;
 use std::path::Path;
 use std::io::prelude::*;
@@ -9,7 +10,6 @@ use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex, MutexGuard};
 use haplotypes_and_genotypes::*;
-use ndarray_npy::write_npy;
 use std::fs::File;
 use std::process;
 use nix::unistd;
@@ -428,11 +428,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 indels_map,
                                                 snps_map,
                                                 &geom_means,
-                                                &coverages);
+                                                sample_count as i32);
 
-                    let mut variant_distances = variant_distances
-                        .lock()
-                        .unwrap();
+                    let mut variant_distances =  variant_distances.lock().unwrap();
 
 //                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
 
@@ -453,7 +451,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
                     let tmp_path = distances_file.path().to_str()
                         .expect("Failed to convert tempfile path to str").to_string();
-                    write_npy(&tmp_path, variant_distances.to_owned()).expect("Unable to write to tempfile");
+
+                    variant_distances.write_npy(&tmp_path);
 
 //                println!("{:?}", variant_distances);
                     let max_rank = 10;
@@ -462,11 +461,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                     (0..max_rank).into_par_iter().for_each(|rank| {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     nmf.py {} True {} {}",
+                     nmf.py {} True {} {} {}",
                             // NMF
                             rank + 1,
                             100,
-                            tmp_path);
+                            tmp_path,
+                            sample_count as i32);
                         info!("Queuing cmd_string: {}", cmd_string);
                         let mut python = std::process::Command::new("bash")
                             .arg("-c")
@@ -515,11 +515,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                     nmf.py {} False {} {}",
+                     nmf.py {} False {} {} {}",
                         // NMF
                         best_rank,
                         100,
-                        tmp_path);
+                        tmp_path,
+                        sample_count as i32);
                     info!("Queuing cmd_string: {}", cmd_string);
                     let mut python = std::process::Command::new("bash")
                         .arg("-c")
@@ -913,198 +914,5 @@ impl PileupMatrixFunctions for PileupMatrix{
                 }
             }
         }
-    }
-}
-
-fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &i32)],
-                           indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
-                           snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                           geom_means: &[f32],
-                           coverages: &HashMap<i32, Vec<f32>>) -> Arc<Mutex<Array2<f32>>> {
-    let mut variant_distances: Arc<Mutex<Array2<f32>>>
-        = Arc::new(
-        Mutex::new(
-            Array2::<f32>::zeros((variant_info_all.len(), variant_info_all.len()))));
-    debug!("Filling matrix of size {}",
-           variant_info_all.len().pow(2) as usize);
-
-    // Create variable to store mean of abundance if only one sample
-    let mut vector_mean: f32 = 0.;
-    // produced condensed pairwise distances
-    // described here: https://docs.rs/kodama/0.2.2/kodama/
-    (0..variant_info_all.len()-1)
-        .into_par_iter().for_each(|row_index| {
-        let mut row_variant_set = &BTreeSet::new();
-        let row_info = &variant_info_all[row_index];
-        // lazily get the row variant read id set
-        if indels_map[&row_info.3].contains_key(&row_info.0) {
-            if indels_map[&row_info.3][&row_info.0].contains_key(&row_info.1) {
-                row_variant_set = &indels_map[&row_info.3][&row_info.0][&row_info.1];
-            } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-                let var_char = row_info.1.as_bytes()[0] as char;
-                if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                    row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-                }
-            }
-        } else if snps_map[&row_info.3].contains_key(&row_info.0) {
-            let var_char = row_info.1.as_bytes()[0] as char;
-            if snps_map[&row_info.3][&row_info.0].contains_key(&var_char) {
-                row_variant_set = &snps_map[&row_info.3][&row_info.0][&var_char];
-            }
-        }
-
-        let row_start = *row_info.0 as usize;
-        let row_end = row_start + row_info.1.len() - 1;
-
-        (row_index+1..variant_info_all.len())
-            .into_par_iter().for_each(|col_index| {
-            if row_index == col_index {
-//                let mut variant_distances = variant_distances.lock().unwrap();
-//                variant_distances[[row_index, col_index]] = 0.;
-            } else {
-                let mut col_variant_set = &BTreeSet::new();
-                let col_info = &variant_info_all[col_index];
-                if indels_map[&col_info.3].contains_key(&col_info.0) {
-                    if indels_map[&col_info.3][&col_info.0].contains_key(&col_info.1) {
-                        col_variant_set = &indels_map[&col_info.3][&col_info.0][&col_info.1];
-                    } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                        let var_char = col_info.1.as_bytes()[0] as char;
-                        if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                            col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                        }
-                    }
-                } else if snps_map[&col_info.3].contains_key(&col_info.0) {
-                    let var_char = col_info.1.as_bytes()[0] as char;
-                    if snps_map[&col_info.3][&col_info.0].contains_key(&var_char) {
-                        col_variant_set = &snps_map[&col_info.3][&col_info.0][&var_char];
-                    }
-                }
-
-                let col_start = *col_info.0 as usize;
-                let col_end = col_start + col_info.1.len() - 1;
-
-                let mut distance: f32 = 0.;
-
-                // If the variants share positions, then instantly they can't be in the same
-                // gentoype so max distance
-//                if row_start <= col_end && col_start <= row_end {
-//                    distance = 1.;
-                {
-
-//
-////                            let row_cov = contig_coverage_means[&row_info.3];
-////                            let col_cov = contig_coverage_means[&col_info.3];
-//
-//                    let p: f32 = (row_info.2).0;
-//                    let q: f32 = (col_info.2).0;
-//                    // p * q = expected frequency
-//                    let pq = p * q;
-//
-//                    // linkage disequilibrium
-//                    let d = jaccard - pq;
-//
-//                    // correlation
-//                    let rho = d.powf(2.) / (pq * (p - 1.) * (q - 1.));
-//
-//                    debug!("p {} q {} x {} D {} rho {} distance {}", p, q, jaccard, d, rho, 1. - rho);
-                    // Distance will be defined as the mean between jaccard dist
-                    // and dist_f
-                    let mut corr = 0.;
-                    let mut w = 0;
-                    if (row_info.2).1.len() > 1 {
-                        // Calculate the log-ratio variance across compositions
-                        // Essentially analogous to correlation
-                        let mut log_vec = Arc::new(
-                            Mutex::new(Vec::new()));
-                        (row_info.2).1.par_iter()
-                            .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
-                            let mut log_vec = log_vec.lock().unwrap();
-                            log_vec.push(((r_freq + 1.)/ (c_freq + 1.)).ln() as f32);
-                        });
-                        let log_vec = log_vec.lock().unwrap();
-                        let sum = log_vec.iter().sum::<f32>();
-                        let mean = sum / log_vec.len() as f32;
-                        // calculate the variance of the log vector
-                        let variance = log_vec.iter().map(|&value|{
-                            let diff = mean - value;
-                            diff * diff
-                        }).sum::<f32>() / log_vec.len() as f32;
-
-                        distance = variance;
-                        let mut variant_distances = variant_distances.lock().unwrap();
-                        variant_distances[[row_index, col_index]] = distance;
-                        variant_distances[[col_index, row_index]] = distance;
-
-
-                    } else {
-//                        if vector_mean == 0. {
-//                            // loop through infos, should only happen once
-//                            vector_mean = vector_info_all.par_iter().map(|info_tup|{
-//                                (info_tup.2).1[0]
-//                            }).sum::<f32>() / vector_info_all.len();
-//                        }
-                        let mut d_kl_a: f32 = 0.;
-                        let mut d_kl_b: f32 = 0.;
-                        let row_freq = (row_info.2).1[0];
-                        let col_freq = (col_info.2).1[0];
-                        if row_freq == 1. || col_freq == 1. {
-                            // since the lim x->0 of xln(x) = 0
-                            d_kl_a = row_freq * (row_freq / col_freq).ln();
-                            d_kl_b = col_freq * (col_freq / row_freq).ln();
-                        } else {
-                            d_kl_a = row_freq * (row_freq / col_freq).ln()
-                                + (1. - row_freq) * ((1. - row_freq) / (1. - col_freq)).ln();
-
-                            d_kl_b = col_freq * (col_freq / row_freq).ln()
-                                + (1. - col_freq) * ((1. - col_freq) / (1. - row_freq)).ln();
-                        }
-//                        let intersection_len = (row_variant_set
-//                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-
-                        // Jaccard Similarity Modified for total read depth
-                        // Calculates the observed frequency of two variants together
-                        // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
-//                        let jaccard_d = ((intersection_len + 1.) /
-//                            ((row_info.2).0 + (col_info.2).0 - intersection_len + 1.));
-                        if d_kl_a < 0. {
-                            d_kl_a = 0.
-                        }
-                        if d_kl_b < 0. {
-                            d_kl_b = 0.
-                        }
-
-                        let mut variant_distances = variant_distances.lock().unwrap();
-                        variant_distances[[row_index, col_index]] = d_kl_a;
-                        variant_distances[[col_index, row_index]] = d_kl_b;
-                    }
-
-                }
-
-//                match condensed_index(
-//                    row_index, col_index, variant_info_all.len()) {
-//                    Some(index) => {
-//                        let mut variant_distances = variant_distances.lock().unwrap();
-//                        variant_distances[[index]] = distance;
-//                    }
-//                    None => {
-//                        debug!("No corresponding index for row {} and col {}",
-//                               row_index, col_index);
-//                    }
-//                };
-
-            }
-        });
-    });
-    debug!("{:?}", variant_distances);
-    return variant_distances
-}
-
-// helper function to get the index of condensed matrix from it square form
-fn condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
-    if i == j {
-        return None
-    } else {
-        return Some(n*i - i*(i+1)/2 + j - 1 - i)
-//        return Some(n*(n-1)/2 - (n - row_i)*(n - row_i - 1)/2 + col_j - row_i - 1)
     }
 }
