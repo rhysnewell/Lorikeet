@@ -74,8 +74,9 @@ if __name__=="__main__":
         minRank = int(sys.argv[1])
         estimateRanks = sys.argv[2]
         miter = int(sys.argv[3])
+        sample_count = int(sys.argv[5])
     except IndexError:
-        print("Usage <Ranks> <Estimate Ranks> <Max Iterations> <Input Pairwise Distance Vector>")
+        print("Usage <Ranks> <Estimate Ranks> <Max Iterations> <Input Pairwise Distance Vector> <Sample Count>")
         sys.exit()
 
     #condensed_vec = []
@@ -84,7 +85,8 @@ if __name__=="__main__":
     #        condensed_vec = ast.literal_eval(line)
     #        #condensed_vec = line
     #condensed_vec = np.array(condensed_vec)
-    #pairwise_distances = squareform(pairwise_distances)
+    if sample_count > 1:
+        pairwise_distances = squareform(pairwise_distances)
 
     perform_nmf(pairwise_distances, minRank, miter, estimateRanks)
 
