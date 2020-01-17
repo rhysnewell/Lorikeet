@@ -9,12 +9,12 @@ import sys
 
 #random.seed(a=345210)
 
-def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
+def perform_nmf(array, k=10, miter=10, maxRank=15):
     # array = [[] for i in filenames]
     bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
                     objective='conn')
 
-    estimated_ranks = bd.estimate_rank(rank_range=range(k, 15), n_run=miter//2)
+    estimated_ranks = bd.estimate_rank(rank_range=range(k, maxRank), n_run=miter//2)
     best_rank = 0
     best_rss = None
     # Choose the best rank by finding the first inflection point in the RSS values
@@ -84,7 +84,7 @@ if __name__=="__main__":
     try:
         pairwise_distances = np.load(sys.argv[4])
         minRank = int(sys.argv[1])
-        estimateRanks = sys.argv[2]
+        maxRank = int(sys.argv[2])
         miter = int(sys.argv[3])
         sample_count = int(sys.argv[5])
     except IndexError:
@@ -100,5 +100,5 @@ if __name__=="__main__":
     if sample_count > 1:
         pairwise_distances = squareform(pairwise_distances)
 
-    perform_nmf(pairwise_distances, minRank, miter, estimateRanks)
+    perform_nmf(pairwise_distances, minRank, miter, maxRank)
 
