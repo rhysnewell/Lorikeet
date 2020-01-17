@@ -13,21 +13,33 @@ def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
     # array = [[] for i in filenames]
     bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
                     objective='conn')
+
+    estimated_ranks = bd.estimate_rank(rank_range=range(k, 15), n_run=miter//2)
+    best_rank = 0
+    best_rss = None
+    # Choose the best rank by finding the first inflection point in the RSS values
+    # Quick method is to find first point when RSS is at lowest value
+    for rank, values in estimated_ranks.items():
+
+        if best_rss is None or values['rss'] < best_rss:
+            best_rank = rank
+            best_rss = values['rss']
+        elif values['rss'] >= best_rss:
+            break
+
+    bd = nimfa.Nsnmf(array, seed='nndsvd', rank=best_rank, max_iter=miter, update='euclidean',
+                        objective='conn')
     bd_fit = bd()
-    if estimateRanks == 'True':
-        print(bd_fit.fit.rss())
+    print('Rank: %d' % best_rank)
+    print('Rss: %5.4f' % bd_fit.fit.rss())
+    print('Evar: %5.4f' % bd_fit.fit.evar())
+    print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
+    print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
+    print('Connectivity', bd_fit.fit.connectivity())
 
-    else:
-
-        print('Rss: %5.4f' % bd_fit.fit.rss())
-        print('Evar: %5.4f' % bd_fit.fit.evar())
-        print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
-        print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
-        print('Connectivity', bd_fit.fit.connectivity())
-
-        predictions = bd_fit.fit.predict(prob=True)
-        bins = np.array(predictions[0])[0]
-        print(predictions)
+    predictions = bd_fit.fit.predict(prob=True)
+    bins = np.array(predictions[0])[0]
+    print(predictions)
     #print('Evar: %5.4f' % bd_fit.fit.evar())
     #print('K-L divergence: %5.4f' % bd_fit.distance(metric='kl'))
     #print('Sparseness, W: %5.4f, H: %5.4f' % bd_fit.fit.sparseness())
