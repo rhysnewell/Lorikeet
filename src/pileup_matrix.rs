@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use haplotypes_and_genotypes::*;
 use std::fs::File;
 use std::process;
+use std::cmp;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
@@ -458,9 +459,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                        nmf.py {} False {} {} {}",
+                        nmf.py {} {} {} {} {}",
                         // NMF
-                        5,
+                        cmp::min(5, variant_info_all.len()),
+                        cmp::min(15, variant_info_all.len()),
                         100,
                         tmp_path,
                         sample_count as i32);
