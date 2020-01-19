@@ -5,6 +5,7 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use ndarray::{Array2, Array1, ArrayView};
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
@@ -457,12 +458,72 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 //                println!("{:?}", variant_distances);
 
+                    let max_rank = cmp::min(15, variant_info_all.len());
+                    let min_rank = cmp::min(4, variant_info_all.len());
+
+                    let mut ranks_rss = Arc::new(
+                        Mutex::new(vec![0.; max_rank - min_rank]));
+
+                    (min_rank..max_rank).into_par_iter().for_each(|rank| {
+                        let cmd_string = format!(
+                            "set -e -o pipefail; \
+                     nmf.py {} True {} {} {}",
+                            // NMF
+                            rank + 1,
+                            100,
+                            tmp_path,
+                            sample_count as i32);
+                        info!("Queuing cmd_string: {}", cmd_string);
+                        let mut python = std::process::Command::new("bash")
+                            .arg("-c")
+                            .arg(&cmd_string)
+                            .stderr(process::Stdio::piped())
+                            .stdout(process::Stdio::piped())
+                            .spawn()
+                            .expect("Unable to execute bash");
+
+                        let es = python.wait().expect("Unable to discern exit status");
+                        if !es.success() {
+                            error!("Error when running NMF: {:?}", cmd_string);
+                            let mut err = String::new();
+                            python.stderr.expect("Failed to grab stderr from NMF")
+                                .read_to_string(&mut err).expect("Failed to read stderr into string");
+                            error!("The overall STDERR was: {:?}", err);
+                            debug!("The input matrix was {:?}", variant_distances);
+
+                            process::exit(1);
+                        } else {
+                            let mut out = String::new();
+                            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                                .expect("Failed to read stdout to string");
+                            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+                            let rss: f32 = out.trim().parse().unwrap();
+                            ranks_rss[rank as usize - min_rank] = rss;
+                        }
+                    });
+
+                    let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+                    let mut best_rank = 0;
+                    let mut best_rss = 0.;
+                    debug!("RSS Values {:?}", ranks_rss);
+
+                    for (rank, rss) in ranks_rss.iter().enumerate() {
+                        if best_rank == 0 && best_rss == 0. && rank == 0 {
+                            best_rank = rank + 1;
+                            best_rss = *rss;
+                        } else if &best_rss > rss {
+                            best_rss = *rss;
+                            best_rank = rank + 1;
+                        } else if rss >= &best_rss {
+                            break
+                        }
+                    }
+
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                        nmf.py {} {} {} {} {}",
+                     nmf.py {} False {} {} {}",
                         // NMF
-                        cmp::min(5, variant_info_all.len()),
-                        cmp::min(15, variant_info_all.len()),
+                        best_rank,
                         100,
                         tmp_path,
                         sample_count as i32);
@@ -491,6 +552,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         println!("{}", sample_names[0]);
                         println!("{}", out);
                     }
+
 
 
                     tmp_dir.close().expect("Unable to close temp directory");
