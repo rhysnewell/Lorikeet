@@ -60,9 +60,9 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>
         }
     };
 
-    let mut constraints = Arc::new(Mutex::new(
-       VariantMatrix::Constraints(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
-    );
+//    let mut constraints = Arc::new(Mutex::new(
+//       VariantMatrix::Constraints(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
+//    );
 
     debug!("Filling matrix of size {}",
            (variant_info_all.len().pow(2) - variant_info_all.len())/2);
@@ -130,27 +130,27 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>
                 // Jaccard Similarity Modified for total read depth
                 // Calculates the observed frequency of two variants together
                 // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
-                let mut constraint: f32 = 0.;
-                if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
-                    constraint = 1.;
-                    constraints.lock().unwrap().index(row_index,
-                                                      col_index,
-                                                      n,
-                                                      constraint,
-                                                      None);
-                } else {
-                    let intersection_len = row_variant_set
-                        .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
-                    constraint = -((intersection_len + 1.) /
-                        ((row_info.2).0 + (col_info.2).0 - intersection_len + 1.));
-                    if constraint < 0. {
-                        constraints.lock().unwrap().index(row_index,
-                                                          col_index,
-                                                          n,
-                                                          constraint,
-                                                          None);
-                    }
-                }
+//                let mut constraint: f32 = 0.;
+//                if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
+//                    constraint = 1.;
+//                    constraints.lock().unwrap().index(row_index,
+//                                                      col_index,
+//                                                      n,
+//                                                      constraint,
+//                                                      None);
+//                } else {
+//                    let intersection_len = row_variant_set
+//                        .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
+//                    constraint = -((intersection_len + 1.) /
+//                        ((row_info.2).0 + (col_info.2).0 - intersection_len + 1.));
+//                    if constraint < 0. {
+//                        constraints.lock().unwrap().index(row_index,
+//                                                          col_index,
+//                                                          n,
+//                                                          constraint,
+//                                                          None);
+//                    }
+//                }
 
                 let mut distance: f32 = 0.;
 
@@ -236,7 +236,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>
     });
 //    return variant_distances
     variant_distances.lock().unwrap().write_npy(dist_file);
-    constraints.lock().unwrap().write_npy(cons_file);
+//    constraints.lock().unwrap().write_npy(cons_file);
 }
 
 // helper function to get the index of condensed matrix from it square form
