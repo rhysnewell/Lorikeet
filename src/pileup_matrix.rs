@@ -378,22 +378,25 @@ impl PileupMatrixFunctions for PileupMatrix{
                             for (var, abundances_vector) in hash.iter() {
                                 let mut abundance: f32 = 0.;
                                 let mut mean_var: f32 = 0.;
-                                let mut total_d: f32 = 0.;
+//                                let mut total_d: f32 = 0.;
                                 let mut freqs = Vec::new();
+                                let mut depths = Vec::new();
                                 if !var.contains("R") {
                                     // Get the mean abundance across samples
                                     let mut sample_idx: usize = 0;
                                     abundances_vector.iter().for_each(|(var, d)| {
                                         mean_var += *var;
                                         // Total depth of location
-                                        total_d += *d;
+//                                        total_d += *d;
                                         if var > &0. {
                                             let freq = (*var + 1.) / (*d + 1.);
                                             let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
                                             geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
                                             let sample_coverage = contig_coverages[sample_idx];
 
-                                            freqs.push(freq * (sample_coverage / max_coverage));
+//                                            freqs.push(freq * (sample_coverage / max_coverage));
+                                            freqs.push(*var);
+                                            depths.push(*d);
                                             abundance += *var / *d;
                                         } else {
                                             freqs.push(0.);
@@ -409,7 +412,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                     variant_info_all.push(
                                         (position, var.to_string(),
-                                         (total_d, freqs), tid));
+                                         (depths, freqs), tid));
                                 }
                             }
                         });
