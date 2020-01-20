@@ -9,10 +9,12 @@ import sys
 
 #random.seed(a=345210)
 
-def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
+def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True'):
     # array = [[] for i in filenames]
     bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                     objective='conn')
+                    objective='conn')
+
+    # bd = nimfa.Pmfcc(array, seed='nndsvd', rank=k, max_iter=miter, theta=constraints)
     bd_fit = bd()
     if estimateRanks == 'True':
         print(bd_fit.fit.rss())
@@ -33,17 +35,20 @@ def perform_nmf(array, k=10, miter=10, estimateRanks='True'):
 if __name__=="__main__":
     try:
         pairwise_distances = np.load(sys.argv[4])
+        # constraints = np.load(sys.argv[5])
         minRank = int(sys.argv[1])
         estimateRanks = sys.argv[2]
         miter = int(sys.argv[3])
-        sample_count = int(sys.argv[5])
-        maxThreads = int(sys.argv[6])
+        sample_count = int(sys.argv[6])
+
     except IndexError:
-        print("Usage <Ranks> <Estimate Ranks> <Max Iterations> <Input Pairwise Distance Vector> <Sample Count> <Threads>")
+        print("Usage <Ranks> <Estimate Ranks> <Max Iterations> <Input Pairwise Distance Vector> <Sample Count>")
         sys.exit()
 
-    if sample_count > 1:
+    if sample_count > 0:
         pairwise_distances = squareform(pairwise_distances)
+        # constraints = squareform(constraints)
 
-    perform_nmf(pairwise_distances, minRank, miter, estimateRanks)
+    pairwise_distances = pairwise_distances / np.linalg.norm(pairwise_distances)
+    perform_nmf(pairwise_distances, None, minRank, miter, estimateRanks)
 
