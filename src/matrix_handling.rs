@@ -39,7 +39,7 @@ impl VariantMatrix {
     }
 }
 
-pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>), &i32)],
+pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec<f32>), &i32)],
                                indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                                geom_means: &[f32],
@@ -130,19 +130,19 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>
                 // Jaccard Similarity Modified for total read depth
                 // Calculates the observed frequency of two variants together
                 // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
-//                let mut constraint: f32 = 0.;
-//                if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
-//                    constraint = 1.;
+                let mut constraint: f32 = 0.;
+                if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
+                    constraint = 1.;
 //                    constraints.lock().unwrap().index(row_index,
 //                                                      col_index,
 //                                                      n,
 //                                                      constraint,
 //                                                      None);
-//                } else {
+                } else {
 //                    let intersection_len = row_variant_set
 //                        .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
-//                    constraint = -((intersection_len + 1.) /
-//                        ((row_info.2).0 + (col_info.2).0 - intersection_len + 1.));
+//                    constraint = 1. - ((intersection_len + 1.) /
+//                        ((row_info.2).0.iter().sum() + (col_info.2).0.iter().sum() - intersection_len + 1.));
 //                    if constraint < 0. {
 //                        constraints.lock().unwrap().index(row_index,
 //                                                          col_index,
@@ -158,77 +158,104 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (f32, Vec<f32>
                 // gentoype so max distance
 //                if row_start <= col_end && col_start <= row_end {
 //                    distance = 1.;
-                {
+                    {
 
-                    // Distance will be defined as the mean between jaccard dist
-                    // and dist_f
-                    let mut corr = 0.;
-                    let mut w = 0;
-                    if (row_info.2).1.len() > 1 {
-                        // Calculate the log-ratio variance across compositions
-                        // Essentially analogous to correlation
-                        let mut log_vec = Arc::new(
-                            Mutex::new(Vec::new()));
-                        (row_info.2).1.par_iter()
-                            .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
-                            let mut log_vec = log_vec.lock().unwrap();
-                            log_vec.push(((r_freq + 1.)/ (c_freq + 1.)).ln() as f32);
-                        });
-                        let log_vec = log_vec.lock().unwrap();
-                        let sum = log_vec.iter().sum::<f32>();
-                        let mean = sum / log_vec.len() as f32;
-                        // calculate the variance of the log vector
-                        let variance = log_vec.iter().map(|&value|{
-                            let diff = mean - value;
-                            diff * diff
-                        }).sum::<f32>() / log_vec.len() as f32;
+                        // Distance will be defined as the mean between jaccard dist
+                        // and dist_f
+                        let mut corr = 0.;
+                        let mut w = 0;
+                        if (row_info.2).1.len() > 1 {
+                            // Calculate the log-ratio variance across compositions
+                            // Essentially analogous to correlation
+//                        let mut log_vec = Arc::new(
+//                            Mutex::new(Vec::new()));
+//                        (row_info.2).1.par_iter()
+//                            .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
+//                            let mut log_vec = log_vec.lock().unwrap();
+//                            log_vec.push(((r_freq + 1.)/ (c_freq + 1.)).ln() as f32);
+//                        });
+//                        let log_vec = log_vec.lock().unwrap();
+                            let sum_row = (row_info.2).1.iter().sum::<f32>();
+                            let mean_row = sum_row / (row_info.2).1.len() as f32;
 
+                            let sum_col = (col_info.2).1.iter().sum::<f32>();
+                            let mean_col = sum_col / (col_info.2).1.len() as f32;
 
-                        variant_distances.lock().unwrap().index(row_index,
-                                                                col_index,
-                                                                n,
-                                                                distance,
-                                                                None);
+//                        // calculate the variance of the log vector
+//                        let variance = log_vec.iter().map(|&value|{
+//                            let diff = mean - value;
+//                            diff * diff
+//                        }).sum::<f32>() / log_vec.len() as f32;
 
-                    } else {
+                            // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
+                            let mut row_var = 0.;
+                            let mut col_var = 0.;
+                            let mut covar = 0.;
+
+                            (row_info.2).1.iter()
+                                .zip((col_info.2).1.iter()).for_each(|(r_freq, c_freq)| {
+                                row_var += (r_freq - mean_row).powf(2.);
+                                col_var += (c_freq - mean_col).powf(2.);
+                                covar += (r_freq - mean_row) * (c_freq - mean_col)
+                            });
+
+                            row_var = row_var / (row_info.2).1.len() as f32;
+                            col_var = col_var / (row_info.2).1.len() as f32;
+                            covar = covar / (row_info.2).1.len() as f32;
+
+                            distance = row_var + col_var - 2. * covar;
+
+                            variant_distances.lock().unwrap().index(row_index,
+                                                                    col_index,
+                                                                    n,
+                                                                    distance,
+                                                                    None);
+                        } else {
 //                        if vector_mean == 0. {
 //                            // loop through infos, should only happen once
 //                            vector_mean = vector_info_all.par_iter().map(|info_tup|{
 //                                (info_tup.2).1[0]
 //                            }).sum::<f32>() / vector_info_all.len();
 //                        }
-                        let mut d_kl_a: f32 = 0.;
-                        let mut d_kl_b: f32 = 0.;
-                        let row_freq = (row_info.2).1[0];
-                        let col_freq = (col_info.2).1[0];
-                        if row_freq == 1. || col_freq == 1. {
-                            // since the lim x->0 of xln(x) = 0
-                            d_kl_a = row_freq * (row_freq / col_freq).ln();
-                            d_kl_b = col_freq * (col_freq / row_freq).ln();
-                        } else {
-                            d_kl_a = row_freq * (row_freq / col_freq).ln()
-                                + (1. - row_freq) * ((1. - row_freq) / (1. - col_freq)).ln();
+                            let mut d_kl_a: f32 = 0.;
+                            let mut d_kl_b: f32 = 0.;
+                            let row_freq = (row_info.2).1[0];
+                            let col_freq = (col_info.2).1[0];
 
-                            d_kl_b = col_freq * (col_freq / row_freq).ln()
-                                + (1. - col_freq) * ((1. - col_freq) / (1. - row_freq)).ln();
+                            let row_depth = (row_info.2).0[0];
+                            let col_depth = (col_info.2).0[0];
+
+//                        if row_freq == 1. || col_freq == 1. {
+//                            // since the lim x->0 of xln(x) = 0
+//                            d_kl_a = row_freq * (row_freq / col_freq).ln();
+//                            d_kl_b = col_freq * (col_freq / row_freq).ln();
+//                        } else {
+//                            d_kl_a = row_freq * (row_freq / col_freq).ln()
+//                                + (1. - row_freq) * ((1. - row_freq) / (1. - col_freq)).ln();
+//
+//                            d_kl_b = col_freq * (col_freq / row_freq).ln()
+//                                + (1. - col_freq) * ((1. - col_freq) / (1. - row_freq)).ln();
+//                        }
+////                        let intersection_len = (row_variant_set
+////                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
+//
+//
+//                        if d_kl_a < 0. {
+//                            d_kl_a = 0.
+//                        }
+//                        if d_kl_b < 0. {
+//                            d_kl_b = 0.
+//                        }
+
+                            distance = ((row_freq - col_freq).powf(2.)
+                                + (row_depth - col_depth).powf(2.)).powf(1. / 2.);
+
+                            variant_distances.lock().unwrap().index(row_index,
+                                                                    col_index,
+                                                                    n,
+                                                                    distance,
+                                                                    None);
                         }
-//                        let intersection_len = (row_variant_set
-//                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-
-
-                        if d_kl_a < 0. {
-                            d_kl_a = 0.
-                        }
-                        if d_kl_b < 0. {
-                            d_kl_b = 0.
-                        }
-
-                        variant_distances.lock().unwrap().index(row_index,
-                                                                col_index,
-                                                                n,
-                                                                d_kl_a,
-                                                                Some(d_kl_b));
-
                     }
                 }
             }

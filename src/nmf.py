@@ -11,8 +11,10 @@ import sys
 
 def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True'):
     # array = [[] for i in filenames]
-    bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                    objective='conn')
+    # bd = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
+    #                 objective='conn')
+
+    bd = nimfa.Bd(array, seed='nndsvd', rank=k, max_iter=miter)
 
     # bd = nimfa.Pmfcc(array, seed='nndsvd', rank=k, max_iter=miter, theta=constraints)
     bd_fit = bd()
