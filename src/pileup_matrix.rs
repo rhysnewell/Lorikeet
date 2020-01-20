@@ -425,17 +425,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                             prod / variant_info_all.len() as f32
                         }).collect::<Vec<f32>>();
 
-                    let mut variant_distances =
-                        get_condensed_distances(&variant_info_all[..],
-                                                indels_map,
-                                                snps_map,
-                                                &geom_means,
-                                                sample_count as i32);
-
-                    let mut variant_distances =  variant_distances.lock().unwrap();
-
-//                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
-
                     let tmp_dir = TempDir::new("lorikeet_fifo")
                         .expect("Unable to create temporary directory");
                     let fifo_path = tmp_dir.path().join("foo.pipe");
@@ -447,14 +436,37 @@ impl PileupMatrixFunctions for PileupMatrix{
                         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
                     let mut distances_file = tempfile::Builder::new()
-                        .prefix("lorikeet-distances-vec")
+                        .prefix("lorikeet-distances")
                         .tempfile_in(tmp_dir.path())
                         .expect(&format!("Failed to create distances tempfile"));
+
+                    let mut constraints_file = tempfile::Builder::new()
+                        .prefix("lorikeet-constraints")
+                        .tempfile_in(tmp_dir.path())
+                        .expect(&format!("Failed to create constraints tempfile"));
+
 //                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
-                    let tmp_path = distances_file.path().to_str()
+                    let tmp_path_dist = distances_file.path().to_str()
                         .expect("Failed to convert tempfile path to str").to_string();
 
-                    variant_distances.write_npy(&tmp_path);
+                    let tmp_path_cons = constraints_file.path().to_str()
+                        .expect("Failed to convert tempfile path to str").to_string();
+
+                    get_condensed_distances(&variant_info_all[..],
+                                            indels_map,
+                                            snps_map,
+                                            &geom_means,
+                                            sample_count as i32,
+                                            &tmp_path_dist,
+                                            &tmp_path_cons);
+
+//                    let mut variant_distances =  variant_distances.lock().unwrap();
+
+//                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
+
+
+
+//                    variant_distances.write_npy(&tmp_path);
 
 //                println!("{:?}", variant_distances);
 
@@ -467,11 +479,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                     (min_rank..max_rank).into_par_iter().for_each(|rank| {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     nmf.py {} True {} {} {}",
+                     nmf.py {} True {} {} {} {}",
                             // NMF
                             rank + 1,
                             100,
-                            tmp_path,
+                            tmp_path_dist,
+                            tmp_path_cons,
                             sample_count as i32);
                         info!("Queuing cmd_string: {}", cmd_string);
                         let mut python = std::process::Command::new("bash")
@@ -489,7 +502,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                             python.stderr.expect("Failed to grab stderr from NMF")
                                 .read_to_string(&mut err).expect("Failed to read stderr into string");
                             error!("The overall STDERR was: {:?}", err);
-                            debug!("The input matrix was {:?}", variant_distances);
 
                             process::exit(1);
                         } else {
@@ -497,7 +509,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                             python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                                 .expect("Failed to read stdout to string");
                             let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                            let rss: f32 = out.trim().parse().unwrap();
+                            debug!("Output {:?}", out);
+                            let rss: f32 = match out.trim().parse() {
+                                Ok(value) => value,
+                                Err(error) => {
+                                    debug!("Unable to parse RSS {}", error);
+                                    0.
+                                }
+                            };
                             ranks_rss[rank as usize - min_rank] = rss;
                         }
                     });
@@ -509,23 +528,24 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     for (rank, rss) in ranks_rss.iter().enumerate() {
                         if best_rank == 0 && best_rss == 0. && rank == 0 {
-                            best_rank = rank + 1;
+                            best_rank = rank + min_rank + 1;
                             best_rss = *rss;
-                        } else if &best_rss > rss {
+                        } else if &best_rss >= rss {
                             best_rss = *rss;
-                            best_rank = rank + 1;
-                        } else if rss >= &best_rss {
+                            best_rank = rank + min_rank + 1;
+                        } else if rss > &best_rss {
                             break
                         }
                     }
 
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                     nmf.py {} False {} {} {}",
+                     nmf.py {} False {} {} {} {}",
                         // NMF
                         best_rank,
                         100,
-                        tmp_path,
+                        tmp_path_dist,
+                        tmp_path_cons,
                         sample_count as i32);
                     info!("Queuing cmd_string: {}", cmd_string);
                     let mut python = std::process::Command::new("bash")
