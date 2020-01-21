@@ -6,7 +6,8 @@ use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use rayon::ThreadPool;
-use ndarray::{Array2, Array1, ArrayView};
+use ndarray::{Array2, Array1, Array, ArrayView};
+use ndarray_npy::read_npy;
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -359,7 +360,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let geom_mean_vec =
                     Arc::new(
                         Mutex::new(
-                            vec![1.; sample_count as usize]));
+                            vec![1. as f64; sample_count as usize]));
 
                 // get basic variant info
                 variants.par_iter().for_each(|(tid, variant_abundances)| {
@@ -385,26 +386,27 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Get the mean abundance across samples
                                     let mut sample_idx: usize = 0;
                                     abundances_vector.iter().for_each(|(var, d)| {
-                                        mean_var += *var;
+//                                        mean_var += *var;
                                         // Total depth of location
 //                                        total_d += *d;
                                         if var > &0. {
-                                            let freq = (*var + 1.) / (*d + 1.);
+//                                            let freq = (*var + 1.) / (*d + 1.);
                                             let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
-                                            geom_mean_vec[sample_idx] = geom_mean_vec[sample_idx] * freq;
                                             let sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
-                                            freqs.push(*var);
-                                            depths.push(*d);
+                                            freqs.push(*var + 1.);
+                                            geom_mean_vec[sample_idx] += ((*var + 1.) as f64).ln();
+
+                                            depths.push(*d + 1.);
                                             abundance += *var / *d;
                                         } else {
-                                            freqs.push(0.);
+                                            freqs.push(1.);
                                         }
                                     });
 
-                                    mean_var = mean_var / sample_count;
-                                    abundance = abundance / sample_count;
+//                                    mean_var = mean_var / sample_count;
+//                                    abundance = abundance / sample_count;
 
                                     let mut variant_info_all = variant_info_all
                                         .lock().unwrap();
@@ -417,16 +419,23 @@ impl PileupMatrixFunctions for PileupMatrix{
                             }
                         });
                 });
-                let variant_info_all = variant_info_all.lock().unwrap();
+                let mut variant_info_all = variant_info_all.lock().unwrap();
                 if variant_info_all.len() > 1 {
 
                     info!("Generating Variant Distances with {} Variants", variant_info_all.len());
 
                     let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                    debug!("Geom Mean Vec {:?}", geom_mean_vec);
                     let geom_means = geom_mean_vec.iter()
-                        .map(|prod| {
-                            prod / variant_info_all.len() as f32
-                        }).collect::<Vec<f32>>();
+                        .map(|sum| {
+                            (sum / variant_info_all.len() as f64).exp()
+                        }).collect::<Vec<f64>>();
+
+//                    geom_means.iter().enumerate().for_each(|(sample, geom_means)| {
+//                        variant_info_all.iter_mut().for_each(|var| {
+//
+//                        });
+//                    });
 
                     let tmp_dir = TempDir::new("lorikeet_fifo")
                         .expect("Unable to create temporary directory");
@@ -458,7 +467,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     get_condensed_distances(&variant_info_all[..],
                                             indels_map,
                                             snps_map,
-                                            &geom_means,
+                                            &geom_means[..],
                                             sample_count as i32,
                                             &tmp_path_dist,
                                             &tmp_path_cons);
@@ -482,7 +491,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     (min_rank..max_rank).into_par_iter().for_each(|rank| {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     nmf.py {} True {} {} {} {}",
+                     nice nmf.py {} True {} {} {} {}",
                             // NMF
                             rank + 1,
                             100,
@@ -576,10 +585,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                         println!("{}", out);
                     }
 
-
+                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
+                        .expect("Unable to read predictions");
 
                     tmp_dir.close().expect("Unable to close temp directory");
-
+                    debug!("Predictions {:?}", predictions);
 
 //                let py = gil.python();
 //                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
