@@ -6,7 +6,7 @@ use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use rayon::ThreadPool;
-use ndarray::{Array2, Array1, Array, ArrayView};
+use ndarray::{Array2, Array1, Array, ArrayView, Axis};
 use ndarray_npy::read_npy;
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
@@ -591,10 +591,24 @@ impl PileupMatrixFunctions for PileupMatrix{
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
 
-//                let py = gil.python();
-//                let nmfpy = PyModule::import(py, "nmf.py").unwrap();
-//                let variant_distances = variant_distances.to_owned().into_pyarray(py);
-//                nmfpy.call1("perform_nmf", (variant_distances,)).unwrap();
+                    let mut prediction_map = HashMap::new();
+                    let mut prediction_count = HashMap::new();
+                    for row in 0..(variant_info_all.len()-1) {
+                        let prediction = prediction_map.entry(predictions[[row, 0]] as i32)
+                            .or_insert(0.);
+                        let count = prediction_count.entry(predictions[[row, 0]] as i32)
+                            .or_insert(0.);
+                        *count += 1.;
+                        *prediction += predictions[[row, 1]].ln();
+                    }
+                    let mut prediction_geom = HashMap::new();
+                    prediction_map.iter()
+                        .for_each(|(pred, sum)|{
+                            prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
+                        });
+                    println!("Prediction Geom Means {:?}", prediction_geom);
+
+
                 } else {
                     debug!("Not enough variants found {:?}, Non heterogeneous population", variant_info_all);
                 }
