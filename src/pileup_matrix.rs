@@ -500,21 +500,27 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                println!("{:?}", variant_distances);
 
                     let max_rank = cmp::min(15, variant_info_all.len());
-                    let min_rank = cmp::min(1, variant_info_all.len());
+                    let min_rank = cmp::min(4, variant_info_all.len());
 
                     let mut ranks_rss = Arc::new(
                         Mutex::new(vec![0.; max_rank - min_rank]));
 
+                    let mut in_threads = threads / (max_rank - min_rank - 1);
+                    if in_threads < 1 {
+                        in_threads = 1;
+                    }
+
                     (min_rank..max_rank).into_par_iter().for_each(|rank| {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {} 1",
+                     nice nmf.py {} True {} {} {} {} {}",
                             // NMF
                             rank + 1,
                             10,
                             tmp_path_dist,
                             tmp_path_cons,
-                            sample_count as i32);
+                            sample_count as i32,
+                            in_threads,);
                         info!("Queuing cmd_string: {}", cmd_string);
                         let mut python = std::process::Command::new("bash")
                             .arg("-c")
