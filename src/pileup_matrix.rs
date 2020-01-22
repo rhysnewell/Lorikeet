@@ -5,7 +5,6 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use rayon::ThreadPool;
 use ndarray::{Array2, Array1, Array, ArrayView, Axis};
 use ndarray_npy::read_npy;
 use cogset::{Euclid, Dbscan, BruteScan};
@@ -83,7 +82,7 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
-    fn generate_distances(&mut self);
+    fn generate_distances(&mut self, threads: usize);
 
 //    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
 
@@ -335,7 +334,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn generate_distances(&mut self) {
+    fn generate_distances(&mut self, threads: usize) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
@@ -357,7 +356,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // A vector the length of the number of samples
                 // Cumulatively calculates the product of abundaces from each sample
-                let geom_mean_vec =
+                let geom_mean_var =
+                    Arc::new(
+                        Mutex::new(
+                            vec![1. as f64; sample_count as usize]));
+
+                let geom_mean_dep =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
@@ -373,9 +377,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                     variant_abundances.par_iter().for_each(
                         |(position, hash)| {
                             // loop through each position that has variants
-
-
-
                             for (var, abundances_vector) in hash.iter() {
                                 let mut abundance: f32 = 0.;
                                 let mut mean_var: f32 = 0.;
@@ -391,18 +392,24 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                        total_d += *d;
                                         if var > &0. {
 //                                            let freq = (*var + 1.) / (*d + 1.);
-                                            let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
+                                            let mut geom_mean_var =
+                                                geom_mean_var.lock().unwrap();
+                                            let mut geom_mean_dep =
+                                                geom_mean_dep.lock().unwrap();
+
                                             let sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                             freqs.push(*var + 1.);
-                                            geom_mean_vec[sample_idx] += ((*var + 1.) as f64).ln();
+                                            geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
+                                            geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
 
                                             depths.push(*d + 1.);
                                             abundance += *var / *d;
                                         } else {
                                             freqs.push(1.);
                                         }
+                                        sample_idx += 1;
                                     });
 
 //                                    mean_var = mean_var / sample_count;
@@ -423,13 +430,22 @@ impl PileupMatrixFunctions for PileupMatrix{
                 if variant_info_all.len() > 1 {
 
                     info!("Generating Variant Distances with {} Variants", variant_info_all.len());
+                    let geom_mean = |input: &Vec<f64>| -> Vec<f64> {
+                        let output = input.iter()
+                            .map(|sum| {
+                                (sum / variant_info_all.len() as f64).exp()
+                            }).collect::<Vec<f64>>();
+                        return output
+                    };
+                    debug!("Geom Mean Var {:?}", geom_mean_var);
 
-                    let mut geom_mean_vec = geom_mean_vec.lock().unwrap();
-                    debug!("Geom Mean Vec {:?}", geom_mean_vec);
-                    let geom_means = geom_mean_vec.iter()
-                        .map(|sum| {
-                            (sum / variant_info_all.len() as f64).exp()
-                        }).collect::<Vec<f64>>();
+                    let mut geom_mean_var = geom_mean_var.lock().unwrap();
+                    let geom_mean_var = geom_mean(&geom_mean_var);
+                    debug!("Geom Mean Var {:?}", geom_mean_var);
+
+                    let mut geom_mean_dep = geom_mean_dep.lock().unwrap();
+                    let geom_mean_dep = geom_mean(&geom_mean_dep);
+                    debug!("Geom Mean Dep {:?}", geom_mean_dep);
 
 //                    geom_means.iter().enumerate().for_each(|(sample, geom_means)| {
 //                        variant_info_all.iter_mut().for_each(|var| {
@@ -467,7 +483,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     get_condensed_distances(&variant_info_all[..],
                                             indels_map,
                                             snps_map,
-                                            &geom_means[..],
+                                            &geom_mean_var[..],
+                                            &geom_mean_dep[..],
                                             sample_count as i32,
                                             &tmp_path_dist,
                                             &tmp_path_cons);
@@ -483,7 +500,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                println!("{:?}", variant_distances);
 
                     let max_rank = cmp::min(15, variant_info_all.len());
-                    let min_rank = cmp::min(4, variant_info_all.len());
+                    let min_rank = cmp::min(1, variant_info_all.len());
 
                     let mut ranks_rss = Arc::new(
                         Mutex::new(vec![0.; max_rank - min_rank]));
@@ -491,10 +508,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                     (min_rank..max_rank).into_par_iter().for_each(|rank| {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {}",
+                     nice nmf.py {} True {} {} {} {} 1",
                             // NMF
                             rank + 1,
-                            100,
+                            10,
                             tmp_path_dist,
                             tmp_path_cons,
                             sample_count as i32);
@@ -521,7 +538,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                             python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
                                 .expect("Failed to read stdout to string");
                             let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                            debug!("Output {:?}", out);
                             let rss: f32 = match out.trim().parse() {
                                 Ok(value) => value,
                                 Err(error) => {
@@ -552,13 +568,14 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let cmd_string = format!(
                         "set -e -o pipefail; \
-                     nmf.py {} False {} {} {} {}",
+                     nmf.py {} False {} {} {} {} {}",
                         // NMF
                         best_rank,
-                        100,
+                        30,
                         tmp_path_dist,
                         tmp_path_cons,
-                        sample_count as i32);
+                        sample_count as i32,
+                        threads);
                     info!("Queuing cmd_string: {}", cmd_string);
                     let mut python = std::process::Command::new("bash")
                         .arg("-c")
@@ -607,6 +624,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
                         });
                     println!("Prediction Geom Means {:?}", prediction_geom);
+                    println!("Prediction Counts {:?}", prediction_count);
 
 
                 } else {

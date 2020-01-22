@@ -42,7 +42,8 @@ impl VariantMatrix {
 pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec<f32>), &i32)],
                                indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                               geom_means: &[f64],
+                               geom_means_var: &[f64],
+                               geom_means_dep: &[f64],
                                sample_count: i32,
                                dist_file: &str,
                                cons_file: &str) {
@@ -168,20 +169,21 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 
                             // Calculate the log-ratio variance across compositions
                             // Essentially analogous to correlation
-//                            let mut log_vec = Arc::new(
-//                                Mutex::new(Vec::new()));
-//                            (row_info.2).1.par_iter()
-//                                .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
-//                                let mut log_vec = log_vec.lock().unwrap();
-//                                log_vec.push(((r_freq + 1.)/ (c_freq + 1.)).ln() as f32);
-//                            });
-//                            let log_vec = log_vec.lock().unwrap();
+                            let mut log_vec = Arc::new(
+                                Mutex::new(Vec::new()));
+                            (row_info.2).1.par_iter()
+                                .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
+                                let mut log_vec = log_vec.lock().unwrap();
+                                log_vec.push(((r_freq)/ (c_freq)).ln() as f32);
+                            });
+                            let log_vec = log_vec.lock().unwrap();
+
                             let row_vals: Vec<f32> = (row_info.2).1.iter().enumerate().map(|(i,v)| {
-                                (v / geom_means[i] as f32).ln()
+                                (v / geom_means_var[i] as f32).ln()
                             }).collect();
 
                             let col_vals: Vec<f32> = (col_info.2).1.iter().enumerate().map(|(i,v)| {
-                                (v / geom_means[i] as f32).ln()
+                                (v / geom_means_var[i] as f32).ln()
                             }).collect();
 
                             let sum_row = col_vals.iter().sum::<f32>();
@@ -190,11 +192,14 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             let sum_col = col_vals.iter().sum::<f32>();
                             let mean_col = sum_col / col_vals.len() as f32;
 
-//                        // calculate the variance of the log vector
-//                            let variance = log_vec.iter().map(|&value|{
-//                                let diff = mean - value;
-//                                diff * diff
-//                            }).sum::<f32>() / log_vec.len() as f32;
+                            let sum_log = log_vec.iter().sum::<f32>();
+                            let mean = sum_log / log_vec.len() as f32;
+
+                            // calculate the variance of the log vector
+                            let log_var = log_vec.iter().map(|&value|{
+                                let diff = mean - value;
+                                diff * diff
+                            }).sum::<f32>() / log_vec.len() as f32;
 
                             // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
                             // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
@@ -215,13 +220,17 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             col_var = col_var / col_vals.len() as f32;
                             covar = covar / row_vals.len() as f32;
 
-                            distance = row_var + col_var - 2. * covar;
+//                            distance = row_var + col_var - 2. * covar;
+                            // technically correlation -1 to 1
+                            distance = (2. * covar) / (row_var + col_var);
+                            // 0 to 2
+                            distance += 1.;
+//                            distance = 1. - (-log_var.powf(1. / 2.)).exp();
                             if constraint < 0. {
-                                distance = 1.
+                                distance = 0.
                             } else {
-                                distance *= constraint
+                                distance += constraint
                             }
-
 
                             variant_distances.lock().unwrap().index(row_index,
                                                                     col_index,
@@ -265,8 +274,8 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 //                            d_kl_b = 0.
 //                        }
 
-                            distance = ((row_freq - col_freq).powf(2.)
-                                + (row_depth - col_depth).powf(2.)).powf(1. / 2.);
+                            distance = ((row_freq / geom_means_var[0] as f32 - col_freq / geom_means_var[0] as f32).powf(2.)
+                                + (row_depth / geom_means_dep[0] as f32 - col_depth / geom_means_dep[0] as f32).powf(2.)).powf(1. / 2.);
 
                             if constraint < 0. {
                                 distance = 1.
@@ -285,6 +294,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
             });
         });
 //    return variant_distances
+    debug!("Distances {:?}", variant_distances);
     variant_distances.lock().unwrap().write_npy(dist_file);
 //    constraints.lock().unwrap().write_npy(cons_file);
 //    return constraints
