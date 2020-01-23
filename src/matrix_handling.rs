@@ -52,12 +52,14 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
         1 => {
             Arc::new(
                 Mutex::new(
-                    VariantMatrix::Array1(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2))))
+                    VariantMatrix::Array1(Array1::<f32>::zeros(
+                        (variant_info_all.len().pow(2) - variant_info_all.len())/2))))
         },
         _ => {
             Arc::new(
                 Mutex::new(
-                    VariantMatrix::Array1(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2))))
+                    VariantMatrix::Array1(Array1::<f32>::zeros(
+                        (variant_info_all.len().pow(2) - variant_info_all.len())/2))))
         }
     };
 
@@ -143,7 +145,8 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                     let intersection_len = row_variant_set
                         .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
                     constraint = 1. - ((intersection_len + 1.) /
-                        ((row_info.2).0.iter().sum::<f32>() + (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.));
+                        ((row_info.2).0.iter().sum::<f32>() +
+                            (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.));
 //                    if constraint > 0. {
 //                        constraints.lock().unwrap().index(row_index,
 //                                                          col_index,
@@ -178,22 +181,28 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             });
                             let log_vec = log_vec.lock().unwrap();
 
-                            let row_vals: Vec<f32> = (row_info.2).1.iter().enumerate().map(|(i,v)| {
-                                (v / geom_means_var[i] as f32).ln()
-                            }).collect();
+                            let clr = |input: &Vec<f32>| -> Vec<f32> {
+                                let output = input.iter().enumerate().map(|(i,v)| {
+                                    (v / geom_means_var[i] as f32).ln()
+                                }).collect();
+                                return output
+                            };
 
-                            let col_vals: Vec<f32> = (col_info.2).1.iter().enumerate().map(|(i,v)| {
-                                (v / geom_means_var[i] as f32).ln()
-                            }).collect();
+                            let get_mean = |input: &Vec<f32>| -> f32 {
+                                let sum = input.iter().sum::<f32>();
+                                sum / input.len() as f32
+                            };
 
-                            let sum_row = col_vals.iter().sum::<f32>();
-                            let mean_row = sum_row / row_vals.len() as f32;
+                            let row_vals: Vec<f32> = clr(&(row_info.2).1);
 
-                            let sum_col = col_vals.iter().sum::<f32>();
-                            let mean_col = sum_col / col_vals.len() as f32;
+                            let col_vals: Vec<f32> = clr(&(col_info.2).1);
 
-                            let sum_log = log_vec.iter().sum::<f32>();
-                            let mean = sum_log / log_vec.len() as f32;
+                            let mean_row = get_mean(&row_vals);
+
+                            let mean_col = get_mean(&col_vals);
+
+                            let mean = get_mean(&log_vec);
+
 
                             // calculate the variance of the log vector
                             let log_var = log_vec.iter().map(|&value|{
