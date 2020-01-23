@@ -82,7 +82,7 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
-    fn generate_distances(&mut self, threads: usize);
+    fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
 //    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
 
@@ -334,7 +334,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn generate_distances(&mut self, threads: usize) {
+    fn generate_distances(&mut self, threads: usize, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
@@ -343,6 +343,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 target_names,
                 sample_names,
                 coverages,
+                contigs,
                 ..
             } => {
 
@@ -616,11 +617,17 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut prediction_map = HashMap::new();
                     let mut prediction_count = HashMap::new();
-                    for row in 0..(variant_info_all.len()-1) {
+                    let mut prediction_variants = HashMap::new();
+                    for (row, variant_info) in variant_info_all.iter().enumerate() {
+
                         let prediction = prediction_map.entry(predictions[[row, 0]] as i32)
                             .or_insert(0.);
                         let count = prediction_count.entry(predictions[[row, 0]] as i32)
                             .or_insert(0.);
+                        let variant_vec = prediction_variants.entry(predictions[[row, 0]] as i32)
+                            .or_insert(Vec::new());
+
+                        variant_vec.push(variant_info);
                         *count += 1.;
                         *prediction += predictions[[row, 1]].ln();
                     }
@@ -629,8 +636,95 @@ impl PileupMatrixFunctions for PileupMatrix{
                         .for_each(|(pred, sum)|{
                             prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
                         });
+
                     println!("Prediction Geom Means {:?}", prediction_geom);
                     println!("Prediction Counts {:?}", prediction_count);
+
+//                    for (strain_index, genotype) in prediction_variants.iter() {
+//                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
+//
+//                        let file_path = Path::new(&file_name);
+//
+//                        // Open haplotype file or create one
+//                        let mut file_open = File::create(file_path)
+//                            .expect("No Read or Write Permission in current directory");
+//
+//                        // Generate the variant genome
+//                        for (tid, original_contig) in contigs.iter() {
+//                            let mut contig = String::new();
+//
+//                            let mut skip_n = 0;
+//                            let mut skip_cnt = 0;
+//                            let mut char_cnt = 0;
+//                            let mut max_abund = 0.0;
+//                            let mut variations = 0;
+//
+//                            for (pos, base) in original_contig.iter().enumerate() {
+//                                if skip_cnt < skip_n {
+//                                    skip_cnt += 1;
+//                                } else {
+//                                    let mut max_var = "";
+//
+//                                    skip_n = 0;
+//                                    skip_cnt = 0;
+//                                    if haplotype.variants_genome.contains_key(&tid) {
+//                                        if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
+//                                            let hash = &haplotype.variants_genome[tid][&(pos as i32)];
+//                                            for (var, clusters) in hash.iter() {
+//                                                max_var = var;
+//                                                let abundance_map = &variants[tid][&(pos as i32)][var];
+//                                                let mut mean_var: f32 = 0.;
+//                                                let mut mean_d: f32 = 0.;
+//                                                abundance_map.iter().map(|(var, d)|{
+//                                                    mean_var += *var;
+//                                                    mean_d += *d;
+//                                                });
+//                                                mean_var = mean_var / sample_count;
+//                                                mean_d = mean_d / sample_count;
+//                                                let abundance= mean_var / mean_d;
+//
+//                                                if abundance > max_abund {
+//                                                    max_abund = abundance;
+//                                                }
+//                                                variations += 1;
+//                                            }
+//                                            if max_var.contains("N") {
+//                                                // Skip the next n bases but rescue the reference prefix
+//                                                skip_n = max_var.len() - 1;
+//                                                skip_cnt = 0;
+//                                                let first_byte = max_var.as_bytes()[0];
+//                                                contig = contig + str::from_utf8(
+//                                                    &[first_byte]).unwrap()
+//                                            } else if max_var.len() > 1 {
+//                                                // Insertions have a reference prefix that needs to be removed
+//                                                let removed_first_base = str::from_utf8(
+//                                                    &max_var.as_bytes()[1..]).unwrap();
+//                                                contig = contig + removed_first_base;
+//                                            } else {
+//                                                contig = contig + max_var;
+//                                            }
+//                                        } else {
+//                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+//                                        }
+//                                    } else {
+//                                        contig = str::from_utf8(&original_contig)
+//                                            .expect("Can't convert to str").to_string();
+//                                    }
+//                                }
+//                            };
+//                            writeln!(file_open, ">{}_strain_{}\t#max_variant_abundance_{}\t#variants_{}",
+//                                     target_names[tid],
+//                                     hap_index,
+//                                     max_abund,
+//                                     variations);
+//
+//
+//                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+//                                file_open.write(line).unwrap();
+//                                file_open.write(b"\n").unwrap();
+//                            };
+//                        }
+//                    }
 
 
                 } else {
@@ -770,92 +864,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     }
                     debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
 
-                    for (hap_index, haplotype) in haplotypes_vec.iter().enumerate() {
-                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), hap_index);
 
-                        let file_path = Path::new(&file_name);
-
-                        // Open haplotype file or create one
-                        let mut file_open = File::create(file_path)
-                            .expect("No Read or Write Permission in current directory");
-
-                        // Generate the consensus genome by checking each variant
-                        // Variant has to be in more than 0.5 of population
-                        for (tid, original_contig) in contigs.iter() {
-                            let mut contig = String::new();
-
-                            let mut skip_n = 0;
-                            let mut skip_cnt = 0;
-                            let mut char_cnt = 0;
-                            let mut max_abund = 0.0;
-                            let mut variations = 0;
-
-                            for (pos, base) in original_contig.iter().enumerate() {
-                                if skip_cnt < skip_n {
-                                    skip_cnt += 1;
-                                } else {
-                                    let mut max_var = "";
-
-                                    skip_n = 0;
-                                    skip_cnt = 0;
-                                    if haplotype.variants_genome.contains_key(&tid) {
-                                        if haplotype.variants_genome[tid].contains_key(&(pos as i32)) {
-                                            let hash = &haplotype.variants_genome[tid][&(pos as i32)];
-                                            for (var, clusters) in hash.iter() {
-                                                max_var = var;
-                                                let abundance_map = &variants[tid][&(pos as i32)][var];
-                                                let mut mean_var: f32 = 0.;
-                                                let mut mean_d: f32 = 0.;
-                                                abundance_map.iter().map(|(var, d)|{
-                                                    mean_var += *var;
-                                                    mean_d += *d;
-                                                });
-                                                mean_var = mean_var / sample_count;
-                                                mean_d = mean_d / sample_count;
-                                                let abundance= mean_var / mean_d;
-
-                                                if abundance > max_abund {
-                                                    max_abund = abundance;
-                                                }
-                                                variations += 1;
-                                            }
-                                            if max_var.contains("N") {
-                                                // Skip the next n bases but rescue the reference prefix
-                                                skip_n = max_var.len() - 1;
-                                                skip_cnt = 0;
-                                                let first_byte = max_var.as_bytes()[0];
-                                                contig = contig + str::from_utf8(
-                                                    &[first_byte]).unwrap()
-                                            } else if max_var.len() > 1 {
-                                                // Insertions have a reference prefix that needs to be removed
-                                                let removed_first_base = str::from_utf8(
-                                                    &max_var.as_bytes()[1..]).unwrap();
-                                                contig = contig + removed_first_base;
-                                            } else {
-                                                contig = contig + max_var;
-                                            }
-                                        } else {
-                                            contig = contig + str::from_utf8(&[*base]).unwrap();
-                                        }
-                                    } else {
-                                        contig = str::from_utf8(&original_contig)
-                                            .expect("Can't convert to str").to_string();
-                                    }
-                                }
-                            };
-                            writeln!(file_open, ">{}_strain_{}\t#max_variant_abundance_{}\t#variants_{}",
-                                     target_names[tid],
-                                     hap_index,
-                                     max_abund,
-                                     variations);
-
-
-                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                file_open.write(line).unwrap();
-                                file_open.write(b"\n").unwrap();
-                            };
-                        }
-                    }
                 }
             }
         }
