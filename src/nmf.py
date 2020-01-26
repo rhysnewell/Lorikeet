@@ -29,11 +29,14 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
             print('K-L divergence: %5.4f' % mf_fit.distance(metric='kl'))
             print('Sparseness, W: %5.4f, H: %5.4f' % mf_fit.fit.sparseness())
             print('Connectivity', mf_fit.fit.connectivity())
+            print('Score', mf_fit.fit.select_features())
 
             predictions = mf_fit.fit.predict(prob=True)
             bins = np.array(predictions[0])[0]
             # bins = np.array(predictions[0])[0].reshape((len(bins), 1))
-            new_pred = np.column_stack((bins, np.array(predictions[1])))
+            new_pred = np.column_stack((bins,
+                                        np.array(predictions[1]),
+                                        np.array(mf_fit.fit.select_features())))
             print(path)
 
             np.save(path, new_pred.astype('float32'), False)

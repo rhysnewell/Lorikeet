@@ -321,6 +321,7 @@ impl PileupFunctions for PileupStats {
                 let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
                 let variant_count = Arc::new(Mutex::new(0));
                 let indels = Arc::new(Mutex::new(indels));
+//                let mut outside_coverage = Arc::new(Mutex::new(HashMap::new()));
                 let nucfrequency = Arc::new(Mutex::new(nucfrequency));
 //                let min_variant_fraction = min_variant_depth as f32 / 100.;
                 // for each location calculate if there is a variant based on read depth
@@ -413,6 +414,8 @@ impl PileupFunctions for PileupStats {
                         };
 
 //                        }
+                    } else {
+
                     }
 
                     if rel_abundance.len() > 1 {
