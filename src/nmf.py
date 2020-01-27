@@ -15,31 +15,53 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
     # mf = nimfa.Nsnmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
     #                 objective='conn')
     if constraints is None:
-        mf = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                        objective='conn')
-        # mf = nimfa.Psmf(array, seed=None, rank=k, max_iter=miter)
-        mf_fit = mf()
+        converged = False
+        count = 0
+        while converged is False or count >= 10:
+            try:
+                mf = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
+                                objective='conn')
+                # mf = nimfa.Psmf(array, seed=None, rank=k, max_iter=miter)
+                mf_fit = mf()
+                converged  = True
+            except LinAlgError:
+                count += 1
+
         if estimateRanks == 'True':
             print(mf_fit.fit.rss())
 
         else:
-            print('Rank: %d' % k)
-            print('Rss: %5.4f' % mf_fit.fit.rss())
-            print('Evar: %5.4f' % mf_fit.fit.evar())
-            print('K-L divergence: %5.4f' % mf_fit.distance(metric='kl'))
-            print('Sparseness, W: %5.4f, H: %5.4f' % mf_fit.fit.sparseness())
-            print('Connectivity', mf_fit.fit.connectivity())
-            print('Score', mf_fit.fit.select_features())
+            if count >= 10:
+                converged = False
+                while converged is False or k >= 1:
+                    try:
+                        mf = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
+                                        objective='conn')
+                        # mf = nimfa.Psmf(array, seed=None, rank=k, max_iter=miter)
+                        mf_fit = mf()
+                        converged  = True
+                    except LinAlgError:
+                        k -= 1
+            else if converged:
+                print('Rank: %d' % k)
+                print('Rss: %5.4f' % mf_fit.fit.rss())
+                print('Evar: %5.4f' % mf_fit.fit.evar())
+                print('K-L divergence: %5.4f' % mf_fit.distance(metric='kl'))
+                print('Sparseness, W: %5.4f, H: %5.4f' % mf_fit.fit.sparseness())
+                print('Connectivity', mf_fit.fit.connectivity())
+                print('Score', mf_fit.fit.select_features())
 
-            predictions = mf_fit.fit.predict(prob=True)
-            bins = np.array(predictions[0])[0]
-            # bins = np.array(predictions[0])[0].reshape((len(bins), 1))
-            new_pred = np.column_stack((bins,
-                                        np.array(predictions[1]),
-                                        np.array(mf_fit.fit.select_features())))
-            print(path)
+                predictions = mf_fit.fit.predict(prob=True)
+                bins = np.array(predictions[0])[0]
+                # bins = np.array(predictions[0])[0].reshape((len(bins), 1))
+                new_pred = np.column_stack((bins,
+                                            np.array(predictions[1]),
+                                            np.array(mf_fit.fit.select_features())))
+                print(path)
 
-            np.save(path, new_pred.astype('float32'), False)
+                np.save(path, new_pred.astype('float32'), False)
+            else:
+                print("Failed to converge SVD, Try again with stricter variant calling")
     else:
         mf = nimfa.Pmfcc(array, seed='nndsvd', rank=k, max_iter=miter, theta=constraints)
         mf_fit = mf()
