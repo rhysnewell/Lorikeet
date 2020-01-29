@@ -41,10 +41,10 @@ pub fn pileup_variants<R: NamedBamReader,
     n_threads: usize,
     method: &str,
     coverage_fold: f32,
-    include_indels: bool) {
+    include_indels: bool,
+    include_soft_clipping: bool) {
 
     let sample_idx = 0;
-    let include_soft_clipping = false;
     let sample_count = bam_readers.len();
     let mut sample_idx = 0;
     // Print file header
@@ -233,6 +233,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                 // for each chunk of the cigar string
                 let mut cursor: usize = record.pos() as usize;
+                let quals = record.qual();
                 let mut read_cursor: usize = 0;
                 for cig in record.cigar().iter() {
                     match cig {
@@ -242,7 +243,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             let final_pos = cursor + cig.len() as usize;
 
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
-                                let base = record.seq()[qpos] as char;
+                                let base = record.seq().encoded_base(qpos) as char;
                                 let refr = ref_seq[cursor as usize] as char;
                                 let mut nuc_freq = nuc_freq.lock().unwrap();
                                 let nuc_map = nuc_freq
