@@ -481,6 +481,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let tmp_path_cons = constraints_file.path().to_str()
                         .expect("Failed to convert tempfile path to str").to_string();
 
+                    // TODO: Move NMF calculation to be within rust. Need extern crate
+                    //       None are availble currently 29/01/2020
+
                     get_condensed_distances(&variant_info_all[..],
                                             indels_map,
                                             snps_map,

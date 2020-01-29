@@ -1884,7 +1884,8 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                include_indels);
+                include_indels,
+                false);
         },
         "genotype" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1903,6 +1904,7 @@ fn run_pileup<'a,
 
             let output_prefix = m.value_of("output-prefix").unwrap();
             let include_indels = m.is_present("include-indels");
+            let include_soft_clipping = m.is_present("include-soft-clipping");
 
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
@@ -1978,7 +1980,8 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                include_indels);
+                include_indels,
+                include_soft_clipping);
         },
         "summarize" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -2025,7 +2028,8 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                include_indels);
+                include_indels,
+                false);
         },
         "evolve" => {
             let mut variant_consensus_file = "uninit.fna".to_string();
@@ -2073,7 +2077,8 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                include_indels);
+                include_indels,
+                false);
         },
         "polish" => {
             let mut variant_consensus_file = "uninit.fna".to_string();
@@ -2130,7 +2135,8 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                true);
+                true,
+                false);
         },
         _ => panic!("Unknown lorikeet mode"),
     }
@@ -3079,6 +3085,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("nanopore"))
                 .arg(Arg::with_name("include-secondary")
                     .long("include-secondary"))
+                .arg(Arg::with_name("include-soft-clipping")
+                    .long("include-soft-clipping"))
                 .arg(Arg::with_name("include-supplementary")
                     .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
