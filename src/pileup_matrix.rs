@@ -503,7 +503,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 //                println!("{:?}", variant_distances);
 
-                    let max_rank = cmp::min(15, variant_info_all.len());
+                    let max_rank = cmp::min(25, variant_info_all.len());
                     let min_rank = cmp::min(4, variant_info_all.len());
 
                     let mut ranks_rss = Arc::new(
@@ -617,43 +617,89 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
+                    let mut unique_ranks = HashSet::new();
+
+                    predictions
+                        .outer_iter().for_each(|row|{
+                        unique_ranks.insert(row[0] as i32);
+                    });
+
+                    debug!("Unique ranks {:?}", unique_ranks);
 
                     let mut prediction_map = HashMap::new();
                     let mut prediction_count = HashMap::new();
                     let mut prediction_features = HashMap::new();
                     let mut prediction_variants = HashMap::new();
+                    let mut prediction_variants_all = HashMap::new();
+
+                    let mut max_cnt = 0;
+                    let mut max_strain = 0;
+                    let thresh = 1. / unique_ranks.len() as f32;
+                    // check if prediction probability is greater than certain amount
+                    // if so then place into that rank
+                    // If not, then prediction could realistically be any available rank
                     for (row, variant_info) in variant_info_all.iter().enumerate() {
-                        let rank = predictions[[row, 0]] as i32;
-                        let prediction = prediction_map.entry(rank)
-                            .or_insert(0.);
-                        let count = prediction_count.entry(rank)
-                            .or_insert(0.);
-                        let variant_tid = prediction_variants.entry(rank + 1)
-                            .or_insert(HashMap::new());
+                        let prob = predictions[[row, 1]];
+                        if prob >= thresh {
+                            let rank = predictions[[row, 0]] as i32;
 
-                        // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                        let variant_pos = variant_tid.entry(variant_info.3).or_insert(HashMap::new());
+                            let prediction = prediction_map.entry(rank + 1)
+                                .or_insert(0.);
+                            let count = prediction_count.entry(rank + 1)
+                                .or_insert(0.);
+                            let variant_tid = prediction_variants.entry(rank + 1)
+                                .or_insert(HashMap::new());
 
-                        let variant = variant_pos.entry(variant_info.0).or_insert(HashSet::new());
-                        variant.insert(&variant_info.1);
+                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                            let variant_pos = variant_tid.entry(variant_info.3).or_insert(HashMap::new());
+
+                            let variant = variant_pos.entry(variant_info.0).or_insert(HashSet::new());
+                            variant.insert(&variant_info.1);
 
 
-                        let feature = prediction_features.entry(rank).or_insert(0.);
-                        *feature += predictions[[row, 2]];
+                            let feature = prediction_features.entry(rank + 1).or_insert(0.);
+                            *feature += predictions[[row, 2]];
 
-                        *count += 1.;
-                        *prediction += predictions[[row, 1]].ln();
+                            *count += 1.;
+                            *prediction += predictions[[row, 1]].ln();
+                        } else {
+                            // we add the variant to all strains
+                            let rank = 0;
+
+                            let prediction = prediction_map.entry(rank)
+                                .or_insert(0.);
+                            let count = prediction_count.entry(rank)
+                                .or_insert(0.);
+                            let variant_tid = prediction_variants_all.entry(rank)
+                                .or_insert(HashMap::new());
+
+                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                            let variant_pos = variant_tid
+                                .entry(variant_info.3).or_insert(HashMap::new());
+
+                            let variant = variant_pos
+                                .entry(variant_info.0).or_insert(HashSet::new());
+                            variant.insert(&variant_info.1);
+
+
+                            let feature = prediction_features.entry(rank).or_insert(0.);
+                            *feature += predictions[[row, 2]];
+
+                            *count += 1.;
+                            *prediction += predictions[[row, 1]].ln();
+                        }
                     }
 
-                    for (row, variant_info) in variant_info_all.iter().enumerate() {
+                    // get the strain with maximum members
+                    let mut max_cnt = 0.;
+                    let mut max_strain = 0;
+                    prediction_count.iter().map(|(strain, cnt)|{
+                        if &max_cnt <= cnt {
+                            max_strain = *strain;
+                            max_cnt = *cnt;
+                        }
+                    });
 
-                        let variant_all = prediction_variants.entry(0).or_insert(HashMap::new());
-
-                        let variant_pos_all = variant_all.entry(variant_info.3).or_insert(HashMap::new());
-
-                        let variant = variant_pos_all.entry(variant_info.0).or_insert(HashSet::new());
-                        variant.insert(&variant_info.1);
-                    }
 
                     let mut prediction_geom = HashMap::new();
                     prediction_map.iter()
@@ -665,75 +711,89 @@ impl PileupMatrixFunctions for PileupMatrix{
                     println!("Prediction Counts {:?}", prediction_count);
                     println!("Prediction Features {:?}", prediction_features);
 
+                    for (strain_index, genotype) in prediction_variants.iter_mut() {
+                        if strain_index != &0 {
 
-                    for (strain_index, genotype) in prediction_variants.iter() {
-                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
-                        let file_path = Path::new(&file_name);
+                            let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
-                        // Open haplotype file or create one
-                        let mut file_open = File::create(file_path)
-                            .expect("No Read or Write Permission in current directory");
+                            let file_path = Path::new(&file_name);
 
-                        // Generate the variant genome
-                        for (tid, original_contig) in contigs.iter() {
-                            let mut contig = String::new();
+                            // Open haplotype file or create one
+                            let mut file_open = File::create(file_path)
+                                .expect("No Read or Write Permission in current directory");
 
-                            let mut skip_n = 0;
-                            let mut skip_cnt = 0;
-                            let mut char_cnt = 0;
-                            let mut variations = 0;
+                            // Generate the variant genome
+                            for (tid, original_contig) in contigs.iter() {
+                                let mut contig = String::new();
 
-                            for (pos, base) in original_contig.iter().enumerate() {
-                                if skip_cnt < skip_n {
-                                    skip_cnt += 1;
-                                } else {
-                                    let mut max_var = "";
+                                let mut skip_n = 0;
+                                let mut skip_cnt = 0;
+                                let mut char_cnt = 0;
+                                let mut variations = 0;
 
-                                    skip_n = 0;
-                                    skip_cnt = 0;
-                                    if genotype.contains_key(&tid) {
-                                        if genotype[tid].contains_key(&(pos as i32)) {
-                                            let hash = &genotype[tid][&(pos as i32)];
-                                            for var in hash.iter() {
-                                                max_var = var;
-                                                variations += 1;
-                                                break
-                                            }
-                                            if max_var.contains("N") {
-                                                // Skip the next n bases but rescue the reference prefix
-                                                skip_n = max_var.len() - 1;
-                                                skip_cnt = 0;
-                                                let first_byte = max_var.as_bytes()[0];
-                                                contig = contig + str::from_utf8(
-                                                    &[first_byte]).unwrap()
-                                            } else if max_var.len() > 1 {
-                                                // Insertions have a reference prefix that needs to be removed
-                                                let removed_first_base = str::from_utf8(
-                                                    &max_var.as_bytes()[1..]).unwrap();
-                                                contig = contig + removed_first_base;
+                                for (pos, base) in original_contig.iter().enumerate() {
+                                    if skip_cnt < skip_n {
+                                        skip_cnt += 1;
+                                    } else {
+                                        let mut max_var = "";
+
+                                        skip_n = 0;
+                                        skip_cnt = 0;
+                                        if genotype.contains_key(&tid) {
+                                            let mut tid_genotype = genotype.get_mut(&tid).unwrap();
+
+                                            if prediction_variants_all.contains_key(&0) {
+                                                if prediction_variants_all[&0].contains_key(&tid) {
+                                                    tid_genotype
+                                                        .extend(prediction_variants_all[&0][&tid].clone());
+                                                }
+                                            };
+
+                                            if tid_genotype.contains_key(&(pos as i32)) {
+
+                                                let hash = &genotype[tid][&(pos as i32)];
+
+                                                for var in hash.iter() {
+                                                    max_var = var;
+                                                    variations += 1;
+                                                    break
+                                                }
+                                                if max_var.contains("N") {
+                                                    // Skip the next n bases but rescue the reference prefix
+                                                    skip_n = max_var.len() - 1;
+                                                    skip_cnt = 0;
+                                                    let first_byte = max_var.as_bytes()[0];
+                                                    contig = contig + str::from_utf8(
+                                                        &[first_byte]).unwrap()
+                                                } else if max_var.len() > 1 {
+                                                    // Insertions have a reference prefix that needs to be removed
+                                                    let removed_first_base = str::from_utf8(
+                                                        &max_var.as_bytes()[1..]).unwrap();
+                                                    contig = contig + removed_first_base;
+                                                } else {
+                                                    contig = contig + max_var;
+                                                }
                                             } else {
-                                                contig = contig + max_var;
+                                                contig = contig + str::from_utf8(&[*base]).unwrap();
                                             }
                                         } else {
-                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                                            contig = str::from_utf8(&original_contig)
+                                                .expect("Can't convert to str").to_string();
                                         }
-                                    } else {
-                                        contig = str::from_utf8(&original_contig)
-                                            .expect("Can't convert to str").to_string();
                                     }
-                                }
-                            };
-                            writeln!(file_open, ">{}_strain_{}\t#variants_{}",
-                                     target_names[tid],
-                                     strain_index,
-                                     variations);
+                                };
+                                writeln!(file_open, ">{}_strain_{}\t#variants_{}",
+                                         target_names[tid],
+                                         strain_index,
+                                         variations);
 
 
-                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                file_open.write(line).unwrap();
-                                file_open.write(b"\n").unwrap();
-                            };
+                                for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                                    file_open.write(line).unwrap();
+                                    file_open.write(b"\n").unwrap();
+                                };
+                            }
                         }
                     }
 

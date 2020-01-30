@@ -14,11 +14,9 @@ pub mod mapping_index_maintenance;
 pub mod coverage_printer;
 pub mod shard_bam_reader;
 pub mod genome_exclusion;
-pub mod mash;
-pub mod minhashes;
-pub mod distance;
 pub mod haplotypes_and_genotypes;
 pub mod matrix_handling;
+pub mod variants;
 
 extern crate linregress;
 extern crate cogset;
