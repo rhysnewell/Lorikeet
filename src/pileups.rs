@@ -243,7 +243,7 @@ pub fn pileup_variants<R: NamedBamReader,
                             let final_pos = cursor + cig.len() as usize;
 
                             for qpos in read_cursor..(read_cursor+cig.len() as usize) {
-                                let base = record.seq().encoded_base(qpos) as char;
+                                let base = record.seq()[qpos] as char;
                                 let refr = ref_seq[cursor as usize] as char;
                                 let mut nuc_freq = nuc_freq.lock().unwrap();
                                 let nuc_map = nuc_freq
