@@ -83,9 +83,12 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-//    fn dbscan_cluster(&mut self, eps: f64, min_cluster_size: usize);
+    fn run_nmf(&mut self, dist_file_path: &str);
 
-    fn generate_genotypes(&mut self, output_prefix: &str);
+    fn generate_genotypes(&mut self,
+                          output_prefix: &str,
+                          prediction_variants: &mut HashMap<(), ()>,
+                          prediction_variants_all: &mut HashMap<(), ()>);
 
     fn print_matrix(&self);
 
@@ -245,23 +248,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                 variant_index += 1;
                             }
-                            // Get the geometric means of the variant, depth, and reference counts
-                            // at each variant position
-//                            let var_geom: f32 = contig_sums[0].iter().product::<f32>()
-//                                .powf((1 / variant_index) as f32);
-//                            let dep_geom: f32 = contig_sums[1].iter().product::<f32>()
-//                                .powf((1 / variant_index) as f32);
-//                            let ref_geom: f32 = contig_sums[2].iter().product::<f32>()
-//                                .powf((1 / variant_index) as f32);
-//
-//                            debug!("Ref CLR {:?}", contig_sums[2]);
-//
-//                            contig_sums[0] = contig_sums[0].iter()
-//                                .map(|var| { (*var / var_geom).ln() }).collect();
-//                            contig_sums[1] = contig_sums[1].iter()
-//                                .map(|dep| { (*dep / dep_geom).ln() }).collect();
-//                            contig_sums[2] = contig_sums[2].iter()
-//                                .map(|refr| { (*refr / ref_geom).ln() }).collect();
 
                             let contig_variant_counts = variant_counts.entry(sample_idx)
                                 .or_insert(HashMap::new());
@@ -492,223 +478,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             &tmp_path_dist,
                                             &tmp_path_cons);
 
-//                    let mut variant_distances =  variant_distances.lock().unwrap();
+                    self.run_nmf(&tmp_path_dist);
 
-//                let strings: Vec<String> = variant_distances.iter().map(|n| n.to_string()).collect();
-
-
-
-//                    variant_distances.write_npy(&tmp_path);
-
-//                println!("{:?}", variant_distances);
-
-                    let max_rank = cmp::min(25, variant_info_all.len());
-                    let min_rank = cmp::min(4, variant_info_all.len());
-
-                    let mut ranks_rss = Arc::new(
-                        Mutex::new(vec![0.; max_rank - min_rank]));
-
-                    let mut in_threads = threads / (max_rank - min_rank - 1);
-                    if in_threads < 1 {
-                        in_threads = 1;
-                    }
-
-                    (min_rank..max_rank).into_par_iter().for_each(|rank| {
-                        let cmd_string = format!(
-                            "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {} {}",
-                            // NMF
-                            rank + 1,
-                            10,
-                            tmp_path_dist,
-                            tmp_path_cons,
-                            sample_count as i32,
-                            in_threads,);
-                        info!("Queuing cmd_string: {}", cmd_string);
-                        let mut python = std::process::Command::new("bash")
-                            .arg("-c")
-                            .arg(&cmd_string)
-                            .stderr(process::Stdio::piped())
-                            .stdout(process::Stdio::piped())
-                            .spawn()
-                            .expect("Unable to execute bash");
-
-                        let es = python.wait().expect("Unable to discern exit status");
-                        if !es.success() {
-                            error!("Error when running NMF: {:?}", cmd_string);
-                            let mut err = String::new();
-                            python.stderr.expect("Failed to grab stderr from NMF")
-                                .read_to_string(&mut err).expect("Failed to read stderr into string");
-                            error!("The overall STDERR was: {:?}", err);
-
-                            process::exit(1);
-                        } else {
-                            let mut out = String::new();
-                            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                                .expect("Failed to read stdout to string");
-                            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                            let rss: f32 = match out.trim().parse() {
-                                Ok(value) => value,
-                                Err(error) => {
-                                    debug!("Unable to parse RSS {}", error);
-                                    0.
-                                }
-                            };
-                            ranks_rss[rank as usize - min_rank] = rss;
-                        }
-                    });
-
-                    let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-                    let mut best_rank = 0;
-                    let mut best_rss = 0.;
-                    debug!("RSS Values {:?}", ranks_rss);
-
-                    for (rank, rss) in ranks_rss.iter().enumerate() {
-                        if best_rank == 0 && best_rss == 0. && rank == 0 {
-                            best_rank = rank + min_rank + 1;
-                            best_rss = *rss;
-                        } else if &best_rss >= rss {
-                            best_rss = *rss;
-                            best_rank = rank + min_rank + 1;
-                        } else if rss > &best_rss {
-                            break
-                        }
-                    }
-
-                    let cmd_string = format!(
-                        "set -e -o pipefail; \
-                     nmf.py {} False {} {} {} {} {}",
-                        // NMF
-                        best_rank,
-                        30,
-                        tmp_path_dist,
-                        tmp_path_cons,
-                        sample_count as i32,
-                        threads);
-                    info!("Queuing cmd_string: {}", cmd_string);
-                    let mut python = std::process::Command::new("bash")
-                        .arg("-c")
-                        .arg(&cmd_string)
-                        .stderr(process::Stdio::piped())
-                        .stdout(process::Stdio::piped())
-                        .spawn()
-                        .expect("Unable to execute bash");
-
-                    let es = python.wait().expect("Unable to discern exit status");
-                    if !es.success() {
-                        error!("Error when running NMF: {:?}", cmd_string);
-                        let mut err = String::new();
-                        python.stderr.expect("Failed to grab stderr from NMF")
-                            .read_to_string(&mut err).expect("Failed to read stderr into string");
-                        error!("The overall STDERR was: {:?}", err);
-
-                        process::exit(1);
-                    } else {
-                        let mut out = String::new();
-                        python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                            .expect("Failed to read stdout to string");
-                        println!("{}", sample_names[0]);
-                        println!("{}", out);
-                    }
-
-                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
-                        .expect("Unable to read predictions");
-
-                    tmp_dir.close().expect("Unable to close temp directory");
-                    debug!("Predictions {:?}", predictions);
-                    let mut unique_ranks = HashSet::new();
-
-                    predictions
-                        .outer_iter().for_each(|row|{
-                        unique_ranks.insert(row[0] as i32);
-                    });
-
-                    debug!("Unique ranks {:?}", unique_ranks);
-
-                    let mut prediction_map = HashMap::new();
-                    let mut prediction_count = HashMap::new();
-                    let mut prediction_features = HashMap::new();
-                    let mut prediction_variants = HashMap::new();
-                    let mut prediction_variants_all = HashMap::new();
-
-                    let mut max_cnt = 0;
-                    let mut max_strain = 0;
-                    let thresh = 1. / unique_ranks.len() as f32;
-                    // check if prediction probability is greater than certain amount
-                    // if so then place into that rank
-                    // If not, then prediction could realistically be any available rank
-                    for (row, variant_info) in variant_info_all.iter().enumerate() {
-                        let prob = predictions[[row, 1]];
-                        if prob >= thresh {
-                            let rank = predictions[[row, 0]] as i32;
-
-                            let prediction = prediction_map.entry(rank + 1)
-                                .or_insert(0.);
-                            let count = prediction_count.entry(rank + 1)
-                                .or_insert(0.);
-                            let variant_tid = prediction_variants.entry(rank + 1)
-                                .or_insert(HashMap::new());
-
-                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                            let variant_pos = variant_tid.entry(variant_info.3).or_insert(HashMap::new());
-
-                            let variant = variant_pos.entry(variant_info.0).or_insert(HashSet::new());
-                            variant.insert(&variant_info.1);
-
-
-                            let feature = prediction_features.entry(rank + 1).or_insert(0.);
-                            *feature += predictions[[row, 2]];
-
-                            *count += 1.;
-                            *prediction += predictions[[row, 1]].ln();
-                        } else {
-                            // we add the variant to all strains
-                            let rank = 0;
-
-                            let prediction = prediction_map.entry(rank)
-                                .or_insert(0.);
-                            let count = prediction_count.entry(rank)
-                                .or_insert(0.);
-                            let variant_tid = prediction_variants_all.entry(rank)
-                                .or_insert(HashMap::new());
-
-                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                            let variant_pos = variant_tid
-                                .entry(variant_info.3).or_insert(HashMap::new());
-
-                            let variant = variant_pos
-                                .entry(variant_info.0).or_insert(HashSet::new());
-                            variant.insert(&variant_info.1);
-
-
-                            let feature = prediction_features.entry(rank).or_insert(0.);
-                            *feature += predictions[[row, 2]];
-
-                            *count += 1.;
-                            *prediction += predictions[[row, 1]].ln();
-                        }
-                    }
-
-                    // get the strain with maximum members
-                    let mut max_cnt = 0.;
-                    let mut max_strain = 0;
-                    prediction_count.iter().map(|(strain, cnt)|{
-                        if &max_cnt <= cnt {
-                            max_strain = *strain;
-                            max_cnt = *cnt;
-                        }
-                    });
-
-
-                    let mut prediction_geom = HashMap::new();
-                    prediction_map.iter()
-                        .for_each(|(pred, sum)|{
-                            prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
-                        });
-
-                    println!("Prediction Geom Means {:?}", prediction_geom);
-                    println!("Prediction Counts {:?}", prediction_count);
-                    println!("Prediction Features {:?}", prediction_features);
 
                     for (strain_index, genotype) in prediction_variants.iter_mut() {
                         if strain_index != &0 {
@@ -804,137 +575,321 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn generate_genotypes(&mut self, output_prefix: &str) {
+    fn run_nmf(&mut self, dist_file_path: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                ref mut variants,
-                ref mut clusters,
-                ref mut clusters_mean,
-                contigs,
-                target_names,
-                dendrogram,
-                sample_names,
                 ..
             } => {
-                let sample_count = sample_names.len() as f32;
-                // First we need to convert DBSCAN cluster ids into taxonomic rank ids
-                // Clusters of higher abundance mutations will be closer to root
-                // Ordered from root to leaf
-                // We can then check how dissimilar two variants are on the hierarchical cluster
-//                let mut ordered_clusters: Vec<_> = clusters_mean.iter().collect();
-//                ordered_clusters
-//                    .sort_by(|a, b|
-//                        b.1.partial_cmp(a.1).unwrap());
-//                debug!("{:?}", ordered_clusters);
+                let max_rank = cmp::min(25, variant_info_all.len());
+                let min_rank = cmp::min(4, variant_info_all.len());
 
-                // Clusters is set up as HashMap<tid, HashMap<Position, BTreeMap<Variant, (Cluster_ID, Dendro_index)>>>
-                // In this case we want to rearrange to HashMap<dendro_ID, HashMap<Position, (Variant, db_clust, tid)>>
-                // This will allow us to disentangle positions where more than one variant is possible
-                if dendrogram.len() > 0 {
-                    let mut haplotypes_vec: Vec<Haplotype> = vec!();
+                let mut ranks_rss = Arc::new(
+                    Mutex::new(vec![0.; max_rank - min_rank]));
 
-                    debug!("Beginning haplotyping of dendrogram of length: {}", dendrogram.len());
-                    let mut dendro_ids = Arc::new(Mutex::new(HashMap::new()));
-                    for (tid, cluster_tid) in clusters.iter() {
-                        cluster_tid.par_iter().for_each(|(position, variant_map)| {
-                            for (variant, cluster) in variant_map.iter() {
-                                let mut dendro_ids = dendro_ids.lock().unwrap();
-                                let clust = dendro_ids.entry(cluster.1)
-                                    .or_insert(BTreeMap::new());
+                let mut in_threads = threads / (max_rank - min_rank - 1);
+                if in_threads < 1 {
+                    in_threads = 1;
+                }
 
-                                clust.entry(*position)
-                                    .or_insert((variant.to_string(), cluster.0, *tid));
-                            }
-                        });
-                    }
+                (min_rank..max_rank).into_par_iter().for_each(|rank| {
+                    let cmd_string = format!(
+                        "set -e -o pipefail; \
+                     nice nmf.py {} True {} {} {} {} {}",
+                        // NMF
+                        rank + 1,
+                        10,
+                        dist_file_path,
+                        "tmp_path_cons",
+                        sample_count as i32,
+                        in_threads, );
+                    info!("Queuing cmd_string: {}", cmd_string);
+                    let mut python = std::process::Command::new("bash")
+                        .arg("-c")
+                        .arg(&cmd_string)
+                        .stderr(process::Stdio::piped())
+                        .stdout(process::Stdio::piped())
+                        .spawn()
+                        .expect("Unable to execute bash");
 
-                    // Numer of minimum clusters as inferred from DBSCAN
-                    let k = clusters_mean.keys().len();
+                    let es = python.wait().expect("Unable to discern exit status");
+                    if !es.success() {
+                        error!("Error when running NMF: {:?}", cmd_string);
+                        let mut err = String::new();
+                        python.stderr.expect("Failed to grab stderr from NMF")
+                            .read_to_string(&mut err).expect("Failed to read stderr into string");
+                        error!("The overall STDERR was: {:?}", err);
 
-                    // Beginning roots (indices) of each cluster
-                    // Since there are N - 1 steps in the dendrogram, to get k clusters we need the
-                    // range of indices [N - 1 - 2k; N - 1 - k)
-                    let n_1 = dendrogram.len();
-                    // get the first k root labels
-                    let mut cluster_root_labels = vec!();
-                    let mut step_i = &dendrogram[n_1 - 1];
-                    if k != 1 {
-                        while cluster_root_labels.len() < k {
-                            if cluster_root_labels.len() == 0 {
-                                cluster_root_labels.push(step_i.cluster1);
-                                cluster_root_labels.push(step_i.cluster2);
-                            } else {
-                                let mut cluster_to_check = cluster_root_labels
-                                    .iter().max().unwrap().clone();
-
-                                step_i = &dendrogram[cluster_to_check - n_1 - 1];
-                                cluster_root_labels.push(step_i.cluster1);
-                                cluster_root_labels.push(step_i.cluster2);
-
-                                let cluster_to_check_i = cluster_root_labels.iter()
-                                    .position(|x| x == &cluster_to_check).unwrap();
-                                cluster_root_labels.remove(cluster_to_check_i);
+                        process::exit(1);
+                    } else {
+                        let mut out = String::new();
+                        python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                            .expect("Failed to read stdout to string");
+                        let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+                        let rss: f32 = match out.trim().parse() {
+                            Ok(value) => value,
+                            Err(error) => {
+                                debug!("Unable to parse RSS {}", error);
+                                0.
                             }
                         };
-                    } else {
-                        cluster_root_labels.push(n_1+n_1);
+                        ranks_rss[rank as usize - min_rank] = rss;
                     }
-//                let cluster_roots = (n_1 + 1 - 2 * (k)..n_1 + 1 - k);
-                    let mut position_count: HashSet<usize> = HashSet::new();
+                });
 
-                    for (index, cluster_root) in cluster_root_labels.into_iter().enumerate() {
-                        if cluster_root > n_1 {
-                            let cluster_root_id = cluster_root - n_1 - 1;
-                            let hap_root = &dendrogram[cluster_root_id];
-                            let mut new_haplotype = Haplotype::start(
-                                hap_root.size, cluster_root_id, index);
-                            let mut dendro_ids = dendro_ids.lock().unwrap();
-                            new_haplotype.add_variants_per_genome(dendrogram, &dendro_ids, clusters);
-                            debug!("{} {:?} {:?}",
-                                   cluster_root_id,
-                                   new_haplotype.node_size,
-                                   new_haplotype.variants.len());
+                let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+                let mut best_rank = 0;
+                let mut best_rss = 0.;
+                debug!("RSS Values {:?}", ranks_rss);
 
-                            position_count.extend(&new_haplotype.variant_indices);
-                            haplotypes_vec.push(new_haplotype);
-                        } else {
-                            let mut dendro_ids = dendro_ids.lock().unwrap();
-                            let variant_pos = dendro_ids.get(&cluster_root).expect("Label not found");
-                            let mut variant_map = HashMap::new();
-                            for (pos, variant) in variant_pos.iter() {
-                                let captured_tid = variant_map.entry(variant.2)
-                                    .or_insert(HashMap::new());
+                for (rank, rss) in ranks_rss.iter().enumerate() {
+                    if best_rank == 0 && best_rss == 0. && rank == 0 {
+                        best_rank = rank + min_rank + 1;
+                        best_rss = *rss;
+                    } else if &best_rss >= rss {
+                        best_rss = *rss;
+                        best_rank = rank + min_rank + 1;
+                    } else if rss > &best_rss {
+                        break
+                    }
+                }
 
-                                let captured_var = captured_tid.entry(*pos)
-                                    .or_insert(BTreeMap::new());
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     nmf.py {} False {} {} {} {} {}",
+                    // NMF
+                    best_rank,
+                    30,
+                    dist_file_path,
+                    "tmp_path_cons",
+                    sample_count as i32,
+                    threads);
+                info!("Queuing cmd_string: {}", cmd_string);
+                let mut python = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stderr(process::Stdio::piped())
+                    .stdout(process::Stdio::piped())
+                    .spawn()
+                    .expect("Unable to execute bash");
 
-                                captured_var.entry(variant.0.clone())
-                                    .or_insert((variant.1, cluster_root));
+                let es = python.wait().expect("Unable to discern exit status");
+                if !es.success() {
+                    error!("Error when running NMF: {:?}", cmd_string);
+                    let mut err = String::new();
+                    python.stderr.expect("Failed to grab stderr from NMF")
+                        .read_to_string(&mut err).expect("Failed to read stderr into string");
+                    error!("The overall STDERR was: {:?}", err);
 
-                                let clusters_tid = clusters.entry(variant.2)
-                                    .or_insert(HashMap::new());
+                    process::exit(1);
+                } else {
+                    let mut out = String::new();
+                    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                        .expect("Failed to read stdout to string");
+                    println!("{}", sample_names[0]);
+                    println!("{}", out);
+                }
 
-                                let cluster_pos = clusters_tid.entry(*pos)
-                                    .or_insert(BTreeMap::new());
+                let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
+                    .expect("Unable to read predictions");
 
-                                cluster_pos.insert(variant.0.clone(), (variant.1, cluster_root));
-                            }
+                tmp_dir.close().expect("Unable to close temp directory");
+                debug!("Predictions {:?}", predictions);
+                let mut unique_ranks = HashSet::new();
 
-                            let mut new_haplotype = Haplotype {
-                                root_cluster_id: cluster_root,
-                                variant_indices: [cluster_root].into_iter().cloned().collect(),
-                                variants: HashMap::new(),
-                                variants_genome: variant_map,
-                                node_size: 1,
-                                haplotype_index: index,
+                predictions
+                    .outer_iter().for_each(|row| {
+                    unique_ranks.insert(row[0] as i32);
+                });
+
+                debug!("Unique ranks {:?}", unique_ranks);
+
+                let mut prediction_map = HashMap::new();
+                let mut prediction_count = HashMap::new();
+                let mut prediction_features = HashMap::new();
+                let mut prediction_variants = HashMap::new();
+                let mut prediction_variants_all = HashMap::new();
+
+                let mut max_cnt = 0;
+                let mut max_strain = 0;
+                let thresh = 1. / unique_ranks.len() as f32;
+                // check if prediction probability is greater than certain amount
+                // if so then place into that rank
+                // If not, then prediction could realistically be any available rank
+                for (row, variant_info) in variant_info_all.iter().enumerate() {
+                    let prob = predictions[[row, 1]];
+                    if prob >= thresh {
+                        let rank = predictions[[row, 0]] as i32;
+
+                        let prediction = prediction_map.entry(rank + 1)
+                            .or_insert(0.);
+                        let count = prediction_count.entry(rank + 1)
+                            .or_insert(0.);
+                        let variant_tid = prediction_variants.entry(rank + 1)
+                            .or_insert(HashMap::new());
+
+                        // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                        let variant_pos = variant_tid.entry(variant_info.3).or_insert(HashMap::new());
+
+                        let variant = variant_pos.entry(variant_info.0).or_insert(HashSet::new());
+                        variant.insert(&variant_info.1);
+
+
+                        let feature = prediction_features.entry(rank + 1).or_insert(0.);
+                        *feature += predictions[[row, 2]];
+
+                        *count += 1.;
+                        *prediction += predictions[[row, 1]].ln();
+                    } else {
+                        // we add the variant to all strains
+                        let rank = 0;
+
+                        let prediction = prediction_map.entry(rank)
+                            .or_insert(0.);
+                        let count = prediction_count.entry(rank)
+                            .or_insert(0.);
+                        let variant_tid = prediction_variants_all.entry(rank)
+                            .or_insert(HashMap::new());
+
+                        // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                        let variant_pos = variant_tid
+                            .entry(variant_info.3).or_insert(HashMap::new());
+
+                        let variant = variant_pos
+                            .entry(variant_info.0).or_insert(HashSet::new());
+                        variant.insert(&variant_info.1);
+
+
+                        let feature = prediction_features.entry(rank).or_insert(0.);
+                        *feature += predictions[[row, 2]];
+
+                        *count += 1.;
+                        *prediction += predictions[[row, 1]].ln();
+                    }
+                }
+
+                // get the strain with maximum members
+                let mut max_cnt = 0.;
+                let mut max_strain = 0;
+                prediction_count.iter().map(|(strain, cnt)| {
+                    if &max_cnt <= cnt {
+                        max_strain = *strain;
+                        max_cnt = *cnt;
+                    }
+                });
+
+
+                let mut prediction_geom = HashMap::new();
+                prediction_map.iter()
+                    .for_each(|(pred, sum)| {
+                        prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
+                    });
+
+                println!("Prediction Geom Means {:?}", prediction_geom);
+                println!("Prediction Counts {:?}", prediction_count);
+                println!("Prediction Features {:?}", prediction_features);
+            }
+        }
+    }
+
+    fn generate_genotypes(&mut self, output_prefix: &str,
+                          prediction_variants: &mut HashMap<(), ()>,
+                          prediction_variants_all: &mut HashMap<(), ()>) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
+                variants,
+                indels_map,
+                snps_map,
+                target_names,
+                sample_names,
+                coverages,
+                contigs,
+                ..
+            } => {
+
+                for (strain_index, genotype) in prediction_variants.iter_mut() {
+                    if strain_index != &0 {
+
+
+                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
+
+                        let file_path = Path::new(&file_name);
+
+                        // Open haplotype file or create one
+                        let mut file_open = File::create(file_path)
+                            .expect("No Read or Write Permission in current directory");
+
+                        // Generate the variant genome
+                        for (tid, original_contig) in contigs.iter() {
+                            let mut contig = String::new();
+
+                            let mut skip_n = 0;
+                            let mut skip_cnt = 0;
+                            let mut char_cnt = 0;
+                            let mut variations = 0;
+
+                            for (pos, base) in original_contig.iter().enumerate() {
+                                if skip_cnt < skip_n {
+                                    skip_cnt += 1;
+                                } else {
+                                    let mut max_var = "";
+
+                                    skip_n = 0;
+                                    skip_cnt = 0;
+                                    if genotype.contains_key(&tid) {
+                                        let mut tid_genotype = genotype.get_mut(&tid).unwrap();
+
+                                        if prediction_variants_all.contains_key(&0) {
+                                            if prediction_variants_all[&0].contains_key(&tid) {
+                                                tid_genotype
+                                                    .extend(prediction_variants_all[&0][&tid].clone());
+                                            }
+                                        };
+
+                                        if tid_genotype.contains_key(&(pos as i32)) {
+
+                                            let hash = &genotype[tid][&(pos as i32)];
+
+                                            for var in hash.iter() {
+                                                max_var = var;
+                                                variations += 1;
+                                                break
+                                            }
+                                            if max_var.contains("N") {
+                                                // Skip the next n bases but rescue the reference prefix
+                                                skip_n = max_var.len() - 1;
+                                                skip_cnt = 0;
+                                                let first_byte = max_var.as_bytes()[0];
+                                                contig = contig + str::from_utf8(
+                                                    &[first_byte]).unwrap()
+                                            } else if max_var.len() > 1 {
+                                                // Insertions have a reference prefix that needs to be removed
+                                                let removed_first_base = str::from_utf8(
+                                                    &max_var.as_bytes()[1..]).unwrap();
+                                                contig = contig + removed_first_base;
+                                            } else {
+                                                contig = contig + max_var;
+                                            }
+                                        } else {
+                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                                        }
+                                    } else {
+                                        contig = str::from_utf8(&original_contig)
+                                            .expect("Can't convert to str").to_string();
+                                    }
+                                }
                             };
-                            position_count.extend(&new_haplotype.variant_indices);
-                            haplotypes_vec.push(new_haplotype);
+                            writeln!(file_open, ">{}_strain_{}\t#variants_{}",
+                                     target_names[tid],
+                                     strain_index,
+                                     variations);
+
+
+                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                                file_open.write(line).unwrap();
+                                file_open.write(b"\n").unwrap();
+                            };
                         }
                     }
-                    debug!("Variants found in tree {} {:?}", position_count.len(), position_count);
-
-
                 }
             }
         }
