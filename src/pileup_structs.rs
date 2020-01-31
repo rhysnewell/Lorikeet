@@ -1384,7 +1384,7 @@ impl PileupFunctions for PileupStats {
                 // produced condensed pairwise distances
                 // described here: https://docs.rs/kodama/0.2.2/kodama/
                 (0..variant_info_all.len()-1)
-                    .into_par_iter().for_each(|(row_index)|{
+                    .into_par_iter().for_each(|row_index|{
                     let mut row_variant_set = &BTreeSet::new();
                     let row_info = &variant_info_all[row_index];
                     // lazily get the row variant read id set
@@ -1406,7 +1406,7 @@ impl PileupFunctions for PileupStats {
                     let row_start = *row_info.0 as usize;
                     let row_end = row_start + row_info.1.len() - 1;
                     (row_index+1..variant_info_all.len())
-                        .into_par_iter().for_each(|(col_index)|{
+                        .into_par_iter().for_each(|col_index|{
                         let mut col_variant_set= &BTreeSet::new();
                         let col_info = &variant_info_all[col_index];
                         if indels.contains_key(&col_info.0) {

@@ -22,26 +22,22 @@ extern crate linregress;
 extern crate cogset;
 extern crate kodama;
 extern crate taxonomy;
-extern crate rusty_machine;
 extern crate bio;
 extern crate bio_types;
 extern crate seq_io;
 extern crate permutohedron;
 #[macro_use]
 extern crate log;
-extern crate rusty_machine as rm;
+#[macro_use]
+extern crate strum_macros;
 extern crate rust_htslib;
 extern crate env_logger;
 extern crate nix;
 extern crate tempdir;
 extern crate tempfile;
 extern crate rand;
-extern crate needletail;
-extern crate simhash;
-extern crate murmurhash3;
 extern crate itertools;
 extern crate nalgebra;
-extern crate intel_mkl_src;
 extern crate rayon;
 extern crate permutation;
 extern crate ndarray;
