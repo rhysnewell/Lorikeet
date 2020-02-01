@@ -485,7 +485,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                  threads,
                                  output_prefix,
                                  variant_info_all.len(),
-                                sample_names);
+                                sample_names,
+                                100);
 
                     let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
                         .expect("Unable to read predictions");
@@ -840,13 +841,15 @@ fn run_nmf(dist_file_path: &str,
            threads: usize,
            output_prefix: &str,
            n_variants: usize,
-           sample_names: &Vec<String>) {
+           sample_names: &Vec<String>,
+           miter: usize) {
     let sample_count = sample_names.len();
     let mut converged = false;
     let mut max_rank = cmp::min(15, n_variants);
     let mut min_rank = cmp::min(4, n_variants);
     let mut best_rank = 0;
     let mut best_rss = 0.;
+    let mut iterations = 0;
     while !converged {
         let mut ranks_rss = Arc::new(
             Mutex::new(vec![0.; max_rank - min_rank]));
@@ -907,7 +910,8 @@ fn run_nmf(dist_file_path: &str,
                 break
             }
         }
-        if best_rank < max_rank {
+        iterations += max_rank - min_rank;
+        if best_rank < max_rank || iterations >= miter {
             converged = true;
         } else {
             max_rank += 11;
