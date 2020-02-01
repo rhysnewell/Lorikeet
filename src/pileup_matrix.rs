@@ -16,7 +16,7 @@ use std::cmp;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
-use tempfile;
+use ::{tempfile, finish_command_safely};
 use itertools::Itertools;
 
 
@@ -39,6 +39,8 @@ pub enum PileupMatrix {
         clusters_mean: HashMap<i32, f32>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
         variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f32>>>>,
+        pred_variants: HashMap<i32, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants_all: HashMap<i32, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
 }
 
@@ -61,6 +63,8 @@ impl PileupMatrix {
             clusters_mean: HashMap::new(),
             variant_counts: HashMap::new(),
             variant_sums: HashMap::new(),
+            pred_variants: HashMap::new(),
+            pred_variants_all: HashMap::new(),
         }
     }
 }
@@ -83,12 +87,8 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_nmf(&mut self, dist_file_path: &str);
-
     fn generate_genotypes(&mut self,
-                          output_prefix: &str,
-                          prediction_variants: &mut HashMap<(), ()>,
-                          prediction_variants_all: &mut HashMap<(), ()>);
+                          output_prefix: &str);
 
     fn print_matrix(&self);
 
@@ -329,6 +329,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 coverages,
                 contigs,
+                ref mut pred_variants,
+                ref mut pred_variants_all,
                 ..
             } => {
 
@@ -478,94 +480,114 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             &tmp_path_dist,
                                             &tmp_path_cons);
 
-                    self.run_nmf(&tmp_path_dist);
+                    run_nmf(&tmp_path_dist,
+                                 &tmp_dir,
+                                 threads,
+                                 output_prefix,
+                                 variant_info_all.len(),
+                                sample_names);
+
+                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
+                        .expect("Unable to read predictions");
+
+                    tmp_dir.close().expect("Unable to close temp directory");
+                    debug!("Predictions {:?}", predictions);
+                    let mut unique_ranks = HashSet::new();
+
+                    predictions
+                        .outer_iter().for_each(|row| {
+                        unique_ranks.insert(row[0] as i32);
+                    });
+
+                    debug!("Unique ranks {:?}", unique_ranks);
+
+                    let mut prediction_map = HashMap::new();
+                    let mut prediction_count = HashMap::new();
+                    let mut prediction_features = HashMap::new();
+                    let mut prediction_variants = HashMap::new();
+                    let mut prediction_variants_all = HashMap::new();
+
+                    let mut max_cnt = 0;
+                    let mut max_strain = 0;
+                    let thresh = 1. / unique_ranks.len() as f32;
+                    // check if prediction probability is greater than certain amount
+                    // if so then place into that rank
+                    // If not, then prediction could realistically be any available rank
+                    for (row, variant_info) in variant_info_all.iter().enumerate() {
+                        let prob = predictions[[row, 1]];
+                        if prob >= thresh {
+                            let rank = predictions[[row, 0]] as i32;
+
+                            let prediction = prediction_map.entry(rank + 1)
+                                .or_insert(0.);
+                            let count = prediction_count.entry(rank + 1)
+                                .or_insert(0.);
+                            let variant_tid = prediction_variants.entry(rank + 1)
+                                .or_insert(HashMap::new());
+
+                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                            let variant_pos = variant_tid.entry(*variant_info.3).or_insert(HashMap::new());
+
+                            let variant = variant_pos.entry(*variant_info.0).or_insert(HashSet::new());
+                            variant.insert(variant_info.1.to_owned());
 
 
-                    for (strain_index, genotype) in prediction_variants.iter_mut() {
-                        if strain_index != &0 {
+                            let feature = prediction_features.entry(rank + 1).or_insert(0.);
+                            *feature += predictions[[row, 2]];
+
+                            *count += 1.;
+                            *prediction += predictions[[row, 1]].ln();
+                        } else {
+                            // we add the variant to all strains
+                            let rank = 0;
+
+                            let prediction = prediction_map.entry(rank)
+                                .or_insert(0.);
+                            let count = prediction_count.entry(rank)
+                                .or_insert(0.);
+                            let variant_tid = prediction_variants_all.entry(rank)
+                                .or_insert(HashMap::new());
+
+                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                            let variant_pos = variant_tid
+                                .entry(*variant_info.3).or_insert(HashMap::new());
+
+                            let variant = variant_pos
+                                .entry(*variant_info.0).or_insert(HashSet::new());
+                            variant.insert(variant_info.1.to_owned());
 
 
-                            let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
+                            let feature = prediction_features.entry(rank).or_insert(0.);
+                            *feature += predictions[[row, 2]];
 
-                            let file_path = Path::new(&file_name);
-
-                            // Open haplotype file or create one
-                            let mut file_open = File::create(file_path)
-                                .expect("No Read or Write Permission in current directory");
-
-                            // Generate the variant genome
-                            for (tid, original_contig) in contigs.iter() {
-                                let mut contig = String::new();
-
-                                let mut skip_n = 0;
-                                let mut skip_cnt = 0;
-                                let mut char_cnt = 0;
-                                let mut variations = 0;
-
-                                for (pos, base) in original_contig.iter().enumerate() {
-                                    if skip_cnt < skip_n {
-                                        skip_cnt += 1;
-                                    } else {
-                                        let mut max_var = "";
-
-                                        skip_n = 0;
-                                        skip_cnt = 0;
-                                        if genotype.contains_key(&tid) {
-                                            let mut tid_genotype = genotype.get_mut(&tid).unwrap();
-
-                                            if prediction_variants_all.contains_key(&0) {
-                                                if prediction_variants_all[&0].contains_key(&tid) {
-                                                    tid_genotype
-                                                        .extend(prediction_variants_all[&0][&tid].clone());
-                                                }
-                                            };
-
-                                            if tid_genotype.contains_key(&(pos as i32)) {
-
-                                                let hash = &genotype[tid][&(pos as i32)];
-
-                                                for var in hash.iter() {
-                                                    max_var = var;
-                                                    variations += 1;
-                                                    break
-                                                }
-                                                if max_var.contains("N") {
-                                                    // Skip the next n bases but rescue the reference prefix
-                                                    skip_n = max_var.len() - 1;
-                                                    skip_cnt = 0;
-                                                    let first_byte = max_var.as_bytes()[0];
-                                                    contig = contig + str::from_utf8(
-                                                        &[first_byte]).unwrap()
-                                                } else if max_var.len() > 1 {
-                                                    // Insertions have a reference prefix that needs to be removed
-                                                    let removed_first_base = str::from_utf8(
-                                                        &max_var.as_bytes()[1..]).unwrap();
-                                                    contig = contig + removed_first_base;
-                                                } else {
-                                                    contig = contig + max_var;
-                                                }
-                                            } else {
-                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                            }
-                                        } else {
-                                            contig = str::from_utf8(&original_contig)
-                                                .expect("Can't convert to str").to_string();
-                                        }
-                                    }
-                                };
-                                writeln!(file_open, ">{}_strain_{}\t#variants_{}",
-                                         target_names[tid],
-                                         strain_index,
-                                         variations);
-
-
-                                for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                    file_open.write(line).unwrap();
-                                    file_open.write(b"\n").unwrap();
-                                };
-                            }
+                            *count += 1.;
+                            *prediction += predictions[[row, 1]].ln();
                         }
                     }
+
+                    // get the strain with maximum members
+                    let mut max_cnt = 0.;
+                    let mut max_strain = 0;
+                    prediction_count.iter().map(|(strain, cnt)| {
+                        if &max_cnt <= cnt {
+                            max_strain = *strain;
+                            max_cnt = *cnt;
+                        }
+                    });
+
+
+                    let mut prediction_geom = HashMap::new();
+                    prediction_map.iter()
+                        .for_each(|(pred, sum)| {
+                            prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
+                        });
+
+                    println!("Prediction Geom Means {:?}", prediction_geom);
+                    println!("Prediction Counts {:?}", prediction_count);
+                    println!("Prediction Features {:?}", prediction_features);
+
+                    *pred_variants = prediction_variants;
+                    *pred_variants_all = prediction_variants_all;
 
 
                 } else {
@@ -575,225 +597,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_nmf(&mut self, dist_file_path: &str) {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                ..
-            } => {
-                let max_rank = cmp::min(25, variant_info_all.len());
-                let min_rank = cmp::min(4, variant_info_all.len());
-
-                let mut ranks_rss = Arc::new(
-                    Mutex::new(vec![0.; max_rank - min_rank]));
-
-                let mut in_threads = threads / (max_rank - min_rank - 1);
-                if in_threads < 1 {
-                    in_threads = 1;
-                }
-
-                (min_rank..max_rank).into_par_iter().for_each(|rank| {
-                    let cmd_string = format!(
-                        "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {} {}",
-                        // NMF
-                        rank + 1,
-                        10,
-                        dist_file_path,
-                        "tmp_path_cons",
-                        sample_count as i32,
-                        in_threads, );
-                    info!("Queuing cmd_string: {}", cmd_string);
-                    let mut python = std::process::Command::new("bash")
-                        .arg("-c")
-                        .arg(&cmd_string)
-                        .stderr(process::Stdio::piped())
-                        .stdout(process::Stdio::piped())
-                        .spawn()
-                        .expect("Unable to execute bash");
-
-                    let es = python.wait().expect("Unable to discern exit status");
-                    if !es.success() {
-                        error!("Error when running NMF: {:?}", cmd_string);
-                        let mut err = String::new();
-                        python.stderr.expect("Failed to grab stderr from NMF")
-                            .read_to_string(&mut err).expect("Failed to read stderr into string");
-                        error!("The overall STDERR was: {:?}", err);
-
-                        process::exit(1);
-                    } else {
-                        let mut out = String::new();
-                        python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                            .expect("Failed to read stdout to string");
-                        let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-                        let rss: f32 = match out.trim().parse() {
-                            Ok(value) => value,
-                            Err(error) => {
-                                debug!("Unable to parse RSS {}", error);
-                                0.
-                            }
-                        };
-                        ranks_rss[rank as usize - min_rank] = rss;
-                    }
-                });
-
-                let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-                let mut best_rank = 0;
-                let mut best_rss = 0.;
-                debug!("RSS Values {:?}", ranks_rss);
-
-                for (rank, rss) in ranks_rss.iter().enumerate() {
-                    if best_rank == 0 && best_rss == 0. && rank == 0 {
-                        best_rank = rank + min_rank + 1;
-                        best_rss = *rss;
-                    } else if &best_rss >= rss {
-                        best_rss = *rss;
-                        best_rank = rank + min_rank + 1;
-                    } else if rss > &best_rss {
-                        break
-                    }
-                }
-
-                let cmd_string = format!(
-                    "set -e -o pipefail; \
-                     nmf.py {} False {} {} {} {} {}",
-                    // NMF
-                    best_rank,
-                    30,
-                    dist_file_path,
-                    "tmp_path_cons",
-                    sample_count as i32,
-                    threads);
-                info!("Queuing cmd_string: {}", cmd_string);
-                let mut python = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&cmd_string)
-                    .stderr(process::Stdio::piped())
-                    .stdout(process::Stdio::piped())
-                    .spawn()
-                    .expect("Unable to execute bash");
-
-                let es = python.wait().expect("Unable to discern exit status");
-                if !es.success() {
-                    error!("Error when running NMF: {:?}", cmd_string);
-                    let mut err = String::new();
-                    python.stderr.expect("Failed to grab stderr from NMF")
-                        .read_to_string(&mut err).expect("Failed to read stderr into string");
-                    error!("The overall STDERR was: {:?}", err);
-
-                    process::exit(1);
-                } else {
-                    let mut out = String::new();
-                    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                        .expect("Failed to read stdout to string");
-                    println!("{}", sample_names[0]);
-                    println!("{}", out);
-                }
-
-                let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
-                    .expect("Unable to read predictions");
-
-                tmp_dir.close().expect("Unable to close temp directory");
-                debug!("Predictions {:?}", predictions);
-                let mut unique_ranks = HashSet::new();
-
-                predictions
-                    .outer_iter().for_each(|row| {
-                    unique_ranks.insert(row[0] as i32);
-                });
-
-                debug!("Unique ranks {:?}", unique_ranks);
-
-                let mut prediction_map = HashMap::new();
-                let mut prediction_count = HashMap::new();
-                let mut prediction_features = HashMap::new();
-                let mut prediction_variants = HashMap::new();
-                let mut prediction_variants_all = HashMap::new();
-
-                let mut max_cnt = 0;
-                let mut max_strain = 0;
-                let thresh = 1. / unique_ranks.len() as f32;
-                // check if prediction probability is greater than certain amount
-                // if so then place into that rank
-                // If not, then prediction could realistically be any available rank
-                for (row, variant_info) in variant_info_all.iter().enumerate() {
-                    let prob = predictions[[row, 1]];
-                    if prob >= thresh {
-                        let rank = predictions[[row, 0]] as i32;
-
-                        let prediction = prediction_map.entry(rank + 1)
-                            .or_insert(0.);
-                        let count = prediction_count.entry(rank + 1)
-                            .or_insert(0.);
-                        let variant_tid = prediction_variants.entry(rank + 1)
-                            .or_insert(HashMap::new());
-
-                        // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                        let variant_pos = variant_tid.entry(variant_info.3).or_insert(HashMap::new());
-
-                        let variant = variant_pos.entry(variant_info.0).or_insert(HashSet::new());
-                        variant.insert(&variant_info.1);
-
-
-                        let feature = prediction_features.entry(rank + 1).or_insert(0.);
-                        *feature += predictions[[row, 2]];
-
-                        *count += 1.;
-                        *prediction += predictions[[row, 1]].ln();
-                    } else {
-                        // we add the variant to all strains
-                        let rank = 0;
-
-                        let prediction = prediction_map.entry(rank)
-                            .or_insert(0.);
-                        let count = prediction_count.entry(rank)
-                            .or_insert(0.);
-                        let variant_tid = prediction_variants_all.entry(rank)
-                            .or_insert(HashMap::new());
-
-                        // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                        let variant_pos = variant_tid
-                            .entry(variant_info.3).or_insert(HashMap::new());
-
-                        let variant = variant_pos
-                            .entry(variant_info.0).or_insert(HashSet::new());
-                        variant.insert(&variant_info.1);
-
-
-                        let feature = prediction_features.entry(rank).or_insert(0.);
-                        *feature += predictions[[row, 2]];
-
-                        *count += 1.;
-                        *prediction += predictions[[row, 1]].ln();
-                    }
-                }
-
-                // get the strain with maximum members
-                let mut max_cnt = 0.;
-                let mut max_strain = 0;
-                prediction_count.iter().map(|(strain, cnt)| {
-                    if &max_cnt <= cnt {
-                        max_strain = *strain;
-                        max_cnt = *cnt;
-                    }
-                });
-
-
-                let mut prediction_geom = HashMap::new();
-                prediction_map.iter()
-                    .for_each(|(pred, sum)| {
-                        prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
-                    });
-
-                println!("Prediction Geom Means {:?}", prediction_geom);
-                println!("Prediction Counts {:?}", prediction_count);
-                println!("Prediction Features {:?}", prediction_features);
-            }
-        }
-    }
-
-    fn generate_genotypes(&mut self, output_prefix: &str,
-                          prediction_variants: &mut HashMap<(), ()>,
-                          prediction_variants_all: &mut HashMap<(), ()>) {
+    fn generate_genotypes(&mut self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
@@ -803,12 +607,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                 sample_names,
                 coverages,
                 contigs,
+                ref mut pred_variants,
+                ref mut pred_variants_all,
                 ..
             } => {
 
-                for (strain_index, genotype) in prediction_variants.iter_mut() {
+                for (strain_index, genotype) in pred_variants.iter_mut() {
                     if strain_index != &0 {
-
 
                         let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
@@ -838,10 +643,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if genotype.contains_key(&tid) {
                                         let mut tid_genotype = genotype.get_mut(&tid).unwrap();
 
-                                        if prediction_variants_all.contains_key(&0) {
-                                            if prediction_variants_all[&0].contains_key(&tid) {
+                                        if pred_variants_all.contains_key(&0) {
+                                            if pred_variants_all[&0].contains_key(&tid) {
                                                 tid_genotype
-                                                    .extend(prediction_variants_all[&0][&tid].clone());
+                                                    .extend(pred_variants_all[&0][&tid].clone());
                                             }
                                         };
 
@@ -1027,4 +832,112 @@ impl PileupMatrixFunctions for PileupMatrix{
             }
         }
     }
+}
+
+
+fn run_nmf(dist_file_path: &str,
+           tmp_dir: &TempDir,
+           threads: usize,
+           output_prefix: &str,
+           n_variants: usize,
+           sample_names: &Vec<String>) {
+    let sample_count = sample_names.len();
+    let mut converged = false;
+    let mut max_rank = cmp::min(15, n_variants);
+    let mut min_rank = cmp::min(4, n_variants);
+    let mut best_rank = 0;
+    let mut best_rss = 0.;
+    while !converged {
+        let mut ranks_rss = Arc::new(
+            Mutex::new(vec![0.; max_rank - min_rank]));
+
+        let mut in_threads = threads / (max_rank - min_rank - 1);
+        if in_threads < 1 {
+            in_threads = 1;
+        }
+
+        (min_rank..max_rank).into_par_iter().for_each(|rank| {
+            let cmd_string = format!(
+                "set -e -o pipefail; \
+                     nice nmf.py {} True {} {} {} {} {}",
+                // NMF
+                rank + 1,
+                10,
+                dist_file_path,
+                "tmp_path_cons",
+                sample_count as i32,
+                in_threads, );
+            info!("Queuing cmd_string: {}", cmd_string);
+            let mut python = std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&cmd_string)
+                .stderr(process::Stdio::piped())
+                .stdout(process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash");
+
+            python = finish_command_safely(python, "run_nmf");
+
+            let mut out = String::new();
+            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+                .expect("Failed to read stdout to string");
+            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+            let rss: f32 = match out.trim().parse() {
+                Ok(value) => value,
+                Err(error) => {
+                    debug!("Unable to parse RSS {}", error);
+                    0.
+                }
+            };
+            ranks_rss[rank as usize - min_rank] = rss;
+        });
+
+        let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+
+        debug!("RSS Values {:?}", ranks_rss);
+
+        for (rank, rss) in ranks_rss.iter().enumerate() {
+            if best_rank == 0 && best_rss == 0. && rank == 0 {
+                best_rank = rank + min_rank + 1;
+                best_rss = *rss;
+            } else if &best_rss >= rss {
+                best_rss = *rss;
+                best_rank = rank + min_rank + 1;
+            } else if rss > &best_rss {
+                break
+            }
+        }
+        if best_rank < max_rank {
+            converged = true;
+        } else {
+            max_rank += 11;
+            min_rank += 11;
+        }
+    }
+
+    let cmd_string = format!(
+        "set -e -o pipefail; \
+                     nmf.py {} False {} {} {} {} {}",
+        // NMF
+        best_rank,
+        30,
+        dist_file_path,
+        "tmp_path_cons",
+        sample_count as i32,
+        threads);
+    info!("Queuing cmd_string: {}", cmd_string);
+    let mut python = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(&cmd_string)
+        .stderr(process::Stdio::piped())
+        .stdout(process::Stdio::piped())
+        .spawn()
+        .expect("Unable to execute bash");
+
+    python = finish_command_safely(python, "run_nmf");
+    let mut out = String::new();
+    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+        .expect("Failed to read stdout to string");
+    println!("{}", sample_names[0]);
+    println!("{}", out);
 }
