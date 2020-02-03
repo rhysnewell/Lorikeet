@@ -1,4 +1,4 @@
-baseURL = "/Lorikeet"
+baseURL = "/"
 languageCode = "en-us"
 title = "Lorikeet"
 themesDir = "themes/"
