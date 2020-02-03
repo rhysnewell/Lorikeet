@@ -1,0 +1,48 @@
+baseURL = "www.example.com"
+languageCode = "en-us"
+title = "Lorikeet"
+themesDir = "themes/"
+theme = "hugo-whisper-theme"
+
+pygmentsCodeFences = true
+pygmentsCodefencesGuessSyntax = true
+pygmentsUseClasses = true
+
+# Controls how many words are printed in the content summary on the docs homepage.
+# See https://gohugo.io/content-management/summaries/
+summaryLength = 30
+
+[[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+
+[[menu.main]]
+    name = "Docs"
+    url = "/docs/"
+    weight = 2
+
+[params]
+  google_analytics_id=""
+  homepage_button_link = '/docs'
+  homepage_button_text = 'Read The Docs'
+  homepage_intro = 'Whisper is a documentation theme built with Hugo. The design and functionality is intentionally minimal.'
+  homepage_image = '/images/lorikeet_logo_crop_left.png'
+
+  ## You can enable to add anchor links to header elements
+  # enable_anchor_link = true
+
+  [params.homepage_meta_tags]
+    meta_description = "Lorikeet is a bioinformatic tool to resolve strain-level haplotypes in metagenomic datasets."
+    meta_og_title = "Lorikeet Documentation"
+    meta_og_type = "website"
+    meta_og_url = "https://rhysnewell.github.io/lorikeet"
+#    meta_og_image = "https://raw.githubusercontent.com/JugglerX/hugo-whisper-theme/master/images/tn.png"
+    meta_og_description = "Lorikeet is a bioinformatic tool to resolve strain-level haplotypes in metagenomic datasets."
+    meta_twitter_card = "summary"
+    meta_twitter_site = "@rhysnewell"
+    meta_twitter_creator = "@rhysnewell"
+
+  [params.logo]
+      mobile = "/images/lorikeet_logo_v1.png"
+      standard  = "/images/lorikeet_logo_v1.png"
