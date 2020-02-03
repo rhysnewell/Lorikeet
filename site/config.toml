@@ -15,17 +15,17 @@ summaryLength = 30
 
 [[menu.main]]
     name = "Home"
-    url = "/Lorikeet"
+    url = "/"
     weight = 1
 
 [[menu.main]]
     name = "Docs"
-    url = "/Lorikeet/docs/"
+    url = "/docs/"
     weight = 2
 
 [params]
   google_analytics_id=""
-  homepage_button_link = '/Lorikeet/docs'
+  homepage_button_link = '/docs'
   homepage_button_text = 'Read The Docs'
   homepage_intro = 'Whisper is a documentation theme built with Hugo. The design and functionality is intentionally minimal.'
   homepage_image = '/Lorikeet/images/lorikeet_logo_crop_left.png'
