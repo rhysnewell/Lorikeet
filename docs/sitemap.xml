@@ -3,46 +3,46 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   
   <url>
-    <loc>/docs/</loc>
+    <loc>/Lorikeet/docs/</loc>
     <lastmod>2018-11-28T15:14:39+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/docs/install-hugo/</loc>
+    <loc>/Lorikeet/docs/install-hugo/</loc>
     <lastmod>2019-02-11T19:27:37+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/docs/install-theme/</loc>
+    <loc>/Lorikeet/docs/install-theme/</loc>
     <lastmod>2019-02-11T19:27:37+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/docs/configure/</loc>
+    <loc>/Lorikeet/docs/configure/</loc>
     <lastmod>2019-02-11T19:30:08+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/docs/specimen/</loc>
+    <loc>/Lorikeet/docs/specimen/</loc>
     <lastmod>2019-02-11T19:27:37+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/docs/example/</loc>
+    <loc>/Lorikeet/docs/example/</loc>
     <lastmod>2019-02-11T19:27:37+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/</loc>
+    <loc>/Lorikeet/</loc>
     <lastmod>2020-02-03T15:14:39+10:00</lastmod>
   </url>
   
   <url>
-    <loc>/categories/</loc>
+    <loc>/Lorikeet/categories/</loc>
   </url>
   
   <url>
-    <loc>/tags/</loc>
+    <loc>/Lorikeet/tags/</loc>
   </url>
   
 </urlset>
