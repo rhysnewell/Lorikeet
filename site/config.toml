@@ -15,12 +15,12 @@ summaryLength = 30
 
 [[menu.main]]
     name = "Home"
-    url = "/"
+    url = "/docs/"
     weight = 1
 
 [[menu.main]]
     name = "Docs"
-    url = "/docs/"
+    url = "/docs/docs/"
     weight = 2
 
 [params]
@@ -28,7 +28,7 @@ summaryLength = 30
   homepage_button_link = '/docs'
   homepage_button_text = 'Read The Docs'
   homepage_intro = 'Whisper is a documentation theme built with Hugo. The design and functionality is intentionally minimal.'
-  homepage_image = '/images/lorikeet_logo_crop_left.png'
+  homepage_image = 'docs/images/lorikeet_logo_crop_left.png'
 
   ## You can enable to add anchor links to header elements
   # enable_anchor_link = true
@@ -45,5 +45,5 @@ summaryLength = 30
     meta_twitter_creator = "@rhysnewell"
 
   [params.logo]
-      mobile = "/images/lorikeet_logo_v1.png"
-      standard  = "/images/lorikeet_logo_v1.png"
+      mobile = "docs/images/lorikeet_logo_v1.png"
+      standard  = "docs/images/lorikeet_logo_v1.png"
