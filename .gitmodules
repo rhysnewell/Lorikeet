@@ -1,6 +1,3 @@
-[submodule "docs/theme/hugo-whisper-theme"]
-	path = docs/theme/hugo-whisper-theme
-	url = git@github.com:JugglerX/hugo-whisper-theme.git
 [submodule "docs/themes/hugo-whisper-theme"]
 	path = docs/themes/hugo-whisper-theme
-	url = git@github.com:JugglerX/hugo-whisper-theme.git
+	url = https://github.com/jugglerx/hugo-whisper-theme.git
