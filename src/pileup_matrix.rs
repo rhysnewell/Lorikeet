@@ -844,81 +844,81 @@ fn run_nmf(dist_file_path: &str,
            sample_names: &Vec<String>,
            miter: usize) {
     let sample_count = sample_names.len();
-    let mut converged = false;
-    let mut max_rank = cmp::min(15, n_variants);
-    let mut min_rank = cmp::min(4, n_variants);
-    let mut best_rank = 0;
-    let mut best_rss = 0.;
-    let mut iterations = 0;
-    while !converged {
-        let mut ranks_rss = Arc::new(
-            Mutex::new(vec![0.; max_rank - min_rank]));
-
-        let mut in_threads = threads / (max_rank - min_rank - 1);
-        if in_threads < 1 {
-            in_threads = 1;
-        }
-
-        (min_rank..max_rank).into_par_iter().for_each(|rank| {
-            let cmd_string = format!(
-                "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {} {}",
-                // NMF
-                rank + 1,
-                10,
-                dist_file_path,
-                "tmp_path_cons",
-                sample_count as i32,
-                in_threads, );
-            info!("Queuing cmd_string: {}", cmd_string);
-            let mut python = std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd_string)
-                .stderr(process::Stdio::piped())
-                .stdout(process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash");
-
-            python = finish_command_safely(python, "run_nmf");
-
-            let mut out = String::new();
-            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                .expect("Failed to read stdout to string");
-            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-            let rss: f32 = match out.trim().parse() {
-                Ok(value) => value,
-                Err(error) => {
-                    debug!("Unable to parse RSS {}", error);
-                    0.
-                }
-            };
-            ranks_rss[rank as usize - min_rank] = rss;
-        });
-
-        let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-
-        debug!("RSS Values {:?}", ranks_rss);
-
-        for (rank, rss) in ranks_rss.iter().enumerate() {
-            if best_rank == 0 && best_rss == 0. && rank == 0 {
-                best_rank = rank + min_rank + 1;
-                best_rss = *rss;
-            } else if &best_rss >= rss {
-                best_rss = *rss;
-                best_rank = rank + min_rank + 1;
-            } else if rss > &best_rss {
-                break
-            }
-        }
-        iterations += max_rank - min_rank;
-        if best_rank < max_rank || iterations >= miter {
-            converged = true;
-        } else {
-            max_rank += 11;
-            min_rank += 11;
-        }
-    }
-
+//    let mut converged = false;
+//    let mut max_rank = cmp::min(15, n_variants);
+//    let mut min_rank = cmp::min(4, n_variants);
+//    let mut best_rank = 0;
+//    let mut best_rss = 0.;
+//    let mut iterations = 0;
+//    while !converged {
+//        let mut ranks_rss = Arc::new(
+//            Mutex::new(vec![0.; max_rank - min_rank]));
+//
+//        let mut in_threads = threads / (max_rank - min_rank - 1);
+//        if in_threads < 1 {
+//            in_threads = 1;
+//        }
+//
+//        (min_rank..max_rank).into_par_iter().for_each(|rank| {
+//            let cmd_string = format!(
+//                "set -e -o pipefail; \
+//                     nice nmf.py {} True {} {} {} {} {}",
+//                // NMF
+//                rank + 1,
+//                10,
+//                dist_file_path,
+//                "tmp_path_cons",
+//                sample_count as i32,
+//                in_threads, );
+//            info!("Queuing cmd_string: {}", cmd_string);
+//            let mut python = std::process::Command::new("bash")
+//                .arg("-c")
+//                .arg(&cmd_string)
+//                .stderr(process::Stdio::piped())
+//                .stdout(process::Stdio::piped())
+//                .spawn()
+//                .expect("Unable to execute bash");
+//
+//            python = finish_command_safely(python, "run_nmf");
+//
+//            let mut out = String::new();
+//            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
+//                .expect("Failed to read stdout to string");
+//            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
+//            let rss: f32 = match out.trim().parse() {
+//                Ok(value) => value,
+//                Err(error) => {
+//                    debug!("Unable to parse RSS {}", error);
+//                    0.
+//                }
+//            };
+//            ranks_rss[rank as usize - min_rank] = rss;
+//        });
+//
+//        let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
+//
+//        debug!("RSS Values {:?}", ranks_rss);
+//
+//        for (rank, rss) in ranks_rss.iter().enumerate() {
+//            if best_rank == 0 && best_rss == 0. && rank == 0 {
+//                best_rank = rank + min_rank + 1;
+//                best_rss = *rss;
+//            } else if &best_rss >= rss {
+//                best_rss = *rss;
+//                best_rank = rank + min_rank + 1;
+//            } else if rss > &best_rss {
+//                break
+//            }
+//        }
+//        iterations += max_rank - min_rank;
+//        if best_rank < max_rank || iterations >= miter {
+//            converged = true;
+//        } else {
+//            max_rank += 11;
+//            min_rank += 11;
+//        }
+//    }
+    let best_rank = 25;
     let cmd_string = format!(
         "set -e -o pipefail; \
                      nmf.py {} False {} {} {} {} {}",
