@@ -10,15 +10,13 @@ use rust_htslib::bam::record::CigarString;
 use rust_htslib::bam::Read as BamRead;
 use rust_htslib::bam::errors::Result as HtslibResult;
 
-use mapping_parameters::ReadFormat;
-
+use readers::{bam_generator::*, mapping_parameters::ReadFormat};
 use tempdir::TempDir;
 use tempfile;
 use nix::unistd;
 use nix::sys::stat;
 
-use bam_generator::*;
-use bam_generator::complete_processes;
+
 use genome_exclusion::*;
 
 use std::slice;

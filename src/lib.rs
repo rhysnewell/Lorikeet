@@ -3,16 +3,15 @@ pub mod pileup_structs;
 pub mod pileup_matrix;
 pub mod mosdepth_genome_coverage_estimators;
 pub mod genomes_and_contigs;
-pub mod bam_generator;
-pub mod filter;
+pub mod readers;
+
 pub mod external_command_checker;
-pub mod bwa_index_maintenance;
+
 pub mod coverage_takers;
-pub mod mapping_parameters;
+
 pub mod codon_structs;
-pub mod mapping_index_maintenance;
+
 pub mod coverage_printer;
-pub mod shard_bam_reader;
 pub mod genome_exclusion;
 pub mod haplotypes_and_genotypes;
 pub mod matrix_handling;
