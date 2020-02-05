@@ -488,11 +488,41 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 sample_names,
                                 100);
 
-                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
+                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist.clone() + "_predictions.npy")
                         .expect("Unable to read predictions");
+
+                    let connections: Array2<i32> = read_npy(tmp_path_dist + "_connections.npy")
+                        .expect("Unable to read connections");
 
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
+                    let mut indices = (0..variant_info_all.len()-1)
+                        .collect::<HashSet<usize>>();
+                    let mut index_to_check: usize = 0;
+                    let mut clusters = HashMap::new();
+                    let mut cluster_id = 0;
+                    while indices.len() > 0 {
+                        let cluster_set = clusters.entry(cluster_id)
+                            .or_insert(HashSet::new());
+                        connections.slice(s![index_to_check, ..])
+                            .iter().enumerate()
+                            .for_each(|(ind, x)| {
+                                    if *x==1 {
+                                        cluster_set.insert(ind);
+                                    }
+                                });
+                        cluster_id += 1;
+                        indices = indices.difference(&cluster_set)
+                            .cloned().collect::<HashSet<usize>>();
+                        match indices.iter().min() {
+                            Some(ind) => index_to_check = *ind,
+                            None => break,
+                        };
+                    }
+//                    println!("Clusters {:?}", clusters);
+                    for (cluster, set) in clusters {
+                        println!("Cluster {}: {}", cluster, set.len());
+                    }
                     let mut unique_ranks = HashSet::new();
 
                     predictions
@@ -844,80 +874,6 @@ fn run_nmf(dist_file_path: &str,
            sample_names: &Vec<String>,
            miter: usize) {
     let sample_count = sample_names.len();
-//    let mut converged = false;
-//    let mut max_rank = cmp::min(15, n_variants);
-//    let mut min_rank = cmp::min(4, n_variants);
-//    let mut best_rank = 0;
-//    let mut best_rss = 0.;
-//    let mut iterations = 0;
-//    while !converged {
-//        let mut ranks_rss = Arc::new(
-//            Mutex::new(vec![0.; max_rank - min_rank]));
-//
-//        let mut in_threads = threads / (max_rank - min_rank - 1);
-//        if in_threads < 1 {
-//            in_threads = 1;
-//        }
-//
-//        (min_rank..max_rank).into_par_iter().for_each(|rank| {
-//            let cmd_string = format!(
-//                "set -e -o pipefail; \
-//                     nice nmf.py {} True {} {} {} {} {}",
-//                // NMF
-//                rank + 1,
-//                10,
-//                dist_file_path,
-//                "tmp_path_cons",
-//                sample_count as i32,
-//                in_threads, );
-//            info!("Queuing cmd_string: {}", cmd_string);
-//            let mut python = std::process::Command::new("bash")
-//                .arg("-c")
-//                .arg(&cmd_string)
-//                .stderr(process::Stdio::piped())
-//                .stdout(process::Stdio::piped())
-//                .spawn()
-//                .expect("Unable to execute bash");
-//
-//            python = finish_command_safely(python, "run_nmf");
-//
-//            let mut out = String::new();
-//            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-//                .expect("Failed to read stdout to string");
-//            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-//            let rss: f32 = match out.trim().parse() {
-//                Ok(value) => value,
-//                Err(error) => {
-//                    debug!("Unable to parse RSS {}", error);
-//                    0.
-//                }
-//            };
-//            ranks_rss[rank as usize - min_rank] = rss;
-//        });
-//
-//        let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-//
-//        debug!("RSS Values {:?}", ranks_rss);
-//
-//        for (rank, rss) in ranks_rss.iter().enumerate() {
-//            if best_rank == 0 && best_rss == 0. && rank == 0 {
-//                best_rank = rank + min_rank + 1;
-//                best_rss = *rss;
-//            } else if &best_rss >= rss {
-//                best_rss = *rss;
-//                best_rank = rank + min_rank + 1;
-//            } else if rss > &best_rss {
-//                break
-//            }
-//        }
-//        iterations += max_rank - min_rank;
-//        if best_rank < max_rank || iterations >= miter {
-//            converged = true;
-//        } else {
-//            max_rank += 11;
-//            min_rank += 11;
-//        }
-//    }
     let best_rank = 25;
     let cmd_string = format!(
         "set -e -o pipefail; \

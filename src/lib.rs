@@ -41,6 +41,7 @@ extern crate itertools;
 extern crate nalgebra;
 extern crate rayon;
 extern crate permutation;
+#[macro_use]
 extern crate ndarray;
 extern crate ndarray_npy;
 extern crate strum;

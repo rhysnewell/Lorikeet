@@ -48,7 +48,7 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                 print('Evar: %5.4f' % mf_fit.fit.evar())
                 print('K-L divergence: %5.4f' % mf_fit.distance(metric='kl'))
                 print('Sparseness, W: %5.4f, H: %5.4f' % mf_fit.fit.sparseness())
-                # print('Connectivity', mf_fit.fit.connectivity())
+                print('Connectivity', mf_fit.fit.connectivity())
                 # print('Score', mf_fit.fit.select_features())
 
                 predictions = mf_fit.fit.predict(prob=True)
@@ -58,8 +58,8 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                                             np.array(predictions[1]),
                                             np.array(mf_fit.fit.select_features())))
                 print(path)
-
-                np.save(path, new_pred.astype('float32'), False)
+                np.save(path + "_predictions", new_pred.astype('float32'), False)
+                np.save(path + "_connections", mf_fit.fit.connectivity().astype('int32'), False)
             else:
                 print("Failed to converge SVD, Try again with stricter variant calling")
     else:
