@@ -16,7 +16,7 @@ use std::cmp;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
-use ::{tempfile, finish_command_safely};
+use crate::{tempfile, finish_command_safely};
 use itertools::Itertools;
 
 
@@ -491,16 +491,32 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut predictions: Array2<f32> = read_npy(tmp_path_dist.clone() + "_predictions.npy")
                         .expect("Unable to read predictions");
 
+                    let mut basis: Array2<f32> = read_npy(tmp_path_dist + "_basis.npy")
+                        .expect("Unable to read predictions");
+
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
                     let mut unique_ranks = HashSet::new();
-
+                    let mut geom_mean_score = 0.;
+                    // get unique ranks from NMF and geom mean of scores
                     predictions
                         .outer_iter().for_each(|row| {
                         unique_ranks.insert(row[0] as i32);
+                        geom_mean_score += row[1].ln();
                     });
 
-                    debug!("Unique ranks {:?}", unique_ranks);
+                    geom_mean_score = (geom_mean_score / variant_info_all.len() as f32).exp();
+                    let mut sd_factor = 0.;
+
+                    // calculate the geom SD factor https://en.wikipedia.org/wiki/Geometric_standard_deviation
+                    predictions.outer_iter().for_each(|row| {
+                        sd_factor += (row[1] / geom_mean_score).ln().powf(2.);
+                    });
+
+                    sd_factor = (sd_factor / variant_info_all.len() as f32).powf(1. / 2.).exp();
+
+
+                    debug!("Unique ranks {:?} geom mean {} sd {}", unique_ranks, geom_mean_score, sd_factor);
 
                     let mut prediction_map = HashMap::new();
                     let mut prediction_count = HashMap::new();
@@ -511,12 +527,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut max_cnt = 0;
                     let mut max_strain = 0;
                     let thresh = 1. / unique_ranks.len() as f32;
-                    // check if prediction probability is greater than certain amount
+                    // check if feature score is greater than geom mean score / SD
                     // if so then place into that rank
                     // If not, then prediction could realistically be any available rank
                     for (row, variant_info) in variant_info_all.iter().enumerate() {
-                        let prob = predictions[[row, 1]];
-                        if prob >= thresh {
+                        let score = predictions[[row, 1]];
+                        if score >= geom_mean_score / sd_factor {
                             let rank = predictions[[row, 0]] as i32;
 
                             let prediction = prediction_map.entry(rank + 1)
@@ -574,11 +590,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                             max_strain = *strain;
                             max_cnt = *cnt;
                         }
+//                        let score = prediction_map.entry(*strain).or_insert(0.);
+//                        *score = (*score / *cnt as f32).exp()
                     });
 
 
                     let mut prediction_geom = HashMap::new();
-                    prediction_map.iter()
+                    prediction_features.iter()
                         .for_each(|(pred, sum)| {
                             prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
                         });
@@ -613,7 +631,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
-                for (strain_index, genotype) in pred_variants.iter_mut() {
+                pred_variants.par_iter().for_each(|(strain_index, genotype)|{
                     if strain_index != &0 {
 
                         let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
@@ -623,6 +641,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         // Open haplotype file or create one
                         let mut file_open = File::create(file_path)
                             .expect("No Read or Write Permission in current directory");
+
+                        let mut genotype = genotype.clone();
 
                         // Generate the variant genome
                         for (tid, original_contig) in contigs.iter() {
@@ -696,7 +716,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             };
                         }
                     }
-                }
+                });
             }
         }
     }
@@ -844,7 +864,7 @@ fn run_nmf(dist_file_path: &str,
            sample_names: &Vec<String>,
            miter: usize) {
     let sample_count = sample_names.len();
-    let best_rank = 25;
+    let best_rank = 15;
     let cmd_string = format!(
         "set -e -o pipefail; \
                      nmf.py {} False {} {} {} {} {}",
