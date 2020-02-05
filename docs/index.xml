@@ -12,13 +12,13 @@
     
     
     <item>
-      <title>Install Hugo</title>
-      <link>/Lorikeet/docs/install-hugo/</link>
+      <title>Install Lorikeet</title>
+      <link>/Lorikeet/docs/install-lorikeet/</link>
       <pubDate>Mon, 11 Feb 2019 19:27:37 +1000</pubDate>
       
-      <guid>/Lorikeet/docs/install-hugo/</guid>
-      <description>To use this theme you will need to have Hugo installed. If you don&amp;rsquo;t already have Hugo installed please follow the official installation guide
-Check Hugo Version This theme uses Hugo Pipes to compile SCSS and minify assets.</description>
+      <guid>/Lorikeet/docs/install-lorikeet/</guid>
+      <description>A static binary of the latest release of lorikeet can be downloaded directly from GitHub
+tar -xvzf lorikeet-x86_64-unknown-linux-musl.tar.gz You&amp;rsquo;ll then need to place both the Lorikeet binary and the nmf.py script into your current bin/ folder</description>
     </item>
     
     <item>
