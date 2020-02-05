@@ -491,38 +491,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut predictions: Array2<f32> = read_npy(tmp_path_dist.clone() + "_predictions.npy")
                         .expect("Unable to read predictions");
 
-                    let connections: Array2<i32> = read_npy(tmp_path_dist + "_connections.npy")
-                        .expect("Unable to read connections");
-
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
-                    let mut indices = (0..variant_info_all.len()-1)
-                        .collect::<HashSet<usize>>();
-                    let mut index_to_check: usize = 0;
-                    let mut clusters = HashMap::new();
-                    let mut cluster_id = 0;
-                    while indices.len() > 0 {
-                        let cluster_set = clusters.entry(cluster_id)
-                            .or_insert(HashSet::new());
-                        connections.slice(s![index_to_check, ..])
-                            .iter().enumerate()
-                            .for_each(|(ind, x)| {
-                                    if *x==1 {
-                                        cluster_set.insert(ind);
-                                    }
-                                });
-                        cluster_id += 1;
-                        indices = indices.difference(&cluster_set)
-                            .cloned().collect::<HashSet<usize>>();
-                        match indices.iter().min() {
-                            Some(ind) => index_to_check = *ind,
-                            None => break,
-                        };
-                    }
-//                    println!("Clusters {:?}", clusters);
-                    for (cluster, set) in clusters {
-                        println!("Cluster {}: {}", cluster, set.len());
-                    }
                     let mut unique_ranks = HashSet::new();
 
                     predictions

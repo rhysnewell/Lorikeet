@@ -6,10 +6,10 @@ use external_command_checker;
 use pileup_structs::*;
 use pileup_matrix::*;
 use codon_structs::*;
-use bam_generator::*;
+use crate::readers::bam_generator::*;
 use FlagFilter;
 use rayon::prelude::*;
-use estimation::alignment_properties::{InsertSize, AlignmentProperties};
+use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
 
 use std::str;
 use std::fs::File;

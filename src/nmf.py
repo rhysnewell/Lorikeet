@@ -59,7 +59,7 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                                             np.array(mf_fit.fit.select_features())))
                 print(path)
                 np.save(path + "_predictions", new_pred.astype('float32'), False)
-                np.save(path + "_connections", mf_fit.fit.connectivity().astype('int32'), False)
+                # np.save(path + "_connections", mf_fit.fit.connectivity().astype('int32'), False)
             else:
                 print("Failed to converge SVD, Try again with stricter variant calling")
     else:

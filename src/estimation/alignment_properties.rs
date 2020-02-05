@@ -16,7 +16,7 @@ use std::u32;
 use csv;
 use itertools::Itertools;
 use ordered_float::NotNan;
-use bam_generator::*;
+use crate::readers::bam_generator::*;
 use rust_htslib::bam::{self, record::Cigar};
 use statrs::statistics::{OrderStatistics, Statistics};
 

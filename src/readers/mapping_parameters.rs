@@ -2,7 +2,7 @@ use std::process;
 
 use tempfile::NamedTempFile;
 
-use bam_generator::MappingProgram;
+use readers::bam_generator::MappingProgram;
 
 #[derive(Clone)]
 pub enum ReadFormat {
