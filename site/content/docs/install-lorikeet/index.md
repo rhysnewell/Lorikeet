@@ -3,6 +3,22 @@ title: 'Install Lorikeet'
 date: 2019-02-11T19:27:37+10:00
 weight: 2
 ---
+### Dependencies
+
+For read mapping:
+ * [Minimap2]() by default
+ * [BWA]()
+ * [SAMtools]()
+
+For open reading frame calling:
+ * [Prodigal]()
+
+Additionally, you'll need Python >= 3.6 with the following packages:
+ * [Nimfa]()
+ * [Numpy]()
+ * [SciPy]()
+ * [Threadpoolctl]()
+### Easy install
 
 A static binary of the latest release of lorikeet can be downloaded directly from [GitHub](https://github.com/rhysnewell/Lorikeet/releases/latest)
 
