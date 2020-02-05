@@ -6,25 +6,18 @@ weight: 4
 summary: Syntax highlighting and menus can be configured via `config.toml`.
 ---
 
-## Syntax Highlighting
+## Basic Usage
 
-Whisper uses the in-built code highlighting that ships with hugo. https://gohugo.io/content-management/syntax-highlighting/
+If provided a complete or draft microbial reference genome, and one or more sets of reads or BAM files Lorikeet can find variant locations within the reference genome
+based on the read mappings. Ideally, multiple samples will be provided so log-ratio variances can be calculated between
+each pairwise combination of variants. If only a single sample is provided, a euclidean distance matrix is calculated
+based on the abundance of each variant location. Non-negative matrix factorization is then performed on the resulting pairiwse matrix
+reducing the variants into a lower latent space where each variant is assigned to its resulting dominant factor.
 
-You can insert code snippets in any markdown file by using standard code fences syntax ie:
 
-````
+```commandline
+lorikeet genotype -r draft_genome.fasta -1 sample_1.1.fq.gz sample_2.1.fq.gz -2 sample_1.2.fq.gz sample_2.2.fq.gz 
 ```
-insert code here
-```
-````
-
-You can specify the langauge by adding a declaration after the backticks
-
-````
-```javascript
-insert code here
-```
-````
 
 ### Pygments Options
 

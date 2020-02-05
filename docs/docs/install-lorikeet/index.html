@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>Configuration - Lorikeet</title>
+  <title>Install Lorikeet - Lorikeet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
   <link rel="icon" href="/Lorikeet/favicon.png">
@@ -90,7 +90,7 @@
   <h4>Docs</h4>
   <ul>
     
-    <li class="">
+    <li class="active ">
       <a href="/Lorikeet/docs/install-lorikeet/">Install Lorikeet</a>
     </li>
     
@@ -98,7 +98,7 @@
       <a href="/Lorikeet/docs/install-theme/">Install Theme</a>
     </li>
     
-    <li class="active ">
+    <li class="">
       <a href="/Lorikeet/docs/configure/">Configuration</a>
     </li>
     
@@ -117,31 +117,17 @@
         </div>
         <div class="col-12 col-md-9">
           
-<h1 class="title">Configuration</h1>
+<h1 class="title">Install Lorikeet</h1>
 <div class="content ">
-  <h2 id="basic-usage">Basic Usage</h2>
-<p>If provided a complete or draft microbial reference genome, and one or more sets of reads or BAM files Lorikeet can find variant locations within the reference genome
-based on the read mappings. Ideally, multiple samples will be provided so log-ratio variances can be calculated between
-each pairwise combination of variants. If only a single sample is provided, a euclidean distance matrix is calculated
-based on the abundance of each variant location. Non-negative matrix factorization is then performed on the resulting pairiwse matrix
-reducing the variants into a lower latent space where each variant is assigned to its resulting dominant factor.</p>
-<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">lorikeet genotype -r draft_genome.fasta -1 sample_1.1.fq.gz sample_2.1.fq.gz -2 sample_1.2.fq.gz sample_2.2.fq.gz 
-</code></pre></div><h3 id="pygments-options">Pygments Options</h3>
-<p>The following code highlighting options are configured in the <code>config.toml</code></p>
-<div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="nx">pygmentsCodeFences</span> <span class="p">=</span> <span class="kc">true</span>
-<span class="nx">pygmentsCodefencesGuessSyntax</span> <span class="p">=</span> <span class="kc">true</span>
-<span class="nx">pygmentsUseClasses</span> <span class="p">=</span> <span class="kc">true</span>
-</code></pre></div><h2 id="main-menu">Main menu</h2>
-<p>Configure the main menu by editing the <code>config.toml</code></p>
-<div class="highlight"><pre class="chroma"><code class="language-toml" data-lang="toml"><span class="p">[</span><span class="p">[</span><span class="nx">menu</span><span class="p">.</span><span class="nx">main</span><span class="p">]</span><span class="p">]</span>
-<span class="nx">name</span> <span class="p">=</span> <span class="s2">&#34;Home&#34;</span>
-<span class="nx">url</span> <span class="p">=</span> <span class="s2">&#34;/&#34;</span>
-<span class="nx">weight</span> <span class="p">=</span> <span class="mi">1</span>
-
-<span class="p">[</span><span class="p">[</span><span class="nx">menu</span><span class="p">.</span><span class="nx">main</span><span class="p">]</span><span class="p">]</span>
-<span class="nx">name</span> <span class="p">=</span> <span class="s2">&#34;Docs&#34;</span>
-<span class="nx">url</span> <span class="p">=</span> <span class="s2">&#34;/docs/&#34;</span>
-<span class="nx">weight</span> <span class="p">=</span> <span class="mi">2</span>
+  <p>A static binary of the latest release of lorikeet can be downloaded directly from <a href="https://github.com/rhysnewell/Lorikeet/releases/latest">GitHub</a></p>
+<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">tar -xvzf lorikeet-x86_64-unknown-linux-musl.tar.gz
+</code></pre></div><p>You&rsquo;ll then need to place both the Lorikeet binary and the nmf.py script into your current bin/ folder</p>
+<p>We are working on integrating the nmf.py script into Rust, however current methods using Opy3 require unstable versions of Rust.</p>
+<h3 id="build-from-scratch">Build from scratch</h3>
+<p>Building from scratch requires Rust to be installed on your machine. Installation instructions for rust can be found
+<a href="https://www.rust-lang.org/tools/install">here</a>.</p>
+<p>Once installed, clone the latest Lorikeet version from GitHub.</p>
+<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">git clone https://github.com/rhysnewell/Lorikeet.git &amp;&amp; cd Lorikeet/
 </code></pre></div>
 </div>
 </div>
