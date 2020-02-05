@@ -119,7 +119,26 @@
           
 <h1 class="title">Install Lorikeet</h1>
 <div class="content ">
-  <p>A static binary of the latest release of lorikeet can be downloaded directly from <a href="https://github.com/rhysnewell/Lorikeet/releases/latest">GitHub</a></p>
+  <h3 id="dependencies">Dependencies</h3>
+<p>For read mapping:</p>
+<ul>
+<li><a href="">Minimap2</a> by default</li>
+<li><a href="">BWA</a></li>
+<li><a href="">SAMtools</a></li>
+</ul>
+<p>For open reading frame calling:</p>
+<ul>
+<li><a href="">Prodigal</a></li>
+</ul>
+<p>Additionally, you&rsquo;ll need Python &gt;= 3.6 with the following packages:</p>
+<ul>
+<li><a href="">Nimfa</a></li>
+<li><a href="">Numpy</a></li>
+<li><a href="">SciPy</a></li>
+<li><a href="">Threadpoolctl</a></li>
+</ul>
+<h3 id="easy-install">Easy install</h3>
+<p>A static binary of the latest release of lorikeet can be downloaded directly from <a href="https://github.com/rhysnewell/Lorikeet/releases/latest">GitHub</a></p>
 <div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">tar -xvzf lorikeet-x86_64-unknown-linux-musl.tar.gz
 </code></pre></div><p>You&rsquo;ll then need to place both the Lorikeet binary and the nmf.py script into your current bin/ folder</p>
 <p>We are working on integrating the nmf.py script into Rust, however current methods using Opy3 require unstable versions of Rust.</p>
