@@ -14,6 +14,7 @@ pub mod matrix_handling;
 pub mod variants;
 pub mod estimation;
 pub mod model;
+pub mod utils;
 
 extern crate linregress;
 extern crate cogset;

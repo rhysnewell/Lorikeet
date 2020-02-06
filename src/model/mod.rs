@@ -14,7 +14,7 @@ use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 //use crate::grammar;
 
-//pub mod evidence;
+//pub mod model.evidence;
 //pub mod likelihood;
 //pub mod modes;
 //pub mod sample;
@@ -438,7 +438,7 @@ impl Variant {
 
 #[cfg(test)]
 mod tests {
-//    use crate::model::evidence::{observation::ObservationBuilder, Observation};
+//    use crate::model::model.evidence::{observation::ObservationBuilder, Observation};
 //    use crate::utils;
 
 //    use bio::stats::LogProb;
@@ -571,7 +571,7 @@ mod tests {
     //     let p_germline = pileup.posterior_prob(&tumor_all, &normal_alt);
     //     let p_somatic = pileup.posterior_prob(&tumor_alt, &normal_ref);
     //     let (af_case, af_control) = pileup.map_allele_freqs();
-    //     // we have no evidence for germline, but an allele frequency of 1 is most likely with a germline variant!
+    //     // we have no model.evidence for germline, but an allele frequency of 1 is most likely with a germline variant!
     //     assert!(p_germline > p_somatic);
     //     // germline < somatic
     //     assert_relative_eq!(
