@@ -713,7 +713,7 @@ impl PileupFunctions for PileupStats {
                     for (hap_index, haplotype) in haplotypes_vec.iter().enumerate() {
                         writeln!(file_open, ">{}_haplotype_{}",
                                  str::from_utf8(target_name).expect("UTF-8 error"),
-                                 hap_index);
+                                 hap_index).expect("Unable to write to file");
 
                         let mut contig = String::new();
 

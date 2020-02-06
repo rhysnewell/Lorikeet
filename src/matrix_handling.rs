@@ -48,7 +48,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                                dist_file: &str,
                                cons_file: &str) {
 
-    let mut variant_distances = match sample_count {
+    let variant_distances = match sample_count {
         1 => {
             Arc::new(
                 Mutex::new(
@@ -71,7 +71,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
            (variant_info_all.len().pow(2) - variant_info_all.len())/2);
 
     // Create variable to store mean of abundance if only one sample
-    let mut vector_mean: f32 = 0.;
+    let vector_mean: f32 = 0.;
 
     let n = variant_info_all.len();
     // produced condensed pairwise distances
@@ -253,8 +253,8 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 //                                (info_tup.2).1[0]
 //                            }).sum::<f32>() / vector_info_all.len();
 //                        }
-                            let mut d_kl_a: f32 = 0.;
-                            let mut d_kl_b: f32 = 0.;
+//                            let mut d_kl_a: f32 = 0.;
+//                            let mut d_kl_b: f32 = 0.;
                             let row_freq = (row_info.2).1[0];
                             let col_freq = (col_info.2).1[0];
 

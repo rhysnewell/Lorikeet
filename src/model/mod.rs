@@ -438,10 +438,10 @@ impl Variant {
 
 #[cfg(test)]
 mod tests {
-    use crate::model::evidence::{observation::ObservationBuilder, Observation};
-    use crate::utils;
+//    use crate::model::evidence::{observation::ObservationBuilder, Observation};
+//    use crate::utils;
 
-    use bio::stats::LogProb;
+//    use bio::stats::LogProb;
 //
 //    pub fn observation(prob_mapping: LogProb, prob_alt: LogProb, prob_ref: LogProb) -> Observation {
 //        ObservationBuilder::default()

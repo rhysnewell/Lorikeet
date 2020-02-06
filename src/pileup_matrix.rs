@@ -585,7 +585,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // get the strain with maximum members
                     let mut max_cnt = 0.;
                     let mut max_strain = 0;
-                    prediction_count.iter().map(|(strain, cnt)| {
+                    prediction_count.iter().for_each(|(strain, cnt)| {
                         if &max_cnt <= cnt {
                             max_strain = *strain;
                             max_cnt = *cnt;
@@ -707,7 +707,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             writeln!(file_open, ">{}_strain_{}\t#variants_{}",
                                      target_names[tid],
                                      strain_index,
-                                     variations);
+                                     variations).expect("Unable to write to file");
 
 
                             for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
