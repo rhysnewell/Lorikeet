@@ -45,5 +45,5 @@ summaryLength = 30
     meta_twitter_creator = "@rhysnewell"
 
   [params.logo]
-      mobile = "/Lorikeet/images/lorikeet_logo_v1.png"
-      standard  = "/Lorikeet/images/lorikeet_logo_v1.png"
+      mobile = "/Lorikeet/images/lorikeet_logo_crop.png"
+      standard  = "/Lorikeet/images/lorikeet_logo_crop.png"
