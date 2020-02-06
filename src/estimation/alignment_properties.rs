@@ -218,19 +218,24 @@ impl InsertSize {
 mod tests {
     use super::*;
     use std::fs;
+    use readers;
 
     #[test]
     fn test_estimate() {
-        let mut bam = bam::Reader::from_path("tests/resources/tumor-first30000.bam").unwrap();
+        let bam_readers = readers::bam_generator::generate_named_bam_readers_from_bam_files(
+            vec!["tests/data/test2.bam"]);
+        for reader in bam_readers {
+            let mut bam = reader.start();
 
-        let props = AlignmentProperties::estimate(&mut bam).unwrap();
-        println!("{:?}", props);
+            let props = AlignmentProperties::estimate(&mut bam).unwrap();
+            println!("{:?}", props);
 
-        assert_relative_eq!(props.insert_size.mean, 312.0);
-        assert_relative_eq!(props.insert_size.sd, 11.89254089203071);
-        assert_eq!(props.max_del_cigar_len, 30);
-        assert_eq!(props.max_ins_cigar_len, 12);
-        assert_eq!(props.frac_max_softclip, 0.69);
+            assert_relative_eq!(props.insert_size.mean, 499.0);
+            assert_relative_eq!(props.insert_size.sd, 39.54);
+            assert_eq!(props.max_del_cigar_len, 6);
+            assert_eq!(props.max_ins_cigar_len, 5);
+            assert_relative_eq!(props.frac_max_softclip, 0.45);
+        }
     }
 
     #[test]

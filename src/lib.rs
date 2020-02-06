@@ -4,13 +4,9 @@ pub mod pileup_matrix;
 pub mod mosdepth_genome_coverage_estimators;
 pub mod genomes_and_contigs;
 pub mod readers;
-
 pub mod external_command_checker;
-
 pub mod coverage_takers;
-
 pub mod codon_structs;
-
 pub mod coverage_printer;
 pub mod genome_exclusion;
 pub mod haplotypes_and_genotypes;
@@ -45,6 +41,8 @@ extern crate ndarray;
 extern crate ndarray_npy;
 extern crate strum;
 
+#[macro_use]
+extern crate approx;
 #[macro_use]
 extern crate log;
 #[macro_use]
