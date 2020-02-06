@@ -125,40 +125,44 @@ impl AlignmentProperties {
         Ok(properties)
     }
 
-//    /// Estimate `AlignmentProperties` from first 10000 fragments of bam file.
-//    /// Only reads that are mapped, not duplicates and where quality checks passed are taken.
-//    pub fn estimate_from_record(record: &mut bam::Record,
-//                                properties: &mut AlignmentProperties,
-//                                tlens: &mut Vec<f64>) -> Result<Self, Box<dyn Error>> {
-//
-//        if record.is_unmapped() || record.is_duplicate() || record.is_quality_check_failed() {
-//
-//            let is_regular = properties.update_max_cigar_ops_len(&record);
-//
-//            if is_regular
-//                && !record.is_mate_unmapped()
-//                && record.is_first_in_template()
-//                && record.tid() == record.mtid()
-//                && record.mapq() > 0
-//            {
-//                // record insert size
-//                tlens.push(record.insert_size().abs() as f64);
-//            }
-//
-//            i += 1;
-//        }
-//
-//        let upper = tlens.percentile(95);
-//        let lower = tlens.percentile(5);
-//        let mut valid = tlens
-//            .into_iter()
-//            .filter(|l| *l <= upper && *l >= lower)
-//            .collect_vec();
-//        properties.insert_size.mean = valid.median();
-//        properties.insert_size.sd = valid.iter().std_dev();
-//
-//        Ok(properties)
-//    }
+    /// Estimate `AlignmentProperties` from each record in bam file.
+    /// Only reads that are mapped, not duplicates and where quality checks passed are taken.
+    /// Return will need to be extended to existing vector
+    pub fn estimate_from_record(record: &mut bam::Record, properties: &mut AlignmentProperties) -> Option<f64> {
+
+        let mut tlen = None;
+        if record.is_unmapped() || record.is_duplicate() || record.is_quality_check_failed() {
+            tlen
+        } else {
+            let is_regular = properties.update_max_cigar_ops_len(&record);
+
+            if is_regular
+                && !record.is_mate_unmapped()
+                && record.is_first_in_template()
+                && record.tid() == record.mtid()
+                && record.mapq() > 0
+            {
+                // record insert size
+                tlen = Some(record.insert_size().abs() as f64);
+            }
+            tlen
+        }
+    }
+
+    pub fn update_properties(tlens: &mut Vec<f64>, properties: &mut AlignmentProperties) -> Result<Self, Box<dyn Error>> {
+        let upper = tlens.percentile(95);
+        let lower = tlens.percentile(5);
+        let mut valid = tlens
+            .into_iter()
+            .map(|l| {
+                *l <= upper && *l >= lower;
+                *l
+            })
+            .collect_vec();
+        properties.insert_size.mean = valid.median();
+        properties.insert_size.sd = valid.iter().std_dev();
+        Ok(*properties)
+    }
 
     /// Number of bases that are feasible for overlapping the variant.
     pub fn feasible_bases(&self, read_len: u32, variant: &Variant) -> u32 {
@@ -219,6 +223,7 @@ mod tests {
     use super::*;
     use std::fs;
     use readers;
+    use rust_htslib::bam::record::Record;
 
     #[test]
     fn test_estimate() {
@@ -232,6 +237,40 @@ mod tests {
 
             assert_relative_eq!(props.insert_size.mean, 499.0);
             assert_relative_eq!(props.insert_size.sd, 39.541883346487914);
+            assert_eq!(props.max_del_cigar_len, 6);
+            assert_eq!(props.max_ins_cigar_len, 5);
+            assert_relative_eq!(props.frac_max_softclip, 0.44666666666666666);
+        }
+    }
+
+    #[test]
+    fn test_estimate_from_records() {
+        let bam_readers = readers::bam_generator::generate_named_bam_readers_from_bam_files(
+            vec!["tests/data/test2.bam"]);
+        for reader in bam_readers {
+            let mut bam = reader.start();
+            let mut record= Record::new();
+            let mut tlens = Vec::new();
+            let mut properties = AlignmentProperties {
+                insert_size: InsertSize::default(),
+                max_del_cigar_len: 0,
+                max_ins_cigar_len: 0,
+                frac_max_softclip: 0.0,
+            };
+
+            while bam.read(&mut record)
+                .expect("Error while reading BAM record") == true {
+                match AlignmentProperties::estimate_from_record(&mut record, &mut properties) {
+                    Some(tlen) => tlens.push(tlen),
+                    None => {},
+                };
+            }
+
+            let props = AlignmentProperties::update_properties(&mut tlens, &mut properties).unwrap();
+            println!("{:?}", props);
+
+            assert_relative_eq!(props.insert_size.mean, 498.5);
+            assert_relative_eq!(props.insert_size.sd, 49.78135392920871);
             assert_eq!(props.max_del_cigar_len, 6);
             assert_eq!(props.max_ins_cigar_len, 5);
             assert_relative_eq!(props.frac_max_softclip, 0.44666666666666666);
