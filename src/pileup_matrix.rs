@@ -518,11 +518,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     debug!("Unique ranks {:?} geom mean {} sd {}", unique_ranks, geom_mean_score, sd_factor);
 
-                    let mut prediction_map = HashMap::new();
-                    let mut prediction_count = HashMap::new();
-                    let mut prediction_features = HashMap::new();
-                    let mut prediction_variants = HashMap::new();
-                    let mut prediction_variants_all = HashMap::new();
+                    let mut prediction_map = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_count = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_features = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_variants = Arc::new(Mutex::new(HashMap::new()));
+//                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
 
                     let mut max_cnt = 0;
                     let mut max_strain = 0;
@@ -530,11 +530,15 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // check if feature score is greater than geom mean score / SD
                     // if so then place into that rank
                     // If not, then prediction could realistically be any available rank
-                    for (row, variant_info) in variant_info_all.iter().enumerate() {
+                    variant_info_all.par_iter().enumerate().for_each(|(row, variant_info)| {
                         let score = predictions[[row, 1]];
                         if score >= geom_mean_score / sd_factor {
-                            let rank = predictions[[row, 0]] as i32;
+                            let mut prediction_map = prediction_map.lock().unwrap();
+                            let mut prediction_count = prediction_count.lock().unwrap();
+                            let mut prediction_features = prediction_features.lock().unwrap();
+                            let mut prediction_variants = prediction_variants.lock().unwrap();
 
+                            let rank = predictions[[row, 0]] as i32;
                             let prediction = prediction_map.entry(rank + 1)
                                 .or_insert(0.);
                             let count = prediction_count.entry(rank + 1)
@@ -555,33 +559,64 @@ impl PileupMatrixFunctions for PileupMatrix{
                             *count += 1.;
                             *prediction += predictions[[row, 1]].ln();
                         } else {
-                            // we add the variant to all strains
-                            let rank = 0;
+                            // we figure out which strains variant could belong to based basis values
+                            let basis_vec = basis.slice(s![row, ..]);
+                            let mut basis_mean: f32 = 0.;
+                            basis_vec.iter()
+                                .for_each(|x| basis_mean += x.ln());
+                            basis_mean = (basis_mean / basis_vec.len() as f32).exp();
 
-                            let prediction = prediction_map.entry(rank)
-                                .or_insert(0.);
-                            let count = prediction_count.entry(rank)
-                                .or_insert(0.);
-                            let variant_tid = prediction_variants_all.entry(rank)
-                                .or_insert(HashMap::new());
+                            let mut basis_sd: f32 = 0.;
+                            basis_vec.iter().for_each(|x| {
+                                basis_sd += (x / basis_mean).ln().powf(2.);
+                            });
 
-                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                            let variant_pos = variant_tid
-                                .entry(*variant_info.3).or_insert(HashMap::new());
+                            basis_sd = (basis_sd / basis_vec.len() as f32).powf(1. / 2.).exp();
 
-                            let variant = variant_pos
-                                .entry(*variant_info.0).or_insert(HashSet::new());
-                            variant.insert(variant_info.1.to_owned());
+                            let mut ranks = Arc::new(Mutex::new(Vec::new()));
+
+                            // Search for above 10 sd_factors of the geometric mean
+                            basis_vec.iter().enumerate().for_each(|(ind, score)|{
+                               if score >= &(basis_mean * 100. * basis_sd) && unique_ranks.contains(&(ind as i32)){
+                                   let mut ranks = ranks.lock().unwrap();
+                                   ranks.push(ind as i32);
+                               }
+                            });
+                            let ranks = ranks.lock().unwrap();
+                            ranks.par_iter().for_each(|rank|{
+                                let mut prediction_map = prediction_map.lock().unwrap();
+                                let mut prediction_count = prediction_count.lock().unwrap();
+                                let mut prediction_features = prediction_features.lock().unwrap();
+                                let mut prediction_variants = prediction_variants.lock().unwrap();
+                                let rank = rank + 1;
+                                let prediction = prediction_map.entry(rank)
+                                    .or_insert(0.);
+                                let count = prediction_count.entry(rank)
+                                    .or_insert(0.);
+                                let variant_tid = prediction_variants.entry(rank)
+                                    .or_insert(HashMap::new());
+
+                                // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                                let variant_pos = variant_tid
+                                    .entry(*variant_info.3).or_insert(HashMap::new());
+
+                                let variant = variant_pos
+                                    .entry(*variant_info.0).or_insert(HashSet::new());
+                                variant.insert(variant_info.1.to_owned());
 
 
-                            let feature = prediction_features.entry(rank).or_insert(0.);
-                            *feature += predictions[[row, 2]];
+                                let feature = prediction_features.entry(rank).or_insert(0.);
+                                *feature += predictions[[row, 2]];
 
-                            *count += 1.;
-                            *prediction += predictions[[row, 1]].ln();
+                                *count += 1.;
+                                *prediction += predictions[[row, 1]].ln();
+                            });
                         }
-                    }
-
+                    });
+                    let mut prediction_map = prediction_map.lock().unwrap();
+                    let mut prediction_count = prediction_count.lock().unwrap();
+                    let mut prediction_features = prediction_features.lock().unwrap();
+                    let mut prediction_variants = prediction_variants.lock().unwrap();
                     // get the strain with maximum members
                     let mut max_cnt = 0.;
                     let mut max_strain = 0;
@@ -605,8 +640,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     println!("Prediction Counts {:?}", prediction_count);
                     println!("Prediction Features {:?}", prediction_features);
 
-                    *pred_variants = prediction_variants;
-                    *pred_variants_all = prediction_variants_all;
+                    *pred_variants = prediction_variants.to_owned();
+//                    *pred_variants_all = HashMap::new();
 
 
                 } else {
