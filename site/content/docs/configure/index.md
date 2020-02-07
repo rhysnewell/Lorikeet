@@ -36,11 +36,11 @@ Configure the main menu by editing the `config.toml`
 ```toml
 [[menu.main]]
 name = "Home"
-url = "/"
+url = "/docs/"
 weight = 1
 
 [[menu.main]]
 name = "Docs"
-url = "/docs/"
+url = "/docs/docs/"
 weight = 2
 ```

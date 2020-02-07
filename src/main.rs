@@ -2169,7 +2169,7 @@ fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {
 }
 
 fn build_cli() -> App<'static, 'static> {
-    // specify static lazily because need to define it at runtime.
+    // specify _2 lazily because need to define it at runtime.
     lazy_static! {
         static ref POLYMORPH_HELP: String = format!(
             "
