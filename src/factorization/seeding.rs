@@ -1,4 +1,5 @@
 use ndarray;
+use ndarray_linalg::{SVD, convert::*, diagonal::*};
 use rayon::prelude::*;
 
 pub enum Seed {
@@ -13,8 +14,8 @@ impl Seed {
     pub fn new_nndsvd(rank: usize, v: &ndarray::Array2<f32>) -> Seed {
         Seed::Nndsvd {
             rank,
-            w: ndarray::Array2::zeros((v.shape[0], rank)),
-            h: ndarray::Array2::zeros((rank, v.shape[1])),
+            w: ndarray::Array2::zeros((v.shape()[0], rank)),
+            h: ndarray::Array2::zeros((rank, v.shape()[1])),
         }
     }
 }
@@ -35,8 +36,12 @@ impl SeedFunctions for Seed {
                 ref mut w,
                 ref mut h,
             } => {
-
-
+                let (mut u, mut s, mut e)
+                    = v.svd(calc_u: True, calc_vt: True).unwrap();
+                e = e.t();
+                s = s.diag();
+                w.slice_mut(s![.., 0]).assign(s[0].powf(1. / 2.) * u.slice(s![.., 0].mapv_inplace(|x| x.abs())));
+                h.slice_mut(s![0, ..]).assign(s[0].powf(1. / 2.) * e.slice(s![.., 0]).t().mapv_inplace(|x| x.aabs()));
             }
         }
     }
