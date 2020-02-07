@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::process;
 
 use CONCATENATED_FASTA_FILE_SEPARATOR;
-use bam_generator::MappingProgram;
+use readers::bam_generator::MappingProgram;
 
 use tempdir::TempDir;
 use tempfile::NamedTempFile;

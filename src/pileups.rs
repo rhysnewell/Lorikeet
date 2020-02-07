@@ -1,15 +1,15 @@
 use std;
 use std::collections::{HashMap, BTreeMap, BTreeSet};
-use rust_htslib::bam;
-use rust_htslib::bam::record::Cigar;
+use rust_htslib::bam::{self, record::Cigar};
 
 use external_command_checker;
 use pileup_structs::*;
 use pileup_matrix::*;
 use codon_structs::*;
-use bam_generator::*;
+use crate::readers::bam_generator::*;
 use FlagFilter;
 use rayon::prelude::*;
+use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
 
 use std::str;
 use std::fs::File;
@@ -21,7 +21,6 @@ use nix::sys::stat;
 use tempdir::TempDir;
 use tempfile;
 use std::sync::{Arc, Mutex};
-
 
 
 pub fn pileup_variants<R: NamedBamReader,
@@ -121,6 +120,10 @@ pub fn pileup_variants<R: NamedBamReader,
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
         bam_generated.set_threads(n_threads);
+
+        let mut bam_properties =
+            AlignmentProperties::default(InsertSize::default());
+
         let stoit_name = bam_generated.name().to_string();
 
         let header = bam_generated.header().clone(); // bam header
@@ -134,7 +137,8 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
-        let mut nuc_freq: Arc<Mutex<HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let mut nuc_freq: Arc<Mutex<HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>>
+            = Arc::new(Mutex::new(HashMap::new()));
         let mut indels = HashMap::new();
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
@@ -143,8 +147,10 @@ pub fn pileup_variants<R: NamedBamReader,
 
         // for record in records
         let mut skipped_reads = 0;
+
         while bam_generated.read(&mut record)
             .expect("Error while reading BAM record") == true {
+
             if (!flag_filters.include_supplementary && record.is_supplementary()) ||
                 (!flag_filters.include_secondary && record.is_secondary()) ||
                 (!flag_filters.include_improper_pairs && !record.is_proper_pair()){

@@ -2,9 +2,7 @@ use std;
 use std::io::Read;
 use std::process;
 
-use filter::*;
-use mapping_index_maintenance::MappingIndex;
-use mapping_parameters::ReadFormat;
+use readers::{filter::*, mapping_parameters::ReadFormat, mapping_index_maintenance::MappingIndex};
 use FlagFilter;
 
 use rust_htslib::bam;
