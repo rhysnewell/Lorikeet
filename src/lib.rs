@@ -15,15 +15,16 @@ pub mod variants;
 pub mod estimation;
 pub mod model;
 pub mod utils;
+pub mod factorization;
 
+extern crate bio;
+extern crate bio_types;
 extern crate linregress;
 extern crate cogset;
 extern crate csv;
 extern crate statrs;
 extern crate kodama;
 extern crate taxonomy;
-extern crate bio;
-extern crate bio_types;
 extern crate ordered_float;
 extern crate seq_io;
 extern crate permutohedron;

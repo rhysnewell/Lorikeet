@@ -502,7 +502,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     predictions
                         .outer_iter().for_each(|row| {
                         unique_ranks.insert(row[0] as i32);
-                        geom_mean_score += row[1].ln();
+                        geom_mean_score += row[2].ln();
                     });
 
                     geom_mean_score = (geom_mean_score / variant_info_all.len() as f32).exp();
@@ -510,7 +510,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     // calculate the geom SD factor https://en.wikipedia.org/wiki/Geometric_standard_deviation
                     predictions.outer_iter().for_each(|row| {
-                        sd_factor += (row[1] / geom_mean_score).ln().powf(2.);
+                        sd_factor += (row[2] / geom_mean_score).ln().powf(2.);
                     });
 
                     sd_factor = (sd_factor / variant_info_all.len() as f32).powf(1. / 2.).exp();
@@ -531,8 +531,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // if so then place into that rank
                     // If not, then prediction could realistically be any available rank
                     variant_info_all.par_iter().enumerate().for_each(|(row, variant_info)| {
-                        let score = predictions[[row, 1]];
-                        if score >= geom_mean_score / sd_factor {
+                        let score = predictions[[row, 2]];
+                        if score >= 0. {
                             let mut prediction_map = prediction_map.lock().unwrap();
                             let mut prediction_count = prediction_count.lock().unwrap();
                             let mut prediction_features = prediction_features.lock().unwrap();
@@ -575,9 +575,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                             let mut ranks = Arc::new(Mutex::new(Vec::new()));
 
-                            // Search for above 10 sd_factors of the geometric mean
+                            // Search for above n sd_factors of the geometric mean
                             basis_vec.iter().enumerate().for_each(|(ind, score)|{
-                               if score >= &(basis_mean * 100. * basis_sd) && unique_ranks.contains(&(ind as i32)){
+                               if score >= &(basis_mean * 6. * basis_sd) && unique_ranks.contains(&(ind as i32)){
                                    let mut ranks = ranks.lock().unwrap();
                                    ranks.push(ind as i32);
                                }

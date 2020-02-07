@@ -3,6 +3,7 @@ use rayon::prelude::*;
 use ndarray_npy::write_npy;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::process;
 
 // Public enum to handle different Array dimensions as return of function
 #[derive(Debug)]
@@ -144,7 +145,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                 } else {
                     let intersection_len = row_variant_set
                         .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
-                    constraint = 1. - ((intersection_len + 1.) /
+                    constraint = ((intersection_len + 1.) /
                         ((row_info.2).0.iter().sum::<f32>() +
                             (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.));
 //                    if constraint > 0. {
@@ -164,10 +165,6 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 //                    distance = 1.;
                     {
 
-                        // Distance will be defined as the mean between jaccard dist
-                        // and dist_f
-//                        let mut corr = 0.;
-//                        let mut w = 0;
                         if (row_info.2).1.len() > 1 {
 
                             // Calculate the log-ratio variance across compositions
@@ -229,7 +226,6 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             col_var = col_var / col_vals.len() as f32;
                             covar = covar / row_vals.len() as f32;
 
-//                            distance = row_var + col_var - 2. * covar;
                             // technically correlation -1 to 1
                             distance = (2. * covar) / (row_var + col_var);
                             // 0 to 2
@@ -240,48 +236,26 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             } else {
                                 distance += constraint
                             }
-
-                            variant_distances.lock().unwrap().index(row_index,
-                                                                    col_index,
-                                                                    n,
-                                                                    distance,
-                                                                    None);
+                            if distance > 2. {
+                                distance = 2.;
+                            }
+                            if distance < 0. {
+                                error!("Negative value encountered {} invalid for NMF", distance)
+                                process::exit(1);
+                            } else {
+                                variant_distances.lock().unwrap().index(row_index,
+                                                                        col_index,
+                                                                        n,
+                                                                        distance,
+                                                                        None);
+                            }
                         } else {
-//                        if vector_mean == 0. {
-//                            // loop through infos, should only happen once
-//                            vector_mean = vector_info_all.par_iter().map(|info_tup|{
-//                                (info_tup.2).1[0]
-//                            }).sum::<f32>() / vector_info_all.len();
-//                        }
-//                            let mut d_kl_a: f32 = 0.;
-//                            let mut d_kl_b: f32 = 0.;
+
                             let row_freq = (row_info.2).1[0];
                             let col_freq = (col_info.2).1[0];
 
                             let row_depth = (row_info.2).0[0];
                             let col_depth = (col_info.2).0[0];
-
-//                        if row_freq == 1. || col_freq == 1. {
-//                            // since the lim x->0 of xln(x) = 0
-//                            d_kl_a = row_freq * (row_freq / col_freq).ln();
-//                            d_kl_b = col_freq * (col_freq / row_freq).ln();
-//                        } else {
-//                            d_kl_a = row_freq * (row_freq / col_freq).ln()
-//                                + (1. - row_freq) * ((1. - row_freq) / (1. - col_freq)).ln();
-//
-//                            d_kl_b = col_freq * (col_freq / row_freq).ln()
-//                                + (1. - col_freq) * ((1. - col_freq) / (1. - row_freq)).ln();
-//                        }
-////                        let intersection_len = (row_variant_set
-////                            .intersection(&col_variant_set).collect::<HashSet<_>>().len()) as f32;
-//
-//
-//                        if d_kl_a < 0. {
-//                            d_kl_a = 0.
-//                        }
-//                        if d_kl_b < 0. {
-//                            d_kl_b = 0.
-//                        }
 
                             distance = ((row_freq / geom_means_var[0] as f32 - col_freq / geom_means_var[0] as f32).powf(2.)
                                 + (row_depth / geom_means_dep[0] as f32 - col_depth / geom_means_dep[0] as f32).powf(2.)).powf(1. / 2.);
@@ -292,11 +266,16 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                                 distance *= constraint
                             }
 
-                            variant_distances.lock().unwrap().index(row_index,
-                                                                    col_index,
-                                                                    n,
-                                                                    distance,
-                                                                    None);
+                            if distance < 0. {
+                                error!("Negative value encountered {} invalid for NMF", distance)
+                                process::exit(1);
+                            } else {
+                                variant_distances.lock().unwrap().index(row_index,
+                                                                        col_index,
+                                                                        n,
+                                                                        distance,
+                                                                        None);
+                            }
                         }
                     }
                 }
