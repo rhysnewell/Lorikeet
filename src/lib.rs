@@ -35,12 +35,12 @@ extern crate tempdir;
 extern crate tempfile;
 extern crate rand;
 extern crate itertools;
-extern crate nalgebra;
 extern crate rayon;
 extern crate permutation;
 #[macro_use]
 extern crate ndarray;
 extern crate ndarray_npy;
+extern crate ndarray_linalg;
 extern crate strum;
 
 #[macro_use]

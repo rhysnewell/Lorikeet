@@ -240,7 +240,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                                 distance = 2.;
                             }
                             if distance < 0. {
-                                error!("Negative value encountered {} invalid for NMF", distance)
+                                error!("Negative value encountered {} invalid for NMF", distance);
                                 process::exit(1);
                             } else {
                                 variant_distances.lock().unwrap().index(row_index,
@@ -267,7 +267,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             }
 
                             if distance < 0. {
-                                error!("Negative value encountered {} invalid for NMF", distance)
+                                error!("Negative value encountered {} invalid for NMF", distance);
                                 process::exit(1);
                             } else {
                                 variant_distances.lock().unwrap().index(row_index,
