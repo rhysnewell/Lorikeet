@@ -3,33 +3,31 @@ pub mod pileup_structs;
 pub mod pileup_matrix;
 pub mod mosdepth_genome_coverage_estimators;
 pub mod genomes_and_contigs;
-pub mod bam_generator;
-pub mod filter;
+pub mod readers;
 pub mod external_command_checker;
-pub mod bwa_index_maintenance;
 pub mod coverage_takers;
-pub mod mapping_parameters;
 pub mod codon_structs;
-pub mod mapping_index_maintenance;
 pub mod coverage_printer;
-pub mod shard_bam_reader;
 pub mod genome_exclusion;
 pub mod haplotypes_and_genotypes;
 pub mod matrix_handling;
 pub mod variants;
+pub mod estimation;
+pub mod model;
+pub mod utils;
+pub mod factorization;
 
-extern crate linregress;
-extern crate cogset;
-extern crate kodama;
-extern crate taxonomy;
 extern crate bio;
 extern crate bio_types;
+extern crate linregress;
+extern crate cogset;
+extern crate csv;
+extern crate statrs;
+extern crate kodama;
+extern crate taxonomy;
+extern crate ordered_float;
 extern crate seq_io;
 extern crate permutohedron;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate strum_macros;
 extern crate rust_htslib;
 extern crate env_logger;
 extern crate nix;
@@ -40,8 +38,27 @@ extern crate itertools;
 extern crate nalgebra;
 extern crate rayon;
 extern crate permutation;
+#[macro_use]
 extern crate ndarray;
 extern crate ndarray_npy;
+extern crate strum;
+
+#[macro_use]
+extern crate approx;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate strum_macros;
+#[macro_use]
+extern crate derive_builder;
+#[macro_use]
+extern crate serde_derive;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate derive_new;
+#[macro_use]
+extern crate pest_derive;
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;

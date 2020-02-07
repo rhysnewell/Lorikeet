@@ -1,9 +1,14 @@
 ---
-sudo: false
+sudo: required
 language: rust
 rust:
   - stable
   - beta
+
+addons:
+  apt:
+    packages:
+      - libssl-dev
 
 install:
   # Modified from https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/use-conda-with-travis-ci.html
@@ -30,13 +35,29 @@ install:
 
 cache: cargo
 
+before_cache: |
+  if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
+    cargo install cargo-tarpaulin
+  fi
+
 os:
   - linux
 
 env:
   - ARCH=x86_64
 
-build: false
-
-test_script:
+script:
+  - cargo clean
+  - cargo build
   - cargo test
+
+after_success: |
+  if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
+    # Uncomment the following line for coveralls.io
+    # cargo tarpaulin --ciserver travis-ci --coveralls $TRAVIS_JOB_ID
+
+   Uncomment the following two lines create and upload a report for codecov.io
+   cargo tarpaulin --out Xml
+   CODECOV_TOKEN="0a2d25a8-b6c0-43c5-a3c4-6f5b0bb8a4d4"
+   bash <(curl -s https://codecov.io/bash)
+  fi

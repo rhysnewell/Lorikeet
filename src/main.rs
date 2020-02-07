@@ -1,9 +1,8 @@
 extern crate lorikeet;
-use lorikeet::bam_generator::*;
-use lorikeet::filter;
+use lorikeet::readers::*;
+use lorikeet::readers::{bam_generator::*, mapping_parameters::*, shard_bam_reader::*, filter};
+use lorikeet::pileups;
 use lorikeet::external_command_checker;
-use lorikeet::mapping_parameters::*;
-use lorikeet::shard_bam_reader::*;
 use lorikeet::FlagFilter;
 use lorikeet::genome_exclusion::*;
 use lorikeet::mosdepth_genome_coverage_estimators::*;
@@ -679,7 +678,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -696,7 +695,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(m,
                                mode,
@@ -704,7 +703,7 @@ fn main(){
                                bam_readers,
                                filter_params.flag_filters);
                 } else {
-                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                mode,
@@ -784,7 +783,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -801,7 +800,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(m,
                                        mode,
@@ -809,7 +808,7 @@ fn main(){
                                        bam_readers,
                                        filter_params.flag_filters);
                 } else {
-                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                        mode,
@@ -889,7 +888,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -906,7 +905,7 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(m,
                                mode,
@@ -914,7 +913,7 @@ fn main(){
                                bam_readers,
                                filter_params.flag_filters);
                 } else {
-                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                mode,
@@ -994,7 +993,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -1011,14 +1010,14 @@ fn main(){
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-                    let bam_readers = lorikeet::shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
                         bam_files, sort_threads, &NoExclusionGenomeFilter{});
                     run_pileup(m, mode,
                                &mut estimators,
                                bam_readers,
                                filter_params.flag_filters);
                 } else {
-                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                        mode,
@@ -1101,7 +1100,7 @@ fn main(){
             if m.is_present("bam-file") {
                 let bam_files: Vec<&str> = m.values_of("bam-file").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = lorikeet::bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -1116,7 +1115,7 @@ fn main(){
                                bam_readers,
                                filter_params.flag_filters);
                 } else {
-                    let bam_readers = lorikeet::bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                mode,
@@ -1233,9 +1232,9 @@ fn setup_mapping_index(
     reference_wise_params: &SingleReferenceMappingParameters,
     m: &clap::ArgMatches,
     mapping_program: MappingProgram,
-) -> Option<Box<dyn lorikeet::mapping_index_maintenance::MappingIndex>> {
+) -> Option<Box<dyn mapping_index_maintenance::MappingIndex>> {
     match mapping_program {
-        MappingProgram::BWA_MEM => Some(lorikeet::mapping_index_maintenance::generate_bwa_index(
+        MappingProgram::BWA_MEM => Some(mapping_index_maintenance::generate_bwa_index(
             reference_wise_params.reference,
             None
         )),
@@ -1252,7 +1251,7 @@ fn setup_mapping_index(
                 }
                 None
             } else {
-                Some(lorikeet::mapping_index_maintenance::generate_minimap2_index(
+                Some(mapping_index_maintenance::generate_minimap2_index(
                     reference_wise_params.reference,
                     Some(m.value_of("minimap2-params").unwrap_or("")),
                     mapping_program,
@@ -1550,7 +1549,7 @@ fn get_sharded_bam_readers<'a, 'b, T>(
 
         for p in reference_wise_params {
             bam_readers.push(
-                lorikeet::shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
+                shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
                     mapping_program,
                     match index {
                         Some(ref index) => index.index_path(),
@@ -1631,7 +1630,7 @@ fn get_streamed_bam_readers<'a>(
 
         for p in reference_wise_params {
             bam_readers.push(
-                lorikeet::bam_generator::generate_named_bam_readers_from_reads(
+                bam_generator::generate_named_bam_readers_from_reads(
                     mapping_program,
                     match index {
                         Some(ref index) => index.index_path(),
@@ -1761,7 +1760,7 @@ fn get_streamed_filtered_bam_readers(
 
         for p in reference_wise_params {
             bam_readers.push(
-                lorikeet::bam_generator::generate_filtered_named_bam_readers_from_reads(
+                bam_generator::generate_filtered_named_bam_readers_from_reads(
                     mapping_program,
                     match index {
                         Some(ref index) => index.index_path(),
@@ -1818,8 +1817,8 @@ fn generate_faidx(m: &clap::ArgMatches) -> bio::io::fasta::IndexedReader<File> {
 }
 
 fn run_pileup<'a,
-    R: lorikeet::bam_generator::NamedBamReader,
-    T: lorikeet::bam_generator::NamedBamReaderGenerator<R>>(
+    R: bam_generator::NamedBamReader,
+    T: bam_generator::NamedBamReaderGenerator<R>>(
     m: &clap::ArgMatches,
     mode: &str,
     estimators: &mut EstimatorsAndTaker,
@@ -1867,7 +1866,7 @@ fn run_pileup<'a,
 
             info!("Beginning polymorph with {} bam readers and {} threads", bam_readers.len(), threads);
             println!("sample\ttid\tpos\tvariant\treference\tvariant_depth\tdepth\tgenotypes\tvaf_cluster\tgenotype");
-            lorikeet::pileups::pileup_variants(
+            pileups::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -1963,7 +1962,7 @@ fn run_pileup<'a,
             };
 
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
-            lorikeet::pileups::pileup_variants(
+            pileups::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -2011,7 +2010,7 @@ fn run_pileup<'a,
             };
 
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
-            lorikeet::pileups::pileup_variants(
+            pileups::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -2060,7 +2059,7 @@ fn run_pileup<'a,
 
             info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
             println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
-            lorikeet::pileups::pileup_variants(
+            pileups::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -2118,7 +2117,7 @@ fn run_pileup<'a,
 
 
             info!("Beginning polishing with {} bam readers and {} threads", bam_readers.len(), threads);
-            lorikeet::pileups::pileup_variants(
+            pileups::pileup_variants(
                 m,
                 bam_readers,
                 mode,

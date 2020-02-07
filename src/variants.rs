@@ -11,17 +11,12 @@
 //// Variant data type adapted from varlociraptor
 //// Only taken because compiling varlociraptor takes a very long time
 //// Copyright 2016-2019 Johannes Köster, David Lähnemann.
-//#[derive(Debug, Clone, Serialize, Deserialize, EnumString, EnumIter, IntoStaticStr)]
+//#[derive(Debug, Clone, IntoStaticStr)]
 //pub enum VariantType {
-//    #[strum(serialize = "INS")]
 //    Insertion(Option<Range<u32>>),
-//    #[strum(serialize = "DEL")]
 //    Deletion(Option<Range<u32>>),
-//    #[strum(serialize = "SNV")]
 //    SNV,
-//    #[strum(serialize = "MNV")]
 //    MNV,
-//    #[strum(serialize = "REF")]
 //    None, // site with no suggested alternative allele
 //}
 //

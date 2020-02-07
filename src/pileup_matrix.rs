@@ -16,7 +16,7 @@ use std::cmp;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
-use ::{tempfile, finish_command_safely};
+use crate::{tempfile, finish_command_safely};
 use itertools::Itertools;
 
 
@@ -488,37 +488,57 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 sample_names,
                                 100);
 
-                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist + ".npy")
+                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist.clone() + "_predictions.npy")
+                        .expect("Unable to read predictions");
+
+                    let mut basis: Array2<f32> = read_npy(tmp_path_dist + "_basis.npy")
                         .expect("Unable to read predictions");
 
                     tmp_dir.close().expect("Unable to close temp directory");
                     debug!("Predictions {:?}", predictions);
                     let mut unique_ranks = HashSet::new();
-
+                    let mut geom_mean_score = 0.;
+                    // get unique ranks from NMF and geom mean of scores
                     predictions
                         .outer_iter().for_each(|row| {
                         unique_ranks.insert(row[0] as i32);
+                        geom_mean_score += row[2].ln();
                     });
 
-                    debug!("Unique ranks {:?}", unique_ranks);
+                    geom_mean_score = (geom_mean_score / variant_info_all.len() as f32).exp();
+                    let mut sd_factor = 0.;
 
-                    let mut prediction_map = HashMap::new();
-                    let mut prediction_count = HashMap::new();
-                    let mut prediction_features = HashMap::new();
-                    let mut prediction_variants = HashMap::new();
-                    let mut prediction_variants_all = HashMap::new();
+                    // calculate the geom SD factor https://en.wikipedia.org/wiki/Geometric_standard_deviation
+                    predictions.outer_iter().for_each(|row| {
+                        sd_factor += (row[2] / geom_mean_score).ln().powf(2.);
+                    });
+
+                    sd_factor = (sd_factor / variant_info_all.len() as f32).powf(1. / 2.).exp();
+
+
+                    debug!("Unique ranks {:?} geom mean {} sd {}", unique_ranks, geom_mean_score, sd_factor);
+
+                    let mut prediction_map = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_count = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_features = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_variants = Arc::new(Mutex::new(HashMap::new()));
+//                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
 
                     let mut max_cnt = 0;
                     let mut max_strain = 0;
                     let thresh = 1. / unique_ranks.len() as f32;
-                    // check if prediction probability is greater than certain amount
+                    // check if feature score is greater than geom mean score / SD
                     // if so then place into that rank
                     // If not, then prediction could realistically be any available rank
-                    for (row, variant_info) in variant_info_all.iter().enumerate() {
-                        let prob = predictions[[row, 1]];
-                        if prob >= thresh {
-                            let rank = predictions[[row, 0]] as i32;
+                    variant_info_all.par_iter().enumerate().for_each(|(row, variant_info)| {
+                        let score = predictions[[row, 2]];
+                        if score >= 0. {
+                            let mut prediction_map = prediction_map.lock().unwrap();
+                            let mut prediction_count = prediction_count.lock().unwrap();
+                            let mut prediction_features = prediction_features.lock().unwrap();
+                            let mut prediction_variants = prediction_variants.lock().unwrap();
 
+                            let rank = predictions[[row, 0]] as i32;
                             let prediction = prediction_map.entry(rank + 1)
                                 .or_insert(0.);
                             let count = prediction_count.entry(rank + 1)
@@ -539,46 +559,79 @@ impl PileupMatrixFunctions for PileupMatrix{
                             *count += 1.;
                             *prediction += predictions[[row, 1]].ln();
                         } else {
-                            // we add the variant to all strains
-                            let rank = 0;
+                            // we figure out which strains variant could belong to based basis values
+                            let basis_vec = basis.slice(s![row, ..]);
+                            let mut basis_mean: f32 = 0.;
+                            basis_vec.iter()
+                                .for_each(|x| basis_mean += x.ln());
+                            basis_mean = (basis_mean / basis_vec.len() as f32).exp();
 
-                            let prediction = prediction_map.entry(rank)
-                                .or_insert(0.);
-                            let count = prediction_count.entry(rank)
-                                .or_insert(0.);
-                            let variant_tid = prediction_variants_all.entry(rank)
-                                .or_insert(HashMap::new());
+                            let mut basis_sd: f32 = 0.;
+                            basis_vec.iter().for_each(|x| {
+                                basis_sd += (x / basis_mean).ln().powf(2.);
+                            });
 
-                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                            let variant_pos = variant_tid
-                                .entry(*variant_info.3).or_insert(HashMap::new());
+                            basis_sd = (basis_sd / basis_vec.len() as f32).powf(1. / 2.).exp();
 
-                            let variant = variant_pos
-                                .entry(*variant_info.0).or_insert(HashSet::new());
-                            variant.insert(variant_info.1.to_owned());
+                            let mut ranks = Arc::new(Mutex::new(Vec::new()));
+
+                            // Search for above n sd_factors of the geometric mean
+                            basis_vec.iter().enumerate().for_each(|(ind, score)|{
+                               if score >= &(basis_mean * 6. * basis_sd) && unique_ranks.contains(&(ind as i32)){
+                                   let mut ranks = ranks.lock().unwrap();
+                                   ranks.push(ind as i32);
+                               }
+                            });
+                            let ranks = ranks.lock().unwrap();
+                            ranks.par_iter().for_each(|rank|{
+                                let mut prediction_map = prediction_map.lock().unwrap();
+                                let mut prediction_count = prediction_count.lock().unwrap();
+                                let mut prediction_features = prediction_features.lock().unwrap();
+                                let mut prediction_variants = prediction_variants.lock().unwrap();
+                                let rank = rank + 1;
+                                let prediction = prediction_map.entry(rank)
+                                    .or_insert(0.);
+                                let count = prediction_count.entry(rank)
+                                    .or_insert(0.);
+                                let variant_tid = prediction_variants.entry(rank)
+                                    .or_insert(HashMap::new());
+
+                                // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                                let variant_pos = variant_tid
+                                    .entry(*variant_info.3).or_insert(HashMap::new());
+
+                                let variant = variant_pos
+                                    .entry(*variant_info.0).or_insert(HashSet::new());
+                                variant.insert(variant_info.1.to_owned());
 
 
-                            let feature = prediction_features.entry(rank).or_insert(0.);
-                            *feature += predictions[[row, 2]];
+                                let feature = prediction_features.entry(rank).or_insert(0.);
+                                *feature += predictions[[row, 2]];
 
-                            *count += 1.;
-                            *prediction += predictions[[row, 1]].ln();
+                                *count += 1.;
+                                *prediction += predictions[[row, 1]].ln();
+                            });
                         }
-                    }
-
+                    });
+                    let mut prediction_map = prediction_map.lock().unwrap();
+                    let mut prediction_count = prediction_count.lock().unwrap();
+                    let mut prediction_features = prediction_features.lock().unwrap();
+                    let mut prediction_variants = prediction_variants.lock().unwrap();
                     // get the strain with maximum members
                     let mut max_cnt = 0.;
                     let mut max_strain = 0;
-                    prediction_count.iter().map(|(strain, cnt)| {
+                    prediction_count.iter().for_each(|(strain, cnt)| {
                         if &max_cnt <= cnt {
                             max_strain = *strain;
                             max_cnt = *cnt;
                         }
+//                        let score = prediction_map.entry(*strain).or_insert(0.);
+//                        *score = (*score / *cnt as f32).exp()
                     });
 
 
                     let mut prediction_geom = HashMap::new();
-                    prediction_map.iter()
+                    prediction_features.iter()
                         .for_each(|(pred, sum)| {
                             prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
                         });
@@ -587,8 +640,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     println!("Prediction Counts {:?}", prediction_count);
                     println!("Prediction Features {:?}", prediction_features);
 
-                    *pred_variants = prediction_variants;
-                    *pred_variants_all = prediction_variants_all;
+                    *pred_variants = prediction_variants.to_owned();
+//                    *pred_variants_all = HashMap::new();
 
 
                 } else {
@@ -613,7 +666,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
-                for (strain_index, genotype) in pred_variants.iter_mut() {
+                pred_variants.par_iter().for_each(|(strain_index, genotype)|{
                     if strain_index != &0 {
 
                         let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
@@ -623,6 +676,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         // Open haplotype file or create one
                         let mut file_open = File::create(file_path)
                             .expect("No Read or Write Permission in current directory");
+
+                        let mut genotype = genotype.clone();
 
                         // Generate the variant genome
                         for (tid, original_contig) in contigs.iter() {
@@ -687,7 +742,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             writeln!(file_open, ">{}_strain_{}\t#variants_{}",
                                      target_names[tid],
                                      strain_index,
-                                     variations);
+                                     variations).expect("Unable to write to file");
 
 
                             for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
@@ -696,7 +751,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             };
                         }
                     }
-                }
+                });
             }
         }
     }
@@ -844,81 +899,7 @@ fn run_nmf(dist_file_path: &str,
            sample_names: &Vec<String>,
            miter: usize) {
     let sample_count = sample_names.len();
-    let mut converged = false;
-    let mut max_rank = cmp::min(15, n_variants);
-    let mut min_rank = cmp::min(4, n_variants);
-    let mut best_rank = 0;
-    let mut best_rss = 0.;
-    let mut iterations = 0;
-    while !converged {
-        let mut ranks_rss = Arc::new(
-            Mutex::new(vec![0.; max_rank - min_rank]));
-
-        let mut in_threads = threads / (max_rank - min_rank - 1);
-        if in_threads < 1 {
-            in_threads = 1;
-        }
-
-        (min_rank..max_rank).into_par_iter().for_each(|rank| {
-            let cmd_string = format!(
-                "set -e -o pipefail; \
-                     nice nmf.py {} True {} {} {} {} {}",
-                // NMF
-                rank + 1,
-                10,
-                dist_file_path,
-                "tmp_path_cons",
-                sample_count as i32,
-                in_threads, );
-            info!("Queuing cmd_string: {}", cmd_string);
-            let mut python = std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd_string)
-                .stderr(process::Stdio::piped())
-                .stdout(process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash");
-
-            python = finish_command_safely(python, "run_nmf");
-
-            let mut out = String::new();
-            python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-                .expect("Failed to read stdout to string");
-            let mut ranks_rss = ranks_rss.lock().expect("Unable to lock RSS vec");
-            let rss: f32 = match out.trim().parse() {
-                Ok(value) => value,
-                Err(error) => {
-                    debug!("Unable to parse RSS {}", error);
-                    0.
-                }
-            };
-            ranks_rss[rank as usize - min_rank] = rss;
-        });
-
-        let ranks_rss = ranks_rss.lock().expect("unable to lock rss vec");
-
-        debug!("RSS Values {:?}", ranks_rss);
-
-        for (rank, rss) in ranks_rss.iter().enumerate() {
-            if best_rank == 0 && best_rss == 0. && rank == 0 {
-                best_rank = rank + min_rank + 1;
-                best_rss = *rss;
-            } else if &best_rss >= rss {
-                best_rss = *rss;
-                best_rank = rank + min_rank + 1;
-            } else if rss > &best_rss {
-                break
-            }
-        }
-        iterations += max_rank - min_rank;
-        if best_rank < max_rank || iterations >= miter {
-            converged = true;
-        } else {
-            max_rank += 11;
-            min_rank += 11;
-        }
-    }
-
+    let best_rank = 15;
     let cmd_string = format!(
         "set -e -o pipefail; \
                      nmf.py {} False {} {} {} {} {}",
