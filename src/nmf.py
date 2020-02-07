@@ -28,7 +28,7 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                 count += 1
 
         if estimateRanks == 'True':
-            print(mf_fit.fit.rss())
+            print(mf_fit.distance(metric='kl'))
 
         else:
             if count >= 10:
