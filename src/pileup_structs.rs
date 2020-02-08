@@ -11,7 +11,6 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 
 use cogset::{Euclid, Dbscan, BruteScan};
 use kodama::{Method, nnchain, Dendrogram};
-use nalgebra as na;
 use std::path::Path;
 use std::fs::OpenOptions;
 
@@ -1042,42 +1041,6 @@ impl PileupFunctions for PileupStats {
                 // read ids they share
 
                 // total reads
-                let n = variants_in_reads.keys().len();
-
-                let mut variant_distances: na::base::DMatrix<f32>
-                    = na::base::DMatrix::zeros(*total_variants, *total_variants);
-
-                // Set up the distance matrix of size n*n
-                let mut variant_indices = HashMap::new();
-                let mut variant_index = 0usize;
-                let mut read_indices = HashMap::new();
-                let mut read_index = 0usize;
-
-                for (read_id, read_map) in variants_in_reads.iter() {
-                    let row_index = read_indices.entry(read_id).or_insert(read_index);
-                    for (genomic_pos, variant) in read_map.iter() {
-                        if !(variant.contains("R")){
-                            let mut column_index;
-                            if variant_indices.contains_key(&(genomic_pos, variant)) {
-                                column_index = variant_indices
-                                    .entry((genomic_pos, variant))
-                                    .or_insert(variant_index);
-                            } else {
-                                column_index = variant_indices
-                                    .entry((genomic_pos, variant))
-                                    .or_insert(variant_index);
-                                variant_index += 1;
-                            }
-
-                            variant_distances[(*row_index, *column_index)] = 1.;
-                        }
-                    }
-                    read_index += 1;
-                }
-                // Use SVD from ndarray_linalg
-                let svd_array = variant_distances.svd(false, false);
-                // Get the v_t singular vector matrix from SVD
-                let v_t = svd_array.singular_values.into_iter().cloned().collect::<Vec<_>>();
 
             }
         }

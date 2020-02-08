@@ -1,4 +1,4 @@
-use crate::nmf;
+use crate::factorization::nmf;
 use ndarray::Array2;
 
 pub struct NmfStd {
@@ -16,6 +16,6 @@ pub struct NmfStd {
 //
 //        Mixture matrix -- the second matrix factor in standard factorization
 //    """
-    v1: Some(Array2<f32>),
-    h1: Some(Array2<f32>),
+//    v1: Some(Array2<f32>),
+//    h1: Some(Array2<f32>),
 }
