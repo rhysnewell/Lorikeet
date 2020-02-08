@@ -130,10 +130,10 @@ impl RunFactorization for Factorization {
                             // Euclidean distance multiplicative update rules.
                             let h_unwrap = h.unwrap();
                             let w_unwrap = w.unwrap();
-                            *h = Some(h_unwrap * (w_unwrap.t().dot(v)
-                                / w_unwrap.t().dot(w_unwrap.dot(h_unwrap))));
-                            *w = Some(w_unwrap * (v.dot(h_unwrap.t()
-                                / w_unwrap.dot(h_unwrap.dot(h_unwrap.t())))));
+                            *h = Some(h_unwrap * (w_unwrap.t().dot(&v)
+                                / w_unwrap.t().dot(w_unwrap.dot(&h_unwrap))));
+                            *w = Some(w_unwrap * (v.dot(&h_unwrap.t()
+                                / w_unwrap.dot(&h_unwrap.dot(&h_unwrap.t())))));
                         },
                         String::from("divergence") => {
                             // Update basis and mixture matrix based on
@@ -144,12 +144,12 @@ impl RunFactorization for Factorization {
                                 (1, v.shape()[1]), w_unwrap.sum_axis(Axis(0)));
                             *h = Some(h_unwrap * (
                                 w_unwrap.t().dot(
-                                    v / (w_unwrap.dot(
-                                        h_unwrap))))) / h1;
+                                    &(*v / (w_unwrap.dot(
+                                        &h_unwrap))))/ h1));
 
                             let w1 = Array::from_elem(
                                 (v.shape()[0], 1), h_unwrap.sum_axis(Axis(1)));
-                            *w = Some(w_unwrap * ((v / (w_unwrap.dot(h_unwrap))).dot(h_unwrap.t()) / w1));
+                            *w = Some(w_unwrap * ((*v / (w_unwrap.dot(&h_unwrap))).dot(&h_unwrap.t()) / w1));
 
                         },
                         _ => {},
@@ -157,19 +157,19 @@ impl RunFactorization for Factorization {
                 };
 
 
-                let mut best_obj = Arc::new(Mutex::new(0.))
+                let mut best_obj = Arc::new(Mutex::new(0.));
 
-                (0..self.n_run).into_par_iter().for_each(|run|{
-                    seed.initialize(self.v);
+                (0..*n_run).into_par_iter().for_each(|run|{
+                    seed.initialize(v);
                     let (wsvd, hsvd) = seed.get_wh();
-                    *w = Some(*wsvd);
-                    *h = Some(*hsvd);
+                    *w = Some(wsvd);
+                    *h = Some(hsvd);
 
                     let mut p_obj = std::f32::MAX;
                     let mut c_obj = std::f32::MAX;
                     if run == 0 {
                         let mut best_obj = best_obj.lock().unwrap();
-                        best_obj = c_obj;
+                        *best_obj = c_obj;
                     }
                     while is_satisfied(p_obj, c_obj, run) {
                         p_obj = c_obj;
