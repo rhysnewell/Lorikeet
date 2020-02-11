@@ -1,8 +1,8 @@
-use ndarray::{Array2, Array1, ArrayView};
+use ndarray::{Array2, Array1};
 use rayon::prelude::*;
 use ndarray_npy::write_npy;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::process;
 
 // Public enum to handle different Array dimensions as return of function
@@ -145,9 +145,9 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                 } else {
                     let intersection_len = row_variant_set
                         .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
-                    constraint = ((intersection_len + 1.) /
+                    constraint = (intersection_len + 1.) /
                         ((row_info.2).0.iter().sum::<f32>() +
-                            (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.));
+                            (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.);
 //                    if constraint > 0. {
 //                        constraints.lock().unwrap().index(row_index,
 //                                                          col_index,
