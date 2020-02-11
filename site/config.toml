@@ -15,12 +15,12 @@ summaryLength = 30
 
 [[menu.main]]
     name = "Home"
-    url = "/docs/"
+    url = "/"
     weight = 1
 
 [[menu.main]]
     name = "Docs"
-    url = "/docs/docs/"
+    url = "/docs/"
     weight = 2
 
 [params]
