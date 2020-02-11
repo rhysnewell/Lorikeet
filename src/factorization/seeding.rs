@@ -2,44 +2,42 @@ use ndarray::{Array2, Array1, Axis, ArrayView, Ix1};
 use ndarray_linalg::{SVD, convert::*, diagonal::*, Norm};
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
+use std::process;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Seed {
     Nndsvd {
         rank: usize,
-        w: Array2<f32>,
-        h: Array2<f32>,
-    }
+    },
+    None,
 }
 
 impl Seed {
     pub fn new_nndsvd(rank: usize, v: &Array2<f32>) -> Seed {
         Seed::Nndsvd {
             rank,
-            w: Array2::zeros((v.shape()[0], rank)),
-            h: Array2::zeros((rank, v.shape()[1])),
         }
     }
 }
 
 pub trait SeedFunctions {
-    fn initialize(&mut self, v: &Array2<f32>);
-
-    fn get_wh(&mut self) -> (&Array2<f32>, &Array2<f32>);
+    fn initialize(&self, v: &Array2<f32>) -> (Array2<f32>, Array2<f32>);
 }
 
 impl SeedFunctions for Seed {
-    fn initialize(&mut self, v: &Array2<f32>) {
+    fn initialize(&self, v: &Array2<f32>) -> (Array2<f32>, Array2<f32>) {
         match self {
             Seed::Nndsvd {
-                ref mut rank,
-                ref mut w,
-                ref mut h,
+                rank,
             } => {
                 let (u, s, e)
                     = v.svd(true, true).unwrap();
                 let e = e.unwrap();
                 let e = e.t();
                 let u = u.unwrap();
+
+                let mut w = Array2::zeros((v.shape()[0], *rank));
+                let mut h = Array2::zeros((*rank, v.shape()[1]));
 
                 // choose the first singular triplet to be nonnegative
                 let s = s.into_diag();
@@ -84,7 +82,7 @@ impl SeedFunctions for Seed {
                 });
                 let w_guard = w_guard.lock().unwrap();
                 let h_guard = h_guard.lock().unwrap();
-                *w = w_guard.mapv(|x|{
+                w = w_guard.mapv(|x|{
                     if x < 1.0_f32.powf(-11.) {
                         0.
                     } else {
@@ -92,27 +90,17 @@ impl SeedFunctions for Seed {
                     }
                 });
 
-                *h = h_guard.mapv(|x|{
+                h = h_guard.mapv(|x|{
                     if x < 1.0_f32.powf(-11.) {
                         0.
                     } else {
                         x
                     }
                 });
+                return (w, h)
 
-            }
-        }
-    }
-
-    fn get_wh(&mut self) -> (&Array2<f32>, &Array2<f32>) {
-        match self {
-            Seed::Nndsvd {
-                w,
-                h,
-                ..
-            } => {
-                (w, h)
-            }
+            },
+            Seed::None => process::exit(1)
         }
     }
 }
