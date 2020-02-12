@@ -445,32 +445,21 @@ impl RunFactorization for Factorization {
                         let argmax = notnan_row.par_iter().position(|element| element == max).unwrap();
                         idx[col_idx] = argmax;
                     });
-                debug!("idx {:?}", idx);
 
-                let mat1 = Arc::new(Mutex::new(Array::zeros(
-                    (v.shape()[1], v.shape()[1]))));
-                let mat2 = Arc::new(Mutex::new(Array::zeros(
-                    (v.shape()[1], v.shape()[1]))));
-
-                // Recreating np.tile. Not sure if ndarray has implementation of this
-                (0..idx.len()).into_par_iter().for_each(|i|{
-                    let mut mat1 = mat1.lock().unwrap();
-                    let mut mat2 = mat2.lock().unwrap();
-                    mat1.slice_mut(s![i, ..]).assign(&idx);
-                    mat2.slice_mut(s![.., i]).assign(&idx.t());
-                });
+                let mat1 = idx.broadcast((v.shape()[1], v.shape()[1])).unwrap();
+                let mat2 = mat1.t();
 
                 debug!("mat1 {:?}", mat1);
                 debug!("mat2 {:?}", mat2);
 
                 let mut new_cons: Array2<f32> = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
-                let mut mat1 = mat1.lock().unwrap();
-                let mut mat2 = mat2.lock().unwrap();
+//                let mut mat1 = mat1.lock().unwrap();
+//                let mut mat2 = mat2.lock().unwrap();
 
                 Zip::from(&mut new_cons)
-                    .and(&*mat1)
-                    .and(&*mat2)
+                    .and(mat1)
+                    .and(mat2)
                     .apply(|a, b, c| {
                         if b == c {
                             *a = 1.
