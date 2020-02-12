@@ -9,6 +9,7 @@ addons:
   apt:
     packages:
       - libssl-dev
+      - gfortran
 
 install:
   # Modified from https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/use-conda-with-travis-ci.html
