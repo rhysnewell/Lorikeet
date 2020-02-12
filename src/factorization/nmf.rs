@@ -82,6 +82,37 @@ pub enum Factorization {
     }
 }
 
+impl Factorization {
+    pub fn new_nmf(input: Array2<f32>,
+               r: usize,
+               nrun: usize,
+               updatemethod: &str,
+               objectivemethod: &str,
+               connchange: usize,
+               miter: usize,
+               minresiduals: f32) -> Factorization {
+        Factorization::NMF {
+            seed: Seed::new_nndsvd(r, &input),
+            v: input,
+            v1: None,
+            h1: None,
+            w1: None,
+            h: None,
+            w: None,
+            final_obj: 0.,
+            rank: r,
+            n_run: nrun,
+            update: Update::from_str(updatemethod),
+            objective: Objective::from_str(objectivemethod),
+            conn_change: connchange,
+            max_iter: miter,
+            min_residuals: minresiduals,
+            cons: Array::zeros((1, 1)),
+            old_cons: Array::zeros((1, 1)),
+        }
+    }
+}
+
 pub trait RunFactorization {
     fn initialize(&mut self,
                   input: Array2<f32>,
@@ -99,7 +130,8 @@ pub trait RunFactorization {
                     c_obj: &f32,
                     run: &usize,
                     min_residuals: &f32,
-                    max_iter: &usize) -> bool;
+                    max_iter: &usize,
+                    objective: &Objective) -> bool;
 
     fn update_wh(v: &Array2<f32>,
                  w: Option<Array2<f32>>,
@@ -220,22 +252,23 @@ impl RunFactorization for Factorization {
                     let (wsvd, hsvd) = seed.initialize(&v);
                     w_ret = Some(wsvd);
                     h_ret = Some(hsvd);
+//                    debug!("Initialized H: {:?}", h_ret);
 
                     p_obj = std::f32::MAX;
                     c_obj = std::f32::MAX;
-                    if run == 0 {
-                        let mut best_obj = best_obj.lock().unwrap();
-                        *best_obj = c_obj;
-                    }
+
+                    let mut iteration = 0;
                     while Factorization::is_satisfied(&p_obj,
                                             &c_obj,
-                                            &run,
+                                            &iteration,
                                             &min_residuals,
-                                            &max_iter) {
+                                            &max_iter,
+                                            &objective) {
 
                         // to satisfy borrow checker, connectivity has to be checked here
                         match objective {
                             Objective::Conn => {
+
                                 if c_obj >= 1. {
                                     consecutive_conn *= 0.;
                                 } else {
@@ -253,13 +286,15 @@ impl RunFactorization for Factorization {
                             = Factorization::update_wh(&v, w_ret, h_ret, &update);
                         w_ret = w_update;
                         h_ret = h_update;
-                        let (c_obj, new_cons) =
+                        let (new_c_obj, new_cons) =
                             Factorization::objective_update(&v,
                                                           &w_ret,
                                                           &h_ret,
                                                           &cons_ret,
                                                           &old_cons_ret,
                                                             &objective);
+                        c_obj = new_c_obj;
+
                         match new_cons {
                             Some(array) => {
                                 old_cons_ret = cons_ret.clone();
@@ -267,8 +302,16 @@ impl RunFactorization for Factorization {
                             },
                             None => {},
                         }
+//                        println!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
+//                                 c_obj, p_obj);
+                        iteration += 1;
                         // nimfa adjusts small values here tow avoid underflows, but not sure
                         // if necessary
+                    }
+                    if c_obj < *best_obj.lock().unwrap() || run == 0 {
+                        let mut best_obj = best_obj.lock().unwrap();
+                        *best_obj = c_obj;
+
                     }
 
                 };
@@ -284,9 +327,16 @@ impl RunFactorization for Factorization {
                     c_obj: &f32,
                     run: &usize,
                     min_residuals: &f32,
-                    max_iter: &usize) -> bool {
+                    max_iter: &usize,
+                    objective: &Objective) -> bool {
             if *max_iter <= *run {
                 false
+            } else if match objective {
+                Objective::Conn => true,
+                _ => false,
+            }{
+                // connectivity test outside this function
+                true
             } else if run > &0 && (p_obj - c_obj) < *min_residuals {
                 false
             } else if run > &0 && c_obj > p_obj {
@@ -380,33 +430,47 @@ impl RunFactorization for Factorization {
                 // from previous iteration.
                 let w_unwrap = w.as_ref().unwrap();
                 let h_unwrap = h.as_ref().unwrap();
+                debug!("H: {:?}", h_unwrap);
                 let mut idx = Array::zeros(
                     (h_unwrap.shape()[1]));
 
-                h_unwrap.outer_iter().enumerate()
+                h_unwrap.axis_iter(Axis(1)).enumerate()
                     .for_each(|(col_idx, row)|{
-                        let notnan_row: Vec<NotNan<f32>> = row
-                            .iter()
-                            .cloned()
+                        let notnan_row: Vec<NotNan<f32>> = row.iter().cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
                             .collect();
 
-                        let max = notnan_row.iter().max().unwrap();
-                        let argmax = notnan_row.iter().position(|element| element == max).unwrap();
+                        let max = notnan_row.par_iter().max().unwrap();
+                        let argmax = notnan_row.par_iter().position(|element| element == max).unwrap();
                         idx[col_idx] = argmax;
                     });
-                let mat1 = Array::from_elem(
-                    (v.shape()[1], 1), idx.clone());
-                let mat2 = Array::from_elem(
-                    (1, v.shape()[1]), idx.t());
+                debug!("idx {:?}", idx);
+
+                let mat1 = Arc::new(Mutex::new(Array::zeros(
+                    (v.shape()[1], v.shape()[1]))));
+                let mat2 = Arc::new(Mutex::new(Array::zeros(
+                    (v.shape()[1], v.shape()[1]))));
+
+                // Recreating np.tile. Not sure if ndarray has implementation of this
+                (0..idx.len()).into_par_iter().for_each(|i|{
+                    let mut mat1 = mat1.lock().unwrap();
+                    let mut mat2 = mat2.lock().unwrap();
+                    mat1.slice_mut(s![i, ..]).assign(&idx);
+                    mat2.slice_mut(s![.., i]).assign(&idx.t());
+                });
+
+                debug!("mat1 {:?}", mat1);
+                debug!("mat2 {:?}", mat2);
 
                 let mut new_cons: Array2<f32> = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
+                let mut mat1 = mat1.lock().unwrap();
+                let mut mat2 = mat2.lock().unwrap();
 
                 Zip::from(&mut new_cons)
-                    .and(&mat1)
-                    .and(&mat2)
+                    .and(&*mat1)
+                    .and(&*mat2)
                     .apply(|a, b, c| {
                         if b == c {
                             *a = 1.
@@ -424,7 +488,6 @@ impl RunFactorization for Factorization {
                             connectivity_change += 1.;
                         }
                     });
-
                 return (connectivity_change, Some(new_cons))
             },
             Objective::None => {
@@ -560,7 +623,7 @@ impl RunFactorization for Factorization {
                 let mut idx = Array::zeros(
                     (x.shape()[1], 2));
 
-                x.outer_iter().enumerate()
+                x.axis_iter(Axis(1)).enumerate()
                     .for_each(|(col_idx, row)|{
                         let notnan_row: Vec<NotNan<f32>> = row
                             .iter()
@@ -583,7 +646,7 @@ impl RunFactorization for Factorization {
                     .and(&sums)
                     .and(&idx.slice(s![.., 0]))
                     .apply(|prob, sum, e|{
-                        *prob = *e / NotNan::from(sum + 1f32.powf(-5.))
+                        *prob = *e / NotNan::from(sum + 1f32.exp().powf(-5.))
                     });
 
                 stack![Axis(1), idx, prob.insert_axis(Axis(1))]

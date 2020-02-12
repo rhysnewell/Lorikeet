@@ -17,7 +17,9 @@ use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
 use crate::{tempfile, finish_command_safely};
+use crate::factorization::{nmf::*, seeding::*};
 use itertools::Itertools;
+use ordered_float::NotNan;
 
 
 #[derive(Debug)]
@@ -39,8 +41,8 @@ pub enum PileupMatrix {
         clusters_mean: HashMap<i32, f32>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
         variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f32>>>>,
-        pred_variants: HashMap<i32, HashMap<i32, HashMap<i32, HashSet<String>>>>,
-        pred_variants_all: HashMap<i32, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants: HashMap<NotNan<f32>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants_all: HashMap<NotNan<f32>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
 }
 
@@ -441,67 +443,46 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                        });
 //                    });
 
-                    let tmp_dir = TempDir::new("lorikeet_fifo")
-                        .expect("Unable to create temporary directory");
-                    let fifo_path = tmp_dir.path().join("foo.pipe");
-
                     // create new fifo and give read, write and execute rights to the owner.
                     // This is required because we cannot open a Rust stream as a BAM file with
                     // rust-htslib.
-                    unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
-                        .expect(&format!("Error creating named pipe {:?}", fifo_path));
-
-                    let mut distances_file = tempfile::Builder::new()
-                        .prefix("lorikeet-distances")
-                        .tempfile_in(tmp_dir.path())
-                        .expect(&format!("Failed to create distances tempfile"));
-
-                    let mut constraints_file = tempfile::Builder::new()
-                        .prefix("lorikeet-constraints")
-                        .tempfile_in(tmp_dir.path())
-                        .expect(&format!("Failed to create constraints tempfile"));
-
-//                writeln!(distances_file, "{:?}", variant_distances).expect("Unable to write to tempfile");
-                    let tmp_path_dist = distances_file.path().to_str()
-                        .expect("Failed to convert tempfile path to str").to_string();
-
-                    let tmp_path_cons = constraints_file.path().to_str()
-                        .expect("Failed to convert tempfile path to str").to_string();
 
                     // TODO: Move NMF calculation to be within rust. Need extern crate
                     //       None are availble currently 29/01/2020
 
-                    get_condensed_distances(&variant_info_all[..],
+                    let v = get_condensed_distances(&variant_info_all[..],
                                             indels_map,
                                             snps_map,
                                             &geom_mean_var[..],
                                             &geom_mean_dep[..],
-                                            sample_count as i32,
-                                            &tmp_path_dist,
-                                            &tmp_path_cons);
+                                            sample_count as i32);
 
-                    run_nmf(&tmp_path_dist,
-                                 &tmp_dir,
-                                 threads,
-                                 output_prefix,
-                                 variant_info_all.len(),
-                                sample_names,
-                                100);
+                    let v = v.lock().unwrap();
+                    let v = v.get_array2();
 
-                    let mut predictions: Array2<f32> = read_npy(tmp_path_dist.clone() + "_predictions.npy")
-                        .expect("Unable to read predictions");
+                    let mut nmf = Factorization::new_nmf(
+                                                     v,
+                                                     15,
+                                                     1,
+                                                     "euclidean",
+                                                     "conn",
+                                                     30,
+                                                     200,
+                                                     1f32.exp().powf(-10.));
 
-                    let mut basis: Array2<f32> = read_npy(tmp_path_dist + "_basis.npy")
-                        .expect("Unable to read predictions");
+                    nmf.factorize();
 
-                    tmp_dir.close().expect("Unable to close temp directory");
+                    let mut predictions = nmf.predict("samples");
+
+                    let mut basis = nmf.basis();
+
                     debug!("Predictions {:?}", predictions);
                     let mut unique_ranks = HashSet::new();
                     let mut geom_mean_score = 0.;
                     // get unique ranks from NMF and geom mean of scores
                     predictions
                         .outer_iter().for_each(|row| {
-                        unique_ranks.insert(row[0] as i32);
+                        unique_ranks.insert(row[1]);
                         geom_mean_score += row[2].ln();
                     });
 
@@ -532,18 +513,18 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // If not, then prediction could realistically be any available rank
                     variant_info_all.par_iter().enumerate().for_each(|(row, variant_info)| {
                         let score = predictions[[row, 2]];
-                        if score >= 0. {
+                        if score >= NotNan::from(0.) {
                             let mut prediction_map = prediction_map.lock().unwrap();
                             let mut prediction_count = prediction_count.lock().unwrap();
                             let mut prediction_features = prediction_features.lock().unwrap();
                             let mut prediction_variants = prediction_variants.lock().unwrap();
 
-                            let rank = predictions[[row, 0]] as i32;
-                            let prediction = prediction_map.entry(rank + 1)
+                            let rank = predictions[[row, 1]] + NotNan::from(1.);
+                            let prediction = prediction_map.entry(rank)
                                 .or_insert(0.);
-                            let count = prediction_count.entry(rank + 1)
+                            let count = prediction_count.entry(rank)
                                 .or_insert(0.);
-                            let variant_tid = prediction_variants.entry(rank + 1)
+                            let variant_tid = prediction_variants.entry(rank)
                                 .or_insert(HashMap::new());
 
                             // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
@@ -553,11 +534,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                             variant.insert(variant_info.1.to_owned());
 
 
-                            let feature = prediction_features.entry(rank + 1).or_insert(0.);
+                            let feature = prediction_features.entry(rank)
+                                .or_insert(NotNan::new(0.).unwrap());
                             *feature += predictions[[row, 2]];
 
                             *count += 1.;
-                            *prediction += predictions[[row, 1]].ln();
+                            *prediction += predictions[[row, 0]].ln();
                         } else {
                             // we figure out which strains variant could belong to based basis values
                             let basis_vec = basis.slice(s![row, ..]);
@@ -577,9 +559,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                             // Search for above n sd_factors of the geometric mean
                             basis_vec.iter().enumerate().for_each(|(ind, score)|{
-                               if score >= &(basis_mean * 6. * basis_sd) && unique_ranks.contains(&(ind as i32)){
+                               if score >= &(basis_mean * 6. * basis_sd) && unique_ranks.contains(
+                                   &(NotNan::from(ind as f32))){
                                    let mut ranks = ranks.lock().unwrap();
-                                   ranks.push(ind as i32);
+                                   ranks.push(NotNan::from(ind as f32));
                                }
                             });
                             let ranks = ranks.lock().unwrap();
@@ -588,7 +571,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let mut prediction_count = prediction_count.lock().unwrap();
                                 let mut prediction_features = prediction_features.lock().unwrap();
                                 let mut prediction_variants = prediction_variants.lock().unwrap();
-                                let rank = rank + 1;
+                                let rank = *rank + NotNan::from(1.);
                                 let prediction = prediction_map.entry(rank)
                                     .or_insert(0.);
                                 let count = prediction_count.entry(rank)
@@ -605,11 +588,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 variant.insert(variant_info.1.to_owned());
 
 
-                                let feature = prediction_features.entry(rank).or_insert(0.);
+                                let feature = prediction_features.entry(rank)
+                                    .or_insert(NotNan::new(0.).unwrap());
                                 *feature += predictions[[row, 2]];
 
                                 *count += 1.;
-                                *prediction += predictions[[row, 1]].ln();
+                                *prediction += predictions[[row, 0]].ln();
                             });
                         }
                     });
@@ -619,7 +603,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut prediction_variants = prediction_variants.lock().unwrap();
                     // get the strain with maximum members
                     let mut max_cnt = 0.;
-                    let mut max_strain = 0;
+                    let mut max_strain = NotNan::from(0.);
                     prediction_count.iter().for_each(|(strain, cnt)| {
                         if &max_cnt <= cnt {
                             max_strain = *strain;
@@ -633,7 +617,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut prediction_geom = HashMap::new();
                     prediction_features.iter()
                         .for_each(|(pred, sum)| {
-                            prediction_geom.insert(pred, (sum / prediction_count[pred]).exp());
+                            prediction_geom.insert(pred, (*sum / prediction_count[pred]).exp());
                         });
 
                     println!("Prediction Geom Means {:?}", prediction_geom);
@@ -667,7 +651,7 @@ impl PileupMatrixFunctions for PileupMatrix{
             } => {
 
                 pred_variants.par_iter().for_each(|(strain_index, genotype)|{
-                    if strain_index != &0 {
+                    if *strain_index != NotNan::from(0.) {
 
                         let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
@@ -699,10 +683,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if genotype.contains_key(&tid) {
                                         let mut tid_genotype = genotype.get_mut(&tid).unwrap();
 
-                                        if pred_variants_all.contains_key(&0) {
-                                            if pred_variants_all[&0].contains_key(&tid) {
+                                        if pred_variants_all.contains_key(&NotNan::from(0.)) {
+                                            if pred_variants_all[&NotNan::from(0.)].contains_key(&tid) {
                                                 tid_genotype
-                                                    .extend(pred_variants_all[&0][&tid].clone());
+                                                    .extend(pred_variants_all[&NotNan::from(0.)][&tid].clone());
                                             }
                                         };
 

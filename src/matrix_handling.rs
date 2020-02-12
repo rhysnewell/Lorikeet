@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::process;
 
 // Public enum to handle different Array dimensions as return of function
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VariantMatrix {
     Array1(Array1<f32>),
     Array2(Array2<f32>),
@@ -34,8 +34,20 @@ impl VariantMatrix {
             },
             VariantMatrix::Array2(array2) => {
                 array2[[row_index, col_index]] = distance1;
-                array2[[col_index, row_index]] = distance2.unwrap();
+                array2[[col_index, row_index]] = distance1;
             },
+        }
+    }
+
+    pub fn get_array2(&self) -> Array2<f32> {
+        match self {
+            VariantMatrix::Array2(array) => {
+                return array.clone()
+            },
+            _ => {
+                error!("Method cannot be used on Array1 VariantMatrix");
+                process::exit(1)
+            }
         }
     }
 }
@@ -45,24 +57,12 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                                geom_means_var: &[f64],
                                geom_means_dep: &[f64],
-                               sample_count: i32,
-                               dist_file: &str,
-                               cons_file: &str) {
+                               sample_count: i32) -> Arc<Mutex<VariantMatrix>> {
 
-    let variant_distances = match sample_count {
-        1 => {
-            Arc::new(
+    let variant_distances = Arc::new(
                 Mutex::new(
-                    VariantMatrix::Array1(Array1::<f32>::zeros(
-                        (variant_info_all.len().pow(2) - variant_info_all.len())/2))))
-        },
-        _ => {
-            Arc::new(
-                Mutex::new(
-                    VariantMatrix::Array1(Array1::<f32>::zeros(
-                        (variant_info_all.len().pow(2) - variant_info_all.len())/2))))
-        }
-    };
+                    VariantMatrix::Array2(Array2::<f32>::zeros(
+                        (variant_info_all.len(), variant_info_all.len())))));
 
 //    let mut constraints = Arc::new(Mutex::new(
 //       VariantMatrix::Constraints(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
@@ -104,8 +104,11 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
         (row_index+1..variant_info_all.len())
             .into_par_iter().for_each(|col_index| {
             if row_index == col_index {
-//                let mut variant_distances = variant_distances.lock().unwrap();
-//                variant_distances[[row_index, col_index]] = 0.;
+                variant_distances.lock().unwrap().index(row_index,
+                                                        col_index,
+                                                        n,
+                                                        2.,
+                                                        None);
             } else {
                 let mut col_variant_set = &BTreeSet::new();
                 let col_info = &variant_info_all[col_index];
@@ -283,9 +286,9 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
         });
 //    return variant_distances
     debug!("Distances {:?}", variant_distances);
-    variant_distances.lock().unwrap().write_npy(dist_file);
+//    variant_distances.lock().unwrap().write_npy(dist_file);
 //    constraints.lock().unwrap().write_npy(cons_file);
-//    return constraints
+    return variant_distances
 }
 
 // helper function to get the index of condensed matrix from it square form
