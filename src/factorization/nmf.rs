@@ -2,6 +2,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::prelude::*;
 use rayon::prelude::*;
+use ordered_float::NotNan;
 
 use ndarray::{Array, Array2, Axis, Zip};
 use crate::factorization::{seeding::Seed, nmf_std};
@@ -111,6 +112,20 @@ pub trait RunFactorization {
                         cons: &Array2<f32>,
                         old_cons: &Array2<f32>,
                         objective: &Objective) -> (f32, Option<Array2<f32>>);
+
+    fn basis(&self) -> &Array2<f32>;
+
+    fn target(&self) -> &Array2<f32>;
+
+    fn coef(&self) -> &Array2<f32>;
+
+    fn fitted(&self) -> Array2<f32>;
+
+    fn distance(&self, metric: Objective) -> f32;
+
+    fn residuals(&self) -> Array2<f32>;
+
+    fn predict(&self, what: &str) -> Array2<NotNan<f32>>;
 }
 
 impl RunFactorization for Factorization {
@@ -367,14 +382,19 @@ impl RunFactorization for Factorization {
                 let h_unwrap = h.as_ref().unwrap();
                 let mut idx = Array::zeros(
                     (h_unwrap.shape()[1]));
+
                 h_unwrap.outer_iter().enumerate()
                     .for_each(|(col_idx, row)|{
-                        let argmax = row.iter()
-                            .fold(None,|m,&x|
-                                m.map_or(Some(x), |mv|
-                                    Some(if x > mv {x} else {mv})));
-                        idx[col_idx] = argmax.unwrap();
+                        let notnan_row: Vec<NotNan<f32>> = row
+                            .iter()
+                            .cloned()
+                            .map(NotNan::new)
+                            .filter_map(Result::ok)
+                            .collect();
 
+                        let max = notnan_row.iter().max().unwrap();
+                        let argmax = notnan_row.iter().position(|element| element == max).unwrap();
+                        idx[col_idx] = argmax;
                     });
                 let mat1 = Array::from_elem(
                     (v.shape()[1], 1), idx.clone());
@@ -410,6 +430,165 @@ impl RunFactorization for Factorization {
             Objective::None => {
                 process::exit(1);
             },
+        }
+    }
+
+    fn basis(&self) -> &Array2<f32> {
+        match self {
+            Factorization::NMF {
+                w,
+                ..
+            } => {
+                return w.as_ref().unwrap()
+            }
+        }
+    }
+
+    fn target(&self) -> &Array2<f32> {
+        match self {
+            Factorization::NMF {
+                v,
+                ..
+            } => {
+                return v
+            }
+        }
+    }
+
+    fn coef(&self) -> &Array2<f32> {
+        match self {
+            Factorization::NMF {
+                h,
+                ..
+            } => {
+                return h.as_ref().unwrap()
+            }
+        }
+    }
+
+    fn fitted(&self) -> Array2<f32> {
+        match self {
+            Factorization::NMF {
+                w,
+                h,
+                ..
+            } => {
+                let w_unwrap = w.as_ref().unwrap();
+                let h_unwrap = h.as_ref().unwrap();
+
+                return w_unwrap.dot(h_unwrap)
+            }
+        }
+    }
+
+    fn distance(&self, metric: Objective) -> f32 {
+        match self {
+            Factorization::NMF {
+                v,
+                w,
+                h,
+                ..
+            } => {
+                match metric {
+                    Objective::Fro => {
+                        // Compute squared Frobenius norm of a target matrix and its NMF estimate.
+                        let w_unwrap = w.as_ref().unwrap();
+                        let h_unwrap = h.as_ref().unwrap();
+
+                        let r = v.clone() - w_unwrap.dot(h_unwrap);
+                        return (r.clone() * r).sum()
+                    },
+                    Objective::Div => {
+                        // Compute divergence of target matrix from its NMF estimate.
+                        let w_unwrap = w.as_ref().unwrap();
+                        let h_unwrap = h.as_ref().unwrap();
+
+                        let va = w_unwrap.dot(h_unwrap);
+                        let inner_elop = (v.clone() / va.clone()).mapv(|x| { x.ln() });
+
+                        return ((v.clone() * inner_elop) - v.clone() + va).sum()
+                    },
+                    _ => {
+                        process::exit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    fn residuals(&self) -> Array2<f32> {
+        match self {
+            Factorization::NMF {
+                v,
+                w,
+                h,
+                ..
+            } => {
+                let w_unwrap = w.as_ref().unwrap();
+                let h_unwrap = h.as_ref().unwrap();
+
+                return v.clone() - w_unwrap.dot(h_unwrap)
+            }
+        }
+    }
+
+    fn predict(&self, what: &str) -> Array2<NotNan<f32>> {
+        // Compute the dominant basis components. The dominant basis component is
+        // computed as the row index for which the entry is the maximum within the column.
+        match self {
+            Factorization::NMF {
+                v,
+                w,
+                h,
+                ..
+            } => {
+                let mut x = Array::zeros((2, 2));
+                match what {
+                    "samples" => {
+                        x = h.as_ref().unwrap().clone();
+                    },
+                    "features" => {
+                        x = w.as_ref().unwrap().clone();
+                    },
+                    _ => {
+                        error!("Invalid option for prediction parameter {}", what);
+                        process::exit(1)
+                    }
+                };
+
+
+                let mut idx = Array::zeros(
+                    (x.shape()[1], 2));
+
+                x.outer_iter().enumerate()
+                    .for_each(|(col_idx, row)|{
+                        let notnan_row: Vec<NotNan<f32>> = row
+                            .iter()
+                            .cloned()
+                            .map(NotNan::new)
+                            .filter_map(Result::ok)
+                            .collect();
+
+                        let max = notnan_row.iter().max().unwrap();
+                        let argmax = notnan_row.iter().position(|element| element == max).unwrap();
+                        idx[[col_idx, 0]] = *max;
+                        idx[[col_idx, 1]] = NotNan::from(argmax as f32);
+                    });
+
+                let sums = x.sum_axis(Axis(0));
+
+                let mut prob = Array::zeros((x.shape()[1]));
+
+                Zip::from(&mut prob)
+                    .and(&sums)
+                    .and(&idx.slice(s![.., 0]))
+                    .apply(|prob, sum, e|{
+                        *prob = *e / NotNan::from(sum + 1f32.powf(-5.))
+                    });
+
+                stack![Axis(1), idx, prob.insert_axis(Axis(1))]
+
+            }
         }
     }
 }
