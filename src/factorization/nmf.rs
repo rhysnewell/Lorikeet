@@ -5,6 +5,7 @@ use rayon::prelude::*;
 use ordered_float::NotNan;
 
 use ndarray::{Array, Array2, Axis, Zip};
+use ndarray::prelude::*;
 use crate::factorization::{seeding::Seed, nmf_std};
 use factorization::seeding::SeedFunctions;
 use std::process;
@@ -302,8 +303,8 @@ impl RunFactorization for Factorization {
                             },
                             None => {},
                         }
-//                        println!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
-//                                 c_obj, p_obj);
+                        debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
+                                 c_obj, p_obj);
                         iteration += 1;
                         // nimfa adjusts small values here tow avoid underflows, but not sure
                         // if necessary
@@ -311,9 +312,7 @@ impl RunFactorization for Factorization {
                     if c_obj < *best_obj.lock().unwrap() || run == 0 {
                         let mut best_obj = best_obj.lock().unwrap();
                         *best_obj = c_obj;
-
                     }
-
                 };
                 *w = w_ret;
                 *h = h_ret;
@@ -430,27 +429,24 @@ impl RunFactorization for Factorization {
                 // from previous iteration.
                 let w_unwrap = w.as_ref().unwrap();
                 let h_unwrap = h.as_ref().unwrap();
-                debug!("H: {:?}", h_unwrap);
-                let mut idx = Array::zeros(
-                    (h_unwrap.shape()[1]));
+                let mut idx = Arc::new(Mutex::new(Array1::<usize>::zeros(
+                    (h_unwrap.shape()[1]))));
 
-                h_unwrap.axis_iter(Axis(1)).enumerate()
+                h_unwrap.axis_iter(Axis(1)).into_par_iter().enumerate()
                     .for_each(|(col_idx, row)|{
-                        let notnan_row: Vec<NotNan<f32>> = row.iter().cloned()
+                        let notnan_row: Vec<NotNan<f32>> = row.into_par_iter().cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
                             .collect();
 
                         let max = notnan_row.par_iter().max().unwrap();
                         let argmax = notnan_row.par_iter().position(|element| element == max).unwrap();
+                        let mut idx = idx.lock().unwrap();
                         idx[col_idx] = argmax;
                     });
-
+                let mut idx = idx.lock().unwrap();
                 let mat1 = idx.broadcast((v.shape()[1], v.shape()[1])).unwrap();
                 let mat2 = mat1.t();
-
-                debug!("mat1 {:?}", mat1);
-                debug!("mat2 {:?}", mat2);
 
                 let mut new_cons: Array2<f32> = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
@@ -460,7 +456,7 @@ impl RunFactorization for Factorization {
                 Zip::from(&mut new_cons)
                     .and(mat1)
                     .and(mat2)
-                    .apply(|a, b, c| {
+                    .par_apply(|a, b, c| {
                         if b == c {
                             *a = 1.
                         } else {
@@ -469,14 +465,16 @@ impl RunFactorization for Factorization {
                     });
 
 
-                let mut connectivity_change = 0.;
+                let connectivity_change = Arc::new(Mutex::new(0.));
                 Zip::from(&mut new_cons)
                     .and(cons)
-                    .apply(|a, b| {
+                    .par_apply(|a, b| {
                         if a != b {
-                            connectivity_change += 1.;
+                            let mut connectivity_change = connectivity_change.lock().unwrap();
+                            *connectivity_change += 1.;
                         }
                     });
+                let connectivity_change = connectivity_change.lock().unwrap().clone();
                 return (connectivity_change, Some(new_cons))
             },
             Objective::None => {
