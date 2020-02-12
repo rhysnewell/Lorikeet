@@ -41,6 +41,7 @@ impl SeedFunctions for Seed {
 
                 // choose the first singular triplet to be nonnegative
                 let s = s.into_diag();
+                debug!("S: {:?}", s);
                 w.slice_mut(s![.., 0]).assign(
                     &(s[0].powf(1. / 2.) * u.slice(s![.., 0]).mapv(|x| x.abs())));
                 h.slice_mut(s![0, ..]).assign(
@@ -64,6 +65,7 @@ impl SeedFunctions for Seed {
                     let n_vvn = vvn.norm();
                     let termp = n_uup * n_vvp;
                     let termn = n_uun * n_vvn;
+
                     if termp >= termn {
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
@@ -75,28 +77,32 @@ impl SeedFunctions for Seed {
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
                         w_guard.slice_mut(s![.., i]).assign(
-                            &((s[i] * termp).powf(1. / 2.) / (uun.mapv(|x| x * n_uun))));
+                            &((s[i] * termn).powf(1. / 2.) / (uun.mapv(|x| x * n_uun))));
                         h_guard.slice_mut(s![i, ..]).assign(
-                            &((s[i] * termp).powf(1. / 2.) / (vvn.t().mapv(|x| x * n_vvn))));;
+                            &((s[i] * termn).powf(1. / 2.) / (vvn.t().mapv(|x| x * n_vvn))));;
                     }
                 });
                 let w_guard = w_guard.lock().unwrap();
                 let h_guard = h_guard.lock().unwrap();
-                w = w_guard.mapv(|x|{
-                    if x < 1.0_f32.powf(-11.) {
+
+
+                let w = w_guard.mapv(|x|{
+                    if x < 1f32.exp().powf(-11.) {
                         0.
                     } else {
                         x
                     }
                 });
 
-                h = h_guard.mapv(|x|{
-                    if x < 1.0_f32.powf(-11.) {
+                let h = h_guard.mapv(|x|{
+                    if x < 1f32.exp().powf(-11.) {
                         0.
                     } else {
                         x
                     }
                 });
+
+                debug!("Threshold {}", 1f32.exp().powf(-11.));
                 return (w, h)
 
             },
@@ -107,7 +113,7 @@ impl SeedFunctions for Seed {
 
 fn pos(matrix: &ArrayView<f32, Ix1>) -> Array1<f32> {
     matrix.mapv(|x| {
-        if x > 0. {
+        if x >= 0. {
             1.
         } else {
             0.
@@ -122,5 +128,11 @@ fn neg(matrix: &ArrayView<f32, Ix1>) -> Array1<f32> {
         } else {
             0.
         }
-    }) * matrix
+    }) * matrix.mapv(|x| {
+        if x != 0. {
+            -x
+        } else {
+            x
+        }
+    })
 }

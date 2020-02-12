@@ -25,6 +25,7 @@ extern crate csv;
 extern crate statrs;
 extern crate kodama;
 extern crate taxonomy;
+extern crate openblas_src;
 extern crate ordered_float;
 extern crate seq_io;
 extern crate permutohedron;
