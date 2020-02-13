@@ -7,9 +7,7 @@ use std::io::prelude::*;
 use rayon::prelude::*;
 use ndarray::{Array2};
 use ndarray_npy::read_npy;
-use kodama::{Dendrogram};
 use std::sync::{Arc, Mutex};
-use haplotypes_and_genotypes::*;
 use std::fs::File;
 use std::process;
 use std::cmp;
@@ -36,7 +34,6 @@ pub enum PileupMatrix {
         target_lengths: HashMap<i32, f32>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
-        dendrogram: Dendrogram<f32>,
         clusters: HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>,
         clusters_mean: HashMap<i32, f32>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
@@ -60,7 +57,6 @@ impl PileupMatrix {
             target_lengths: HashMap::new(),
             sample_names: vec!(),
             kfrequencies: BTreeMap::new(),
-            dendrogram: Dendrogram::new(0),
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
             variant_counts: HashMap::new(),
@@ -76,11 +72,6 @@ pub trait PileupMatrixFunctions {
 
     fn add_sample(&mut self, sample_name: String);
 
-    fn add_kmers(&mut self,
-                 tid: i32,
-                 number_of_contigs: usize,
-                 k_freq: BTreeMap<Vec<u8>, usize>);
-
     fn add_contig(&mut self,
                   pileup_stats: PileupStats,
                   sample_count: usize,
@@ -92,11 +83,8 @@ pub trait PileupMatrixFunctions {
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
 
-    fn print_matrix(&self);
-
     fn print_variant_stats(&self, output_prefix: &str);
 
-    fn print_kmers(&self, output_prefix: &str, kmer_size: &usize);
 
 }
 
@@ -137,25 +125,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
                 sample_names.push(sample_name);
-            }
-        }
-    }
-
-    fn add_kmers(&mut self, tid: i32, number_of_contigs: usize, k_freq: BTreeMap<Vec<u8>, usize>) {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                ref mut kfrequencies,
-                target_lengths,
-                ..
-            } => {
-                if !target_lengths.contains_key(&tid) {
-                    let contig_order_id = tid as usize;
-                    for (tet, count) in k_freq.iter() {
-                        let count_vec = kfrequencies.entry(tet.to_vec())
-                                                    .or_insert(vec![0; number_of_contigs]);
-                        count_vec[contig_order_id] = *count;
-                    }
-                }
             }
         }
     }
@@ -443,13 +412,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                        });
 //                    });
 
-                    // create new fifo and give read, write and execute rights to the owner.
-                    // This is required because we cannot open a Rust stream as a BAM file with
-                    // rust-htslib.
-
-                    // TODO: Move NMF calculation to be within rust. Need extern crate
-                    //       None are availble currently 29/01/2020
-
+                    // Generate distance or covariance matrix and pass that NMF functions
                     let v = get_condensed_distances(&variant_info_all[..],
                                             indels_map,
                                             snps_map,
@@ -620,9 +583,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                             prediction_geom.insert(pred, (*sum / prediction_count[pred]).exp());
                         });
 
-                    println!("Prediction Geom Means {:?}", prediction_geom);
-                    println!("Prediction Counts {:?}", prediction_count);
-                    println!("Prediction Features {:?}", prediction_features);
+                    debug!("Prediction Geom Means {:?}", prediction_geom);
+                    debug!("Prediction Counts {:?}", prediction_count);
+                    debug!("Prediction Features {:?}", prediction_features);
 
                     *pred_variants = prediction_variants.to_owned();
 //                    *pred_variants_all = HashMap::new();
@@ -740,30 +703,6 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn print_matrix(&self) {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                variants,
-                target_names,
-                sample_names,
-                ..
-            } => {
-
-                for (tid, contig_name) in target_names.iter() {
-                    for (pos, variant_map) in variants[tid].iter() {
-                        for (variant, variant_depths) in variant_map.iter() {
-                            print!("{}\t{}", contig_name, pos);
-                            for sample_depths in variant_depths.iter(){
-                                print!("\t{}", sample_depths.0/sample_depths.1);
-                            }
-                            print!("\n");
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn print_variant_stats(&self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
@@ -842,71 +781,4 @@ impl PileupMatrixFunctions for PileupMatrix{
             }
         }
     }
-
-    fn print_kmers(&self, output_prefix: &str, kmer_size: &usize) {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                kfrequencies,
-                target_names,
-                ..
-            } => {
-                let file_name = output_prefix.to_string() + &"_".to_owned()
-                                + &kmer_size.clone().to_string() + &"mer_counts".to_owned()
-                                + &".tsv".to_owned();
-                let file_path = Path::new(&file_name);
-                let mut file_open = match File::create(file_path) {
-                    Ok(fasta) => fasta,
-                    Err(e) => {
-                        println!("Cannot create file {:?}", e);
-                        std::process::exit(1)
-                    },
-                };
-                for (tid, name) in target_names.iter() {
-                    write!(file_open, "{}\t",
-                           name).unwrap();
-                    for (_kmer, counts) in kfrequencies.iter(){
-                        write!(file_open, "{}\t", counts[*tid as usize]).unwrap();
-                    }
-                    write!(file_open, "\n").unwrap();
-                }
-            }
-        }
-    }
-}
-
-
-fn run_nmf(dist_file_path: &str,
-           tmp_dir: &TempDir,
-           threads: usize,
-           output_prefix: &str,
-           n_variants: usize,
-           sample_names: &Vec<String>,
-           miter: usize) {
-    let sample_count = sample_names.len();
-    let best_rank = 15;
-    let cmd_string = format!(
-        "set -e -o pipefail; \
-                     nmf.py {} False {} {} {} {} {}",
-        // NMF
-        best_rank,
-        30,
-        dist_file_path,
-        "tmp_path_cons",
-        sample_count as i32,
-        threads);
-    info!("Queuing cmd_string: {}", cmd_string);
-    let mut python = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&cmd_string)
-        .stderr(process::Stdio::piped())
-        .stdout(process::Stdio::piped())
-        .spawn()
-        .expect("Unable to execute bash");
-
-    python = finish_command_safely(python, "run_nmf");
-    let mut out = String::new();
-    python.stdout.expect("Failed to grab stdout from NMF").read_to_string(&mut out)
-        .expect("Failed to read stdout to string");
-    println!("{}", sample_names[0]);
-    println!("{}", out);
 }
