@@ -430,12 +430,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                      "euclidean",
                                                      "conn",
                                                      30,
-                                                     200,
-                                                     1f32.exp().powf(-10.));
+                                                     1000,
+                                                     1e-5);
 
                     nmf.factorize();
 
-                    info!("EVAR: {}", nmf.evar());
+                    info!("EVAR: {} RSS: {}", nmf.evar(), nmf.rss());
 
                     let mut predictions = nmf.predict("samples");
 

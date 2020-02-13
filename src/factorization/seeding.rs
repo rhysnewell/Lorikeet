@@ -40,12 +40,18 @@ impl SeedFunctions for Seed {
                 let mut h = Array2::zeros((*rank, v.shape()[1]));
 
                 // choose the first singular triplet to be nonnegative
-                let s = s.into_diag();
+//                let s = s.into_diag();
                 debug!("S: {:?}", s);
+                let mut u_slice = u.slice(s![.., 0]).to_owned();
+                u_slice.par_mapv_inplace(|x| x.abs());
+                let mut e_slice = e.slice(s![.., 0]).to_owned();
+                e_slice = e_slice.t().to_owned();
+                e_slice.par_mapv_inplace(|x| x.abs());
+
                 w.slice_mut(s![.., 0]).assign(
-                    &(s[0].powf(1. / 2.) * u.slice(s![.., 0]).mapv(|x| x.abs())));
+                    &(s[0].powf(1. / 2.) * u_slice));
                 h.slice_mut(s![0, ..]).assign(
-                    &(s[0].powf(1. / 2.) * e.slice(s![.., 0]).t().mapv(|x| x.abs())));
+                    &(s[0].powf(1. / 2.) * e_slice));
 
                 // generate mutex guards around w and h
                 let w_guard = Arc::new(Mutex::new(w.clone()));
@@ -54,7 +60,6 @@ impl SeedFunctions for Seed {
 
                 // Update other factors based on associated svd factor
                 (1..*rank).into_par_iter().for_each(|i|{
-                    debug!("Inside Loop");
                     let uu = u.slice(s![.., i]).to_owned();
                     let vv = e.slice(s![.., i]).to_owned();
                     let mut uup = pos(&uu);
@@ -96,10 +101,9 @@ impl SeedFunctions for Seed {
                 });
                 let mut w_guard = w_guard.lock().unwrap();
                 let mut h_guard = h_guard.lock().unwrap();
-                debug!("outside loop");
 
                 w_guard.par_mapv_inplace(|x|{
-                    if x < 1f32.exp().powf(-11.) {
+                    if x < 1e-11 {
                         0.
                     } else {
                         x
@@ -107,7 +111,7 @@ impl SeedFunctions for Seed {
                 });
 
                 h_guard.par_mapv_inplace(|x|{
-                    if x < 1f32.exp().powf(-11.) {
+                    if x < 1e-11 {
                         0.
                     } else {
                         x
@@ -117,7 +121,8 @@ impl SeedFunctions for Seed {
                 let w = w_guard.clone();
                 let h = h_guard.clone();
 
-                debug!("Threshold {}", 1f32.exp().powf(-11.));
+                debug!("H: {:?}", h);
+                debug!("W: {:?}", w);
                 return (w, h)
 
             },
@@ -140,6 +145,7 @@ fn pos(matrix: &Array1<f32>) -> Array1<f32> {
 
 fn neg(matrix: &Array1<f32>) -> Array1<f32> {
     let mut neg_mat = matrix.to_owned();
+    let mut inverse = matrix.to_owned();
     neg_mat.par_mapv_inplace(|x| {
         if x < 0. {
             1.
@@ -147,13 +153,13 @@ fn neg(matrix: &Array1<f32>) -> Array1<f32> {
             0.
         }
     });
-    neg_mat * -matrix
 
-//        matrix.mapv(|x| {
-//        if x != 0. {
-//            -x
-//        } else {
-//            x
-//        }
-//    })
+    inverse.par_mapv_inplace(|x| {
+        if x != 0. {
+            -x
+        } else {
+            x
+        }
+    });
+    neg_mat * inverse
 }
