@@ -788,11 +788,6 @@ mod tests {
         contig.calc_variants(
             1,
             0.);
-        let genotypes = contig.generate_minimum_genotypes();
-        println!("{:?}", genotypes);
-
-        assert_eq!(genotypes[&0], 4);
-        assert_eq!(genotypes[&1], 4);
     }
 
     #[test]
@@ -850,12 +845,6 @@ mod tests {
         contig.calc_variants(
             1,
             0.);
-        let genotypes = contig.generate_minimum_genotypes();
-        println!("{:?}", genotypes);
-
-        assert_eq!(genotypes[&0], 4);
-        assert_eq!(genotypes[&1], 4);
-        assert_eq!(genotypes[&2], 3);
     }
 
     #[test]
@@ -925,12 +914,5 @@ mod tests {
         contig.calc_variants(
             1,
             0.);
-        let genotypes = contig.generate_minimum_genotypes();
-        println!("{:?}", genotypes);
-
-        assert_eq!(genotypes[&0], 2);
-        assert_eq!(genotypes[&1], 5);
-        assert_eq!(genotypes[&2], 5);
-        assert_eq!(genotypes[&3], 4);
     }
 }
