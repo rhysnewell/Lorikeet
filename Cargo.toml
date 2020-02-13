@@ -1,17 +1,21 @@
 [package]
 
 name = "lorikeet"
-version = "0.2.9"
+version = "0.3.0"
 authors = ["Rhys Newell <r.newell@uq.net.au>"]
 license = "GPL-3.0"
 description = "Strain resolver for metagenomics"
-homepage = "rhysnewell.github.io/Lorikeet/"
+homepage = "https://rhysnewell.github.io/Lorikeet/"
 repository = "https://github.com/rhysnewell/Lorikeet"
 documentation = "https://github.com/rhysnewell/Lorikeet"
 readme = "README.md"
 exclude = [
   "tests/*"
 ]
+
+[features]
+#openblas = ["ndarray-linalg/openblas"]
+#openblas-src = ["ndarray-linalg/openblas-src"]
 
 [dependencies]
 ansi_term = "0.11"
@@ -32,9 +36,12 @@ log = "0.4.*"
 ordered-float = "1"
 ndarray = { version = "0.13.0", features = ["rayon"] }
 ndarray-npy = "0.5.*"
-ndarray-linalg = "0.12"
+ndarray-linalg = { version = "0.12", features = ["static"] }
+#lapack-src = { version = "0.5.0", default-features = false, feature = ["static"] }
+#blas-src = { version = "0.5.0", default-features = false, feature = ["static"] }
+#openblas-src = { version = "0.7.0", feature = ["static"] }
+#cblas = "0.2.0"
 nix = "0.13.*"
-openblas-src = "0.8.0"
 permutation = "0.2.5"
 permutohedron = "0.2.4"
 pest = "2"
