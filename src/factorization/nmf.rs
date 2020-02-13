@@ -471,8 +471,8 @@ impl RunFactorization for Factorization {
                     (h_unwrap.shape()[1]))));
 
                 h_unwrap.axis_iter(Axis(1)).into_par_iter().enumerate()
-                    .for_each(|(col_idx, row)|{
-                        let notnan_row: Vec<NotNan<f32>> = row.into_par_iter().cloned()
+                    .for_each(|(col_idx, col)|{
+                        let notnan_row: Vec<NotNan<f32>> = col.into_par_iter().cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
                             .collect();
@@ -483,8 +483,11 @@ impl RunFactorization for Factorization {
                         idx[col_idx] = argmax;
                     });
                 let mut idx = idx.lock().unwrap();
+                debug!("IDX: {:?}", idx);
+
                 let mat1 = idx.broadcast((v.shape()[1], v.shape()[1])).unwrap();
                 let mat2 = mat1.t();
+
 
                 let mut new_cons: Array2<f32> = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
@@ -592,7 +595,8 @@ impl RunFactorization for Factorization {
                         let h_unwrap = h.as_ref().unwrap();
 
                         let va = w_unwrap.dot(h_unwrap);
-                        let inner_elop = (v.clone() / va.clone()).mapv(|x| { x.ln() });
+                        let mut inner_elop = (v.clone() / va.clone());
+                        inner_elop.par_mapv_inplace(|x| { x.ln() });
 
                         return ((v.clone() * inner_elop) - v.clone() + va).sum()
                     },
@@ -651,7 +655,7 @@ impl RunFactorization for Factorization {
                 x.axis_iter(Axis(1)).enumerate()
                     .for_each(|(col_idx, row)|{
                         let notnan_row: Vec<NotNan<f32>> = row
-                            .into_par_iter()
+                            .iter()
                             .cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
