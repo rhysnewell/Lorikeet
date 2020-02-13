@@ -9,6 +9,7 @@ use ndarray::prelude::*;
 use crate::factorization::{seeding::Seed, nmf_std};
 use factorization::seeding::SeedFunctions;
 use std::process;
+use std::f32;
 
 //use crate::matrix_handling;
 #[derive(Debug, Clone, Copy)]
@@ -137,7 +138,7 @@ pub trait RunFactorization {
     fn update_wh(v: &Array2<f32>,
                  w: Option<Array2<f32>>,
                  h: Option<Array2<f32>>,
-                 update: &Update) -> (Option<Array2<f32>>, Option<Array2<f32>>);
+                 update: &Update) -> (Array2<f32>, Array2<f32>);
 
     fn objective_update(v: &Array2<f32>,
                         w: &Option<Array2<f32>>,
@@ -287,10 +288,29 @@ impl RunFactorization for Factorization {
                         };
 
                         p_obj = c_obj;
-                        let (mut w_update, h_update)
+                        let (mut w_update, mut h_update)
                             = Factorization::update_wh(&v, w_ret, h_ret, &update);
-                        w_ret = w_update;
-                        h_ret = h_update;
+
+
+                        // Adjust small values to prevent numerical underflow
+                        w_update.par_mapv_inplace(|x| {
+                            if x > f32::EPSILON {
+                                x
+                            } else {
+                                f32::EPSILON
+                            }
+                        });
+
+                        h_update.par_mapv_inplace(|x| {
+                            if x > f32::EPSILON {
+                                x
+                            } else {
+                                f32::EPSILON
+                            }
+                        });
+
+                        w_ret = Some(w_update);
+                        h_ret = Some(h_update);
                         let (new_c_obj, new_cons) =
                             Factorization::objective_update(&v,
                                                           &w_ret,
@@ -310,14 +330,15 @@ impl RunFactorization for Factorization {
                         debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
                                  c_obj, p_obj);
                         iteration += 1;
-                        // nimfa adjusts small values here tow avoid underflows, but not sure
-                        // if necessary
+
                     }
                     if c_obj < *best_obj.lock().unwrap() || run == 0 {
                         let mut best_obj = best_obj.lock().unwrap();
                         *best_obj = c_obj;
                     }
                 };
+                debug!("H: {:?}", h_ret);
+                debug!("W: {:?}", w_ret);
                 *w = w_ret;
                 *h = h_ret;
                 *cons = cons_ret;
@@ -349,7 +370,10 @@ impl RunFactorization for Factorization {
             }
         }
 
-    fn update_wh(v: &Array2<f32>, w: Option<Array2<f32>>, h: Option<Array2<f32>>, update: &Update) -> (Option<Array2<f32>>, Option<Array2<f32>>){
+    fn update_wh(v: &Array2<f32>,
+                 w: Option<Array2<f32>>,
+                 h: Option<Array2<f32>>,
+                 update: &Update) -> (Array2<f32>, Array2<f32>){
         match update {
             Update::Euclidean => {
                 // Update basis and mixture matrix based on
@@ -357,17 +381,27 @@ impl RunFactorization for Factorization {
                 let h_unwrap = h.as_ref().unwrap();
                 let w_unwrap = w.as_ref().unwrap();
 
-                let lower_dot: Array2<f32> = w_unwrap.t()
-                    .dot(&w_unwrap
-                        .dot(h_unwrap));
-                let upper_dot: Array2<f32> = w_unwrap.t().dot(v);
+                // Build individual parts of functions
+                // Function 1
+                let w_dot_h = w_unwrap.dot(h_unwrap);
+                let w_t = w_unwrap.t();
 
-                let inner_dot: Array2<f32> = w_unwrap
-                    .dot(&h_unwrap
-                        .dot(&h_unwrap.t()));
+                let w_t_dot_w_dot_h: Array2<f32> = w_t.dot(&w_dot_h);
+                let w_t_dot_v: Array2<f32> = w_t.dot(v);
 
-                let w_return = Some(w_unwrap * &(v.dot(&h_unwrap.t()) / inner_dot));
-                let h_return = Some(h_unwrap * &(upper_dot / lower_dot));
+                let upper_div_lower_a = w_t_dot_v / w_t_dot_w_dot_h ;
+                //
+
+                // Function 2
+                let h_t = h_unwrap.t();
+                let h_dot_h_t = h_unwrap.dot(&h_t);
+                let w_dot_h_dot_h_t = w_unwrap.dot(&h_dot_h_t);
+                let v_dot_h_t = v.dot(&h_t);
+
+                let upper_div_lower_b = v_dot_h_t / w_dot_h_dot_h_t;
+
+                let h_return = h_unwrap * &(upper_div_lower_a);
+                let w_return = w_unwrap * &(upper_div_lower_b);
 
                 return (w_return, h_return)
             },
@@ -391,8 +425,8 @@ impl RunFactorization for Factorization {
                 let inner_elop: Array2<f32> = v.clone() / inner_dot;
                 let w_inner: Array2<f32> = inner_elop.dot(&h_unwrap.t());
 
-                let h_return = Some(h_unwrap * &(h_inner / h1));
-                let w_return = Some(w_unwrap * &(w_inner / w1));
+                let h_return = h_unwrap * &(h_inner / h1);
+                let w_return = w_unwrap * &(w_inner / w1);
                 return (w_return, h_return)
             },
             _ => {
@@ -637,7 +671,7 @@ impl RunFactorization for Factorization {
                     .and(&sums)
                     .and(&idx.slice(s![.., 0]))
                     .par_apply(|prob, sum, e|{
-                        *prob = *e / NotNan::from(sum + 1f32.exp().powf(-5.))
+                        *prob = *e / NotNan::from(sum + 1e-5)
                     });
 
                 stack![Axis(1), idx, prob.insert_axis(Axis(1))]
@@ -665,7 +699,9 @@ impl RunFactorization for Factorization {
                 ..
             } => {
                 let x = self.rss();
-                return 1. - x / (v * v).sum()
+                let var = (v * v).sum();
+                debug!("RSS {} VAR {}", x, var);
+                return 1. - x / var
             }
         }
     }

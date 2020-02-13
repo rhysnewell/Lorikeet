@@ -49,7 +49,8 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                 print('K-L divergence: %5.4f' % mf_fit.distance(metric='kl'))
                 print('Sparseness, W: %5.4f, H: %5.4f' % mf_fit.fit.sparseness())
                 print('Connectivity', mf_fit.fit.connectivity())
-                # print('Scores', mf_fit.fit.score_features())
+                print('W', mf_fit.fit.basis())
+                print('H', mf_fit.fit.coef())
 
                 predictions = mf_fit.fit.predict(prob=True)
                 bins = np.array(predictions[0])[0]
