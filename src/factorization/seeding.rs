@@ -51,8 +51,10 @@ impl SeedFunctions for Seed {
                 let w_guard = Arc::new(Mutex::new(w.clone()));
                 let h_guard = Arc::new(Mutex::new(h.clone()));
 
+
                 // Update other factors based on associated svd factor
                 (1..*rank).into_par_iter().for_each(|i|{
+                    debug!("Inside Loop");
                     let uu = u.slice(s![.., i]).to_owned();
                     let vv = e.slice(s![.., i]).to_owned();
                     let mut uup = pos(&uu);
@@ -94,6 +96,7 @@ impl SeedFunctions for Seed {
                 });
                 let mut w_guard = w_guard.lock().unwrap();
                 let mut h_guard = h_guard.lock().unwrap();
+                debug!("outside loop");
 
                 w_guard.par_mapv_inplace(|x|{
                     if x < 1f32.exp().powf(-11.) {

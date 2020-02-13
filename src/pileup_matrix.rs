@@ -435,6 +435,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     nmf.factorize();
 
+                    info!("EVAR: {}", nmf.evar());
+
                     let mut predictions = nmf.predict("samples");
 
                     let mut basis = nmf.basis();

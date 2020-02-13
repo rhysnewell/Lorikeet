@@ -159,6 +159,10 @@ pub trait RunFactorization {
     fn residuals(&self) -> Array2<f32>;
 
     fn predict(&self, what: &str) -> Array2<NotNan<f32>>;
+
+    fn rss (&self) -> f32;
+
+    fn evar(&self) -> f32;
 }
 
 impl RunFactorization for Factorization {
@@ -613,14 +617,14 @@ impl RunFactorization for Factorization {
                 x.axis_iter(Axis(1)).enumerate()
                     .for_each(|(col_idx, row)|{
                         let notnan_row: Vec<NotNan<f32>> = row
-                            .iter()
+                            .into_par_iter()
                             .cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
                             .collect();
 
-                        let max = notnan_row.iter().max().unwrap();
-                        let argmax = notnan_row.iter().position(|element| element == max).unwrap();
+                        let max = notnan_row.par_iter().max().unwrap();
+                        let argmax = notnan_row.par_iter().position(|element| element == max).unwrap();
                         idx[[col_idx, 0]] = *max;
                         idx[[col_idx, 1]] = NotNan::from(argmax as f32);
                     });
@@ -632,12 +636,36 @@ impl RunFactorization for Factorization {
                 Zip::from(&mut prob)
                     .and(&sums)
                     .and(&idx.slice(s![.., 0]))
-                    .apply(|prob, sum, e|{
+                    .par_apply(|prob, sum, e|{
                         *prob = *e / NotNan::from(sum + 1f32.exp().powf(-5.))
                     });
 
                 stack![Axis(1), idx, prob.insert_axis(Axis(1))]
 
+            }
+        }
+    }
+
+    fn rss(&self) -> f32 {
+        match self {
+            Factorization::NMF {
+                ..
+            } => {
+                let x = self.residuals();
+                let rss = (&x * &x).sum();
+                return rss
+            }
+        }
+    }
+
+    fn evar(&self) -> f32 {
+        match self {
+            Factorization::NMF {
+                v,
+                ..
+            } => {
+                let x = self.rss();
+                return 1. - x / (v * v).sum()
             }
         }
     }
