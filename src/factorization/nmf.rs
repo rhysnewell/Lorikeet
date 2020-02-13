@@ -515,6 +515,7 @@ impl RunFactorization for Factorization {
                             *connectivity_change += 1.;
                         }
                     });
+                debug!("Eqaulity: {}", &new_cons==cons);
                 let connectivity_change = connectivity_change.lock().unwrap().clone();
                 return (connectivity_change, Some(new_cons))
             },

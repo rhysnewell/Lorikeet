@@ -145,7 +145,6 @@ fn pos(matrix: &Array1<f32>) -> Array1<f32> {
 
 fn neg(matrix: &Array1<f32>) -> Array1<f32> {
     let mut neg_mat = matrix.to_owned();
-    let mut inverse = matrix.to_owned();
     neg_mat.par_mapv_inplace(|x| {
         if x < 0. {
             1.
@@ -153,13 +152,27 @@ fn neg(matrix: &Array1<f32>) -> Array1<f32> {
             0.
         }
     });
+    neg_mat * -matrix
+}
 
-    inverse.par_mapv_inplace(|x| {
-        if x != 0. {
-            -x
-        } else {
-            x
-        }
-    });
-    neg_mat * inverse
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array1};
+
+    #[test]
+    fn test_pos_and_neg() {
+        let array = Array1::from_shape_vec((7),
+                                           vec![23., -23., 0., 1., -1., -2., 2.]).unwrap();
+        let pos_ret = pos(&array);
+        let neg_ret = neg(&array);
+
+        assert_eq!(pos_ret,
+                   Array1::from_shape_vec((7),
+                                          vec![23., 0., 0., 1., 0., 0., 2.]).unwrap());
+
+        assert_eq!(neg_ret,
+                   Array1::from_shape_vec((7),
+                                          vec![0., 23., 0., 0., 1., 2., 0.]).unwrap())
+    }
 }
