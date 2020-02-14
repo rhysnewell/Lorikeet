@@ -1,6 +1,5 @@
 use ndarray::{Array2, Array1, Axis, ArrayView, Ix1, prelude::*};
 use ndarray_linalg::{SVD, convert::*, diagonal::*, Norm};
-use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::process;
 
@@ -107,21 +106,21 @@ impl SeedFunctions for Seed {
                 let mut w_guard = w_guard.lock().unwrap();
                 let mut h_guard = h_guard.lock().unwrap();
 
-                w_guard.par_mapv_inplace(|x|{
-                    if x < 1e-11 {
-                        0.
-                    } else {
-                        x
-                    }
-                });
-
-                h_guard.par_mapv_inplace(|x|{
-                    if x < 1e-11 {
-                        0.
-                    } else {
-                        x
-                    }
-                });
+//                w_guard.par_mapv_inplace(|x|{
+//                    if x < 1e-11 {
+//                        0.
+//                    } else {
+//                        x
+//                    }
+//                });
+//
+//                h_guard.par_mapv_inplace(|x|{
+//                    if x < 1e-11 {
+//                        0.
+//                    } else {
+//                        x
+//                    }
+//                });
 
                 let w = w_guard.clone();
                 let h = h_guard.clone();
@@ -164,6 +163,7 @@ fn neg(matrix: &Array1<f32>) -> Array1<f32> {
 mod tests {
     use super::*;
     use ndarray::{Array1};
+    use ndarray_linalg::svd;
 
     #[test]
     fn test_pos_and_neg() {
@@ -179,5 +179,24 @@ mod tests {
         assert_eq!(neg_ret,
                    Array1::from_shape_vec((7),
                                           vec![0., 23., 0., 0., 1., 2., 0.]).unwrap())
+    }
+
+    #[test]
+    fn test_svd() {
+        let v = Array2::from_shape_vec((5, 5),
+                                       vec![0.5, 0.5, 0.5, 0.5, 0.5,
+                                            0.5, 0.5, 0.5, 0.5, 0.5,
+                                            0.5, 0.5, 0.5, 0.5, 0.5,
+                                            0.5, 0.5, 0.5, 0.5, 0.5,
+                                            0.5, 0.5, 0.5, 0.5, 0.5]).unwrap();
+
+        let (u, s, e)
+            = v.svd(true, true).unwrap();
+        println!("U: {:?}", u);
+        println!("S: {:?}", s);
+        println!("E: {:?}", e);
+
+        assert_eq!(1, 2);
+
     }
 }

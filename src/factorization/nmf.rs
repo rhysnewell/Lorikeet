@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::prelude::*;
-use rayon::prelude::*;
+use rayon;
 use ordered_float::NotNan;
 
 use ndarray::{Array, Array2, Axis, Zip};
@@ -10,6 +10,7 @@ use crate::factorization::{seeding::Seed, nmf_std};
 use factorization::seeding::SeedFunctions;
 use std::process;
 use std::f32;
+
 
 //use crate::matrix_handling;
 #[derive(Debug, Clone, Copy)]
@@ -333,6 +334,7 @@ impl RunFactorization for Factorization {
                         iteration += 1;
 
                     }
+                    info!("Matrix Factorization complete after {} iterations", iteration);
                     if c_obj < *best_obj.lock().unwrap() || run == 0 {
                         let mut best_obj = best_obj.lock().unwrap();
                         *best_obj = c_obj;
