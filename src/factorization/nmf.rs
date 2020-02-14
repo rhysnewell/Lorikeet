@@ -68,8 +68,8 @@ pub enum Factorization {
         v1: Option<Array2<f32>>,
         h1: Option<Array2<f32>>,
         w1: Option<Array2<f32>>,
-        h: Option<Array2<f32>>,
-        w: Option<Array2<f32>>,
+        h: Array2<f32>,
+        w: Array2<f32>,
         seed: Seed,
         final_obj: f32,
         rank: usize,
@@ -99,8 +99,8 @@ impl Factorization {
             v1: None,
             h1: None,
             w1: None,
-            h: None,
-            w: None,
+            h: Array2::zeros((1, 1)),
+            w: Array2::zeros((1, 1)),
             final_obj: 0.,
             rank: r,
             n_run: nrun,
@@ -136,13 +136,13 @@ pub trait RunFactorization {
                     objective: &Objective) -> bool;
 
     fn update_wh(v: &Array2<f32>,
-                 w: Option<Array2<f32>>,
-                 h: Option<Array2<f32>>,
+                 w: Array2<f32>,
+                 h: Array2<f32>,
                  update: &Update) -> (Array2<f32>, Array2<f32>);
 
     fn objective_update(v: &Array2<f32>,
-                        w: &Option<Array2<f32>>,
-                        h: &Option<Array2<f32>>,
+                        w: &Array2<f32>,
+                        h: &Array2<f32>,
                         cons: &Array2<f32>,
                         old_cons: &Array2<f32>,
                         objective: &Objective) -> (f32, Option<Array2<f32>>);
@@ -201,8 +201,8 @@ impl RunFactorization for Factorization {
                 *v1 = None;
                 *h1 = None;
                 *w1 = None;
-                *h = None;
-                *w = None;
+                *h = Array2::zeros((1, 1));
+                *w = Array2::zeros((1, 1));
                 *final_obj = 0.;
                 *rank = r;
                 *n_run = nrun;
@@ -246,8 +246,8 @@ impl RunFactorization for Factorization {
                 let mut best_obj = Arc::new(Mutex::new(0.));
                 let mut p_obj = std::f32::MAX;
                 let mut c_obj = std::f32::MAX;
-                let mut w_ret = None;
-                let mut h_ret = None;
+                let mut w_ret = Array2::zeros((1, 1));
+                let mut h_ret = Array2::zeros((1, 1));
                 let mut cons_ret = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
                 let mut old_cons_ret = Array::zeros(
@@ -256,8 +256,8 @@ impl RunFactorization for Factorization {
 
                 for run in (0..*n_run).into_iter() {
                     let (wsvd, hsvd) = seed.initialize(&v);
-                    w_ret = Some(wsvd);
-                    h_ret = Some(hsvd);
+                    w_ret = wsvd;
+                    h_ret = hsvd;
 //                    debug!("Initialized H: {:?}", h_ret);
 
                     p_obj = std::f32::MAX;
@@ -291,26 +291,27 @@ impl RunFactorization for Factorization {
                         let (mut w_update, mut h_update)
                             = Factorization::update_wh(&v, w_ret, h_ret, &update);
 
+                            // This code does not work and it seems to function fine without it
+//                        // Adjust small values to prevent numerical underflow
+//                        w_update.par_mapv_inplace(|x| {
+//                            if x > f32::EPSILON {
+//                                x
+//                            } else {
+//                                x + f32::EPSILON
+//                            }
+//                        });
+//
+//                        h_update.par_mapv_inplace(|x| {
+//                            if x > f32::EPSILON {
+//                                x
+//                            } else {
+//                                x + f32::EPSILON
+//                            }
+//                        });
 
-                        // Adjust small values to prevent numerical underflow
-                        w_update.par_mapv_inplace(|x| {
-                            if x > f32::EPSILON {
-                                x
-                            } else {
-                                f32::EPSILON
-                            }
-                        });
+                        w_ret = w_update;
+                        h_ret = h_update;
 
-                        h_update.par_mapv_inplace(|x| {
-                            if x > f32::EPSILON {
-                                x
-                            } else {
-                                f32::EPSILON
-                            }
-                        });
-
-                        w_ret = Some(w_update);
-                        h_ret = Some(h_update);
                         let (new_c_obj, new_cons) =
                             Factorization::objective_update(&v,
                                                           &w_ret,
@@ -371,63 +372,53 @@ impl RunFactorization for Factorization {
         }
 
     fn update_wh(v: &Array2<f32>,
-                 w: Option<Array2<f32>>,
-                 h: Option<Array2<f32>>,
+                 w: Array2<f32>,
+                 h: Array2<f32>,
                  update: &Update) -> (Array2<f32>, Array2<f32>){
         match update {
             Update::Euclidean => {
                 // Update basis and mixture matrix based on
                 // Euclidean distance multiplicative update rules.
-                let h_unwrap = h.as_ref().unwrap();
-                let w_unwrap = w.as_ref().unwrap();
-
                 // Build individual parts of functions
+                // H is updated first, and then used to update W
                 // Function 1
-                let w_dot_h = w_unwrap.dot(h_unwrap);
-                let w_t = w_unwrap.t();
-
+                let w_dot_h = w.dot(&h);
+                let w_t = w.t();
                 let w_t_dot_w_dot_h: Array2<f32> = w_t.dot(&w_dot_h);
                 let w_t_dot_v: Array2<f32> = w_t.dot(v);
-
                 let upper_div_lower_a = w_t_dot_v / w_t_dot_w_dot_h ;
-                //
+                let h = h * &(upper_div_lower_a);
 
                 // Function 2
-                let h_t = h_unwrap.t();
-                let h_dot_h_t = h_unwrap.dot(&h_t);
-                let w_dot_h_dot_h_t = w_unwrap.dot(&h_dot_h_t);
-                let v_dot_h_t = v.dot(&h_t);
-
+                let h_dot_h_t = h.dot(&h.t());
+                let w_dot_h_dot_h_t = w.dot(&h_dot_h_t);
+                let v_dot_h_t = v.dot(&h.t());
                 let upper_div_lower_b = v_dot_h_t / w_dot_h_dot_h_t;
+                let w = w * upper_div_lower_b;
 
-                let h_return = h_unwrap * &(upper_div_lower_a);
-                let w_return = w_unwrap * &(upper_div_lower_b);
-
-                return (w_return, h_return)
+                return (w, h)
             },
             Update::Divergence => {
                 // Update basis and mixture matrix based on
                 // Divergence distance multiplicative update rules.
-                let h_unwrap = h.as_ref().unwrap();
-                let w_unwrap = w.as_ref().unwrap();
                 let h1: Array2<f32> = Array::from_elem(
-                    (1, v.shape()[1]), w_unwrap.sum_axis(Axis(0))[0]);
+                    (1, v.shape()[1]), w.sum_axis(Axis(0))[0]);
 
-                let inner_dot: Array2<f32> = w_unwrap.dot(h_unwrap);
+                let inner_dot: Array2<f32> = w.dot(&h);
                 let inner_elop: Array2<f32> = v.clone() / inner_dot;
-                let h_inner: Array2<f32> = w_unwrap.t()
+                let h_inner: Array2<f32> = w.t()
                     .dot(&(inner_elop));
 
                 let w1: Array2<f32> = Array::from_elem(
-                    (v.shape()[0], 1), h_unwrap.sum_axis(Axis(1))[0]);
+                    (v.shape()[0], 1), h.sum_axis(Axis(1))[0]);
 
-                let mut inner_dot: Array2<f32> = w_unwrap.dot(h_unwrap);
+                let mut inner_dot: Array2<f32> = w.dot(&h);
                 let inner_elop: Array2<f32> = v.clone() / inner_dot;
-                let w_inner: Array2<f32> = inner_elop.dot(&h_unwrap.t());
+                let w_inner: Array2<f32> = inner_elop.dot(&h.t());
 
-                let h_return = h_unwrap * &(h_inner / h1);
-                let w_return = w_unwrap * &(w_inner / w1);
-                return (w_return, h_return)
+                let h = h * &(h_inner / h1);
+                let w = w * &(w_inner / w1);
+                return (w, h)
             },
             _ => {
                 process::exit(1)
@@ -436,26 +427,20 @@ impl RunFactorization for Factorization {
     }
 
     fn objective_update(v: &Array2<f32>,
-                        w: &Option<Array2<f32>>,
-                        h: &Option<Array2<f32>>,
+                        w: &Array2<f32>,
+                        h: &Array2<f32>,
                         cons: &Array2<f32>,
                         old_cons: &Array2<f32>,
                         objective: &Objective) -> (f32, Option<Array2<f32>>) {
         match objective {
             Objective::Fro => {
                 // Compute squared Frobenius norm of a target matrix and its NMF estimate.
-                let w_unwrap = w.as_ref().unwrap();
-                let h_unwrap = h.as_ref().unwrap();
-
-                let r = v.clone() - w_unwrap.dot(h_unwrap);
+                let r = v.clone() - w.dot(h);
                 return ((r.clone() * r).sum(), None)
             },
             Objective::Div => {
                 // Compute divergence of target matrix from its NMF estimate.
-                let w_unwrap = w.as_ref().unwrap();
-                let h_unwrap = h.as_ref().unwrap();
-
-                let va = w_unwrap.dot(h_unwrap);
+                let va = w.dot(h);
                 let inner_elop = (v.clone() / va.clone()).mapv(|x|{x.ln()});
 
                 return (((v.clone() * inner_elop) - v.clone() + va).sum(), None)
@@ -465,12 +450,10 @@ impl RunFactorization for Factorization {
                 // from previous iteration.
                 // Return logical value denoting whether connectivity matrix has changed
                 // from previous iteration.
-                let w_unwrap = w.as_ref().unwrap();
-                let h_unwrap = h.as_ref().unwrap();
                 let mut idx = Arc::new(Mutex::new(Array1::<usize>::zeros(
-                    (h_unwrap.shape()[1]))));
+                    (h.shape()[1]))));
 
-                h_unwrap.axis_iter(Axis(1)).into_par_iter().enumerate()
+                h.axis_iter(Axis(1)).into_par_iter().enumerate()
                     .for_each(|(col_idx, col)|{
                         let notnan_row: Vec<NotNan<f32>> = col.into_par_iter().cloned()
                             .map(NotNan::new)
@@ -483,7 +466,7 @@ impl RunFactorization for Factorization {
                         idx[col_idx] = argmax;
                     });
                 let mut idx = idx.lock().unwrap();
-                debug!("IDX: {:?}", idx);
+//                debug!("IDX: {:?}", idx);
 
                 let mat1 = idx.broadcast((v.shape()[1], v.shape()[1])).unwrap();
                 let mat2 = mat1.t();
@@ -515,7 +498,7 @@ impl RunFactorization for Factorization {
                             *connectivity_change += 1.;
                         }
                     });
-                debug!("Eqaulity: {}", &new_cons==cons);
+//                debug!("Eqaulity: {}", &new_cons==cons);
                 let connectivity_change = connectivity_change.lock().unwrap().clone();
                 return (connectivity_change, Some(new_cons))
             },
@@ -531,7 +514,7 @@ impl RunFactorization for Factorization {
                 w,
                 ..
             } => {
-                return w.as_ref().unwrap()
+                return w
             }
         }
     }
@@ -553,7 +536,7 @@ impl RunFactorization for Factorization {
                 h,
                 ..
             } => {
-                return h.as_ref().unwrap()
+                return h
             }
         }
     }
@@ -565,10 +548,7 @@ impl RunFactorization for Factorization {
                 h,
                 ..
             } => {
-                let w_unwrap = w.as_ref().unwrap();
-                let h_unwrap = h.as_ref().unwrap();
-
-                return w_unwrap.dot(h_unwrap)
+                return w.dot(h)
             }
         }
     }
@@ -584,18 +564,12 @@ impl RunFactorization for Factorization {
                 match metric {
                     Objective::Fro => {
                         // Compute squared Frobenius norm of a target matrix and its NMF estimate.
-                        let w_unwrap = w.as_ref().unwrap();
-                        let h_unwrap = h.as_ref().unwrap();
-
-                        let r = v.clone() - w_unwrap.dot(h_unwrap);
+                        let r = v.clone() - w.dot(h);
                         return (r.clone() * r).sum()
                     },
                     Objective::Div => {
                         // Compute divergence of target matrix from its NMF estimate.
-                        let w_unwrap = w.as_ref().unwrap();
-                        let h_unwrap = h.as_ref().unwrap();
-
-                        let va = w_unwrap.dot(h_unwrap);
+                        let va = w.dot(h);
                         let mut inner_elop = (v.clone() / va.clone());
                         inner_elop.par_mapv_inplace(|x| { x.ln() });
 
@@ -617,10 +591,8 @@ impl RunFactorization for Factorization {
                 h,
                 ..
             } => {
-                let w_unwrap = w.as_ref().unwrap();
-                let h_unwrap = h.as_ref().unwrap();
 
-                return v.clone() - w_unwrap.dot(h_unwrap)
+                return v.clone() - w.dot(h)
             }
         }
     }
@@ -638,10 +610,10 @@ impl RunFactorization for Factorization {
                 let mut x = Array::zeros((2, 2));
                 match what {
                     "samples" => {
-                        x = h.as_ref().unwrap().clone();
+                        x = h.to_owned()
                     },
                     "features" => {
-                        x = w.as_ref().unwrap().clone();
+                        x = w.to_owned()
                     },
                     _ => {
                         error!("Invalid option for prediction parameter {}", what);
@@ -709,5 +681,45 @@ impl RunFactorization for Factorization {
                 return 1. - x / var
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::{Array2};
+
+    #[test]
+    fn test_update() {
+        let v = Array2::from_shape_vec((5, 5),
+                                        vec![0.5, 0.5, 0.5, 0.5, 0.5,
+                                                0.5, 0.5, 0.5, 0.5, 0.5,
+                                                0.5, 0.5, 0.5, 0.5, 0.5,
+                                                0.5, 0.5, 0.5, 0.5, 0.5,
+                                                0.5, 0.5, 0.5, 0.5, 0.5]).unwrap();
+        let w = Array2::from_shape_vec((5, 2),
+                                       vec![0.75, 0.85,
+                                               0.65, 0.95,
+                                               0.55, 0.05,
+                                               0.45, 0.15,
+                                               0.35, 0.25]).unwrap();
+        let h = Array2::from_shape_vec((2, 5),
+                                       vec![0.15, 0.25, 0.35, 0.45, 0.55,
+                                            0.05, 0.95, 0.85, 0.75, 0.65]).unwrap();
+
+
+        let (w_ret, h_ret) = Factorization::update_wh(&v,
+                                                      w,
+                                                      h,
+                                                      &Update::Euclidean);
+
+        assert_eq!(w_ret, Array2::from_shape_vec((5, 2), vec![0.59104721, 0.68220986,
+                                                                        0.51940084 , 0.74870694,
+                                                                        1.051906, 0.123250104,
+                                                                        0.8904397, 0.34999108,
+                                                                        0.71739516, 0.55372749]).unwrap());
+
+        assert_eq!(h_ret, Array2::from_shape_vec((2, 5), vec![0.65737057, 0.19434629, 0.26941917, 0.34303534, 0.41523683,
+                                                 0.18672198, 0.53807426, 0.48819402  , 0.43689322 , 0.38411031]).unwrap());
     }
 }

@@ -60,6 +60,8 @@ impl SeedFunctions for Seed {
 
                 // Update other factors based on associated svd factor
                 (1..*rank).into_par_iter().for_each(|i|{
+                    debug!("Inside Loop");
+
                     let uu = u.slice(s![.., i]).to_owned();
                     let vv = e.slice(s![.., i]).to_owned();
                     let mut uup = pos(&uu);
@@ -74,6 +76,7 @@ impl SeedFunctions for Seed {
                     let termn = n_uun * n_vvn;
 
                     if termp >= termn {
+                        debug!("First statement");
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
 
@@ -86,6 +89,7 @@ impl SeedFunctions for Seed {
                         h_guard.slice_mut(s![i, ..]).assign(
                             &((s[i] * termp).powf(1. / 2.) / (vvp_t)));;
                     } else {
+                        debug!("Second statement");
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
 
@@ -99,6 +103,7 @@ impl SeedFunctions for Seed {
                             &((s[i] * termn).powf(1. / 2.) / (vvn_t)));;
                     }
                 });
+                debug!("Outside Loop");
                 let mut w_guard = w_guard.lock().unwrap();
                 let mut h_guard = h_guard.lock().unwrap();
 
