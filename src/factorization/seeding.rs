@@ -2,10 +2,25 @@ use ndarray::{Array2, Array1, Axis, ArrayView, Ix1, prelude::*};
 use ndarray_linalg::{SVD, convert::*, diagonal::*, Norm};
 use std::sync::{Arc, Mutex};
 use std::process;
+use rayon::prelude::*;
+use rand::{thread_rng, Rng};
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum Seed {
     Nndsvd {
+        rank: usize,
+    },
+    RandomVcol {
+        rank: usize,
+    },
+    RandomC {
+        rank: usize,
+    },
+    Random {
+        rank: usize,
+    },
+    Fixed {
         rank: usize,
     },
     None,
@@ -14,6 +29,30 @@ pub enum Seed {
 impl Seed {
     pub fn new_nndsvd(rank: usize, v: &Array2<f32>) -> Seed {
         Seed::Nndsvd {
+            rank,
+        }
+    }
+
+    pub fn new_random_vcol(rank: usize, v: &Array2<f32>) -> Seed {
+        Seed::RandomVcol {
+            rank,
+        }
+    }
+
+    pub fn new_random_c(rank: usize, v: &Array2<f32>) -> Seed {
+        Seed::RandomC {
+            rank,
+        }
+    }
+
+    pub fn new_random(rank: usize, v: &Array2<f32>) -> Seed {
+        Seed::Random {
+            rank,
+        }
+    }
+
+    pub fn new_fixed(rank: usize, v: &Array2<f32>) -> Seed {
+        Seed::Fixed {
             rank,
         }
     }
@@ -31,6 +70,7 @@ impl SeedFunctions for Seed {
             } => {
                 let (u, s, e)
                     = v.svd(true, true).unwrap();
+                info!("SVD calculation finished");
                 let e = e.unwrap();
                 let e = e.t();
                 let u = u.unwrap();
@@ -130,7 +170,51 @@ impl SeedFunctions for Seed {
                 return (w, h)
 
             },
-            Seed::None => process::exit(1)
+            Seed::RandomVcol {
+                rank
+            } => {
+                let p_c = (1. / 5. * v.shape()[1] as f32) as i32;
+                let p_r = (1. / 5. * v.shape()[0] as f32) as i32;
+                let mut h_guard = Arc::new(Mutex::new(Array2::zeros((*rank, v.shape()[1]))));
+                let mut w_guard = Arc::new(Mutex::new(Array2::zeros((v.shape()[0], *rank))));
+
+                let mut rng = thread_rng();
+
+                (0..*rank).into_iter().for_each(|i| {
+                    // retrieve random columns from input matrix
+                    let mut random_cols = Array2::zeros((v.shape()[0], p_c as usize));
+                    (0..p_c).into_iter().for_each(|idx| {
+                        let col_id = rng.gen_range(0, v.shape()[1]);
+                        let v_slice = v.slice(s![.., col_id]).to_owned();
+
+                        random_cols.slice_mut(s![.., idx]).assign(&v_slice)
+                    });
+                    let mut w_guard = w_guard.lock().unwrap();
+
+                    w_guard.slice_mut(s![.., i]).assign(
+                        &random_cols.mean_axis(Axis(1)).unwrap());
+
+                    // retrieve random rows from input matrix
+                    let mut random_rows = Array2::zeros((p_r as usize, v.shape()[1]));
+                    (0..p_r).into_iter().for_each(|idx| {
+                        let row_id = rng.gen_range(0, v.shape()[0]);
+                        let v_slice = v.slice(s![row_id, ..]).to_owned();
+                        random_rows.slice_mut(s![idx, ..]).assign(&v_slice)
+                    });
+                    let mut h_guard = h_guard.lock().unwrap();
+
+                    h_guard.slice_mut(s![i, ..]).assign(
+                        &random_rows.mean_axis(Axis(0)).unwrap());;
+                });
+                let mut w_guard = w_guard.lock().unwrap();
+                let mut h_guard = h_guard.lock().unwrap();
+
+                let w = w_guard.clone();
+                let h = h_guard.clone();
+
+                return (w, h)
+            },
+            _ => process::exit(1)
         }
     }
 }
@@ -196,7 +280,7 @@ mod tests {
         println!("S: {:?}", s);
         println!("E: {:?}", e);
 
-        assert_eq!(1, 2);
+//        assert_eq!(1, 2);
 
     }
 }
