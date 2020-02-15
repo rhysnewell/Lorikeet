@@ -1,11 +1,11 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::prelude::*;
-use rayon;
 use ordered_float::NotNan;
 
 use ndarray::{Array, Array2, Axis, Zip};
 use ndarray::prelude::*;
+use rayon::prelude::*;
 use crate::factorization::{seeding::Seed, nmf_std};
 use factorization::seeding::SeedFunctions;
 use std::process;
@@ -95,7 +95,7 @@ impl Factorization {
                miter: usize,
                minresiduals: f32) -> Factorization {
         Factorization::NMF {
-            seed: Seed::new_nndsvd(r, &input),
+            seed: Seed::new_random_vcol(r, &input),
             v: input,
             v1: None,
             h1: None,
@@ -197,7 +197,7 @@ impl RunFactorization for Factorization {
                 ref mut cons,
                 ref mut old_cons,
             } => {
-                *seed = Seed::new_nndsvd(*rank, &input);
+                *seed = Seed::new_random(*rank, &input);
                 *v = input;
                 *v1 = None;
                 *h1 = None;
