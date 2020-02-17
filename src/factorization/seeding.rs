@@ -173,36 +173,66 @@ impl SeedFunctions for Seed {
             Seed::RandomVcol {
                 rank
             } => {
-                let p_c = (1. / 5. * v.shape()[1] as f32) as i32;
-                let p_r = (1. / 5. * v.shape()[0] as f32) as i32;
+                let p_c = (1. / 5. * v.shape()[1] as f32) as usize;
+                let p_r = (1. / 5. * v.shape()[0] as f32) as usize;
                 let mut h_guard = Arc::new(Mutex::new(Array2::zeros((*rank, v.shape()[1]))));
                 let mut w_guard = Arc::new(Mutex::new(Array2::zeros((v.shape()[0], *rank))));
 
-                let mut rng = thread_rng();
+                // TODO: Since we are dealing with a symmetrical pairwise matrix,
+                //       would it make sense to initialize with the same rows/columns for both
+                //       W and H? i.e. rr_indices becomes the transpose matrix of rc_indices.
 
-                (0..*rank).into_iter().for_each(|i| {
+                let mut rng = thread_rng();
+                let mut rc_indices = Array2::zeros((*rank, p_c));
+//                let mut rr_indices = Array2::zeros((p_r, rank));
+                for r in (0..*rank).into_iter() {
+                    let mut random_indices = Array1::zeros((p_c));
+                    for c in (0..p_c).into_iter() {
+                        random_indices[c] = rng.gen_range(0, v.shape()[1]);
+                    }
+                    rc_indices.slice_mut(s![r, ..]).assign(&random_indices);
+                }
+                let rr_indices = rc_indices.t();
+                debug!("Random Col Ids {}", rc_indices);
+
+
+                (0..*rank).into_par_iter().for_each(|i| {
                     // retrieve random columns from input matrix
-                    let mut random_cols = Array2::zeros((v.shape()[0], p_c as usize));
+                    let mut random_cols = Arc::new(
+                        Mutex::new(
+                            Array2::zeros((v.shape()[0], p_c))));
+
                     (0..p_c).into_iter().for_each(|idx| {
-                        let col_id = rng.gen_range(0, v.shape()[1]);
+                        debug!("inner column loop");
+                        let col_id = rc_indices[[i, idx]];
                         let v_slice = v.slice(s![.., col_id]).to_owned();
 
+                        let mut random_cols = random_cols.lock().unwrap();
+                        debug!("Slicing on idx {}", idx);
                         random_cols.slice_mut(s![.., idx]).assign(&v_slice)
                     });
                     let mut w_guard = w_guard.lock().unwrap();
-
+                    let random_cols = random_cols.lock().unwrap();
+                    debug!("Slicing in column means");
                     w_guard.slice_mut(s![.., i]).assign(
                         &random_cols.mean_axis(Axis(1)).unwrap());
 
                     // retrieve random rows from input matrix
-                    let mut random_rows = Array2::zeros((p_r as usize, v.shape()[1]));
+                    let mut random_rows = Arc::new(
+                        Mutex::new(
+                            Array2::zeros((p_r, v.shape()[1]))));
+
                     (0..p_r).into_iter().for_each(|idx| {
-                        let row_id = rng.gen_range(0, v.shape()[0]);
+                        debug!("inner row loop");
+                        let row_id = rr_indices[[idx, i]];
                         let v_slice = v.slice(s![row_id, ..]).to_owned();
-                        random_rows.slice_mut(s![idx, ..]).assign(&v_slice)
+
+                        let mut random_rows = random_rows.lock().unwrap();
+                        random_rows.slice_mut(s![idx, ..]).assign(&v_slice);
                     });
                     let mut h_guard = h_guard.lock().unwrap();
-
+                    let random_rows = random_rows.lock().unwrap();
+                    debug!("Slicing in row means");
                     h_guard.slice_mut(s![i, ..]).assign(
                         &random_rows.mean_axis(Axis(0)).unwrap());;
                 });
