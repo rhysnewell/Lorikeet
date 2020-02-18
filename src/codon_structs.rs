@@ -11,7 +11,7 @@ use bio::io::gff;
 pub struct CodonTable {
     aminos: HashMap<Vec<u8>, char>,
     starts: HashMap<Vec<u8>, char>,
-    ns_sites: HashMap<Vec<u8>, f32>,
+    ns_sites: HashMap<Vec<u8>, f64>,
 }
 
 
@@ -69,10 +69,10 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f32, f32)>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
-                      depth: &Vec<f64>) -> f32;
+                      depth: &Vec<f64>) -> f64;
 }
 
 impl Translations for CodonTable {
@@ -113,16 +113,16 @@ impl Translations for CodonTable {
                     }
                 }
             }
-            self.ns_sites.insert(codon.clone(), n as f32);
+            self.ns_sites.insert(codon.clone(), n as f64);
         }
     }
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f32, f32)>>,
+                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
                       indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
                       ref_sequence: &Vec<u8>,
-                      _depth: &Vec<f64>) -> f32 {
+                      _depth: &Vec<f64>) -> f64 {
         let strand = gene.strand().expect("No strandedness found");
 
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
@@ -136,8 +136,8 @@ impl Translations for CodonTable {
         debug!("Codon Sequence {:?}", codon_sequence);
 
         // Calculate N and S
-        let mut big_n: f32 = 0.0;
-        let mut big_s: f32 = 0.0;
+        let mut big_n: f64 = 0.0;
+        let mut big_s: f64 = 0.0;
         for codon in codon_sequence.iter() {
             if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
                 continue
@@ -151,8 +151,8 @@ impl Translations for CodonTable {
         debug!("getting ns_sites N {} S {}", big_n, big_s);
 
         // Create Nd and Sd values
-        let mut big_nd: f32 = 0.0;
-        let mut big_sd: f32 = 0.0;
+        let mut big_nd: f64 = 0.0;
+        let mut big_sd: f64 = 0.0;
 
         // dN/dS calculations when using NGS reads outlined here:
         // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
@@ -223,8 +223,8 @@ impl Translations for CodonTable {
                                 }
                             }
                         }
-                        let nd = ns as f32 / permutations.len() as f32;
-                        let sd = ss as f32 / permutations.len() as f32;
+                        let nd = ns as f64 / permutations.len() as f64;
+                        let sd = ss as f64 / permutations.len() as f64;
                         big_nd += nd;
                         big_sd += sd;
                     }
@@ -340,7 +340,7 @@ mod tests {
 
         let mut gene_records
             = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
-        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f32, f32)>> = HashMap::new();
+        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>> = HashMap::new();
         variant_abundances.insert(13, BTreeMap::new());
         variant_abundances.insert(14, BTreeMap::new());
         let hash = variant_abundances.entry(7).or_insert(BTreeMap::new());

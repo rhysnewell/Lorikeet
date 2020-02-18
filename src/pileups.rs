@@ -459,11 +459,11 @@ fn process_previous_contigs_var(
                 total_mismatches)
         });
 
-        let coverages: Vec<f32> = coverage_estimators.par_iter_mut()
-            .map(|estimator| estimator.calculate_coverage(&vec![0])).collect();
+        let coverages: Vec<f64> = coverage_estimators.par_iter_mut()
+            .map(|estimator| estimator.calculate_coverage(&vec![0]) as f64).collect();
 
-        let mut pileup_struct = PileupStats::new_contig_stats(min,
-                                                              max,
+        let mut pileup_struct = PileupStats::new_contig_stats(min as f64,
+                                                              max as f64,
                                                               contig_end_exclusion);
 
         // adds contig info to pileup struct
@@ -483,7 +483,7 @@ fn process_previous_contigs_var(
         // filters variants across contig
         pileup_struct.calc_variants(
             min_var_depth,
-            coverage_fold);
+            coverage_fold as f64);
 
         match mode {
             "polymorph" => {

@@ -17,39 +17,39 @@ pub enum PileupStats {
     PileupContigStats {
         nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
         variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
-        variant_abundances: HashMap<i32, BTreeMap<String, (f32, f32)>>,
+        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
         indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
         genotypes_per_position: HashMap<usize, usize>,
-        mean_genotypes: f32,
+        mean_genotypes: f64,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
-        target_len: f32,
+        target_len: f64,
         variations_per_n: usize,
         total_variants: usize,
-        coverage: f32,
-        variance: f32,
+        coverage: f64,
+        variance: f64,
         observed_contig_length: u32,
         num_covered_bases: i32,
         num_mapped_reads: u64,
         total_mismatches: u32,
         contig_end_exclusion: u32,
-        min: f32,
-        max: f32,
+        min: f64,
+        max: f64,
         method: String,
-        regression: (f32, f32, f32),
+        regression: (f64, f64, f64),
         // Clusters hashmap:
         // Key = Position
         // Value = K: Variant, V: (DBSCAN Cluster, HAC Index/initial cluster)
         clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
-        clusters_mean: HashMap<i32, f32>,
+        clusters_mean: HashMap<i32, f64>,
     }
 }
 
 impl PileupStats {
-    pub fn new_contig_stats(min: f32, max: f32,
+    pub fn new_contig_stats(min: f64, max: f64,
                             contig_end_exclusion: u32) -> PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: HashMap::new(),
@@ -96,14 +96,14 @@ pub trait PileupFunctions {
                   contig_name: Vec<u8>,
                   contig_len: usize,
                   method: &str,
-                  coverages: Vec<f32>,
+                  coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>);
 
     fn calc_error(&mut self);
 
     fn calc_variants(&mut self,
                      min_variant_depth: usize,
-                     coverage_fold: f32);
+                     coverage_fold: f64);
 
     fn polish_contig(&mut self,
                      original_contig: &Vec<u8>,
@@ -177,7 +177,7 @@ impl PileupFunctions for PileupStats {
                   contig_name: Vec<u8>,
                   contig_len: usize,
                   method: &str,
-                  coverages: Vec<f32>,
+                  coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>) {
         match self {
             PileupStats::PileupContigStats {
@@ -199,9 +199,9 @@ impl PileupFunctions for PileupStats {
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
-                *target_len = contig_len as f32;
-                *coverage = coverages[1] as f32;
-                *variance = coverages[2] as f32;
+                *target_len = contig_len as f64;
+                *coverage = coverages[1] as f64;
+                *variance = coverages[2] as f64;
                 *method = method.to_string();
                 let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
                 *depth = vec![0.; ups_and_downs.len()];
@@ -273,15 +273,15 @@ impl PileupFunctions for PileupStats {
                          standard_errors,
                          pvalues.pairs());
                 // return results as intercept, effect size, se
-                *regression = (parameters.intercept_value as f32,
-                               parameters.regressor_values[0] as f32,
-                               standard_errors[0].1 as f32);
+                *regression = (parameters.intercept_value as f64,
+                               parameters.regressor_values[0] as f64,
+                               standard_errors[0].1 as f64);
 
             }
         }
     }
 
-    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f32){
+    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f64){
         match self {
             PileupStats::PileupContigStats {
                 ref mut nucfrequency,
@@ -303,7 +303,7 @@ impl PileupFunctions for PileupStats {
                 let indels = Arc::new(Mutex::new(indels));
 //                let mut outside_coverage = Arc::new(Mutex::new(HashMap::new()));
                 let nucfrequency = Arc::new(Mutex::new(nucfrequency));
-//                let min_variant_fraction = min_variant_depth as f32 / 100.;
+//                let min_variant_fraction = min_variant_depth as f64 / 100.;
                 // for each location calculate if there is a variant based on read depth
                 // Uses rayon multithreading
                 depth.par_iter_mut().enumerate().for_each(|(i, d)| {
@@ -325,16 +325,16 @@ impl PileupFunctions for PileupStats {
                         for (indel, read_ids) in indel_map.iter() {
                             let count = read_ids.len();
 //                                if indel.contains("N") {
-//                                    *d += count as f32;
+//                                    *d += count as f64;
 //                                }
                             *d += count as f64;
-                            if (*coverage * (1.0 - coverage_fold) <= *d as f32
-                                && *d as f32 <= *coverage * (1.0 + coverage_fold))
+                            if (*coverage * (1.0 - coverage_fold) <= *d as f64
+                                && *d as f64 <= *coverage * (1.0 + coverage_fold))
                                 || (coverage_fold == 0.0) {
                                 if (count >= min_variant_depth)
-//                                    && (count as f32 / *d >= min_variant_fraction)
-                                    && ((count as f32) > *d as f32 * 2. * (regression.1 + regression.2)) {
-                                    rel_abundance.insert(indel.to_owned(), (count as f32, *d as f32));
+//                                    && (count as f64 / *d >= min_variant_fraction)
+                                    && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
+                                    rel_abundance.insert(indel.to_owned(), (count as f64, *d as f64));
                                     for read in read_ids {
                                         let mut read_variants
                                             = read_variants.lock().unwrap();
@@ -354,8 +354,8 @@ impl PileupFunctions for PileupStats {
                             }
                         }
                     }
-                    if (*coverage * (1.0 - coverage_fold) <= *d as f32
-                        && *d as f32 <= *coverage * (1.0 + coverage_fold))
+                    if (*coverage * (1.0 - coverage_fold) <= *d as f64
+                        && *d as f64 <= *coverage * (1.0 + coverage_fold))
                         || (coverage_fold == 0.0) {
                         let mut nucfrequency
                             = nucfrequency.lock().unwrap();
@@ -369,9 +369,9 @@ impl PileupFunctions for PileupStats {
                                 let count = read_ids.len();
 
                                 if (count >= min_variant_depth)
-//                                    && (count as f32 / *d >= min_variant_fraction)
-                                    && ((count as f32) > *d as f32 * 2. * (regression.1 + regression.2)) {
-                                    rel_abundance.insert(base.to_string(), (count as f32, *d as f32));
+//                                    && (count as f64 / *d >= min_variant_fraction)
+                                    && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
+                                    rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
 
                                     for read in read_ids {
                                         let mut read_variants
