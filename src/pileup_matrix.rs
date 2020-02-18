@@ -6,6 +6,7 @@ use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use ndarray::{Array2};
+use ndarray_linalg::{norm::*};
 use ndarray_npy::read_npy;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
@@ -23,23 +24,23 @@ use ordered_float::NotNan;
 #[derive(Debug)]
 pub enum PileupMatrix {
     PileupContigMatrix {
-        coverages: HashMap<i32, Vec<f32>>,
-        average_genotypes: HashMap<i32, Vec<f32>>,
-        variances: HashMap<i32, Vec<f32>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f32, f32)>>>>,
+        coverages: HashMap<i32, Vec<f64>>,
+        average_genotypes: HashMap<i32, Vec<f64>>,
+        variances: HashMap<i32, Vec<f64>>,
+        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f64, f64)>>>>,
         snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
         indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
         contigs: HashMap<i32, Vec<u8>>,
         target_names: HashMap<i32, String>,
-        target_lengths: HashMap<i32, f32>,
+        target_lengths: HashMap<i32, f64>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
         clusters: HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>,
-        clusters_mean: HashMap<i32, f32>,
+        clusters_mean: HashMap<i32, f64>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
-        variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f32>>>>,
-        pred_variants: HashMap<NotNan<f32>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
-        pred_variants_all: HashMap<NotNan<f32>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
+        pred_variants: HashMap<NotNan<f64>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants_all: HashMap<NotNan<f64>, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
 }
 
@@ -165,14 +166,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                         ..
                     } => {
                         let ag = average_genotypes.entry(tid).or_insert(
-                            vec![0.0 as f32; sample_count]);
+                            vec![0.0 as f64; sample_count]);
                         ag[sample_idx] = mean_genotypes;
                         let var = variances.entry(tid).or_insert(
-                            vec![0.0 as f32; sample_count]
+                            vec![0.0 as f64; sample_count]
                         );
                         var[sample_idx] = variance;
                         let cov = coverages.entry(tid).or_insert(
-                            vec![0.0 as f32; sample_count]
+                            vec![0.0 as f64; sample_count]
                         );
                         cov[sample_idx] = coverage;
                         target_names.entry(tid)
@@ -196,14 +197,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                             for (pos, abundance_map) in variant_abundances.iter() {
                                 let position_variants = contig_variants.entry(*pos)
                                     .or_insert(BTreeMap::new());
-                                let mut variant_depth: f32 = 0.;
-                                let mut total_depth: f32 = 0.;
+                                let mut variant_depth: f64 = 0.;
+                                let mut total_depth: f64 = 0.;
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
-                                    variant_depth += abundance.0 as f32;
-                                    total_depth = abundance.1 as f32 + 1 as f32;
-                                    sample_map[sample_idx] = (abundance.0 as f32, abundance.1 as f32);
+                                    variant_depth += abundance.0 as f64;
+                                    total_depth = abundance.1 as f64 + 1 as f64;
+                                    sample_map[sample_idx] = (abundance.0 as f64, abundance.1 as f64);
                                 }
                                 // add pseudocounts
                                 let ref_depth = total_depth
@@ -305,7 +306,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
-                let sample_count = sample_names.len() as f32;
+                let sample_count = sample_names.len() as f64;
 
 
                 let variant_info_all =
@@ -330,16 +331,16 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let contig_coverages = coverages.get(tid)
                         .expect("Unable to retrieve contig coverage");
 
-                    let max_coverage = contig_coverages.iter().cloned().fold1(f32::max)
+                    let max_coverage = contig_coverages.iter().cloned().fold1(f64::max)
                         .expect("Unable to retrieve max coverage");
 
                     variant_abundances.par_iter().for_each(
                         |(position, hash)| {
                             // loop through each position that has variants
                             for (var, abundances_vector) in hash.iter() {
-                                let mut abundance: f32 = 0.;
-                                let mut mean_var: f32 = 0.;
-//                                let mut total_d: f32 = 0.;
+                                let mut abundance: f64 = 0.;
+                                let mut mean_var: f64 = 0.;
+//                                let mut total_d: f64 = 0.;
                                 let mut freqs = Vec::new();
                                 let mut depths = Vec::new();
                                 if !var.contains("R") {
@@ -421,7 +422,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             sample_count as i32);
 
                     let v = v.lock().unwrap();
-                    let v = v.get_array2();
+                    let mut v = v.get_array2();
+                    info!("Array Frobenius Norm {}", v.norm());
+                    v = v.clone() / v.norm();
 
                     let mut nmf = Factorization::new_nmf(
                                                      v,
@@ -451,7 +454,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         geom_mean_score += row[2].ln();
                     });
 
-                    geom_mean_score = (geom_mean_score / variant_info_all.len() as f32).exp();
+                    geom_mean_score = (geom_mean_score / variant_info_all.len() as f64).exp();
                     let mut sd_factor = 0.;
 
                     // calculate the geom SD factor https://en.wikipedia.org/wiki/Geometric_standard_deviation
@@ -459,7 +462,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         sd_factor += (row[2] / geom_mean_score).ln().powf(2.);
                     });
 
-                    sd_factor = (sd_factor / variant_info_all.len() as f32).powf(1. / 2.).exp();
+                    sd_factor = (sd_factor / variant_info_all.len() as f64).powf(1. / 2.).exp();
 
 
                     debug!("Unique ranks {:?} geom mean {} sd {}", unique_ranks, geom_mean_score, sd_factor);
@@ -472,7 +475,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut max_cnt = 0;
                     let mut max_strain = 0;
-                    let thresh = 1. / unique_ranks.len() as f32;
+                    let thresh = 1. / unique_ranks.len() as f64;
                     // check if feature score is greater than geom mean score / SD
                     // if so then place into that rank
                     // If not, then prediction could realistically be any available rank
@@ -508,26 +511,26 @@ impl PileupMatrixFunctions for PileupMatrix{
                         } else {
                             // we figure out which strains variant could belong to based basis values
                             let basis_vec = basis.slice(s![row, ..]);
-                            let mut basis_mean: f32 = 0.;
+                            let mut basis_mean: f64 = 0.;
                             basis_vec.iter()
                                 .for_each(|x| basis_mean += x.ln());
-                            basis_mean = (basis_mean / basis_vec.len() as f32).exp();
+                            basis_mean = (basis_mean / basis_vec.len() as f64).exp();
 
-                            let mut basis_sd: f32 = 0.;
+                            let mut basis_sd: f64 = 0.;
                             basis_vec.iter().for_each(|x| {
                                 basis_sd += (x / basis_mean).ln().powf(2.);
                             });
 
-                            basis_sd = (basis_sd / basis_vec.len() as f32).powf(1. / 2.).exp();
+                            basis_sd = (basis_sd / basis_vec.len() as f64).powf(1. / 2.).exp();
 
                             let mut ranks = Arc::new(Mutex::new(Vec::new()));
 
                             // Search for above n sd_factors of the geometric mean
                             basis_vec.iter().enumerate().for_each(|(ind, score)|{
                                if score >= &(basis_mean * 6. * basis_sd) && unique_ranks.contains(
-                                   &(NotNan::from(ind as f32))){
+                                   &(NotNan::from(ind as f64))){
                                    let mut ranks = ranks.lock().unwrap();
-                                   ranks.push(NotNan::from(ind as f32));
+                                   ranks.push(NotNan::from(ind as f64));
                                }
                             });
                             let ranks = ranks.lock().unwrap();
@@ -575,7 +578,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             max_cnt = *cnt;
                         }
 //                        let score = prediction_map.entry(*strain).or_insert(0.);
-//                        *score = (*score / *cnt as f32).exp()
+//                        *score = (*score / *cnt as f64).exp()
                     });
 
 
@@ -741,32 +744,32 @@ impl PileupMatrixFunctions for PileupMatrix{
                     write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
                     for (sample_idx, _sample_name) in sample_names.iter().enumerate() {
                         let ten_kbs = contig_len / 10000.;
-                        let total_variants = variant_counts[&sample_idx][tid] as f32;
+                        let total_variants = variant_counts[&sample_idx][tid] as f64;
                         if total_variants > 0. {
                             let var_ten_kbs = total_variants / ten_kbs;
                             let sample_sums = &variant_sums[&sample_idx][tid];
 
 //                            let var_ratios = sample_sums[0]
 //                                .iter().zip(&sample_sums[1])
-//                                .map(|(var, dep)| { var / dep }).collect::<Vec<f32>>();
+//                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
 //
 //                            let refr_ratios = sample_sums[2]
 //                                .iter().zip(&sample_sums[1])
-//                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f32>>();
+//                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
 
-                            let var_ratios_mean: f32 = sample_sums[0].iter().sum::<f32>()
-                                / sample_sums[1].len() as f32;
+                            let var_ratios_mean: f64 = sample_sums[0].iter().sum::<f64>()
+                                / sample_sums[1].len() as f64;
 
-                            let refr_ratios_mean: f32 = sample_sums[2].iter().sum::<f32>()
-                                / sample_sums[1].len() as f32;
+                            let refr_ratios_mean: f64 = sample_sums[2].iter().sum::<f64>()
+                                / sample_sums[1].len() as f64;
 
-                            let mut var_std: f32 = sample_sums[0].iter().map(|x|
-                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f32>>().iter().sum::<f32>();
-                            var_std = (var_std / (sample_sums[1].len()) as f32).powf(1./2.);
+                            let mut var_std: f64 = sample_sums[0].iter().map(|x|
+                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
+                            var_std = (var_std / (sample_sums[1].len()) as f64).powf(1./2.);
 
-                            let mut ref_std: f32 = sample_sums[2].iter().map(|x|
-                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f32>>().iter().sum::<f32>();
-                            ref_std = (ref_std / (sample_sums[1].len()) as f32).powf(1./2.);
+                            let mut ref_std: f64 = sample_sums[2].iter().map(|x|
+                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
+                            ref_std = (ref_std / (sample_sums[1].len()) as f64).powf(1./2.);
 
                             writeln!(file_open,
                                      "\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}",

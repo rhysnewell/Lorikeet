@@ -20,7 +20,7 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
         while converged is False or count >= 10:
             try:
                 mf = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                                objective='conn')
+                                objective='fro')
                 # mf = nimfa.Psmf(array, seed=None, rank=k, max_iter=miter)
                 mf_fit = mf()
                 converged  = True
@@ -36,7 +36,7 @@ def perform_nmf(array, constraints, k=10, miter=10, estimateRanks='True', path='
                 while converged is False or k >= 1:
                     try:
                         mf = nimfa.Nmf(array, seed='nndsvd', rank=k, max_iter=miter, update='euclidean',
-                                        objective='conn')
+                                        objective='fro')
                         # mf = nimfa.Psmf(array, seed=None, rank=k, max_iter=miter)
                         mf_fit = mf()
                         converged  = True

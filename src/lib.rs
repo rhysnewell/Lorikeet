@@ -57,7 +57,6 @@ extern crate pest_derive;
 
 use std::path::Path;
 use genomes_and_contigs::GenomesAndContigs;
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use std::io::Read;
 
 

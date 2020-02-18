@@ -8,9 +8,9 @@ use std::process;
 // Public enum to handle different Array dimensions as return of function
 #[derive(Debug, Clone)]
 pub enum VariantMatrix {
-    Array1(Array1<f32>),
-    Array2(Array2<f32>),
-    Constraints(Array1<f32>),
+    Array1(Array1<f64>),
+    Array2(Array2<f64>),
+    Constraints(Array1<f64>),
 }
 
 impl VariantMatrix {
@@ -26,7 +26,7 @@ impl VariantMatrix {
         }
     }
 
-    fn index(&mut self, row_index: usize, col_index: usize, n: usize, distance1: f32, distance2: Option<f32>) {
+    fn index(&mut self, row_index: usize, col_index: usize, n: usize, distance1: f64, distance2: Option<f64>) {
         match self {
             VariantMatrix::Array1(array1) | VariantMatrix::Constraints(array1) => {
                 let condensed_index = get_condensed_index(row_index, col_index, n).unwrap();
@@ -39,7 +39,7 @@ impl VariantMatrix {
         }
     }
 
-    pub fn get_array2(&self) -> Array2<f32> {
+    pub fn get_array2(&self) -> Array2<f64> {
         match self {
             VariantMatrix::Array2(array) => {
                 return array.clone()
@@ -52,7 +52,7 @@ impl VariantMatrix {
     }
 }
 
-pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec<f32>), &i32)],
+pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec<f64>), &i32)],
                                indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                                geom_means_var: &[f64],
@@ -61,18 +61,18 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 
     let variant_distances = Arc::new(
                 Mutex::new(
-                    VariantMatrix::Array2(Array2::<f32>::zeros(
+                    VariantMatrix::Array2(Array2::<f64>::zeros(
                         (variant_info_all.len(), variant_info_all.len())))));
 
 //    let mut constraints = Arc::new(Mutex::new(
-//       VariantMatrix::Constraints(Array1::<f32>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
+//       VariantMatrix::Constraints(Array1::<f64>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
 //    );
 
     debug!("Filling matrix of size {}",
            (variant_info_all.len().pow(2) - variant_info_all.len())/2);
 
     // Create variable to store mean of abundance if only one sample
-    let vector_mean: f32 = 0.;
+    let vector_mean: f64 = 0.;
 
     let n = variant_info_all.len();
     // produced condensed pairwise distances
@@ -107,7 +107,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                 variant_distances.lock().unwrap().index(row_index,
                                                         col_index,
                                                         n,
-                                                        2.,
+                                                        0.,
                                                         None);
             } else {
                 let mut col_variant_set = &BTreeSet::new();
@@ -137,7 +137,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                 // Jaccard Similarity Modified for total read depth
                 // Calculates the observed frequency of two variants together
                 // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
-                let mut constraint: f32 = 1.;
+                let mut constraint: f64 = 1.;
                 if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
                     constraint = -1.;
 //                    constraints.lock().unwrap().index(row_index,
@@ -147,10 +147,10 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 //                                                      None);
                 } else {
                     let intersection_len = row_variant_set
-                        .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f32;
+                        .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f64;
                     constraint = (intersection_len + 1.) /
-                        ((row_info.2).0.iter().sum::<f32>() +
-                            (col_info.2).0.iter().sum::<f32>() - intersection_len + 1.);
+                        ((row_info.2).0.iter().sum::<f64>() +
+                            (col_info.2).0.iter().sum::<f64>() - intersection_len + 1.);
 //                    if constraint > 0. {
 //                        constraints.lock().unwrap().index(row_index,
 //                                                          col_index,
@@ -160,7 +160,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
 //                    }
                 }
 
-                let mut distance: f32 = 0.;
+                let mut distance: f64 = 0.;
 
                 // If the variants share positions, then instantly they can't be in the same
                 // gentoype so max distance
@@ -177,25 +177,25 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             (row_info.2).1.par_iter()
                                 .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
                                 let mut log_vec = log_vec.lock().unwrap();
-                                log_vec.push(((r_freq)/ (c_freq)).ln() as f32);
+                                log_vec.push(((r_freq)/ (c_freq)).ln() as f64);
                             });
                             let log_vec = log_vec.lock().unwrap();
 
-                            let clr = |input: &Vec<f32>| -> Vec<f32> {
+                            let clr = |input: &Vec<f64>| -> Vec<f64> {
                                 let output = input.iter().enumerate().map(|(i,v)| {
-                                    (v / geom_means_var[i] as f32).ln()
+                                    (v / geom_means_var[i] as f64).ln()
                                 }).collect();
                                 return output
                             };
 
-                            let get_mean = |input: &Vec<f32>| -> f32 {
-                                let sum = input.iter().sum::<f32>();
-                                sum / input.len() as f32
+                            let get_mean = |input: &Vec<f64>| -> f64 {
+                                let sum = input.iter().sum::<f64>();
+                                sum / input.len() as f64
                             };
 
-                            let row_vals: Vec<f32> = clr(&(row_info.2).1);
+                            let row_vals: Vec<f64> = clr(&(row_info.2).1);
 
-                            let col_vals: Vec<f32> = clr(&(col_info.2).1);
+                            let col_vals: Vec<f64> = clr(&(col_info.2).1);
 
                             let mean_row = get_mean(&row_vals);
 
@@ -208,7 +208,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             let log_var = log_vec.iter().map(|&value|{
                                 let diff = mean - value;
                                 diff * diff
-                            }).sum::<f32>() / log_vec.len() as f32;
+                            }).sum::<f64>() / log_vec.len() as f64;
 
                             // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
                             // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
@@ -225,9 +225,9 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                                 covar += (r_freq - mean_row) * (c_freq - mean_col)
                             });
 
-                            row_var = row_var / row_vals.len() as f32;
-                            col_var = col_var / col_vals.len() as f32;
-                            covar = covar / row_vals.len() as f32;
+                            row_var = row_var / row_vals.len() as f64;
+                            col_var = col_var / col_vals.len() as f64;
+                            covar = covar / row_vals.len() as f64;
 
                             // technically correlation -1 to 1
                             distance = (2. * covar) / (row_var + col_var);
@@ -260,8 +260,8 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f32>, Vec
                             let row_depth = (row_info.2).0[0];
                             let col_depth = (col_info.2).0[0];
 
-                            distance = ((row_freq / geom_means_var[0] as f32 - col_freq / geom_means_var[0] as f32).powf(2.)
-                                + (row_depth / geom_means_dep[0] as f32 - col_depth / geom_means_dep[0] as f32).powf(2.)).powf(1. / 2.);
+                            distance = ((row_freq / geom_means_var[0] as f64 - col_freq / geom_means_var[0] as f64).powf(2.)
+                                + (row_depth / geom_means_dep[0] as f64 - col_depth / geom_means_dep[0] as f64).powf(2.)).powf(1. / 2.);
 
                             if constraint < 0. {
                                 distance = 1.
