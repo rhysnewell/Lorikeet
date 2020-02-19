@@ -381,6 +381,7 @@ impl RunFactorization for Factorization {
                    c_obj, p_obj);
             iteration += 1;
         }
+        info!("NMF using rank {} finished in {} iterations", rank, iteration);
         return (w_ret, h_ret)
     }
 
