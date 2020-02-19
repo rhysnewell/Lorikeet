@@ -435,7 +435,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                      "conn",
                                                      Seed::new_random_vcol(),
                                                      30,
-                                                     5000,
+                                                     100,
                                                      1e-5);
 
                     nmf.estimate_rank();
