@@ -95,6 +95,8 @@ if __name__=="__main__":
             if constraints is not None:
                 constraints = squareform(constraints)
 
+        print("INPUT:", pairwise_distances)
+        print("INPUT NORM:", np.linalg.norm(pairwise_distances))
         pairwise_distances = pairwise_distances / np.linalg.norm(pairwise_distances)
-        perform_nmf(pairwise_distances, constraints, minRank, miter, estimateRanks, sys.argv[4])
+        perform_nmf(pairwise_distances, constraints, minrank, miter, estimateRanks, sys.argv[4])
 

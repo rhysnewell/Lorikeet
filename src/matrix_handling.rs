@@ -148,7 +148,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                 } else {
                     let intersection_len = row_variant_set
                         .intersection(&col_variant_set).collect::<HashSet<_>>().len() as f64;
-                    constraint = (intersection_len + 1.) /
+                    constraint = 1. - (intersection_len + 1.) /
                         ((row_info.2).0.iter().sum::<f64>() +
                             (col_info.2).0.iter().sum::<f64>() - intersection_len + 1.);
 //                    if constraint > 0. {
@@ -237,7 +237,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                             if constraint < 0. {
                                 distance = 0.
                             } else {
-                                distance += constraint
+                                distance += 1. - constraint
                             }
                             if distance > 2. {
                                 distance = 2.;

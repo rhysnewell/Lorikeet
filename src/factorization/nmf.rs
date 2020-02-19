@@ -96,7 +96,7 @@ impl Factorization {
                miter: usize,
                minresiduals: f64) -> Factorization {
         Factorization::NMF {
-            seed: Seed::new_nndsvd(r, &input),
+            seed: Seed::new_random_vcol(r, &input),
             v: input,
             v1: None,
             h1: None,
@@ -700,7 +700,7 @@ mod tests {
     #[test]
     fn test_update_euclidean() {
         let v = Array2::from_shape_vec((5, 5),
-                                        vec![0.0, 0.5, 1.0, 1.5, 2.0,
+                                         vec![0.0, 0.5, 1.0, 1.5, 2.0,
                                                  0.5, 0.0, 0.5, 0.5, 1.5,
                                                  1.0, 0.5, 0.0, 0.5, 1.0,
                                                  1.5, 0.5, 0.5, 0.0, 0.5,
@@ -729,8 +729,9 @@ mod tests {
 //                                                                                    vec![1.07569721, 0.19787986, 0.32330301, 0.47401247, 0.98146877,
 //                                                                                         0.20746888, 0.43045941, 0.71601787, 0.73786408, 1.109652  ]).unwrap());
         let (p_obj, _unused) = Factorization::objective_update(&v,
-                                                               &w,
-                                                               &h, &placeholder,
+                                                                    &w,
+                                                                    &h,
+                                                               &placeholder,
                                                                &placeholder,
                                                                &Objective::Fro);
 
@@ -749,10 +750,11 @@ mod tests {
         assert_eq!(h_ret, Array2::from_shape_vec((2, 5), vec![1.0756972111553786, 0.19787985865724383, 0.3233030090972708, 0.4740124740124741, 0.9814687714481813,
                                                                         0.20746887966804983, 0.43045940843297675, 0.7160178685386088, 0.7378640776699029, 1.1096520026263952]).unwrap());
         let (c_obj, _unused) = Factorization::objective_update(&v,
-                                                    &w_ret,
-                                                    &h_ret, &placeholder,
-                                                    &placeholder,
-                                                    &Objective::Fro);
+                                                                 &w_ret,
+                                                                    &h_ret,
+                                                               &placeholder,
+                                                            &placeholder,
+                                                            &Objective::Fro);
         let (mut w_ret, mut h_ret) = Factorization::update_wh(&v,
                                                               w_ret,
                                                               h_ret,
