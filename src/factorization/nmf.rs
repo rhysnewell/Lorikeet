@@ -459,13 +459,10 @@ impl RunFactorization for Factorization {
 
                 h.axis_iter(Axis(1)).into_par_iter().enumerate()
                     .for_each(|(col_idx, col)|{
-                        debug!("COL: {}", col);
                         let notnan_row: Vec<NotNan<f64>> = col.into_par_iter().cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
                             .collect();
-
-                        debug!("NotNan: {:?}", notnan_row);
                         let max = notnan_row.par_iter().max().expect("No maximum found");
                         let argmax = notnan_row.par_iter().position(|element| element == max).unwrap();
                         let mut idx = idx.lock().unwrap();
