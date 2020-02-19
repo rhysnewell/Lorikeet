@@ -284,7 +284,7 @@ impl RunFactorization for Factorization {
 
                 for (r, curr) in best_obj.iter().enumerate() {
                     debug!("PREV {} CURR {}", prev, curr);
-                    if curr < &prev {
+                    if (&prev - curr) > 1e-3 {
                         prev = *curr;
                         best_rank = r;
                     } else {
@@ -295,7 +295,7 @@ impl RunFactorization for Factorization {
 
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
                                                               best_rank, *update, *objective, *conn_change,
-                                                              *max_iter, *min_residuals);
+                                                              1000, *min_residuals);
                 info!("Best NMF rank: {}", best_rank);
                 debug!("H: {:?}", h_ret);
                 debug!("W: {:?}", w_ret);
