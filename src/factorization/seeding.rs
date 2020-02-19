@@ -30,52 +30,52 @@ pub enum Seed {
 }
 
 impl Seed {
-    pub fn new_nndsvd(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_nndsvd() -> Seed {
         Seed::Nndsvd {
-            rank,
+            rank: 0,
         }
     }
 
-    pub fn new_random_vcol(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_random_vcol() -> Seed {
         Seed::RandomVcol {
-            rank,
+            rank: 0,
         }
     }
 
-    pub fn new_random_sym(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_random_sym() -> Seed {
         Seed::RandomSym {
-            rank,
+            rank: 0,
         }
     }
 
-    pub fn new_random_c(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_random_c() -> Seed {
         Seed::RandomC {
-            rank,
+            rank: 0,
         }
     }
 
-    pub fn new_random(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_random() -> Seed {
         Seed::Random {
-            rank,
+            rank: 0,
         }
     }
 
-    pub fn new_fixed(rank: usize, v: &Array2<f64>) -> Seed {
+    pub fn new_fixed() -> Seed {
         Seed::Fixed {
-            rank,
+            rank: 0,
         }
     }
 }
 
 pub trait SeedFunctions {
-    fn initialize(&self, v: &Array2<f64>) -> (Array2<f64>, Array2<f64>);
+    fn initialize(&self, v: &Array2<f64>, rank: &usize) -> (Array2<f64>, Array2<f64>);
 }
 
 impl SeedFunctions for Seed {
-    fn initialize(&self, v: &Array2<f64>) -> (Array2<f64>, Array2<f64>) {
+    fn initialize(&self, v: &Array2<f64>, rank: &usize) -> (Array2<f64>, Array2<f64>) {
         match self {
             Seed::Nndsvd {
-                rank,
+                ..
             } => {
                 let (u, s, e)
                     = v.svd(true, true).unwrap();
@@ -184,7 +184,7 @@ impl SeedFunctions for Seed {
 
             },
             Seed::RandomVcol {
-                rank
+                ..
             } => {
                 let p_c = (1. / 2. * v.shape()[1] as f64) as usize;
                 let p_r = (1. / 2. * v.shape()[0] as f64) as usize;
@@ -262,7 +262,7 @@ impl SeedFunctions for Seed {
                 return (w, h)
             },
             Seed::RandomSym {
-                rank
+                ..
             } => {
                 let p_c = (1. / 2. * v.shape()[1] as f64) as usize;
                 let p_r = (1. / 2. * v.shape()[0] as f64) as usize;

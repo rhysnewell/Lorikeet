@@ -92,11 +92,12 @@ impl Factorization {
                nrun: usize,
                updatemethod: &str,
                objectivemethod: &str,
+               seedmethod: Seed,
                connchange: usize,
                miter: usize,
                minresiduals: f64) -> Factorization {
         Factorization::NMF {
-            seed: Seed::new_random_vcol(r, &input),
+            seed: seedmethod,
             v: input,
             v1: None,
             h1: None,
@@ -124,11 +125,22 @@ pub trait RunFactorization {
                   nrun: usize,
                   updatemethod: &str,
                   objectivemethod: &str,
+                  seedmethod: Seed,
                   connchange: usize,
                   miter: usize,
                   minresiduals: f64);
 
-    fn factorize(&mut self);
+    fn estimate_rank(&mut self);
+
+    fn factorize(v: &Array2<f64>,
+                seed: Seed,
+                final_obj: f64,
+                rank: usize,
+                update: Update,
+                objective: Objective,
+                conn_change: usize,
+                max_iter: usize,
+                min_residuals: f64) -> (Array2<f64>, Array2<f64>);
 
     fn is_satisfied(p_obj: &f64,
                     c_obj: &f64,
@@ -177,6 +189,7 @@ impl RunFactorization for Factorization {
                   nrun: usize,
                   updatemethod: &str,
                   objectivemethod: &str,
+                  seedmethod: Seed,
                   connchange: usize,
                   miter: usize,
                   minresiduals: f64) {
@@ -200,7 +213,7 @@ impl RunFactorization for Factorization {
                 ref mut cons,
                 ref mut old_cons,
             } => {
-                *seed = Seed::new_random_vcol(*rank, &input);
+                *seed = seedmethod;
                 *v = input;
                 *v1 = None;
                 *h1 = None;
@@ -221,7 +234,7 @@ impl RunFactorization for Factorization {
         }
     }
 
-    fn factorize(&mut self) {
+    fn estimate_rank(&mut self) {
         match self {
             Factorization::NMF {
                 v,
@@ -247,94 +260,128 @@ impl RunFactorization for Factorization {
                 //        Return fitted factorization model.
 
                 // Defined all variables first so they can be used inside closures
-                let best_obj = Arc::new(Mutex::new(0.));
-                let mut p_obj = std::f64::MAX;
-                let mut c_obj = std::f64::MAX;
-                let mut w_ret = Array2::zeros((1, 1));
-                let mut h_ret = Array2::zeros((1, 1));
-                let mut cons_ret = Array::zeros(
-                    (v.shape()[0], v.shape()[1]));
-                let mut old_cons_ret = Array::zeros(
-                    (v.shape()[0], v.shape()[1]));
-                let mut consecutive_conn = 0.;
+                let best_obj = Arc::new(Mutex::new(vec![0.; *rank]));
+                let mut best_rank = 0;
 
-                for run in (0..*n_run).into_iter() {
-                    let (wsvd, hsvd) = seed.initialize(&v);
-                    w_ret = wsvd;
-                    h_ret = hsvd;
-//                    debug!("Initialized H: {:?}", h_ret);
 
-                    p_obj = std::f64::MAX;
-                    c_obj = std::f64::MAX;
+                (1..*rank+1).into_par_iter().for_each(|r| {
+                    let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
+                                                                 r, *update, *objective, *conn_change,
+                                                                 *max_iter, *min_residuals);
+                    let (c_obj, new_cons) =
+                        Factorization::objective_update(&v,
+                                                        &w_ret,
+                                                        &h_ret,
+                                                        &Array2::zeros((1, 1)),
+                                                        &Array2::zeros((1, 1)),
+                                                        &Objective::Fro);
+                    let mut best_obj = best_obj.lock().unwrap();
+                    best_obj[r-1] = c_obj;
 
-                    let mut iteration = 0;
-                    while Factorization::is_satisfied(&p_obj,
-                                            &c_obj,
-                                            &iteration,
-                                            &min_residuals,
-                                            &max_iter,
-                                            &objective) {
+                });
+                let best_obj = best_obj.lock().unwrap();
+                let mut prev = std::f64::MAX;
 
-                        // to satisfy borrow checker, connectivity has to be checked here
-                        match objective {
-                            Objective::Conn => {
-
-                                if c_obj >= 1. {
-                                    consecutive_conn *= 0.;
-                                } else {
-                                    consecutive_conn += 1.;
-                                }
-                                if consecutive_conn >= *conn_change as f64 {
-                                    break
-                                }
-                            },
-                            _ => {}
-                        };
-
-                        p_obj = c_obj;
-                        let (mut w_update, mut h_update)
-                            = Factorization::update_wh(&v, w_ret, h_ret, &update);
-
-                            // This code does not work and it seems to function fine without it
-//                        // Adjust small values to prevent numerical underflow
-                        w_ret = Factorization::adjustment(&mut w_update);
-                        h_ret = Factorization::adjustment(&mut h_update);
-
-                        let (new_c_obj, new_cons) =
-                            Factorization::objective_update(&v,
-                                                          &w_ret,
-                                                          &h_ret,
-                                                          &cons_ret,
-                                                          &old_cons_ret,
-                                                            &objective);
-                        c_obj = new_c_obj;
-
-                        match new_cons {
-                            Some(array) => {
-                                old_cons_ret = cons_ret.clone();
-                                cons_ret = array;
-                            },
-                            None => {},
-                        }
-                        debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
-                                 c_obj, p_obj);
-                        iteration += 1;
-
+                for (r, curr) in best_obj.iter().enumerate() {
+                    debug!("PREV {} CURR {}", prev, curr);
+                    if curr < &prev {
+                        prev = *curr;
+                        best_rank = r;
+                    } else {
+                        break
                     }
-                    info!("Matrix Factorization complete after {} iterations", iteration);
-                    if c_obj < *best_obj.lock().unwrap() || run == 0 {
-                        let mut best_obj = best_obj.lock().unwrap();
-                        *best_obj = c_obj;
-                    }
-                };
+                }
+
+
+                let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
+                                                              best_rank, *update, *objective, *conn_change,
+                                                              *max_iter, *min_residuals);
+                info!("Best NMF rank: {}", best_rank);
                 debug!("H: {:?}", h_ret);
                 debug!("W: {:?}", w_ret);
-                *w = w_ret;
-                *h = h_ret;
-                *cons = cons_ret;
-                *old_cons = old_cons_ret;
+                *w = w_ret.clone();
+                *h = h_ret.clone();
+
             }
         }
+    }
+
+    fn factorize(v: &Array2<f64>,
+                 seed: Seed,
+                 final_obj: f64,
+                 rank: usize,
+                 update: Update,
+                 objective: Objective,
+                 conn_change: usize,
+                 max_iter: usize,
+                 min_residuals: f64) -> (Array2<f64>, Array2<f64>){
+        let mut p_obj = std::f64::MAX;
+        let mut c_obj = std::f64::MAX;
+        let mut cons_ret = Array::zeros(
+            (v.shape()[0], v.shape()[1]));
+        let mut old_cons_ret = Array::zeros(
+            (v.shape()[0], v.shape()[1]));
+        let mut consecutive_conn = 0.;
+
+        let (mut w_ret, mut h_ret) = seed.initialize(&v, &rank);
+
+//                    debug!("Initialized H: {:?}", h_ret);
+
+        let mut iteration = 0;
+
+        while Factorization::is_satisfied(&p_obj,
+                                          &c_obj,
+                                          &iteration,
+                                          &min_residuals,
+                                          &max_iter,
+                                          &objective) {
+
+            // to satisfy borrow checker, connectivity has to be checked here
+            match objective {
+                Objective::Conn => {
+
+                    if c_obj >= 1. {
+                        consecutive_conn *= 0.;
+                    } else {
+                        consecutive_conn += 1.;
+                    }
+                    if consecutive_conn >= conn_change as f64 {
+                        break
+                    }
+                },
+                _ => {}
+            };
+
+            p_obj = c_obj;
+            let (mut w_update, mut h_update)
+                = Factorization::update_wh(&v, w_ret, h_ret, &update);
+
+            // This code does not work and it seems to function fine without it
+//                        // Adjust small values to prevent numerical underflow
+            w_ret = Factorization::adjustment(&mut w_update);
+            h_ret = Factorization::adjustment(&mut h_update);
+
+            let (new_c_obj, new_cons) =
+                Factorization::objective_update(&v,
+                                                &w_ret,
+                                                &h_ret,
+                                                &cons_ret,
+                                                &old_cons_ret,
+                                                &objective);
+            c_obj = new_c_obj;
+
+            match new_cons {
+                Some(array) => {
+                    old_cons_ret = cons_ret.clone();
+                    cons_ret = array;
+                },
+                None => {},
+            }
+            debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
+                   c_obj, p_obj);
+            iteration += 1;
+        }
+        return (w_ret, h_ret)
     }
 
     fn adjustment(input: &mut Array2<f64>) -> Array2<f64> {
@@ -445,7 +492,8 @@ impl RunFactorization for Factorization {
             Objective::Div => {
                 // Compute divergence of target matrix from its NMF estimate.
                 let va = w.dot(h);
-                let inner_elop = (v.clone() / va.clone()).mapv(|x|{x.ln()});
+                let mut inner_elop = v.clone() / va.clone();
+                inner_elop.par_mapv_inplace(|x|{x.ln()});
 
                 return (((v.clone() * inner_elop) - v.clone() + va).sum(), None)
             },

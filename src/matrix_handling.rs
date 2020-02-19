@@ -225,7 +225,6 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                                 covar += (r_freq - mean_row) * (c_freq - mean_col)
                             });
 
-                     
                             row_var = row_var / row_vals.len() as f64;
                             col_var = col_var / col_vals.len() as f64;
                             covar = covar / row_vals.len() as f64;
@@ -239,11 +238,11 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                             if constraint < 0. {
                                 distance = 0.
                             } else {
-                                distance -= constraint.ln();
+                                distance += (1. - constraint);
                             }
-                            if distance > 2. {
-                                distance = 2.;
-                            }
+//                            if distance > 2. {
+//                                distance = 2.;
+//                            }
                             if distance < 0. {
                                 distance = 0.;
                             } else {
