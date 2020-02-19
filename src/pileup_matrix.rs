@@ -5,7 +5,7 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use ndarray::{Array2};
+use ndarray::{Array2, prelude::*};
 use ndarray_linalg::{norm::*};
 use ndarray_npy::read_npy;
 use std::sync::{Arc, Mutex};
@@ -424,6 +424,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let v = v.lock().unwrap();
                     let mut v = v.get_array2();
                     info!("Array Frobenius Norm {}", v.norm());
+                    println!("V: {}", v);
+
                     v = v.clone() / v.norm();
 
                     let mut nmf = Factorization::new_nmf(
@@ -431,7 +433,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                      15,
                                                      1,
                                                      "euclidean",
-                                                     "conn",
+                                                     "fro",
                                                      30,
                                                      1000,
                                                      1e-5);
