@@ -225,26 +225,27 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                                 covar += (r_freq - mean_row) * (c_freq - mean_col)
                             });
 
+                     
                             row_var = row_var / row_vals.len() as f64;
                             col_var = col_var / col_vals.len() as f64;
                             covar = covar / row_vals.len() as f64;
 
                             // technically correlation -1 to 1
                             distance = (2. * covar) / (row_var + col_var);
+
                             // 0 to 2
                             distance += 1.;
 //                            distance = 1. - (-log_var.powf(1. / 2.)).exp();
-//                            if constraint < 0. {
-//                                distance = 0.
-//                            } else {
-//                                distance += 1. - constraint
-//                            }
+                            if constraint < 0. {
+                                distance = 0.
+                            } else {
+                                distance -= constraint.ln();
+                            }
                             if distance > 2. {
                                 distance = 2.;
                             }
                             if distance < 0. {
-                                error!("Negative value encountered {} invalid for NMF", distance);
-                                process::exit(1);
+                                distance = 0.;
                             } else {
                                 variant_distances.lock().unwrap().index(row_index,
                                                                         col_index,

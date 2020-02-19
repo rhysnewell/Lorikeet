@@ -433,9 +433,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                      15,
                                                      1,
                                                      "euclidean",
-                                                     "fro",
+                                                     "conn",
                                                      30,
-                                                     1000,
+                                                     5000,
                                                      1e-5);
 
                     nmf.factorize();
@@ -446,7 +446,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut basis = nmf.basis();
 
-                    debug!("Predictions {:?}", predictions);
+                    //debug!("Predictions {:?}", predictions);
                     let mut unique_ranks = HashSet::new();
                     let mut geom_mean_score = 0.;
                     // get unique ranks from NMF and geom mean of scores
