@@ -234,11 +234,11 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                             // 0 to 2
                             distance += 1.;
 //                            distance = 1. - (-log_var.powf(1. / 2.)).exp();
-                            if constraint < 0. {
-                                distance = 0.
-                            } else {
-                                distance += 1. - constraint
-                            }
+//                            if constraint < 0. {
+//                                distance = 0.
+//                            } else {
+//                                distance += 1. - constraint
+//                            }
                             if distance > 2. {
                                 distance = 2.;
                             }
