@@ -9,7 +9,7 @@ addons:
   apt:
     packages:
       - libssl-dev
-      - gfortran-dev
+      - gfortran
 #      - libopenblas-dev
       - liblapacke-dev
 
