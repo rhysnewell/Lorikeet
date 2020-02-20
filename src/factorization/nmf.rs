@@ -4,7 +4,7 @@ use std::prelude::*;
 use ordered_float::NotNan;
 use approx;
 
-use ndarray::{Array, Array2, Axis, Zip};
+use ndarray::{Array, Array2, Axis, Zip, stack};
 use ndarray::prelude::*;
 use rayon::prelude::*;
 use crate::factorization::{seeding::Seed};
@@ -176,6 +176,8 @@ pub trait RunFactorization {
     fn residuals(&self) -> Array2<f64>;
 
     fn predict(&self, what: &str) -> Array2<NotNan<f64>>;
+
+    fn probabilities(&self, what: &str) -> Array2<NotNan<f64>>;
 
     fn rss (&self) -> f64;
 
@@ -679,7 +681,7 @@ impl RunFactorization for Factorization {
                 x.axis_iter(Axis(1)).enumerate()
                     .for_each(|(col_idx, row)|{
                         let notnan_row: Vec<NotNan<f64>> = row
-                            .iter()
+                            .into_par_iter()
                             .cloned()
                             .map(NotNan::new)
                             .filter_map(Result::ok)
@@ -704,6 +706,38 @@ impl RunFactorization for Factorization {
 
                 stack![Axis(1), idx, prob.insert_axis(Axis(1))]
 
+            }
+        }
+    }
+
+    fn probabilities(&self, what: &str) -> Array2<NotNan<f64>> {
+        match self {
+            Factorization::NMF {
+                v,
+                w,
+                h,
+                ..
+            } => {
+                let mut x = Array::zeros((2, 2));
+                match what {
+                    "samples" => {
+                        x = h.to_owned()
+                    },
+                    "features" => {
+                        x = w.to_owned()
+                    },
+                    _ => {
+                        error!("Invalid option for prediction parameter {}", what);
+                        process::exit(1)
+                    }
+                };
+
+                let mut probabilities = Array::zeros(
+                    (x.shape()[1], x.shape()[0]));
+
+                let sums = x.sum_axis(Axis(0));
+
+                return probabilities
             }
         }
     }
