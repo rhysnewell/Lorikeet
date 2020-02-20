@@ -7,7 +7,6 @@ use std::io::prelude::*;
 use rayon::prelude::*;
 use ndarray::{Array2, prelude::*};
 use ndarray_linalg::{norm::*};
-use ndarray_npy::read_npy;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::process;

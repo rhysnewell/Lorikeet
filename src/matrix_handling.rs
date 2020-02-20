@@ -1,6 +1,5 @@
 use ndarray::{Array2, Array1};
 use rayon::prelude::*;
-use ndarray_npy::write_npy;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::process;
@@ -15,16 +14,16 @@ pub enum VariantMatrix {
 
 impl VariantMatrix {
 
-    pub fn write_npy(&self, tmp_path: &str) {
-        match self {
-            VariantMatrix::Array1(array1) | VariantMatrix::Constraints(array1) => {
-                write_npy(&tmp_path, array1.to_owned()).expect("Unable to write to tempfile");
-            },
-            VariantMatrix::Array2(array2) => {
-                write_npy(&tmp_path, array2.to_owned()).expect("Unable to write to tempfile");
-            },
-        }
-    }
+//    pub fn write_npy(&self, tmp_path: &str) {
+//        match self {
+//            VariantMatrix::Array1(array1) | VariantMatrix::Constraints(array1) => {
+//                write_npy(&tmp_path, array1.to_owned()).expect("Unable to write to tempfile");
+//            },
+//            VariantMatrix::Array2(array2) => {
+//                write_npy(&tmp_path, array2.to_owned()).expect("Unable to write to tempfile");
+//            },
+//        }
+//    }
 
     fn index(&mut self, row_index: usize, col_index: usize, n: usize, distance1: f64, distance2: Option<f64>) {
         match self {

@@ -34,7 +34,6 @@ extern crate rayon;
 extern crate permutation;
 #[macro_use]
 extern crate ndarray;
-extern crate ndarray_npy;
 extern crate ndarray_linalg;
 extern crate strum;
 

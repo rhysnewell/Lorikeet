@@ -36,8 +36,7 @@ linregress = "0.1.6"
 log = "0.4.*"
 ordered-float = "1"
 ndarray = { version = "0.13.0", features = ["rayon"] }
-ndarray-npy = "0.5.*"
-ndarray-linalg = { version = "0.12", features = ["openblas"]}
+ndarray-linalg = { version = "0.12", features = ["static"]}
 nix = "0.13.*"
 permutation = "0.2.5"
 permutohedron = "0.2.4"
