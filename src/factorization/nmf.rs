@@ -291,12 +291,11 @@ impl RunFactorization for Factorization {
                         break
                     }
                 }
-
+                info!("Best NMF rank: {}", best_rank);
 
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
                                                               best_rank, *update, *objective, *conn_change,
                                                               1000, *min_residuals);
-                info!("Best NMF rank: {}", best_rank);
                 debug!("H: {:?}", h_ret);
                 debug!("W: {:?}", w_ret);
                 *w = w_ret.clone();

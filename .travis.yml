@@ -8,9 +8,11 @@ rust:
 addons:
   apt:
     packages:
+      - build-essential
       - libssl-dev
       - gfortran
-#      - libopenblas-dev
+      - libopenblas-dev
+      - libblas-dev
       - liblapacke-dev
 
 install:
