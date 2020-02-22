@@ -266,10 +266,10 @@ impl RunFactorization for Factorization {
                 let mut best_rank = 0;
 
 
-                (1..*rank+1).into_par_iter().for_each(|r| {
+                (2..*rank+1).into_iter().for_each(|r| {
                     let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
-                                                                 r, *update, *objective, *conn_change,
-                                                                 *max_iter, *min_residuals);
+                                                                 r, *update, Objective::Fro, *conn_change,
+                                                                 50, *min_residuals);
                     let (c_obj, new_cons) =
                         Factorization::objective_update(&v,
                                                         &w_ret,
@@ -297,7 +297,7 @@ impl RunFactorization for Factorization {
 
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
                                                               best_rank, *update, *objective, *conn_change,
-                                                              1000, *min_residuals);
+                                                              *max_iter, *min_residuals);
 
                 *w = w_ret.clone();
                 *h = h_ret.clone();
@@ -354,7 +354,7 @@ impl RunFactorization for Factorization {
 
             p_obj = c_obj;
             let (mut w_update, mut h_update)
-                = Factorization::update_wh(&v, w_ret, h_ret, &update);
+                = Factorization::update_wh(&v,  w_ret, h_ret, &update);
 
             // This code does not work and it seems to function fine without it
 //                        // Adjust small values to prevent numerical underflow
@@ -381,7 +381,7 @@ impl RunFactorization for Factorization {
 //                   c_obj, p_obj);
             iteration += 1;
         }
-        info!("NMF using rank {} finished in {} iterations", rank, iteration);
+        info!("NMF using rank {} objective function value {}", rank, c_obj);
         return (w_ret, h_ret)
     }
 
@@ -434,8 +434,10 @@ impl RunFactorization for Factorization {
                 // H is updated first, and then used to update W
                 // Function 1
                 let w_t = w.t();
+                let mut lower_1 = w_t.dot(v);
+                let lower_2 = w_t.dot(&w.dot(&h));
                 let mut lower_1 = w_t.dot(v) / w_t.dot(&w.dot(&h));
-                lower_1 = Factorization::adjustment(&mut lower_1);
+
                 let h = h * &(lower_1);
 
                 // Function 2
@@ -470,6 +472,7 @@ impl RunFactorization for Factorization {
 
                 let h = h * &(h_inner / h1);
                 let w = w * &(w_inner / w1);
+
                 return (w, h)
             },
             _ => {
@@ -788,13 +791,13 @@ mod tests {
         let placeholder = Array2::zeros((1, 1));
 
 
-        let w = Array2::from_shape_vec((5, 2),
+        let mut w = Array2::from_shape_vec((5, 2),
                                        vec![0.75, 0.85,
                                                0.65, 0.95,
                                                0.55, 0.05,
                                                0.45, 0.15,
                                                0.35, 0.25]).unwrap();
-        let h = Array2::from_shape_vec((2, 5),
+        let mut h = Array2::from_shape_vec((2, 5),
                                        vec![0.15, 0.25, 0.35, 0.45, 0.55,
                                             0.05, 0.95, 0.85, 0.75, 0.65]).unwrap();
 

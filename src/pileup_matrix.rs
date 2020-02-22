@@ -405,7 +405,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let v = v.lock().unwrap();
                     let mut v = v.get_array2();
-                    println!("V {}", v);
                     info!("Array Frobenius Norm {}", v.norm());
 
                     v = v.clone() / v.norm();
@@ -418,7 +417,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                      "conn",
                                                      Seed::new_random_vcol(),
                                                      30,
-                                                     100,
+                                                     500,
                                                      1e-5);
 
                     nmf.estimate_rank();
