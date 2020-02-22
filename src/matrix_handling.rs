@@ -171,14 +171,14 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
 
                             // Calculate the log-ratio variance across compositions
                             // Essentially analogous to correlation
-                            let mut log_vec = Arc::new(
-                                Mutex::new(Vec::new()));
-                            (row_info.2).1.par_iter()
-                                .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
-                                let mut log_vec = log_vec.lock().unwrap();
-                                log_vec.push(((r_freq)/ (c_freq)).ln() as f64);
-                            });
-                            let log_vec = log_vec.lock().unwrap();
+//                            let mut log_vec = Arc::new(
+//                                Mutex::new(Vec::new()));
+//                            (row_info.2).1.par_iter()
+//                                .zip((col_info.2).1.par_iter()).for_each(|(r_freq, c_freq)|{
+//                                let mut log_vec = log_vec.lock().unwrap();
+//                                log_vec.push(((r_freq)/ (c_freq)).ln() as f64);
+//                            });
+//                            let log_vec = log_vec.lock().unwrap();
 
                             let clr = |input: &Vec<f64>| -> Vec<f64> {
                                 let output = input.iter().enumerate().map(|(i,v)| {
@@ -200,14 +200,14 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
 
                             let mean_col = get_mean(&col_vals);
 
-                            let mean = get_mean(&log_vec);
+//                            let mean = get_mean(&log_vec);
 
 
                             // calculate the variance of the log vector
-                            let log_var = log_vec.iter().map(|&value|{
-                                let diff = mean - value;
-                                diff * diff
-                            }).sum::<f64>() / log_vec.len() as f64;
+//                            let log_var = log_vec.iter().map(|&value|{
+//                                let diff = mean - value;
+//                                diff * diff
+//                            }).sum::<f64>() / log_vec.len() as f64;
 
                             // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
                             // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
@@ -229,11 +229,15 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                             covar = covar / row_vals.len() as f64;
 
                             // technically correlation -1 to 1
-                            distance = (2. * covar) / (row_var + col_var);
-
+                            if row_var == 0. && col_var == 0. {
+                                distance = 0.;
+                            } else {
+                                distance = (2. * covar) / (row_var + col_var);
+                            }
                             // 0 to 2
                             distance += 1.;
 //                            distance = 1. - (-log_var.powf(1. / 2.)).exp();
+
                             if constraint < 0. {
                                 distance = 0.
                             } else {
@@ -244,13 +248,13 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
 //                            }
                             if distance < 0. {
                                 distance = 0.;
-                            } else {
-                                variant_distances.lock().unwrap().index(row_index,
-                                                                        col_index,
-                                                                        n,
-                                                                        distance,
-                                                                        None);
                             }
+
+                            variant_distances.lock().unwrap().index(row_index,
+                                                                    col_index,
+                                                                    n,
+                                                                    distance,
+                                                                    None);
                         } else {
 
                             let row_freq = (row_info.2).1[0];
