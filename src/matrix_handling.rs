@@ -250,6 +250,11 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
                                 distance = 0.;
                             }
 
+                            if distance.is_nan() || constraint.is_nan() {
+                                println!("Distance {} Constraint {} INFO {:?} {:?}", distance, constraint, row_info, col_info);
+
+                            }
+
                             variant_distances.lock().unwrap().index(row_index,
                                                                     col_index,
                                                                     n,
