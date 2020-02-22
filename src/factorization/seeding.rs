@@ -198,8 +198,6 @@ impl SeedFunctions for Seed {
                     }
                     rr_indices.slice_mut(s![.., r]).assign(&random_indices_r);
                 }
-                debug!("Random Col Ids {}", rc_indices);
-                debug!("Random Row Ids {}", rr_indices);
 
 
                 (0..*rank).into_par_iter().for_each(|i| {

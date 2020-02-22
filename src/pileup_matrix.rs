@@ -179,61 +179,43 @@ impl PileupMatrixFunctions for PileupMatrix{
                         target_names.entry(tid)
                             .or_insert(str::from_utf8(&target_name).unwrap().to_string());
                         target_lengths.entry(tid).or_insert(target_len);
-                        debug!("DEPTH {:?}", depth);
 
                         // Initialize contig id in variant hashmap
                         let mut contig_variants = variants.entry(tid)
                             .or_insert(HashMap::new());
 
-                        let mut sample_sums = variant_sums.entry(sample_idx)
-                            .or_insert(HashMap::new());
-                        if total_variants > 0 {
-                            let mut contig_sums = sample_sums.entry(tid)
-                                .or_insert(vec![vec![0.; total_variants as usize]; 3]);
+//                        let mut sample_sums = variant_sums.entry(sample_idx)
+//                            .or_insert(HashMap::new());
+//                        let mut contig_sums = sample_sums.entry(tid)
+//                            .or_insert(vec![vec![0.; total_variants as usize]; 3]);
 
-                            // Apppend the sample index to each variant abundance... so many loops >:(
-                            // Initialize the variant position index
-                            // Also turns out to be the total number of variant positions
-                            let mut variant_index = 0;
-                            for (pos, abundance_map) in variant_abundances.iter() {
-                                let position_variants = contig_variants.entry(*pos)
-                                    .or_insert(BTreeMap::new());
-                                let mut variant_depth: f64 = 0.;
-                                let mut total_depth: f64 = depth[*pos as usize];
+                        // Apppend the sample index to each variant abundance... so many loops >:(
+                        // Initialize the variant position index
+                        // Also turns out to be the total number of variant positions
+                        for (pos, total_depth) in depth.iter().enumerate() {
+                            let position_variants = contig_variants.entry(pos as i32)
+                                .or_insert(BTreeMap::new());
+                            let mut variant_depth: f64 = 0.;
+
+                            if variant_abundances.contains_key(&(pos as i32)) {
+                                let abundance_map = variant_abundances.get(&(pos as i32)).unwrap();
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
                                     variant_depth += (abundance.0) as f64;
-                                    sample_map[sample_idx] = (abundance.0 as f64, total_depth);
+                                    sample_map[sample_idx] = (abundance.0 as f64, *total_depth);
+
                                 }
-                                // add pseudocounts
-                                let ref_depth = total_depth
-                                                        - variant_depth;
-
-                                //Add Reference as variant
-                                let sample_map = position_variants.entry("R".to_string())
-                                    .or_insert(vec![(0., 0.); sample_count]);
-                                sample_map[sample_idx] = (ref_depth, total_depth);
-
-                                variant_depth += 1.;
-
-                                contig_sums[0][variant_index] = variant_depth / total_depth;
-                                contig_sums[2][variant_index] = ref_depth / total_depth;
-                                contig_sums[1][variant_index] = total_depth;
-
-                                variant_index += 1;
                             }
+                            // add pseudocounts
+                            let ref_depth = *total_depth
+                                                    - variant_depth;
 
-                            let contig_variant_counts = variant_counts.entry(sample_idx)
-                                .or_insert(HashMap::new());
-                            contig_variant_counts.insert(tid, variant_index);
-                        } else {
-                            let mut contig_sums = sample_sums.entry(tid)
-                                .or_insert(vec![vec![0.]; 3]);
+                            //Add Reference as variant
+                            let sample_map = position_variants.entry("R".to_string())
+                                .or_insert(vec![(0., 0.); sample_count]);
+                            sample_map[sample_idx] = (ref_depth, *total_depth);
 
-                            let contig_variant_counts = variant_counts.entry(sample_idx)
-                                .or_insert(HashMap::new());
-                            contig_variant_counts.insert(tid, 0);
                         }
 
                         let contig_indels = indels_map.entry(tid)
@@ -339,46 +321,49 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     variant_abundances.par_iter().for_each(
                         |(position, hash)| {
-                            // loop through each position that has variants
-                            for (var, abundances_vector) in hash.iter() {
-                                let mut abundance: f64 = 0.;
-                                let mut mean_var: f64 = 0.;
+                            // loop through each position that has variants ignoring positions that
+                            // only contained the reference in all samples
+                            if hash.keys().len() > 1 {
+                                for (var, abundances_vector) in hash.iter() {
+                                    let mut abundance: f64 = 0.;
+                                    let mut mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
-                                let mut freqs = Vec::new();
-                                let mut depths = Vec::new();
-                                // Get the mean abundance across samples
-                                let mut sample_idx: usize = 0;
-                                abundances_vector.iter().for_each(|(var, d)| {
+                                    let mut freqs = Vec::new();
+                                    let mut depths = Vec::new();
+                                    // Get the mean abundance across samples
+                                    let mut sample_idx: usize = 0;
+                                    abundances_vector.iter().for_each(|(var, d)| {
 //                                        mean_var += *var;
-                                    // Total depth of location
+                                        // Total depth of location
 //                                        total_d += *d;
 //                                            let freq = (*var + 1.) / (*d + 1.);
-                                    let mut geom_mean_var =
-                                        geom_mean_var.lock().unwrap();
-                                    let mut geom_mean_dep =
-                                        geom_mean_dep.lock().unwrap();
+                                        let mut geom_mean_var =
+                                            geom_mean_var.lock().unwrap();
+                                        let mut geom_mean_dep =
+                                            geom_mean_dep.lock().unwrap();
 
-                                    let sample_coverage = contig_coverages[sample_idx];
+                                        let sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
-                                    freqs.push(*var);
-                                    geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
-                                    geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
+                                        freqs.push(*var);
+                                        geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
+                                        geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
 
-                                    depths.push(*d);
-                                    sample_idx += 1;
-                                });
+                                        depths.push(*d);
+                                        sample_idx += 1;
+                                    });
 
 //                                    mean_var = mean_var / sample_count;
 //                                    abundance = abundance / sample_count;
 
-                                let mut variant_info_all = variant_info_all
-                                    .lock().unwrap();
+                                    let mut variant_info_all = variant_info_all
+                                        .lock().unwrap();
 
 
-                                variant_info_all.push(
-                                    (position, var.to_string(),
-                                     (depths, freqs), tid));
+                                    variant_info_all.push(
+                                        (position, var.to_string(),
+                                         (depths, freqs), tid));
+                                }
                             }
                         });
                 });
