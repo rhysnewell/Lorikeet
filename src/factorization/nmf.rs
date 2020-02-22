@@ -440,19 +440,40 @@ impl RunFactorization for Factorization {
                 let w_t = w.t();
                 let mut lower_1 = w_t.dot(v);
                 let lower_2 = w_t.dot(&w.dot(&h));
-                let mut lower_1 = w_t.dot(v) / w_t.dot(&w.dot(&h));
+                let mut lower_1 = w_t.dot(v);
 
-                let h = h * &(lower_1);
+                Zip::from(&mut lower_1)
+                    .and(&lower_2)
+                    .par_apply(|a, b| {
+                       *a = &*a / b
+                    });
+                lower_1 = Factorization::adjustment(&mut lower_1);
+
+                let mut h = h;
+                Zip::from(&mut h)
+                    .and(&lower_1)
+                    .par_apply(|a, b| {
+                        *a = &*a*b
+                    });
 
                 // Function 2
                 let mut h_dot_h_t = h.dot(&h.t());
-                h_dot_h_t = Factorization::adjustment(&mut h_dot_h_t);
-                let mut w_dot_h_dot_h_t = w.dot(&h_dot_h_t);
-                w_dot_h_dot_h_t = Factorization::adjustment(&mut w_dot_h_dot_h_t);
+                let w_dot_h_dot_h_t = w.dot(&h_dot_h_t);
                 let mut v_dot_h_t = v.dot(&h.t());
+//                let upper_div_lower_b = v_dot_h_t / w_dot_h_dot_h_t;
+                Zip::from(&mut v_dot_h_t)
+                    .and(&w_dot_h_dot_h_t)
+                    .par_apply(|a, b| {
+                        *a = &*a / b
+                    });
+
                 v_dot_h_t = Factorization::adjustment(&mut v_dot_h_t);
-                let upper_div_lower_b = v_dot_h_t / w_dot_h_dot_h_t;
-                let w = w * upper_div_lower_b;
+                let mut w = w;
+                Zip::from(&mut w)
+                    .and(&v_dot_h_t)
+                    .par_apply(|a, b| {
+                       *a = &*a*b
+                    });
 
                 return (w, h)
             },
@@ -494,7 +515,16 @@ impl RunFactorization for Factorization {
         match objective {
             Objective::Fro => {
                 // Compute squared Frobenius norm of a target matrix and its NMF estimate.
-                let r = v.clone() - w.dot(h);
+                let w_dot_h = w.dot(h);
+                let mut r = Array2::zeros(
+                    (v.shape()[0], v.shape()[1]));
+                Zip::from(&mut r)
+                    .and(v)
+                    .and(&w_dot_h)
+                    .par_apply(|a, b, c|{
+                        *a = b - c
+                    });
+
                 return ((r.clone() * r).sum(), None)
             },
             Objective::Div => {
