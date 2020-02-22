@@ -419,6 +419,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let v = v.lock().unwrap();
                     let mut v = v.get_array2();
+                    println!("V {}", v);
                     info!("Array Frobenius Norm {}", v.norm());
 
                     v = v.clone() / v.norm();

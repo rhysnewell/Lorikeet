@@ -1,4 +1,10 @@
 ---
+os:
+  - linux
+
+env:
+  - ARCH=x86_64
+
 sudo: required
 language: rust
 rust:
@@ -41,12 +47,6 @@ before_cache: |
   if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
     cargo install cargo-tarpaulin
   fi
-
-os:
-  - linux
-
-env:
-  - ARCH=x86_64
 
 script:
   - cargo clean
