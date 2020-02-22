@@ -107,7 +107,6 @@ impl SeedFunctions for Seed {
 
                 // Update other factors based on associated svd factor
                 (1..*rank).into_par_iter().for_each(|i|{
-                    debug!("Inside Loop");
 
                     let uu = u.slice(s![.., i]).to_owned();
                     let vv = e.slice(s![.., i]).to_owned();
@@ -123,25 +122,18 @@ impl SeedFunctions for Seed {
                     let termn = n_uun * n_vvn;
 
                     if termp >= termn {
-                        debug!("First statement");
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
-                        debug!("Map in place 1");
                         uup.par_mapv_inplace(|x| x * n_uup);
-                        debug!("vvp_t");
                         let mut vvp_t = vvp.t().to_owned();
-                        debug!("Map in place 2");
                         vvp_t.par_mapv_inplace(|x| x * n_vvp);
 
-                        debug!("First slice");
                         w_guard.slice_mut(s![.., i]).assign(
                             &((s[i] * termp).powf(1. / 2.) / (uup)));
 
-                        debug!("Second slice");
                         h_guard.slice_mut(s![i, ..]).assign(
                             &((s[i] * termp).powf(1. / 2.) / (vvp_t)));;
                     } else {
-                        debug!("Second statement");
                         let mut w_guard = w_guard.lock().unwrap();
                         let mut h_guard = h_guard.lock().unwrap();
 
@@ -155,7 +147,6 @@ impl SeedFunctions for Seed {
                             &((s[i] * termn).powf(1. / 2.) / (vvn_t)));;
                     }
                 });
-                debug!("Outside Loop");
                 let mut w_guard = w_guard.lock().unwrap();
                 let mut h_guard = h_guard.lock().unwrap();
 
@@ -178,8 +169,6 @@ impl SeedFunctions for Seed {
                 let w = w_guard.clone();
                 let h = h_guard.clone();
 
-                debug!("H: {:?}", h);
-                debug!("W: {:?}", w);
                 return (w, h)
 
             },
@@ -220,17 +209,14 @@ impl SeedFunctions for Seed {
                             Array2::zeros((v.shape()[0], p_c))));
 
                     (0..p_c).into_iter().for_each(|idx| {
-                        debug!("inner column loop");
                         let col_id = rc_indices[[i, idx]];
                         let v_slice = v.slice(s![.., col_id]).to_owned();
 
                         let mut random_cols = random_cols.lock().unwrap();
-                        debug!("Slicing on idx {}", idx);
                         random_cols.slice_mut(s![.., idx]).assign(&v_slice)
                     });
                     let mut w_guard = w_guard.lock().unwrap();
                     let random_cols = random_cols.lock().unwrap();
-                    debug!("Slicing in column means");
                     w_guard.slice_mut(s![.., i]).assign(
                         &random_cols.mean_axis(Axis(1)).unwrap());
 
@@ -240,7 +226,6 @@ impl SeedFunctions for Seed {
                             Array2::zeros((p_r, v.shape()[1]))));
 
                     (0..p_r).into_iter().for_each(|idx| {
-                        debug!("inner row loop");
                         let row_id = rr_indices[[idx, i]];
                         let v_slice = v.slice(s![row_id, ..]).to_owned();
 
@@ -249,7 +234,6 @@ impl SeedFunctions for Seed {
                     });
                     let mut h_guard = h_guard.lock().unwrap();
                     let random_rows = random_rows.lock().unwrap();
-                    debug!("Slicing in row means");
                     h_guard.slice_mut(s![i, ..]).assign(
                         &random_rows.mean_axis(Axis(0)).unwrap());;
                 });
@@ -284,7 +268,6 @@ impl SeedFunctions for Seed {
                     rc_indices.slice_mut(s![r, ..]).assign(&random_indices);
                 }
                 let rr_indices = rc_indices.t();
-                debug!("Random Col Ids {}", rc_indices);
 
 
                 (0..*rank).into_par_iter().for_each(|i| {
@@ -294,17 +277,14 @@ impl SeedFunctions for Seed {
                             Array2::zeros((v.shape()[0], p_c))));
 
                     (0..p_c).into_iter().for_each(|idx| {
-                        debug!("inner column loop");
                         let col_id = rc_indices[[i, idx]];
                         let v_slice = v.slice(s![.., col_id]).to_owned();
 
                         let mut random_cols = random_cols.lock().unwrap();
-                        debug!("Slicing on idx {}", idx);
                         random_cols.slice_mut(s![.., idx]).assign(&v_slice)
                     });
                     let mut w_guard = w_guard.lock().unwrap();
                     let random_cols = random_cols.lock().unwrap();
-                    debug!("Slicing in column means");
                     w_guard.slice_mut(s![.., i]).assign(
                         &random_cols.mean_axis(Axis(1)).unwrap());
 
@@ -314,7 +294,6 @@ impl SeedFunctions for Seed {
                             Array2::zeros((p_r, v.shape()[1]))));
 
                     (0..p_r).into_iter().for_each(|idx| {
-                        debug!("inner row loop");
                         let row_id = rr_indices[[idx, i]];
                         let v_slice = v.slice(s![row_id, ..]).to_owned();
 
@@ -323,7 +302,6 @@ impl SeedFunctions for Seed {
                     });
                     let mut h_guard = h_guard.lock().unwrap();
                     let random_rows = random_rows.lock().unwrap();
-                    debug!("Slicing in row means");
                     h_guard.slice_mut(s![i, ..]).assign(
                         &random_rows.mean_axis(Axis(0)).unwrap());;
                 });

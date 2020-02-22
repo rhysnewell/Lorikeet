@@ -298,8 +298,7 @@ impl RunFactorization for Factorization {
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
                                                               best_rank, *update, *objective, *conn_change,
                                                               1000, *min_residuals);
-                debug!("H: {:?}", h_ret);
-                debug!("W: {:?}", w_ret);
+
                 *w = w_ret.clone();
                 *h = h_ret.clone();
 
@@ -378,8 +377,8 @@ impl RunFactorization for Factorization {
                 },
                 None => {},
             }
-            debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
-                   c_obj, p_obj);
+//            debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
+//                   c_obj, p_obj);
             iteration += 1;
         }
         info!("NMF using rank {} finished in {} iterations", rank, iteration);

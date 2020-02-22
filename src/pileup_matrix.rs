@@ -179,6 +179,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         target_names.entry(tid)
                             .or_insert(str::from_utf8(&target_name).unwrap().to_string());
                         target_lengths.entry(tid).or_insert(target_len);
+                        debug!("DEPTH {:?}", depth);
 
                         // Initialize contig id in variant hashmap
                         let mut contig_variants = variants.entry(tid)
@@ -198,12 +199,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 let position_variants = contig_variants.entry(*pos)
                                     .or_insert(BTreeMap::new());
                                 let mut variant_depth: f64 = 0.;
-                                let mut total_depth: f64 = 0.;
+                                let mut total_depth: f64 = depth[*pos as usize];
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
                                     variant_depth += (abundance.0) as f64;
-                                    total_depth = (abundance.1) as f64;
                                     sample_map[sample_idx] = (abundance.0 as f64, total_depth);
                                 }
                                 // add pseudocounts
