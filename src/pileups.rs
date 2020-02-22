@@ -257,10 +257,10 @@ pub fn pileup_variants<R: NamedBamReader,
 
                                 if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-
-                                    let id = nuc_map.entry(base)
-                                        .or_insert(BTreeSet::new());
                                     let id = nuc_map.entry(base).or_insert(BTreeSet::new());
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                } else {
+                                    let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
                                 cursor += 1;

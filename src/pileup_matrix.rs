@@ -161,6 +161,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         indels,
                         nucfrequency,
                         total_variants,
+                        depth,
 //                        variations_per_n,
                         ..
                     } => {
@@ -201,17 +202,20 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 for (variant, abundance) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
-                                    variant_depth += abundance.0 as f64;
-                                    total_depth = abundance.1 as f64 + 1 as f64;
-                                    sample_map[sample_idx] = (abundance.0 as f64, abundance.1 as f64);
+                                    variant_depth += (abundance.0) as f64;
+                                    total_depth = (abundance.1) as f64;
+                                    sample_map[sample_idx] = (abundance.0 as f64, total_depth);
                                 }
                                 // add pseudocounts
                                 let ref_depth = total_depth
                                                         - variant_depth;
-                                variant_depth += 1.;
 
-                                let geom_mean = ((variant_depth / total_depth)
-                                    * (ref_depth / total_depth)).powf(1./2.);
+                                //Add Reference as variant
+                                let sample_map = position_variants.entry("R".to_string())
+                                    .or_insert(vec![(0., 0.); sample_count]);
+                                sample_map[sample_idx] = (ref_depth, total_depth);
+
+                                variant_depth += 1.;
 
                                 contig_sums[0][variant_index] = variant_depth / total_depth;
                                 contig_sums[2][variant_index] = ref_depth / total_depth;
@@ -342,46 +346,39 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                let mut total_d: f64 = 0.;
                                 let mut freqs = Vec::new();
                                 let mut depths = Vec::new();
-                                if !var.contains("R") {
-                                    // Get the mean abundance across samples
-                                    let mut sample_idx: usize = 0;
-                                    abundances_vector.iter().for_each(|(var, d)| {
+                                // Get the mean abundance across samples
+                                let mut sample_idx: usize = 0;
+                                abundances_vector.iter().for_each(|(var, d)| {
 //                                        mean_var += *var;
-                                        // Total depth of location
+                                    // Total depth of location
 //                                        total_d += *d;
-                                        if var > &0. {
 //                                            let freq = (*var + 1.) / (*d + 1.);
-                                            let mut geom_mean_var =
-                                                geom_mean_var.lock().unwrap();
-                                            let mut geom_mean_dep =
-                                                geom_mean_dep.lock().unwrap();
+                                    let mut geom_mean_var =
+                                        geom_mean_var.lock().unwrap();
+                                    let mut geom_mean_dep =
+                                        geom_mean_dep.lock().unwrap();
 
-                                            let sample_coverage = contig_coverages[sample_idx];
+                                    let sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
-                                            freqs.push(*var + 1.);
-                                            geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
-                                            geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
+                                    freqs.push(*var);
+                                    geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
+                                    geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
 
-                                            depths.push(*d + 1.);
-                                            abundance += *var / *d;
-                                        } else {
-                                            freqs.push(1.);
-                                        }
-                                        sample_idx += 1;
-                                    });
+                                    depths.push(*d);
+                                    sample_idx += 1;
+                                });
 
 //                                    mean_var = mean_var / sample_count;
 //                                    abundance = abundance / sample_count;
 
-                                    let mut variant_info_all = variant_info_all
-                                        .lock().unwrap();
+                                let mut variant_info_all = variant_info_all
+                                    .lock().unwrap();
 
 
-                                    variant_info_all.push(
-                                        (position, var.to_string(),
-                                         (depths, freqs), tid));
-                                }
+                                variant_info_all.push(
+                                    (position, var.to_string(),
+                                     (depths, freqs), tid));
                             }
                         });
                 });
@@ -680,6 +677,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 let removed_first_base = str::from_utf8(
                                                     &max_var.as_bytes()[1..]).unwrap();
                                                 contig = contig + removed_first_base;
+                                            } else if max_var.contains("R") {
+                                                contig = contig + str::from_utf8(&[*base]).unwrap();
                                             } else {
                                                 contig = contig + max_var;
                                             }
