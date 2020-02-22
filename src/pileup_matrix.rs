@@ -324,7 +324,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
                             if hash.keys().len() > 1 {
-                                for (var, abundances_vector) in hash.iter() {
+                                for (variant, abundances_vector) in hash.iter() {
                                     let mut abundance: f64 = 0.;
                                     let mut mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
@@ -347,8 +347,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
                                         geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
-                                        geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
-
+                                        if variant == &"R".to_string() {
+                                            geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
+                                        }
                                         depths.push(*d);
                                         sample_idx += 1;
                                     });
@@ -361,7 +362,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 
                                     variant_info_all.push(
-                                        (position, var.to_string(),
+                                        (position, variant.to_string(),
                                          (depths, freqs), tid));
                                 }
                             }

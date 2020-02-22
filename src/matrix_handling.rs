@@ -182,7 +182,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
 
                             let clr = |input: &Vec<f64>| -> Vec<f64> {
                                 let output = input.iter().enumerate().map(|(i,v)| {
-                                    (v / geom_means_var[i] as f64).ln()
+                                    ((v + 1.) / geom_means_var[i] as f64).ln()
                                 }).collect();
                                 return output
                             };
