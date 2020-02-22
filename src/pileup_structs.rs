@@ -364,33 +364,39 @@ impl PileupFunctions for PileupStats {
                             Some(map) => map.to_owned(),
                             None => BTreeMap::new(),
                         };
-                        if nuc_map.len() > 0 {
+                        if nuc_map.len() > 1 {
                             for (base, read_ids) in nuc_map.iter() {
                                 let count = read_ids.len();
 
-                                if (count >= min_variant_depth)
-//                                    && (count as f64 / *d >= min_variant_fraction)
-                                    && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
-                                    rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
+                                if base != &"R".chars().collect::<Vec<char>>()[0] {
+                                    if (count >= min_variant_depth)
+    //                                    && (count as f64 / *d >= min_variant_fraction)
+                                        && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
+                                        rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
 
-                                    for read in read_ids {
-                                        let mut read_variants
-                                            = read_variants.lock().unwrap();
-                                        let read_vec = read_variants
-                                            .entry(read.clone())
-                                            .or_insert(BTreeMap::new());
-                                        read_vec.insert(i as i32, base.to_string());
+                                        for read in read_ids {
+                                            let mut read_variants
+                                                = read_variants.lock().unwrap();
+                                            let read_vec = read_variants
+                                                .entry(read.clone())
+                                                .or_insert(BTreeMap::new());
+                                            read_vec.insert(i as i32, base.to_string());
+                                        }
+                                        if base != &"R".chars().collect::<Vec<char>>()[0] {
+                                            let mut variant_count = variant_count.lock().unwrap();
+                                            *variant_count += 1;
+                                        }
+                                    } else {
+                                        let nuc_map_back = nucfrequency
+                                            .entry(i as i32).or_insert(BTreeMap::new());
+                                        nuc_map_back.remove(base);
                                     }
-                                    if base != &"R".chars().collect::<Vec<char>>()[0] {
-                                        let mut variant_count = variant_count.lock().unwrap();
-                                        *variant_count += 1;
-                                    }
-                                } else {
-                                    let nuc_map_back = nucfrequency
-                                        .entry(i as i32).or_insert(BTreeMap::new());
-                                    nuc_map_back.remove(base);
                                 }
-                            }
+                            };
+                        } else {
+                            let nuc_map_back = nucfrequency
+                                .entry(i as i32).or_insert(BTreeMap::new());
+                            nuc_map_back.remove(&"R".chars().collect::<Vec<char>>()[0]);
                         };
 
 //                        }
@@ -413,7 +419,7 @@ impl PileupFunctions for PileupStats {
                                 = nucfrequency.lock().unwrap();
                             let nuc_map = nucfrequency
                                 .entry(i as i32).or_insert(BTreeMap::new());
-                            if nuc_map.len() > 0 {
+                            if nuc_map.len() > 1 {
                                 for (base, read_ids) in nuc_map.iter() {
                                     let count = read_ids.len();
                                     if base == &("R".as_bytes()[0] as char) {
