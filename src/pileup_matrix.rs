@@ -411,7 +411,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut nmf = Factorization::new_nmf(
                                                      v,
-                                                     8,
+                                                     20,
                                                      1,
                                                      "euclidean",
                                                      "conn",

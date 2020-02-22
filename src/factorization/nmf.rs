@@ -262,11 +262,11 @@ impl RunFactorization for Factorization {
                 //        Return fitted factorization model.
 
                 // Defined all variables first so they can be used inside closures
-                let best_obj = Arc::new(Mutex::new(vec![0.; *rank]));
+//                let best_obj = Arc::new(Mutex::new(vec![0.; *rank]));
                 let mut best_rank = 0;
+                let mut prev = std::f64::MAX;
 
-
-                (2..*rank+1).into_iter().for_each(|r| {
+                for r in (2..*rank+1).into_iter() {
                     let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
                                                                  r, *update, Objective::Fro, *conn_change,
                                                                  50, *min_residuals);
@@ -277,22 +277,26 @@ impl RunFactorization for Factorization {
                                                         &Array2::zeros((1, 1)),
                                                         &Array2::zeros((1, 1)),
                                                         &Objective::Fro);
-                    let mut best_obj = best_obj.lock().unwrap();
-                    best_obj[r-1] = c_obj;
-
-                });
-                let best_obj = best_obj.lock().unwrap();
-                let mut prev = std::f64::MAX;
-
-                for (r, curr) in best_obj.iter().enumerate() {
-                    debug!("PREV {} CURR {}", prev, curr);
-                    if (&prev - curr) > 1e-3 {
-                        prev = *curr;
+//                    let mut best_obj = best_obj.lock().unwrap();
+//                    best_obj[r-1] = c_obj;
+                    if (prev - c_obj) > 1e-3 {
+                        prev = c_obj;
                         best_rank = r;
                     } else {
                         break
                     }
-                }
+                };
+//                let best_obj = best_obj.lock().unwrap();
+//
+//                for (r, curr) in best_obj.iter().enumerate() {
+//                    debug!("PREV {} CURR {}", prev, curr);
+//                    if (&prev - curr) > 1e-3 {
+//                        prev = *curr;
+//                        best_rank = r;
+//                    } else {
+//                        break
+//                    }
+//                }
                 info!("Best NMF rank: {}", best_rank);
 
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
@@ -377,8 +381,8 @@ impl RunFactorization for Factorization {
                 },
                 None => {},
             }
-//            debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
-//                   c_obj, p_obj);
+            debug!("Consecutive Conn: {} c_obj {} p_obj {}", consecutive_conn,
+                   c_obj, p_obj);
             iteration += 1;
         }
         info!("NMF using rank {} objective function value {}", rank, c_obj);
