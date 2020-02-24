@@ -448,8 +448,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                 // If not, then prediction could realistically be any available rank
                 variant_info.par_iter().enumerate().for_each(|(row, info)| {
                     let scores = predictions.slice(s![row, ..]).clone();
+                    let notnan_scores: Vec<NotNan<f64>> = scores.into_par_iter().cloned()
+                        .map(NotNan::new)
+                        .filter_map(Result::ok)
+                        .collect();
+                    let max = notnan_scores.par_iter().max().expect("No maximum found");
+
                     scores.iter().enumerate().for_each(|(rank, score)|{
-                        if score >= &thresh {
+                        if score >= &(thresh*2.) || NotNan::from(*score) == *max {
                             let mut prediction_count = prediction_count.lock().unwrap();
                             let mut prediction_features = prediction_features.lock().unwrap();
                             let mut prediction_variants = prediction_variants.lock().unwrap();
