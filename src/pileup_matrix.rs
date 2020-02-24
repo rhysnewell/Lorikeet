@@ -455,7 +455,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let max = notnan_scores.par_iter().max().expect("No maximum found");
 
                     scores.iter().enumerate().for_each(|(rank, score)|{
-                        if score >= &(thresh*2.) || NotNan::from(*score) == *max {
+                        if score >= &(thresh) || NotNan::from(*score) == *max {
                             let mut prediction_count = prediction_count.lock().unwrap();
                             let mut prediction_features = prediction_features.lock().unwrap();
                             let mut prediction_variants = prediction_variants.lock().unwrap();
