@@ -177,7 +177,7 @@ pub trait RunFactorization {
 
     fn predict(&self, what: &str) -> Array2<NotNan<f64>>;
 
-    fn probabilities(&self, what: &str) -> Array2<NotNan<f64>>;
+    fn probabilities(&self, what: &str) -> Array2<f64>;
 
     fn rss (&self) -> f64;
 
@@ -262,13 +262,12 @@ impl RunFactorization for Factorization {
                 //        Return fitted factorization model.
 
                 // Defined all variables first so they can be used inside closures
-//                let best_obj = Arc::new(Mutex::new(vec![0.; *rank]));
                 let mut best_rank = 0;
                 let mut prev = std::f64::MAX;
 
                 for r in (2..*rank+1).into_iter() {
                     let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
-                                                                 r, *update, Objective::Fro, *conn_change,
+                                                                 r, *update, Objective::Conn, *conn_change,
                                                                  50, *min_residuals);
                     let (c_obj, new_cons) =
                         Factorization::objective_update(&v,
@@ -277,8 +276,8 @@ impl RunFactorization for Factorization {
                                                         &Array2::zeros((1, 1)),
                                                         &Array2::zeros((1, 1)),
                                                         &Objective::Fro);
-//                    let mut best_obj = best_obj.lock().unwrap();
-//                    best_obj[r-1] = c_obj;
+
+                    info!("NMF using rank {} objective function value {}", r, c_obj);
                     if (prev - c_obj) > 1e-3 {
                         prev = c_obj;
                         best_rank = r;
@@ -286,17 +285,6 @@ impl RunFactorization for Factorization {
                         break
                     }
                 };
-//                let best_obj = best_obj.lock().unwrap();
-//
-//                for (r, curr) in best_obj.iter().enumerate() {
-//                    debug!("PREV {} CURR {}", prev, curr);
-//                    if (&prev - curr) > 1e-3 {
-//                        prev = *curr;
-//                        best_rank = r;
-//                    } else {
-//                        break
-//                    }
-//                }
                 info!("Best NMF rank: {}", best_rank);
 
                 let (w_ret, h_ret) = Factorization::factorize(v, *seed, *final_obj,
@@ -360,8 +348,7 @@ impl RunFactorization for Factorization {
             let (mut w_update, mut h_update)
                 = Factorization::update_wh(&v,  w_ret, h_ret, &update);
 
-            // This code does not work and it seems to function fine without it
-//                        // Adjust small values to prevent numerical underflow
+            // Adjust small values to prevent numerical underflow
             w_ret = Factorization::adjustment(&mut w_update);
             h_ret = Factorization::adjustment(&mut h_update);
 
@@ -385,7 +372,6 @@ impl RunFactorization for Factorization {
                    c_obj, p_obj);
             iteration += 1;
         }
-        info!("NMF using rank {} objective function value {}", rank, c_obj);
         return (w_ret, h_ret)
     }
 
@@ -460,7 +446,6 @@ impl RunFactorization for Factorization {
                 let mut h_dot_h_t = h.dot(&h.t());
                 let w_dot_h_dot_h_t = w.dot(&h_dot_h_t);
                 let mut v_dot_h_t = v.dot(&h.t());
-//                let upper_div_lower_b = v_dot_h_t / w_dot_h_dot_h_t;
                 Zip::from(&mut v_dot_h_t)
                     .and(&w_dot_h_dot_h_t)
                     .par_apply(|a, b| {
@@ -563,8 +548,6 @@ impl RunFactorization for Factorization {
 
                 let mut new_cons: Array2<f64> = Array::zeros(
                     (v.shape()[0], v.shape()[1]));
-//                let mut mat1 = mat1.lock().unwrap();
-//                let mut mat2 = mat2.lock().unwrap();
 
                 Zip::from(&mut new_cons)
                     .and(mat1)
@@ -587,7 +570,6 @@ impl RunFactorization for Factorization {
                             *connectivity_change += 1.;
                         }
                     });
-//                debug!("Eqaulity: {}", &new_cons==cons);
                 let connectivity_change = connectivity_change.lock().unwrap().clone();
                 return (connectivity_change, Some(new_cons))
             },
@@ -746,7 +728,7 @@ impl RunFactorization for Factorization {
         }
     }
 
-    fn probabilities(&self, what: &str) -> Array2<NotNan<f64>> {
+    fn probabilities(&self, what: &str) -> Array2<f64> {
         match self {
             Factorization::NMF {
                 v,
@@ -768,11 +750,20 @@ impl RunFactorization for Factorization {
                     }
                 };
 
-                let mut probabilities = Array::zeros(
-                    (x.shape()[1], x.shape()[0]));
+                let probabilities = Arc::new(Mutex::new(Array::zeros(
+                    (x.shape()[1], x.shape()[0]))));
 
-                let sums = x.sum_axis(Axis(0));
 
+                x.axis_iter(Axis(1)).into_par_iter().enumerate()
+                    .for_each(|(col_idx, row)|{
+                        let sum: f64 = row
+                            .into_par_iter()
+                            .sum();
+                        let probs = row.to_owned() / sum;
+                        let mut probabilities = probabilities.lock().unwrap();
+                        probabilities.slice_mut(s![col_idx, ..]).assign(&probs);
+                    });
+                let probabilities = probabilities.lock().unwrap().clone();
                 return probabilities
             }
         }

@@ -410,11 +410,9 @@ pub fn pileup_variants<R: NamedBamReader,
         sample_idx += 1;
     };
     if mode=="genotype" {
-//        pileup_matrix.dbscan_cluster(epsilon, min_cluster_size);
-//        pileup_matrix.generate_genotypes(output_prefix);
-        pileup_matrix.generate_distances(n_threads, output_prefix);
+        let v = pileup_matrix.generate_distances(n_threads, output_prefix);
+        pileup_matrix.run_nmf(v);
         pileup_matrix.generate_genotypes(output_prefix);
-//        pileup_matrix.print_matrix();
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);
     }
@@ -490,20 +488,13 @@ fn process_previous_contigs_var(
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 if pileup_struct.len() > 0 {
-//                    pileup_struct.cluster_variants(epsilon);
-
-
-                    // prints results of variants calling
-//                    pileup_struct.generate_variant_contig(&ref_sequence, output_prefix);
 
                     pileup_struct.print_variants(&ref_sequence, stoit_name);
                 }
-//                pileup_struct.generate_svd();
 
             },
             "summarize" | "genotype" => {
                 // calculates minimum number of genotypes possible for each variant location
-//                pileup_struct.generate_minimum_genotypes();
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
                                          sample_idx as usize,

@@ -51,7 +51,7 @@ impl VariantMatrix {
     }
 }
 
-pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec<f64>), &i32)],
+pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<f64>), i32)],
                                indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                                geom_means_var: &[f64],
@@ -97,7 +97,7 @@ pub fn get_condensed_distances(variant_info_all: &[(&i32, String, (Vec<f64>, Vec
             }
         }
 
-        let row_start = *row_info.0 as usize;
+        let row_start = row_info.0 as usize;
         let row_end = row_start + row_info.1.len() - 1;
 
         (row_index+1..variant_info_all.len())
