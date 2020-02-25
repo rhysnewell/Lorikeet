@@ -181,14 +181,14 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
 //                            let log_vec = log_vec.lock().unwrap();
 
                             let clr = |input: &Vec<f64>| -> Vec<f64> {
-                                let output = input.iter().enumerate().map(|(i,v)| {
+                                let output = input.par_iter().enumerate().map(|(i,v)| {
                                     ((v + 1.) / geom_means_var[i] as f64).ln()
                                 }).collect();
                                 return output
                             };
 
                             let get_mean = |input: &Vec<f64>| -> f64 {
-                                let sum = input.iter().sum::<f64>();
+                                let sum = input.par_iter().sum::<f64>();
                                 sum / input.len() as f64
                             };
 
@@ -199,15 +199,6 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                             let mean_row = get_mean(&row_vals);
 
                             let mean_col = get_mean(&col_vals);
-
-//                            let mean = get_mean(&log_vec);
-
-
-                            // calculate the variance of the log vector
-//                            let log_var = log_vec.iter().map(|&value|{
-//                                let diff = mean - value;
-//                                diff * diff
-//                            }).sum::<f64>() / log_vec.len() as f64;
 
                             // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
                             // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))

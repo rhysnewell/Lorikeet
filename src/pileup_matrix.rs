@@ -16,6 +16,7 @@ use nix::sys::stat;
 use tempdir::TempDir;
 use crate::{tempfile, finish_command_safely};
 use crate::factorization::{nmf::*, seeding::*};
+use crate::dbscan::fuzzy;
 use itertools::Itertools;
 use ordered_float::NotNan;
 
@@ -39,6 +40,8 @@ pub enum PileupMatrix {
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
         variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
         variant_info: Vec<(i32, String, (Vec<f64>, Vec<f64>), i32)>,
+        geom_mean_var: Vec<f64>,
+        geom_mean_dep: Vec<f64>,
         pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
         pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
@@ -63,6 +66,8 @@ impl PileupMatrix {
             variant_counts: HashMap::new(),
             variant_sums: HashMap::new(),
             variant_info: Vec::new(),
+            geom_mean_var: Vec::new(),
+            geom_mean_dep: Vec::new(),
             pred_variants: HashMap::new(),
             pred_variants_all: HashMap::new(),
         }
@@ -80,9 +85,11 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
-    fn generate_distances(&mut self, threads: usize, output_prefix: &str) -> Array2<f64>;
+    fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_nmf(&mut self, v: Array2<f64>);
+    fn run_fuzzy_scan(&mut self);
+
+    fn run_nmf(&mut self);
 
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
@@ -276,17 +283,17 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn generate_distances(&mut self, threads: usize, output_prefix: &str) -> Array2<f64> {
+    fn generate_distances(&mut self, threads: usize, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
-                indels_map,
-                snps_map,
                 target_names,
                 sample_names,
                 coverages,
                 contigs,
                 ref mut variant_info,
+                ref mut geom_mean_var,
+                ref mut geom_mean_dep,
                 ref mut pred_variants_all,
                 ..
             } => {
@@ -301,12 +308,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // A vector the length of the number of samples
                 // Cumulatively calculates the product of abundaces from each sample
-                let geom_mean_var =
+                let geom_mean_v =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
 
-                let geom_mean_dep =
+                let geom_mean_d =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
@@ -337,18 +344,18 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         // Total depth of location
 //                                        total_d += *d;
 //                                            let freq = (*var + 1.) / (*d + 1.);
-                                        let mut geom_mean_var =
-                                            geom_mean_var.lock().unwrap();
-                                        let mut geom_mean_dep =
-                                            geom_mean_dep.lock().unwrap();
+                                        let mut geom_mean_v =
+                                            geom_mean_v.lock().unwrap();
+                                        let mut geom_mean_d =
+                                            geom_mean_d.lock().unwrap();
 
                                         let sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
-                                        geom_mean_var[sample_idx] += ((*var + 1.) as f64).ln();
+                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
                                         if variant == &"R".to_string() {
-                                            geom_mean_dep[sample_idx] += ((*d + 1.) as f64).ln();
+                                            geom_mean_d[sample_idx] += ((*d + 1.) as f64).ln();
                                         }
                                         depths.push(*d);
                                         sample_idx += 1;
@@ -367,143 +374,193 @@ impl PileupMatrixFunctions for PileupMatrix{
                         });
                 });
                 let mut variant_info_all = variant_info_all.lock().unwrap().clone();
-                if variant_info_all.len() > 1 {
+                let geom_mean = |input: &Vec<f64>| -> Vec<f64> {
+                    let output = input.iter()
+                        .map(|sum| {
+                            (sum / variant_info_all.len() as f64).exp()
+                        }).collect::<Vec<f64>>();
+                    return output
+                };
+                debug!("Geom Mean Var {:?}", geom_mean_v);
 
-                    info!("Generating Variant Distances with {} Variants", variant_info_all.len());
-                    let geom_mean = |input: &Vec<f64>| -> Vec<f64> {
-                        let output = input.iter()
-                            .map(|sum| {
-                                (sum / variant_info_all.len() as f64).exp()
-                            }).collect::<Vec<f64>>();
-                        return output
+                let mut geom_mean_v = geom_mean_v.lock().unwrap().clone();
+                let geom_mean_v = geom_mean(&geom_mean_v);
+                debug!("Geom Mean Var {:?}", geom_mean_v);
+
+                let mut geom_mean_d = geom_mean_d.lock().unwrap().clone();
+                let geom_mean_d = geom_mean(&geom_mean_d);
+                debug!("Geom Mean Dep {:?}", geom_mean_d);
+
+                *variant_info = variant_info_all;
+                *geom_mean_var = geom_mean_v;
+                *geom_mean_dep = geom_mean_d;
+
+            }
+        }
+    }
+
+    fn run_fuzzy_scan(&mut self) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
+                ref mut variant_info,
+                ref mut geom_mean_var,
+                ref mut geom_mean_dep,
+                ..
+            } => {
+
+                info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
+
+                let points = Arc::new(Mutex::new(Vec::new()));
+                variant_info.into_par_iter().for_each(|info| {
+                    let point = fuzzy::Point{
+                       pos: info.0,
+                       var: info.1.clone(),
+                       geom_var: geom_mean_var.clone(),
+                       geom_dep: geom_mean_dep.clone(),
+                       deps: (info.2).0.clone(),
+                       vars: (info.2).1.clone(),
+                       tid: info.3
                     };
-                    debug!("Geom Mean Var {:?}", geom_mean_var);
-
-                    let mut geom_mean_var = geom_mean_var.lock().unwrap();
-                    let geom_mean_var = geom_mean(&geom_mean_var);
-                    debug!("Geom Mean Var {:?}", geom_mean_var);
-
-                    let mut geom_mean_dep = geom_mean_dep.lock().unwrap();
-                    let geom_mean_dep = geom_mean(&geom_mean_dep);
-                    debug!("Geom Mean Dep {:?}", geom_mean_dep);
-
-
-                    // Generate distance or covariance matrix and pass that NMF functions
-                    let v = get_condensed_distances(&variant_info_all[..],
-                                            indels_map,
-                                            snps_map,
-                                            &geom_mean_var[..],
-                                            &geom_mean_dep[..],
-                                            sample_count as i32);
-
-                    let v = v.lock().unwrap();
-                    *variant_info = variant_info_all;
-
-                    let mut v = v.get_array2();
-                    return v
-
-                } else {
-                    debug!("Not enough variants found for NMF calculation: {:?}", variant_info_all);
-                    process::exit(1)
+                    let mut points = points.lock().unwrap();
+                    points.push(point);
+                });
+                let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
+                    eps_min: 0.05,
+                    eps_max: 0.25,
+                    pts_min: 0.1*variant_info.len() as f64,
+                    pts_max: 1.0*variant_info.len() as f64,
+                };
+                let points = points.lock().unwrap();
+                let clusters = fuzzy_scanner.cluster(&points[..]);
+                for cluster in clusters{
+                    println!("Clusters {:?}", cluster.len());
                 }
             }
         }
     }
 
-    fn run_nmf(&mut self, v: Array2<f64>) {
+    fn run_nmf(&mut self) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
+                ref mut geom_mean_var,
+                ref mut geom_mean_dep,
                 ref mut pred_variants,
+                sample_names,
+                indels_map,
+                snps_map,
                 ..
             } => {
-                let v = v.clone() / v.norm();
-                let mut nmf = Factorization::new_nmf(
-                    v,
-                    20,
-                    1,
-                    "euclidean",
-                    "conn",
-                    Seed::new_random_vcol(),
-                    30,
-                    500,
-                    1e-5);
+                if variant_info.len() > 1 {
+                    let sample_count = sample_names.len() as f64;
 
-                nmf.estimate_rank();
+                    info!("Generating Variant Distances with {} Variants", variant_info.len());
 
-                info!("EVAR: {} RSS: {}", nmf.evar(), nmf.rss());
 
-                let mut predictions = nmf.probabilities("samples");
 
-                let mut prediction_count = Arc::new(Mutex::new(HashMap::new()));
-                let mut prediction_features = Arc::new(Mutex::new(HashMap::new()));
-                let mut prediction_variants = Arc::new(Mutex::new(HashMap::new()));
-//                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
+                    // Generate distance or covariance matrix and pass that NMF functions
+                    let v = get_condensed_distances(&variant_info[..],
+                                                    indels_map,
+                                                    snps_map,
+                                                    &geom_mean_var[..],
+                                                    &geom_mean_dep[..],
+                                                    sample_count as i32);
 
-                let mut max_cnt = 0;
-                let mut max_strain = 0;
-                let thresh = 1. / predictions.shape()[1] as f64;
-                // check if feature score is greater than geom mean score / SD
-                // if so then place into that rank
-                // If not, then prediction could realistically be any available rank
-                variant_info.par_iter().enumerate().for_each(|(row, info)| {
-                    let scores = predictions.slice(s![row, ..]).clone();
-                    let notnan_scores: Vec<NotNan<f64>> = scores.into_par_iter().cloned()
-                        .map(NotNan::new)
-                        .filter_map(Result::ok)
-                        .collect();
-                    let max = notnan_scores.par_iter().max().expect("No maximum found");
+                    let v = v.lock().unwrap();
 
-                    scores.iter().enumerate().for_each(|(rank, score)|{
-                        if score >= &(thresh) || NotNan::from(*score) == *max {
-                            let mut prediction_count = prediction_count.lock().unwrap();
-                            let mut prediction_features = prediction_features.lock().unwrap();
-                            let mut prediction_variants = prediction_variants.lock().unwrap();
+                    let mut v = v.get_array2();
 
-                            let rank: usize = rank + 1;
-                            let count = prediction_count.entry(rank)
-                                .or_insert(0);
-                            let variant_tid = prediction_variants.entry(rank)
-                                .or_insert(HashMap::new());
+                    let v = v.clone() / v.norm();
+                    let mut nmf = Factorization::new_nmf(
+                        v,
+                        20,
+                        1,
+                        "euclidean",
+                        "conn",
+                        Seed::new_random_vcol(),
+                        30,
+                        500,
+                        1e-5);
 
-                            // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                            let variant_pos = variant_tid.entry(info.3).or_insert(HashMap::new());
+                    nmf.estimate_rank();
 
-                            let variant = variant_pos.entry(info.0).or_insert(HashSet::new());
-                            variant.insert(info.1.clone());
+                    info!("EVAR: {} RSS: {}", nmf.evar(), nmf.rss());
 
-                            let feature = prediction_features.entry(rank)
-                                .or_insert(0.);
-                            *feature += score.ln();
+                    let mut predictions = nmf.probabilities("samples");
 
-                            *count += 1;
+                    let mut prediction_count = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_features = Arc::new(Mutex::new(HashMap::new()));
+                    let mut prediction_variants = Arc::new(Mutex::new(HashMap::new()));
+    //                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
+
+                    let mut max_cnt = 0;
+                    let mut max_strain = 0;
+                    let thresh = 1. / predictions.shape()[1] as f64;
+                    // check if feature score is greater than geom mean score / SD
+                    // if so then place into that rank
+                    // If not, then prediction could realistically be any available rank
+                    variant_info.par_iter().enumerate().for_each(|(row, info)| {
+                        let scores = predictions.slice(s![row, ..]).clone();
+                        let notnan_scores: Vec<NotNan<f64>> = scores.into_par_iter().cloned()
+                            .map(NotNan::new)
+                            .filter_map(Result::ok)
+                            .collect();
+                        let max = notnan_scores.par_iter().max().expect("No maximum found");
+
+                        scores.iter().enumerate().for_each(|(rank, score)|{
+                            if score >= &(thresh) || NotNan::from(*score) == *max {
+                                let mut prediction_count = prediction_count.lock().unwrap();
+                                let mut prediction_features = prediction_features.lock().unwrap();
+                                let mut prediction_variants = prediction_variants.lock().unwrap();
+
+                                let rank: usize = rank + 1;
+                                let count = prediction_count.entry(rank)
+                                    .or_insert(0);
+                                let variant_tid = prediction_variants.entry(rank)
+                                    .or_insert(HashMap::new());
+
+                                // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
+                                let variant_pos = variant_tid.entry(info.3).or_insert(HashMap::new());
+
+                                let variant = variant_pos.entry(info.0).or_insert(HashSet::new());
+                                variant.insert(info.1.clone());
+
+                                let feature = prediction_features.entry(rank)
+                                    .or_insert(0.);
+                                *feature += score.ln();
+
+                                *count += 1;
+                            }
+                        });
+                    });
+                    let mut prediction_count = prediction_count.lock().unwrap();
+                    let mut prediction_features = prediction_features.lock().unwrap();
+                    let mut prediction_variants = prediction_variants.lock().unwrap().clone();
+                    // get the strain with maximum members
+                    let mut max_cnt = 0;
+                    let mut max_strain = 0;
+                    prediction_count.iter().for_each(|(strain, cnt)| {
+                        if &max_cnt <= cnt {
+                            max_strain = *strain;
+                            max_cnt = *cnt;
                         }
                     });
-                });
-                let mut prediction_count = prediction_count.lock().unwrap();
-                let mut prediction_features = prediction_features.lock().unwrap();
-                let mut prediction_variants = prediction_variants.lock().unwrap().clone();
-                // get the strain with maximum members
-                let mut max_cnt = 0;
-                let mut max_strain = 0;
-                prediction_count.iter().for_each(|(strain, cnt)| {
-                    if &max_cnt <= cnt {
-                        max_strain = *strain;
-                        max_cnt = *cnt;
-                    }
-                });
 
 
-                let mut prediction_geom = HashMap::new();
-                prediction_features.iter()
-                    .for_each(|(pred, sum)| {
-                        prediction_geom.insert(pred, (*sum / prediction_count[pred] as f64).exp());
-                    });
+                    let mut prediction_geom = HashMap::new();
+                    prediction_features.iter()
+                        .for_each(|(pred, sum)| {
+                            prediction_geom.insert(pred, (*sum / prediction_count[pred] as f64).exp());
+                        });
 
-                debug!("Prediction Geom Means {:?}", prediction_geom);
-                debug!("Prediction Counts {:?}", prediction_count);
+                    debug!("Prediction Geom Means {:?}", prediction_geom);
+                    debug!("Prediction Counts {:?}", prediction_count);
 
-                *pred_variants = prediction_variants;
+                    *pred_variants = prediction_variants;
+                } else {
+                    debug!("Not enough variants found for NMF calculation: {:?}", variant_info);
+                    process::exit(1)
+                }
             }
         }
     }
