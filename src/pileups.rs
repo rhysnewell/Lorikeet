@@ -413,7 +413,7 @@ pub fn pileup_variants<R: NamedBamReader,
         pileup_matrix.generate_distances(n_threads, output_prefix);
         pileup_matrix.run_fuzzy_scan();
 //        pileup_matrix.run_nmf();
-//        pileup_matrix.generate_genotypes(output_prefix);
+        pileup_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);
     }

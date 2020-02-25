@@ -405,6 +405,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut variant_info,
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
+                ref mut pred_variants,
                 ..
             } => {
 
@@ -426,15 +427,32 @@ impl PileupMatrixFunctions for PileupMatrix{
                 });
                 let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: 0.05,
-                    eps_max: 0.25,
-                    pts_min: 0.1*variant_info.len() as f64,
+                    eps_max: 0.15,
+                    pts_min: 0.05*variant_info.len() as f64,
                     pts_max: 1.0*variant_info.len() as f64,
                 };
                 let points = points.lock().unwrap();
                 let clusters = fuzzy_scanner.cluster(&points[..]);
-                for cluster in clusters{
-                    println!("Clusters {:?}", cluster.len());
-                }
+                let prediction_variants = Arc::new(
+                    Mutex::new(
+                        HashMap::new()));
+
+                clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
+                    cluster.par_iter().for_each(|assignment|{
+                        let variant = &points[assignment.index];
+                        let mut prediction_variants = prediction_variants.lock().unwrap();
+                        let variant_tid = prediction_variants.entry(rank + 1)
+                            .or_insert(HashMap::new());
+
+                        let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
+
+                        let variant_set = variant_pos.entry(variant.pos).or_insert(HashSet::new());
+                        variant_set.insert(variant.var.clone());
+                    });
+                });
+                let prediction_variants = prediction_variants.lock().unwrap().clone();
+                debug!("Predictions {:?}", prediction_variants);
+                *pred_variants = prediction_variants;
             }
         }
     }
