@@ -257,11 +257,11 @@ impl RunFactorization for Factorization {
                 ref mut cons,
                 ref mut old_cons,
             } => {
-                //        Compute matrix factorization.
-                //
-                //        Return fitted factorization model.
+                ///        Compute matrix factorization.
+                ///
+                ///        Return fitted factorization model.
 
-                // Defined all variables first so they can be used inside closures
+                /// Defined all variables first so they can be used inside closures
                 let mut best_rank = 0;
                 let mut prev = std::f64::MAX;
 
@@ -317,7 +317,6 @@ impl RunFactorization for Factorization {
 
         let (mut w_ret, mut h_ret) = seed.initialize(&v, &rank);
 
-//                    debug!("Initialized H: {:?}", h_ret);
 
         let mut iteration = 0;
 
@@ -401,7 +400,7 @@ impl RunFactorization for Factorization {
                 Objective::Conn => true,
                 _ => false,
             }{
-                // connectivity test outside this function
+                /// connectivity test outside this function
                 true
             } else if run > &0 && (p_obj - c_obj) < *min_residuals {
                 false
@@ -418,11 +417,11 @@ impl RunFactorization for Factorization {
                  update: &Update) -> (Array2<f64>, Array2<f64>){
         match update {
             Update::Euclidean => {
-                // Update basis and mixture matrix based on
-                // Euclidean distance multiplicative update rules.
-                // Build individual parts of functions
-                // H is updated first, and then used to update W
-                // Function 1
+                /// Update basis and mixture matrix based on
+                /// Euclidean distance multiplicative update rules.
+                /// Build individual parts of functions
+                /// H is updated first, and then used to update W
+                /// Function 1
                 let w_t = w.t();
                 let mut lower_1 = w_t.dot(v);
                 let lower_2 = w_t.dot(&w.dot(&h));
@@ -463,8 +462,8 @@ impl RunFactorization for Factorization {
                 return (w, h)
             },
             Update::Divergence => {
-                // Update basis and mixture matrix based on
-                // Divergence distance multiplicative update rules.
+                /// Update basis and mixture matrix based on
+                /// Divergence distance multiplicative update rules.
                 let h1: Array2<f64> = Array::from_elem(
                     (1, v.shape()[1]), w.sum_axis(Axis(0))[0]);
 
@@ -499,7 +498,7 @@ impl RunFactorization for Factorization {
                         objective: &Objective) -> (f64, Option<Array2<f64>>) {
         match objective {
             Objective::Fro => {
-                // Compute squared Frobenius norm of a target matrix and its NMF estimate.
+                /// Compute squared Frobenius norm of a target matrix and its NMF estimate.
                 let w_dot_h = w.dot(h);
                 let mut r = Array2::zeros(
                     (v.shape()[0], v.shape()[1]));
@@ -513,7 +512,7 @@ impl RunFactorization for Factorization {
                 return ((r.clone() * r).sum(), None)
             },
             Objective::Div => {
-                // Compute divergence of target matrix from its NMF estimate.
+                /// Compute divergence of target matrix from its NMF estimate.
                 let va = w.dot(h);
                 let mut inner_elop = v.clone() / va.clone();
                 inner_elop.par_mapv_inplace(|x|{x.ln()});
@@ -521,10 +520,10 @@ impl RunFactorization for Factorization {
                 return (((v.clone() * inner_elop) - v.clone() + va).sum(), None)
             },
             Objective::Conn => {
-                // Compute connectivity matrix and compare it to connectivity matrix
-                // from previous iteration.
-                // Return logical value denoting whether connectivity matrix has changed
-                // from previous iteration.
+                /// Compute connectivity matrix and compare it to connectivity matrix
+                /// from previous iteration.
+                /// Return logical value denoting whether connectivity matrix has changed
+                /// from previous iteration.
                 let idx = Arc::new(Mutex::new(Array1::<usize>::zeros(
                     h.shape()[1])));
 
