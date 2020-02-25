@@ -86,7 +86,7 @@ impl SeedFunctions for Seed {
                 let mut w = Array2::zeros((v.shape()[0], *rank));
                 let mut h = Array2::zeros((*rank, v.shape()[1]));
 
-                // choose the first singular triplet to be nonnegative
+                /// choose the first singular triplet to be nonnegative
 //                let s = s.into_diag();
                 debug!("S: {:?}", s);
                 let mut u_slice = u.slice(s![.., 0]).to_owned();
@@ -100,12 +100,12 @@ impl SeedFunctions for Seed {
                 h.slice_mut(s![0, ..]).assign(
                     &(s[0].powf(1. / 2.) * e_slice));
 
-                // generate mutex guards around w and h
+                /// generate mutex guards around w and h
                 let w_guard = Arc::new(Mutex::new(w.clone()));
                 let h_guard = Arc::new(Mutex::new(h.clone()));
 
 
-                // Update other factors based on associated svd factor
+                /// Update other factors based on associated svd factor
                 (1..*rank).into_par_iter().for_each(|i|{
 
                     let uu = u.slice(s![.., i]).to_owned();
@@ -184,14 +184,14 @@ impl SeedFunctions for Seed {
                 let mut rc_indices = Array2::zeros((*rank, p_c));
                 let mut rr_indices = Array2::zeros((p_r, *rank));
                 for r in (0..*rank).into_iter() {
-                    // generate random column indices
+                    /// generate random column indices
                     let mut random_indices_c = Array1::zeros(p_c);
                     for c in (0..p_c).into_iter() {
                         random_indices_c[c] = rng.gen_range(0, v.shape()[1]);
                     }
                     rc_indices.slice_mut(s![r, ..]).assign(&random_indices_c);
 
-                    // Generate random row indices
+                    /// Generate random row indices
                     let mut random_indices_r = Array1::zeros(p_r);
                     for r in (0..p_r).into_iter() {
                         random_indices_r[r] = rng.gen_range(0, v.shape()[0]);
@@ -251,9 +251,9 @@ impl SeedFunctions for Seed {
                 let mut h_guard = Arc::new(Mutex::new(Array2::zeros((*rank, v.shape()[1]))));
                 let mut w_guard = Arc::new(Mutex::new(Array2::zeros((v.shape()[0], *rank))));
 
-                // TODO: Since we are dealing with a symmetrical pairwise matrix,
-                //       would it make sense to initialize with the same rows/columns for both
-                //       W and H? i.e. rr_indices becomes the transpose matrix of rc_indices.
+                /// TODO: Since we are dealing with a symmetrical pairwise matrix,
+                ///       would it make sense to initialize with the same rows/columns for both
+                ///       W and H? i.e. rr_indices becomes the transpose matrix of rc_indices.
 
                 let mut rng = thread_rng();
                 let mut rc_indices = Array2::zeros((*rank, p_c));
@@ -269,7 +269,7 @@ impl SeedFunctions for Seed {
 
 
                 (0..*rank).into_par_iter().for_each(|i| {
-                    // retrieve random columns from input matrix
+                    /// retrieve random columns from input matrix
                     let random_cols = Arc::new(
                         Mutex::new(
                             Array2::zeros((v.shape()[0], p_c))));
@@ -286,7 +286,7 @@ impl SeedFunctions for Seed {
                     w_guard.slice_mut(s![.., i]).assign(
                         &random_cols.mean_axis(Axis(1)).unwrap());
 
-                    // retrieve random rows from input matrix
+                    /// retrieve random rows from input matrix
                     let random_rows = Arc::new(
                         Mutex::new(
                             Array2::zeros((p_r, v.shape()[1]))));
