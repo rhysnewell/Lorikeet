@@ -15,6 +15,7 @@ pub mod estimation;
 pub mod model;
 pub mod utils;
 pub mod factorization;
+pub mod dbscan;
 
 extern crate bio;
 extern crate bio_types;
