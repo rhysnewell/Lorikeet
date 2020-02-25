@@ -278,7 +278,7 @@ impl RunFactorization for Factorization {
                                                         &Objective::Fro);
 
                     info!("NMF using rank {} objective function value {}", r, c_obj);
-                    if (prev - c_obj) > 1e-3 {
+                    if (prev - c_obj) > 1e-2 {
                         prev = c_obj;
                         best_rank = r;
                     } else {
