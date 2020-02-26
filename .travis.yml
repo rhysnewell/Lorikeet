@@ -16,11 +16,11 @@ addons:
     packages:
       - build-essential
       - libssl-dev
-      - gfortran
 
 install:
   # Modified from https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/use-conda-with-travis-ci.html
   - sudo apt-get update
+  - sudo apt-get install gfortran
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
