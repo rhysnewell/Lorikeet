@@ -578,6 +578,12 @@ Other arguments (optional):
                                          The minimum distance between two points required for clustering.
    --e-max                               Maximum epsilon value used in fuzzyDBSCAN algorithm.
                                          The maximum distance between two points for border clustering.
+   --pts-min                             Minimum points as percentage in fuzzyDBSCAN algorithm.
+                                         The fraction of points needed to be within e-max
+                                         to begin core clustering.
+   --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
+                                         The fraction of points needed to be within e-max
+                                         to begin border clustering.
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -3046,7 +3052,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.01"))
                 .arg(Arg::with_name("e-max")
                     .long("e-max")
-                    .default_value("0.5"))
+                    .default_value("0.15"))
+                .arg(Arg::with_name("pts-min")
+                    .long("pts-min")
+                    .default_value("0.01"))
+                .arg(Arg::with_name("pts-max")
+                    .long("pts-max")
+                    .default_value("0.15"))
                 .arg(Arg::with_name("min-cluster-size")
                     .long("min-cluster-size")
                     .short("s")
