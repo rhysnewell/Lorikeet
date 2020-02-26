@@ -331,12 +331,16 @@ impl PileupMatrixFunctions for PileupMatrix{
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
                             if hash.keys().len() > 1 {
+                                let mut depths = Vec::new();
+                                let a_vec = &hash[&"R".to_string()];
+                                for (_a, d) in a_vec.iter() {
+                                    depths.push(*d);
+                                };
                                 for (variant, abundances_vector) in hash.iter() {
                                     let mut abundance: f64 = 0.;
                                     let mut mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
                                     let mut freqs = Vec::new();
-                                    let mut depths = Vec::new();
                                     // Get the mean abundance across samples
                                     let mut sample_idx: usize = 0;
                                     abundances_vector.iter().for_each(|(var, d)| {
@@ -355,9 +359,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         freqs.push(*var);
 //                                        if variant == &"R".to_string() {
                                             geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                            geom_mean_d[sample_idx] += ((*d + 1.) as f64).ln();
+                                            geom_mean_d[sample_idx] += ((depths[sample_idx] + 1.) as f64).ln();
 //                                        }
-                                        depths.push(*d);
                                         sample_idx += 1;
                                     });
 
@@ -368,7 +371,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                     variant_info_all.push(
                                         (*position, variant.to_string(),
-                                         (depths, freqs), *tid));
+                                         (depths.clone(), freqs), *tid));
                                 }
                             }
                         });
