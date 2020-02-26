@@ -42,7 +42,7 @@ pub enum PileupMatrix {
         variant_info: Vec<(i32, String, (Vec<f64>, Vec<f64>), i32)>,
         geom_mean_var: Vec<f64>,
         geom_mean_dep: Vec<f64>,
-        pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashMap<fuzzy::Category, HashSet<String>>>>>,
         pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
 }
@@ -353,10 +353,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
-                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                        if variant == &"R".to_string() {
+//                                        if variant == &"R".to_string() {
+                                            geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
                                             geom_mean_d[sample_idx] += ((*d + 1.) as f64).ln();
-                                        }
+//                                        }
                                         depths.push(*d);
                                         sample_idx += 1;
                                     });
@@ -381,7 +381,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                         }).collect::<Vec<f64>>();
                     return output
                 };
-                debug!("Geom Mean Var {:?}", geom_mean_v);
 
                 let mut geom_mean_v = geom_mean_v.lock().unwrap().clone();
                 let geom_mean_v = geom_mean(&geom_mean_v);
@@ -452,7 +451,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                         let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
 
-                        let variant_set = variant_pos.entry(variant.pos).or_insert(HashSet::new());
+                        let variant_cat = variant_pos.entry(variant.pos).or_insert(HashMap::new());
+                        let variant_set = variant_cat.entry(assignment.category).or_insert(HashSet::new());
                         variant_set.insert(variant.var.clone());
 
                         let mut prediction_count = prediction_count.lock().unwrap();
@@ -561,7 +561,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
                                 let variant_pos = variant_tid.entry(info.3).or_insert(HashMap::new());
 
-                                let variant = variant_pos.entry(info.0).or_insert(HashSet::new());
+                                let variant_cat = variant_pos.entry(info.0).or_insert(HashMap::new());
+                                let variant = variant_cat.entry(fuzzy::Category::Core).or_insert(HashSet::new());
                                 variant.insert(info.1.clone());
 
                                 let feature = prediction_features.entry(rank)
@@ -652,16 +653,22 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if genotype.contains_key(&tid) {
                                         let mut tid_genotype = genotype.get_mut(&tid).unwrap();
 
-                                        if pred_variants_all.contains_key(&0) {
-                                            if pred_variants_all[&0].contains_key(&tid) {
-                                                tid_genotype
-                                                    .extend(pred_variants_all[&0][&tid].clone());
-                                            }
-                                        };
+//                                        if pred_variants_all.contains_key(&0) {
+//                                            if pred_variants_all[&0].contains_key(&tid) {
+//                                                tid_genotype
+//                                                    .extend(pred_variants_all[&0][&tid].clone());
+//                                            }
+//                                        };
 
                                         if tid_genotype.contains_key(&(pos as i32)) {
 
-                                            let hash = &genotype[tid][&(pos as i32)];
+                                            let categories = &genotype[tid][&(pos as i32)];
+                                            let mut hash= HashSet::new();
+                                            if categories.contains_key(&fuzzy::Category::Core) {
+                                                hash = categories[&fuzzy::Category::Core].clone();
+                                            } else if categories.contains_key(&fuzzy::Category::Border) {
+                                                hash = categories[&fuzzy::Category::Border].clone();
+                                            }
 
                                             for var in hash.iter() {
                                                 max_var = var;
