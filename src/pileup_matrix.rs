@@ -649,7 +649,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 if skip_cnt < skip_n {
                                     skip_cnt += 1;
                                 } else {
-                                    let mut max_var = "";
 
                                     skip_n = 0;
                                     skip_cnt = 0;
@@ -673,10 +672,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 hash = categories[&fuzzy::Category::Border].clone();
                                             }
 
+                                            let mut max_var = "";
                                             for var in hash.iter() {
-                                                max_var = var;
+                                                if max_var == "" {
+                                                    max_var = var;
+                                                } else if max_var == "R" {
+                                                    max_var = var;
+                                                }
                                                 variations += 1;
-                                                break
                                             }
                                             if max_var.contains("N") {
                                                 // Skip the next n bases but rescue the reference prefix
