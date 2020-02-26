@@ -574,6 +574,10 @@ Other arguments (optional):
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
+   --e-min                               Minimum epsilon value used in fuzzyDBSCAN algorithm.
+                                         The minimum distance between two points required for clustering.
+   --e-max                               Maximum epsilon value used in fuzzyDBSCAN algorithm.
+                                         The maximum distance between two points for border clustering.
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -3037,10 +3041,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
-                .arg(Arg::with_name("epsilon")
-                    .long("epsilon")
-                    .short("e")
-                    .default_value("0.05"))
+                .arg(Arg::with_name("e-min")
+                    .long("e-min")
+                    .default_value("0.01"))
+                .arg(Arg::with_name("e-max")
+                    .long("e-max")
+                    .default_value("0.5"))
                 .arg(Arg::with_name("min-cluster-size")
                     .long("min-cluster-size")
                     .short("s")

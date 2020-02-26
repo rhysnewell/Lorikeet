@@ -51,6 +51,7 @@ impl VariantMatrix {
     }
 }
 
+///Generates a pairwise distance or covariance matrix
 pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<f64>), i32)],
                                indels_map: &mut HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,

@@ -633,12 +633,12 @@ impl RunFactorization for Factorization {
             } => {
                 match metric {
                     Objective::Fro => {
-                        // Compute squared Frobenius norm of a target matrix and its NMF estimate.
+                        /// Compute squared Frobenius norm of a target matrix and its NMF estimate.
                         let r = v.clone() - w.dot(h);
                         return (r.clone() * r).sum()
                     },
                     Objective::Div => {
-                        // Compute divergence of target matrix from its NMF estimate.
+                        /// Compute divergence of target matrix from its NMF estimate.
                         let va = w.dot(h);
                         let mut inner_elop = v.clone() / va.clone();
                         inner_elop.par_mapv_inplace(|x| { x.ln() });
