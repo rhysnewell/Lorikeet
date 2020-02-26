@@ -408,7 +408,9 @@ pub fn pileup_variants<R: NamedBamReader,
         pileup_matrix.generate_distances(n_threads, output_prefix);
         let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
         let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-        pileup_matrix.run_fuzzy_scan(e_min, e_max);
+        let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
+        let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
+        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max);
 //        pileup_matrix.run_nmf();
         pileup_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {

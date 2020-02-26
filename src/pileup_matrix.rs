@@ -87,7 +87,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64);
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64);
 
     fn run_nmf(&mut self);
 
@@ -398,7 +398,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -427,8 +427,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
-                    pts_min: 0.01*variant_info.len() as f64,
-                    pts_max: 0.05*variant_info.len() as f64,
+                    pts_min: pts_min*variant_info.len() as f64,
+                    pts_max: pts_max*variant_info.len() as f64,
                 };
                 let points = points.lock().unwrap();
                 let clusters = fuzzy_scanner.cluster(&points[..]);
