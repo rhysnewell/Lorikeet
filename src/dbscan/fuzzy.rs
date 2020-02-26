@@ -37,71 +37,78 @@ pub struct Point {
 impl MetricSpace for Point {
     fn distance(&self, other: &Self) -> f64 {
 
-        if self.pos == other.pos && self.tid == other.tid {
-            return 10.
-        } else if self.vars.len() > 1 {
-            let mut distance = 0.;
-            let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
-                let output = input.par_iter().enumerate().map(|(i, v)| {
-                    ((v + 1.) / geom_mean_var[i] as f64).ln()
-                }).collect();
-                return output
-            };
-
-            let get_mean = |input: &Vec<f64>| -> f64 {
-                let sum = input.par_iter().sum::<f64>();
-                sum / input.len() as f64
-            };
-
-            let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
-
-            let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
-
-            let mean_row = get_mean(&row_vals);
-
-            let mean_col = get_mean(&col_vals);
-
-            // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
-            // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
-
-            // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
-            let mut row_var = 0.;
-            let mut col_var = 0.;
-            let mut covar = 0.;
-
-            row_vals.iter()
-                .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
-                row_var += (r_freq - mean_row).powf(2.);
-                col_var += (c_freq - mean_col).powf(2.);
-                covar += (r_freq - mean_row) * (c_freq - mean_col)
-            });
-
-            row_var = row_var / row_vals.len() as f64;
-            col_var = col_var / col_vals.len() as f64;
-            covar = covar / row_vals.len() as f64;
-
-            if row_var == 0. && col_var == 0. {
-                distance = 0.;
+        if self.vars.len() > 1 {
+            if self.pos == other.pos && self.tid == other.tid {
+                return 2.
             } else {
-                distance = (2. * covar) / (row_var + col_var);
+                let mut distance = 0.;
+                let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
+                    let output = input.par_iter().enumerate().map(|(i, v)| {
+                        ((v + 1.) / geom_mean_var[i] as f64).ln()
+                    }).collect();
+                    return output
+                };
+
+                let get_mean = |input: &Vec<f64>| -> f64 {
+                    let sum = input.par_iter().sum::<f64>();
+                    sum / input.len() as f64
+                };
+
+                let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
+
+                let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
+
+                let mean_row = get_mean(&row_vals);
+
+                let mean_col = get_mean(&col_vals);
+
+                // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
+                // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
+
+                // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
+                let mut row_var = 0.;
+                let mut col_var = 0.;
+                let mut covar = 0.;
+
+                row_vals.iter()
+                    .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
+                    row_var += (r_freq - mean_row).powf(2.);
+                    col_var += (c_freq - mean_col).powf(2.);
+                    covar += (r_freq - mean_row) * (c_freq - mean_col)
+                });
+
+                row_var = row_var / row_vals.len() as f64;
+                col_var = col_var / col_vals.len() as f64;
+                covar = covar / row_vals.len() as f64;
+
+                if row_var == 0. && col_var == 0. {
+                    distance = 0.;
+                } else {
+                    distance = (2. * covar) / (row_var + col_var);
+                }
+                // swap signs
+                distance *= -1.;
+                // move between 0 and 2
+                distance += 1.;
+//                debug!("Distance {} Self {:?} Other {:?}", distance, &self, other);
+
+                return distance
             }
-            // swap signs
-            distance *= -1.;
-            // move between 0 and 2
-            distance += 1.;
-
-            return distance
         } else {
-            let row_freq = self.vars[0];
-            let col_freq = other.vars[0];
+            if self.pos == other.pos && self.tid == other.tid {
+                return 20.
+            } else {
+                let row_freq = self.vars[0];
+                let col_freq = other.vars[0];
 
-            let row_depth = self.deps[0];
-            let col_depth = other.deps[0];
+                let row_depth = self.deps[0];
+                let col_depth = other.deps[0];
 
-            let distance = (((row_freq / self.geom_var[0] as f64).ln() - (col_freq / other.geom_var[0] as f64).ln()).powf(2.)
-                + ((row_depth / self.geom_dep[0] as f64).ln() - (col_depth / other.geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
+                let distance = (((row_freq / self.geom_var[0] as f64).ln() - (col_freq / other.geom_var[0] as f64).ln()).powf(2.)
+                    + ((row_depth / self.geom_dep[0] as f64).ln() - (col_depth / other.geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
 
-            return distance
+                return distance
+            }
         }
     }
 }

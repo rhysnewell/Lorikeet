@@ -1901,7 +1901,7 @@ fn run_pileup<'a,
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
+//            let kmer_size = m.value_of("kmer-size").unwrap().parse().unwrap();
             let reference_path = Path::new(m.value_of("reference").unwrap());
             let fasta_reader = match fasta::Reader::from_path(reference_path){
                 Ok(reader) => reader,
@@ -1925,45 +1925,6 @@ fn run_pileup<'a,
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
                 panic!("error: Trim bounds must be between 0 and 1, and \
                                     min must be less than max, found {} and {}", min, max);
-            }
-
-            let contigs = fasta_reader.into_records().collect_vec();
-            // Initialize bound contig variable
-            let mut tet_freq = BTreeMap::new();
-            let contig_count = contigs.len();
-            let mut contig_idx = 0 as usize;
-            let mut contig_names = vec![String::new(); contig_count];
-            info!("Calculating K-mer frequencies");
-            for contig in contigs{
-                let contig = contig.unwrap();
-                contig_names[contig_idx] = String::from_utf8(contig.head).unwrap();
-                let kmers = hash_kmers(&contig.seq, kmer_size);
-                // Get kmer counts in a contig
-                for (kmer, pos) in kmers {
-                    let k = tet_freq.entry(kmer.to_vec()).or_insert(vec![0; contig_count]);
-                    k[contig_idx] = pos.len();
-                }
-                contig_idx += 1;
-            }
-
-            let file_name = output_prefix.to_string() + &"_".to_owned()
-                + &kmer_size.clone().to_string() + &"mer_counts".to_owned()
-                + &".tsv".to_owned();
-            let file_path = Path::new(&file_name);
-            let mut file_open = match File::create(file_path) {
-                Ok(fasta) => fasta,
-                Err(e) => {
-                    println!("Cannot create file {:?}", e);
-                    std::process::exit(1)
-                },
-            };
-            for (tid, name) in contig_names.iter().enumerate() {
-                write!(file_open, "{}\t",
-                       name).unwrap();
-                for (_kmer, counts) in tet_freq.iter(){
-                    write!(file_open, "{}\t", counts[tid]).unwrap();
-                }
-                write!(file_open, "\n").unwrap();
             }
 
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
@@ -3049,7 +3010,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("trimmed_mean"))
                 .arg(Arg::with_name("e-min")
                     .long("e-min")
-                    .default_value("0.01"))
+                    .default_value("0.05"))
                 .arg(Arg::with_name("e-max")
                     .long("e-max")
                     .default_value("0.15"))

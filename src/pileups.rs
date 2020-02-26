@@ -49,9 +49,13 @@ pub fn pileup_variants<R: NamedBamReader,
     // Print file header
     let mut pileup_matrix = PileupMatrix::new_matrix();
     let mut gff_map = HashMap::new();
+    let mut codon_table = CodonTable::setup();
+
 
     match mode {
         "evolve" => {
+            codon_table.get_codon_table(11);
+
             let mut gff_reader;
             if m.is_present("gff") {
                 let gff_file = m.value_of("gff").unwrap();
@@ -111,8 +115,6 @@ pub fn pileup_variants<R: NamedBamReader,
     }
     let mut read_cnt_id: i64 = 0;
     let mut read_to_id = HashMap::new();
-    let mut codon_table = CodonTable::setup();
-    codon_table.get_codon_table(11);
     // Loop through bam generators in parallel
     for bam_generator in bam_readers {
         let mut bam_generated = bam_generator.start();
