@@ -87,7 +87,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_fuzzy_scan(&mut self);
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64);
 
     fn run_nmf(&mut self);
 
@@ -399,7 +399,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_fuzzy_scan(&mut self) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -426,14 +426,20 @@ impl PileupMatrixFunctions for PileupMatrix{
                     points.push(point);
                 });
                 let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
-                    eps_min: 0.05,
-                    eps_max: 0.15,
-                    pts_min: 0.05*variant_info.len() as f64,
-                    pts_max: 1.0*variant_info.len() as f64,
+                    eps_min: e_min,
+                    eps_max: e_max,
+                    pts_min: 0.01*variant_info.len() as f64,
+                    pts_max: 0.05*variant_info.len() as f64,
                 };
                 let points = points.lock().unwrap();
                 let clusters = fuzzy_scanner.cluster(&points[..]);
                 let prediction_variants = Arc::new(
+                    Mutex::new(
+                        HashMap::new()));
+                let prediction_count = Arc::new(
+                    Mutex::new(
+                        HashMap::new()));
+                let prediction_features = Arc::new(
                     Mutex::new(
                         HashMap::new()));
 
@@ -448,10 +454,25 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                         let variant_set = variant_pos.entry(variant.pos).or_insert(HashSet::new());
                         variant_set.insert(variant.var.clone());
+
+                        let mut prediction_count = prediction_count.lock().unwrap();
+                        let count = prediction_count.entry(rank + 1).or_insert(0);
+                        *count += 1;
+
+                        let mut prediction_features = prediction_features.lock().unwrap();
+                        let feature = prediction_features.entry(rank+1).or_insert(HashMap::new());
+                        let category = feature.entry(assignment.category).or_insert(0);
+                        *category += 1;
+
                     });
                 });
                 let prediction_variants = prediction_variants.lock().unwrap().clone();
+                let prediction_count = prediction_count.lock().unwrap();
+                let prediction_features = prediction_features.lock().unwrap();
+
                 debug!("Predictions {:?}", prediction_variants);
+                debug!("Prediction count {:?}", prediction_count);
+                debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants;
             }
         }

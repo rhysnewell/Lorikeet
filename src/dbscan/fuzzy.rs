@@ -38,7 +38,7 @@ impl MetricSpace for Point {
     fn distance(&self, other: &Self) -> f64 {
 
         if self.pos == other.pos && self.tid == other.tid {
-            return 2.
+            return 10.
         } else if self.vars.len() > 1 {
             let mut distance = 0.;
             let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
@@ -98,15 +98,16 @@ impl MetricSpace for Point {
             let row_depth = self.deps[0];
             let col_depth = other.deps[0];
 
-            let distance = ((row_freq / self.geom_var[0] as f64 - col_freq / other.geom_var[0] as f64).powf(2.)
-                + (row_depth / self.geom_dep[0] as f64 - col_depth / other.geom_dep[0] as f64).powf(2.)).powf(1. / 2.);
+            let distance = (((row_freq / self.geom_var[0] as f64).ln() - (col_freq / other.geom_var[0] as f64).ln()).powf(2.)
+                + ((row_depth / self.geom_dep[0] as f64).ln() - (col_depth / other.geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
+
             return distance
         }
     }
 }
 
 /// A high-level classification, as defined by the FuzzyDBSCAN algorithm.
-#[derive(Debug, PartialEq, Serialize, Clone)]
+#[derive(Debug, PartialEq, Serialize, Clone, Copy, Hash, Eq)]
 pub enum Category {
     Core,
     Border,

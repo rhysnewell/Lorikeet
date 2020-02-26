@@ -48,10 +48,7 @@ pub fn pileup_variants<R: NamedBamReader,
     let mut sample_idx = 0;
     // Print file header
     let mut pileup_matrix = PileupMatrix::new_matrix();
-
     let mut gff_map = HashMap::new();
-    let mut epsilon = 0.05;
-    let mut min_cluster_size= 10;
 
     match mode {
         "evolve" => {
@@ -108,8 +105,8 @@ pub fn pileup_variants<R: NamedBamReader,
             }
         },
         _ => {
-            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
-            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
+//            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
+//            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
         }
     }
     let mut read_cnt_id: i64 = 0;
@@ -206,7 +203,6 @@ pub fn pileup_variants<R: NamedBamReader,
                             num_mapped_reads_in_current_contig,
                             sample_count,
                             output_prefix,
-                            epsilon,
                             &stoit_name);
                     }
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -385,7 +381,6 @@ pub fn pileup_variants<R: NamedBamReader,
                 num_mapped_reads_in_current_contig,
                 sample_count,
                 output_prefix,
-                epsilon,
                 &stoit_name);
 
             num_mapped_reads_total += num_mapped_reads_in_current_contig;
@@ -411,7 +406,9 @@ pub fn pileup_variants<R: NamedBamReader,
     };
     if mode=="genotype" {
         pileup_matrix.generate_distances(n_threads, output_prefix);
-        pileup_matrix.run_fuzzy_scan();
+        let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
+        let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
+        pileup_matrix.run_fuzzy_scan(e_min, e_max);
 //        pileup_matrix.run_nmf();
         pileup_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
@@ -443,7 +440,6 @@ fn process_previous_contigs_var(
     num_mapped_reads_in_current_contig: u64,
     sample_count: usize,
     output_prefix: &str,
-    epsilon: f64,
     stoit_name: &str) {
 
     if last_tid != -2 {
