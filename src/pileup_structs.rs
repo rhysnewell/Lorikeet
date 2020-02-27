@@ -3,7 +3,6 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
 use rayon::prelude::*;
-use permutation::*;
 use codon_structs::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
