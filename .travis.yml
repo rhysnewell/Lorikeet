@@ -15,12 +15,15 @@ addons:
   apt:
     packages:
       - build-essential
+      - gfortran
       - libssl-dev
+  homebrew:
+    packages:
+      - gcc@9
 
 install:
   # Modified from https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/use-conda-with-travis-ci.html
   - sudo apt-get update
-  - sudo apt-get install gfortran
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
   - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
@@ -45,6 +48,7 @@ before_cache: |
   fi
 
 script:
+  - if [ "$TRAVIS_OS_NAME" = 'osx' ]; then export CC=gcc-9 FC=gfortran-9 LIBRARY_PATH=/usr/local/opt/gcc/lib/gcc/9; fi
   - cargo clean
   - cargo build
   - cargo test
