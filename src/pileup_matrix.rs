@@ -475,9 +475,22 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let prediction_variants = prediction_variants.lock().unwrap().clone();
                 let prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
-                for combination in prediction_count.iter().combinations(2) {
-//                    let intersect =
-                }
+                // Pairs of clusters that shared border points
+//                let mut to_combine = HashMap::new();
+//                // Clusters that were completely contained within another cluster
+//                let mut to_remove = HashSet::new();
+//                for combination in prediction_count.iter().combinations(2) {
+//                    let intersect: HashSet<usize> = combination[0].1.intersection(combination[1].1).collect();
+//                    if intersect.len() == combination[0].1.len() {
+//                        to_remove.insert(combination[0].0);
+//                    } else if intersect.len() == combination[1].1.len() {
+//                        to_remove.insert(combination[1].0);
+//                    } else if intersect.len() > 0 {
+//                        if combination[0].1.len() >= combination[1].1.len() {
+//
+//                        }
+//                    }
+//                }
 
                 debug!("Predictions {:?}", prediction_variants);
                 debug!("Prediction count {:?}", prediction_count);
