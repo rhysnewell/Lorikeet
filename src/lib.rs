@@ -23,7 +23,6 @@ extern crate linregress;
 extern crate csv;
 extern crate statrs;
 extern crate ordered_float;
-extern crate permutohedron;
 extern crate rust_htslib;
 extern crate env_logger;
 extern crate nix;
@@ -32,7 +31,6 @@ extern crate tempfile;
 extern crate rand;
 extern crate itertools;
 extern crate rayon;
-extern crate permutation;
 #[macro_use]
 extern crate ndarray;
 extern crate ndarray_linalg;

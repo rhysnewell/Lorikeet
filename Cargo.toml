@@ -35,12 +35,10 @@ lazy_static = "1.3.0"
 linregress = "0.1.6"
 log = "0.4.*"
 ordered-float = "1"
-#openblas-src = "0.7.0"
+openblas-src = { version = "0.7.0", features = ["static"] }
 ndarray = { version = "0.13.0", default-features=false, features = ["rayon"] }
-ndarray-linalg = { version = "0.12", default-features=false, features = ["openblas-src"]}
+ndarray-linalg = { version = "0.12" }
 nix = "0.13.*"
-permutation = "0.2.5"
-permutohedron = "0.2.4"
 pest = "2"
 pest_derive = "2"
 rayon = "1.2.*"

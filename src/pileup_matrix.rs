@@ -17,7 +17,7 @@ use tempdir::TempDir;
 use crate::{tempfile, finish_command_safely};
 use crate::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
-use itertools::Itertools;
+use itertools::{Itertools};
 use ordered_float::NotNan;
 
 
@@ -445,9 +445,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                     Mutex::new(
                         HashMap::new()));
 
+
+
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
                         let variant = &points[assignment.index];
+
                         let mut prediction_variants = prediction_variants.lock().unwrap();
                         let variant_tid = prediction_variants.entry(rank + 1)
                             .or_insert(HashMap::new());
@@ -459,8 +462,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         variant_set.insert(variant.var.clone());
 
                         let mut prediction_count = prediction_count.lock().unwrap();
-                        let count = prediction_count.entry(rank + 1).or_insert(0);
-                        *count += 1;
+                        let count = prediction_count.entry(rank + 1).or_insert(HashSet::new());
+                        count.insert(assignment.index);
 
                         let mut prediction_features = prediction_features.lock().unwrap();
                         let feature = prediction_features.entry(rank+1).or_insert(HashMap::new());
@@ -472,6 +475,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let prediction_variants = prediction_variants.lock().unwrap().clone();
                 let prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
+                for combination in prediction_count.iter().combinations(2) {
+//                    let intersect =
+                }
 
                 debug!("Predictions {:?}", prediction_variants);
                 debug!("Prediction count {:?}", prediction_count);
