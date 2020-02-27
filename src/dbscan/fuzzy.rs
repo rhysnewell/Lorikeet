@@ -44,7 +44,7 @@ impl MetricSpace for Point {
                 let mut distance = 0.;
                 let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
-                        ((v + 1.) / geom_mean_var[i] as f64).ln()
+                        ((v + 1.) / geom_mean_var[i] as f64)
                     }).collect();
                     return output
                 };
@@ -92,6 +92,7 @@ impl MetricSpace for Point {
                     sum_of_diff += (r - c).powf(2.)
                 }
                 distance = sum_of_diff.powf(1. / 2.);
+//                debug!("Distance {}", distance);
                 // swap signs
 //                distance *= -1.;
 //                 move between 0 and 2
