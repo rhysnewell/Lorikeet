@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
+use ndarray::{Array2};
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -34,6 +35,21 @@ pub struct Point {
     pub tid: i32,
 }
 
+pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
+    let mut output = Arc::new(Mutex::new(Array2::<f64>::zeros((input.len(), input.len()))));
+    (0..input.len()-1).into_par_iter().for_each(|row_index|{
+        (row_index+1..input.len()).into_par_iter().for_each(|col_index|{
+            let euc_dist: f64 = (input[row_index] - input[col_index]).powf(2.).powf(1. / 2.);
+            let mut output = output.lock().unwrap();
+            output[[row_index, col_index]] = euc_dist;
+            output[[col_index, row_index]] = euc_dist;
+        });
+    });
+    let output = output.lock().unwrap().clone();
+    return output
+
+}
+
 impl MetricSpace for Point {
     fn distance(&self, other: &Self) -> f64 {
 
@@ -41,22 +57,23 @@ impl MetricSpace for Point {
             if self.pos == other.pos && self.tid == other.tid {
                 return 10.
             } else {
-                let mut distance = 0.;
+//                let mut distance = 0.;
                 let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
-                        ((v + 1.) / geom_mean_var[i] as f64)
+                        ((v + 1.) / geom_mean_var[i] as f64).ln()
                     }).collect();
                     return output
                 };
-
-                let get_mean = |input: &Vec<f64>| -> f64 {
-                    let sum = input.par_iter().sum::<f64>();
-                    sum / input.len() as f64
-                };
-
-                let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
-
-                let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
+//
+//
+//                let get_mean = |input: &Vec<f64>| -> f64 {
+//                    let sum = input.par_iter().sum::<f64>();
+//                    sum / input.len() as f64
+//                };
+//
+//                let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
+//
+//                let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
 
 //                let mean_row = get_mean(&row_vals);
 //
@@ -87,11 +104,11 @@ impl MetricSpace for Point {
 //                    distance = (2. * covar) / (row_var + col_var);
 //                }
 
-                let mut sum_of_diff = 0.;
-                for (r, c) in row_vals.iter().zip(col_vals.iter()) {
-                    sum_of_diff += (r - c).powf(2.)
-                }
-                distance = sum_of_diff.powf(1. / 2.);
+//                let mut sum_of_diff = 0.;
+//                for (r, c) in row_vals.iter().zip(col_vals.iter()) {
+//                    sum_of_diff += (r - c).powf(2.)
+//                }
+//                distance = sum_of_diff.powf(1. / 2.);
 //                debug!("Distance {}", distance);
                 // swap signs
 //                distance *= -1.;
@@ -99,7 +116,55 @@ impl MetricSpace for Point {
 //                distance += 1.;
 //                debug!("Distance {} Self {:?} Other {:?}", distance, &self, other);
 
-                return distance
+                let a_jk = dist_mat(&self.vars);
+                let b_jk = dist_mat(&other.vars);
+                let mut a_mean = 0.;
+                let mut b_mean = 0.;
+                a_jk.iter().for_each(|a| {a_mean += a});
+                b_jk.iter().for_each(|b| {b_mean += b});
+                a_mean = a_mean / a_jk.len() as f64;
+                b_mean = b_mean / b_jk.len() as f64;
+                let d_cov = Arc::new(Mutex::new(0.));
+                let d_var_a = Arc::new(Mutex::new(0.));
+                let d_var_b = Arc::new(Mutex::new(0.));
+                (0..a_jk.shape()[0]).into_par_iter().for_each(|j|{
+                    (0..a_jk.shape()[1]).into_par_iter().for_each(|k|{
+                        let a_j_mean: f64 = a_jk.slice(s![j, ..]).iter().sum::<f64>() / a_jk.slice(s![j, ..]).len() as f64;
+                        let a_k_mean: f64 = a_jk.slice(s![.., k]).iter().sum::<f64>() / a_jk.slice(s![.., k]).len() as f64;
+
+                        let b_j_mean: f64 = b_jk.slice(s![j, ..]).iter().sum::<f64>() / b_jk.slice(s![j, ..]).len() as f64;
+                        let b_k_mean: f64 = b_jk.slice(s![.., k]).iter().sum::<f64>() / b_jk.slice(s![.., k]).len() as f64;
+
+                        let A_jk: f64 = a_jk[[j, k]] - a_j_mean - a_k_mean + a_mean;
+                        let B_jk: f64 = b_jk[[j, k]] - b_j_mean - b_k_mean + b_mean;
+
+                        let mut d_cov = d_cov.lock().unwrap();
+                        *d_cov += A_jk * B_jk;
+
+                        let mut d_var_a = d_var_a.lock().unwrap();
+                        *d_var_a += A_jk.powf(2.);
+
+                        let mut d_var_b = d_var_b.lock().unwrap();
+                        *d_var_b += B_jk.powf(2.);
+
+                    })
+                });
+                let mut d_cov = d_cov.lock().unwrap().clone();
+                let mut d_var_a = d_var_a.lock().unwrap().clone();
+                let mut d_var_b = d_var_b.lock().unwrap().clone();
+                let n = self.vars.len() as f64;
+                d_cov = d_cov / n.powf(2.);
+                d_var_a = d_var_a / n.powf(2.);
+                d_var_b = d_var_b / n.powf(2.);
+
+                debug!("d_cov {} d_var_a {} d_var_b {}", d_cov, d_var_a, d_var_b);
+
+                let mut distance = d_cov / (d_var_a * d_var_b).powf(1. / 2.);
+                debug!("Distance {}", distance);
+
+
+
+                return distance - 1.
             }
         } else {
             if self.pos == other.pos && self.tid == other.tid {
