@@ -15,7 +15,7 @@ use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
 use bird_tool_utils::{command::finish_command_safely};
-use crate::factorization::{nmf::*, seeding::*};
+use nymph::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
 use itertools::{Itertools};
 use ordered_float::NotNan;

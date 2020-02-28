@@ -9,7 +9,6 @@ pub mod variants;
 pub mod estimation;
 pub mod model;
 pub mod utils;
-pub mod factorization;
 pub mod dbscan;
 
 extern crate bio;
@@ -19,6 +18,7 @@ extern crate bio_types;
 extern crate linregress;
 extern crate coverm;
 extern crate bird_tool_utils;
+extern crate nymph;
 extern crate csv;
 extern crate statrs;
 extern crate ordered_float;
@@ -33,6 +33,7 @@ extern crate rayon;
 #[macro_use]
 extern crate ndarray;
 extern crate ndarray_linalg;
+extern crate openblas_src;
 extern crate strum;
 
 #[macro_use]
@@ -73,30 +74,3 @@ where T: std::cmp::PartialEq<T> {
     }
     return Err("Element not found in slice")
 }
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_contig_to_genome(){
-        let mut contig_to_genome = GenomesAndContigs::new();
-        let genome = String::from("genome0");
-        let index = contig_to_genome.establish_genome(genome);
-        contig_to_genome.insert(String::from("contig1"), index);
-        assert_eq!(
-            String::from("genome0"),
-            *(contig_to_genome.genome_of_contig(&String::from("contig1")).unwrap()));
-    }
-
-    #[test]
-    fn test_read_genome_fasta_files_one_genome(){
-        let contig_to_genome = read_genome_fasta_files(&vec!["tests/data/genome1.fna"]);
-        assert_eq!(String::from("genome1"), *contig_to_genome.genome_of_contig(&String::from("seq1")).unwrap());
-        assert_eq!(String::from("genome1"), *contig_to_genome.genome_of_contig(&String::from("seq2")).unwrap());
-    }
-}
-
-
-

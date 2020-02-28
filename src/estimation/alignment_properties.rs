@@ -222,12 +222,12 @@ impl InsertSize {
 mod tests {
     use super::*;
     use std::fs;
-    use readers;
+    use coverm::*;
     use rust_htslib::bam::record::Record;
 
     #[test]
     fn test_estimate() {
-        let bam_readers = readers::bam_generator::generate_named_bam_readers_from_bam_files(
+        let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
             vec!["tests/data/test2.bam"]);
         for reader in bam_readers {
             let mut bam = reader.start();
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_estimate_from_records() {
-        let bam_readers = readers::bam_generator::generate_named_bam_readers_from_bam_files(
+        let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
             vec!["tests/data/test2.bam"]);
         for reader in bam_readers {
             let mut bam = reader.start();
