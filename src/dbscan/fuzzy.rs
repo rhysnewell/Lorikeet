@@ -57,52 +57,52 @@ impl MetricSpace for Point {
             if self.pos == other.pos && self.tid == other.tid {
                 return 10.
             } else {
-//                let mut distance = 0.;
+                let mut distance = 0.;
                 let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
                         ((v + 1.) / geom_mean_var[i] as f64).ln()
                     }).collect();
                     return output
                 };
-//
-//
-//                let get_mean = |input: &Vec<f64>| -> f64 {
-//                    let sum = input.par_iter().sum::<f64>();
-//                    sum / input.len() as f64
-//                };
-//
-//                let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
-//
-//                let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
 
-//                let mean_row = get_mean(&row_vals);
-//
-//                let mean_col = get_mean(&col_vals);
-//
-//                // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
-//                // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
-//
-//                // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
-//                let mut row_var = 0.;
-//                let mut col_var = 0.;
-//                let mut covar = 0.;
-//
-//                row_vals.iter()
-//                    .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
-//                    row_var += (r_freq - mean_row).powf(2.);
-//                    col_var += (c_freq - mean_col).powf(2.);
-//                    covar += (r_freq - mean_row) * (c_freq - mean_col)
-//                });
-//
-//                row_var = row_var / row_vals.len() as f64;
-//                col_var = col_var / col_vals.len() as f64;
-//                covar = covar / row_vals.len() as f64;
-//
-//                if row_var == 0. && col_var == 0. {
-//                    distance = 0.;
-//                } else {
-//                    distance = (2. * covar) / (row_var + col_var);
-//                }
+
+                let get_mean = |input: &Vec<f64>| -> f64 {
+                    let sum = input.par_iter().sum::<f64>();
+                    sum / input.len() as f64
+                };
+
+                let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
+
+                let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
+
+                let mean_row = get_mean(&row_vals);
+
+                let mean_col = get_mean(&col_vals);
+
+                // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
+                // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
+
+                // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
+                let mut row_var = 0.;
+                let mut col_var = 0.;
+                let mut covar = 0.;
+
+                row_vals.iter()
+                    .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
+                    row_var += (r_freq - mean_row).powf(2.);
+                    col_var += (c_freq - mean_col).powf(2.);
+                    covar += (r_freq - mean_row) * (c_freq - mean_col)
+                });
+
+                row_var = row_var / row_vals.len() as f64;
+                col_var = col_var / col_vals.len() as f64;
+                covar = covar / row_vals.len() as f64;
+
+                if row_var == 0. && col_var == 0. {
+                    distance = 0.;
+                } else {
+                    distance = (2. * covar) / (row_var + col_var);
+                }
 
 //                let mut sum_of_diff = 0.;
 //                for (r, c) in row_vals.iter().zip(col_vals.iter()) {
@@ -110,61 +110,61 @@ impl MetricSpace for Point {
 //                }
 //                distance = sum_of_diff.powf(1. / 2.);
 //                debug!("Distance {}", distance);
-                // swap signs
-//                distance *= -1.;
+//                 swap signs
+                distance *= -1.;
 //                 move between 0 and 2
-//                distance += 1.;
+                distance += 1.;
 //                debug!("Distance {} Self {:?} Other {:?}", distance, &self, other);
 
-                let a_jk = dist_mat(&self.vars);
-                let b_jk = dist_mat(&other.vars);
-                let mut a_mean = 0.;
-                let mut b_mean = 0.;
-                a_jk.iter().for_each(|a| {a_mean += a});
-                b_jk.iter().for_each(|b| {b_mean += b});
-                a_mean = a_mean / a_jk.len() as f64;
-                b_mean = b_mean / b_jk.len() as f64;
-                let d_cov = Arc::new(Mutex::new(0.));
-                let d_var_a = Arc::new(Mutex::new(0.));
-                let d_var_b = Arc::new(Mutex::new(0.));
-                (0..a_jk.shape()[0]).into_par_iter().for_each(|j|{
-                    (0..a_jk.shape()[1]).into_par_iter().for_each(|k|{
-                        let a_j_mean: f64 = a_jk.slice(s![j, ..]).iter().sum::<f64>() / a_jk.slice(s![j, ..]).len() as f64;
-                        let a_k_mean: f64 = a_jk.slice(s![.., k]).iter().sum::<f64>() / a_jk.slice(s![.., k]).len() as f64;
+//                let a_jk = dist_mat(&clr(&self.vars, &self.geom_var));
+//                let b_jk = dist_mat(&clr(&other.vars, &other.geom_var));
+//                let mut a_mean = 0.;
+//                let mut b_mean = 0.;
+//                a_jk.iter().for_each(|a| {a_mean += a});
+//                b_jk.iter().for_each(|b| {b_mean += b});
+//                a_mean = a_mean / a_jk.len() as f64;
+//                b_mean = b_mean / b_jk.len() as f64;
+//                let d_cov = Arc::new(Mutex::new(0.));
+//                let d_var_a = Arc::new(Mutex::new(0.));
+//                let d_var_b = Arc::new(Mutex::new(0.));
+//                (0..a_jk.shape()[0]).into_par_iter().for_each(|j|{
+//                    let a_j_mean: f64 = a_jk.slice(s![j, ..]).iter().sum::<f64>() / a_jk.slice(s![j, ..]).len() as f64;
+//                    let b_j_mean: f64 = b_jk.slice(s![j, ..]).iter().sum::<f64>() / b_jk.slice(s![j, ..]).len() as f64;
+//
+//                    (0..a_jk.shape()[1]).into_par_iter().for_each(|k|{
+//                        let a_k_mean: f64 = a_jk.slice(s![.., k]).iter().sum::<f64>() / a_jk.slice(s![.., k]).len() as f64;
+//                        let b_k_mean: f64 = b_jk.slice(s![.., k]).iter().sum::<f64>() / b_jk.slice(s![.., k]).len() as f64;
+//
+//                        let A_jk: f64 = a_jk[[j, k]] - a_j_mean - a_k_mean + a_mean;
+//                        let B_jk: f64 = b_jk[[j, k]] - b_j_mean - b_k_mean + b_mean;
+//
+//                        let mut d_cov = d_cov.lock().unwrap();
+//                        *d_cov += A_jk * B_jk;
+//
+//                        let mut d_var_a = d_var_a.lock().unwrap();
+//                        *d_var_a += A_jk.powf(2.);
+//
+//                        let mut d_var_b = d_var_b.lock().unwrap();
+//                        *d_var_b += B_jk.powf(2.);
+//
+//                    })
+//                });
+//                let mut d_cov = d_cov.lock().unwrap().clone();
+//                let mut d_var_a = d_var_a.lock().unwrap().clone();
+//                let mut d_var_b = d_var_b.lock().unwrap().clone();
+//                let n = self.vars.len() as f64;
+//                d_cov = d_cov / n.powf(2.);
+//                d_var_a = d_var_a / n.powf(2.);
+//                d_var_b = d_var_b / n.powf(2.);
+//
+//                debug!("d_cov {} d_var_a {} d_var_b {}", d_cov, d_var_a, d_var_b);
+//
+//                let mut distance = d_cov / (d_var_a * d_var_b).powf(1. / 2.);
+//                debug!("Distance {}", distance);
 
-                        let b_j_mean: f64 = b_jk.slice(s![j, ..]).iter().sum::<f64>() / b_jk.slice(s![j, ..]).len() as f64;
-                        let b_k_mean: f64 = b_jk.slice(s![.., k]).iter().sum::<f64>() / b_jk.slice(s![.., k]).len() as f64;
-
-                        let A_jk: f64 = a_jk[[j, k]] - a_j_mean - a_k_mean + a_mean;
-                        let B_jk: f64 = b_jk[[j, k]] - b_j_mean - b_k_mean + b_mean;
-
-                        let mut d_cov = d_cov.lock().unwrap();
-                        *d_cov += A_jk * B_jk;
-
-                        let mut d_var_a = d_var_a.lock().unwrap();
-                        *d_var_a += A_jk.powf(2.);
-
-                        let mut d_var_b = d_var_b.lock().unwrap();
-                        *d_var_b += B_jk.powf(2.);
-
-                    })
-                });
-                let mut d_cov = d_cov.lock().unwrap().clone();
-                let mut d_var_a = d_var_a.lock().unwrap().clone();
-                let mut d_var_b = d_var_b.lock().unwrap().clone();
-                let n = self.vars.len() as f64;
-                d_cov = d_cov / n.powf(2.);
-                d_var_a = d_var_a / n.powf(2.);
-                d_var_b = d_var_b / n.powf(2.);
-
-                debug!("d_cov {} d_var_a {} d_var_b {}", d_cov, d_var_a, d_var_b);
-
-                let mut distance = d_cov / (d_var_a * d_var_b).powf(1. / 2.);
-                debug!("Distance {}", distance);
 
 
-
-                return distance - 1.
+                return distance
             }
         } else {
             if self.pos == other.pos && self.tid == other.tid {

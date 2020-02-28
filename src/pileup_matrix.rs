@@ -449,17 +449,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
-                        let variant = &points[assignment.index];
 
-                        let mut prediction_variants = prediction_variants.lock().unwrap();
-                        let variant_tid = prediction_variants.entry(rank + 1)
-                            .or_insert(HashMap::new());
-
-                        let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
-
-                        let variant_cat = variant_pos.entry(variant.pos).or_insert(HashMap::new());
-                        let variant_set = variant_cat.entry(assignment.category).or_insert(HashSet::new());
-                        variant_set.insert(variant.var.clone());
 
                         let mut prediction_count = prediction_count.lock().unwrap();
                         let count = prediction_count.entry(rank + 1).or_insert(HashSet::new());
@@ -467,34 +457,78 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                         let mut prediction_features = prediction_features.lock().unwrap();
                         let feature = prediction_features.entry(rank+1).or_insert(HashMap::new());
-                        let category = feature.entry(assignment.category).or_insert(0);
-                        *category += 1;
+                        feature.insert(assignment.index, assignment.category);
+//                        *category += 1;
 
                     });
                 });
-                let prediction_variants = prediction_variants.lock().unwrap().clone();
-                let prediction_count = prediction_count.lock().unwrap();
-                let prediction_features = prediction_features.lock().unwrap();
+                let mut prediction_count = prediction_count.lock().unwrap();
+                let mut prediction_features = prediction_features.lock().unwrap();
                 // Pairs of clusters that shared border points
-//                let mut to_combine = HashMap::new();
-//                // Clusters that were completely contained within another cluster
-//                let mut to_remove = HashSet::new();
-//                for combination in prediction_count.iter().combinations(2) {
-//                    let intersect: HashSet<usize> = combination[0].1.intersection(combination[1].1).collect();
-//                    if intersect.len() == combination[0].1.len() {
-//                        to_remove.insert(combination[0].0);
-//                    } else if intersect.len() == combination[1].1.len() {
-//                        to_remove.insert(combination[1].0);
-//                    } else if intersect.len() > 0 {
-//                        if combination[0].1.len() >= combination[1].1.len() {
-//
-//                        }
-//                    }
-//                }
+                let mut to_combine = HashMap::new();
+                // Clusters that were completely contained within another cluster
+                let mut to_remove = HashSet::new();
+                for combination in prediction_count.iter().combinations(2) {
+                    let intersect: HashSet<usize> = combination[0].1.clone()
+                        .intersection(&combination[1].1.clone())
+                        .cloned()
+                        .collect();
+                    if intersect.len() == combination[0].1.len() {
+                        to_remove.insert(*combination[0].0);
+                    } else if intersect.len() == combination[1].1.len() {
+                        to_remove.insert(*combination[1].0);
+                    } else if intersect.len() > 0 {
+                        if combination[0].1.len() >= combination[1].1.len() {
+                            to_combine.insert(*combination[1].0, *combination[0].0);
+                        } else {
+                            to_combine.insert(*combination[0].0, *combination[1].0);
+                        };
+                    }
+                }
+
+                // extend clusters with neighbouring points
+                for (to_extend, extend_with) in to_combine.iter() {
+                    if !to_remove.contains(to_extend) || !to_remove.contains(extend_with) {
+                        let extended_set = prediction_count[&to_extend]
+                            .union(&prediction_count[&extend_with]).cloned().collect();
+                        prediction_count.insert(*to_extend, extended_set);
+                    }
+                }
+
+                // Build Genotype Maps
+                prediction_count.par_iter().for_each(|(cluster, prediction_set)|{
+                    if !to_remove.contains(cluster) {
+                        prediction_set.par_iter().for_each(|index| {
+                            let variant = &points[*index];
+
+                            let mut prediction_variants = prediction_variants.lock().unwrap();
+                            let variant_tid = prediction_variants.entry(*cluster)
+                                .or_insert(HashMap::new());
+
+                            let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
+
+                            let variant_cat = variant_pos.entry(variant.pos).or_insert(HashMap::new());
+                            let mut category = fuzzy::Category::Noise;
+                            if prediction_features[&cluster].contains_key(&index) {
+                                category = prediction_features[&cluster][&index].clone();
+                            } else {
+                                category = fuzzy::Category::Border;
+                            }
+                            let variant_set = variant_cat.entry(category).or_insert(HashSet::new());
+                            variant_set.insert(variant.var.clone());
+                        });
+                    }
+                });
+                let mut prediction_variants = prediction_variants.lock().unwrap().clone();
+
+
 
                 debug!("Predictions {:?}", prediction_variants);
-                debug!("Prediction count {:?}", prediction_count);
-                debug!("Prediction categories {:?}", prediction_features);
+                for (cluster, pred_set) in prediction_count.iter() {
+                    debug!("Cluster {} Variants {}", cluster, pred_set.len());
+                }
+//                debug!("Prediction count {:?}", prediction_count);
+//                debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants;
             }
         }
