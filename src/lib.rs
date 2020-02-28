@@ -1,14 +1,8 @@
 pub mod pileups;
 pub mod pileup_structs;
 pub mod pileup_matrix;
-pub mod mosdepth_genome_coverage_estimators;
-pub mod genomes_and_contigs;
-pub mod readers;
 pub mod external_command_checker;
-pub mod coverage_takers;
 pub mod codon_structs;
-pub mod coverage_printer;
-pub mod genome_exclusion;
 pub mod matrix_handling;
 pub mod variants;
 pub mod estimation;
@@ -20,6 +14,7 @@ pub mod dbscan;
 extern crate bio;
 extern crate bio_types;
 extern crate linregress;
+extern crate coverm;
 extern crate csv;
 extern crate statrs;
 extern crate ordered_float;
@@ -54,7 +49,7 @@ extern crate derive_new;
 extern crate pest_derive;
 
 use std::path::Path;
-use genomes_and_contigs::GenomesAndContigs;
+use coverm::genomes_and_contigs::GenomesAndContigs;
 use std::io::Read;
 
 

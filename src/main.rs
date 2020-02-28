@@ -1,11 +1,8 @@
 extern crate lorikeet;
-use lorikeet::readers::*;
-use lorikeet::readers::{bam_generator::*, mapping_parameters::*, shard_bam_reader::*, filter};
+
 use lorikeet::pileups;
 use lorikeet::external_command_checker;
-use lorikeet::FlagFilter;
-use lorikeet::genome_exclusion::*;
-use lorikeet::mosdepth_genome_coverage_estimators::*;
+
 
 extern crate rust_htslib;
 use rust_htslib::bam;
@@ -16,6 +13,14 @@ use seq_io::fasta;
 
 extern crate bio;
 use bio::alignment::sparse::*;
+
+extern crate coverm;
+use coverm::*;
+use coverm::shard_bam_reader::*;
+use coverm::FlagFilter;
+use coverm::genome_exclusion::*;
+use coverm::mosdepth_genome_coverage_estimators::*;
+use coverm::{bam_generator::*, mapping_parameters::*, filter, mapping_index_maintenance};
 
 use std::env;
 use std::str;
@@ -1263,6 +1268,7 @@ fn setup_mapping_index(
             } else {
                 Some(mapping_index_maintenance::generate_minimap2_index(
                     reference_wise_params.reference,
+                    Some(m.value_of("threads").unwrap().parse::<usize>().unwrap()),
                     Some(m.value_of("minimap2-params").unwrap_or("")),
                     mapping_program,
                 ))
