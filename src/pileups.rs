@@ -6,14 +6,14 @@ use external_command_checker;
 use pileup_structs::*;
 use pileup_matrix::*;
 use codon_structs::*;
-use crate::readers::bam_generator::*;
-use FlagFilter;
+use coverm::bam_generator::*;
 use rayon::prelude::*;
 use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
 
 use std::str;
 use std::fs::File;
-use mosdepth_genome_coverage_estimators::*;
+use coverm::mosdepth_genome_coverage_estimators::*;
+use coverm::FlagFilter;
 use bio::io::gff;
 use bio::io::gff::Record;
 use nix::unistd;
