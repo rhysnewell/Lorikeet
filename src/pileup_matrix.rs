@@ -14,7 +14,7 @@ use std::cmp;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
-use crate::{tempfile, finish_command_safely};
+use bird_tool_utils::{command::finish_command_safely};
 use crate::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
 use itertools::{Itertools};

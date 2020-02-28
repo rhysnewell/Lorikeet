@@ -1,6 +1,7 @@
 pub mod pileups;
 pub mod pileup_structs;
 pub mod pileup_matrix;
+pub mod cli;
 pub mod external_command_checker;
 pub mod codon_structs;
 pub mod matrix_handling;
@@ -12,9 +13,12 @@ pub mod factorization;
 pub mod dbscan;
 
 extern crate bio;
+extern crate clap;
+extern crate seq_io;
 extern crate bio_types;
 extern crate linregress;
 extern crate coverm;
+extern crate bird_tool_utils;
 extern crate csv;
 extern crate statrs;
 extern crate ordered_float;
@@ -54,70 +58,6 @@ use std::io::Read;
 
 
 pub const CONCATENATED_FASTA_FILE_SEPARATOR: &str = "~";
-
-pub fn finish_command_safely(
-    mut process: std::process::Child, process_name: &str)
-    -> std::process::Child {
-    let es = process.wait()
-        .expect(&format!("Failed to glean exitstatus from failing {} process", process_name));
-    debug!("Process {} finished", process_name);
-    if !es.success() {
-        error!("Error when running {} process.", process_name);
-        let mut err = String::new();
-        process.stderr.expect(&format!("Failed to grab stderr from failed {} process", process_name))
-            .read_to_string(&mut err).expect("Failed to read stderr into string");
-        error!("The STDERR was: {:?}", err);
-        let mut out = String::new();
-        process.stdout.expect(&format!("Failed to grab stdout from failed {} process", process_name))
-            .read_to_string(&mut out).expect("Failed to read stdout into string");
-        error!("The STDOUT was: {:?}", out);
-        error!("Cannot continue after {} failed.", process_name);
-        std::process::exit(1);
-    }
-    return process;
-}
-
-pub fn read_genome_fasta_files(fasta_file_paths: &Vec<&str>)
-    -> GenomesAndContigs {
-    let mut contig_to_genome = GenomesAndContigs::new();
-
-    for file in fasta_file_paths {
-        let path = Path::new(file);
-        let reader = bio::io::fasta::Reader::from_file(path)
-            .expect(&format!("Unable to read fasta file {}", file));
-
-        let genome_name = String::from(
-            path.file_stem()
-                .expect("Problem while determining file stem")
-            .to_str()
-                .expect("File name string conversion problem"));
-        if contig_to_genome.genome_index(&genome_name).is_some() {
-            panic!("The genome name {} was derived from >1 file", genome_name);
-        }
-        let genome_index = contig_to_genome.establish_genome(genome_name);
-        for record in reader.records() {
-            let contig = String::from(
-                record
-                    .expect(&format!("Failed to parse contig name in fasta file {:?}", path))
-                    .id());
-            contig_to_genome.insert(contig, genome_index);
-        }
-    }
-    return contig_to_genome;
-}
-
-#[derive(PartialEq, Debug)]
-pub struct ReadsMapped {
-    num_mapped_reads: u64,
-    num_reads: u64
-}
-
-#[derive(Clone, Debug)]
-pub struct FlagFilter {
-    pub include_improper_pairs: bool,
-    pub include_supplementary: bool,
-    pub include_secondary: bool,
-}
 
 
 /// Finds the first occurence of element in a slice
