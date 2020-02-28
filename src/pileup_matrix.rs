@@ -485,6 +485,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                         };
                     }
                 }
+                for (cluster, pred_set) in prediction_count.iter() {
+                    debug!("Pre-extended Cluster {} Variants {}", cluster, pred_set.len());
+                }
 
                 // extend clusters with neighbouring points
                 for (to_extend, extend_with) in to_combine.iter() {
