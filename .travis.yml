@@ -1,11 +1,13 @@
----
 os:
   - linux
 
 env:
-  - ARCH=x86_64
+  global:
+    - HOST=x86_64-unknown-linux-gnu
+    - CARGO_INCREMENTAL=0
 
 sudo: required
+dist: trusty
 language: rust
 rust:
   - stable
@@ -16,6 +18,7 @@ addons:
     packages:
       - build-essential
       - gfortran
+      - libopenblas-dev
       - libssl-dev
   homebrew:
     packages:
@@ -38,7 +41,6 @@ install:
   - conda config --add channels bioconda
   - conda config --add channels conda-forge
   - conda install bwa samtools minimap2 prodigal
-  - cargo build --verbose
 
 cache: cargo
 
