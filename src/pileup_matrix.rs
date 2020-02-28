@@ -22,6 +22,7 @@ use ordered_float::NotNan;
 
 
 #[derive(Debug)]
+/// Container for all variants within a genome and associated clusters
 pub enum PileupMatrix {
     PileupContigMatrix {
         coverages: HashMap<i32, Vec<f64>>,
