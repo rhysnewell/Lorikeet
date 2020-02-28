@@ -2,7 +2,7 @@
 
 name = "lorikeet"
 version = "0.3.0"
-authors = ["Rhys Newell <r.newell@uq.net.au>"]
+authors = ["Rhys Newell <r.newell@uq.edu.au>"]
 license = "GPL-3.0"
 description = "Strain resolver for metagenomics"
 homepage = "https://rhysnewell.github.io/Lorikeet/"
