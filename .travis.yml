@@ -47,10 +47,7 @@ cache: cargo
 
 before_cache:
   - rm -rf "$TRAVIS_HOME/.cargo/registry/src"
-  |
-  if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then
-    cargo install cargo-tarpaulin
-  fi
+  - if [[ "$TRAVIS_RUST_VERSION" == stable ]]; then cargo install cargo-tarpaulin; fi
 
 script:
   - if [ "$TRAVIS_OS_NAME" = 'osx' ]; then export CC=gcc-9 FC=gfortran-9 LIBRARY_PATH=/usr/local/opt/gcc/lib/gcc/9; fi
