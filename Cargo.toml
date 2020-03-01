@@ -1,6 +1,6 @@
 [package]
 
-name = "lorikeet"
+name = "Lorikeet"
 version = "0.3.0"
 authors = ["Rhys Newell <r.newell@uq.edu.au>"]
 license = "GPL-3.0"
