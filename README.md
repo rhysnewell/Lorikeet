@@ -8,8 +8,18 @@
 A strain resolver for metagenomics.
 
 ## Installation
+
+#### option 1: Cargo
 ```
-cargo install lorikeet
+cargo install Lorikeet
+```
+
+#### option 2: Conda
+*Not implemented yet*
+
+#### option 3: Build manually
+```
+git clone https://github.com/rhysnewell/Lorikeet/git && cd Lorikeet && cargo build --release
 ```
 
 
@@ -38,14 +48,22 @@ Other options:
 Rhys J. P. Newell <r.newell near uq.edu.au>
 ```
 
+Genotype from bam:
 
-`lorikeet polymorph -b input.bam -r input_genome.fna`
+`lorikeet genotype -b input.bam -r input_genome.fna --e-min 0.1 --e-max 0.5 --pts-min 0.1 --pts-max 0.5`
 
-OR
+Genotype from reads:
 
-`lorikeet polymorph -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq`
+`lorikeet genotype -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq`
 
-# Output 
-The output of polymorph is a tab-delimited file with 9 fields
+## Output
 
-`tid  pos variant reference abundance depth genotypes type  connected_bases`
+#### Genotype 
+Genotype will produce multiple .fna files representative of the expected strain level genotypes
+
+#### Polymorph
+Polymorph produces a tab delimited file containing possible variants and their positions within the reference
+
+#### Evolve
+Evolve will produce dN/dS values within coding regions based on the possible variants found along the reference.
+These dN/dS values only take single nucleotide polymorphisms into account but INDELs can still be reported.
