@@ -11,7 +11,7 @@ A strain resolver for metagenomics.
 
 #### option 1: Cargo
 ```
-cargo install Lorikeet
+cargo install lorikeet-rs
 ```
 
 #### option 2: Conda

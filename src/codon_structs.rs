@@ -2,10 +2,6 @@ use std::collections::{HashMap, BTreeMap, BTreeSet};
 use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
-use bio::io::gff;
-
-
-
 
 pub struct CodonTable {
     aminos: HashMap<Vec<u8>, char>,
@@ -197,7 +193,7 @@ impl Translations for CodonTable {
                         }
                         total_variants += diffs.len();
                         // get permuations of positions
-                        let mut permutations: Vec<Vec<usize>> = diffs.iter().cloned().permutations(diffs.len()).collect();
+                        let permutations: Vec<Vec<usize>> = diffs.iter().cloned().permutations(diffs.len()).collect();
 
                         // calculate synonymous and non-synonymous for each permutation
                         let mut ns = 0;

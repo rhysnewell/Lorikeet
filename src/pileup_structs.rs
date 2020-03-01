@@ -10,8 +10,6 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::path::Path;
 use std::fs::OpenOptions;
 
-#[macro_use(array)]
-
 pub enum PileupStats {
     PileupContigStats {
         nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
@@ -175,7 +173,7 @@ impl PileupFunctions for PileupStats {
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
                   contig_len: usize,
-                  method: &str,
+                  _method: &str,
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>) {
         match self {
@@ -288,8 +286,6 @@ impl PileupFunctions for PileupStats {
                 ref mut variant_abundances,
                 depth,
                 ref mut indels,
-                target_len,
-                ref mut variations_per_n,
                 ref mut total_variants,
                 ref mut coverage,
                 tid,
@@ -484,7 +480,6 @@ impl PileupFunctions for PileupStats {
 
                 let mut skip_n = 0;
                 let mut skip_cnt = 0;
-                let mut char_cnt = 0;
                 // Generate the consensus genome by checking each variant
                 // Variant has to be in more than 0.5 of population
                 for (pos, base) in original_contig.iter().enumerate() {
@@ -559,7 +554,7 @@ impl PileupFunctions for PileupStats {
                     None => &placeholder,
                 };
                 debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
-                let mut print_stream = &mut Mutex::new(std::io::stdout());
+                let print_stream = Arc::new(Mutex::new(std::io::stdout()));
                 gff_records.par_iter().enumerate().for_each(|(_id, gene)| {
                     let dnds = codon_table.find_mutations(gene, variant_abundances, indels, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
