@@ -13,8 +13,6 @@ exclude = [
   "tests/*"
 ]
 
-# Working dynamic build
-# C_INCLUDE_PATH=~/miniconda3/envs/lorikeet-dev/include LIBCLANG_PATH=~/miniconda3/envs/lorikeet-dev/lib/libclang.so.9 LIBRARY_PATH=~/miniconda3/envs/lorikeet-dev/lib RUSTFLAGS='-L/srv/home/s4331221/miniconda3/envs/lorikeet-dev/lib/libgfortran.so.3' cargo build --release
 
 [features]
 #openblas = ["ndarray-linalg/openblas"]
