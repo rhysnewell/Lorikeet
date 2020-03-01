@@ -30,19 +30,15 @@ extern crate tempfile;
 extern crate rand;
 extern crate itertools;
 extern crate rayon;
-#[macro_use]
 extern crate ndarray;
 extern crate ndarray_linalg;
 extern crate openblas_src;
 extern crate strum;
 
-#[macro_use]
 extern crate approx;
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate strum_macros;
-#[macro_use]
 extern crate derive_builder;
 #[macro_use]
 extern crate serde_derive;
@@ -50,13 +46,7 @@ extern crate serde_derive;
 extern crate lazy_static;
 #[macro_use]
 extern crate derive_new;
-#[macro_use]
 extern crate pest_derive;
-
-use std::path::Path;
-use coverm::genomes_and_contigs::GenomesAndContigs;
-use std::io::Read;
-
 
 pub const CONCATENATED_FASTA_FILE_SEPARATOR: &str = "~";
 

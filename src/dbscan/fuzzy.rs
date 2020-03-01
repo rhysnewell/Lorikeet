@@ -36,7 +36,7 @@ pub struct Point {
 }
 
 pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
-    let mut output = Arc::new(Mutex::new(Array2::<f64>::zeros((input.len(), input.len()))));
+    let output = Arc::new(Mutex::new(Array2::<f64>::zeros((input.len(), input.len()))));
     (0..input.len()-1).into_par_iter().for_each(|row_index|{
         (row_index+1..input.len()).into_par_iter().for_each(|col_index|{
             let euc_dist: f64 = (input[row_index] - input[col_index]).powf(2.).powf(1. / 2.);
@@ -57,17 +57,11 @@ impl MetricSpace for Point {
             if self.pos == other.pos && self.tid == other.tid {
                 return 10.
             } else {
-                let mut distance = 0.;
                 let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
                         ((v + 1.) / geom_mean_var[i] as f64).ln()
                     }).collect();
                     return output
-                };
-
-                let get_mean = |input: &Vec<f64>| -> f64 {
-                    let sum = input.par_iter().sum::<f64>();
-                    sum / input.len() as f64
                 };
 
                 let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
@@ -78,7 +72,7 @@ impl MetricSpace for Point {
                 for (r, c) in row_vals.iter().zip(col_vals.iter()) {
                     sum_of_diff += (r - c).powf(2.)
                 }
-                distance = sum_of_diff.powf(1. / 2.);
+                let distance = sum_of_diff.powf(1. / 2.);
 
                 return distance
             }
@@ -262,7 +256,7 @@ impl FuzzyDBSCAN {
         neighbor_indices: &HashSet<usize>,
         points: &[P],
     ) -> f64 {
-        let mut density: f64 = neighbor_indices.par_iter().fold(|| 0.0, |sum, &neighbor_index| {
+        let density: f64 = neighbor_indices.par_iter().fold(|| 0.0, |sum, &neighbor_index| {
             sum + self.mu_distance(&points[point_index], &points[neighbor_index])
         }).sum();
         density + 1.0

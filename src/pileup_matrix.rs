@@ -5,16 +5,11 @@ use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use ndarray::{Array2, prelude::*};
+use ndarray::{prelude::*};
 use ndarray_linalg::{norm::*};
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::process;
-use std::cmp;
-use nix::unistd;
-use nix::sys::stat;
-use tempdir::TempDir;
-use bird_tool_utils::{command::finish_command_safely};
 use nymph::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
 use itertools::{Itertools};
@@ -142,7 +137,7 @@ impl PileupMatrixFunctions for PileupMatrix{
     }
 
     fn add_contig(&mut self,
-                  mut pileup_stats: PileupStats,
+                  pileup_stats: PileupStats,
                   sample_count: usize,
                   sample_idx: usize,
                   contig: Vec<u8>) {
@@ -157,8 +152,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut target_names,
                 ref mut target_lengths,
                 ref mut variances,
-                ref mut variant_counts,
-                ref mut variant_sums,
                 ..
             } => {
                 match pileup_stats {
@@ -193,7 +186,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         target_lengths.entry(tid).or_insert(target_len);
 
                         // Initialize contig id in variant hashmap
-                        let mut contig_variants = variants.entry(tid)
+                        let contig_variants = variants.entry(tid)
                             .or_insert(HashMap::new());
 
 
@@ -257,7 +250,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             *contig_snps = nucfrequency;
                         } else {
                             for (pos, snp_map) in nucfrequency.iter(){
-                                let mut position_snps = contig_snps.entry(*pos)
+                                let position_snps = contig_snps.entry(*pos)
                                     .or_insert(BTreeMap::new());
                                 if position_snps.len() == 0 {
                                     *position_snps = snp_map.clone();
@@ -284,18 +277,15 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn generate_distances(&mut self, threads: usize, output_prefix: &str) {
+    fn generate_distances(&mut self, _threads: usize, _output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 variants,
-                target_names,
                 sample_names,
                 coverages,
-                contigs,
                 ref mut variant_info,
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
-                ref mut pred_variants_all,
                 ..
             } => {
 
@@ -324,7 +314,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let contig_coverages = coverages.get(tid)
                         .expect("Unable to retrieve contig coverage");
 
-                    let max_coverage = contig_coverages.iter().cloned().fold1(f64::max)
+                    let _max_coverage = contig_coverages.iter().cloned().fold1(f64::max)
                         .expect("Unable to retrieve max coverage");
 
                     variant_abundances.par_iter().for_each(
@@ -338,13 +328,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     depths.push(*d);
                                 };
                                 for (variant, abundances_vector) in hash.iter() {
-                                    let mut abundance: f64 = 0.;
-                                    let mut mean_var: f64 = 0.;
+                                    let _abundance: f64 = 0.;
+                                    let _mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
                                     let mut freqs = Vec::new();
                                     // Get the mean abundance across samples
                                     let mut sample_idx: usize = 0;
-                                    abundances_vector.iter().for_each(|(var, d)| {
+                                    abundances_vector.iter().for_each(|(var, _d)| {
 //                                        mean_var += *var;
                                         // Total depth of location
 //                                        total_d += *d;
@@ -354,7 +344,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         let mut geom_mean_d =
                                             geom_mean_d.lock().unwrap();
 
-                                        let sample_coverage = contig_coverages[sample_idx];
+                                        let _sample_coverage = contig_coverages[sample_idx];
 
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
@@ -377,7 +367,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             }
                         });
                 });
-                let mut variant_info_all = variant_info_all.lock().unwrap().clone();
+                let variant_info_all = variant_info_all.lock().unwrap().clone();
                 let geom_mean = |input: &Vec<f64>| -> Vec<f64> {
                     let output = input.iter()
                         .map(|sum| {
@@ -386,11 +376,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                     return output
                 };
 
-                let mut geom_mean_v = geom_mean_v.lock().unwrap().clone();
+                let geom_mean_v = geom_mean_v.lock().unwrap().clone();
                 let geom_mean_v = geom_mean(&geom_mean_v);
                 debug!("Geom Mean Var {:?}", geom_mean_v);
 
-                let mut geom_mean_d = geom_mean_d.lock().unwrap().clone();
+                let geom_mean_d = geom_mean_d.lock().unwrap().clone();
                 let geom_mean_d = geom_mean(&geom_mean_d);
                 debug!("Geom Mean Dep {:?}", geom_mean_d);
 
@@ -428,7 +418,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let mut points = points.lock().unwrap();
                     points.push(point);
                 });
-                let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
+                let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
                     pts_min: pts_min*variant_info.len() as f64,
@@ -464,7 +454,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     });
                 });
                 let mut prediction_count = prediction_count.lock().unwrap();
-                let mut prediction_features = prediction_features.lock().unwrap();
+                let prediction_features = prediction_features.lock().unwrap();
                 // Pairs of clusters that shared border points
                 let mut to_combine = HashMap::new();
                 // Clusters that were completely contained within another cluster
@@ -512,7 +502,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
 
                             let variant_cat = variant_pos.entry(variant.pos).or_insert(HashMap::new());
-                            let mut category = fuzzy::Category::Noise;
+                            let mut category;
                             if prediction_features[&cluster].contains_key(&index) {
                                 category = prediction_features[&cluster][&index].clone();
                             } else {
@@ -523,7 +513,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         });
                     }
                 });
-                let mut prediction_variants = prediction_variants.lock().unwrap().clone();
+                let prediction_variants = prediction_variants.lock().unwrap().clone();
 
 
 
@@ -567,7 +557,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let v = v.lock().unwrap();
 
-                    let mut v = v.get_array2();
+                    let v = v.get_array2();
 
                     let v = v.clone() / v.norm();
                     let mut nmf = Factorization::new_nmf(
@@ -587,13 +577,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut predictions = nmf.probabilities("samples");
 
-                    let mut prediction_count = Arc::new(Mutex::new(HashMap::new()));
-                    let mut prediction_features = Arc::new(Mutex::new(HashMap::new()));
-                    let mut prediction_variants = Arc::new(Mutex::new(HashMap::new()));
+                    let prediction_count = Arc::new(Mutex::new(HashMap::new()));
+                    let prediction_features = Arc::new(Mutex::new(HashMap::new()));
+                    let prediction_variants = Arc::new(Mutex::new(HashMap::new()));
     //                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
 
-                    let mut max_cnt = 0;
-                    let mut max_strain = 0;
                     let thresh = 1. / predictions.shape()[1] as f64;
                     // check if feature score is greater than geom mean score / SD
                     // if so then place into that rank
@@ -633,9 +621,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                             }
                         });
                     });
-                    let mut prediction_count = prediction_count.lock().unwrap();
-                    let mut prediction_features = prediction_features.lock().unwrap();
-                    let mut prediction_variants = prediction_variants.lock().unwrap().clone();
+                    let prediction_count = prediction_count.lock().unwrap();
+                    let prediction_features = prediction_features.lock().unwrap();
+                    let prediction_variants = prediction_variants.lock().unwrap().clone();
                     // get the strain with maximum members
                     let mut max_cnt = 0;
                     let mut max_strain = 0;
@@ -668,15 +656,9 @@ impl PileupMatrixFunctions for PileupMatrix{
     fn generate_genotypes(&mut self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                variants,
-                indels_map,
-                snps_map,
                 target_names,
-                sample_names,
-                coverages,
                 contigs,
                 ref mut pred_variants,
-                ref mut pred_variants_all,
                 ..
             } => {
 
@@ -699,7 +681,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                             let mut skip_n = 0;
                             let mut skip_cnt = 0;
-                            let mut char_cnt = 0;
+//                            let char_cnt = 0;
                             let mut variations = 0;
 
                             for (pos, base) in original_contig.iter().enumerate() {
@@ -710,7 +692,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     skip_n = 0;
                                     skip_cnt = 0;
                                     if genotype.contains_key(&tid) {
-                                        let mut tid_genotype = genotype.get_mut(&tid).unwrap();
+                                        let tid_genotype = genotype.get_mut(&tid).unwrap();
 
 //                                        if pred_variants_all.contains_key(&0) {
 //                                            if pred_variants_all[&0].contains_key(&tid) {
@@ -784,11 +766,9 @@ impl PileupMatrixFunctions for PileupMatrix{
     fn print_variant_stats(&self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                variants,
                 target_names,
                 target_lengths,
                 sample_names,
-                variances,
                 variant_counts,
                 variant_sums,
                 ..

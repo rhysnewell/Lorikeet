@@ -25,7 +25,7 @@ impl VariantMatrix {
 //        }
 //    }
 
-    fn index(&mut self, row_index: usize, col_index: usize, n: usize, distance1: f64, distance2: Option<f64>) {
+    fn index(&mut self, row_index: usize, col_index: usize, n: usize, distance1: f64, _distance2: Option<f64>) {
         match self {
             VariantMatrix::Array1(array1) | VariantMatrix::Constraints(array1) => {
                 let condensed_index = get_condensed_index(row_index, col_index, n).unwrap();
@@ -57,7 +57,7 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                                snps_map: &mut HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                                geom_means_var: &[f64],
                                geom_means_dep: &[f64],
-                               sample_count: i32) -> Arc<Mutex<VariantMatrix>> {
+                               _sample_count: i32) -> Arc<Mutex<VariantMatrix>> {
 
     let variant_distances = Arc::new(
                 Mutex::new(
@@ -72,7 +72,7 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
            (variant_info_all.len().pow(2) - variant_info_all.len())/2);
 
     // Create variable to store mean of abundance if only one sample
-    let vector_mean: f64 = 0.;
+    let _vector_mean: f64 = 0.;
 
     let n = variant_info_all.len();
     // produced condensed pairwise distances
@@ -99,7 +99,7 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
         }
 
         let row_start = row_info.0 as usize;
-        let row_end = row_start + row_info.1.len() - 1;
+        let _row_end = row_start + row_info.1.len() - 1;
 
         (row_index+1..variant_info_all.len())
             .into_par_iter().for_each(|col_index| {
@@ -137,7 +137,7 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                 // Jaccard Similarity Modified for total read depth
                 // Calculates the observed frequency of two variants together
                 // |A (inter) B| / ((depth(A) + depth(B) - |A (inter) B|)
-                let mut constraint: f64 = 1.;
+                let mut constraint;
                 if row_info.0 == col_info.0 && row_info.3 == col_info.3 {
                     constraint = -1.;
 //                    constraints.lock().unwrap().index(row_index,
@@ -160,7 +160,7 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
 //                    }
                 }
 
-                let mut distance: f64 = 0.;
+                let mut distance;
 
                 // If the variants share positions, then instantly they can't be in the same
                 // gentoype so max distance

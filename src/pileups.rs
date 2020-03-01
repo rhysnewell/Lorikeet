@@ -30,7 +30,7 @@ pub fn pileup_variants<R: NamedBamReader,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     mut reference: bio::io::fasta::IndexedReader<File>,
-    print_zero_coverage_contigs: bool,
+    _print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     mapq_threshold: u8,
     min_var_depth: usize,
@@ -43,7 +43,7 @@ pub fn pileup_variants<R: NamedBamReader,
     include_indels: bool,
     include_soft_clipping: bool) {
 
-    let sample_idx = 0;
+    let _sample_idx = 0;
     let sample_count = bam_readers.len();
     let mut sample_idx = 0;
     // Print file header
@@ -74,7 +74,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
                     .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-                let mut gff_file = tempfile::Builder::new()
+                let gff_file = tempfile::Builder::new()
                     .prefix("lorikeet-prodigal-gff")
                     .tempfile_in(tmp_dir.path())
                     .expect(&format!("Failed to create distances tempfile"));
@@ -120,7 +120,7 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut bam_generated = bam_generator.start();
         bam_generated.set_threads(n_threads);
 
-        let mut bam_properties =
+        let bam_properties =
             AlignmentProperties::default(InsertSize::default());
 
         let stoit_name = bam_generated.name().to_string();
@@ -237,7 +237,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                 // for each chunk of the cigar string
                 let mut cursor: usize = record.pos() as usize;
-                let quals = record.qual();
+                let _quals = record.qual();
                 let mut read_cursor: usize = 0;
                 for cig in record.cigar().iter() {
                     match cig {
