@@ -1,4 +1,4 @@
-extern crate lorikeet;
+extern crate Lorikeet as lorikeet;
 
 use lorikeet::pileups;
 use lorikeet::external_command_checker;
