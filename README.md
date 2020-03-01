@@ -5,17 +5,25 @@
 
 ![](docs/static/images/lorikeet_logo_crop.png)
 
-A strain resolver for metagenomics. Currently under active development, StrainM currently acts as a variant caller for reads mapped to a metagenome assembled genome.
+A strain resolver for metagenomics.
+
+## Installation
+```
+cargo install lorikeet
+```
+
+
+## Usage
 
 Input can either be reads and reference genome, or MAG. Or a BAM file and associated genome.
 
-# Usage
 ```
 Strain genotyping analysis for metagenomics
 
 Usage: lorikeet <subcommand> ...
 
 Main subcommands:
+    genotype    *Experimental* Resolve strain-level genotypes of MAGs from microbial communities
     polymorph   Calculate variants along contig positions
     summarize   Summarizes contig stats from multiple samples
     evolve  Calculate dN/dS values for genes from read mappings
