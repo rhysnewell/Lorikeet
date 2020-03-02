@@ -519,10 +519,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 debug!("Predictions {:?}", prediction_variants);
                 for (cluster, pred_set) in prediction_count.iter() {
-                    debug!("Cluster {} Variants {}", cluster, pred_set.len());
+                    info!("Cluster {} Variants {}", cluster, pred_set.len());
                 }
 //                debug!("Prediction count {:?}", prediction_count);
-//                debug!("Prediction categories {:?}", prediction_features);
+                info!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants;
             }
         }
