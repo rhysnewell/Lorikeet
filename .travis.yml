@@ -42,8 +42,6 @@ install:
   - conda config --add channels bioconda
   - conda config --add channels conda-forge
   - conda install bwa samtools minimap2 prodigal
-  - rm -r ~/travis/.cargo/registry/src/github*/openblas-src*/
-  - rm -r ~/travis/.cargo/registry/cache/github*/openblas-src*/
 
 cache: cargo
 
