@@ -482,7 +482,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // extend clusters with neighbouring points
                 for (to_extend, extend_with) in to_combine.iter() {
-                    if !to_remove.contains(to_extend) || !to_remove.contains(extend_with) {
+                    if !to_remove.contains(to_extend) && !to_remove.contains(extend_with) {
                         let extended_set = prediction_count[&to_extend]
                             .union(&prediction_count[&extend_with]).cloned().collect();
                         prediction_count.insert(*to_extend, extended_set);
@@ -519,10 +519,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 debug!("Predictions {:?}", prediction_variants);
                 for (cluster, pred_set) in prediction_count.iter() {
-                    info!("Cluster {} Variants {}", cluster, pred_set.len());
+                    info!("Cluster {} Sites {}", cluster, pred_set.len());
                 }
 //                debug!("Prediction count {:?}", prediction_count);
-                info!("Prediction categories {:?}", prediction_features);
+                debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants;
             }
         }
@@ -718,7 +718,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 } else if max_var == "R" {
                                                     max_var = var;
                                                 }
-                                                variations += 1;
                                             }
                                             if max_var.contains("N") {
                                                 // Skip the next n bases but rescue the reference prefix
@@ -726,16 +725,22 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 skip_cnt = 0;
                                                 let first_byte = max_var.as_bytes()[0];
                                                 contig = contig + str::from_utf8(
-                                                    &[first_byte]).unwrap()
+                                                    &[first_byte]).unwrap();
+                                                variations += 1;
+
                                             } else if max_var.len() > 1 {
                                                 // Insertions have a reference prefix that needs to be removed
                                                 let removed_first_base = str::from_utf8(
                                                     &max_var.as_bytes()[1..]).unwrap();
                                                 contig = contig + removed_first_base;
+                                                variations += 1;
+
                                             } else if max_var.contains("R") {
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                             } else {
                                                 contig = contig + max_var;
+                                                variations += 1;
+
                                             }
                                         } else {
                                             contig = contig + str::from_utf8(&[*base]).unwrap();

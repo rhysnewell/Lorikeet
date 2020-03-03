@@ -64,17 +64,51 @@ impl MetricSpace for Point {
                     return output
                 };
 
+                let get_mean = |input: &Vec<f64>| -> f64 {
+                    let sum = input.par_iter().sum::<f64>();
+                    sum / input.len() as f64
+                };
+
                 let row_vals: Vec<f64> = clr(&self.vars, &self.geom_var);
 
                 let col_vals: Vec<f64> = clr(&other.vars, &other.geom_var);
 
-                let mut sum_of_diff = 0.;
-                for (r, c) in row_vals.iter().zip(col_vals.iter()) {
-                    sum_of_diff += (r - c).powf(2.)
-                }
-                let distance = sum_of_diff.powf(1. / 2.);
+                let mean_row = get_mean(&row_vals);
 
-                return distance
+                let mean_col = get_mean(&col_vals);
+
+                // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
+                // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
+
+                // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
+                let mut row_var = 0.;
+                let mut col_var = 0.;
+                let mut covar = 0.;
+
+                row_vals.iter()
+                    .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
+                    row_var += (r_freq - mean_row).powf(2.);
+                    col_var += (c_freq - mean_col).powf(2.);
+                    covar += (r_freq - mean_row) * (c_freq - mean_col)
+                });
+
+                row_var = row_var / row_vals.len() as f64;
+                col_var = col_var / col_vals.len() as f64;
+                covar = covar / row_vals.len() as f64;
+
+                let mut correlation;
+                if row_var == 0. && col_var == 0. {
+                    correlation = 0.;
+                } else {
+                    correlation = (2. * covar) / (row_var + col_var);
+                }
+
+//              swap signs
+                correlation *= -1.;
+//              move between 0 and 2
+                correlation += 1.;
+
+                return correlation
             }
         } else {
             if self.pos == other.pos && self.tid == other.tid {
