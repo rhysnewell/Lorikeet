@@ -441,7 +441,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
 
-
                         let mut prediction_count = prediction_count.lock().unwrap();
                         let count = prediction_count.entry(rank + 1).or_insert(HashSet::new());
                         count.insert(assignment.index);
@@ -493,22 +492,36 @@ impl PileupMatrixFunctions for PileupMatrix{
                 prediction_count.par_iter().for_each(|(cluster, prediction_set)|{
                     if !to_remove.contains(cluster) {
                         prediction_set.par_iter().for_each(|index| {
-                            let variant = &points[*index];
 
-                            let mut prediction_variants = prediction_variants.lock().unwrap();
-                            let variant_tid = prediction_variants.entry(*cluster)
+                            let variant = &points[*index];
+                            let mut prediction_variants = prediction_variants
+                                .lock()
+                                .unwrap();
+
+                            let variant_tid = prediction_variants
+                                .entry(*cluster)
+                                .or_insert(HashMap::new());
+                            let variant_pos = variant_tid
+                                .entry(variant.tid)
                                 .or_insert(HashMap::new());
 
-                            let variant_pos = variant_tid.entry(variant.tid).or_insert(HashMap::new());
+                            let variant_cat = variant_pos
+                                .entry(variant.pos)
+                                .or_insert(HashMap::new());
 
-                            let variant_cat = variant_pos.entry(variant.pos).or_insert(HashMap::new());
                             let mut category;
                             if prediction_features[&cluster].contains_key(&index) {
                                 category = prediction_features[&cluster][&index].clone();
                             } else {
-                                category = fuzzy::Category::Border;
+                                if variant.var.contains("R") {
+                                    category = fuzzy::Category::Border;
+                                } else {
+                                    category = fuzzy::Category::Core;
+                                }
                             }
-                            let variant_set = variant_cat.entry(category).or_insert(HashSet::new());
+                            let variant_set = variant_cat
+                                .entry(category)
+                                .or_insert(HashSet::new());
                             variant_set.insert(variant.var.clone());
                         });
                     }
