@@ -469,9 +469,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                         to_remove.insert(*combination[1].0);
                     } else if intersect.len() > 0 {
                         if combination[0].1.len() >= combination[1].1.len() {
-                            to_combine.insert(*combination[1].0, *combination[0].0);
+                            let combo_set = to_combine.entry(*combination[1].0)
+                                .or_insert(HashSet::new());
+                            combo_set.insert(*combination[0].0);
                         } else {
-                            to_combine.insert(*combination[0].0, *combination[1].0);
+                            let combo_set = to_combine.entry(*combination[0].0)
+                                .or_insert(HashSet::new());
+                            combo_set.insert(*combination[1].0);
                         };
                     }
                 }
@@ -480,11 +484,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                 }
 
                 // extend clusters with neighbouring points
-                for (to_extend, extend_with) in to_combine.iter() {
-                    if !to_remove.contains(to_extend) && !to_remove.contains(extend_with) {
-                        let extended_set = prediction_count[&to_extend]
-                            .union(&prediction_count[&extend_with]).cloned().collect();
-                        prediction_count.insert(*to_extend, extended_set);
+                for (to_extend, extend_set) in to_combine.iter() {
+                    if !to_remove.contains(to_extend) {
+                        for extend_with in extend_set.iter() {
+                            let extended_set = prediction_count[&to_extend]
+                                .union(&prediction_count[&extend_with]).cloned().collect();
+                            prediction_count.insert(*to_extend, extended_set);
+                        }
                     }
                 }
 
@@ -501,6 +507,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             let variant_tid = prediction_variants
                                 .entry(*cluster)
                                 .or_insert(HashMap::new());
+
                             let variant_pos = variant_tid
                                 .entry(variant.tid)
                                 .or_insert(HashMap::new());
@@ -526,9 +533,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                         });
                     }
                 });
+
                 let prediction_variants = prediction_variants.lock().unwrap().clone();
-
-
 
                 debug!("Predictions {:?}", prediction_variants);
                 for (cluster, pred_set) in prediction_count.iter() {
