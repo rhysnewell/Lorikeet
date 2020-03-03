@@ -163,7 +163,8 @@ pub fn pileup_variants<R: NamedBamReader,
                 if record.seq().len() == 0 {
                     continue
                 } else if record.mapq() < mapq_threshold {
-                    continue
+                    skipped_reads += 1;
+                    continue;
                 }
                 // Check if new read to id
                 if !read_to_id.contains_key(&record.qname().to_vec()) {
