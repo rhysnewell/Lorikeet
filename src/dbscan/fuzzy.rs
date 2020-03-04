@@ -236,11 +236,11 @@ impl FuzzyDBSCAN {
         let mut neighbor_visited = vec![false; points.len()];
         while let Some(neighbor_index) = take_arbitrary(&mut neighbor_indices) {
             neighbor_visited[neighbor_index] = true;
+            visited[neighbor_index] = true;
             let neighbor_neighbor_indices = self.region_query(points, neighbor_index);
             let neighbor_label =
                 self.mu_min_p(self.density(neighbor_index, &neighbor_neighbor_indices, points));
             if neighbor_label == 1.0 {
-                visited[neighbor_index] = true;
                 for neighbor_neighbor_index in neighbor_neighbor_indices {
                     if !neighbor_visited[neighbor_neighbor_index] {
                         neighbor_indices.insert(neighbor_neighbor_index);
