@@ -275,15 +275,19 @@ impl PileupFunctions for PileupStats {
                                parameters.regressor_values[0] as f64,
                                standard_errors[0].1 as f64);
 
-                // calculate the minimum number of variant sites needed for specified ANI
-                // ANI is not divided by 100 here as it is already betwen 0 and 1
-                let variants_for_ani = (*target_len as f32 * (1. - ani)) as usize;
-                info!("Variants needed for ANI {}", variants_for_ani);
+                if ani > 0. {
+                    // calculate the minimum number of variant sites needed for specified ANI
+                    // ANI is not divided by 100 here as it is already betwen 0 and 1
+                    let variants_for_ani = (*target_len as f32 * (1. - ani)) as usize;
+                    info!("Variants needed for ANI {}", variants_for_ani);
 
-                // Sort variant count vec descending
-                variant_count.sort_by(|a, b| b.partial_cmp(a).unwrap());
+                    // Sort variant count vec descending
+                    variant_count.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
-                variant_count[variants_for_ani] as usize
+                    variant_count[variants_for_ani] as usize
+                } else {
+                    0
+                }
 
             }
         }

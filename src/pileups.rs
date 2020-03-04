@@ -111,8 +111,10 @@ pub fn pileup_variants<R: NamedBamReader,
                 contig_genes.push(rec);
             }
         },
-        "genotype" => {
-            ani = parse_percentage(m, "strain-ani");
+        "genotype" | "summarize" => {
+            if m.is_present("strain-ani") {
+                ani = parse_percentage(m, "strain-ani");
+            }
         },
         _ => {
 //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
@@ -486,17 +488,29 @@ fn process_previous_contigs_var(
                                  coverages,
                                  ups_and_downs);
 
+        if ani == 0. {
+            pileup_struct.calc_error(ani);
+
+
+            // filters variants across contig
+            pileup_struct.calc_variants(
+                min_var_depth,
+                coverage_fold as f64);
+        } else {
+            let min_var_depth = pileup_struct.calc_error(ani);
+
+            info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
+
+            // filters variants across contig
+            pileup_struct.calc_variants(
+                min_var_depth,
+                coverage_fold as f64);
+        }
 
 
         match mode {
             "polymorph" => {
-                pileup_struct.calc_error(ani);
 
-
-                // filters variants across contig
-                pileup_struct.calc_variants(
-                    min_var_depth,
-                    coverage_fold as f64);
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 if pileup_struct.len() > 0 {
@@ -506,14 +520,7 @@ fn process_previous_contigs_var(
 
             },
             "summarize" | "genotype" => {
-                let min_var_depth = pileup_struct.calc_error(ani);
 
-                info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
-
-                // filters variants across contig
-                pileup_struct.calc_variants(
-                    min_var_depth,
-                    coverage_fold as f64);
                 // calculates minimum number of genotypes possible for each variant location
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
@@ -521,23 +528,11 @@ fn process_previous_contigs_var(
                                         ref_sequence);
             },
             "evolve" => {
-                pileup_struct.calc_error(ani);
 
-
-                // filters variants across contig
-                pileup_struct.calc_variants(
-                    min_var_depth,
-                    coverage_fold as f64);
                 pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
             },
             "polish" => {
-                pileup_struct.calc_error(ani);
 
-
-                // filters variants across contig
-                pileup_struct.calc_variants(
-                    min_var_depth,
-                    coverage_fold as f64);
                 pileup_struct.polish_contig(&ref_sequence,
                                             output_prefix);
             }
