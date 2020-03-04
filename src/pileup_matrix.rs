@@ -455,7 +455,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let mut prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
                 // Pairs of clusters that shared border points
-                let mut to_combine = HashMap::new();
+//                let mut to_combine = HashMap::new();
                 // Clusters that were completely contained within another cluster
                 let mut to_remove = HashSet::new();
                 for combination in prediction_count.iter().combinations(2) {
@@ -463,38 +463,48 @@ impl PileupMatrixFunctions for PileupMatrix{
                         .intersection(&combination[1].1.clone())
                         .cloned()
                         .collect();
-                    info!("Combination {} and {} Intersection Length {}", combination[0].0, combination[1].0, intersect.len());
-                    if intersect.len() == combination[0].1.len() {
+                    info!("Combination {} and {} Intersection Length {}",
+                          combination[0].0,
+                          combination[1].0,
+                          intersect.len());
+                    if intersect.len() == combination[0].1.len()
+                        && intersect.len() == combination[1].1.len() {
+                        // Remove second entry arbitrarily
+                        // TODO: Setup a random component to this
+                        //       so it can take first or second
+                        to_remove.insert(*combination[1].0);
+                    } else if intersect.len() == combination[0].1.len() {
                         to_remove.insert(*combination[0].0);
                     } else if intersect.len() == combination[1].1.len() {
                         to_remove.insert(*combination[1].0);
-                    } else if intersect.len() > 0 {
-                        // If clusters overlap, then we extend the smaller cluster with the larger one
-                        if combination[0].1.len() > combination[1].1.len() {
-                            let combo_set = to_combine.entry(*combination[1].0)
-                                .or_insert(HashSet::new());
-                            combo_set.insert(*combination[0].0);
-                        } else {
-                            let combo_set = to_combine.entry(*combination[0].0)
-                                .or_insert(HashSet::new());
-                            combo_set.insert(*combination[1].0);
-                        }
                     }
+//                    else if intersect.len() > 0 {
+                        // If clusters overlap, then we extend the smaller cluster with the larger one
+//                        if combination[0].1.len() > combination[1].1.len() {
+//                            let combo_set = to_combine.entry(*combination[1].0)
+//                                .or_insert(HashSet::new());
+//                            combo_set.insert(*combination[0].0);
+//                        } else {
+//                            let combo_set = to_combine.entry(*combination[0].0)
+//                                .or_insert(HashSet::new());
+//                            combo_set.insert(*combination[1].0);
+//                        }
+//                    }
                 }
-                for (cluster, pred_set) in prediction_count.iter() {
-                    debug!("Pre-extended Cluster {} Variants {}", cluster, pred_set.len());
-                }
+//                for (cluster, pred_set) in prediction_count.iter() {
+//                    debug!("Pre-extended Cluster {} Variants {}", cluster, pred_set.len());
+//                }
 
                 // extend clusters with neighbouring points
-                for (to_extend, extend_set) in to_combine.iter() {
-                    if !to_remove.contains(to_extend) {
-                        for extend_with in extend_set.iter() {
-                            let extended_set = prediction_count[&to_extend]
-                                .union(&prediction_count[&extend_with]).cloned().collect();
-                            prediction_count.insert(*to_extend, extended_set);
-                        }
-                    }
-                }
+//                for (to_extend, extend_set) in to_combine.iter() {
+//                    if !to_remove.contains(to_extend) {
+//                        for extend_with in extend_set.iter() {
+//                            let extended_set = prediction_count[&to_extend]
+//                                .union(&prediction_count[&extend_with]).cloned().collect();
+//                            prediction_count.insert(*to_extend, extended_set);
+//                        }
+//                    }
+//                }
 
                 // Build Genotype Maps
                 prediction_count.par_iter().for_each(|(cluster, prediction_set)|{
