@@ -469,12 +469,15 @@ impl PileupMatrixFunctions for PileupMatrix{
                     } else if intersect.len() == combination[1].1.len() {
                         to_remove.insert(*combination[1].0);
                     } else if intersect.len() > 0 {
-                        let combo_set = to_combine.entry(*combination[1].0)
-                            .or_insert(HashSet::new());
-                        combo_set.insert(*combination[0].0);
-                        let combo_set = to_combine.entry(*combination[0].0)
-                            .or_insert(HashSet::new());
-                        combo_set.insert(*combination[1].0);
+                        if combination[0].1.len() > combination[1].1.len() {
+                            let combo_set = to_combine.entry(*combination[1].0)
+                                .or_insert(HashSet::new());
+                            combo_set.insert(*combination[0].0);
+                        } else {
+                            let combo_set = to_combine.entry(*combination[0].0)
+                                .or_insert(HashSet::new());
+                            combo_set.insert(*combination[1].0);
+                        }
                     }
                 }
                 for (cluster, pred_set) in prediction_count.iter() {
