@@ -10,6 +10,7 @@ use coverm::bam_generator::*;
 use rayon::prelude::*;
 use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
 
+use crate::*;
 use std::str;
 use std::fs::File;
 use coverm::mosdepth_genome_coverage_estimators::*;
@@ -46,6 +47,7 @@ pub fn pileup_variants<R: NamedBamReader,
     let _sample_idx = 0;
     let sample_count = bam_readers.len();
     let mut sample_idx = 0;
+    let mut ani = 0.;
     // Print file header
     let mut pileup_matrix = PileupMatrix::new_matrix();
     let mut gff_map = HashMap::new();
@@ -55,6 +57,7 @@ pub fn pileup_variants<R: NamedBamReader,
     match mode {
         "evolve" => {
             codon_table.get_codon_table(11);
+            ani = 0.;
 
             let mut gff_reader;
             if m.is_present("gff") {
@@ -107,6 +110,9 @@ pub fn pileup_variants<R: NamedBamReader,
                     .or_insert(Vec::new());
                 contig_genes.push(rec);
             }
+        },
+        "genotype" => {
+            ani = parse_percentage(m, "strain-ani");
         },
         _ => {
 //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
@@ -184,6 +190,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
                         process_previous_contigs_var(
                             mode,
+                            ani,
                             last_tid,
                             nuc_freq.lock().unwrap().clone(),
                             indels,
@@ -362,6 +369,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
             process_previous_contigs_var(
                 mode,
+                ani,
                 last_tid,
                 nuc_freq.lock().unwrap().clone(),
                 indels,
@@ -423,6 +431,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
 fn process_previous_contigs_var(
     mode: &str,
+    ani: f32,
     last_tid: i32,
     nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
     indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
@@ -477,16 +486,17 @@ fn process_previous_contigs_var(
                                  coverages,
                                  ups_and_downs);
 
-        pileup_struct.calc_error();
 
-
-        // filters variants across contig
-        pileup_struct.calc_variants(
-            min_var_depth,
-            coverage_fold as f64);
 
         match mode {
             "polymorph" => {
+                pileup_struct.calc_error(ani);
+
+
+                // filters variants across contig
+                pileup_struct.calc_variants(
+                    min_var_depth,
+                    coverage_fold as f64);
                 // calculates minimum number of genotypes possible for each variant location
 //                pileup_struct.generate_minimum_genotypes();
                 if pileup_struct.len() > 0 {
@@ -496,6 +506,14 @@ fn process_previous_contigs_var(
 
             },
             "summarize" | "genotype" => {
+                let min_var_depth = pileup_struct.calc_error(ani);
+
+                info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
+
+                // filters variants across contig
+                pileup_struct.calc_variants(
+                    min_var_depth,
+                    coverage_fold as f64);
                 // calculates minimum number of genotypes possible for each variant location
                 pileup_matrix.add_contig(pileup_struct,
                                          sample_count,
@@ -503,9 +521,23 @@ fn process_previous_contigs_var(
                                         ref_sequence);
             },
             "evolve" => {
+                pileup_struct.calc_error(ani);
+
+
+                // filters variants across contig
+                pileup_struct.calc_variants(
+                    min_var_depth,
+                    coverage_fold as f64);
                 pileup_struct.calc_gene_mutations(gff_map, &ref_sequence, codon_table);
             },
             "polish" => {
+                pileup_struct.calc_error(ani);
+
+
+                // filters variants across contig
+                pileup_struct.calc_variants(
+                    min_var_depth,
+                    coverage_fold as f64);
                 pileup_struct.polish_contig(&ref_sequence,
                                             output_prefix);
             }

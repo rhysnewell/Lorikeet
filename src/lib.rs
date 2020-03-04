@@ -48,19 +48,24 @@ extern crate lazy_static;
 extern crate derive_new;
 extern crate pest_derive;
 
+use clap::*;
+use std::process;
+
 pub const CONCATENATED_FASTA_FILE_SEPARATOR: &str = "~";
 
-
-/// Finds the first occurence of element in a slice
-fn find_first<T>(slice: &[T], element: T) -> Result<usize, &'static str>
-where T: std::cmp::PartialEq<T> {
-
-    let mut index: usize = 0;
-    for el in slice {
-        if *el == element {
-            return Ok(index)
+pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
+    match m.is_present(parameter) {
+        true => {
+            let mut percentage = value_t!(m.value_of(parameter), f32).unwrap();
+            if percentage >= 1.0 && percentage <= 100.0 {
+                percentage = percentage / 100.0;
+            } else if percentage < 0.0 || percentage > 100.0 {
+                error!("Invalid alignment percentage: '{}'", percentage);
+                process::exit(1);
+            }
+            info!("Using {} {}%", parameter, percentage * 100.0);
+            percentage
         }
-        index += 1;
+        false => 0.0,
     }
-    return Err("Element not found in slice")
 }

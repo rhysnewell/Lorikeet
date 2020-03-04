@@ -463,7 +463,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         .intersection(&combination[1].1.clone())
                         .cloned()
                         .collect();
-                    info!("Combination {:?} Intersection Length {}", combination, intersect.len());
+                    info!("Combination {} and {} Intersection Length {}", combination[0].0, combination[1].0, intersect.len());
                     if intersect.len() == combination[0].1.len() {
                         to_remove.insert(*combination[0].0);
                     } else if intersect.len() == combination[1].1.len() {
