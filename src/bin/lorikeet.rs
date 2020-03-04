@@ -1,5 +1,6 @@
 extern crate lorikeet_rs as lorikeet;
 
+use lorikeet::*;
 use lorikeet::pileups;
 use lorikeet::external_command_checker;
 use lorikeet::cli::*;
@@ -729,23 +730,6 @@ fn parse_mapping_program(m: &clap::ArgMatches) -> MappingProgram {
         }
     }
     return mapping_program;
-}
-
-fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
-    match m.is_present(parameter) {
-        true => {
-            let mut percentage = value_t!(m.value_of(parameter), f32).unwrap();
-            if percentage >= 1.0 && percentage <= 100.0 {
-                percentage = percentage / 100.0;
-            } else if percentage < 0.0 || percentage > 100.0 {
-                error!("Invalid alignment percentage: '{}'", percentage);
-                process::exit(1);
-            }
-            info!("Using {} {}%", parameter, percentage * 100.0);
-            percentage
-        }
-        false => 0.0,
-    }
 }
 
 

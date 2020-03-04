@@ -96,7 +96,7 @@ pub trait PileupFunctions {
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>);
 
-    fn calc_error(&mut self);
+    fn calc_error(&mut self, ani: f32) -> usize;
 
     fn calc_variants(&mut self,
                      min_variant_depth: usize,
@@ -243,12 +243,13 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn calc_error(&mut self) {
+    fn calc_error(&mut self, ani: f32) -> usize {
         match self {
             PileupStats::PileupContigStats {
                 variant_count,
                 depth,
                 regression,
+                target_len,
                 ..
             } => {
                 let data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
@@ -273,6 +274,16 @@ impl PileupFunctions for PileupStats {
                 *regression = (parameters.intercept_value as f64,
                                parameters.regressor_values[0] as f64,
                                standard_errors[0].1 as f64);
+
+                // calculate the minimum number of variant sites needed for specified ANI
+                // ANI is not divided by 100 here as it is already betwen 0 and 1
+                let variants_for_ani = (*target_len as f32 * (1. - ani)) as usize;
+                info!("Variants needed for ANI {}", variants_for_ani);
+
+                // Sort variant count vec descending
+                variant_count.sort_by(|a, b| b.partial_cmp(a).unwrap());
+
+                variant_count[variants_for_ani] as usize
 
             }
         }
