@@ -744,9 +744,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                             let mut max_var = "";
                                             for var in hash.iter() {
+                                                // If there are two variants possible for
+                                                // a single site and one is the reference
+                                                // we will choose the reference
                                                 if max_var == "" {
                                                     max_var = var;
-                                                } else if max_var == "R" {
+                                                } else if max_var != "R" {
                                                     max_var = var;
                                                 }
                                             }
