@@ -749,7 +749,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                                 // we will choose the reference
                                                 if max_var == "" {
                                                     max_var = var;
-                                                } else if max_var != "R" {
+                                                } else if max_var == "R" {
                                                     max_var = var;
                                                 }
                                             }
