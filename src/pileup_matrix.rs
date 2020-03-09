@@ -83,6 +83,8 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
+    fn run_umap(&mut self);
+
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64);
 
     fn run_nmf(&mut self);
@@ -392,6 +394,15 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
+    fn run_umap(&mut self) {
+        match self {
+            PileupMatrix::PileupContigMatrix {
+                ref mut variant_info,
+                ..
+            }
+        }
+    }
+
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
@@ -406,15 +417,15 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 let points = Arc::new(Mutex::new(Vec::new()));
                 variant_info.into_par_iter().for_each(|info| {
-                    let point = fuzzy::Point{
-                       pos: info.0,
-                       var: info.1.clone(),
-                       geom_var: geom_mean_var.clone(),
-                       geom_dep: geom_mean_dep.clone(),
-                       deps: (info.2).0.clone(),
-                       vars: (info.2).1.clone(),
-                       tid: info.3
-                    };
+                    let point = fuzzy::Point {
+                           pos: info.0,
+                           var: info.1.clone(),
+                           geom_var: geom_mean_var.clone(),
+                           geom_dep: geom_mean_dep.clone(),
+                           deps: (info.2).0.clone(),
+                           vars: (info.2).1.clone(),
+                           tid: info.3
+                        };
                     let mut points = points.lock().unwrap();
                     points.push(point);
                 });
