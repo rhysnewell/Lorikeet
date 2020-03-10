@@ -32,6 +32,7 @@ extern crate itertools;
 extern crate rayon;
 extern crate ndarray;
 extern crate ndarray_linalg;
+extern crate ndarray_npy;
 extern crate openblas_src;
 extern crate strum;
 

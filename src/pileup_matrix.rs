@@ -7,6 +7,10 @@ use std::io::prelude::*;
 use rayon::prelude::*;
 use ndarray::{prelude::*};
 use ndarray_linalg::{norm::*};
+use ndarray_npy::{read_npy, write_npy};
+use tempdir::TempDir;
+use nix::unistd;
+use nix::sys::stat;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::process;
@@ -14,6 +18,9 @@ use nymph::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
 use itertools::{Itertools};
 use ordered_float::NotNan;
+use rayon::current_num_threads;
+use bird_tool_utils::command::finish_command_safely;
+use std::env::temp_dir;
 
 
 #[derive(Debug)]
@@ -83,9 +90,9 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_umap(&mut self);
+    fn run_umap(&mut self) -> Array2<f64>;
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64);
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>);
 
     fn run_nmf(&mut self);
 
@@ -394,16 +401,78 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_umap(&mut self) {
+    fn run_umap(&mut self) -> Array2<f64> {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
+                geom_mean_var,
                 ..
-            }
+            } => {
+                let points = Arc::new(Mutex::new(
+                    Array2::zeros((variant_info.len(), (variant_info[0].2).1.len()))));
+
+
+                variant_info.into_par_iter().enumerate().for_each(|(index, info)| {
+
+                    let mut clr: Array1<f64> = Array1::from_shape_vec(((info.2).1.len()),
+                                                          (info.2).1.par_iter().enumerate().map(|(i, v)| {
+                                                            ((v + 1.) / geom_mean_var[i] as f64).ln()
+                                                            }).collect())
+                                                        .expect("Unable to make array from vec");
+
+                    let mut points = points.lock().unwrap();
+                    points.slice_mut(s![index, ..]).assign(&mut clr);
+                });
+
+                let tmp_dir = TempDir::new("lorikeet_fifo")
+                    .expect("Unable to create temporary directory");
+                let fifo_path = tmp_dir.path().join("foo.pipe");
+
+                // create new fifo and give read, write and execute rights to the owner.
+                // This is required because we cannot open a Rust stream as a BAM file with
+                // rust-htslib.
+                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
+                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
+
+                let mut variants_file = tempfile::Builder::new()
+                    .prefix("lorikeet-variants")
+                    .tempfile_in(tmp_dir.path())
+                    .expect(&format!("Failed to create distances tempfile"));
+                let tmp_path_var = variants_file.path().to_str()
+                    .expect("Failed to convert tempfile path to str").to_string();
+                let points = points.lock().unwrap().clone();
+
+                write_npy(&tmp_path_var, points);
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                     run_umap.py {} {}",
+                    // NMF
+                    &tmp_path_var,
+                    current_num_threads());
+
+                info!("Queuing cmd_string: {}", cmd_string);
+                let mut python = std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stderr(process::Stdio::piped())
+                    .stdout(process::Stdio::piped())
+                    .spawn()
+                    .expect("Unable to execute bash");
+
+                python = finish_command_safely(python, "run_umap");
+                let mut umap_file = temp_dir().join("lorikeet-umap.npy");
+                let embeddings: Array2<f64> = read_npy(tmp_path_var + "-umap.npy")
+                    .expect("Unable to read umap embeddings");
+
+//                println!("{:?}", embeddings)
+                return embeddings
+
+
+            },
         }
     }
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -415,20 +484,19 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
 
-                let points = Arc::new(Mutex::new(Vec::new()));
-                variant_info.into_par_iter().for_each(|info| {
-                    let point = fuzzy::Point {
-                           pos: info.0,
-                           var: info.1.clone(),
-                           geom_var: geom_mean_var.clone(),
-                           geom_dep: geom_mean_dep.clone(),
-                           deps: (info.2).0.clone(),
-                           vars: (info.2).1.clone(),
-                           tid: info.3
+                let points = Arc::new(Mutex::new(vec![fuzzy::Point {
+                    x: 0.,
+                    y: 0.,
+                }; variant_info.len()]));
+                embeddings.axis_iter(Axis(0)).into_par_iter().enumerate()
+                    .for_each(|(index, embed)|{
+                        let point = fuzzy::Point {
+                            x: embed[0],
+                            y: embed[1],
                         };
-                    let mut points = points.lock().unwrap();
-                    points.push(point);
-                });
+                        let mut points = points.lock().unwrap();
+                        points[index] = point;
+                    });
                 let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
@@ -448,114 +516,46 @@ impl PileupMatrixFunctions for PileupMatrix{
                         HashMap::new()));
 
 
-
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
 
                         let mut prediction_count = prediction_count.lock().unwrap();
-                        let count = prediction_count.entry(rank + 1).or_insert(HashSet::new());
+                        let count = prediction_count.entry(rank + 1)
+                            .or_insert(HashSet::new());
                         count.insert(assignment.index);
 
                         let mut prediction_features = prediction_features.lock().unwrap();
                         let feature = prediction_features.entry(rank+1).or_insert(HashMap::new());
                         feature.insert(assignment.index, assignment.category);
 //                        *category += 1;
+                        let variant = &variant_info[assignment.index];
+                        let mut prediction_variants = prediction_variants
+                            .lock()
+                            .unwrap();
+
+                        let variant_tid = prediction_variants
+                            .entry(rank + 1)
+                            .or_insert(HashMap::new());
+
+                        let variant_pos = variant_tid
+                            .entry(variant.3)
+                            .or_insert(HashMap::new());
+
+                        let variant_cat = variant_pos
+                            .entry(variant.0)
+                            .or_insert(HashMap::new());
+
+                        let mut category = feature[&assignment.index];
+
+                        let variant_set = variant_cat
+                            .entry(category)
+                            .or_insert(HashSet::new());
+                        variant_set.insert(variant.1.clone());
 
                     });
                 });
                 let mut prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
-                // Pairs of clusters that shared border points
-//                let mut to_combine = HashMap::new();
-                // Clusters that were completely contained within another cluster
-                let mut to_remove = HashSet::new();
-                for combination in prediction_count.iter().combinations(2) {
-                    let intersect: HashSet<usize> = combination[0].1.clone()
-                        .intersection(&combination[1].1.clone())
-                        .cloned()
-                        .collect();
-                    info!("Combination {} and {} Intersection Length {}",
-                          combination[0].0,
-                          combination[1].0,
-                          intersect.len());
-                    if intersect.len() == combination[0].1.len()
-                        && intersect.len() == combination[1].1.len() {
-                        // Remove second entry arbitrarily
-                        // TODO: Setup a random component to this
-                        //       so it can take first or second
-                        to_remove.insert(*combination[1].0);
-                    } else if intersect.len() == combination[0].1.len() {
-                        to_remove.insert(*combination[0].0);
-                    } else if intersect.len() == combination[1].1.len() {
-                        to_remove.insert(*combination[1].0);
-                    }
-//                    else if intersect.len() > 0 {
-                        // If clusters overlap, then we extend the smaller cluster with the larger one
-//                        if combination[0].1.len() > combination[1].1.len() {
-//                            let combo_set = to_combine.entry(*combination[1].0)
-//                                .or_insert(HashSet::new());
-//                            combo_set.insert(*combination[0].0);
-//                        } else {
-//                            let combo_set = to_combine.entry(*combination[0].0)
-//                                .or_insert(HashSet::new());
-//                            combo_set.insert(*combination[1].0);
-//                        }
-//                    }
-                }
-//                for (cluster, pred_set) in prediction_count.iter() {
-//                    debug!("Pre-extended Cluster {} Variants {}", cluster, pred_set.len());
-//                }
-
-                // extend clusters with neighbouring points
-//                for (to_extend, extend_set) in to_combine.iter() {
-//                    if !to_remove.contains(to_extend) {
-//                        for extend_with in extend_set.iter() {
-//                            let extended_set = prediction_count[&to_extend]
-//                                .union(&prediction_count[&extend_with]).cloned().collect();
-//                            prediction_count.insert(*to_extend, extended_set);
-//                        }
-//                    }
-//                }
-
-                // Build Genotype Maps
-                prediction_count.par_iter().for_each(|(cluster, prediction_set)|{
-                    if !to_remove.contains(cluster) {
-                        prediction_set.par_iter().for_each(|index| {
-
-                            let variant = &points[*index];
-                            let mut prediction_variants = prediction_variants
-                                .lock()
-                                .unwrap();
-
-                            let variant_tid = prediction_variants
-                                .entry(*cluster)
-                                .or_insert(HashMap::new());
-
-                            let variant_pos = variant_tid
-                                .entry(variant.tid)
-                                .or_insert(HashMap::new());
-
-                            let variant_cat = variant_pos
-                                .entry(variant.pos)
-                                .or_insert(HashMap::new());
-
-                            let mut category;
-                            if prediction_features[&cluster].contains_key(&index) {
-                                category = prediction_features[&cluster][&index].clone();
-                            } else {
-                                if variant.var.contains("R") {
-                                    category = fuzzy::Category::Border;
-                                } else {
-                                    category = fuzzy::Category::Core;
-                                }
-                            }
-                            let variant_set = variant_cat
-                                .entry(category)
-                                .or_insert(HashSet::new());
-                            variant_set.insert(variant.var.clone());
-                        });
-                    }
-                });
 
                 let prediction_variants = prediction_variants.lock().unwrap().clone();
 
