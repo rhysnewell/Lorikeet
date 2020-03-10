@@ -18,7 +18,7 @@ if __name__=="__main__":
     except IndexError:
             print("Usage <Variant Counts> <Threads>")
             sys.exit()
-    reducer = umap.UMAP(metric='manhattan')
+    reducer = umap.UMAP(metric='manhattan', min_dist=0.75)
     with threadpool_limits(limits=threads, user_api='blas'):
         variants = variants / np.linalg.norm(variants)
         embedding = reducer.fit_transform(variants)
