@@ -25,7 +25,7 @@ pub trait MetricSpace: Sized + Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-pub struct Point {
+pub struct Var {
     pub pos: i32,
     pub var: String,
     pub geom_var: Vec<f64>,
@@ -33,6 +33,12 @@ pub struct Point {
     pub deps: Vec<f64>,
     pub vars: Vec<f64>,
     pub tid: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct Point {
+    pub x: f64,
+    pub y: f64,
 }
 
 pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
@@ -50,7 +56,7 @@ pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
 
 }
 
-impl MetricSpace for Point {
+impl MetricSpace for Var {
     fn distance(&self, other: &Self) -> f64 {
 
         if self.vars.len() > 1 {
@@ -128,6 +134,13 @@ impl MetricSpace for Point {
         }
     }
 }
+
+impl MetricSpace for Point {
+    fn distance(&self, other: &Self) -> f64 {
+        ((other.x - self.x).powi(2) + (other.y - self.y).powi(2)).sqrt()
+    }
+}
+
 
 /// A high-level classification, as defined by the FuzzyDBSCAN algorithm.
 #[derive(Debug, PartialEq, Serialize, Clone, Copy, Hash, Eq)]

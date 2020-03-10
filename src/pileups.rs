@@ -423,8 +423,8 @@ pub fn pileup_variants<R: NamedBamReader,
         let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
         let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
         let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max);
-//        pileup_matrix.run_nmf();
+        let embeddings = pileup_matrix.run_umap();
+        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, embeddings);
         pileup_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);

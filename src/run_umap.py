@@ -14,13 +14,12 @@ if __name__=="__main__":
     try:
         variants = np.load(sys.argv[1])
         threads = int(sys.argv[2])
-        path = sys.argv[4]
 
     except IndexError:
-            print("Usage <Variant Counts> <Threads> <Path>")
+            print("Usage <Variant Counts> <Threads>")
             sys.exit()
     reducer = umap.UMAP(metric='manhattan')
     with threadpool_limits(limits=threads, user_api='blas'):
         variants = variants / np.linalg.norm(variants)
         embedding = reducer.fit_transform(variants)
-        np.save(path + "_umap", embedding.astype('float64'), False)
+        np.save(sys.argv[1] + "-umap", embedding.astype('float64'), False)
