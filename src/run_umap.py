@@ -5,6 +5,8 @@ import umap
 #warnings.filterwarnings("always")
 from threadpoolctl import threadpool_limits
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sys
 
@@ -18,7 +20,7 @@ if __name__=="__main__":
     except IndexError:
             print("Usage <Variant Counts> <Threads>")
             sys.exit()
-    reducer = umap.UMAP(metric='manhattan', min_dist=0.75)
+    reducer = umap.UMAP(metric='manhattan', min_dist=0.5, spread=1.5)
     with threadpool_limits(limits=threads, user_api='blas'):
         variants = variants / np.linalg.norm(variants)
         embedding = reducer.fit_transform(variants)
