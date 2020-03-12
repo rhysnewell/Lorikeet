@@ -416,7 +416,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut clr: Array1<f64> = Array1::from_shape_vec(((info.2).1.len()),
                                                           (info.2).1.par_iter().enumerate().map(|(i, v)| {
-                                                            ((v + 1.) / geom_mean_var[i] as f64).ln()
+                                                            (v + 1.).log2()
                                                             }).collect())
                                                         .expect("Unable to make array from vec");
 
