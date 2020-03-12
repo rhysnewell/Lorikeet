@@ -416,7 +416,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let mut clr: Array1<f64> = Array1::from_shape_vec(((info.2).1.len()),
                                                           (info.2).1.par_iter().enumerate().map(|(i, v)| {
-                                                            (v + 1.).log2()
+                                                            ((v + 1.) / geom_mean_var[i] as f64).ln()
                                                             }).collect())
                                                         .expect("Unable to make array from vec");
 
@@ -429,8 +429,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let fifo_path = tmp_dir.path().join("foo.pipe");
 
                 // create new fifo and give read, write and execute rights to the owner.
-                // This is required because we cannot open a Rust stream as a BAM file with
-                // rust-htslib.
                 unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
                     .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
