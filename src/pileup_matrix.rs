@@ -464,8 +464,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 
 //                println!("{:?}", embeddings)
                 return embeddings
-
-
             },
         }
     }
