@@ -90,7 +90,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_umap(&mut self) -> Array2<f64>;
+    fn run_umap(&mut self, metric: &str, spread: f64, min_dist: f64, n_neighbors: i32) -> Array2<f64>;
 
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>);
 
@@ -401,7 +401,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_umap(&mut self) -> Array2<f64> {
+    fn run_umap(&mut self, metric: &str, spread: f64, min_dist: f64, n_neighbours: i32) -> Array2<f64> {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -443,10 +443,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                 write_npy(&tmp_path_var, points);
                 let cmd_string = format!(
                     "set -e -o pipefail; \
-                     run_umap.py {} {}",
+                     run_umap.py {} {} {} {} {} {}",
                     // NMF
                     &tmp_path_var,
-                    current_num_threads());
+                    current_num_threads(),
+                    min_dist,
+                    spread,
+                    n_neighbours,
+                    metric);
 
                 info!("Queuing cmd_string: {}", cmd_string);
                 let mut python = std::process::Command::new("bash")
