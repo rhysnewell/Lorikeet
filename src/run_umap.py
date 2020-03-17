@@ -44,7 +44,7 @@ if __name__=="__main__":
     except IndexError:
         print("Usage <Variant Counts> <Threads> <Min Dist> <Spread> <No. Neighbours> <Metric>")
         sys.exit()
-    reducer = umap.UMAP(metric=metric, min_dist=0.15, spread=0.5, n_neighbors=int(0.1*np.size(variants, 0)))
+    reducer = umap.UMAP(metric=metric, min_dist=0.15, spread=0.5, n_neighbors=n_neighbours)
     with threadpool_limits(limits=threads, user_api='blas'):
         variants = variants / np.linalg.norm(variants, ord=2, axis=1, keepdims=True)
         embedding = reducer.fit_transform(variants)
