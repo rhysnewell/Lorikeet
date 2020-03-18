@@ -94,7 +94,7 @@ pub trait PileupMatrixFunctions {
 
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>);
 
-    fn run_nmf(&mut self);
+    fn run_nmf(&mut self) -> Array2<f64>;
 
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
@@ -358,7 +358,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
 //                                        if variant == &"R".to_string() {
-                                            geom_mean_v[sample_idx] += ((*var + 0.0001) as f64).ln();
+                                            geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
                                             geom_mean_d[sample_idx] += ((depths[sample_idx] + 1.) as f64).ln();
 //                                        }
                                         sample_idx += 1;
@@ -485,14 +485,12 @@ impl PileupMatrixFunctions for PileupMatrix{
                 info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
 
                 let points = Arc::new(Mutex::new(vec![fuzzy::Point {
-                    x: 0.,
-                    y: 0.,
+                    values: Vec::new(),
                 }; variant_info.len()]));
                 embeddings.axis_iter(Axis(0)).into_par_iter().enumerate()
                     .for_each(|(index, embed)|{
                         let point = fuzzy::Point {
-                            x: embed[0],
-                            y: embed[1],
+                            values: embed.to_slice().unwrap().to_vec(),
                         };
                         let mut points = points.lock().unwrap();
                         points[index] = point;
@@ -570,7 +568,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_nmf(&mut self) {
+    fn run_nmf(&mut self) -> Array2<f64>{
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -602,6 +600,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let v = v.get_array2();
 
                     let v = v.clone() / v.norm();
+
                     let mut nmf = Factorization::new_nmf(
                         v,
                         20,
@@ -617,76 +616,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     info!("EVAR: {} RSS: {}", nmf.evar(), nmf.rss());
 
-                    let mut predictions = nmf.probabilities("samples");
-
-                    let prediction_count = Arc::new(Mutex::new(HashMap::new()));
-                    let prediction_features = Arc::new(Mutex::new(HashMap::new()));
-                    let prediction_variants = Arc::new(Mutex::new(HashMap::new()));
-    //                    let mut prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
-
-                    let thresh = 1. / predictions.shape()[1] as f64;
-                    // check if feature score is greater than geom mean score / SD
-                    // if so then place into that rank
-                    // If not, then prediction could realistically be any available rank
-                    variant_info.par_iter().enumerate().for_each(|(row, info)| {
-                        let scores = predictions.slice(s![row, ..]).clone();
-                        let notnan_scores: Vec<NotNan<f64>> = scores.into_par_iter().cloned()
-                            .map(NotNan::new)
-                            .filter_map(Result::ok)
-                            .collect();
-                        let max = notnan_scores.par_iter().max().expect("No maximum found");
-
-                        scores.iter().enumerate().for_each(|(rank, score)|{
-                            if score >= &(thresh) || NotNan::from(*score) == *max {
-                                let mut prediction_count = prediction_count.lock().unwrap();
-                                let mut prediction_features = prediction_features.lock().unwrap();
-                                let mut prediction_variants = prediction_variants.lock().unwrap();
-
-                                let rank: usize = rank + 1;
-                                let count = prediction_count.entry(rank)
-                                    .or_insert(0);
-                                let variant_tid = prediction_variants.entry(rank)
-                                    .or_insert(HashMap::new());
-
-                                // variant_info_all.push((position, var.to_string(), (depths, freqs), tid));
-                                let variant_pos = variant_tid.entry(info.3).or_insert(HashMap::new());
-
-                                let variant_cat = variant_pos.entry(info.0).or_insert(HashMap::new());
-                                let variant = variant_cat.entry(fuzzy::Category::Core).or_insert(HashSet::new());
-                                variant.insert(info.1.clone());
-
-                                let feature = prediction_features.entry(rank)
-                                    .or_insert(0.);
-                                *feature += score.ln();
-
-                                *count += 1;
-                            }
-                        });
-                    });
-                    let prediction_count = prediction_count.lock().unwrap();
-                    let prediction_features = prediction_features.lock().unwrap();
-                    let prediction_variants = prediction_variants.lock().unwrap().clone();
-                    // get the strain with maximum members
-                    let mut max_cnt = 0;
-                    let mut max_strain = 0;
-                    prediction_count.iter().for_each(|(strain, cnt)| {
-                        if &max_cnt <= cnt {
-                            max_strain = *strain;
-                            max_cnt = *cnt;
-                        }
-                    });
-
-
-                    let mut prediction_geom = HashMap::new();
-                    prediction_features.iter()
-                        .for_each(|(pred, sum)| {
-                            prediction_geom.insert(pred, (*sum / prediction_count[pred] as f64).exp());
-                        });
-
-                    debug!("Prediction Geom Means {:?}", prediction_geom);
-                    debug!("Prediction Counts {:?}", prediction_count);
-
-                    *pred_variants = prediction_variants;
+                    let basis = nmf.basis().clone();
+                    return basis
                 } else {
                     debug!("Not enough variants found for NMF calculation: {:?}", variant_info);
                     process::exit(1)
