@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import sys
 import statistics
 import numba
+from sklearn.decomposition import PCA
 
 #random.seed(a=345210)
 
@@ -28,9 +29,9 @@ def coda_rho(a, b):
 
     rho = 2*covar / (var_a + var_b)
 
-    rho *= -1
-    rho += 1
-    return rho
+    # rho *= -1
+    # rho += 1
+    return covar
 
 if __name__=="__main__":
     try:
@@ -44,7 +45,7 @@ if __name__=="__main__":
     except IndexError:
         print("Usage <Variant Counts> <Threads> <Min Dist> <Spread> <No. Neighbours> <Metric>")
         sys.exit()
-    reducer = umap.UMAP(metric=metric, min_dist=0.15, spread=0.5, n_neighbors=n_neighbours)
+    reducer = umap.UMAP(metric=metric, min_dist=min_dist, spread=spread, n_neighbors=n_neighbours, n_components=2)
     with threadpool_limits(limits=threads, user_api='blas'):
         variants = variants / np.linalg.norm(variants, ord=2, axis=1, keepdims=True)
         embedding = reducer.fit_transform(variants)

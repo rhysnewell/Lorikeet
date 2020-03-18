@@ -429,10 +429,12 @@ pub fn pileup_variants<R: NamedBamReader,
         let n_neighbours: i32 = m.value_of("n-neighbours").unwrap().parse().unwrap();
 
 
-        let embeddings = pileup_matrix.run_umap(metric,
-                                                                               spread,
-                                                                                min_dist,
-                                                                                n_neighbours);
+//        let embeddings = pileup_matrix.run_umap(metric,
+//                                                                               spread,
+//                                                                                min_dist,
+//                                                                                n_neighbours);
+
+        let embeddings = pileup_matrix.run_nmf();
 
         pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, embeddings);
         pileup_matrix.generate_genotypes(output_prefix);

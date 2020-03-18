@@ -37,8 +37,7 @@ pub struct Var {
 
 #[derive(Debug, Clone)]
 pub struct Point {
-    pub x: f64,
-    pub y: f64,
+    pub values: Vec<f64>,
 }
 
 pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
@@ -137,7 +136,14 @@ impl MetricSpace for Var {
 
 impl MetricSpace for Point {
     fn distance(&self, other: &Self) -> f64 {
-        ((other.x - self.x).powi(2) + (other.y - self.y).powi(2)).sqrt()
+        let mut sum_squares = Arc::new(Mutex::new(0.));
+        self.values.par_iter().zip(other.values.par_iter()).for_each(|(x, y)|{
+            let mut sum_squares = sum_squares.lock().unwrap();
+            *sum_squares += (x - y).powf(2.)
+        });
+        let mut sum_squares: f64 = *sum_squares.lock().unwrap();
+        let dist: f64 = sum_squares.sqrt();
+        return dist
     }
 }
 

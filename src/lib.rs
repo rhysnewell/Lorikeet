@@ -33,6 +33,7 @@ extern crate rayon;
 extern crate ndarray;
 extern crate ndarray_linalg;
 extern crate ndarray_npy;
+//extern crate plotly;
 extern crate openblas_src;
 extern crate strum;
 
