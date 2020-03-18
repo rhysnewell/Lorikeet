@@ -64,10 +64,6 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                     VariantMatrix::Array2(Array2::<f64>::zeros(
                         (variant_info_all.len(), variant_info_all.len())))));
 
-//    let mut constraints = Arc::new(Mutex::new(
-//       VariantMatrix::Constraints(Array1::<f64>::zeros((variant_info_all.len().pow(2) - variant_info_all.len())/2)))
-//    );
-
     debug!("Filling matrix of size {}",
            (variant_info_all.len().pow(2) - variant_info_all.len())/2);
 

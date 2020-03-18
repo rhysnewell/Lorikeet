@@ -213,7 +213,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(vec![(0., 0.); sample_count]);
                                     variant_depth += (abundance.0) as f64;
-                                    sample_map[sample_idx] = (abundance.0 as f64 / *total_depth, *total_depth);
+                                    sample_map[sample_idx] = (abundance.0 as f64, *total_depth);
 
                                 }
                             }
@@ -224,7 +224,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             //Add Reference as variant
                             let sample_map = position_variants.entry("R".to_string())
                                 .or_insert(vec![(0., 0.); sample_count]);
-                            sample_map[sample_idx] = (ref_depth / *total_depth, *total_depth);
+                            sample_map[sample_idx] = (ref_depth, *total_depth);
 
                         }
 
@@ -482,6 +482,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
+                debug!("Embeddings {:?}", embeddings);
                 info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
 
                 let points = Arc::new(Mutex::new(vec![fuzzy::Point {
