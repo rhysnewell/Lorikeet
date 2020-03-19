@@ -36,10 +36,11 @@ ordered-float = "1"
 bird_tool_utils = "0.1.0"
 coverm = "0.4"
 ndarray = { version = "0.13", features = ["rayon"] }
-ndarray-linalg = { version = "0.12" }
+ndarray-linalg = { version = "0.12", features = ["static"] }
 ndarray-npy = "0.5"
 openblas-src = "0.7"
 nymph = "0.1"
+#plotly = "0.4"
 nix = "0.13"
 pest = "2"
 pest_derive = "2"

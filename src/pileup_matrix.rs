@@ -592,9 +592,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     let v = v.lock().unwrap();
 
                     let v = v.get_array2();
-
-                    let v = v.clone() / v.norm();
-
+                    let v = normalize(v, NormalizeAxis::Row).0;
                     let mut nmf = Factorization::new_nmf(
                         v,
                         20,
