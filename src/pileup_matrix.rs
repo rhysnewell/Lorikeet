@@ -593,9 +593,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                     let v = v.get_array2();
                     let v = normalize(v, NormalizeAxis::Row).0;
+                    let rank = v.ncols();
                     let mut nmf = Factorization::new_nmf(
                         v,
-                        20,
+                        rank / 2,
                         1,
                         "euclidean",
                         "conn",
