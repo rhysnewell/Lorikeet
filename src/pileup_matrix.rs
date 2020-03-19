@@ -344,10 +344,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     // Get the mean abundance across samples
                                     let mut sample_idx: usize = 0;
                                     abundances_vector.iter().for_each(|(var, _d)| {
-//                                        mean_var += *var;
-                                        // Total depth of location
-//                                        total_d += *d;
-//                                            let freq = (*var + 1.) / (*d + 1.);
                                         let mut geom_mean_v =
                                             geom_mean_v.lock().unwrap();
                                         let mut geom_mean_d =
@@ -355,12 +351,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                         let _sample_coverage = contig_coverages[sample_idx];
 
-//                                            freqs.push(freq * (sample_coverage / max_coverage));
                                         freqs.push(*var);
-//                                        if variant == &"R".to_string() {
-                                            geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                            geom_mean_d[sample_idx] += ((depths[sample_idx] + 1.) as f64).ln();
-//                                        }
+                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
+                                        geom_mean_d[sample_idx] += ((depths[sample_idx] + 1.) as f64).ln();
                                         sample_idx += 1;
                                     });
 
