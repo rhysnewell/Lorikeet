@@ -92,7 +92,7 @@ pub trait PileupMatrixFunctions {
 
     fn run_umap(&mut self, metric: &str, spread: f64, min_dist: f64, n_neighbors: i32) -> Array2<f64>;
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>);
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Option<Array2<f64>>);
 
     fn run_nmf(&mut self) -> Array2<f64>;
 
@@ -465,7 +465,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Array2<f64>) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Option<Array2<f64>>) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -475,28 +475,55 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
-                debug!("Embeddings {:?}", embeddings);
                 info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
-
-                let points = Arc::new(Mutex::new(vec![fuzzy::Point {
-                    values: Vec::new(),
-                }; variant_info.len()]));
-                embeddings.axis_iter(Axis(0)).into_par_iter().enumerate()
-                    .for_each(|(index, embed)|{
-                        let point = fuzzy::Point {
-                            values: embed.to_slice().unwrap().to_vec(),
-                        };
-                        let mut points = points.lock().unwrap();
-                        points[index] = point;
-                    });
                 let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
                     pts_min: pts_min*variant_info.len() as f64,
                     pts_max: pts_max*variant_info.len() as f64,
                 };
-                let points = points.lock().unwrap();
-                let clusters = fuzzy_scanner.cluster(&points[..]);
+                let mut clusters;
+                match embeddings {
+                    Some(array) => {
+                        let points = Arc::new(Mutex::new(vec![fuzzy::Point {
+                            values: Vec::new(),
+                        }; variant_info.len()]));
+                        array.axis_iter(Axis(0)).into_par_iter().enumerate()
+                            .for_each(|(index, embed)| {
+                                let point = fuzzy::Point {
+                                    values: embed.to_slice().unwrap().to_vec(),
+                                };
+                                let mut points = points.lock().unwrap();
+                                points[index] = point;
+                            });
+
+                        let points = points.lock().unwrap();
+                        clusters = fuzzy_scanner.cluster(&points[..]);
+                    },
+                    None => {
+                        let points = Arc::new(Mutex::new(Vec::new()));
+                        variant_info.into_par_iter().for_each(|info| {
+                            let point = fuzzy::Var{
+                                pos: info.0,
+                                var: info.1.clone(),
+                                geom_var: geom_mean_var.clone(),
+                                geom_dep: geom_mean_dep.clone(),
+                                deps: (info.2).0.clone(),
+                                vars: (info.2).1.clone(),
+                                tid: info.3
+                            };
+                            let mut points = points.lock().unwrap();
+                            points.push(point);
+                        });
+                        let points = points.lock().unwrap();
+                        clusters = fuzzy_scanner.cluster(&points[..]);
+                    }
+                }
+
+                if clusters.len() == 1 || clusters.len() == 0 {
+                    // Then clustering was incorrect. Try different values
+                }
+
                 let prediction_variants = Arc::new(
                     Mutex::new(
                         HashMap::new()));
