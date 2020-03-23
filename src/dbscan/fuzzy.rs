@@ -142,7 +142,7 @@ impl MetricSpace for Point {
             *sum_squares += (x - y).powf(2.)
         });
         let mut sum_squares: f64 = *sum_squares.lock().unwrap();
-        let dist: f64 = sum_squares.sqrt() * 100.;
+        let dist: f64 = sum_squares.sqrt();
         return dist
     }
 }
