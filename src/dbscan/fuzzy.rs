@@ -101,19 +101,11 @@ impl MetricSpace for Var {
                 col_var = col_var / col_vals.len() as f64;
                 covar = covar / row_vals.len() as f64;
 
-                let mut correlation;
-                if row_var == 0. && col_var == 0. {
-                    correlation = 0.;
-                } else {
-                    correlation = (2. * covar) / (row_var + col_var);
-                }
+                let mut phi = 1. + row_var / col_var -
+                    2. * (row_var / col_var).sqrt()
+                        * covar / (col_var * row_var).sqrt();
 
-//              swap signs
-                correlation *= -1.;
-//              move between 0 and 2
-                correlation += 1.;
-
-                return correlation
+                return phi
             }
         } else {
             if self.pos == other.pos && self.tid == other.tid {
