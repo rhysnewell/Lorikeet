@@ -192,15 +192,15 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                             let row_vals: Vec<f64> = clr(&(row_info.2).1);
 
                             let col_vals: Vec<f64> = clr(&(col_info.2).1);
-
+//
                             let mean_row = get_mean(&row_vals);
 
                             let mean_col = get_mean(&col_vals);
-
-                            // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
-                            // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
-
-                            // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
+//
+//                            // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
+//                            // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
+//
+//                            // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
                             let mut row_var = 0.;
                             let mut col_var = 0.;
                             let mut covar = 0.;
@@ -212,41 +212,17 @@ pub fn get_condensed_distances(variant_info_all: &[(i32, String, (Vec<f64>, Vec<
                                 covar += (r_freq - mean_row) * (c_freq - mean_col)
                             });
 
-                            row_var = row_var / row_vals.len() as f64;
-                            col_var = col_var / col_vals.len() as f64;
-                            covar = covar / row_vals.len() as f64;
+                            // https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004075
+                            // Proportionality statistic, phi
+                            let mut phi = 1. + row_var / col_var -
+                                                2. * (row_var / col_var).sqrt()
+                                                    * covar / (col_var * row_var).sqrt();
 
-                            // technically correlation -1 to 1
-                            if row_var == 0. && col_var == 0. {
-                                distance = 0.;
-                            } else {
-                                distance = (2. * covar) / (row_var + col_var);
-                            }
-                            // 0 to 2
-                            distance += 1.;
-//                            distance = 1. - (-log_var.powf(1. / 2.)).exp();
-
-                            if constraint < 0. {
-                                distance = 0.
-                            } else {
-                                distance -= constraint;
-                            }
-//                            if distance > 2. {
-//                                distance = 2.;
-//                            }
-                            if distance < 0. {
-                                distance = 0.;
-                            }
-
-                            if distance.is_nan() || constraint.is_nan() {
-                                println!("Distance {} Constraint {} INFO {:?} {:?}", distance, constraint, row_info, col_info);
-
-                            }
 
                             variant_distances.lock().unwrap().index(row_index,
                                                                     col_index,
                                                                     n,
-                                                                    distance,
+                                                                    phi,
                                                                     None);
                         } else {
 
