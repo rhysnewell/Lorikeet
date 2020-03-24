@@ -3,7 +3,6 @@ use std::hash::Hash;
 use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-use ndarray::{Array2};
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -38,21 +37,6 @@ pub struct Var {
 #[derive(Debug, Clone)]
 pub struct Point {
     pub values: Vec<f64>,
-}
-
-pub fn dist_mat(input: &Vec<f64>) -> Array2<f64> {
-    let output = Arc::new(Mutex::new(Array2::<f64>::zeros((input.len(), input.len()))));
-    (0..input.len()-1).into_par_iter().for_each(|row_index|{
-        (row_index+1..input.len()).into_par_iter().for_each(|col_index|{
-            let euc_dist: f64 = (input[row_index] - input[col_index]).powf(2.).powf(1. / 2.);
-            let mut output = output.lock().unwrap();
-            output[[row_index, col_index]] = euc_dist;
-            output[[col_index, row_index]] = euc_dist;
-        });
-    });
-    let output = output.lock().unwrap().clone();
-    return output
-
 }
 
 impl MetricSpace for Var {
