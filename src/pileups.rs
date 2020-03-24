@@ -436,7 +436,7 @@ pub fn pileup_variants<R: NamedBamReader,
 
 //        let embeddings = pileup_matrix.run_nmf();
 
-        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, None);
+        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max);
         pileup_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
         pileup_matrix.print_variant_stats(output_prefix);

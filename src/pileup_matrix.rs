@@ -1,20 +1,15 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use pileup_structs::*;
-use matrix_handling::*;
 use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use ndarray::{prelude::*};
-use ndarray_linalg::{norm::*};
-use ndarray_npy::{read_npy, write_npy};
 use tempdir::TempDir;
 use nix::unistd;
 use nix::sys::stat;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::process;
-use nymph::factorization::{nmf::*, seeding::*};
 use crate::dbscan::fuzzy;
 use itertools::{Itertools};
 use ordered_float::NotNan;
@@ -90,11 +85,7 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_umap(&mut self, metric: &str, spread: f64, min_dist: f64, n_neighbors: i32) -> Array2<f64>;
-
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Option<Array2<f64>>);
-
-    fn run_nmf(&mut self) -> Array2<f64>;
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64);
 
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
@@ -394,78 +385,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_umap(&mut self, metric: &str, spread: f64, min_dist: f64, n_neighbours: i32) -> Array2<f64> {
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                ref mut variant_info,
-                geom_mean_var,
-                ..
-            } => {
-                let points = Arc::new(Mutex::new(
-                    Array2::zeros((variant_info.len(), (variant_info[0].2).1.len()))));
-
-
-                variant_info.into_par_iter().enumerate().for_each(|(index, info)| {
-
-                    let mut clr: Array1<f64> = Array1::from_shape_vec(((info.2).1.len()),
-                                                          (info.2).1.par_iter().enumerate().map(|(i, v)| {
-                                                            ((v + 1.) / geom_mean_var[i] as f64).ln()
-                                                            }).collect())
-                                                        .expect("Unable to make array from vec");
-
-                    let mut points = points.lock().unwrap();
-                    points.slice_mut(s![index, ..]).assign(&mut clr);
-                });
-
-                let tmp_dir = TempDir::new("lorikeet_fifo")
-                    .expect("Unable to create temporary directory");
-                let fifo_path = tmp_dir.path().join("foo.pipe");
-
-                // create new fifo and give read, write and execute rights to the owner.
-                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
-                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
-
-                let mut variants_file = tempfile::Builder::new()
-                    .prefix("lorikeet-variants")
-                    .tempfile_in(tmp_dir.path())
-                    .expect(&format!("Failed to create distances tempfile"));
-                let tmp_path_var = variants_file.path().to_str()
-                    .expect("Failed to convert tempfile path to str").to_string();
-                let points = points.lock().unwrap().clone();
-
-                write_npy(&tmp_path_var, points);
-                let cmd_string = format!(
-                    "set -e -o pipefail; \
-                     run_umap.py {} {} {} {} {} {}",
-                    // NMF
-                    &tmp_path_var,
-                    current_num_threads(),
-                    min_dist,
-                    spread,
-                    n_neighbours,
-                    metric);
-
-                info!("Queuing cmd_string: {}", cmd_string);
-                let mut python = std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&cmd_string)
-                    .stderr(process::Stdio::piped())
-                    .stdout(process::Stdio::piped())
-                    .spawn()
-                    .expect("Unable to execute bash");
-
-                python = finish_command_safely(python, "run_umap");
-                let mut umap_file = temp_dir().join("lorikeet-umap.npy");
-                let embeddings: Array2<f64> = read_npy(tmp_path_var + "-umap.npy")
-                    .expect("Unable to read umap embeddings");
-
-//                println!("{:?}", embeddings)
-                return embeddings
-            },
-        }
-    }
-
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, embeddings: Option<Array2<f64>>) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -479,46 +399,33 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
-                    pts_min: pts_min*variant_info.len() as f64,
-                    pts_max: pts_max*variant_info.len() as f64,
-                };
-                let mut clusters;
-                match embeddings {
-                    Some(array) => {
-                        let points = Arc::new(Mutex::new(vec![fuzzy::Point {
-                            values: Vec::new(),
-                        }; variant_info.len()]));
-                        array.axis_iter(Axis(0)).into_par_iter().enumerate()
-                            .for_each(|(index, embed)| {
-                                let point = fuzzy::Point {
-                                    values: embed.to_slice().unwrap().to_vec(),
-                                };
-                                let mut points = points.lock().unwrap();
-                                points[index] = point;
-                            });
-
-                        let points = points.lock().unwrap();
-                        clusters = fuzzy_scanner.cluster(&points[..]);
+                    pts_min: match pts_min {
+                        _ if pts_min > 1. => pts_min,
+                        _ => pts_min*variant_info.len() as f64,
+                        },
+                    pts_max: match pts_max {
+                        _ if pts_max > 1. => pts_max,
+                        _ => pts_max*variant_info.len() as f64,
                     },
-                    None => {
-                        let points = Arc::new(Mutex::new(Vec::new()));
-                        variant_info.into_par_iter().for_each(|info| {
-                            let point = fuzzy::Var{
-                                pos: info.0,
-                                var: info.1.clone(),
-                                geom_var: geom_mean_var.clone(),
-                                geom_dep: geom_mean_dep.clone(),
-                                deps: (info.2).0.clone(),
-                                vars: (info.2).1.clone(),
-                                tid: info.3
-                            };
-                            let mut points = points.lock().unwrap();
-                            points.push(point);
-                        });
-                        let points = points.lock().unwrap();
-                        clusters = fuzzy_scanner.cluster(&points[..]);
-                    }
-                }
+                };
+
+                let points = Arc::new(Mutex::new(Vec::new()));
+                variant_info.into_par_iter().for_each(|info| {
+                    let point = fuzzy::Var {
+                        pos: info.0,
+                        var: info.1.clone(),
+                        geom_var: geom_mean_var.clone(),
+                        geom_dep: geom_mean_dep.clone(),
+                        deps: (info.2).0.clone(),
+                        vars: (info.2).1.clone(),
+                        tid: info.3
+                    };
+                    let mut points = points.lock().unwrap();
+                    points.push(point);
+                });
+                let points = points.lock().unwrap();
+                let clusters = fuzzy_scanner.cluster(&points[..]);
+
 
                 if clusters.len() == 1 || clusters.len() == 0 {
                     // Then clustering was incorrect. Try different values
@@ -585,64 +492,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                debug!("Prediction count {:?}", prediction_count);
                 debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants;
-            }
-        }
-    }
-
-    fn run_nmf(&mut self) -> Array2<f64>{
-        match self {
-            PileupMatrix::PileupContigMatrix {
-                ref mut variant_info,
-                ref mut geom_mean_var,
-                ref mut geom_mean_dep,
-                ref mut pred_variants,
-                sample_names,
-                indels_map,
-                snps_map,
-                ..
-            } => {
-                if variant_info.len() > 1 {
-                    let sample_count = sample_names.len() as f64;
-
-                    info!("Generating Variant Distances with {} Variants", variant_info.len());
-
-
-
-                    // Generate distance or covariance matrix and pass that NMF functions
-                    let v = get_condensed_distances(&variant_info[..],
-                                                    indels_map,
-                                                    snps_map,
-                                                    &geom_mean_var[..],
-                                                    &geom_mean_dep[..],
-                                                    sample_count as i32);
-
-                    let v = v.lock().unwrap();
-
-                    let v = v.get_array2();
-
-                    let v = normalize(v, NormalizeAxis::Row).0;
-                    let rank = v.ncols();
-                    let mut nmf = Factorization::new_nmf(
-                        v,
-                        rank,
-                        1,
-                        "euclidean",
-                        "conn",
-                        Seed::new_random_vcol(),
-                        30,
-                        500,
-                        1e-5);
-
-                    nmf.estimate_rank();
-
-                    info!("EVAR: {} RSS: {}", nmf.evar(), nmf.rss());
-
-                    let basis = nmf.basis().clone();
-                    return basis
-                } else {
-                    debug!("Not enough variants found for NMF calculation: {:?}", variant_info);
-                    process::exit(1)
-                }
             }
         }
     }
