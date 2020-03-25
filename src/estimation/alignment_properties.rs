@@ -235,11 +235,11 @@ mod tests {
             let props = AlignmentProperties::estimate(&mut bam).unwrap();
             println!("{:?}", props);
 
-            assert_relative_eq!(props.insert_size.mean, 499.0);
-            assert_relative_eq!(props.insert_size.sd, 39.541883346487914);
+            assert_eq!(props.insert_size.mean, 499.0);
+            assert_eq!(props.insert_size.sd, 39.541883346487914);
             assert_eq!(props.max_del_cigar_len, 6);
             assert_eq!(props.max_ins_cigar_len, 5);
-            assert_relative_eq!(props.frac_max_softclip, 0.44666666666666666);
+            assert_eq!(props.frac_max_softclip, 0.44666666666666666);
         }
     }
 
@@ -269,11 +269,11 @@ mod tests {
             let props = AlignmentProperties::update_properties(&mut tlens, &mut properties).unwrap();
             println!("{:?}", props);
 
-            assert_relative_eq!(props.insert_size.mean, 498.5);
-            assert_relative_eq!(props.insert_size.sd, 49.78135392920871);
+            assert_eq!(props.insert_size.mean, 498.5);
+            assert_eq!(props.insert_size.sd, 49.78135392920871);
             assert_eq!(props.max_del_cigar_len, 6);
             assert_eq!(props.max_ins_cigar_len, 5);
-            assert_relative_eq!(props.frac_max_softclip, 0.44666666666666666);
+            assert_eq!(props.frac_max_softclip, 0.44666666666666666);
         }
     }
 
@@ -283,7 +283,7 @@ mod tests {
             fs::File::open("tests/resources/samtools_stats.example.txt").unwrap(),
         ))
         .unwrap();
-        assert_relative_eq!(insert_size.mean, 311.7);
-        assert_relative_eq!(insert_size.sd, 15.5);
+        assert_eq!(insert_size.mean, 311.7);
+        assert_eq!(insert_size.sd, 15.5);
     }
 }
