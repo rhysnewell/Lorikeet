@@ -317,7 +317,7 @@ pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bio::io::gff::GffType;
+    use bio::io::{gff};
 
     #[test]
     fn test_floor_division() {
@@ -331,7 +331,7 @@ mod tests {
         codon_table.get_codon_table(11);
 
         let mut gene_records
-            = gff::Reader::from_file("tests/data/dnds.gff", bio::io::gff::GffType::GFF3).expect("Incorrect file path");
+            = gff::Reader::from_file("tests/data/dnds.gff", gff::GffType::GFF3).expect("Incorrect file path");
         let mut variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>> = HashMap::new();
         variant_abundances.insert(13, BTreeMap::new());
         variant_abundances.insert(14, BTreeMap::new());
