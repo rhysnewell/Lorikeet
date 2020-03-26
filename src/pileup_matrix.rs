@@ -37,7 +37,7 @@ pub enum PileupMatrix {
         clusters_mean: HashMap<i32, f64>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
         variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
-        variant_info: Vec<(i32, String, (Vec<f64>, Vec<f64>), i32)>,
+        variant_info: Vec<fuzzy::Var>,
         geom_mean_var: Vec<f64>,
         geom_mean_dep: Vec<f64>,
         pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashMap<fuzzy::Category, HashSet<String>>>>>,
@@ -344,18 +344,22 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                         freqs.push(*var);
                                         geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                        geom_mean_d[sample_idx] += ((depths[sample_idx] + 1.) as f64).ln();
+                                        geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
                                         sample_idx += 1;
                                     });
 
 
                                     let mut variant_info_all = variant_info_all
                                         .lock().unwrap();
+                                    let point = fuzzy::Var {
+                                        pos: *position,
+                                        var: variant.to_string(),
+                                        deps: depths.clone(),
+                                        vars: freqs,
+                                        tid: *tid,
+                                    };
 
-
-                                    variant_info_all.push(
-                                        (*position, variant.to_string(),
-                                         (depths.clone(), freqs), *tid));
+                                    variant_info_all.push(point);
                                 }
                             }
                         });
@@ -407,24 +411,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                         _ if pts_max > 1. => pts_max,
                         _ => pts_max*variant_info.len() as f64,
                     },
+                    geom_var: geom_mean_var.clone(),
+                    geom_dep: geom_mean_dep.clone(),
                 };
 
-                let points = Arc::new(Mutex::new(Vec::new()));
-                variant_info.into_par_iter().for_each(|info| {
-                    let point = fuzzy::Var {
-                        pos: info.0,
-                        var: info.1.clone(),
-                        geom_var: geom_mean_var.clone(),
-                        geom_dep: geom_mean_dep.clone(),
-                        deps: (info.2).0.clone(),
-                        vars: (info.2).1.clone(),
-                        tid: info.3
-                    };
-                    let mut points = points.lock().unwrap();
-                    points.push(point);
-                });
-                let points = points.lock().unwrap();
-                let clusters = fuzzy_scanner.cluster(&points[..]);
+                let clusters = fuzzy_scanner.cluster(&variant_info[..]);
 
 
                 if clusters.len() == 1 || clusters.len() == 0 {
@@ -464,11 +455,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                             .or_insert(HashMap::new());
 
                         let variant_pos = variant_tid
-                            .entry(variant.3)
+                            .entry(variant.tid)
                             .or_insert(HashMap::new());
 
                         let variant_cat = variant_pos
-                            .entry(variant.0)
+                            .entry(variant.pos)
                             .or_insert(HashMap::new());
 
                         let mut category = feature[&assignment.index];
@@ -476,7 +467,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         let variant_set = variant_cat
                             .entry(category)
                             .or_insert(HashSet::new());
-                        variant_set.insert(variant.1.clone());
+                        variant_set.insert(variant.var.to_owned());
 
                     });
                 });

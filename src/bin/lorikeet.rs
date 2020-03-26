@@ -1263,7 +1263,6 @@ fn run_pileup<'a,
 
             File::create(file_path)
                 .expect("No Read or Write Permission in current directory");
-
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
