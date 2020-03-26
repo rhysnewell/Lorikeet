@@ -423,18 +423,6 @@ pub fn pileup_variants<R: NamedBamReader,
         let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
         let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
         let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-        let metric: &str = m.value_of("metric").unwrap();
-        let spread: f64 = m.value_of("spread").unwrap().parse().unwrap();
-        let min_dist: f64 = m.value_of("min-dist").unwrap().parse().unwrap();
-        let n_neighbours: i32 = m.value_of("n-neighbours").unwrap().parse().unwrap();
-
-
-//        let embeddings = pileup_matrix.run_umap(metric,
-//                                                                               spread,
-//                                                                                min_dist,
-//                                                                                n_neighbours);
-
-//        let embeddings = pileup_matrix.run_nmf();
 
         pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max);
         pileup_matrix.generate_genotypes(output_prefix);
