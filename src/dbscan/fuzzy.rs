@@ -239,7 +239,7 @@ impl FuzzyDBSCAN {
             let neighbor_neighbor_indices = self.region_query(points, neighbor_index);
             let neighbor_label =
                 self.mu_min_p(self.density(neighbor_index, &neighbor_neighbor_indices, points));
-            if neighbor_label == 1.0 {
+            if neighbor_label > 0.0 {
                 for neighbor_neighbor_index in neighbor_neighbor_indices {
                     if !neighbor_visited[neighbor_neighbor_index] {
                         neighbor_indices.insert(neighbor_neighbor_index);

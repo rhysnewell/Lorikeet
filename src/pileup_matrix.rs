@@ -348,18 +348,19 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         sample_idx += 1;
                                     });
 
+                                    if !variant.contains("R") {
+                                        let mut variant_info_all = variant_info_all
+                                            .lock().unwrap();
+                                        let point = fuzzy::Var {
+                                            pos: *position,
+                                            var: variant.to_string(),
+                                            deps: depths.clone(),
+                                            vars: freqs,
+                                            tid: *tid,
+                                        };
 
-                                    let mut variant_info_all = variant_info_all
-                                        .lock().unwrap();
-                                    let point = fuzzy::Var {
-                                        pos: *position,
-                                        var: variant.to_string(),
-                                        deps: depths.clone(),
-                                        vars: freqs,
-                                        tid: *tid,
-                                    };
-
-                                    variant_info_all.push(point);
+                                        variant_info_all.push(point);
+                                    }
                                 }
                             }
                         });
@@ -416,7 +417,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 };
 
                 let clusters = fuzzy_scanner.cluster(&variant_info[..]);
-
 
                 if clusters.len() == 1 || clusters.len() == 0 {
                     // Then clustering was incorrect. Try different values
