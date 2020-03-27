@@ -441,9 +441,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             .or_insert(HashSet::new());
                         count.insert(assignment.index);
 
-                        let mut prediction_features = prediction_features.lock().unwrap();
-                        let feature = prediction_features.entry(rank+1).or_insert(HashMap::new());
-                        feature.insert(assignment.index, assignment.category);
+
 //                        *category += 1;
                         let variant = &variant_info[assignment.index];
                         let mut prediction_variants = prediction_variants
@@ -462,27 +460,37 @@ impl PileupMatrixFunctions for PileupMatrix{
                             .entry(variant.pos)
                             .or_insert(HashMap::new());
 
-                        let mut category = feature[&assignment.index];
 
                         let variant_set = variant_cat
-                            .entry(category)
+                            .entry(assignment.category)
                             .or_insert(HashSet::new());
                         variant_set.insert(variant.var.to_owned());
 
+                        let mut prediction_features = prediction_features.lock().unwrap();
+                        let feature = prediction_features.entry(rank+1).or_insert(HashSet::new());
+                        feature.insert(variant.var.to_owned());
+
                     });
                 });
+
                 let mut prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
 
-                let prediction_variants = prediction_variants.lock().unwrap().clone();
+                let mut prediction_variants = prediction_variants.lock().unwrap();
 
                 debug!("Predictions {:?}", prediction_variants);
-                for (cluster, pred_set) in prediction_count.iter() {
-                    info!("Cluster {} Sites {}", cluster, pred_set.len());
+                for (cluster, pred_set) in prediction_features.iter() {
+                    if pred_set.len() > 1 {
+                        info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
+                    } else if !pred_set.contains("R") {
+                        info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
+                    } else {
+                        prediction_variants.remove_entry(cluster);
+                    }
                 }
 //                debug!("Prediction count {:?}", prediction_count);
                 debug!("Prediction categories {:?}", prediction_features);
-                *pred_variants = prediction_variants;
+                *pred_variants = prediction_variants.clone();
             }
         }
     }
