@@ -85,7 +85,8 @@ pub trait PileupMatrixFunctions {
 
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64);
+    /// Perform fuzzy DBSCAN clustering using proportionality
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64);
 
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
@@ -370,19 +371,17 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         sample_idx += 1;
                                     });
 
-                                    if !variant.contains("R") {
-                                        let mut variant_info_all = variant_info_all
-                                            .lock().unwrap();
-                                        let point = fuzzy::Var {
-                                            pos: *position,
-                                            var: variant.to_string(),
-                                            deps: depths.clone(),
-                                            vars: freqs,
-                                            tid: *tid,
-                                        };
+                                    let mut variant_info_all = variant_info_all
+                                        .lock().unwrap();
+                                    let point = fuzzy::Var {
+                                        pos: *position,
+                                        var: variant.to_string(),
+                                        deps: depths.clone(),
+                                        vars: freqs,
+                                        tid: *tid,
+                                    };
 
-                                        variant_info_all.push(point);
-                                    }
+                                    variant_info_all.push(point);
                                 }
                             }
                         });
@@ -412,7 +411,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut variant_info,
@@ -436,6 +435,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         _ if pts_max > 1. => pts_max,
                         _ => pts_max*variant_info.len() as f64,
                     },
+                    phi,
                     geom_var: geom_mean_var.clone(),
                     geom_dep: geom_mean_dep.clone(),
                 };

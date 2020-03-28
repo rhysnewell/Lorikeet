@@ -156,6 +156,8 @@ pub struct FuzzyDBSCAN {
     pub pts_min: f64,
     /// The maximum fuzzy neighborhood density (number of points).
     pub pts_max: f64,
+    /// The minimum threshold required for a label to called Core
+    pub phi: f64,
     /// The geometric mean of the depth of the variants across samples (as a vector).
     pub geom_var: Vec<f64>,
     /// The geometric mean of the depth of the variants across samples (as a vector).
@@ -170,6 +172,7 @@ impl FuzzyDBSCAN {
             eps_max: f64::NAN,
             pts_min: f64::NAN,
             pts_max: f64::NAN,
+            phi: f64::NAN,
             geom_var: Vec::new(),
             geom_dep: Vec::new(),
         }
@@ -239,7 +242,7 @@ impl FuzzyDBSCAN {
             let neighbor_neighbor_indices = self.region_query(points, neighbor_index);
             let neighbor_label =
                 self.mu_min_p(self.density(neighbor_index, &neighbor_neighbor_indices, points));
-            if neighbor_label > 0.0 {
+            if neighbor_label >= self.phi {
                 for neighbor_neighbor_index in neighbor_neighbor_indices {
                     if !neighbor_visited[neighbor_neighbor_index] {
                         neighbor_indices.insert(neighbor_neighbor_index);
