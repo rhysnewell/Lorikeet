@@ -95,19 +95,15 @@
     </li>
     
     <li class="">
-      <a href="/Lorikeet/docs/install-theme/">Install Theme</a>
+      <a href="/Lorikeet/docs/usage/">Usage</a>
     </li>
     
     <li class="">
-      <a href="/Lorikeet/docs/configure/">Configuration</a>
+      <a href="/Lorikeet/docs/algorithm/">Algorithm</a>
     </li>
     
     <li class="">
-      <a href="/Lorikeet/docs/specimen/">Specimen</a>
-    </li>
-    
-    <li class="">
-      <a href="/Lorikeet/docs/example/">Hugo Whisper</a>
+      <a href="/Lorikeet/docs/example/">Lorikeet Example</a>
     </li>
     
   </ul>
@@ -130,19 +126,13 @@
 <ul>
 <li><a href="">Prodigal</a></li>
 </ul>
-<p>Additionally, you&rsquo;ll need Python &gt;= 3.6 with the following packages:</p>
-<ul>
-<li><a href="">Nimfa</a></li>
-<li><a href="">Numpy</a></li>
-<li><a href="">SciPy</a></li>
-<li><a href="">Threadpoolctl</a></li>
-</ul>
-<h3 id="easy-install">Easy install</h3>
+<h3 id="cargo">Cargo</h3>
+<p>Lorikeet is available on cargo and can be installed using:</p>
+<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">cargo install lorikeet-rs
+</code></pre></div><h3 id="static-binary">Static Binary</h3>
 <p>A static binary of the latest release of lorikeet can be downloaded directly from <a href="https://github.com/rhysnewell/Lorikeet/releases/latest">GitHub</a></p>
 <div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">tar -xvzf lorikeet-x86_64-unknown-linux-musl.tar.gz
-</code></pre></div><p>You&rsquo;ll then need to place both the Lorikeet binary and the nmf.py script into your current bin/ folder</p>
-<p>We are working on integrating the nmf.py script into Rust, however current methods using Opy3 require unstable versions of Rust.</p>
-<h3 id="build-from-scratch">Build from scratch</h3>
+</code></pre></div><h3 id="build-from-scratch">Build from scratch</h3>
 <p>Building from scratch requires Rust to be installed on your machine. Installation instructions for rust can be found
 <a href="https://www.rust-lang.org/tools/install">here</a>.</p>
 <p>Once installed, clone the latest Lorikeet version from GitHub.</p>

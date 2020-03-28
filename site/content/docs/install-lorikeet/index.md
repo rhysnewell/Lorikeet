@@ -13,12 +13,14 @@ For read mapping:
 For open reading frame calling:
  * [Prodigal]()
 
-Additionally, you'll need Python >= 3.6 with the following packages:
- * [Nimfa]()
- * [Numpy]()
- * [SciPy]()
- * [Threadpoolctl]()
-### Easy install
+### Cargo
+
+Lorikeet is available on cargo and can be installed using:
+```commandline
+cargo install lorikeet-rs
+```
+
+### Static Binary
 
 A static binary of the latest release of lorikeet can be downloaded directly from [GitHub](https://github.com/rhysnewell/Lorikeet/releases/latest)
 
@@ -26,9 +28,7 @@ A static binary of the latest release of lorikeet can be downloaded directly fro
 tar -xvzf lorikeet-x86_64-unknown-linux-musl.tar.gz
 ```
 
-You'll then need to place both the Lorikeet binary and the nmf.py script into your current bin/ folder
 
-We are working on integrating the nmf.py script into Rust, however current methods using Opy3 require unstable versions of Rust.
 
 ### Build from scratch
 

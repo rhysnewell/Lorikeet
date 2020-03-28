@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="x-ua-compatible" content="ie=edge">
-  <title>Lorikeet Example - Lorikeet</title>
+  <title>Usage - Lorikeet</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
   <link rel="icon" href="/Lorikeet/favicon.png">
@@ -94,7 +94,7 @@
       <a href="/Lorikeet/docs/install-lorikeet/">Install Lorikeet</a>
     </li>
     
-    <li class="">
+    <li class="active ">
       <a href="/Lorikeet/docs/usage/">Usage</a>
     </li>
     
@@ -102,7 +102,7 @@
       <a href="/Lorikeet/docs/algorithm/">Algorithm</a>
     </li>
     
-    <li class="active ">
+    <li class="">
       <a href="/Lorikeet/docs/example/">Lorikeet Example</a>
     </li>
     
@@ -113,24 +113,18 @@
         </div>
         <div class="col-12 col-md-9">
           
-<h1 class="title">Lorikeet Example</h1>
+<h1 class="title">Usage</h1>
 <div class="content ">
-  <p>Whisper is a minimal documentation theme built for Hugo. The design &amp; functionality is intentionally minimal.</p>
-<h2 id="quickstart">Quickstart</h2>
-<p>Copy or git clone this theme into the sites themes folder <code>mynewsite/themes</code></p>
-<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">hugo new site whisper
-git clone https://github.com/jugglerx/hugo-whisper-theme.git
-</code></pre></div><h3 id="code-highlighting">Code Highlighting</h3>
-<p>Whisper uses Hugo&rsquo;s in-built code highlighting with a github style code highlighting theme. <a href="https://gohugo.io/content-management/syntax-highlighting/">https://gohugo.io/content-management/syntax-highlighting/</a></p>
-<p>You can insert code snippets in any markdown file by using standard code fences syntax ie:</p>
-<div class="highlight"><pre class="chroma"><code class="language-js" data-lang="js"><span class="kd">function</span> <span class="nx">myFunction</span><span class="p">(</span><span class="p">)</span> <span class="p">{</span>
-  <span class="kd">var</span> <span class="nx">x</span> <span class="o">=</span> <span class="nb">document</span><span class="p">.</span><span class="nx">getElementById</span><span class="p">(</span><span class="s1">&#39;myDIV&#39;</span><span class="p">)</span><span class="p">;</span>
-  <span class="k">if</span> <span class="p">(</span><span class="nx">x</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">display</span> <span class="o">===</span> <span class="s1">&#39;none&#39;</span><span class="p">)</span> <span class="p">{</span>
-    <span class="nx">x</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">display</span> <span class="o">=</span> <span class="s1">&#39;block&#39;</span><span class="p">;</span>
-  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-    <span class="nx">x</span><span class="p">.</span><span class="nx">style</span><span class="p">.</span><span class="nx">display</span> <span class="o">=</span> <span class="s1">&#39;none&#39;</span><span class="p">;</span>
-  <span class="p">}</span>
-<span class="p">}</span>
+  <h2 id="quick-start">Quick Start</h2>
+<h3 id="genotyping">Genotyping</h3>
+<p>If provided a complete or draft microbial reference genome, and one or more sets of reads or BAM files Lorikeet can find variant locations within the reference genome
+based on the read mappings. Ideally, multiple samples will be provided so log-ratio variances can be calculated between
+each pairwise combination of variants. If only a single sample is provided, a euclidean distance matrix is calculated
+based on the abundance of each variant location. Non-negative matrix factorization is then performed on the resulting pairiwse matrix
+reducing the variants into a lower latent space where each variant is assigned to its resulting dominant factor.</p>
+<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">lorikeet genotype -r draft_genome.fasta -1 sample_1.1.fq.gz sample_2.1.fq.gz -2 sample_1.2.fq.gz sample_2.2.fq.gz -f 10 -t 10 --eps-min 0.05 --eps-max 0.15
+</code></pre></div><h3 id="variant-calling">Variant Calling</h3>
+<div class="highlight"><pre class="chroma"><code class="language-fallback" data-lang="fallback">lorikeet polymorph -r draft_genome.fasta -1 sample_1.1.fq.gz sample_2.1.fq.gz -2 sample_1.2.fq.gz sample_2.2.fq.gz -f 10 -t 10
 </code></pre></div>
 </div>
 </div>

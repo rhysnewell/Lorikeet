@@ -19,40 +19,29 @@
       <guid>/Lorikeet/docs/install-lorikeet/</guid>
       <description>Dependencies For read mapping:
  Minimap2 by default BWA SAMtools  For open reading frame calling:
- Prodigal  Additionally, you&amp;rsquo;ll need Python &amp;gt;= 3.6 with the following packages:
- Nimfa Numpy SciPy Threadpoolctl  Easy install A static binary of the latest release of lorikeet can be downloaded directly from GitHub</description>
+ Prodigal  Cargo Lorikeet is available on cargo and can be installed using:</description>
     </item>
     
     <item>
-      <title>Install Theme</title>
-      <link>/Lorikeet/docs/install-theme/</link>
-      <pubDate>Mon, 11 Feb 2019 19:27:37 +1000</pubDate>
-      
-      <guid>/Lorikeet/docs/install-theme/</guid>
-      <description>Create a new Hugo site hugo new site mynewsite This will create a fresh Hugo site in the folder mynewsite.
-Install theme Copy or git clone this theme into the sites themes folder mynewsite/themes</description>
-    </item>
-    
-    <item>
-      <title>Configuration</title>
-      <link>/Lorikeet/docs/configure/</link>
+      <title>Usage</title>
+      <link>/Lorikeet/docs/usage/</link>
       <pubDate>Mon, 11 Feb 2019 19:30:08 +1000</pubDate>
       
-      <guid>/Lorikeet/docs/configure/</guid>
+      <guid>/Lorikeet/docs/usage/</guid>
       <description>Syntax highlighting and menus can be configured via &lt;code&gt;config.toml&lt;/code&gt;.</description>
     </item>
     
     <item>
-      <title>Specimen</title>
-      <link>/Lorikeet/docs/specimen/</link>
+      <title>Algorithm</title>
+      <link>/Lorikeet/docs/algorithm/</link>
       <pubDate>Mon, 11 Feb 2019 19:27:37 +1000</pubDate>
       
-      <guid>/Lorikeet/docs/specimen/</guid>
-      <description>Markdown Test Page  Headings Paragraphs Blockquotes Lists Horizontal rule Table Code Inline elements   Headings Heading one Sint sit cillum pariatur eiusmod nulla pariatur ipsum. Sit laborum anim qui mollit tempor pariatur nisi minim dolor.</description>
+      <guid>/Lorikeet/docs/algorithm/</guid>
+      <description>To do</description>
     </item>
     
     <item>
-      <title>Hugo Whisper</title>
+      <title>Lorikeet Example</title>
       <link>/Lorikeet/docs/example/</link>
       <pubDate>Mon, 11 Feb 2019 19:27:37 +1000</pubDate>
       
