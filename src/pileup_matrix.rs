@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use tempdir::TempDir;
 use nix::unistd;
 use nix::sys::stat;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::fs::File;
 use std::process;
 use crate::dbscan::fuzzy;
@@ -89,6 +89,28 @@ pub trait PileupMatrixFunctions {
 
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
+
+    /// Connects fuzzy DBSCAN clusters based on shared read information
+    fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
+                          variant_info: &Vec<fuzzy::Var>,
+                          snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                          indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
+                          -> Vec<Vec<fuzzy::Assignment>>;
+
+    /// Get all of the associated read ids for a given cluster
+    fn get_read_set(variants: &fuzzy::Cluster,
+                    variant_info: &Vec<fuzzy::Var>,
+                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+
+    /// Extract the read ids associated with a particular variant
+    fn get_variant_set(variant: &fuzzy::Var,
+                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+
+    /// Helper function to return the read ids with a particular SNV
+    fn get_variant_set_snps(variant: &fuzzy::Var,
+                        snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> BTreeSet<i64>;
 
     fn print_variant_stats(&self, output_prefix: &str);
 
@@ -397,6 +419,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
                 ref mut pred_variants,
+                snps_map,
+                indels_map,
                 ..
             } => {
 
@@ -417,6 +441,8 @@ impl PileupMatrixFunctions for PileupMatrix{
                 };
 
                 let clusters = fuzzy_scanner.cluster(&variant_info[..]);
+
+                let clusters = Self::linkage_clustering(&clusters, &variant_info, &snps_map, &indels_map);
 
                 if clusters.len() == 1 || clusters.len() == 0 {
                     // Then clustering was incorrect. Try different values
@@ -613,6 +639,132 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
+    /// Connects fuzzy DBSCAN clusters based on shared read information
+    fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
+                          variant_info: &Vec<fuzzy::Var>,
+                          snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                          indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
+                          -> Vec<Vec<fuzzy::Assignment>> {
+
+        let shared_read_counts = Arc::new(Mutex::new(HashMap::new()));
+
+        (0..clusters.len()).into_iter().permutations(2)
+            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)|{
+            let clust1 = &clusters[indices[0]];
+            let clust2 = &clusters[indices[1]];
+            let read_set1 = Self::get_read_set(clust1, variant_info, snp_map, indel_map);
+            let read_set2 = Self::get_read_set(clust2, variant_info, snp_map, indel_map);
+            let intersection: BTreeSet<_> = read_set1.intersection(&read_set2).collect();
+            let mut shared_read_counts = shared_read_counts.lock().unwrap();
+            add_entry(&mut shared_read_counts, indices[0], indices[1], intersection.len());
+            add_entry(&mut shared_read_counts, indices[0], indices[1], intersection.len());
+        });
+
+        let shared_read_counts = shared_read_counts.lock().unwrap();
+        let mut remaining = 0;
+        // Keep information about clusters that have just been linked so they don't get double linked
+        let mut already_combined = HashSet::new();
+        let mut extended_clusters = Vec::new();
+        for (cluster, cluster_map) in shared_read_counts.iter() {
+
+            let mut to_combine = 0;
+            let mut count = 0;
+            let mut non_zeros = 0;
+            // Find clusters with shared read ids
+            for (inner_cluster, intersection) in cluster_map.iter() {
+                if !already_combined.contains(inner_cluster) {
+                    if intersection > &count {
+                        count = *intersection;
+                        to_combine = *inner_cluster;
+                    }
+                    if intersection > &0 {
+                        non_zeros += 1;
+                    }
+                }
+            }
+            // There are other clusters to combine
+            if non_zeros > 1 {
+                remaining += 1;
+            }
+            if !already_combined.contains(cluster) {
+                if count > 0 {
+                    // Add the two clusters to the already combined list
+                    already_combined.insert(*cluster);
+                    already_combined.insert(to_combine);
+                    let mut new_clust = clusters[*cluster].clone();
+                    new_clust.par_extend(clusters[to_combine].clone());
+                    extended_clusters.push(new_clust);
+
+                } else {
+                    // Cluster had no shared reads
+                    already_combined.insert(*cluster);
+                    let mut old_clust = clusters[*cluster].clone();
+                    extended_clusters.push(old_clust);
+                }
+            }
+        }
+        if remaining > 0 {
+            extended_clusters = Self::linkage_clustering(&extended_clusters, variant_info, snp_map, indel_map)
+        }
+        debug!("Shared Read Counts {:?}", shared_read_counts);
+
+        extended_clusters
+    }
+
+    /// Get all of the associated read ids for a given cluster
+    fn get_read_set(variants: &fuzzy::Cluster,
+                    variant_info: &Vec<fuzzy::Var>,
+                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+
+        let read_set = Arc::new(Mutex::new(BTreeSet::new()));
+
+        variants.par_iter().for_each(|assignment|{
+            let variant = &variant_info[assignment.index];
+            let variant_set = Self::get_variant_set(variant,
+                                                    snp_map, indel_map);
+            variant_set.par_iter().for_each(|id|{
+                let mut read_set = read_set.lock().unwrap();
+                read_set.insert(*id);
+            });
+        });
+        let read_set = read_set.lock().unwrap().clone();
+        read_set
+    }
+
+    /// Extract the read ids associated with a particular variant
+    fn get_variant_set(variant: &fuzzy::Var,
+                    snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                    indels_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+        let mut variant_set = BTreeSet::new();
+
+        if indels_map[&variant.tid].contains_key(&variant.pos) {
+            if indels_map[&variant.tid][&variant.pos].contains_key(&variant.var) {
+                let variant_set = indels_map[&variant.tid][&variant.pos][&variant.var].clone();
+            } else {
+                let variant_set = Self::get_variant_set_snps(variant, snps_map);
+            }
+        } else {
+            let variant_set = Self::get_variant_set_snps(variant, snps_map);
+        }
+        return variant_set
+    }
+
+    /// Helper function to return the read ids with a particular SNV
+    fn get_variant_set_snps(variant: &fuzzy::Var,
+                        snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>)
+                        -> BTreeSet<i64> {
+        let mut variant_set = BTreeSet::new();
+        if snps_map[&variant.tid].contains_key(&variant.pos) {
+            let var_char = variant.var.as_bytes()[0] as char;
+            if snps_map[&variant.tid][&variant.pos].contains_key(&var_char) {
+                variant_set = snps_map[&variant.tid][&variant.pos][&var_char].clone();
+            }
+        }
+        return variant_set
+    }
+
+
     fn print_variant_stats(&self, output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
@@ -689,4 +841,11 @@ impl PileupMatrixFunctions for PileupMatrix{
             }
         }
     }
+}
+
+/// Add read count entry to cluster hashmap
+pub fn add_entry(shared_read_counts: &mut HashMap<usize, HashMap<usize, usize>>,
+                 clust1: usize, clust2: usize, count: usize) {
+    let entry = shared_read_counts.entry(clust1).or_insert(HashMap::new());
+    entry.insert(clust2, count);
 }
