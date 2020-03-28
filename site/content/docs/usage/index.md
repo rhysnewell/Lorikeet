@@ -1,5 +1,5 @@
 ---
-title: 'Configuration'
+title: 'Usage'
 date: 2019-02-11T19:30:08+10:00
 draft: false
 weight: 4
@@ -19,28 +19,4 @@ reducing the variants into a lower latent space where each variant is assigned t
 lorikeet genotype -r draft_genome.fasta -1 sample_1.1.fq.gz sample_2.1.fq.gz -2 sample_1.2.fq.gz sample_2.2.fq.gz 
 ```
 
-### Pygments Options
 
-The following code highlighting options are configured in the `config.toml`
-
-```toml
-pygmentsCodeFences = true
-pygmentsCodefencesGuessSyntax = true
-pygmentsUseClasses = true
-```
-
-## Main menu
-
-Configure the main menu by editing the `config.toml`
-
-```toml
-[[menu.main]]
-name = "Home"
-url = "/docs/"
-weight = 1
-
-[[menu.main]]
-name = "Docs"
-url = "/docs/docs/"
-weight = 2
-```
