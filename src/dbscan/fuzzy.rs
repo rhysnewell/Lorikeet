@@ -219,7 +219,7 @@ impl FuzzyDBSCAN {
         }
         if !noise_cluster.is_empty() {
             // we don't want noise, so we just ignore it for now
-//            clusters.push(noise_cluster);
+            clusters.push(noise_cluster);
         }
         clusters
     }
