@@ -353,37 +353,39 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     depths.push(*d);
                                 };
                                 for (variant, abundances_vector) in hash.iter() {
-                                    let _abundance: f64 = 0.;
-                                    let _mean_var: f64 = 0.;
+                                    if !variant.contains("R") {
+                                        let _abundance: f64 = 0.;
+                                        let _mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
-                                    let mut freqs = Vec::new();
-                                    // Get the mean abundance across samples
-                                    let mut sample_idx: usize = 0;
-                                    abundances_vector.iter().for_each(|(var, _d)| {
-                                        let mut geom_mean_v =
-                                            geom_mean_v.lock().unwrap();
-                                        let mut geom_mean_d =
-                                            geom_mean_d.lock().unwrap();
+                                        let mut freqs = Vec::new();
+                                        // Get the mean abundance across samples
+                                        let mut sample_idx: usize = 0;
+                                        abundances_vector.iter().for_each(|(var, _d)| {
+                                            let mut geom_mean_v =
+                                                geom_mean_v.lock().unwrap();
+                                            let mut geom_mean_d =
+                                                geom_mean_d.lock().unwrap();
 
-                                        let _sample_coverage = contig_coverages[sample_idx];
+                                            let _sample_coverage = contig_coverages[sample_idx];
 
-                                        freqs.push(*var);
-                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                        geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
-                                        sample_idx += 1;
-                                    });
+                                            freqs.push(*var);
+                                            geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
+                                            geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
+                                            sample_idx += 1;
+                                        });
 
-                                    let mut variant_info_all = variant_info_all
-                                        .lock().unwrap();
-                                    let point = fuzzy::Var {
-                                        pos: *position,
-                                        var: variant.to_string(),
-                                        deps: depths.clone(),
-                                        vars: freqs,
-                                        tid: *tid,
-                                    };
+                                        let mut variant_info_all = variant_info_all
+                                            .lock().unwrap();
+                                        let point = fuzzy::Var {
+                                            pos: *position,
+                                            var: variant.to_string(),
+                                            deps: depths.clone(),
+                                            vars: freqs,
+                                            tid: *tid,
+                                        };
 
-                                    variant_info_all.push(point);
+                                        variant_info_all.push(point);
+                                    }
                                 }
                             }
                         });
@@ -506,7 +508,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 let mut prediction_variants = prediction_variants.lock().unwrap();
 
-//                debug!("Predictions {:?}", prediction_variants);
+                debug!("Predictions {:?}", prediction_variants);
                 for (cluster, pred_set) in prediction_features.iter() {
                     if pred_set.len() > 1 {
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
