@@ -83,11 +83,13 @@ pub trait PileupMatrixFunctions {
                   sample_idx: usize,
                   contig: Vec<u8>);
 
+    /// Converts all variants into fuzzy::Var format
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
     /// Perform fuzzy DBSCAN clustering using proportionality
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64);
 
+    /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
     fn generate_genotypes(&mut self,
                           output_prefix: &str);
 
@@ -706,7 +708,7 @@ impl PileupMatrixFunctions for PileupMatrix{
         if remaining > 0 {
             extended_clusters = Self::linkage_clustering(&extended_clusters, variant_info, snp_map, indel_map)
         }
-        debug!("Shared Read Counts {:?}", shared_read_counts);
+        info!("Shared Read Counts {:?}", shared_read_counts);
 
         extended_clusters
     }

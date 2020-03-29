@@ -96,21 +96,26 @@ pub trait PileupFunctions {
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>);
 
+    /// Perform linear regression between total mismacthes and read depth
     fn calc_error(&mut self, ani: f32) -> usize;
 
+    /// Filter out variants from potential sequencing or mapping errors
     fn calc_variants(&mut self,
                      min_variant_depth: usize,
                      coverage_fold: f64);
 
+    /// Replace reference variants with most dominant variant observed within the reads
     fn polish_contig(&mut self,
                      original_contig: &Vec<u8>,
                      output_prefix: &str);
 
+    /// Perform dN/dS calculations based on read mapping using modified Jukes-Cantor method
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
                            ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable);
 
+    /// Prints out variant info for current contig
     fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
 }
 
