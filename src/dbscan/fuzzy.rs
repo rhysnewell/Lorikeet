@@ -83,11 +83,14 @@ impl MetricSpace for Var {
                 col_var = col_var / col_vals.len() as f64;
                 covar = covar / row_vals.len() as f64;
 
-                let mut phi = 1. + row_var / col_var -
-                    2. * (row_var / col_var).sqrt()
-                        * covar / (col_var * row_var).sqrt();
+//                let mut phi = 1. + row_var / col_var -
+//                    2. * (row_var / col_var).sqrt()
+//                        * covar / (col_var * row_var).sqrt();
 
-                return phi
+                let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
+                    - (covar / (col_var * row_var).sqrt() + 1.).ln();
+
+                return phi_dist
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {

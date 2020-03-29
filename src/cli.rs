@@ -1458,7 +1458,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("25"))
                 .arg(Arg::with_name("phi")
                     .long("phi")
-                    .default_value("0.95"))
+                    .default_value("0.0"))
                 .arg(Arg::with_name("min-covered-fraction")
                     .long("min-covered-fraction")
                     .default_value("0.0"))
