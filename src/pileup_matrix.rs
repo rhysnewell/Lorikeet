@@ -424,6 +424,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut pred_variants,
                 snps_map,
                 indels_map,
+                target_lengths,
                 ..
             } => {
 
@@ -448,9 +449,23 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 let clusters = Self::linkage_clustering(&clusters, &variant_info, &snps_map, &indels_map);
 
-                if clusters.len() == 1 || clusters.len() == 0 {
-                    // Then clustering was incorrect. Try different values
-                }
+                let mut genome_length = 0.;
+                for (tid, length) in target_lengths {
+                    genome_length += *length;
+                };
+                let required_variants = (1. - 0.997) * genome_length;
+
+                let mut clusters_kept = Vec::new();
+                let mut noise = Vec::new();
+
+                for (index, cluster) in clusters.iter().enumerate() {
+                    if cluster.len() as f64 >= required_variants {
+                        clusters_kept.push(cluster);
+                    } else {
+                        noise.par_extend(cluster.par_iter().cloned());
+                    };
+                };
+                clusters_kept.push(&noise);
 
                 let prediction_variants = Arc::new(
                     Mutex::new(
@@ -463,7 +478,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         HashMap::new()));
 
 
-                clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
+                clusters_kept.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
 
                         let mut prediction_count = prediction_count.lock().unwrap();
@@ -509,8 +524,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let mut prediction_variants = prediction_variants.lock().unwrap();
 
                 debug!("Predictions {:?}", prediction_variants);
+
+
                 for (cluster, pred_set) in prediction_features.iter() {
                     if pred_set.len() > 1 {
+                        let count = prediction_count[cluster].len() as f64;
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
                     } else if !pred_set.contains("R") {
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
@@ -666,7 +684,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                        let set2 = Self::get_variant_set(var2,
                                                         snp_map, indel_map);
                        let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
-                       if intersection.len() >= 1 {
+                       if intersection.len() >= 5 {
                            let mut clusters_changed = clusters_changed.lock().unwrap();
                            clusters_changed[indices[0]].push(assignment2.clone());
                            clusters_changed[indices[1]].push(assignment1.clone());

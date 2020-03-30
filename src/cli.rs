@@ -1464,7 +1464,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.0"))
                 .arg(Arg::with_name("coverage-fold")
                     .long("coverage-fold")
-                    .default_value("0.5"))
+                    .default_value("1.0"))
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
