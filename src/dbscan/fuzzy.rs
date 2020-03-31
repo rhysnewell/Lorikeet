@@ -23,7 +23,7 @@ pub trait MetricSpace: Sized + Send + Sync {
     fn distance(&self, other: &Self, geom_var: &Vec<f64>, geom_dep: &Vec<f64>) -> f64;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Var {
     pub pos: i32,
     pub var: String,
@@ -64,10 +64,8 @@ impl MetricSpace for Var {
 
                 let mean_col = get_mean(&col_vals);
 
-                // https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/ eq. 2
-                // p = 2*cov(Ai, Aj) / (Var(Ai) + Var(Aj))
+                // lovell et al. Phi and Phi distance
 
-                // Distance as https://en.wikipedia.org/wiki/Cosine_similarity
                 let mut row_var = 0.;
                 let mut col_var = 0.;
                 let mut covar = 0.;
@@ -104,7 +102,6 @@ impl MetricSpace for Var {
 
                 let distance = (((row_freq / geom_var[0] as f64).ln() - (col_freq / geom_var[0] as f64).ln()).powf(2.)
                     + ((row_depth / geom_dep[0] as f64).ln() - (col_depth / geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
-
                 distance
             }
         }
@@ -134,7 +131,7 @@ pub enum Category {
 }
 
 /// An element of a [cluster](Cluster).
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct Assignment {
     /// The point index.
     pub index: usize,
