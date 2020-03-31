@@ -454,6 +454,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     genome_length += *length;
                 };
                 let required_variants = (1. - 0.997) * genome_length;
+                info!("Genome Length {} Required Variants {}", genome_length, required_variants);
 
                 let mut clusters_kept = Vec::new();
                 let mut noise = Vec::new();
