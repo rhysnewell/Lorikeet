@@ -454,13 +454,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                     genome_length += *length;
                 };
                 let required_variants = (1. - 0.997) * genome_length;
-                info!("Genome Length {} Required Variants {}", genome_length, required_variants);
+                debug!("Genome Length {} Required Variants {}", genome_length, required_variants);
 
                 let mut clusters_kept = Vec::new();
                 let mut noise = Vec::new();
 
                 for (index, cluster) in clusters.iter().enumerate() {
                     if cluster.len() as f64 >= required_variants {
+                        debug!("Cluster {} Variants {}", index+1, cluster.len());
                         clusters_kept.push(cluster);
                     } else {
                         noise.par_extend(cluster.par_iter().cloned());
@@ -678,17 +679,19 @@ impl PileupMatrixFunctions for PileupMatrix{
             clust1.par_iter().for_each(|assignment1| {
                clust2.par_iter().for_each(|assignment2| {
                    if assignment1.index != assignment2.index {
-                       let var1 = &variant_info[assignment1.index];
-                       let var2 = &variant_info[assignment2.index];
-                       let set1 = Self::get_variant_set(var1,
-                                                        snp_map, indel_map);
-                       let set2 = Self::get_variant_set(var2,
-                                                        snp_map, indel_map);
-                       let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
-                       if intersection.len() >= 5 {
-                           let mut clusters_changed = clusters_changed.lock().unwrap();
-                           clusters_changed[indices[0]].push(assignment2.clone());
-                           clusters_changed[indices[1]].push(assignment1.clone());
+                       if !(clust1.contains(assignment1)) && !(clust2.contains(assignment2)) {
+                           let var1 = &variant_info[assignment1.index];
+                           let var2 = &variant_info[assignment2.index];
+                           let set1 = Self::get_variant_set(var1,
+                                                            snp_map, indel_map);
+                           let set2 = Self::get_variant_set(var2,
+                                                            snp_map, indel_map);
+                           let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
+                           if intersection.len() >= 5 {
+                               let mut clusters_changed = clusters_changed.lock().unwrap();
+                               clusters_changed[indices[0]].push(assignment2.clone());
+                               clusters_changed[indices[1]].push(assignment1.clone());
+                           }
                        }
                    }
                });
