@@ -1453,7 +1453,9 @@ fn run_pileup<'a,
             let print_zeros = !m.is_present("no-zeros");
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let output_prefix = m.value_of("reference").unwrap().to_string();
-            let output_prefix = output_prefix.split("/").last().unwrap().split(".").next().unwrap();
+            let output_prefix = output_prefix
+                .split("..").last().unwrap()
+                .split("/").last().unwrap().split(".").next().unwrap();
 
 
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
