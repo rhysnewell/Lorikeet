@@ -1600,7 +1600,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file")
                     .short("b")
                     .long("bam-file")
-                    .multiple(false)
+                    .multiple(true)
                     .takes_value(true)
                     .required_unless_one(
                         &["read1","read2","coupled","interleaved","single","full-help"]))
@@ -1609,7 +1609,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required(false))
                 .arg(Arg::with_name("read1")
                     .short("-1")
-                    .multiple(false)
+                    .multiple(true)
                     .takes_value(true)
                     .requires("read2")
                     .required_unless_one(
@@ -1617,7 +1617,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .conflicts_with("bam-file"))
                 .arg(Arg::with_name("read2")
                     .short("-2")
-                    .multiple(false)
+                    .multiple(true)
                     .takes_value(true)
                     .requires("read1")
                     .required_unless_one(
@@ -1626,7 +1626,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("coupled")
                     .short("-c")
                     .long("coupled")
-                    .multiple(false)
+                    .multiple(true)
                     .takes_value(true)
                     .required_unless_one(
                         &["bam-file","read1","interleaved","single","full-help"])
@@ -1713,11 +1713,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
                     .conflicts_with("allow-improper-pairs"))
-                .arg(Arg::with_name("output-prefix")
-                    .long("output-prefix")
-                    .short("o")
-                    .takes_value(true)
-                    .required(true))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")

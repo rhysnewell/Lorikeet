@@ -1452,15 +1452,9 @@ fn run_pileup<'a,
         "polish" => {
             let print_zeros = !m.is_present("no-zeros");
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let output_prefix = m.value_of("output-prefix").unwrap().to_string();
+            let output_prefix = m.value_of("reference").unwrap().to_string();
+            let output_prefix = output_prefix.split("/").last().unwrap().split(".").next().unwrap();
 
-            // Make sure we are dealing with a fresh file
-            let file_name = output_prefix.to_string()
-                + &".fna".to_owned();
-
-            let file_path = Path::new(&file_name);
-            File::create(file_path)
-                .expect("No Read or Write Permission in current directory");
 
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
