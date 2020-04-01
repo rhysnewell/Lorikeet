@@ -483,13 +483,13 @@ impl PileupFunctions for PileupStats {
                 ..
             } => {
                 let file_name = output_prefix.to_string()
-                    + &".fna".to_owned();
+                    + &"_polished.fna".to_owned();
 
                 let file_path = Path::new(&file_name);
 
                 // Open haplotype file or create one
 
-                let mut file_open = OpenOptions::new().append(true)
+                let mut file_open = OpenOptions::new().append(true).create(true)
                     .open(file_path).expect("No Read or Write Permission in current directory");
                 file_open.write(b">").unwrap();
                 file_open.write(target_name).unwrap();

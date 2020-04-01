@@ -687,7 +687,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                            let set2 = Self::get_variant_set(var2,
                                                             snp_map, indel_map);
                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
-                           if intersection.len() >= 5 {
+                           if intersection.len() >= 1 {
                                let mut clusters_changed = clusters_changed.lock().unwrap();
                                clusters_changed[indices[0]].push(assignment2.clone());
                                clusters_changed[indices[1]].push(assignment1.clone());
