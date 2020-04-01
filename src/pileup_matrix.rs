@@ -353,7 +353,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     depths.push(*d);
                                 };
                                 for (variant, abundances_vector) in hash.iter() {
-                                    if !variant.contains("R") {
+//                                    if !variant.contains("R") {
                                         let _abundance: f64 = 0.;
                                         let _mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
@@ -385,7 +385,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                         };
 
                                         variant_info_all.push(point);
-                                    }
+//                                    }
                                 }
                             }
                         });
