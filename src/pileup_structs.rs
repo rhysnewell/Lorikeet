@@ -532,6 +532,8 @@ impl PileupFunctions for PileupStats {
                                     let removed_first_base = str::from_utf8(
                                         &max_var.as_bytes()[1..]).unwrap();
                                     contig = contig + removed_first_base;
+                                } else if max_var == "R" {
+                                    contig = contig + str::from_utf8(&[*base]).unwrap();
                                 } else {
                                     contig = contig + max_var;
                                 }
