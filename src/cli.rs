@@ -1737,6 +1737,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("mapq-threshold")
                     .short("q")
                     .default_value("0"))
+                .arg(Arg::with_name("include-indels")
+                    .long("include-indels"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))

@@ -1459,6 +1459,7 @@ fn run_pileup<'a,
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
+            let include_indels = m.is_present("include-indels");
 
             let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
@@ -1496,7 +1497,7 @@ fn run_pileup<'a,
                 threads,
                 method,
                 coverage_fold,
-                true,
+                include_indels,
                 false);
         },
         _ => panic!("Unknown lorikeet mode"),
