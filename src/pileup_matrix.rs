@@ -40,6 +40,7 @@ pub enum PileupMatrix {
         variant_info: Vec<fuzzy::Var>,
         geom_mean_var: Vec<f64>,
         geom_mean_dep: Vec<f64>,
+        geom_mean_frq: Vec<f64>,
         pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashMap<fuzzy::Category, HashSet<String>>>>>,
         pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
@@ -66,6 +67,7 @@ impl PileupMatrix {
             variant_info: Vec::new(),
             geom_mean_var: Vec::new(),
             geom_mean_dep: Vec::new(),
+            geom_mean_frq: Vec::new(),
             pred_variants: HashMap::new(),
             pred_variants_all: HashMap::new(),
         }
@@ -233,7 +235,7 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                 }
                             }
-                            // add pseudocounts
+                            // calc reference variant depth
                             let ref_depth = *total_depth
                                                     - variant_depth;
 
@@ -311,6 +313,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut variant_info,
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
+                ref mut geom_mean_frq,
                 ..
             } => {
 
@@ -330,6 +333,11 @@ impl PileupMatrixFunctions for PileupMatrix{
                             vec![1. as f64; sample_count as usize]));
 
                 let geom_mean_d =
+                    Arc::new(
+                        Mutex::new(
+                            vec![1. as f64; sample_count as usize]));
+
+                let geom_mean_f =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
@@ -354,37 +362,46 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 };
                                 for (variant, abundances_vector) in hash.iter() {
 //                                    if !variant.contains("R") {
-                                        let _abundance: f64 = 0.;
-                                        let _mean_var: f64 = 0.;
+                                    let _abundance: f64 = 0.;
+                                    let _mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
-                                        let mut freqs = Vec::new();
-                                        // Get the mean abundance across samples
-                                        let mut sample_idx: usize = 0;
-                                        abundances_vector.iter().for_each(|(var, _d)| {
-                                            let mut geom_mean_v =
-                                                geom_mean_v.lock().unwrap();
-                                            let mut geom_mean_d =
-                                                geom_mean_d.lock().unwrap();
+                                    let mut freqs = Vec::new();
+                                    let mut rel_abund = Vec::new();
 
-                                            let _sample_coverage = contig_coverages[sample_idx];
+                                // Get the mean abundance across samples
+                                    let mut sample_idx: usize = 0;
+                                    abundances_vector.iter().for_each(|(var, _d)| {
+                                        let mut geom_mean_v =
+                                            geom_mean_v.lock().unwrap();
+                                        let mut geom_mean_d =
+                                            geom_mean_d.lock().unwrap();
+                                        let mut geom_mean_f =
+                                            geom_mean_f.lock().unwrap();
 
-                                            freqs.push(*var);
-                                            geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                            geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
-                                            sample_idx += 1;
-                                        });
+                                        let _sample_coverage = contig_coverages[sample_idx];
 
-                                        let mut variant_info_all = variant_info_all
-                                            .lock().unwrap();
-                                        let point = fuzzy::Var {
-                                            pos: *position,
-                                            var: variant.to_string(),
-                                            deps: depths.clone(),
-                                            vars: freqs,
-                                            tid: *tid,
-                                        };
+                                        freqs.push(*var);
+                                        rel_abund.push(
+                                            (*var + 1.) / (depths[sample_idx] + 1.));
+                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
+                                        geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
+                                        geom_mean_f[sample_idx] += ((*var + 1.) as f64
+                                                                    / (depths[sample_idx] + 1.) as f64).ln();
+                                        sample_idx += 1;
+                                    });
 
-                                        variant_info_all.push(point);
+                                    let mut variant_info_all = variant_info_all
+                                        .lock().unwrap();
+                                    let point = fuzzy::Var {
+                                        pos: *position,
+                                        var: variant.to_string(),
+                                        deps: depths.clone(),
+                                        vars: freqs,
+                                        rel_abunds: rel_abund,
+                                        tid: *tid,
+                                    };
+
+                                    variant_info_all.push(point);
 //                                    }
                                 }
                             }
@@ -407,9 +424,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let geom_mean_d = geom_mean(&geom_mean_d);
                 debug!("Geom Mean Dep {:?}", geom_mean_d);
 
+                let geom_mean_f = geom_mean_f.lock().unwrap().clone();
+                let geom_mean_f = geom_mean(&geom_mean_f);
+                debug!("Geom Mean Frq {:?}", geom_mean_f);
+
                 *variant_info = variant_info_all;
                 *geom_mean_var = geom_mean_v;
                 *geom_mean_dep = geom_mean_d;
+                *geom_mean_frq = geom_mean_f;
 
             }
         }
@@ -421,6 +443,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut variant_info,
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
+                ref mut geom_mean_frq,
                 ref mut pred_variants,
                 snps_map,
                 indels_map,
@@ -443,6 +466,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     phi,
                     geom_var: geom_mean_var.clone(),
                     geom_dep: geom_mean_dep.clone(),
+                    geom_frq: geom_mean_frq.clone(),
                 };
 
                 let clusters = fuzzy_scanner.cluster(&variant_info[..]);
