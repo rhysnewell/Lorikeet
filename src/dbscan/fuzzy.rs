@@ -20,7 +20,8 @@ fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
 /// A trait to compute distances between points.
 pub trait MetricSpace: Sized + Send + Sync {
     /// Returns the distance between `self` and `other`.
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>, geom_dep: &Vec<f64>) -> f64;
+    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
+                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,6 +30,7 @@ pub struct Var {
     pub var: String,
     pub deps: Vec<f64>,
     pub vars: Vec<f64>,
+    pub rel_abunds: Vec<f64>,
     pub tid: i32,
 }
 
@@ -38,15 +40,16 @@ pub struct Point {
 }
 
 impl MetricSpace for Var {
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>, geom_dep: &Vec<f64>) -> f64 {
+    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
+                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
 
         if self.vars.len() > 1 {
             if self.pos == other.pos && self.tid == other.tid {
                 return 10.
             } else {
-                let clr = |input: &Vec<f64>, geom_mean_var: &Vec<f64>| -> Vec<f64> {
+                let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
-                        ((v + 1.) / geom_mean_var[i] as f64).ln()
+                        ((v + 1.) / geom_means[i] as f64).ln()
                     }).collect();
                     return output
                 };
@@ -56,9 +59,9 @@ impl MetricSpace for Var {
                     sum / input.len() as f64
                 };
 
-                let row_vals: Vec<f64> = clr(&self.vars, geom_var);
+                let row_vals: Vec<f64> = clr(&self.rel_abunds, geom_frq);
 
-                let col_vals: Vec<f64> = clr(&other.vars, geom_var);
+                let col_vals: Vec<f64> = clr(&other.rel_abunds, geom_frq);
 
                 let mean_row = get_mean(&row_vals);
 
@@ -109,7 +112,8 @@ impl MetricSpace for Var {
 }
 
 impl MetricSpace for Point {
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>, geom_dep: &Vec<f64>) -> f64 {
+    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
+                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
         let mut sum_squares = Arc::new(Mutex::new(0.));
         self.values.par_iter().zip(other.values.par_iter()).for_each(|(x, y)|{
             let mut sum_squares = sum_squares.lock().unwrap();
@@ -156,12 +160,14 @@ pub struct FuzzyDBSCAN {
     pub pts_min: f64,
     /// The maximum fuzzy neighborhood density (number of points).
     pub pts_max: f64,
-    /// The minimum threshold required for a label to called Core
+    /// The minimum threshold required for a label to become a Core point.
     pub phi: f64,
     /// The geometric mean of the depth of the variants across samples (as a vector).
     pub geom_var: Vec<f64>,
-    /// The geometric mean of the depth of the variants across samples (as a vector).
+    /// The geometric mean of the total depth at each base across samples (as a vector).
     pub geom_dep: Vec<f64>,
+    /// The geometric mean of the relative abundances of the variants across samples (as a vector).
+    pub geom_frq: Vec<f64>,
 }
 
 impl FuzzyDBSCAN {
@@ -175,6 +181,7 @@ impl FuzzyDBSCAN {
             phi: f64::NAN,
             geom_var: Vec::new(),
             geom_dep: Vec::new(),
+            geom_frq: Vec::new(),
         }
     }
 }
@@ -283,7 +290,8 @@ impl FuzzyDBSCAN {
                 *neighbor_index != point_index
                     && neighbor_point.distance(&points[point_index],
                                                &self.geom_var,
-                                               &self.geom_dep) <= self.eps_max
+                                               &self.geom_dep,
+                                               &self.geom_frq) <= self.eps_max
             }).map(|(neighbor_index, _)| neighbor_index)
             .collect() //TODO: would be neat to prevent this allocation.
     }
@@ -311,7 +319,8 @@ impl FuzzyDBSCAN {
     }
 
     fn mu_distance<P: MetricSpace>(&self, a: &P, b: &P) -> f64 {
-        let distance = a.distance(b, &self.geom_var, &self.geom_dep);
+        let distance = a.distance(b, &self.geom_var,
+                                  &self.geom_dep, &self.geom_frq);
         if distance <= self.eps_min {
             1.0
         } else if distance > self.eps_max {
