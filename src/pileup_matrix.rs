@@ -477,21 +477,21 @@ impl PileupMatrixFunctions for PileupMatrix{
                 for (tid, length) in target_lengths {
                     genome_length += *length;
                 };
-                let required_variants = (1. - 0.997) * genome_length;
-                debug!("Genome Length {} Required Variants {}", genome_length, required_variants);
-
-                let mut clusters_kept = Vec::new();
-                let mut noise = Vec::new();
-
-                for (index, cluster) in clusters.iter().enumerate() {
-                    if cluster.len() as f64 >= required_variants {
-                        debug!("Cluster {} Variants {}", index+1, cluster.len());
-                        clusters_kept.push(cluster);
-                    } else {
-                        noise.par_extend(cluster.par_iter().cloned());
-                    };
-                };
-                clusters_kept.push(&noise);
+//                let required_variants = (1. - 0.9999) * genome_length;
+//                debug!("Genome Length {} Required Variants {}", genome_length, required_variants);
+//
+//                let mut clusters_kept = Vec::new();
+//                let mut noise = Vec::new();
+//
+//                for (index, cluster) in clusters.iter().enumerate() {
+//                    if cluster.len() as f64 >= required_variants {
+//                        debug!("Cluster {} Variants {}", index+1, cluster.len());
+//                        clusters_kept.push(cluster);
+//                    } else {
+//                        noise.par_extend(cluster.par_iter().cloned());
+//                    };
+//                };
+//                clusters_kept.push(&noise);
 
                 let prediction_variants = Arc::new(
                     Mutex::new(
@@ -504,7 +504,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         HashMap::new()));
 
 
-                clusters_kept.par_iter().enumerate().for_each(|(rank, cluster)|{
+                clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
 
                         let mut prediction_count = prediction_count.lock().unwrap();
