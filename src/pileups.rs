@@ -535,7 +535,7 @@ fn process_previous_contigs_var(
             "polish" => {
                 let stoit_name = stoit_name
                     .split("..").last().unwrap()
-                    .split("/").last().unwrap().split(".").next().unwrap();
+                    .split("/").last().unwrap();
                 let output_prefix = output_prefix.to_string() + "_" + stoit_name;
                 pileup_struct.polish_contig(&ref_sequence,
                                             &output_prefix);
