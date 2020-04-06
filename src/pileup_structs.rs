@@ -31,8 +31,8 @@ pub enum PileupStats {
         observed_contig_length: u32,
         num_covered_bases: i32,
         num_mapped_reads: u64,
-        total_mismatches: u32,
-        contig_end_exclusion: u32,
+        total_mismatches: u64,
+        contig_end_exclusion: u64,
         min: f64,
         max: f64,
         method: String,
@@ -47,7 +47,7 @@ pub enum PileupStats {
 
 impl PileupStats {
     pub fn new_contig_stats(min: f64, max: f64,
-                            contig_end_exclusion: u32) -> PileupStats {
+                            contig_end_exclusion: u64) -> PileupStats {
         PileupStats::PileupContigStats {
             nucfrequency: HashMap::new(),
             variants_in_reads: HashMap::new(),

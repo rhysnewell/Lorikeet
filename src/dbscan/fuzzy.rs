@@ -17,6 +17,32 @@ fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     }
 }
 
+/// An enum that decides whether a cluster should be updated or duplicated
+#[derive(Debug, Clone)]
+pub enum Update {
+    Push,
+    Clone,
+}
+
+pub fn update_clusters(original_cluster: &mut Cluster, variants: &Vec<Var>, var_to_check: &Var) -> Update {
+    let mut skip = false;
+
+    let mut to_do = Arc::new(
+        Mutex::new(
+            Update::Push));
+
+    original_cluster.par_iter().for_each(|assignment|{
+        if !skip {
+            let var_in_cluster = &variants[assignment.index];
+            if var_in_cluster.tid == var_to_check.tid && var_in_cluster.pos == var_to_check.pos {
+
+            }
+        }
+    });
+    let to_do = to_do.lock().unwrap().clone();
+    return to_do
+}
+
 /// A trait to compute distances between points.
 pub trait MetricSpace: Sized + Send + Sync {
     /// Returns the distance between `self` and `other`.

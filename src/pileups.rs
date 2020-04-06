@@ -36,7 +36,7 @@ pub fn pileup_variants<R: NamedBamReader,
     mapq_threshold: u8,
     min_var_depth: usize,
     min: f32, max: f32,
-    contig_end_exclusion: u32,
+    contig_end_exclusion: u64,
     output_prefix: &str,
     n_threads: usize,
     method: &str,
@@ -135,11 +135,11 @@ pub fn pileup_variants<R: NamedBamReader,
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
-        let mut record: bam::record::Record = bam::record::Record::new();
+        let mut record: bam::record::Record = bam::Record::new();
         let mut ups_and_downs: Vec<i32> = Vec::new();
         let mut num_mapped_reads_total: u64 = 0;
         let mut num_mapped_reads_in_current_contig: u64 = 0;
-        let mut total_edit_distance_in_current_contig: u32 = 0;
+        let mut total_edit_distance_in_current_contig: u64 = 0;
 
         let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
@@ -293,7 +293,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                     let id = indel_map.entry(insert)
                                         .or_insert(BTreeSet::new());
                                     id.insert(read_to_id[&record.qname().to_vec()]);
-                                    total_indels_in_current_contig += cig.len();
+                                    total_indels_in_current_contig += cig.len() as u64;
                                 }
                             }
 
@@ -321,7 +321,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                 id.insert(read_to_id[&record.qname().to_vec()]);
                             }
                             read_cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len();
+                            total_indels_in_current_contig += cig.len() as u64;
                         },
                         Cigar::SoftClip(_) => {
                             // soft clipped portions of reads can be included as insertions
@@ -340,7 +340,7 @@ pub fn pileup_variants<R: NamedBamReader,
                                     .or_insert(BTreeSet::new());
 
                                 id.insert(read_to_id[&record.qname().to_vec()]);
-                                total_indels_in_current_contig += cig.len();
+                                total_indels_in_current_contig += cig.len() as u64;
                             }
                             read_cursor += cig.len() as usize;
                         },
@@ -353,7 +353,7 @@ pub fn pileup_variants<R: NamedBamReader,
                 total_edit_distance_in_current_contig += match
                     record.aux("NM".as_bytes()) {
                     Some(aux) => {
-                        aux.integer() as u32
+                        aux.integer() as u64
                     },
                     None => {
                         panic!("Mapping record encountered that does not have an 'NM' \
@@ -442,7 +442,7 @@ fn process_previous_contigs_var(
     coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
     total_indels_in_current_contig: usize,
-    contig_end_exclusion: u32,
+    contig_end_exclusion: u64,
     min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
@@ -450,7 +450,7 @@ fn process_previous_contigs_var(
     ref_sequence: Vec<u8>,
     sample_idx: i32,
     method: &str,
-    total_mismatches: u32,
+    total_mismatches: u64,
     gff_map: &HashMap<String, Vec<Record>>,
     codon_table: &CodonTable,
     coverage_fold: f32,
