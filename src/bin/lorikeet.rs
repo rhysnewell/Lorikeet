@@ -758,7 +758,7 @@ impl EstimatorsAndTaker {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> EstimatorsAndTaker {
         let mut estimators = vec![];
         let min_fraction_covered = parse_percentage(&m, "min-covered-fraction");
-        let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+        let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
 
         let methods: Vec<&str> = m.values_of("method").unwrap().collect();
 
@@ -1272,7 +1272,7 @@ fn run_pileup<'a,
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
 
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
@@ -1319,7 +1319,7 @@ fn run_pileup<'a,
 
             let method = m.value_of("method").unwrap();
 
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
@@ -1367,7 +1367,7 @@ fn run_pileup<'a,
 
             let method = m.value_of("method").unwrap();
 
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
@@ -1419,7 +1419,7 @@ fn run_pileup<'a,
 
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
@@ -1472,7 +1472,7 @@ fn run_pileup<'a,
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
 
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u32).unwrap();
+            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
             let max = value_t!(m.value_of("trim-max"), f32).unwrap();
             if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
