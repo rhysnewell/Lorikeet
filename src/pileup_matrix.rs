@@ -47,7 +47,7 @@ pub enum PileupMatrix {
 }
 
 impl PileupMatrix {
-    pub fn new_matrix() -> PileupMatrix {
+    pub fn new_matrix(sample_count: usize) -> PileupMatrix {
         PileupMatrix::PileupContigMatrix {
             coverages: HashMap::new(),
             variances: HashMap::new(),
@@ -58,7 +58,7 @@ impl PileupMatrix {
             contigs: HashMap::new(),
             target_names: HashMap::new(),
             target_lengths: HashMap::new(),
-            sample_names: Vec::new(),
+            sample_names: vec!["".to_string(); sample_count],
             kfrequencies: BTreeMap::new(),
             clusters: HashMap::new(),
             clusters_mean: HashMap::new(),
@@ -77,7 +77,7 @@ impl PileupMatrix {
 pub trait PileupMatrixFunctions {
     fn setup(&mut self);
 
-    fn add_sample(&mut self, sample_name: String);
+    fn add_sample(&mut self, sample_name: String, sample_idx: usize);
 
     fn add_contig(&mut self,
                   pileup_stats: PileupStats,
@@ -152,13 +152,13 @@ impl PileupMatrixFunctions for PileupMatrix{
         }
     }
 
-    fn add_sample(&mut self, sample_name: String) {
+    fn add_sample(&mut self, sample_name: String, sample_idx: usize) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut sample_names,
                 ..
             } => {
-                sample_names.push(sample_name);
+                sample_names[sample_idx] = sample_name;
             }
         }
     }

@@ -1236,8 +1236,8 @@ fn generate_faidx(m: &clap::ArgMatches) -> bio::io::fasta::IndexedReader<File> {
 }
 
 fn run_pileup<'a,
-    R: bam_generator::NamedBamReader,
-    T: bam_generator::NamedBamReaderGenerator<R>>(
+    R: bam_generator::NamedBamReader + Send,
+    T: bam_generator::NamedBamReaderGenerator<R> + Send>(
     m: &clap::ArgMatches,
     mode: &str,
     estimators: &mut EstimatorsAndTaker,
