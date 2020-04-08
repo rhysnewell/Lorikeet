@@ -546,11 +546,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 let mut prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
-
                 let mut prediction_variants = prediction_variants.lock().unwrap();
 
                 debug!("Predictions {:?}", prediction_variants);
-
 
                 for (cluster, pred_set) in prediction_features.iter() {
                     if pred_set.len() > 1 {
@@ -696,8 +694,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
         let clusters_changed = Arc::new(Mutex::new(clusters.clone()));
 
-        (0..clusters.len()).into_iter().permutations(2)
+        (0..clusters.len()).into_iter()
+            .permutations(2)
             .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)|{
+
             let clust1 = &clusters[indices[0]];
             let clust2 = &clusters[indices[1]];
             clust1.par_iter().for_each(|assignment1| {
@@ -706,15 +706,21 @@ impl PileupMatrixFunctions for PileupMatrix{
                        if !(clust1.contains(assignment1)) && !(clust2.contains(assignment2)) {
                            let var1 = &variant_info[assignment1.index];
                            let var2 = &variant_info[assignment2.index];
+
                            let set1 = Self::get_variant_set(var1,
-                                                            snp_map, indel_map);
+                                                            snp_map,
+                                                            indel_map);
+
                            let set2 = Self::get_variant_set(var2,
-                                                            snp_map, indel_map);
+                                                            snp_map,
+                                                            indel_map);
+
                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
+
                            if intersection.len() >= 1 {
+
                                let mut clusters_changed =
                                    clusters_changed.lock().unwrap();
-
 
                                clusters_changed[indices[0]].push(assignment2.clone());
                                clusters_changed[indices[1]].push(assignment1.clone());
@@ -752,8 +758,9 @@ impl PileupMatrixFunctions for PileupMatrix{
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                    snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                    indels_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+                       snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
+                       indels_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+
         let mut variant_set = BTreeSet::new();
 
         if indels_map[&variant.tid].contains_key(&variant.pos) {
@@ -770,8 +777,8 @@ impl PileupMatrixFunctions for PileupMatrix{
 
     /// Helper function to return the read ids with a particular SNV
     fn get_variant_set_snps(variant: &fuzzy::Var,
-                        snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>)
-                        -> BTreeSet<i64> {
+                            snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>)
+                            -> BTreeSet<i64> {
         let mut variant_set = BTreeSet::new();
         if snps_map[&variant.tid].contains_key(&variant.pos) {
             let var_char = variant.var.as_bytes()[0] as char;

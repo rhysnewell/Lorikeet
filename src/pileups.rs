@@ -128,7 +128,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Loop through bam generators in parallel
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         let mut bam_generated = bam_generator.start();
-        bam_generated.set_threads(n_threads);
+        bam_generated.set_threads(n_threads / sample_count);
 
         let bam_properties =
             AlignmentProperties::default(InsertSize::default());
@@ -552,5 +552,50 @@ fn process_previous_contigs_var(
             }
             _ => {panic!("unknown mode {}", mode);},
         }
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::str;
+    use coverm::mapping_parameters::*;
+    use coverm::shard_bam_reader::*;
+    use coverm::genome_exclusion::*;
+
+    fn test_with_stream<R: NamedBamReader,
+        G: NamedBamReaderGenerator<R>>(
+        expected: &str,
+        bam_readers: Vec<G>,
+        mut reference: bio::io::fasta::IndexedReader<File>,
+        coverage_estimators: &mut Vec<CoverageEstimator>,
+        proper_pairs_only: bool,
+        n_threads: usize,
+        coverage_fold: f32,
+        min_var_depth: usize,
+        min: f32,
+        max: f32,
+        mode: &str,
+        include_indels: bool,
+        include_soft_clipping: bool) {
+        let mut stream = Cursor::new(Vec::new());
+        let flag_filters = FlagFilter {
+            include_improper_pairs: !proper_pairs_only,
+            include_secondary: false,
+            include_supplementary: false,
+        };
+        {
+            reads_mapped_vec = pileup_variants(
+                bam_readers,
+                &mut coverage_taker,
+                coverage_estimators,
+                print_zero_coverage_contigs,
+                flag_filters,
+                1);
+        }
+        assert_eq!(expected, str::from_utf8(stream.get_ref()).unwrap());
     }
 }

@@ -965,6 +965,7 @@ fn get_sharded_bam_readers<'a, 'b, T>(
                 }
             }
         };
+        let n_samples = reference_wise_params.len() as u16;
 
         for p in reference_wise_params {
             bam_readers.push(
@@ -977,7 +978,7 @@ fn get_sharded_bam_readers<'a, 'b, T>(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    p.threads,
+                    p.threads / n_samples,
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     discard_unmapped,
                     p.mapping_options,
@@ -1047,6 +1048,8 @@ fn get_streamed_bam_readers<'a>(
             }
         };
 
+        let n_samples = reference_wise_params.len() as u16;
+
         for p in reference_wise_params {
             bam_readers.push(
                 bam_generator::generate_named_bam_readers_from_reads(
@@ -1058,7 +1061,7 @@ fn get_streamed_bam_readers<'a>(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    p.threads,
+                    p.threads / n_samples,
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     discard_unmapped,
                     p.mapping_options,
@@ -1176,6 +1179,7 @@ fn get_streamed_filtered_bam_readers(
                 }
             }
         };
+        let n_samples = reference_wise_params.len() as u16;
 
         for p in reference_wise_params {
             bam_readers.push(
@@ -1188,7 +1192,7 @@ fn get_streamed_filtered_bam_readers(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    p.threads,
+                    p.threads / n_samples,
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     filter_params.flag_filters.clone(),
                     filter_params.min_aligned_length_single,
