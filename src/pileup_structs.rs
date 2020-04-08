@@ -271,7 +271,7 @@ impl PileupFunctions for PileupStats {
                 let parameters = model.parameters;
                 let standard_errors = model.se.pairs();
                 let pvalues = model.pvalues;
-                debug!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
+                info!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
                          parameters,
                          standard_errors,
                          pvalues.pairs());
@@ -348,7 +348,7 @@ impl PileupFunctions for PileupStats {
                                 || (coverage_fold == 0.0) {
                                 if (count >= min_variant_depth)
 //                                    && (count as f64 / *d >= min_variant_fraction)
-                                    && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
+                                    && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
                                     rel_abundance.insert(indel.to_owned(), (count as f64, *d as f64));
                                     for read in read_ids {
                                         let mut read_variants
@@ -386,7 +386,7 @@ impl PileupFunctions for PileupStats {
                                 if base != &"R".chars().collect::<Vec<char>>()[0] {
                                     if (count >= min_variant_depth)
     //                                    && (count as f64 / *d >= min_variant_fraction)
-                                        && ((count as f64) > *d as f64 * 2. * (regression.1 + regression.2)) {
+                                        && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
                                         rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
 
                                         for read in read_ids {
