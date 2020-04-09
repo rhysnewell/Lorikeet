@@ -85,6 +85,8 @@ impl MetricSpace for Var {
                     sum / input.len() as f64
                 };
 
+
+
                 let row_vals: Vec<f64> = clr(&self.rel_abunds, geom_frq);
 
                 let col_vals: Vec<f64> = clr(&other.rel_abunds, geom_frq);
@@ -94,6 +96,8 @@ impl MetricSpace for Var {
                 let mean_col = get_mean(&col_vals);
 
                 // lovell et al. Phi and Phi distance
+                // https://github.com/tpq/propr/blob/17263691e9e84b778d3977fffd33b467e4205ef9/src/lr2propr.cpp
+                // propr log ratios to vlr and lr2rho
 
                 let mut row_var = 0.;
                 let mut col_var = 0.;
@@ -106,18 +110,21 @@ impl MetricSpace for Var {
                     covar += (r_freq - mean_row) * (c_freq - mean_col)
                 });
 
-                row_var = row_var / row_vals.len() as f64;
-                col_var = col_var / col_vals.len() as f64;
-                covar = covar / row_vals.len() as f64;
+                row_var = row_var / (row_vals.len() as f64 - 1.);
+                col_var = col_var / (col_vals.len() as f64 - 1.);
+                covar = covar / (row_vals.len() as f64 - 1.);
+
+                let vlr = -2. * covar + row_var + col_var;
+                let rho = 1. - vlr / (row_var + col_var);
 
 //                let mut phi = 1. + row_var / col_var -
 //                    2. * (row_var / col_var).sqrt()
 //                        * covar / (col_var * row_var).sqrt();
 
-                let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
-                    - (covar / (col_var * row_var).sqrt() + 1.).ln();
+//                let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
+//                    - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
-                return phi_dist
+                return 1. - rho
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
