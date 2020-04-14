@@ -79,6 +79,8 @@ pub trait PileupMatrixFunctions {
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize);
 
+    /// Takes [PileupStats](pileup_structs/PileupStats) struct for single contig and adds to
+    /// [PileupMatrix](PileupMatrix)
     fn add_contig(&mut self,
                   pileup_stats: PileupStats,
                   sample_count: usize,
@@ -326,23 +328,25 @@ impl PileupMatrixFunctions for PileupMatrix{
                             Vec::new()));
 
                 // A vector the length of the number of samples
-                // Cumulatively calculates the product of abundaces from each sample
+                // Cumulatively calculates the product of variant depths
                 let geom_mean_v =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
 
+                // product of total depth
                 let geom_mean_d =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
 
+                // product of reference frequency
                 let geom_mean_f =
                     Arc::new(
                         Mutex::new(
                             vec![1. as f64; sample_count as usize]));
 
-                // get basic variant info
+                // get basic variant info and store as fuzzy::Var
                 variants.par_iter().for_each(|(tid, variant_abundances)| {
                     let contig_coverages = coverages.get(tid)
                         .expect("Unable to retrieve contig coverage");
@@ -361,7 +365,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     depths.push(*d);
                                 };
                                 for (variant, abundances_vector) in hash.iter() {
-//                                    if !variant.contains("R") {
+                                    if !variant.contains("R") {
                                     let _abundance: f64 = 0.;
                                     let _mean_var: f64 = 0.;
 //                                let mut total_d: f64 = 0.;
@@ -402,7 +406,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     };
 
                                     variant_info_all.push(point);
-//                                    }
+                                    }
                                 }
                             }
                         });
@@ -608,13 +612,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if genotype.contains_key(&tid) {
                                         let tid_genotype = genotype.get_mut(&tid).unwrap();
 
-//                                        if pred_variants_all.contains_key(&0) {
-//                                            if pred_variants_all[&0].contains_key(&tid) {
-//                                                tid_genotype
-//                                                    .extend(pred_variants_all[&0][&tid].clone());
-//                                            }
-//                                        };
-
                                         if tid_genotype.contains_key(&(pos as i32)) {
 
                                             let categories = &genotype[tid][&(pos as i32)];
@@ -657,7 +654,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                                             } else {
                                                 contig = contig + max_var;
                                                 variations += 1;
-
                                             }
                                         } else {
                                             contig = contig + str::from_utf8(&[*base]).unwrap();
@@ -694,36 +690,43 @@ impl PileupMatrixFunctions for PileupMatrix{
 
         let clusters_changed = Arc::new(Mutex::new(clusters.clone()));
 
+        // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..clusters.len()).into_iter()
             .permutations(2)
             .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)|{
 
+            // Get clusters by index
             let clust1 = &clusters[indices[0]];
             let clust2 = &clusters[indices[1]];
+            // Loop through first cluster
             clust1.par_iter().for_each(|assignment1| {
-               clust2.par_iter().for_each(|assignment2| {
-                   if assignment1.index != assignment2.index {
-                       if !(clust1.contains(assignment1)) && !(clust2.contains(assignment2)) {
-                           let var1 = &variant_info[assignment1.index];
-                           let var2 = &variant_info[assignment2.index];
+                // Loop through second cluster
+                clust2.par_iter().for_each(|assignment2| {
+                    if assignment1.index != assignment2.index {
+                        if !(clust1.contains(assignment1)) && !(clust2.contains(assignment2)) {
+                            let var1 = &variant_info[assignment1.index];
+                            let var2 = &variant_info[assignment2.index];
 
-                           let set1 = Self::get_variant_set(var1,
+                            // Read ids of first variant
+                            let set1 = Self::get_variant_set(var1,
                                                             snp_map,
                                                             indel_map);
 
-                           let set2 = Self::get_variant_set(var2,
+                            // Read ids of second variant
+                            let set2 = Self::get_variant_set(var2,
                                                             snp_map,
                                                             indel_map);
 
-                           let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
+                            // Intersection of two read sets
+                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
 
-                           if intersection.len() >= 1 {
+                            if intersection.len() >= 1 {
 
-                               let mut clusters_changed =
+                                let mut clusters_changed =
                                    clusters_changed.lock().unwrap();
 
-                               clusters_changed[indices[0]].push(assignment2.clone());
-                               clusters_changed[indices[1]].push(assignment1.clone());
+                                clusters_changed[indices[0]].push(assignment2.clone());
+                                clusters_changed[indices[1]].push(assignment1.clone());
                            }
                        }
                    }

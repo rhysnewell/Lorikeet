@@ -117,12 +117,14 @@ impl MetricSpace for Var {
                 let vlr = -2. * covar + row_var + col_var;
                 let rho = 1. - vlr / (row_var + col_var);
 
-//                let mut phi = 1. + row_var / col_var -
-//                    2. * (row_var / col_var).sqrt()
-//                        * covar / (col_var * row_var).sqrt();
+                let mut phi = 1. + row_var / col_var -
+                    2. * (row_var / col_var).sqrt()
+                        * covar / (col_var * row_var).sqrt();
 
-//                let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
-//                    - (covar / (col_var * row_var).sqrt() + 1.).ln();
+                let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
+                    - (covar / (col_var * row_var).sqrt() + 1.).ln();
+
+                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
 
                 return 1. - rho
             }
