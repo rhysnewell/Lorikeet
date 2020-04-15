@@ -780,6 +780,15 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                 clusters_changed[indices[0]].push(assignment2.clone());
                                 clusters_changed[indices[1]].push(assignment1.clone());
+
+                                let mut clust1_set =
+                                    clust1_set.lock().unwrap();
+                                clust1_set.par_extend(&set2);
+
+                                let mut clust2_set =
+                                    clust2_set.lock().unwrap();
+                                clust2_set.par_extend(&set1);
+
                            }
                        }
                    }
