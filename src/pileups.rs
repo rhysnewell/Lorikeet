@@ -102,7 +102,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                                                     bio::io::gff::GffType::GFF3)
                     .expect("Failed to read prodigal output");
 
-                tmp_dir.close().expect("Failed to close temo directory");
+                tmp_dir.close().expect("Failed to close temp directory");
 
             }
             gff_reader.records().into_iter().for_each(|record| {
@@ -560,42 +560,38 @@ fn process_previous_contigs_var(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     use std::str;
+    use std::fs::File;
     use coverm::mapping_parameters::*;
     use coverm::shard_bam_reader::*;
     use coverm::genome_exclusion::*;
-
-    fn test_with_stream<R: NamedBamReader,
-        G: NamedBamReaderGenerator<R>>(
-        expected: &str,
-        bam_readers: Vec<G>,
-        mut reference: bio::io::fasta::IndexedReader<File>,
-        coverage_estimators: &mut Vec<CoverageEstimator>,
-        proper_pairs_only: bool,
-        n_threads: usize,
-        coverage_fold: f32,
-        min_var_depth: usize,
-        min: f32,
-        max: f32,
-        mode: &str,
-        include_indels: bool,
-        include_soft_clipping: bool) {
-        let mut stream = Cursor::new(Vec::new());
-        let flag_filters = FlagFilter {
-            include_improper_pairs: !proper_pairs_only,
-            include_secondary: false,
-            include_supplementary: false,
-        };
-        {
-            reads_mapped_vec = pileup_variants(
-                bam_readers,
-                &mut coverage_taker,
-                coverage_estimators,
-                print_zero_coverage_contigs,
-                flag_filters,
-                1);
-        }
-        assert_eq!(expected, str::from_utf8(stream.get_ref()).unwrap());
-    }
+    use coverm::bam_generator::*;
+//
+//    fn test_with_stream<R: NamedBamReader + Send,
+//        G: NamedBamReaderGenerator<R> + Send>(
+//        expected: &str,
+//        bam_readers: Vec<G>,
+//        mut reference: bio::io::fasta::IndexedReader<File>,
+//        proper_pairs_only: bool,
+//        n_threads: usize,
+//        coverage_fold: f32,
+//        min_var_depth: usize,
+//        min: f32,
+//        max: f32,
+//        mode: &str,
+//        include_indels: bool,
+//        include_soft_clipping: bool) {
+////        let mut stream = Cursor::new(Vec::new());
+//        {
+//            reads_mapped_vec = pileup_variants(
+//                bam_readers,
+//                &mut coverage_taker,
+//                coverage_estimators,
+//                print_zero_coverage_contigs,
+//                flag_filters,
+//                false,
+//            );
+//        }
+////        assert_eq!(expected, str::from_utf8(stream.get_ref()).unwrap());
+//    }
 }

@@ -25,9 +25,9 @@ pub enum Update {
 }
 
 pub fn update_clusters(original_cluster: &mut Cluster, variants: &Vec<Var>, var_to_check: &Var) -> Update {
-    let mut skip = false;
+    let skip = false;
 
-    let mut to_do = Arc::new(
+    let to_do = Arc::new(
         Mutex::new(
             Update::Push));
 
@@ -117,7 +117,7 @@ impl MetricSpace for Var {
                 let vlr = -2. * covar + row_var + col_var;
                 let rho = 1. - vlr / (row_var + col_var);
 
-                let mut phi = 1. + row_var / col_var -
+                let phi = 1. + row_var / col_var -
                     2. * (row_var / col_var).sqrt()
                         * covar / (col_var * row_var).sqrt();
 
@@ -154,7 +154,7 @@ impl MetricSpace for Point {
             let mut sum_squares = sum_squares.lock().unwrap();
             *sum_squares += (x - y).powf(2.)
         });
-        let mut sum_squares: f64 = *sum_squares.lock().unwrap();
+        let sum_squares: f64 = *sum_squares.lock().unwrap();
         let dist: f64 = sum_squares.sqrt();
         return dist
     }
