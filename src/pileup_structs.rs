@@ -271,7 +271,7 @@ impl PileupFunctions for PileupStats {
                 let parameters = model.parameters;
                 let standard_errors = model.se.pairs();
                 let pvalues = model.pvalues;
-                info!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
+                debug!("Linear regression results: \n params {:?} \n se {:?} \n p-values {:?}",
                          parameters,
                          standard_errors,
                          pvalues.pairs());
@@ -761,7 +761,41 @@ fn condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pileups::*;
+    use std::str;
+    use std::fs::File;
+    use coverm::mapping_parameters::*;
+    use coverm::shard_bam_reader::*;
+    use coverm::genome_exclusion::*;
+    use coverm::bam_generator::*;
 
+//    fn test_with_stream<R: NamedBamReader + Send,
+//        G: NamedBamReaderGenerator<R> + Send>(
+//        expected: &str,
+//        bam_readers: Vec<G>,
+//        mut reference: bio::io::fasta::IndexedReader<File>,
+//        proper_pairs_only: bool,
+//        n_threads: usize,
+//        coverage_fold: f32,
+//        min_var_depth: usize,
+//        min: f32,
+//        max: f32,
+//        mode: &str,
+//        include_indels: bool,
+//        include_soft_clipping: bool) {
+////        let mut stream = Cursor::new(Vec::new());
+//        {
+//            reads_mapped_vec = pileup_variants(
+//                bam_readers,
+//                &mut coverage_taker,
+//                coverage_estimators,
+//                print_zero_coverage_contigs,
+//                flag_filters,
+//                false,
+//                );
+//        }
+////        assert_eq!(expected, str::from_utf8(stream.get_ref()).unwrap());
+//    }
     #[test]
     fn test_genotypes_two_positions() {
         let mut contig = PileupStats::new_contig_stats(0.,
@@ -867,6 +901,8 @@ mod tests {
         contig.calc_variants(
             1,
             0.);
+
+
     }
 
     #[test]
@@ -879,7 +915,7 @@ mod tests {
         nuc_freq.insert(1, BTreeMap::new());
         nuc_freq.insert(2, BTreeMap::new());
         nuc_freq.insert(3, BTreeMap::new());
-
+        let reference = "TGTG".as_bytes();
         let mut pos = nuc_freq.entry(0).or_insert(BTreeMap::new());
 
         pos.insert("A".chars().collect::<Vec<char>>()[0],
@@ -936,5 +972,25 @@ mod tests {
         contig.calc_variants(
             1,
             0.);
+
+        let snps = match &contig {
+            PileupStats::PileupContigStats {
+                variant_abundances,
+                ..
+            } => {
+                variant_abundances
+            }
+        };
+        assert_eq!(snps.len(), 4);
+
+        assert_eq!(contig.print_variants(&reference.to_vec(), "test"),
+        println!("test    0       0       A       T       1       3       0       -1      0
+                    test    0       1       A       G       1       6       0       -1      0
+                    test    0       1       C       G       1       6       0       -1      0
+                    test    0       1       T       G       2       6       0       -1      0
+                    test    0       2       A       T       2       6       0       -1      0
+                    test    0       2       G       T       4       6       0       -1      0
+                    test    0       3       C       G       1       0       0       -1      0
+                    test    0       3       T       G       3       0       0       -1      0"));
     }
 }
