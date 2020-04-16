@@ -18,16 +18,18 @@ extern crate linregress;
 extern crate coverm;
 extern crate bird_tool_utils;
 extern crate csv;
+extern crate itertools;
+extern crate kodama;
 extern crate statrs;
 extern crate ordered_float;
-extern crate rust_htslib;
 extern crate env_logger;
 extern crate nix;
 extern crate tempdir;
 extern crate tempfile;
 extern crate rand;
-extern crate itertools;
 extern crate rayon;
+extern crate rust_htslib;
+
 //extern crate plotly;
 extern crate strum;
 

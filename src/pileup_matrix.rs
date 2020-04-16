@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::fs::File;
 use std::process;
 use crate::dbscan::fuzzy;
+use kodama::{Method, linkage};
 use itertools::{Itertools};
 use ordered_float::NotNan;
 use rayon::current_num_threads;
@@ -102,7 +103,7 @@ pub trait PileupMatrixFunctions {
                           variant_info: &Vec<fuzzy::Var>,
                           snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                           indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
-                          -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>) ;
+                          -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) ;
 
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
@@ -483,21 +484,28 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // Perform read phasing clustering and return new clusters
                 // and shared read info between clusters
-                let (clusters, shared_read_count)
+                let (clusters, shared_read_count, mut condensed)
                     = Self::linkage_clustering(&clusters,
                                                &variant_info,
                                                &snps_map,
                                                &indels_map);
 
                 // Collapse clusters with enough shared read info starting with smallest cluster
-                for (cluster_index, cluster) in clusters.iter().enumerate() {
+                if clusters.len() > 1 {
+                    for (cluster_index, cluster) in clusters.iter().enumerate() {
 //                    println!("{}", cluster.len());
-                    let cluster_map = shared_read_count.get(&cluster_index)
-                        .unwrap();
-                    for (clust2, jaccard) in cluster_map {
-                        debug!("Cluster 1 {} Cluster 2 {} Jaccard's {}", cluster_index, clust2, jaccard);
-                    }
-                }
+                        let cluster_map = shared_read_count.get(&cluster_index)
+                            .unwrap();
+                        for (clust2, jaccard) in cluster_map {
+                            debug!("Cluster {} Cluster {} Jaccard's {}",
+                                   cluster_index+1, *clust2+1, jaccard);
+                        };
+                    };
+                };
+
+                let dend = linkage(&mut condensed,
+                                   clusters.len(), Method::Ward);
+                info!("Dendogram {:?}", dend);
 
                 let mut genome_length = 0.;
                 for (tid, length) in target_lengths {
@@ -574,7 +582,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let prediction_features = prediction_features.lock().unwrap();
                 let mut prediction_variants = prediction_variants.lock().unwrap();
 
-                debug!("Predictions {:?}", prediction_variants);
 
                 for (cluster, pred_set) in prediction_features.iter() {
                     if pred_set.len() > 1 {
@@ -708,11 +715,13 @@ impl PileupMatrixFunctions for PileupMatrix{
                           variant_info: &Vec<fuzzy::Var>,
                           snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
                           indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
-                          -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>) {
+                          -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) {
 
         let clusters_changed = Arc::new(Mutex::new(clusters.clone()));
         let clusters_shared_reads = Arc::new(Mutex::new(HashMap::new()));
-
+        let jaccard_distances = Arc::new(Mutex::new(
+           vec![0.; (clusters.len().pow(2) - clusters.len()) / 2])
+        );
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..clusters.len()).into_iter()
             .permutations(2)
@@ -771,25 +780,25 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 };
                             }
                             // Intersection of two read sets
-                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
-
-                            if intersection.len() >= 1 {
-
-                                let mut clusters_changed =
-                                   clusters_changed.lock().unwrap();
-
-                                clusters_changed[indices[0]].push(assignment2.clone());
-                                clusters_changed[indices[1]].push(assignment1.clone());
-
-                                let mut clust1_set =
-                                    clust1_set.lock().unwrap();
-                                clust1_set.par_extend(&set2);
-
-                                let mut clust2_set =
-                                    clust2_set.lock().unwrap();
-                                clust2_set.par_extend(&set1);
-
-                           }
+//                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
+//
+//                            if intersection.len() >= 1 {
+//
+//                                let mut clusters_changed =
+//                                   clusters_changed.lock().unwrap();
+//
+//                                clusters_changed[indices[0]].push(assignment2.clone());
+//                                clusters_changed[indices[1]].push(assignment1.clone());
+//
+//                                let mut clust1_set =
+//                                    clust1_set.lock().unwrap();
+//                                clust1_set.par_extend(&set2);
+//
+//                                let mut clust2_set =
+//                                    clust2_set.lock().unwrap();
+//                                clust2_set.par_extend(&set1);
+//
+//                           }
                        }
                    }
                });
@@ -806,14 +815,18 @@ impl PileupMatrixFunctions for PileupMatrix{
             let mut cluster_map = clusters_shared_reads.entry(indices[0])
                 .or_insert(HashMap::new());
             let jaccard = intersection.len() as f64 /
-                ((clust1_set.len() + clust1_set.len() - intersection.len()) as f64);
+                ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
+            let mut jaccard_distances = jaccard_distances.lock().unwrap();
+            jaccard_distances[get_condensed_index(indices[0], indices[1], clusters.len()).unwrap()]
+                = 1. - jaccard;
             cluster_map.entry(indices[1]).or_insert(jaccard);
         });
 
         let clusters_changed = clusters_changed.lock().unwrap().clone();
         let clusters_shared_reads = clusters_shared_reads.lock().unwrap().clone();
+        let jaccard_distances = jaccard_distances.lock().unwrap().clone();
 
-        (clusters_changed, clusters_shared_reads)
+        (clusters_changed, clusters_shared_reads, jaccard_distances)
     }
 
     /// Get all of the associated read ids for a given cluster
@@ -954,4 +967,13 @@ pub fn add_entry(shared_read_counts: &mut HashMap<usize, HashMap<usize, usize>>,
                  clust1: usize, clust2: usize, count: usize) {
     let entry = shared_read_counts.entry(clust1).or_insert(HashMap::new());
     entry.insert(clust2, count);
+}
+
+/// helper function to get the index of condensed matrix from it square form
+fn get_condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
+    if i == j {
+        return None
+    } else {
+        return Some(n*i - i*(i+1)/2 + j - 1 - i)
+    }
 }
