@@ -52,6 +52,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut pileup_matrix = Arc::new(Mutex::new(PileupMatrix::new_matrix(sample_count)));
     let mut gff_map = Arc::new(Mutex::new(HashMap::new()));
     let mut codon_table = CodonTable::setup();
+    let nanopore = false;
 
 
     match mode {
@@ -259,25 +260,28 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                             // if M, X, or = increment start and decrement end index
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
-
-                            for qpos in read_cursor..(read_cursor+cig.len() as usize) {
-                                let base = record.seq()[qpos] as char;
-                                let refr = ref_seq[cursor as usize] as char;
+                            if !nanopore {
+                                for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                                    let base = record.seq()[qpos] as char;
+                                    let refr = ref_seq[cursor as usize] as char;
 //                                let mut nuc_freq = nuc_freq.lock().unwrap();
-                                let nuc_map = nuc_freq
-                                    .entry(cursor as i32).or_insert(BTreeMap::new());
+                                    let nuc_map = nuc_freq
+                                        .entry(cursor as i32).or_insert(BTreeMap::new());
 
-                                if base != refr {
+                                    if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-                                    let id = nuc_map.entry(base).or_insert(BTreeSet::new());
-                                    let mut read_to_id = read_to_id.lock().unwrap();
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
-                                } else {
-                                    let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
-                                    let mut read_to_id = read_to_id.lock().unwrap();
-                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                        let id = nuc_map.entry(base).or_insert(BTreeSet::new());
+                                        let mut read_to_id = read_to_id.lock().unwrap();
+                                        id.insert(read_to_id[&record.qname().to_vec()]);
+                                    } else {
+                                        let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
+                                        let mut read_to_id = read_to_id.lock().unwrap();
+                                        id.insert(read_to_id[&record.qname().to_vec()]);
+                                    }
+                                    cursor += 1;
                                 }
-                                cursor += 1;
+                            } else {
+                                cursor = final_pos;
                             }
 
 
