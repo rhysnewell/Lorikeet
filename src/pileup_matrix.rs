@@ -503,9 +503,9 @@ impl PileupMatrixFunctions for PileupMatrix{
                     };
                 };
 
-                let dend = linkage(&mut condensed,
-                                   clusters.len(), Method::Ward);
-                info!("Dendogram {:?}", dend);
+//                let dend = linkage(&mut condensed,
+//                                   clusters.len(), Method::Ward);
+//                info!("Dendogram {:?}", dend);
 
                 let mut genome_length = 0.;
                 for (tid, length) in target_lengths {
@@ -717,69 +717,70 @@ impl PileupMatrixFunctions for PileupMatrix{
                           indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) {
 
-        let clusters_changed = Arc::new(Mutex::new(clusters.clone()));
-        let clusters_shared_reads = Arc::new(Mutex::new(HashMap::new()));
-        let jaccard_distances = Arc::new(Mutex::new(
-           vec![0.; (clusters.len().pow(2) - clusters.len()) / 2])
-        );
-        // Loop through each permutation of 2 clusters and observe shared variants in reads
-        (0..clusters.len()).into_iter()
-            .permutations(2)
-            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)|{
+        if clusters.len() > 1 {
+            let clusters_changed = Arc::new(Mutex::new(Vec::new()));
+            let clusters_shared_reads = Arc::new(Mutex::new(HashMap::new()));
+            let jaccard_distances = Arc::new(Mutex::new(
+                vec![0.; (clusters.len().pow(2) - clusters.len()) / 2])
+            );
+            // Loop through each permutation of 2 clusters and observe shared variants in reads
+            (0..clusters.len()).into_iter()
+                .permutations(2)
+                .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)| {
 
-            // Get clusters by index
-            let clust1 = &clusters[indices[0]];
-            let clust2 = &clusters[indices[1]];
+                // Get clusters by index
+                let clust1 = &clusters[indices[0]];
+                let clust2 = &clusters[indices[1]];
 
-            // Total read set for each cluster
-            let clust1_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
-            let clust2_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
+                // Total read set for each cluster
+                let clust1_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
+                let clust2_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
 
-            // Cluster assignment index to avoid reappending to sets
-            let clust1_index = Arc::new(Mutex::new(HashSet::new()));
-            let clust2_index = Arc::new(Mutex::new(HashSet::new()));
+                // Cluster assignment index to avoid reappending to sets
+                let clust1_index = Arc::new(Mutex::new(HashSet::new()));
+                let clust2_index = Arc::new(Mutex::new(HashSet::new()));
 
-            // Loop through first cluster
-            clust1.par_iter().for_each(|assignment1| {
-                // Loop through second cluster
-                clust2.par_iter().for_each(|assignment2| {
-                    if assignment1.index != assignment2.index {
-                        if !(clust1.contains(assignment2)) && !(clust2.contains(assignment1)) {
-                            let var1 = &variant_info[assignment1.index];
-                            let var2 = &variant_info[assignment2.index];
+                // Loop through first cluster
+                clust1.par_iter().for_each(|assignment1| {
+                    // Loop through second cluster
+                    clust2.par_iter().for_each(|assignment2| {
+                        if assignment1.index != assignment2.index {
+                            if !(clust1.contains(assignment2)) && !(clust2.contains(assignment1)) {
+                                let var1 = &variant_info[assignment1.index];
+                                let var2 = &variant_info[assignment2.index];
 
-                            // Read ids of first variant
-                            let set1 = Self::get_variant_set(var1,
-                                                            snp_map,
-                                                            indel_map);
+                                // Read ids of first variant
+                                let set1 = Self::get_variant_set(var1,
+                                                                 snp_map,
+                                                                 indel_map);
 
-                            // Read ids of second variant
-                            let set2 = Self::get_variant_set(var2,
-                                                            snp_map,
-                                                            indel_map);
+                                // Read ids of second variant
+                                let set2 = Self::get_variant_set(var2,
+                                                                 snp_map,
+                                                                 indel_map);
 
-                            // Extend each cluster read set
-                            {
-                                let mut clust1_index =
-                                    clust1_index.lock().unwrap();
-                                if !clust1_index.contains(&assignment1.index) {
-                                    let mut clust1_set =
-                                        clust1_set.lock().unwrap();
-                                    clust1_set.par_extend(&set1);
+                                // Extend each cluster read set
+                                {
+                                    let mut clust1_index =
+                                        clust1_index.lock().unwrap();
+                                    if !clust1_index.contains(&assignment1.index) {
+                                        let mut clust1_set =
+                                            clust1_set.lock().unwrap();
+                                        clust1_set.par_extend(&set1);
 
-                                    clust1_index.insert(assignment1.index);
-                                };
-                                let mut clust2_index =
-                                    clust2_index.lock().unwrap();
-                                if !clust2_index.contains(&assignment2.index) {
-                                    let mut clust2_set =
-                                        clust2_set.lock().unwrap();
-                                    clust2_set.par_extend(&set2);
+                                        clust1_index.insert(assignment1.index);
+                                    };
+                                    let mut clust2_index =
+                                        clust2_index.lock().unwrap();
+                                    if !clust2_index.contains(&assignment2.index) {
+                                        let mut clust2_set =
+                                            clust2_set.lock().unwrap();
+                                        clust2_set.par_extend(&set2);
 
-                                    clust2_index.insert(assignment2.index);
-                                };
-                            }
-                            // Intersection of two read sets
+                                        clust2_index.insert(assignment2.index);
+                                    };
+                                }
+                                // Intersection of two read sets
 //                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
 //
 //                            if intersection.len() >= 1 {
@@ -799,34 +800,102 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                clust2_set.par_extend(&set1);
 //
 //                           }
-                       }
-                   }
-               });
+                            }
+                        }
+                    });
+                });
+
+                // Add the jaccard's similarity to the hashmap for the two clusters
+                let clust1_set = clust1_set.lock().unwrap();
+                let clust2_set = clust2_set.lock().unwrap();
+                let intersection: HashSet<_> = clust1_set
+                    .intersection(&clust2_set).collect();
+//            let indices_set: HashSet<_> = [indices[0], indices[1]].iter().cloned().collect();
+                let mut clusters_shared_reads = clusters_shared_reads
+                    .lock().unwrap();
+                let mut cluster_map = clusters_shared_reads.entry(indices[0])
+                    .or_insert(HashMap::new());
+                let jaccard = intersection.len() as f64 /
+                    ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
+                let mut jaccard_distances = jaccard_distances.lock().unwrap();
+                // Check to see if we have two or more samples
+                if jaccard_distances.len() > 1 {
+                    // Place each measure at appropriate index
+                    jaccard_distances[
+                        get_condensed_index(
+                            indices[0], indices[1], clusters.len()).unwrap_or_else(|| 0)]
+                        = 1. - jaccard;
+                } else {
+                    // If only 1 sample, then just put in first index
+                    jaccard_distances[0] = 1. - jaccard;
+                }
+                // Add jaccard similarity to hashmap
+                cluster_map.entry(indices[1]).or_insert(jaccard);
             });
 
-            // Add the jaccard's similarity to the hashmap for the two clusters
-            let clust1_set = clust1_set.lock().unwrap();
-            let clust2_set = clust2_set.lock().unwrap();
-            let intersection: HashSet<_> = clust1_set
-                .intersection(&clust2_set).collect();
-//            let indices_set: HashSet<_> = [indices[0], indices[1]].iter().cloned().collect();
-            let mut clusters_shared_reads = clusters_shared_reads
-                .lock().unwrap();
-            let mut cluster_map = clusters_shared_reads.entry(indices[0])
-                .or_insert(HashMap::new());
-            let jaccard = intersection.len() as f64 /
-                ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
-            let mut jaccard_distances = jaccard_distances.lock().unwrap();
-            jaccard_distances[get_condensed_index(indices[0], indices[1], clusters.len()).unwrap()]
-                = 1. - jaccard;
-            cluster_map.entry(indices[1]).or_insert(jaccard);
-        });
+            let mut clusters_shared_reads = clusters_shared_reads.lock().unwrap().clone();
+            let mut jaccard_distances = jaccard_distances.lock().unwrap().clone();
+            // Perform HAC using kodama
+            let dend = linkage(&mut jaccard_distances,
+                               clusters.len(), Method::Ward);
 
-        let clusters_changed = clusters_changed.lock().unwrap().clone();
-        let clusters_shared_reads = clusters_shared_reads.lock().unwrap().clone();
-        let jaccard_distances = jaccard_distances.lock().unwrap().clone();
+            debug!("Dendogram {:?}", &dend);
+            // Step through each step in the dendrogram and combine clusters
+            // that are under a certain dissimilarity
+            dend.steps().into_par_iter().for_each(|step| {
+                // Check to see that these are leaf clusters
+                if step.cluster1 <= clusters.len() - 1 && step.cluster2 <= clusters.len() - 1 {
+                    // combine clusters
+                    if step.dissimilarity < 0.5 {
+                        let mut new_cluster = Vec::new();
+                        new_cluster.par_extend(clusters[step.cluster1].par_iter().cloned());
+                        new_cluster.par_extend(clusters[step.cluster2].par_iter().cloned());
 
-        (clusters_changed, clusters_shared_reads, jaccard_distances)
+                        let mut clusters_changed
+                            = clusters_changed.lock().unwrap();
+                        clusters_changed.push(new_cluster);
+                    } else { // cluster is by itself
+                        let mut clusters_changed
+                            = clusters_changed.lock().unwrap();
+                        clusters_changed.push(clusters[step.cluster1].clone());
+                        clusters_changed.push(clusters[step.cluster2].clone());
+                    }
+                // Check individually for leaf clusters
+                } else if step.cluster1 <= clusters.len() - 1 {
+                    let mut clusters_changed
+                        = clusters_changed.lock().unwrap();
+                    clusters_changed.push(clusters[step.cluster1].clone());
+                } else if step.cluster2 <= clusters.len() - 1 {
+                    let mut clusters_changed
+                        = clusters_changed.lock().unwrap();
+                    clusters_changed.push(clusters[step.cluster2].clone());
+                }
+            });
+
+            let mut clusters_changed
+                = clusters_changed.lock().unwrap().clone();
+            // If the number of clusters changed, then we rerun linkage clustering
+            // First use of recursion properly, nice.
+            if clusters_changed.len() != clusters.len() {
+                let (clusters_changed, clusters_shared_reads, jaccard_distances)
+                    = Self::linkage_clustering(&clusters_changed,
+                                               variant_info,
+                                               snp_map,
+                                               indel_map);
+                return (clusters_changed, clusters_shared_reads, jaccard_distances)
+            } else {
+                return (clusters.clone(), clusters_shared_reads, jaccard_distances)
+            }
+        } else {
+            // create placeholder jaccard hashmap when there is only one cluster to prevent nothing
+            // from being returned
+            let mut jaccard_map = HashMap::new();
+            let mut input = HashMap::new();
+            input.insert(1, 1.0);
+            jaccard_map.insert(0, input);
+
+            return (clusters.clone(), jaccard_map, vec![1.0])
+        }
     }
 
     /// Get all of the associated read ids for a given cluster
