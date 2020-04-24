@@ -745,7 +745,6 @@ impl PileupMatrixFunctions for PileupMatrix{
                     // Loop through second cluster
                     clust2.par_iter().for_each(|assignment2| {
                         if assignment1.index != assignment2.index {
-                            if !(clust1.contains(assignment2)) && !(clust2.contains(assignment1)) {
                                 let var1 = &variant_info[assignment1.index];
                                 let var2 = &variant_info[assignment2.index];
 
@@ -800,7 +799,6 @@ impl PileupMatrixFunctions for PileupMatrix{
 //                                clust2_set.par_extend(&set1);
 //
 //                           }
-                            }
                         }
                     });
                 });
@@ -815,8 +813,10 @@ impl PileupMatrixFunctions for PileupMatrix{
                     .lock().unwrap();
                 let mut cluster_map = clusters_shared_reads.entry(indices[0])
                     .or_insert(HashMap::new());
+//                let jaccard = intersection.len() as f64 /
+//                    ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
                 let jaccard = intersection.len() as f64 /
-                    ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
+                    std::cmp::min(clust1_set.len(), clust2_set.len()) as f64;
                 let mut jaccard_distances = jaccard_distances.lock().unwrap();
                 // Check to see if we have two or more samples
                 if jaccard_distances.len() > 1 {
@@ -839,20 +839,28 @@ impl PileupMatrixFunctions for PileupMatrix{
             let dend = linkage(&mut jaccard_distances,
                                clusters.len(), Method::Ward);
 
-            debug!("Dendogram {:?}", &dend);
+            info!("Dendogram {:?}", &dend);
+            let changed = Arc::new(Mutex::new(0));
             // Step through each step in the dendrogram and combine clusters
             // that are under a certain dissimilarity
             dend.steps().into_par_iter().for_each(|step| {
                 // Check to see that these are leaf clusters
                 if step.cluster1 <= clusters.len() - 1 && step.cluster2 <= clusters.len() - 1 {
                     // combine clusters
-                    if step.dissimilarity < 0.5 {
+                    if step.dissimilarity < 0.2 {
                         let mut new_cluster = Vec::new();
                         new_cluster.par_extend(clusters[step.cluster1].par_iter().cloned());
                         new_cluster.par_extend(clusters[step.cluster2].par_iter().cloned());
 
                         let mut clusters_changed
                             = clusters_changed.lock().unwrap();
+//                        if clusters[step.cluster1].len() >= clusters[step.cluster2].len() {
+//                            clusters_changed.push(clusters[step.cluster1].clone());
+//                        } else {
+//                            clusters_changed.push(clusters[step.cluster2].clone());
+//                        }
+                        let mut changed = changed.lock().unwrap();
+                        *changed += 1;
                         clusters_changed.push(new_cluster);
                     } else { // cluster is by itself
                         let mut clusters_changed
@@ -874,9 +882,10 @@ impl PileupMatrixFunctions for PileupMatrix{
 
             let mut clusters_changed
                 = clusters_changed.lock().unwrap().clone();
+            let changed = changed.lock().unwrap();
             // If the number of clusters changed, then we rerun linkage clustering
             // First use of recursion properly, nice.
-            if clusters_changed.len() != clusters.len() {
+            if *changed > 0 {
                 let (clusters_changed, clusters_shared_reads, jaccard_distances)
                     = Self::linkage_clustering(&clusters_changed,
                                                variant_info,
