@@ -1,6 +1,7 @@
 use std;
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use rust_htslib::bam::{self, record::Cigar};
+use rust_htslib::bcf;
 
 use external_command_checker;
 use pileup_structs::*;
@@ -9,10 +10,12 @@ use codon_structs::*;
 use coverm::bam_generator::*;
 use rayon::prelude::*;
 use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
+use crate::pileup_structs::Base;
 
 use crate::*;
 use std::str;
 use std::fs::File;
+use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use bio::io::gff;
@@ -68,7 +71,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                                                     bio::io::gff::GffType::GFF3)
                     .expect("GFF File not found");
             } else {
-                external_command_checker::check_for_prodigal();
+                external_command_checker::check_for_prokka();
                 let tmp_dir = TempDir::new("lorikeet_fifo")
                     .expect("Unable to create temporary directory");
                 let fifo_path = tmp_dir.path().join("foo.pipe");
@@ -85,7 +88,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     .expect(&format!("Failed to create distances tempfile"));
                 let cmd_string = format!(
                     "set -e -o pipefail; \
-                     prodigal -f gff -i {} -o {} {}",
+                     prokka -f gff -i {} -o {} {}",
                     // prodigal
                     m.value_of("reference").unwrap(),
                     gff_file.path().to_str()
@@ -130,11 +133,16 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         let mut bam_generated = bam_generator.start();
         bam_generated.set_threads(n_threads / sample_count);
-
-        let bam_properties =
+        info!("Generating VCF");
+        info!("Bam Name {}", bam_generated.name());
+        let mut bam_properties =
             AlignmentProperties::default(InsertSize::default());
 
+//        let mut tlens = Vec::new();
+
         let stoit_name = bam_generated.name().to_string();
+        let vcf_reader = get_vcf(bam_generated.name(), &m,
+                                 sample_idx, n_threads / sample_count);
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
@@ -166,7 +174,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                 skipped_reads += 1;
                 continue;
             }
-
             // if reference has changed, print the last record
             let tid = record.tid();
             if !record.is_unmapped() { // if mapped
@@ -184,6 +191,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                               .or_insert(*read_cnt_id);
                     *read_cnt_id += 1;
                 }
+
 
                 // if reference has changed, print the last record
                 if tid != last_tid {
@@ -221,6 +229,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                             output_prefix,
                             &stoit_name);
                     }
+
                     ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                     debug!("Working on new reference {}",
                            std::str::from_utf8(target_names[tid as usize]).unwrap());
@@ -252,7 +261,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
                 // for each chunk of the cigar string
                 let mut cursor: usize = record.pos() as usize;
-                let _quals = record.qual();
+                let quals = record.qual();
                 let mut read_cursor: usize = 0;
                 for cig in record.cigar().iter() {
                     match cig {
@@ -262,15 +271,15 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                             let final_pos = cursor + cig.len() as usize;
                             if !nanopore {
                                 for qpos in read_cursor..(read_cursor + cig.len() as usize) {
-                                    let base = record.seq()[qpos] as char;
-                                    let refr = ref_seq[cursor as usize] as char;
+                                    let base = record.seq()[qpos];
+                                    let refr = ref_seq[cursor as usize];
 //                                let mut nuc_freq = nuc_freq.lock().unwrap();
                                     let nuc_map = nuc_freq
                                         .entry(cursor as i32).or_insert(BTreeMap::new());
 
                                     if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-                                        let id = nuc_map.entry(base).or_insert(BTreeSet::new());
+                                        let id = nuc_map.entry(base as char).or_insert(BTreeSet::new());
                                         let mut read_to_id = read_to_id.lock().unwrap();
                                         id.insert(read_to_id[&record.qname().to_vec()]);
                                     } else {
@@ -380,6 +389,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
             let contig_name = target_names[last_tid as usize].to_vec();
             let total_mismatches = total_edit_distance_in_current_contig -
                 total_indels_in_current_contig;
+
 
             process_previous_contigs_var(
                 mode,
@@ -559,7 +569,85 @@ fn process_previous_contigs_var(
     }
 }
 
+/// Get or generate vcf file using pilon
+pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches, sample_idx: usize, threads: usize) -> bcf::Reader {
+    // if vcfs are already provided find correct one first
+    if m.is_present("vcfs") {
+        let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
+        // Filter out bams that don't have stoit name and get their sample idx
+        let vcf_path: Vec<&str> = vcf_paths.iter().cloned()
+                        .filter(|x| x.contains(stoit_name)).collect();
 
+        if vcf_path.len() > 1 || vcf_path.len() == 0 {
+            panic!("Could not associate VCF file with current BAM file please rename VCF files \
+            to have the same prefix as BAM/reads or let VCF files be generated automatically{:?}")
+        } else {
+            let vcf_path = vcf_path[0];
+            let vcf = bcf::Reader::from_path(vcf_path).unwrap();
+            return vcf
+        }
+    } else if m.is_present("bam-files") {
+        let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+        return generate_vcf(bam_path, m, threads)
+    } else {
+        // We are streaming a generated bam file, so we have had to cache the bam for this to work
+        let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
+        let stoit_name: Vec<&str> = stoit_name.split("/").collect();
+        let stoit_name = stoit_name.join(".");
+        let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");
+        let bam_path = (cache + &(stoit_name + ".bam"));
+        info!("Cached bam path {} ", bam_path);
+
+        return generate_vcf(&bam_path, m, threads)
+    }
+
+}
+
+/// Makes direct call to pilon
+pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> bcf::Reader {
+    external_command_checker::check_for_pilon();
+    external_command_checker::check_for_samtools();
+    // setup temp directory
+    let tmp_dir = TempDir::new("lorikeet_fifo")
+        .expect("Unable to create temporary directory");
+    let fifo_path = tmp_dir.path().join("foo.pipe");
+
+    // create new fifo and give read, write and execute rights to the owner.
+    // This is required because we cannot open a Rust stream as a BAM file with
+    // rust-htslib.
+    unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
+        .expect(&format!("Error creating named pipe {:?}", fifo_path));
+
+    let vcf_file = tempfile::Builder::new()
+        .prefix("lorikeet-pilon-vcf")
+        .tempfile_in(tmp_dir.path())
+        .expect(&format!("Failed to create vcf tempfile"));
+
+    let cmd_string = format!(
+        "set -e -o pipefail; samtools index -@ {} {} {} && \
+                     pilon --genome {} --bam {} --vcf --output {} --fix none --threads {}",
+        threads - 1,
+        bam_path,
+        &(bam_path.to_string() + ".bai"),
+        m.value_of("reference").unwrap(),
+        bam_path,
+        vcf_file.path().to_str()
+            .expect("Failed to convert tempfile path to str"),
+        threads);
+    info!("Queuing cmd_string: {}", cmd_string);
+    std::process::Command::new("bash")
+        .arg("-c")
+        .arg(&cmd_string)
+        .output()
+        .expect("Unable to execute bash");
+    let vcf_path = &(vcf_file.path().to_str().unwrap().to_string() + ".vcf");
+    info!("VCF Path {:?}", vcf_path);
+    let vcf_reader = bcf::Reader::from_path(vcf_path)
+        .expect("Failed to read pilon vcf output");
+
+    tmp_dir.close().expect("Failed to close temp directory");
+    return vcf_reader
+}
 
 #[cfg(test)]
 mod tests {

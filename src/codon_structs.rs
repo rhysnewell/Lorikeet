@@ -3,6 +3,12 @@ use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
 
+pub struct GeneInfo {
+    name: String,
+    locations: HashMap<u32, (u64, u64)>,
+    coverages: HashMap<u32, f64>,
+}
+
 pub struct CodonTable {
     aminos: HashMap<Vec<u8>, char>,
     starts: HashMap<Vec<u8>, char>,

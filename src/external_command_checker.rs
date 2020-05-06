@@ -17,6 +17,10 @@ pub fn check_for_prodigal() {
     self::check_for_external_command_presence("prodigal", "which prodigal");
 }
 
+pub fn check_for_pilon() {
+    self::check_for_external_command_presence("pilon", "which pilon");
+}
+
 pub fn check_for_roary() {
     self::check_for_external_command_presence("roary", "which roary");
 }

@@ -10,8 +10,30 @@ use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use std::path::Path;
 use std::fs::OpenOptions;
 
+use crate::model::{VariantType, Variant};
+
+/// Information about the reads containing a certain variant
+pub struct Reads {
+    softclips: usize,
+    hardclips: usize,
+    ids: HashSet<i64>,
+    properpairs: usize,
+}
+
+/// Information about each base position
+pub struct Base {
+    pos: i64,
+    variant: Variant,
+    baseq: f64,
+    mapq: f64,
+    len: usize,
+    depth: f64,
+    reads: Reads,
+}
+
 pub enum PileupStats {
     PileupContigStats {
+        variants: HashMap<i64, HashSet<Base>>,
         nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
         variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
         variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
@@ -49,6 +71,7 @@ impl PileupStats {
     pub fn new_contig_stats(min: f64, max: f64,
                             contig_end_exclusion: u64) -> PileupStats {
         PileupStats::PileupContigStats {
+            variants: HashMap::new(),
             nucfrequency: HashMap::new(),
             variants_in_reads: HashMap::new(),
             variant_abundances: HashMap::new(),
