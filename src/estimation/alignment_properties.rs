@@ -128,7 +128,7 @@ impl AlignmentProperties {
     /// Estimate `AlignmentProperties` from each record in bam file.
     /// Only reads that are mapped, not duplicates and where quality checks passed are taken.
     /// Return will need to be extended to existing vector
-    pub fn estimate_from_record(record: &mut bam::Record, properties: &mut AlignmentProperties) -> Option<f64> {
+    pub fn estimate_from_record(record: &bam::Record, properties: &mut AlignmentProperties) -> Option<f64> {
 
         let mut tlen = None;
         if record.is_unmapped() || record.is_duplicate() || record.is_quality_check_failed() {
