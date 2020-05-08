@@ -1,7 +1,9 @@
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
+use crate::pileup_structs::Base;
+use crate::model::Variant;
 
 pub struct GeneInfo {
     name: String,
@@ -70,8 +72,7 @@ pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
-                      indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
+                      variants: &HashMap<i64, HashMap<Variant, Base>>,
                       ref_sequence: &Vec<u8>,
                       depth: &Vec<f64>) -> f64;
 }
@@ -120,8 +121,7 @@ impl Translations for CodonTable {
 
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
-                      variant_abundances: &HashMap<i32, BTreeMap<String, (f64, f64)>>,
-                      indels: &HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
+                      variants: &HashMap<i64, HashMap<Variant, Base>>,
                       ref_sequence: &Vec<u8>,
                       _depth: &Vec<f64>) -> f64 {
         let strand = gene.strand().expect("No strandedness found");
@@ -162,17 +162,11 @@ impl Translations for CodonTable {
         let mut new_codons: Vec<Vec<u8>> = vec!();
         let mut positionals = 0;
         let mut total_variants = 0;
-        let mut indel_map = BTreeMap::new();
-        let dummy = BTreeMap::new();
+        let dummy = HashMap::new();
         for (gene_cursor, cursor) in (start..end).into_iter().enumerate() {
-            let variant_map = match variant_abundances.get(&(cursor as i32)){
+            let variant_set = match variants.get(&(cursor as i64)){
                 Some(map) => map,
                 None => &dummy,
-            };
-
-            if indels.contains_key(&(cursor as i32)){
-                indel_map = indels.get(&(cursor as i32))
-                    .expect("No INDEL at this location").to_owned();
             };
 
             let codon_idx = gene_cursor / 3 as usize;
@@ -240,39 +234,41 @@ impl Translations for CodonTable {
                 new_codons = Vec::new();
                 new_codons.push(codon.clone());
             }
-            if variant_map.len() > 0 {
-                debug!("variant map {:?}", variant_map);
+            if variant_set.len() > 0 {
+                debug!("variant map {:?}", variant_set);
                 let mut variant_count = 0;
-                let mut variant_vec: Vec<_> = variant_map.iter().collect();
-                // We look at the most abundant variant first for consistency
-                variant_vec.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
-                for (variant, _frac) in variant_vec {
-                    if indel_map.contains_key(variant)
-                        || variant.to_owned().contains("R") {
-                        // Frameshift mutations are not included in dN/dS calculations?
-                        // Seems weird, but all formulas say no
-                        debug!("Frameshift mutation variant {:?}", variant);
-                        continue
+
+                for (variant, base_info) in variant_set.iter() {
+                    match variant {
+                        Variant::SNV(var) => {
+
+                            if variant_count > 0 {
+                                // Create a copy of codon up to this point
+                                // Not sure if reusing previous variants is bad, but
+                                // not doing so can cause randomness to dN/dS values
+
+                                new_codons.push(codon.clone());
+
+                                new_codons[variant_count][codon_cursor] = *var;
+
+                                debug!("multi variant codon {:?}", new_codons);
+                            } else {
+
+                                for var_idx in 0..new_codons.len() {
+
+                                    new_codons[var_idx][codon_cursor] = *var;
+                                }
+                            }
+                            variant_count += 1;
+                        },
+                        _ => {
+                            // Frameshift mutations are not included in dN/dS calculations?
+                            // Seems weird, but all formulas say no
+                            debug!("Frameshift mutation variant {:?}", variant);
+                            continue
+                        },
                     }
-                    let variant = variant.as_bytes().to_vec();
-                    if variant_count > 0 {
-                        // Create a copy of codon up to this point
-                        // Not sure if reusing previous variants is bad, but
-                        // not doing so can cause randomness to dN/dS values
 
-                        new_codons.push(codon.clone());
-
-                        new_codons[variant_count][codon_cursor] = variant[0];
-
-                        debug!("multi variant codon {:?}", new_codons);
-                    } else {
-
-                        for var_idx in 0..new_codons.len() {
-
-                            new_codons[var_idx][codon_cursor] = variant[0];
-                        }
-                    }
-                    variant_count += 1;
                 }
             }
         }

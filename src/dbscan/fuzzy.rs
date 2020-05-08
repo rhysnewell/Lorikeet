@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
+use crate::model::Variant;
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -52,8 +53,8 @@ pub trait MetricSpace: Sized + Send + Sync {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Var {
-    pub pos: i32,
-    pub var: String,
+    pub pos: i64,
+    pub var: Variant,
     pub deps: Vec<f64>,
     pub vars: Vec<f64>,
     pub rel_abunds: Vec<f64>,
