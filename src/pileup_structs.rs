@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
@@ -6,48 +6,88 @@ use rayon::prelude::*;
 use codon_structs::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
+use rust_htslib::bcf::record;
 
 use std::path::Path;
 use std::fs::OpenOptions;
 
 use crate::model::{VariantType, Variant};
 
-/// Information about the reads containing a certain variant
-pub struct Reads {
-    softclips: usize,
-    hardclips: usize,
-    ids: HashSet<i64>,
-    properpairs: usize,
+/// The filter tag given to the locus
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Filter {
+    LowCov,
+    Amb,
+    Del,
+    PASS,
 }
 
 /// Information about each base position
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Base {
-    pos: i64,
-    variant: Variant,
-    baseq: f64,
-    mapq: f64,
-    len: usize,
-    depth: f64,
-    reads: Reads,
+    // Position on contig
+    pub pos: i64,
+    // Reference allele
+    pub refr: u8,
+    // Alternate allele Variant enum
+    pub variant: Variant,
+    // Filter tag
+    pub filters: Vec<HashSet<Filter>>,
+    // Depth of good quality reads
+    pub depth: Vec<u32>,
+    // Depth including bad quality reads
+    pub truedepth: Vec<u32>,
+    // Depth as decided by CoverM
+    pub totaldepth: Vec<u32>,
+    //Physical coverage of valid inserts across locus
+    pub physicalcov: Vec<u32>,
+    // Mean base quality at locus
+    pub baseq: Vec<u32>,
+    // Mean read mapping quality at locus
+    pub mapq: Vec<u32>,
+    // Variant confidence / quality by depth
+    pub conf: Vec<u32>,
+    // Nucleotide count at each locus
+    pub nucs: HashMap<char, Vec<u32>>,
+    // Percentage of As, Cs, Gs, Ts weighted by Q & MQ at locus
+    pub pernucs: HashMap<char, Vec<u32>>,
+    // insertion count at locus
+    pub ic: Vec<u32>,
+    // deletion count at locus
+    pub dc: Vec<u32>,
+    // number of reads clipped here
+    pub xc: Vec<u32>,
+    // allele count in genotypes, for each ALT allele.
+    pub ac: Vec<u32>,
+    // fraction in support for alternate allele
+    pub af: Vec<u32>,
+    // Frequency of variant
+    pub freq: Vec<f64>,
 }
+
+//impl Base {
+//    pub fn from_vcf_record(vcf_record: record) -> Base {
+//        let filter =
+//    }
+//}
 
 pub enum PileupStats {
     PileupContigStats {
-        variants: HashMap<i64, HashSet<Base>>,
-        nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
-        variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
-        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
+        variants: HashMap<i64, HashMap<Variant, Base>>,
+//        nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
+//        variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
+//        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
         variant_count: Vec<f64>,
         depth: Vec<f64>,
-        indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
-        genotypes_per_position: HashMap<usize, usize>,
-        mean_genotypes: f64,
+//        indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
+//        genotypes_per_position: HashMap<usize, usize>,
+//        mean_genotypes: f64,
         tid: i32,
         total_indels: usize,
         target_name: Vec<u8>,
         target_len: f64,
-        variations_per_n: usize,
-        total_variants: usize,
+//        variations_per_n: usize,
+//        total_variants: usize,
         coverage: f64,
         variance: f64,
         observed_contig_length: u32,
@@ -62,8 +102,8 @@ pub enum PileupStats {
         // Clusters hashmap:
         // Key = Position
         // Value = K: Variant, V: (DBSCAN Cluster, HAC Index/initial cluster)
-        clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
-        clusters_mean: HashMap<i32, f64>,
+//        clusters: HashMap<i32, BTreeMap<String, (i32, usize)>>,
+//        clusters_mean: HashMap<i32, f64>,
     }
 }
 
@@ -72,20 +112,12 @@ impl PileupStats {
                             contig_end_exclusion: u64) -> PileupStats {
         PileupStats::PileupContigStats {
             variants: HashMap::new(),
-            nucfrequency: HashMap::new(),
-            variants_in_reads: HashMap::new(),
-            variant_abundances: HashMap::new(),
-            variant_count: Vec::new(),
-            depth: vec!(),
-            indels: HashMap::new(),
-            genotypes_per_position: HashMap::new(),
-            mean_genotypes: 0.0,
             tid: 0,
+            variant_count: vec!(),
+            depth: vec!(),
             total_indels: 0,
             target_name: vec!(),
             target_len: 0.0,
-            variations_per_n: 0,
-            total_variants: 0,
             coverage: 0.00,
             variance: 0.00,
             observed_contig_length: 0,
@@ -97,8 +129,6 @@ impl PileupStats {
             max: max,
             method: "".to_string(),
             regression: (0., 0., 0.),
-            clusters: HashMap::new(),
-            clusters_mean: HashMap::new(),
         }
     }
 }
@@ -109,8 +139,7 @@ pub trait PileupFunctions {
     fn len(&mut self) -> usize;
 
     fn add_contig(&mut self,
-                  nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
-                  indels_positions: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
+                  variants: HashMap<i64, HashSet<Base>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -122,10 +151,10 @@ pub trait PileupFunctions {
     /// Perform linear regression between total mismacthes and read depth
     fn calc_error(&mut self, ani: f32) -> usize;
 
-    /// Filter out variants from potential sequencing or mapping errors
-    fn calc_variants(&mut self,
-                     min_variant_depth: usize,
-                     coverage_fold: f64);
+//    /// Filter out variants from potential sequencing or mapping errors
+//    fn filter_variants(&mut self,
+//                       min_variant_depth: usize,
+//                       coverage_fold: f64);
 
     /// Replace reference variants with most dominant variant observed within the reads
     fn polish_contig(&mut self,
@@ -138,48 +167,35 @@ pub trait PileupFunctions {
                            ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable);
 
-    /// Prints out variant info for current contig
-    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
+//    /// Prints out variant info for current contig
+//    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
 }
 
 impl PileupFunctions for PileupStats {
     fn setup(&mut self) {
         match self {
             PileupStats::PileupContigStats {
-                ref mut nucfrequency,
-                ref mut variants_in_reads,
-                ref mut variant_abundances,
+                ref mut variants,
                 ref mut variant_count,
                 ref mut depth,
-                ref mut indels,
                 ref mut tid,
                 ref mut total_indels,
                 ref mut target_name,
                 ref mut target_len,
-                ref mut variations_per_n,
-                ref mut total_variants,
                 ref mut coverage,
                 ref mut num_covered_bases,
-                ref mut num_mapped_reads,
-                ref mut clusters,
-                ..
+                ref mut num_mapped_reads, ..
             } => {
-                *nucfrequency = HashMap::new();
-                *variants_in_reads = HashMap::new();
-                *variant_abundances = HashMap::new();
+                *variants = HashMap::new();
                 *variant_count = Vec::new();
                 *depth = vec!();
-                *indels = HashMap::new();
                 *tid = 0;
                 *total_indels = 0;
                 *target_name = vec!();
                 *target_len = 0.0;
-                *variations_per_n = 0;
-                *total_variants = 0;
                 *coverage = 0.00;
                 *num_covered_bases = 0;
                 *num_mapped_reads = 0;
-                *clusters = HashMap::new();
             }
         }
     }
@@ -187,16 +203,16 @@ impl PileupFunctions for PileupStats {
     fn len(&mut self) -> usize {
         match self {
             PileupStats::PileupContigStats {
-                ref mut variant_abundances,
+                ref mut variants,
                 ..
             } => {
-                return variant_abundances.len()
+                return variants.len()
             }
         }
     }
 
-    fn add_contig(&mut self, nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
-                  indel_positions: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
+    fn add_contig(&mut self,
+                  variants: HashMap<i64, HashSet<Base>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -206,10 +222,9 @@ impl PileupFunctions for PileupStats {
                   ups_and_downs: Vec<i32>) {
         match self {
             PileupStats::PileupContigStats {
-                ref mut nucfrequency,
+                ref mut variants,
                 ref mut variant_count,
                 ref mut depth,
-                ref mut indels,
                 ref mut tid,
                 ref mut total_indels,
                 ref mut target_name,
@@ -219,8 +234,7 @@ impl PileupFunctions for PileupStats {
                 ref mut method,
                 ..
             } => {
-                *nucfrequency = nuc_freq;
-                *indels = indel_positions;
+                *variants = variants;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
@@ -228,6 +242,7 @@ impl PileupFunctions for PileupStats {
                 *coverage = coverages[1] as f64;
                 *variance = coverages[2] as f64;
                 *method = method.to_string();
+
                 let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
                 *depth = vec![0.; ups_and_downs.len()];
                 let mut cumulative_sum = 0;
@@ -235,7 +250,6 @@ impl PileupFunctions for PileupStats {
                     cumulative_sum += *current;
                     depth[pos] = cumulative_sum as f64;
                 }
-//                let adjusted_depth = Arc::new(Mutex::new(depth.clone()));
 
                 // Calculate how many reads have variant at each position
                 // to go into linear regression predicting read error rate
@@ -243,24 +257,21 @@ impl PileupFunctions for PileupStats {
                     |(pos, _d)|{
                         let mut variant_count_safe = variant_count_safe.lock().unwrap();
 //                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
-                        let snp_map = match nucfrequency.get(&(pos as i32)) {
-                            Some(map) => map.to_owned(),
-                            None => BTreeMap::new(),
+                        let var_set = match variants.get(&(pos as i64)) {
+                            Some(set) => set.to_owned(),
+                            None => HashSet::new(),
                         };
-                        let indel_map = match indels.get(&(pos as i32)){
-                            Some(map) => map.to_owned(),
-                            None => BTreeMap::new(),
-                        };
-                        if snp_map.len() > 1 {
-                            for (key, reads) in snp_map.iter() {
-                                if key != &"R".chars().collect::<Vec<char>>()[0] {
-                                    variant_count_safe[pos] += reads.len() as f64;
+
+                        // Add depth of variant to count file if variant is present
+                        if var_set.len() > 1 {
+                            for base in var_set.iter() {
+                                let var_depth = match base.variant {
+                                    Variant::None => 0,
+                                    _ => base.depth,
+                                };
+                                if var_depth != 0 {
+                                    variant_count_safe[pos] += var_depth as f64;
                                 }
-                            }
-                        }
-                        if indel_map.len() > 0 {
-                            for reads in indel_map.values() {
-                                variant_count_safe[pos] += reads.len() as f64;
                             }
                         }
                 });
@@ -321,179 +332,175 @@ impl PileupFunctions for PileupStats {
         }
     }
 
-    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f64){
-        match self {
-            PileupStats::PileupContigStats {
-                ref mut nucfrequency,
-                ref mut variants_in_reads,
-                ref mut variant_abundances,
-                depth,
-                ref mut indels,
-                ref mut total_variants,
-                ref mut coverage,
-                tid,
-                regression,
-                ..
-            } => {
-                let variants = Arc::new(Mutex::new(HashMap::new())); // The relative abundance of each variant
-                let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
-                let variant_count = Arc::new(Mutex::new(0));
-                let indels = Arc::new(Mutex::new(indels));
-//                let mut outside_coverage = Arc::new(Mutex::new(HashMap::new()));
-                let nucfrequency = Arc::new(Mutex::new(nucfrequency));
-//                let min_variant_fraction = min_variant_depth as f64 / 100.;
-                // for each location calculate if there is a variant based on read depth
-                // Uses rayon multithreading
-                depth.par_iter_mut().enumerate().for_each(|(i, d)| {
-//                    let read_variants = Arc::clone(&read_variants);
-//                    let variant_count = Arc::clone(&variant_count);
-                    let mut rel_abundance = BTreeMap::new();
-//                        if d >= &mut min_variant_depth.clone() {
-                    // INDELS act differently to normal variants
-                    // The reads containing this variant don't contribute to coverage values
-                    // So we need to readjust the depth at these locations to show true
-                    // read depth. i.e. variant depth + reference depth
-                    let mut indels
-                        = indels.lock().unwrap();
-                    let indel_map = match indels.get(&(i as i32)) {
-                        Some(map) => map.to_owned(),
-                        None => BTreeMap::new(),
-                    };
-                    if indel_map.len() > 0 {
-                        for (indel, read_ids) in indel_map.iter() {
-                            let count = read_ids.len();
-//                                if indel.contains("N") {
-//                                    *d += count as f64;
+//    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f64){
+//        match self {
+//            PileupStats::PileupContigStats {
+//                ref mut variants,
+//                depth,
+//                ref mut coverage,
+//                tid,
+//                regression,
+//                ..
+//            } => {
+//                let variants = Arc::new(Mutex::new(HashMap::new())); // The relative abundance of each variant
+//                let read_variants = Arc::new(Mutex::new(HashMap::new())); // The reads with variants and their positions
+//                let variant_count = Arc::new(Mutex::new(0));
+//                let indels = Arc::new(Mutex::new(indels));
+////                let mut outside_coverage = Arc::new(Mutex::new(HashMap::new()));
+//                let nucfrequency = Arc::new(Mutex::new(nucfrequency));
+////                let min_variant_fraction = min_variant_depth as f64 / 100.;
+//                // for each location calculate if there is a variant based on read depth
+//                // Uses rayon multithreading
+//                depth.par_iter_mut().enumerate().for_each(|(i, d)| {
+////                    let read_variants = Arc::clone(&read_variants);
+////                    let variant_count = Arc::clone(&variant_count);
+//                    let mut rel_abundance = BTreeMap::new();
+////                        if d >= &mut min_variant_depth.clone() {
+//                    // INDELS act differently to normal variants
+//                    // The reads containing this variant don't contribute to coverage values
+//                    // So we need to readjust the depth at these locations to show true
+//                    // read depth. i.e. variant depth + reference depth
+//                    let mut indels
+//                        = indels.lock().unwrap();
+//                    let indel_map = match indels.get(&(i as i32)) {
+//                        Some(map) => map.to_owned(),
+//                        None => BTreeMap::new(),
+//                    };
+//                    if indel_map.len() > 0 {
+//                        for (indel, read_ids) in indel_map.iter() {
+//                            let count = read_ids.len();
+////                                if indel.contains("N") {
+////                                    *d += count as f64;
+////                                }
+//                            *d += count as f64;
+//                            if (*coverage * (1.0 - coverage_fold) <= *d as f64
+//                                && *d as f64 <= *coverage * (1.0 + coverage_fold))
+//                                || (coverage_fold == 0.0) {
+//                                if (count >= min_variant_depth)
+////                                    && (count as f64 / *d >= min_variant_fraction)
+//                                    && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
+//                                    rel_abundance.insert(indel.to_owned(), (count as f64, *d as f64));
+//                                    for read in read_ids {
+//                                        let mut read_variants
+//                                            = read_variants.lock().unwrap();
+//
+//                                        let read_vec = read_variants
+//                                            .entry(read.clone())
+//                                            .or_insert(BTreeMap::new());
+//                                        read_vec.insert(i as i32, indel.clone());
+//                                    }
+//                                    let mut variant_count = variant_count.lock().unwrap();
+//                                    *variant_count += 1;
+//                                } else {
+//                                    let indel_map_back = indels
+//                                        .entry(i as i32).or_insert(BTreeMap::new());
+//                                    indel_map_back.remove(indel);
 //                                }
-                            *d += count as f64;
-                            if (*coverage * (1.0 - coverage_fold) <= *d as f64
-                                && *d as f64 <= *coverage * (1.0 + coverage_fold))
-                                || (coverage_fold == 0.0) {
-                                if (count >= min_variant_depth)
-//                                    && (count as f64 / *d >= min_variant_fraction)
-                                    && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
-                                    rel_abundance.insert(indel.to_owned(), (count as f64, *d as f64));
-                                    for read in read_ids {
-                                        let mut read_variants
-                                            = read_variants.lock().unwrap();
-
-                                        let read_vec = read_variants
-                                            .entry(read.clone())
-                                            .or_insert(BTreeMap::new());
-                                        read_vec.insert(i as i32, indel.clone());
-                                    }
-                                    let mut variant_count = variant_count.lock().unwrap();
-                                    *variant_count += 1;
-                                } else {
-                                    let indel_map_back = indels
-                                        .entry(i as i32).or_insert(BTreeMap::new());
-                                    indel_map_back.remove(indel);
-                                }
-                            }
-                        }
-                    }
-                    if (*coverage * (1.0 - coverage_fold) <= *d as f64
-                        && *d as f64 <= *coverage * (1.0 + coverage_fold))
-                        || (coverage_fold == 0.0) {
-                        let mut nucfrequency
-                            = nucfrequency.lock().unwrap();
-
-                        let nuc_map = match nucfrequency.get(&(i as i32)) {
-                            Some(map) => map.to_owned(),
-                            None => BTreeMap::new(),
-                        };
-                        if nuc_map.len() > 1 {
-                            for (base, read_ids) in nuc_map.iter() {
-                                let count = read_ids.len();
-
-                                if base != &"R".chars().collect::<Vec<char>>()[0] {
-                                    if (count >= min_variant_depth)
-    //                                    && (count as f64 / *d >= min_variant_fraction)
-                                        && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
-                                        rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
-
-                                        for read in read_ids {
-                                            let mut read_variants
-                                                = read_variants.lock().unwrap();
-                                            let read_vec = read_variants
-                                                .entry(read.clone())
-                                                .or_insert(BTreeMap::new());
-                                            read_vec.insert(i as i32, base.to_string());
-                                        }
-                                        if base != &"R".chars().collect::<Vec<char>>()[0] {
-                                            let mut variant_count = variant_count.lock().unwrap();
-                                            *variant_count += 1;
-                                        }
-                                    } else {
-                                        let nuc_map_back = nucfrequency
-                                            .entry(i as i32).or_insert(BTreeMap::new());
-                                        nuc_map_back.remove(base);
-                                    }
-                                }
-                            };
-                        } else {
-                            let nuc_map_back = nucfrequency
-                                .entry(i as i32).or_insert(BTreeMap::new());
-                            nuc_map_back.remove(&"R".chars().collect::<Vec<char>>()[0]);
-                        };
-
+//                            }
 //                        }
-                    } else {
-
-                    }
-
-                    if rel_abundance.len() > 1 {
-                        let mut variants = variants.lock().unwrap();
-//                        debug!("Relative Abundances: {:?}", rel_abundance);
-                        variants.insert(i as i32, rel_abundance);
-                    } else if rel_abundance.len() == 1 {
-                        if !(rel_abundance.contains_key(&"R".to_string())) {
-                            let mut variants = variants.lock().unwrap();
-//                            debug!("Relative Abundances: {:?}", rel_abundance);
-                            variants.insert(i as i32, rel_abundance);
-                        } else {
-                            // Need to remove R from whitelist
-                            let mut nucfrequency
-                                = nucfrequency.lock().unwrap();
-                            let nuc_map = nucfrequency
-                                .entry(i as i32).or_insert(BTreeMap::new());
-                            if nuc_map.len() > 1 {
-                                for (base, read_ids) in nuc_map.iter() {
-                                    let count = read_ids.len();
-                                    if base == &("R".as_bytes()[0] as char) {
-                                        for read in read_ids {
-                                            let mut read_variants
-                                                = read_variants.lock().unwrap();
-                                            let read_vec = read_variants
-                                                .entry(read.clone())
-                                                .or_insert(BTreeMap::new());
-                                            read_vec.remove(&(i as i32));
-                                        }
-                                    }
-                                }
-                            } else {
-                                nucfrequency.remove(&(i as i32));
-                            }
-                        }
-                    }
-
-                });
-
-                let read_variants = read_variants.lock().unwrap();
-                *variants_in_reads = read_variants.to_owned();
-                let variants = variants.lock().unwrap();
-                *variant_abundances = variants.to_owned();
-                let variant_count = variant_count.lock().unwrap();
-                debug!("Total variants for {}: {:?}", tid, variant_count);
-                // Total variants is the actual amount of variants that passed all thresholds
-                *total_variants = *variant_count;
-                let mut nucfrequency = nucfrequency.lock().unwrap();
-                **nucfrequency = nucfrequency.to_owned();
-                let mut indels = indels.lock().unwrap();
-                **indels = indels.to_owned();
-            }
-        }
-    }
+//                    }
+//                    if (*coverage * (1.0 - coverage_fold) <= *d as f64
+//                        && *d as f64 <= *coverage * (1.0 + coverage_fold))
+//                        || (coverage_fold == 0.0) {
+//                        let mut nucfrequency
+//                            = nucfrequency.lock().unwrap();
+//
+//                        let nuc_map = match nucfrequency.get(&(i as i32)) {
+//                            Some(map) => map.to_owned(),
+//                            None => BTreeMap::new(),
+//                        };
+//                        if nuc_map.len() > 1 {
+//                            for (base, read_ids) in nuc_map.iter() {
+//                                let count = read_ids.len();
+//
+//                                if base != &"R".chars().collect::<Vec<char>>()[0] {
+//                                    if (count >= min_variant_depth)
+//    //                                    && (count as f64 / *d >= min_variant_fraction)
+//                                        && ((count as f64) > *d as f64 * 6. * (regression.1 + regression.2)) {
+//                                        rel_abundance.insert(base.to_string(), (count as f64, *d as f64));
+//
+//                                        for read in read_ids {
+//                                            let mut read_variants
+//                                                = read_variants.lock().unwrap();
+//                                            let read_vec = read_variants
+//                                                .entry(read.clone())
+//                                                .or_insert(BTreeMap::new());
+//                                            read_vec.insert(i as i32, base.to_string());
+//                                        }
+//                                        if base != &"R".chars().collect::<Vec<char>>()[0] {
+//                                            let mut variant_count = variant_count.lock().unwrap();
+//                                            *variant_count += 1;
+//                                        }
+//                                    } else {
+//                                        let nuc_map_back = nucfrequency
+//                                            .entry(i as i32).or_insert(BTreeMap::new());
+//                                        nuc_map_back.remove(base);
+//                                    }
+//                                }
+//                            };
+//                        } else {
+//                            let nuc_map_back = nucfrequency
+//                                .entry(i as i32).or_insert(BTreeMap::new());
+//                            nuc_map_back.remove(&"R".chars().collect::<Vec<char>>()[0]);
+//                        };
+//
+////                        }
+//                    } else {
+//
+//                    }
+//
+//                    if rel_abundance.len() > 1 {
+//                        let mut variants = variants.lock().unwrap();
+////                        debug!("Relative Abundances: {:?}", rel_abundance);
+//                        variants.insert(i as i32, rel_abundance);
+//                    } else if rel_abundance.len() == 1 {
+//                        if !(rel_abundance.contains_key(&"R".to_string())) {
+//                            let mut variants = variants.lock().unwrap();
+////                            debug!("Relative Abundances: {:?}", rel_abundance);
+//                            variants.insert(i as i32, rel_abundance);
+//                        } else {
+//                            // Need to remove R from whitelist
+//                            let mut nucfrequency
+//                                = nucfrequency.lock().unwrap();
+//                            let nuc_map = nucfrequency
+//                                .entry(i as i32).or_insert(BTreeMap::new());
+//                            if nuc_map.len() > 1 {
+//                                for (base, read_ids) in nuc_map.iter() {
+//                                    let count = read_ids.len();
+//                                    if base == &("R".as_bytes()[0] as char) {
+//                                        for read in read_ids {
+//                                            let mut read_variants
+//                                                = read_variants.lock().unwrap();
+//                                            let read_vec = read_variants
+//                                                .entry(read.clone())
+//                                                .or_insert(BTreeMap::new());
+//                                            read_vec.remove(&(i as i32));
+//                                        }
+//                                    }
+//                                }
+//                            } else {
+//                                nucfrequency.remove(&(i as i32));
+//                            }
+//                        }
+//                    }
+//
+//                });
+//
+//                let read_variants = read_variants.lock().unwrap();
+//                *variants_in_reads = read_variants.to_owned();
+//                let variants = variants.lock().unwrap();
+//                *variant_abundances = variants.to_owned();
+//                let variant_count = variant_count.lock().unwrap();
+//                debug!("Total variants for {}: {:?}", tid, variant_count);
+//                // Total variants is the actual amount of variants that passed all thresholds
+//                *total_variants = *variant_count;
+//                let mut nucfrequency = nucfrequency.lock().unwrap();
+//                **nucfrequency = nucfrequency.to_owned();
+//                let mut indels = indels.lock().unwrap();
+//                **indels = indels.to_owned();
+//            }
+//        }
+//    }
 
 
     fn polish_contig(&mut self,
@@ -501,7 +508,7 @@ impl PileupFunctions for PileupStats {
                      output_prefix: &str) {
         match self {
             PileupStats::PileupContigStats {
-                ref mut variant_abundances,
+                ref mut variants,
                 target_name,
                 ..
             } => {
@@ -521,6 +528,7 @@ impl PileupFunctions for PileupStats {
 
                 let mut contig = String::new();
 
+                let mut variations = 0;
                 let mut skip_n = 0;
                 let mut skip_cnt = 0;
                 // Generate the consensus genome by checking each variant
@@ -529,36 +537,44 @@ impl PileupFunctions for PileupStats {
                     if skip_cnt < skip_n {
                         skip_cnt += 1;
                     } else {
-                        let mut max_var = "";
+                        let mut max_var = Variant::None;
                         let mut max_abund = 0.0;
                         skip_n = 0;
                         skip_cnt = 0;
-                        if variant_abundances.contains_key(&(pos as i32)){
-                            let hash = &variant_abundances[&(pos as i32)];
-                            for (var, abundance) in hash.iter() {
-                                let frac =  abundance.0/abundance.1;
-                                if frac > max_abund {
+                        if variants.contains_key(&(pos as i64)){
+                            let alleles = &variants[&(pos as i64)];
+                            for var in alleles.iter() {
+                                if var.freq[0] > max_abund {
                                     max_var = var;
-                                    max_abund = frac;
+                                    max_abund = var.freq[0];
                                 }
                             }
                             if max_abund >= 0.5 {
-                                if max_var.contains("N") {
-                                    // Skip the next n bases but rescue the reference prefix
-                                    skip_n = max_var.len() - 1;
-                                    skip_cnt = 0;
-                                    let first_byte = max_var.as_bytes()[0];
-                                    contig = contig + str::from_utf8(
-                                        &[first_byte]).unwrap()
-                                } else if max_var.len() > 1 {
-                                    // Insertions have a reference prefix that needs to be removed
-                                    let removed_first_base = str::from_utf8(
-                                        &max_var.as_bytes()[1..]).unwrap();
-                                    contig = contig + removed_first_base;
-                                } else if max_var == "R" {
-                                    contig = contig + str::from_utf8(&[*base]).unwrap();
-                                } else {
-                                    contig = contig + max_var;
+                                match max_var {
+
+                                    Variant::Deletion(size) => {
+                                        // Skip the next n bases but rescue the reference prefix
+                                        skip_n = size - 1;
+                                        skip_cnt = 0;
+                                        variations += 1;
+                                    },
+                                    Variant::Insertion(alt) | Variant::Insertion(alt) => {
+                                        // Insertions have a reference prefix that needs to be removed
+                                        let removed_first_base = str::from_utf8(
+                                            &alt[1..]).unwrap();
+                                        contig = contig + removed_first_base;
+                                        variations += 1;
+                                    },
+                                    Variant::None => {
+                                        contig = contig + str::from_utf8(&[*base]).unwrap();
+                                    },
+                                    Variant::SNV(alt) => {
+                                        contig = contig + str::from_utf8(&[alt]).unwrap();
+                                        variations += 1;
+                                    },
+                                    _ => {
+                                        contig = contig + str::from_utf8(&[*base]).unwrap();
+                                    }
                                 }
                             } else {
                                 contig = contig + str::from_utf8(&[*base]).unwrap();
@@ -584,8 +600,7 @@ impl PileupFunctions for PileupStats {
                            codon_table: &CodonTable) {
         match self {
             PileupStats::PileupContigStats {
-                indels,
-                variant_abundances,
+                variants,
                 tid: _,
                 target_name,
                 depth,
@@ -601,7 +616,7 @@ impl PileupFunctions for PileupStats {
                 debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
                 let print_stream = Arc::new(Mutex::new(std::io::stdout()));
                 gff_records.par_iter().enumerate().for_each(|(_id, gene)| {
-                    let dnds = codon_table.find_mutations(gene, variant_abundances, indels, ref_sequence, depth);
+                    let dnds = codon_table.find_mutations(gene, variants, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
                     let frame: usize = gene.frame().parse().unwrap();
                     let start = gene.start().clone() as usize - 1;
@@ -621,51 +636,47 @@ impl PileupFunctions for PileupStats {
                     contig = contig + "_";
                     let mut indel_map = BTreeMap::new();
 
-                    for cursor in start..end+1 {
-                        let variant_map = match variant_abundances.get(&(cursor as i32)){
-                            Some(map) => map,
-                            None => continue,
-                        };
-                        if indels.contains_key(&(cursor as i32)){
-                            indel_map = indels.get(&(cursor as i32))
-                                .expect("No INDEL at this location").to_owned();
-                        };
-                        if variant_map.len() > 0 {
-                            let mut print_stream = print_stream.lock().unwrap();
-
-
-                            for (variant, abundance) in variant_map {
-                                if variant.to_owned().contains("R"){
-                                    continue
-                                }
-                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
-                                         contig.clone()+gene_id, gene.start(),
-                                         gene.end(), frame, strand_symbol, dnds, cursor).expect("Unable to write to stream");
-
-
-                                if variant.to_owned().contains("N") {
-                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
-                                           variant,
-                                           str::from_utf8(
-                                               &ref_sequence[cursor..cursor
-                                                   + variant.len() as usize]).unwrap(),
-                                           abundance.0, abundance.1, "D").expect("Unable to write to stream");
-
-                                } else if indel_map.contains_key(variant) {
-                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
-                                           variant,
-                                           str::from_utf8(
-                                               &[ref_sequence[cursor]]).unwrap(),
-                                           abundance.0, abundance.1, "I").expect("Unable to write to stream");
-                                } else {
-                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
-                                             variant,
-                                             ref_sequence[cursor] as char,
-                                             abundance.0, abundance.1, "S").expect("Unable to write to stream");
-                                }
-                            }
-                        }
-                    }
+//                    for cursor in start..end+1 {
+//                        let variant_map = match variants.get(&(cursor as i64)){
+//                            Some(map) => map,
+//                            None => continue,
+//                        };
+//                        if variant_map.len() > 0 {
+//                            let mut print_stream = print_stream.lock().unwrap();
+//
+//
+//                            for variant in variant_map {
+//                                if variant.to_owned().contains("R"){
+//                                    continue
+//                                }
+//                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
+//                                         contig.clone()+gene_id, gene.start(),
+//                                         gene.end(), frame, strand_symbol, dnds, cursor).expect("Unable to write to stream");
+//
+//
+//                                if variant.to_owned().contains("N") {
+//                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
+//                                           variant,
+//                                           str::from_utf8(
+//                                               &ref_sequence[cursor..cursor
+//                                                   + variant.len() as usize]).unwrap(),
+//                                           abundance.0, abundance.1, "D").expect("Unable to write to stream");
+//
+//                                } else if indel_map.contains_key(variant) {
+//                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
+//                                           variant,
+//                                           str::from_utf8(
+//                                               &[ref_sequence[cursor]]).unwrap(),
+//                                           abundance.0, abundance.1, "I").expect("Unable to write to stream");
+//                                } else {
+//                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
+//                                             variant,
+//                                             ref_sequence[cursor] as char,
+//                                             abundance.0, abundance.1, "S").expect("Unable to write to stream");
+//                                }
+//                            }
+//                        }
+//                    }
                 });
 
             }
@@ -673,102 +684,99 @@ impl PileupFunctions for PileupStats {
 
     }
 
-    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str){
-        match self {
-            PileupStats::PileupContigStats {
-                indels,
-                variant_abundances,
-                depth,
-                tid,
-                genotypes_per_position,
-                clusters,
-                ..
-
-            } => {
-                info!("Outputting {} variant locations", variant_abundances.keys().len());
-                for (position, _d) in depth.iter().enumerate() {
-
-                    // loop through each position that has variants
-                    let hash = match variant_abundances.get(&(position as i32)) {
-                        Some(hash) => hash,
-                        None => continue,
-                    };
-
-                    let cluster_map = match clusters.get(&(position as i32)) {
-                        Some(map) => map.clone(),
-                        None => BTreeMap::new(),
-                    };
-
-                    for (var, abundance) in hash.iter() {
-                        // for each variant at a location
-                        let indel_map = match indels.get(&(position as i32)) {
-                            Some(map) => map.to_owned(),
-                            None => BTreeMap::new(),
-                        };
-
-                        let cluster_val = match cluster_map.get(var) {
-                            Some(i) => *i,
-                            None => (-1, 0),
-                        };
-
-                        if indel_map.contains_key(var) {
-                            // How does this print N for insertions?
-                            if var.to_owned().contains("N"){
-                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                       stoit_name,
-                                       tid,
-                                       position,
-                                       var,
-                                       str::from_utf8(
-                                           &ref_sequence[position..position
-                                               + var.len() as usize]).unwrap(),
-                                       abundance.0, abundance.1);
-
-                            } else {
-                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                       stoit_name,
-                                       tid, position,
-                                       var,
-                                       str::from_utf8(
-                                           &[ref_sequence[position]]).unwrap(),
-                                       abundance.0, abundance.1);
-                            }
-
-                            // Print number of genotypes associated with that position and variant
-                            match genotypes_per_position.get(&position) {
-                                Some(gtype_count) => {
-                                    print!("{}\t", gtype_count);
-                                },
-                                None => {
-                                    print!("0\t");
-                                },
-                            };
-                            println!("{}\t{}", cluster_val.0, cluster_val.1);
-
-                        } else if var.len() == 1 && var != &"R".to_string(){
-                            print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
-                                   stoit_name,
-                                   tid, position,
-                                   var,
-                                   ref_sequence[position] as char,
-                                   abundance.0, abundance.1);
-
-                            // Print number of genotypes associated with that position and variant
-                            match genotypes_per_position.get(&position) {
-                                Some(gtype_count) => {
-                                    print!("{}\t", gtype_count);
-                                },
-                                None => {
-                                    print!("0\t");
-                                },
-                            };
-                            println!("{}\t{}", cluster_val.0, cluster_val.1);
-                        }
-                    }
-                };
-            }
-        }
-    }
+//    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str){
+//        match self {
+//            PileupStats::PileupContigStats {
+//                variants,
+//                depth,
+//                tid,
+//                ..
+//
+//            } => {
+//                info!("Outputting {} variant locations", variant_abundances.keys().len());
+//                for (position, _d) in depth.iter().enumerate() {
+//
+//                    // loop through each position that has variants
+//                    let hash = match variant_abundances.get(&(position as i32)) {
+//                        Some(hash) => hash,
+//                        None => continue,
+//                    };
+//
+//                    let cluster_map = match clusters.get(&(position as i32)) {
+//                        Some(map) => map.clone(),
+//                        None => BTreeMap::new(),
+//                    };
+//
+//                    for (var, abundance) in hash.iter() {
+//                        // for each variant at a location
+//                        let indel_map = match indels.get(&(position as i32)) {
+//                            Some(map) => map.to_owned(),
+//                            None => BTreeMap::new(),
+//                        };
+//
+//                        let cluster_val = match cluster_map.get(var) {
+//                            Some(i) => *i,
+//                            None => (-1, 0),
+//                        };
+//
+//                        if indel_map.contains_key(var) {
+//                            // How does this print N for insertions?
+//                            if var.to_owned().contains("N"){
+//                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+//                                       stoit_name,
+//                                       tid,
+//                                       position,
+//                                       var,
+//                                       str::from_utf8(
+//                                           &ref_sequence[position..position
+//                                               + var.len() as usize]).unwrap(),
+//                                       abundance.0, abundance.1);
+//
+//                            } else {
+//                                print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+//                                       stoit_name,
+//                                       tid, position,
+//                                       var,
+//                                       str::from_utf8(
+//                                           &[ref_sequence[position]]).unwrap(),
+//                                       abundance.0, abundance.1);
+//                            }
+//
+//                            // Print number of genotypes associated with that position and variant
+//                            match genotypes_per_position.get(&position) {
+//                                Some(gtype_count) => {
+//                                    print!("{}\t", gtype_count);
+//                                },
+//                                None => {
+//                                    print!("0\t");
+//                                },
+//                            };
+//                            println!("{}\t{}", cluster_val.0, cluster_val.1);
+//
+//                        } else if var.len() == 1 && var != &"R".to_string(){
+//                            print!("{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+//                                   stoit_name,
+//                                   tid, position,
+//                                   var,
+//                                   ref_sequence[position] as char,
+//                                   abundance.0, abundance.1);
+//
+//                            // Print number of genotypes associated with that position and variant
+//                            match genotypes_per_position.get(&position) {
+//                                Some(gtype_count) => {
+//                                    print!("{}\t", gtype_count);
+//                                },
+//                                None => {
+//                                    print!("0\t");
+//                                },
+//                            };
+//                            println!("{}\t{}", cluster_val.0, cluster_val.1);
+//                        }
+//                    }
+//                };
+//            }
+//        }
+//    }
 }
 
 // helper function to get the index of condensed matrix from it square form

@@ -1,7 +1,7 @@
 use std;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use rust_htslib::bam::{self, record::Cigar};
-use rust_htslib::bcf;
+use rust_htslib::{bcf::Reader, bcf::*};
 
 use external_command_checker;
 use pileup_structs::*;
@@ -10,7 +10,8 @@ use codon_structs::*;
 use coverm::bam_generator::*;
 use rayon::prelude::*;
 use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
-use crate::pileup_structs::Base;
+use crate::pileup_structs::{Base, Filter};
+use crate::model::{VariantType, Variant};
 
 use crate::*;
 use std::str;
@@ -132,9 +133,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Loop through bam generators in parallel
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         let mut bam_generated = bam_generator.start();
-        bam_generated.set_threads(n_threads / sample_count);
         info!("Generating VCF");
-        info!("Bam Name {}", bam_generated.name());
         let mut bam_properties =
             AlignmentProperties::default(InsertSize::default());
 
@@ -144,9 +143,14 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let vcf_reader = get_vcf(bam_generated.name(), &m,
                                  sample_idx, n_threads / sample_count);
 
+        let split_threads = (n_threads / sample_count);
+        bam_generated.set_threads(split_threads);
+        vcf_reader.set_threads(split_threads);
+
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
         let mut record: bam::record::Record = bam::Record::new();
+//        let mut vcf_record: bcf::record::Record = bcf::Reader::empty_record();
         let mut ups_and_downs: Vec<i32> = Vec::new();
         let mut num_mapped_reads_total: u64 = 0;
         let mut num_mapped_reads_in_current_contig: u64 = 0;
@@ -158,12 +162,20 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let mut nuc_freq = HashMap::new();
         let mut indels = HashMap::new();
 
+        let mut bases = HashMap::new();
+        vcf_reader.records().into_par_iter().for_each(|vcf_record| {
+            println!("Record {:?}", vcf_record);
+            println!("Filters {:?}", vcf_record.filters());
+        });
+//        panic!("Finished with VCF");
+
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
 
 
         // for record in records
         let mut skipped_reads = 0;
+
 
         while bam_generated.read(&mut record)
             .expect("Error while reading BAM record") == true {
@@ -269,30 +281,25 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                             // if M, X, or = increment start and decrement end index
                             ups_and_downs[cursor] += 1;
                             let final_pos = cursor + cig.len() as usize;
-                            if !nanopore {
-                                for qpos in read_cursor..(read_cursor + cig.len() as usize) {
-                                    let base = record.seq()[qpos];
-                                    let refr = ref_seq[cursor as usize];
+                            for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                                let base = record.seq()[qpos];
+                                let refr = ref_seq[cursor as usize];
 //                                let mut nuc_freq = nuc_freq.lock().unwrap();
-                                    let nuc_map = nuc_freq
-                                        .entry(cursor as i32).or_insert(BTreeMap::new());
+                                let nuc_map = nuc_freq
+                                    .entry(cursor as i32).or_insert(BTreeMap::new());
 
-                                    if base != refr {
+                                if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-                                        let id = nuc_map.entry(base as char).or_insert(BTreeSet::new());
-                                        let mut read_to_id = read_to_id.lock().unwrap();
-                                        id.insert(read_to_id[&record.qname().to_vec()]);
-                                    } else {
-                                        let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
-                                        let mut read_to_id = read_to_id.lock().unwrap();
-                                        id.insert(read_to_id[&record.qname().to_vec()]);
-                                    }
-                                    cursor += 1;
+                                    let id = nuc_map.entry(base as char).or_insert(BTreeSet::new());
+                                    let mut read_to_id = read_to_id.lock().unwrap();
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
+                                } else {
+                                    let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
+                                    let mut read_to_id = read_to_id.lock().unwrap();
+                                    id.insert(read_to_id[&record.qname().to_vec()]);
                                 }
-                            } else {
-                                cursor = final_pos;
+                                cursor += 1;
                             }
-
 
                             if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                                 ups_and_downs[final_pos] -= 1;
@@ -570,7 +577,7 @@ fn process_previous_contigs_var(
 }
 
 /// Get or generate vcf file using pilon
-pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches, sample_idx: usize, threads: usize) -> bcf::Reader {
+pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches, sample_idx: usize, threads: usize) -> Reader {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -579,11 +586,12 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches, sample_idx: usize, thread
                         .filter(|x| x.contains(stoit_name)).collect();
 
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
-            panic!("Could not associate VCF file with current BAM file please rename VCF files \
-            to have the same prefix as BAM/reads or let VCF files be generated automatically{:?}")
+            info!("Could not associate VCF file with current BAM file. Re-running pilon");
+            let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+            return generate_vcf(bam_path, m, threads)
         } else {
             let vcf_path = vcf_path[0];
-            let vcf = bcf::Reader::from_path(vcf_path).unwrap();
+            let vcf = Reader::from_path(vcf_path).unwrap();
             return vcf
         }
     } else if m.is_present("bam-files") {
@@ -604,7 +612,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches, sample_idx: usize, thread
 }
 
 /// Makes direct call to pilon
-pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> bcf::Reader {
+pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> Reader {
     external_command_checker::check_for_pilon();
     external_command_checker::check_for_samtools();
     // setup temp directory
@@ -642,7 +650,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> bcf
         .expect("Unable to execute bash");
     let vcf_path = &(vcf_file.path().to_str().unwrap().to_string() + ".vcf");
     info!("VCF Path {:?}", vcf_path);
-    let vcf_reader = bcf::Reader::from_path(vcf_path)
+    let vcf_reader = Reader::from_path(vcf_path)
         .expect("Failed to read pilon vcf output");
 
     tmp_dir.close().expect("Failed to close temp directory");

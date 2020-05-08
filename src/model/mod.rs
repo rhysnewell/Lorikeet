@@ -105,20 +105,36 @@ impl From<&str> for VariantType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
+pub enum SVType {
+    Dup
+}
+
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
+pub struct SV {
+    sv: SVType,
+    len: u32,
+    start: u32,
+    end: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub enum Variant {
     Deletion(u32),
     Insertion(Vec<u8>),
     SNV(u8),
     MNV(Vec<u8>),
+    SV(SV),
     None,
 }
 
 impl Variant {
+
     pub fn has_fragment_evidence(&self) -> bool {
         match self {
             &Variant::Deletion(_) => true,
             &Variant::Insertion(_) => true,
+            &Variant::SV(_) => true,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
             &Variant::None => false,
@@ -143,6 +159,7 @@ impl Variant {
         match self {
             &Variant::Deletion(_) => true,
             &Variant::Insertion(_) => true,
+            &Variant::SV(_) => false,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
             &Variant::None => false,
@@ -170,6 +187,7 @@ impl Variant {
         match self {
             &Variant::Deletion(length) => start + length,
             &Variant::Insertion(_) => start + 1, // end of insertion is the next regular base
+            &Variant::SV(SV) => SV.end,
             &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32,
         }
@@ -179,6 +197,7 @@ impl Variant {
         match self {
             &Variant::Deletion(length) => start + length / 2,
             &Variant::Insertion(_) => start, // end of insertion is the next regular base
+            &Variant::SV(SV) => (SV.start + SV.len) / 2,
             &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32 / 2,
         }
@@ -188,6 +207,7 @@ impl Variant {
         match self {
             &Variant::Deletion(l) => l,
             &Variant::Insertion(ref s) => s.len() as u32,
+            &Variant::SV(SV) => SV.len,
             &Variant::SNV(_) => 1,
             &Variant::MNV(ref alt) => alt.len() as u32,
             &Variant::None => 1,

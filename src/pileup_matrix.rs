@@ -1,22 +1,15 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use pileup_structs::*;
+use crate::model::Variant;
 use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use tempdir::TempDir;
-use nix::unistd;
-use nix::sys::stat;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::fs::File;
-use std::process;
 use crate::dbscan::fuzzy;
 use kodama::{Method, linkage};
 use itertools::{Itertools};
-use ordered_float::NotNan;
-use rayon::current_num_threads;
-use bird_tool_utils::command::finish_command_safely;
-use std::env::temp_dir;
 
 
 #[derive(Debug)]
@@ -26,9 +19,9 @@ pub enum PileupMatrix {
         coverages: HashMap<i32, Vec<f64>>,
         average_genotypes: HashMap<i32, Vec<f64>>,
         variances: HashMap<i32, Vec<f64>>,
-        variants: HashMap<i32, HashMap<i32, BTreeMap<String, Vec<(f64, f64)>>>>,
-        snps_map: HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-        indels_map: HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>,
+        // TID, Position, Base, Var Depth, Total Depth
+        all_variants: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
+        variants_map: HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>,
         contigs: HashMap<i32, Vec<u8>>,
         target_names: HashMap<i32, String>,
         target_lengths: HashMap<i32, f64>,
@@ -42,8 +35,8 @@ pub enum PileupMatrix {
         geom_mean_var: Vec<f64>,
         geom_mean_dep: Vec<f64>,
         geom_mean_frq: Vec<f64>,
-        pred_variants: HashMap<usize, HashMap<i32, HashMap<i32, HashMap<fuzzy::Category, HashSet<String>>>>>,
-        pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
+        pred_variants: HashMap<usize, HashMap<i32, HashMap<i64, HashMap<fuzzy::Category, HashSet<Variant>>>>>,
+//        pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     }
 }
 
@@ -53,9 +46,8 @@ impl PileupMatrix {
             coverages: HashMap::new(),
             variances: HashMap::new(),
             average_genotypes: HashMap::new(),
-            variants: HashMap::new(),
-            snps_map: HashMap::new(),
-            indels_map: HashMap::new(),
+            all_variants: HashMap::new(),
+            variants_map: HashMap::new(),
             contigs: HashMap::new(),
             target_names: HashMap::new(),
             target_lengths: HashMap::new(),
@@ -70,7 +62,7 @@ impl PileupMatrix {
             geom_mean_dep: Vec::new(),
             geom_mean_frq: Vec::new(),
             pred_variants: HashMap::new(),
-            pred_variants_all: HashMap::new(),
+//            pred_variants_all: HashMap::new(),
         }
     }
 }
@@ -101,39 +93,31 @@ pub trait PileupMatrixFunctions {
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                          indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) ;
 
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+                    variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64>;
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64>;
-
-    /// Helper function to return the read ids with a particular SNV
-    fn get_variant_set_snps(variant: &fuzzy::Var,
-                        snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+                       variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64>;
 
     fn print_variant_stats(&self, output_prefix: &str);
 
 
 }
 
-impl PileupMatrixFunctions for PileupMatrix{
+impl PileupMatrixFunctions for PileupMatrix {
     fn setup(&mut self) {
         match self {
             PileupMatrix::PileupContigMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
-                ref mut variants,
-                ref mut snps_map,
-                ref mut indels_map,
+                ref mut all_variants,
+                ref mut variants_map,
                 ref mut contigs,
                 ref mut target_names,
                 ref mut target_lengths,
@@ -143,9 +127,9 @@ impl PileupMatrixFunctions for PileupMatrix{
             } => {
                 *coverages = HashMap::new();
                 *average_genotypes = HashMap::new();
-                *variants = HashMap::new();
-                *snps_map = HashMap::new();
-                *indels_map = HashMap::new();
+                *all_variants = HashMap::new();
+                *variants_map = HashMap::new();
+//                *indels_map = HashMap::new();
                 *contigs = HashMap::new();
                 *target_names = HashMap::new();
                 *target_lengths = HashMap::new();
@@ -175,9 +159,8 @@ impl PileupMatrixFunctions for PileupMatrix{
             PileupMatrix::PileupContigMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
-                ref mut variants,
-                ref mut snps_map,
-                ref mut indels_map,
+                ref mut all_variants,
+                ref mut variants_map,
                 ref mut contigs,
                 ref mut target_names,
                 ref mut target_lengths,
@@ -191,18 +174,14 @@ impl PileupMatrixFunctions for PileupMatrix{
                         target_len,
                         coverage,
                         variance,
-                        mean_genotypes,
-                        variant_abundances,
-                        indels,
-                        nucfrequency,
-                        total_variants,
+                        variants,
                         depth,
 //                        variations_per_n,
                         ..
                     } => {
                         let ag = average_genotypes.entry(tid).or_insert(
                             vec![0.0 as f64; sample_count]);
-                        ag[sample_idx] = mean_genotypes;
+//                        ag[sample_idx] = mean_genotypes;
                         let var = variances.entry(tid).or_insert(
                             vec![0.0 as f64; sample_count]
                         );
@@ -216,7 +195,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                         target_lengths.entry(tid).or_insert(target_len);
 
                         // Initialize contig id in variant hashmap
-                        let contig_variants = variants.entry(tid)
+                        let contig_variants = all_variants.entry(tid)
                             .or_insert(HashMap::new());
 
 
@@ -228,75 +207,25 @@ impl PileupMatrixFunctions for PileupMatrix{
                                 .or_insert(BTreeMap::new());
                             let mut variant_depth: f64 = 0.;
 
-                            if variant_abundances.contains_key(&(pos as i32)) {
-                                let abundance_map = variant_abundances.get(&(pos as i32)).unwrap();
-                                for (variant, abundance) in abundance_map.iter() {
-                                    let sample_map = position_variants.entry(variant.clone())
+                            if variants.contains_key(&(pos as i64)) {
+                                let abundance_map = variants.get(&(pos as i64)).unwrap();
+                                for (variant, base_info) in abundance_map.iter() {
+                                    let sample_map = position_variants.entry(variant)
                                         .or_insert(vec![(0., 0.); sample_count]);
-                                    variant_depth += (abundance.0) as f64;
-                                    sample_map[sample_idx] = (abundance.0 as f64, *total_depth);
+                                    variant_depth += (variant.depth) as f64;
+                                    sample_map[sample_idx] = (variant.depth as f64, *total_depth);
 
                                 }
                             }
-                            // calc reference variant depth
-                            let ref_depth = *total_depth
-                                                    - variant_depth;
+//                            // calc reference variant depth
+//                            let ref_depth = *total_depth
+//                                                    - variant_depth;
+//
+//                            //Add Reference as variant
+//                            let sample_map = position_variants.entry("R".to_string())
+//                                .or_insert(vec![(0., 0.); sample_count]);
+//                            sample_map[sample_idx] = (ref_depth, *total_depth);
 
-                            //Add Reference as variant
-                            let sample_map = position_variants.entry("R".to_string())
-                                .or_insert(vec![(0., 0.); sample_count]);
-                            sample_map[sample_idx] = (ref_depth, *total_depth);
-
-                        }
-
-                        let contig_indels = indels_map.entry(tid)
-                            .or_insert(HashMap::new());
-                        if contig_indels.len() == 0 {
-                            *contig_indels = indels;
-                        } else {
-                            for (pos, indel_map) in indels.iter(){
-                                let position_indels = contig_indels.entry(*pos)
-                                    .or_insert(BTreeMap::new());
-                                if position_indels.len() == 0 {
-                                    *position_indels = indel_map.clone();
-                                } else {
-                                    for (indel, read_set) in indel_map.iter() {
-                                        let read_map = position_indels.entry(indel.clone())
-                                            .or_insert(BTreeSet::new());
-                                        if read_map.len() == 0 {
-                                            *read_map = read_set.clone();
-                                        } else {
-                                            let new_read_set = read_map.union(read_set).cloned().collect();
-                                            *read_map = new_read_set;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        let contig_snps = snps_map.entry(tid)
-                            .or_insert(HashMap::new());
-                        if contig_snps.len() == 0 {
-                            *contig_snps = nucfrequency;
-                        } else {
-                            for (pos, snp_map) in nucfrequency.iter(){
-                                let position_snps = contig_snps.entry(*pos)
-                                    .or_insert(BTreeMap::new());
-                                if position_snps.len() == 0 {
-                                    *position_snps = snp_map.clone();
-                                } else {
-                                    for (snp, read_set) in snp_map.iter() {
-                                        let read_map = position_snps.entry(*snp)
-                                            .or_insert(BTreeSet::new());
-                                        if read_map.len() == 0 {
-                                            *read_map = read_set.clone();
-                                        } else {
-                                            let new_read_set = read_map.union(read_set).cloned().collect();
-                                            *read_map = new_read_set;
-                                        }
-                                    }
-                                }
-                            }
                         }
 
                         contigs.entry(tid).or_insert(contig);
@@ -310,7 +239,7 @@ impl PileupMatrixFunctions for PileupMatrix{
     fn generate_distances(&mut self, _threads: usize, _output_prefix: &str) {
         match self {
             PileupMatrix::PileupContigMatrix {
-                variants,
+                all_variants,
                 sample_names,
                 coverages,
                 ref mut variant_info,
@@ -320,7 +249,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ..
             } => {
 
-                let sample_count = sample_names.len() as f64;
+                let sample_count = sample_names.len();
 
 
                 let variant_info_all =
@@ -348,7 +277,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                             vec![1. as f64; sample_count as usize]));
 
                 // get basic variant info and store as fuzzy::Var
-                variants.par_iter().for_each(|(tid, variant_abundances)| {
+                all_variants.par_iter().for_each(|(tid, variant_abundances)| {
                     let contig_coverages = coverages.get(tid)
                         .expect("Unable to retrieve contig coverage");
 
@@ -360,53 +289,54 @@ impl PileupMatrixFunctions for PileupMatrix{
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
                             if hash.keys().len() > 1 {
-                                let mut depths = Vec::new();
-                                let a_vec = &hash[&"R".to_string()];
-                                for (_a, d) in a_vec.iter() {
-                                    depths.push(*d);
-                                };
-                                for (variant, abundances_vector) in hash.iter() {
-                                    if !variant.contains("R") {
-                                    let _abundance: f64 = 0.;
-                                    let _mean_var: f64 = 0.;
-//                                let mut total_d: f64 = 0.;
-                                    let mut freqs = Vec::new();
-                                    let mut rel_abund = Vec::new();
+//                                let mut depths = Vec::new();
 
-                                // Get the mean abundance across samples
-                                    let mut sample_idx: usize = 0;
-                                    abundances_vector.iter().for_each(|(var, _d)| {
-                                        let mut geom_mean_v =
-                                            geom_mean_v.lock().unwrap();
-                                        let mut geom_mean_d =
-                                            geom_mean_d.lock().unwrap();
-                                        let mut geom_mean_f =
-                                            geom_mean_f.lock().unwrap();
+                                for (variant, base_info) in hash.iter() {
 
-                                        let _sample_coverage = contig_coverages[sample_idx];
+                                    match variant {
+                                        Variant::None => {},
+                                        _ => {
+                                            let _abundance: f64 = 0.;
+                                            let _mean_var: f64 = 0.;
 
-                                        freqs.push(*var);
-                                        rel_abund.push(
-                                            (*var + 1.) / (depths[sample_idx] + 1.));
-                                        geom_mean_v[sample_idx] += ((*var + 1.) as f64).ln();
-                                        geom_mean_d[sample_idx] += ((&depths[sample_idx] + 1.) as f64).ln();
-                                        geom_mean_f[sample_idx] += ((*var + 1.) as f64
-                                                                    / (depths[sample_idx] + 1.) as f64).ln();
-                                        sample_idx += 1;
-                                    });
+                                            let mut freqs = vec![0.0; sample_count as usize];
+                                            let mut rel_abund = vec![0.0; sample_count as usize];
 
-                                    let mut variant_info_all = variant_info_all
-                                        .lock().unwrap();
-                                    let point = fuzzy::Var {
-                                        pos: *position,
-                                        var: variant.to_string(),
-                                        deps: depths.clone(),
-                                        vars: freqs,
-                                        rel_abunds: rel_abund,
-                                        tid: *tid,
-                                    };
+                                            // Get the mean abundance across samples
+                                            let mut sample_idx: usize = 0;
+                                            (0..sample_count).into_iter().for_each(|index| {
+                                                let mut geom_mean_v =
+                                                    geom_mean_v.lock().unwrap();
+                                                let mut geom_mean_d =
+                                                    geom_mean_d.lock().unwrap();
+                                                let mut geom_mean_f =
+                                                    geom_mean_f.lock().unwrap();
 
-                                    variant_info_all.push(point);
+                                                let _sample_coverage = contig_coverages[idx];
+                                                let var_depth = base_info.depth[index] + 1.;
+                                                let total_depth = base_info.totaldepth[index] + 1.;
+                                                freqs[index] = base_info.depth[index];
+                                                rel_abund[index] =
+                                                    (var_depth) / (total_depth);
+                                                geom_mean_v[index] += ((var_depth) as f64).ln();
+                                                geom_mean_d[index] += ((total_depth) as f64).ln();
+                                                geom_mean_f[index] += ((var_depth) as f64
+                                                    / (total_depth) as f64).ln();
+                                            });
+
+                                            let mut variant_info_all = variant_info_all
+                                                .lock().unwrap();
+                                            let point = fuzzy::Var {
+                                                pos: *position,
+                                                var: *variant,
+                                                deps: depths.clone(),
+                                                vars: freqs,
+                                                rel_abunds: rel_abund,
+                                                tid: *tid,
+                                            };
+
+                                            variant_info_all.push(point);
+                                        },
                                     }
                                 }
                             }
@@ -450,8 +380,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 ref mut geom_mean_dep,
                 ref mut geom_mean_frq,
                 ref mut pred_variants,
-                snps_map,
-                indels_map,
+//                variant_map,
                 target_lengths,
                 ..
             } => {
@@ -484,24 +413,24 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                 // Perform read phasing clustering and return new clusters
                 // and shared read info between clusters
-                let (clusters, shared_read_count, mut condensed)
-                    = Self::linkage_clustering(&clusters,
-                                               &variant_info,
-                                               &snps_map,
-                                               &indels_map);
+//                let (clusters, shared_read_count, mut condensed)
+//                    = Self::linkage_clustering(&clusters,
+//                                               &variant_info,
+//                                               &snps_map,
+//                                               &indels_map);
 
                 // Collapse clusters with enough shared read info starting with smallest cluster
-                if clusters.len() > 1 {
-                    for (cluster_index, cluster) in clusters.iter().enumerate() {
-//                    println!("{}", cluster.len());
-                        let cluster_map = shared_read_count.get(&cluster_index)
-                            .unwrap();
-                        for (clust2, jaccard) in cluster_map {
-                            debug!("Cluster {} Cluster {} Jaccard's {}",
-                                   cluster_index+1, *clust2+1, jaccard);
-                        };
-                    };
-                };
+//                if clusters.len() > 1 {
+//                    for (cluster_index, cluster) in clusters.iter().enumerate() {
+////                    println!("{}", cluster.len());
+//                        let cluster_map = shared_read_count.get(&cluster_index)
+//                            .unwrap();
+//                        for (clust2, jaccard) in cluster_map {
+//                            debug!("Cluster {} Cluster {} Jaccard's {}",
+//                                   cluster_index+1, *clust2+1, jaccard);
+//                        };
+//                    };
+//                };
 
 //                let dend = linkage(&mut condensed,
 //                                   clusters.len(), Method::Ward);
@@ -587,7 +516,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                     if pred_set.len() > 1 {
                         let count = prediction_count[cluster].len() as f64;
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
-                    } else if !pred_set.contains("R") {
+                    } else if !pred_set.contains(&Variant::None) {
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
                     } else {
                         prediction_variants.remove_entry(cluster);
@@ -641,48 +570,53 @@ impl PileupMatrixFunctions for PileupMatrix{
                                     if genotype.contains_key(&tid) {
                                         let tid_genotype = genotype.get_mut(&tid).unwrap();
 
-                                        if tid_genotype.contains_key(&(pos as i32)) {
+                                        if tid_genotype.contains_key(&(pos as i64)) {
 
-                                            let categories = &genotype[tid][&(pos as i32)];
-                                            let mut hash= HashSet::new();
+                                            let categories = &genotype[tid][&(pos as i64)];
+                                            let mut hash = HashSet::new();
                                             if categories.contains_key(&fuzzy::Category::Core) {
                                                 hash = categories[&fuzzy::Category::Core].clone();
                                             } else if categories.contains_key(&fuzzy::Category::Border) {
                                                 hash = categories[&fuzzy::Category::Border].clone();
                                             }
 
-                                            let mut max_var = "";
+                                            let mut max_var = Variant::None;
                                             for var in hash.iter() {
                                                 // If there are two variants possible for
                                                 // a single site and one is the reference
                                                 // we will choose the reference
-                                                if max_var == "" {
-                                                    max_var = var;
-                                                } else if max_var == "R" {
-                                                    max_var = var;
+                                                if max_var == Variant::None {
+                                                    max_var = *var;
                                                 }
                                             }
-                                            if max_var.contains("N") {
-                                                // Skip the next n bases but rescue the reference prefix
-                                                skip_n = max_var.len() - 1;
-                                                skip_cnt = 0;
-                                                let first_byte = max_var.as_bytes()[0];
-                                                contig = contig + str::from_utf8(
-                                                    &[first_byte]).unwrap();
-                                                variations += 1;
+                                            match max_var {
 
-                                            } else if max_var.len() > 1 {
-                                                // Insertions have a reference prefix that needs to be removed
-                                                let removed_first_base = str::from_utf8(
-                                                    &max_var.as_bytes()[1..]).unwrap();
-                                                contig = contig + removed_first_base;
-                                                variations += 1;
-
-                                            } else if max_var.contains("R") {
-                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                            } else {
-                                                contig = contig + max_var;
-                                                variations += 1;
+                                                Variant::Deletion(size) => {
+                                                    // Skip the next n bases but rescue the reference prefix
+                                                    skip_n = size - 1;
+                                                    skip_cnt = 0;
+    //                                                let first_byte = max_var.as_bytes()[0];
+    //                                                contig = contig + str::from_utf8(
+    //                                                    &[first_byte]).unwrap();
+                                                    variations += 1;
+                                                },
+                                                Variant::Insertion(alt) | Variant::Insertion(alt) => {
+                                                    // Insertions have a reference prefix that needs to be removed
+                                                    let removed_first_base = str::from_utf8(
+                                                        &alt[1..]).unwrap();
+                                                    contig = contig + removed_first_base;
+                                                    variations += 1;
+                                                },
+                                                Variant::None => {
+                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                },
+                                                Variant::SNV(alt) => {
+                                                    contig = contig + str::from_utf8(&[alt]).unwrap();
+                                                    variations += 1;
+                                                },
+                                                _ => {
+                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                }
                                             }
                                         } else {
                                             contig = contig + str::from_utf8(&[*base]).unwrap();
@@ -713,8 +647,7 @@ impl PileupMatrixFunctions for PileupMatrix{
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                          indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) {
 
         if clusters.len() > 1 {
@@ -750,13 +683,11 @@ impl PileupMatrixFunctions for PileupMatrix{
 
                                 // Read ids of first variant
                                 let set1 = Self::get_variant_set(var1,
-                                                                 snp_map,
-                                                                 indel_map);
+                                                                 variant_map);
 
                                 // Read ids of second variant
                                 let set2 = Self::get_variant_set(var2,
-                                                                 snp_map,
-                                                                 indel_map);
+                                                                 variant_map);
 
                                 // Extend each cluster read set
                                 {
@@ -889,8 +820,7 @@ impl PileupMatrixFunctions for PileupMatrix{
                 let (clusters_changed, clusters_shared_reads, jaccard_distances)
                     = Self::linkage_clustering(&clusters_changed,
                                                variant_info,
-                                               snp_map,
-                                               indel_map);
+                                               variant_map);
                 return (clusters_changed, clusters_shared_reads, jaccard_distances)
             } else {
                 return (clusters.clone(), clusters_shared_reads, jaccard_distances)
@@ -910,15 +840,13 @@ impl PileupMatrixFunctions for PileupMatrix{
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    snp_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                    indel_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+                    variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64> {
 
         let read_set = Arc::new(Mutex::new(BTreeSet::new()));
 
         variants.par_iter().for_each(|assignment|{
             let variant = &variant_info[assignment.index];
-            let variant_set = Self::get_variant_set(variant,
-                                                    snp_map, indel_map);
+            let variant_set = variant_map[&variant.tid][&variant.pos][&variant.var];
             variant_set.par_iter().for_each(|id|{
                 let mut read_set = read_set.lock().unwrap();
                 read_set.insert(*id);
@@ -930,34 +858,12 @@ impl PileupMatrixFunctions for PileupMatrix{
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>,
-                       indels_map: &HashMap<i32, HashMap<i32, BTreeMap<String, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+                       variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64> {
 
         let mut variant_set = BTreeSet::new();
 
-        if indels_map[&variant.tid].contains_key(&variant.pos) {
-            if indels_map[&variant.tid][&variant.pos].contains_key(&variant.var) {
-                variant_set = indels_map[&variant.tid][&variant.pos][&variant.var].clone();
-            } else {
-                variant_set = Self::get_variant_set_snps(variant, snps_map);
-            }
-        } else {
-            variant_set = Self::get_variant_set_snps(variant, snps_map);
-        }
-        return variant_set
-    }
+        variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone();
 
-    /// Helper function to return the read ids with a particular SNV
-    fn get_variant_set_snps(variant: &fuzzy::Var,
-                            snps_map: &HashMap<i32, HashMap<i32, BTreeMap<char, BTreeSet<i64>>>>)
-                            -> BTreeSet<i64> {
-        let mut variant_set = BTreeSet::new();
-        if snps_map[&variant.tid].contains_key(&variant.pos) {
-            let var_char = variant.var.as_bytes()[0] as char;
-            if snps_map[&variant.tid][&variant.pos].contains_key(&var_char) {
-                variant_set = snps_map[&variant.tid][&variant.pos][&var_char].clone();
-            }
-        }
         return variant_set
     }
 
