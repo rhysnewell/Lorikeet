@@ -2,8 +2,7 @@ use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
-use crate::pileup_structs::Base;
-use crate::model::Variant;
+use model::{Variant, Base};
 
 pub struct GeneInfo {
     name: String,

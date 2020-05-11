@@ -11,65 +11,7 @@ use rust_htslib::bcf::record;
 use std::path::Path;
 use std::fs::OpenOptions;
 
-use crate::model::{VariantType, Variant};
-
-/// The filter tag given to the locus
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Filter {
-    LowCov,
-    Amb,
-    Del,
-    PASS,
-}
-
-/// Information about each base position
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Base {
-    // Position on contig
-    pub pos: i64,
-    // Reference allele
-    pub refr: u8,
-    // Alternate allele Variant enum
-    pub variant: Variant,
-    // Filter tag
-    pub filters: Vec<HashSet<Filter>>,
-    // Depth of good quality reads
-    pub depth: Vec<u32>,
-    // Depth including bad quality reads
-    pub truedepth: Vec<u32>,
-    // Depth as decided by CoverM
-    pub totaldepth: Vec<u32>,
-    //Physical coverage of valid inserts across locus
-    pub physicalcov: Vec<u32>,
-    // Mean base quality at locus
-    pub baseq: Vec<u32>,
-    // Mean read mapping quality at locus
-    pub mapq: Vec<u32>,
-    // Variant confidence / quality by depth
-    pub conf: Vec<u32>,
-    // Nucleotide count at each locus
-    pub nucs: HashMap<char, Vec<u32>>,
-    // Percentage of As, Cs, Gs, Ts weighted by Q & MQ at locus
-    pub pernucs: HashMap<char, Vec<u32>>,
-    // insertion count at locus
-    pub ic: Vec<u32>,
-    // deletion count at locus
-    pub dc: Vec<u32>,
-    // number of reads clipped here
-    pub xc: Vec<u32>,
-    // allele count in genotypes, for each ALT allele.
-    pub ac: Vec<u32>,
-    // fraction in support for alternate allele
-    pub af: Vec<u32>,
-    // Frequency of variant
-    pub freq: Vec<f64>,
-}
-
-//impl Base {
-//    pub fn from_vcf_record(vcf_record: record) -> Base {
-//        let filter =
-//    }
-//}
+use model::*;
 
 pub enum PileupStats {
     PileupContigStats {
@@ -139,7 +81,7 @@ pub trait PileupFunctions {
     fn len(&mut self) -> usize;
 
     fn add_contig(&mut self,
-                  variants: HashMap<i64, HashSet<Base>>,
+                  variant_map: HashMap<i64, HashMap<Variant, Base>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -212,7 +154,7 @@ impl PileupFunctions for PileupStats {
     }
 
     fn add_contig(&mut self,
-                  variants: HashMap<i64, HashSet<Base>>,
+                  variant_map: HashMap<i64, HashMap<Variant, Base>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -234,7 +176,7 @@ impl PileupFunctions for PileupStats {
                 ref mut method,
                 ..
             } => {
-                *variants = variants;
+                *variants = variant_map;
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
@@ -259,15 +201,15 @@ impl PileupFunctions for PileupStats {
 //                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
                         let var_set = match variants.get(&(pos as i64)) {
                             Some(set) => set.to_owned(),
-                            None => HashSet::new(),
+                            None => HashMap::new(),
                         };
 
                         // Add depth of variant to count file if variant is present
                         if var_set.len() > 1 {
-                            for base in var_set.iter() {
+                            for (var, base) in var_set.iter() {
                                 let var_depth = match base.variant {
                                     Variant::None => 0,
-                                    _ => base.depth,
+                                    _ => base.depth.par_iter().sum(),
                                 };
                                 if var_depth != 0 {
                                     variant_count_safe[pos] += var_depth as f64;
@@ -543,15 +485,14 @@ impl PileupFunctions for PileupStats {
                         skip_cnt = 0;
                         if variants.contains_key(&(pos as i64)){
                             let alleles = &variants[&(pos as i64)];
-                            for var in alleles.iter() {
-                                if var.freq[0] > max_abund {
-                                    max_var = var;
-                                    max_abund = var.freq[0];
+                            for (var, base) in alleles.iter() {
+                                if base.freq[0] > max_abund {
+                                    max_var = var.clone();
+                                    max_abund = base.freq[0];
                                 }
                             }
                             if max_abund >= 0.5 {
                                 match max_var {
-
                                     Variant::Deletion(size) => {
                                         // Skip the next n bases but rescue the reference prefix
                                         skip_n = size - 1;
@@ -634,7 +575,6 @@ impl PileupFunctions for PileupStats {
                     let gene_id = &gene.attributes()["ID"].split("_").collect::<Vec<&str>>()[1];
                     let mut contig = gene.seqname().to_owned();
                     contig = contig + "_";
-                    let mut indel_map = BTreeMap::new();
 
 //                    for cursor in start..end+1 {
 //                        let variant_map = match variants.get(&(cursor as i64)){
