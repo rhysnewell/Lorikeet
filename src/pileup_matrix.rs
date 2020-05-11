@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use pileup_structs::*;
-use crate::model::Variant;
+use model::*;
 use std::str;
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
-use crate::dbscan::fuzzy;
+use dbscan::fuzzy;
 use kodama::{Method, linkage};
 use itertools::{Itertools};
 
@@ -203,18 +203,17 @@ impl PileupMatrixFunctions for PileupMatrix {
                         // Initialize the variant position index
                         // Also turns out to be the total number of variant positions
                         for (pos, total_depth) in depth.iter().enumerate() {
-                            let position_variants = contig_variants.entry(pos as i32)
-                                .or_insert(BTreeMap::new());
+                            let position_variants = contig_variants.entry(pos as i64)
+                                .or_insert(HashMap::new());
                             let mut variant_depth: f64 = 0.;
 
                             if variants.contains_key(&(pos as i64)) {
                                 let abundance_map = variants.get(&(pos as i64)).unwrap();
                                 for (variant, base_info) in abundance_map.iter() {
-                                    let sample_map = position_variants.entry(variant)
-                                        .or_insert(vec![(0., 0.); sample_count]);
-                                    variant_depth += (variant.depth) as f64;
-                                    sample_map[sample_idx] = (variant.depth as f64, *total_depth);
-
+                                    let sample_map = position_variants.entry(variant.clone())
+                                        .or_insert(base_info.clone());
+                                    variant_depth = base_info.depth.iter().sum::<u32>() as f64;
+                                    sample_map.combine_sample(base_info, sample_idx);
                                 }
                             }
 //                            // calc reference variant depth
@@ -299,7 +298,6 @@ impl PileupMatrixFunctions for PileupMatrix {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
 
-                                            let mut freqs = vec![0.0; sample_count as usize];
                                             let mut rel_abund = vec![0.0; sample_count as usize];
 
                                             // Get the mean abundance across samples
@@ -312,25 +310,24 @@ impl PileupMatrixFunctions for PileupMatrix {
                                                 let mut geom_mean_f =
                                                     geom_mean_f.lock().unwrap();
 
-                                                let _sample_coverage = contig_coverages[idx];
-                                                let var_depth = base_info.depth[index] + 1.;
-                                                let total_depth = base_info.totaldepth[index] + 1.;
-                                                freqs[index] = base_info.depth[index];
+//                                                let _sample_coverage = contig_coverages[idx];
+                                                let var_depth = base_info.depth[index] as f64 + 1.;
+                                                let total_depth = base_info.totaldepth[index] as f64 + 1.;
                                                 rel_abund[index] =
-                                                    (var_depth) / (total_depth);
-                                                geom_mean_v[index] += ((var_depth) as f64).ln();
-                                                geom_mean_d[index] += ((total_depth) as f64).ln();
-                                                geom_mean_f[index] += ((var_depth) as f64
-                                                    / (total_depth) as f64).ln();
+                                                    var_depth / total_depth;
+                                                geom_mean_v[index] += (var_depth).ln();
+                                                geom_mean_d[index] += (total_depth).ln();
+                                                geom_mean_f[index] += (var_depth
+                                                    / total_depth).ln();
                                             });
 
                                             let mut variant_info_all = variant_info_all
                                                 .lock().unwrap();
                                             let point = fuzzy::Var {
                                                 pos: *position,
-                                                var: *variant,
-                                                deps: depths.clone(),
-                                                vars: freqs,
+                                                var: variant.clone(),
+                                                deps: base_info.totaldepth.clone(),
+                                                vars: base_info.depth.clone(),
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
                                             };
@@ -586,7 +583,7 @@ impl PileupMatrixFunctions for PileupMatrix {
                                                 // a single site and one is the reference
                                                 // we will choose the reference
                                                 if max_var == Variant::None {
-                                                    max_var = *var;
+                                                    max_var = var.clone();
                                                 }
                                             }
                                             match max_var {
@@ -846,7 +843,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
         variants.par_iter().for_each(|assignment|{
             let variant = &variant_info[assignment.index];
-            let variant_set = variant_map[&variant.tid][&variant.pos][&variant.var];
+            let variant_set = &variant_map[&variant.tid][&variant.pos][&variant.var];
             variant_set.par_iter().for_each(|id|{
                 let mut read_set = read_set.lock().unwrap();
                 read_set.insert(*id);

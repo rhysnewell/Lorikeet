@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-use crate::model::Variant;
+use model::*;
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -55,8 +55,8 @@ pub trait MetricSpace: Sized + Send + Sync {
 pub struct Var {
     pub pos: i64,
     pub var: Variant,
-    pub deps: Vec<f64>,
-    pub vars: Vec<f64>,
+    pub deps: Vec<u32>,
+    pub vars: Vec<u32>,
     pub rel_abunds: Vec<f64>,
     pub tid: i32,
 }
@@ -66,7 +66,7 @@ pub struct Point {
     pub values: Vec<f64>,
 }
 
-impl MetricSpace for Var {
+impl MetricSpace for Var<> {
     fn distance(&self, other: &Self, geom_var: &Vec<f64>,
                 geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
 
@@ -133,11 +133,11 @@ impl MetricSpace for Var {
             return if self.pos == other.pos && self.tid == other.tid {
                 20.
             } else {
-                let row_freq = self.vars[0];
-                let col_freq = other.vars[0];
+                let row_freq = self.vars[0] as f64;
+                let col_freq = other.vars[0] as f64;
 
-                let row_depth = self.deps[0];
-                let col_depth = other.deps[0];
+                let row_depth = self.deps[0] as f64;
+                let col_depth = other.deps[0] as f64;
 
                 let distance = (((row_freq / geom_var[0] as f64).ln() - (col_freq / geom_var[0] as f64).ln()).powf(2.)
                     + ((row_depth / geom_dep[0] as f64).ln() - (col_depth / geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
