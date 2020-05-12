@@ -1,10 +1,5 @@
-pub mod pileups;
-pub mod pileup_structs;
-pub mod pileup_matrix;
 pub mod cli;
 pub mod external_command_checker;
-pub mod codon_structs;
-pub mod variants;
 pub mod estimation;
 pub mod model;
 pub mod utils;

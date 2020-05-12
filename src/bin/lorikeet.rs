@@ -1,7 +1,7 @@
 extern crate lorikeet_rs as lorikeet;
 
 use lorikeet::*;
-use lorikeet::pileups;
+use lorikeet::estimation::contig;
 use lorikeet::external_command_checker;
 use lorikeet::cli::*;
 
@@ -1287,7 +1287,7 @@ fn run_pileup<'a,
 
             info!("Beginning polymorph with {} bam readers and {} threads", bam_readers.len(), threads);
             println!("sample\ttid\tpos\tvariant\treference\tvariant_depth\tdepth\tgenotypes\tvaf_cluster\tgenotype");
-            pileups::pileup_variants(
+            contig::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -1337,7 +1337,7 @@ fn run_pileup<'a,
             };
 
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
-            pileups::pileup_variants(
+            contig::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -1385,7 +1385,7 @@ fn run_pileup<'a,
             };
 
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
-            pileups::pileup_variants(
+            contig::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -1433,7 +1433,7 @@ fn run_pileup<'a,
 
             info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
             println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
-            pileups::pileup_variants(
+            contig::pileup_variants(
                 m,
                 bam_readers,
                 mode,
@@ -1486,7 +1486,7 @@ fn run_pileup<'a,
 
 
             info!("Beginning polishing with {} bam readers and {} threads", bam_readers.len(), threads);
-            pileups::pileup_variants(
+            contig::pileup_variants(
                 m,
                 bam_readers,
                 mode,

@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
-use pileup_structs::*;
+use estimation::contig_variants::*;
 use model::*;
 use std::str;
 use std::path::Path;
@@ -14,8 +14,8 @@ use itertools::{Itertools};
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
-pub enum PileupMatrix {
-    PileupContigMatrix {
+pub enum VariantMatrix {
+    VariantContigMatrix {
         coverages: HashMap<i32, Vec<f64>>,
         average_genotypes: HashMap<i32, Vec<f64>>,
         variances: HashMap<i32, Vec<f64>>,
@@ -40,9 +40,9 @@ pub enum PileupMatrix {
     }
 }
 
-impl PileupMatrix {
-    pub fn new_matrix(sample_count: usize) -> PileupMatrix {
-        PileupMatrix::PileupContigMatrix {
+impl VariantMatrix {
+    pub fn new_matrix(sample_count: usize) -> VariantMatrix {
+        VariantMatrix::VariantContigMatrix {
             coverages: HashMap::new(),
             variances: HashMap::new(),
             average_genotypes: HashMap::new(),
@@ -62,20 +62,19 @@ impl PileupMatrix {
             geom_mean_dep: Vec::new(),
             geom_mean_frq: Vec::new(),
             pred_variants: HashMap::new(),
-//            pred_variants_all: HashMap::new(),
         }
     }
 }
 
-pub trait PileupMatrixFunctions {
+pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize);
 
-    /// Takes [PileupStats](pileup_structs/PileupStats) struct for single contig and adds to
-    /// [PileupMatrix](PileupMatrix)
+    /// Takes [VariantStats](contig_variants/VariantStats) struct for single contig and adds to
+    /// [VariantMatrix](VariantMatrix)
     fn add_contig(&mut self,
-                  pileup_stats: PileupStats,
+                  variant_stats: VariantStats,
                   sample_count: usize,
                   sample_idx: usize,
                   contig: Vec<u8>);
@@ -110,10 +109,10 @@ pub trait PileupMatrixFunctions {
 
 }
 
-impl PileupMatrixFunctions for PileupMatrix {
+impl VariantMatrixFunctions for VariantMatrix {
     fn setup(&mut self) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut all_variants,
@@ -129,7 +128,6 @@ impl PileupMatrixFunctions for PileupMatrix {
                 *average_genotypes = HashMap::new();
                 *all_variants = HashMap::new();
                 *variants_map = HashMap::new();
-//                *indels_map = HashMap::new();
                 *contigs = HashMap::new();
                 *target_names = HashMap::new();
                 *target_lengths = HashMap::new();
@@ -141,7 +139,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
                 ..
             } => {
@@ -151,12 +149,12 @@ impl PileupMatrixFunctions for PileupMatrix {
     }
 
     fn add_contig(&mut self,
-                  pileup_stats: PileupStats,
+                  variant_stats: VariantStats,
                   sample_count: usize,
                   sample_idx: usize,
                   contig: Vec<u8>) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut all_variants,
@@ -167,8 +165,8 @@ impl PileupMatrixFunctions for PileupMatrix {
                 ref mut variances,
                 ..
             } => {
-                match pileup_stats {
-                    PileupStats::PileupContigStats {
+                match variant_stats {
+                    VariantStats::VariantContigStats {
                         tid,
                         target_name,
                         target_len,
@@ -213,19 +211,8 @@ impl PileupMatrixFunctions for PileupMatrix {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(base_info.clone());
                                     sample_map.combine_sample(base_info, sample_idx, *total_depth);
-                                    info!("depths {:?} {:?}", sample_map.totaldepth, total_depth);
-
                                 }
                             }
-//                            // calc reference variant depth
-//                            let ref_depth = *total_depth
-//                                                    - variant_depth;
-//
-//                            //Add Reference as variant
-//                            let sample_map = position_variants.entry("R".to_string())
-//                                .or_insert(vec![(0., 0.); sample_count]);
-//                            sample_map[sample_idx] = (ref_depth, *total_depth);
-
                         }
 
                         contigs.entry(tid).or_insert(contig);
@@ -238,7 +225,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
     fn generate_distances(&mut self, _threads: usize, _output_prefix: &str) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 all_variants,
                 sample_names,
                 coverages,
@@ -288,7 +275,6 @@ impl PileupMatrixFunctions for PileupMatrix {
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
                             if hash.keys().len() > 0 {
-//                                let mut depths = Vec::new();
 
                                 for (variant, base_info) in hash.iter() {
 
@@ -310,7 +296,7 @@ impl PileupMatrixFunctions for PileupMatrix {
                                                 let mut geom_mean_f =
                                                     geom_mean_f.lock().unwrap();
 
-//                                                let _sample_coverage = contig_coverages[idx];
+
                                                 let var_depth
                                                     = base_info.depth[index] as f64 + 1.;
                                                 let total_depth
@@ -373,7 +359,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
     fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 ref mut variant_info,
                 ref mut geom_mean_var,
                 ref mut geom_mean_dep,
@@ -530,7 +516,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
     fn generate_genotypes(&mut self, output_prefix: &str) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 target_names,
                 contigs,
                 ref mut pred_variants,
@@ -869,7 +855,7 @@ impl PileupMatrixFunctions for PileupMatrix {
 
     fn print_variant_stats(&self, output_prefix: &str) {
         match self {
-            PileupMatrix::PileupContigMatrix {
+            VariantMatrix::VariantContigMatrix {
                 target_names,
                 target_lengths,
                 sample_names,

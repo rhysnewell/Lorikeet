@@ -4,13 +4,13 @@ use rust_htslib::bam::{self, record::Cigar};
 use rust_htslib::{bcf::Reader, bcf::*};
 
 use external_command_checker;
-use pileup_structs::*;
-use pileup_matrix::*;
-use codon_structs::*;
+use estimation::contig_variants::*;
+use estimation::variant_matrix::*;
+use estimation::codon_structs::*;
 use coverm::bam_generator::*;
 use rayon::prelude::*;
-use crate::estimation::alignment_properties::{InsertSize, AlignmentProperties};
-use crate::model::*;
+use estimation::alignment_properties::{InsertSize, AlignmentProperties};
+use model::*;
 
 use crate::*;
 use std::str;
@@ -52,7 +52,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let coverage_estimators = Arc::new(Mutex::new(coverage_estimators));
     let mut ani = 0.;
     // Print file header
-    let mut pileup_matrix = Arc::new(Mutex::new(PileupMatrix::new_matrix(sample_count)));
+    let mut variant_matrix = Arc::new(Mutex::new(VariantMatrix::new_matrix(sample_count)));
     let mut gff_map = Arc::new(Mutex::new(HashMap::new()));
     let mut codon_table = CodonTable::setup();
     let nanopore = false;
@@ -234,7 +234,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                             min_var_depth,
                             contig_len,
                             contig_name,
-                            &pileup_matrix,
+                            &variant_matrix,
                             ref_seq,
                             sample_idx,
                             method,
@@ -417,7 +417,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                 min_var_depth,
                 contig_len,
                 contig_name,
-                &pileup_matrix,
+                &variant_matrix,
                 ref_seq,
                 sample_idx,
                 method,
@@ -447,23 +447,23 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                   stoit_name);
         }
         bam_generated.finish();
-        let mut pileup_matrix = pileup_matrix.lock().unwrap();
-        pileup_matrix.add_sample(stoit_name, sample_idx);
+        let mut variant_matrix = variant_matrix.lock().unwrap();
+        variant_matrix.add_sample(stoit_name, sample_idx);
     });
     if mode=="genotype" {
-        let mut pileup_matrix = pileup_matrix.lock().unwrap();
-        pileup_matrix.generate_distances(n_threads, output_prefix);
+        let mut variant_matrix = variant_matrix.lock().unwrap();
+        variant_matrix.generate_distances(n_threads, output_prefix);
         let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
         let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
         let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
         let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
         let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
 
-        pileup_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi);
-        pileup_matrix.generate_genotypes(output_prefix);
+        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi);
+        variant_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
-        let mut pileup_matrix = pileup_matrix.lock().unwrap();
-        pileup_matrix.print_variant_stats(output_prefix);
+        let mut variant_matrix = variant_matrix.lock().unwrap();
+        variant_matrix.print_variant_stats(output_prefix);
     }
 }
 
@@ -480,7 +480,7 @@ fn process_previous_contigs_var(
     min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
-    pileup_matrix: &Arc<Mutex<PileupMatrix>>,
+    variant_matrix: &Arc<Mutex<VariantMatrix>>,
     ref_sequence: Vec<u8>,
     sample_idx: usize,
     method: &str,
@@ -509,12 +509,12 @@ fn process_previous_contigs_var(
         let coverages: Vec<f64> = coverage_estimators.par_iter_mut()
             .map(|estimator| estimator.calculate_coverage(&vec![0]) as f64).collect();
 
-        let mut pileup_struct = PileupStats::new_contig_stats(min as f64,
+        let mut variant_struct = VariantStats::new_contig_stats(min as f64,
                                                               max as f64,
                                                               contig_end_exclusion);
 
-        // adds contig info to pileup struct
-        pileup_struct.add_contig(variant_map,
+        // adds contig info to variant struct
+        variant_struct.add_contig(variant_map,
                                  last_tid.clone(),
                                  total_indels_in_current_contig,
                                  contig_name.clone(),
@@ -525,20 +525,20 @@ fn process_previous_contigs_var(
 
 
         if ani == 0. {
-            pileup_struct.calc_error(ani);
+            variant_struct.calc_error(ani);
 
 
             // filters variants across contig
-//            pileup_struct.calc_variants(
+//            variant_struct.calc_variants(
 //                min_var_depth,
 //                coverage_fold as f64);
         } else {
-            let min_var_depth = pileup_struct.calc_error(ani);
+            let min_var_depth = variant_struct.calc_error(ani);
 
             info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
 
             // filters variants across contig
-//            pileup_struct.calc_variants(
+//            variant_struct.calc_variants(
 //                min_var_depth,
 //                coverage_fold as f64);
         }
@@ -548,31 +548,31 @@ fn process_previous_contigs_var(
             "polymorph" => {
 
                 // calculates minimum number of genotypes possible for each variant location
-//                pileup_struct.generate_minimum_genotypes();
-                if pileup_struct.len() > 0 {
+//                variant_struct.generate_minimum_genotypes();
+                if variant_struct.len() > 0 {
 
-//                    pileup_struct.print_variants(&ref_sequence, stoit_name);
+//                    variant_struct.print_variants(&ref_sequence, stoit_name);
                 }
 
             },
             "summarize" | "genotype" => {
-                let mut pileup_matrix = pileup_matrix.lock().unwrap();
+                let mut variant_matrix = variant_matrix.lock().unwrap();
                 // calculates minimum number of genotypes possible for each variant location
-                pileup_matrix.add_contig(pileup_struct,
+                variant_matrix.add_contig(variant_struct,
                                          sample_count,
                                          sample_idx,
                                          ref_sequence);
             },
             "evolve" => {
                 let gff_map = gff_map.lock().unwrap();
-                pileup_struct.calc_gene_mutations(&*gff_map, &ref_sequence, codon_table);
+                variant_struct.calc_gene_mutations(&*gff_map, &ref_sequence, codon_table);
             },
             "polish" => {
                 let stoit_name = stoit_name
                     .split("..").last().unwrap()
                     .split("/").last().unwrap();
                 let output_prefix = output_prefix.to_string() + "_" + stoit_name;
-                pileup_struct.polish_contig(&ref_sequence,
+                variant_struct.polish_contig(&ref_sequence,
                                             &output_prefix);
             }
             _ => {panic!("unknown mode {}", mode);},
@@ -687,7 +687,7 @@ mod tests {
 //        include_soft_clipping: bool) {
 ////        let mut stream = Cursor::new(Vec::new());
 //        {
-//            reads_mapped_vec = pileup_variants(
+//            reads_mapped_vec = variant_variants(
 //                bam_readers,
 //                &mut coverage_taker,
 //                coverage_estimators,

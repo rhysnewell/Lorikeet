@@ -3,7 +3,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
 use rayon::prelude::*;
-use codon_structs::*;
+use estimation::codon_structs::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use rust_htslib::bcf::record;
@@ -13,8 +13,8 @@ use std::fs::OpenOptions;
 
 use model::*;
 
-pub enum PileupStats {
-    PileupContigStats {
+pub enum VariantStats {
+    VariantContigStats {
         variants: HashMap<i64, HashMap<Variant, Base>>,
 //        nucfrequency: HashMap<i32, BTreeMap<char, BTreeSet<i64>>>,
 //        variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
@@ -49,10 +49,10 @@ pub enum PileupStats {
     }
 }
 
-impl PileupStats {
+impl VariantStats {
     pub fn new_contig_stats(min: f64, max: f64,
-                            contig_end_exclusion: u64) -> PileupStats {
-        PileupStats::PileupContigStats {
+                            contig_end_exclusion: u64) -> VariantStats {
+        VariantStats::VariantContigStats {
             variants: HashMap::new(),
             tid: 0,
             variant_count: vec!(),
@@ -75,7 +75,7 @@ impl PileupStats {
     }
 }
 
-pub trait PileupFunctions {
+pub trait VariantFunctions {
     fn setup(&mut self);
 
     fn len(&mut self) -> usize;
@@ -113,10 +113,10 @@ pub trait PileupFunctions {
 //    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
 }
 
-impl PileupFunctions for PileupStats {
+impl VariantFunctions for VariantStats {
     fn setup(&mut self) {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut variants,
                 ref mut variant_count,
                 ref mut depth,
@@ -144,11 +144,11 @@ impl PileupFunctions for PileupStats {
 
     fn len(&mut self) -> usize {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut variants,
                 ..
             } => {
-                return variants.len()
+                variants.len()
             }
         }
     }
@@ -163,7 +163,7 @@ impl PileupFunctions for PileupStats {
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>) {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut variants,
                 ref mut variant_count,
                 ref mut depth,
@@ -201,7 +201,6 @@ impl PileupFunctions for PileupStats {
                 // to go into linear regression predicting read error rate
                 depth.par_iter_mut().enumerate().for_each(|(pos, d)| {
                     let mut variant_count_safe = variant_count_safe.lock().unwrap();
-//                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
                     let mut var_set = match variants.get(&(pos as i64)) {
                         Some(set) => set.to_owned(),
                         None => HashMap::new(),
@@ -227,7 +226,7 @@ impl PileupFunctions for PileupStats {
 
     fn calc_error(&mut self, ani: f32) -> usize {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 variant_count,
                 depth,
                 regression,
@@ -237,8 +236,7 @@ impl PileupFunctions for PileupStats {
                 // convert depth to f64 for this to work
                 let depth_64: Vec<f64> = depth.par_iter().map(|x| *x as f64).collect();
                 let data = vec![("Y", variant_count.clone()), ("X", depth_64.clone())];
-//                println!("{:?}", variant_count.clone());
-//                println!("{:?}", depth.clone());
+
                 let data = RegressionDataBuilder::new()
                     .build_from(data).expect("Unable to build regression from data");
                 let formula = "Y ~ X";
@@ -279,7 +277,7 @@ impl PileupFunctions for PileupStats {
 
 //    fn calc_variants(&mut self, min_variant_depth: usize, coverage_fold: f64){
 //        match self {
-//            PileupStats::PileupContigStats {
+//            VariantStats::VariantContigStats {
 //                ref mut variants,
 //                depth,
 //                ref mut coverage,
@@ -452,7 +450,7 @@ impl PileupFunctions for PileupStats {
                      original_contig: &Vec<u8>,
                      output_prefix: &str) {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut variants,
                 target_name,
                 ..
@@ -543,7 +541,7 @@ impl PileupFunctions for PileupStats {
                            ref_sequence: &Vec<u8>,
                            codon_table: &CodonTable) {
         match self {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 variants,
                 tid: _,
                 target_name,
@@ -629,7 +627,7 @@ impl PileupFunctions for PileupStats {
 
 //    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str){
 //        match self {
-//            PileupStats::PileupContigStats {
+//            VariantStats::VariantContigStats {
 //                variants,
 //                depth,
 //                tid,
@@ -772,7 +770,7 @@ mod tests {
 //    }
     #[test]
     fn test_genotypes_two_positions() {
-        let mut contig = PileupStats::new_contig_stats(0.,
+        let mut contig = VariantStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
         let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
@@ -806,7 +804,7 @@ mod tests {
                           vec![6,0]);
 
         match contig {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut regression,
                 ..
             } => {
@@ -822,7 +820,7 @@ mod tests {
 
     #[test]
     fn test_genotypes_three_positions() {
-        let mut contig = PileupStats::new_contig_stats(0.,
+        let mut contig = VariantStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
         let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
@@ -863,7 +861,7 @@ mod tests {
                           vec![6,4,0]);
 
         match contig {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut regression,
                 ..
             } => {
@@ -881,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_genotypes_four_positions() {
-        let mut contig = PileupStats::new_contig_stats(0.,
+        let mut contig = VariantStats::new_contig_stats(0.,
                                                        1.,
                                                        0);
         let mut nuc_freq: HashMap<i32, BTreeMap<char, BTreeSet<i64>>> = HashMap::new();
@@ -934,7 +932,7 @@ mod tests {
                           vec![3,3,0,-6]);
 
         match contig {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 ref mut regression,
                 ..
             } => {
@@ -948,7 +946,7 @@ mod tests {
             0.);
 
         let snps = match &contig {
-            PileupStats::PileupContigStats {
+            VariantStats::VariantContigStats {
                 variant_abundances,
                 ..
             } => {
