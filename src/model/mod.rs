@@ -295,12 +295,12 @@ pub struct Base {
 }
 
 impl Base {
-    pub fn combine_sample(&mut self, other: &Base, sample_idx: usize) {
+    pub fn combine_sample(&mut self, other: &Base, sample_idx: usize, total_depth: i32) {
         if &self != &other {
             self.filters[sample_idx] = other.filters[sample_idx].clone();
             self.depth[sample_idx] = other.depth[sample_idx];
             self.truedepth[sample_idx] = other.truedepth[sample_idx];
-            self.totaldepth[sample_idx] = other.totaldepth[sample_idx];
+            self.totaldepth[sample_idx] = total_depth;
             self.physicalcov[sample_idx] = other.physicalcov[sample_idx];
             self.baseq[sample_idx] = other.baseq[sample_idx];
             self.mapq[sample_idx] = other.mapq[sample_idx];
@@ -312,7 +312,13 @@ impl Base {
             self.af[sample_idx] = other.af[sample_idx];
             self.freq[sample_idx] = other.freq[sample_idx];
 
+        } else {
+            self.totaldepth[sample_idx] = total_depth;
         }
+    }
+
+    pub fn update_total_depth(&mut self, depth: i32, sample_idx: usize) {
+        self.totaldepth[sample_idx] = depth
     }
 
     pub fn new(pos: i64, refr: Vec<u8>, sample_count: usize) -> Base {
