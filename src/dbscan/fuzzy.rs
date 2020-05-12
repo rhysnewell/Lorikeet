@@ -55,8 +55,8 @@ pub trait MetricSpace: Sized + Send + Sync {
 pub struct Var {
     pub pos: i64,
     pub var: Variant,
-    pub deps: Vec<u32>,
-    pub vars: Vec<u32>,
+    pub deps: Vec<i32>,
+    pub vars: Vec<i32>,
     pub rel_abunds: Vec<f64>,
     pub tid: i32,
 }
@@ -125,7 +125,7 @@ impl MetricSpace for Var<> {
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
-                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
+//                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
 
                 return 1. - rho
             }

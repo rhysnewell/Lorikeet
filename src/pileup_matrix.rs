@@ -199,7 +199,7 @@ impl PileupMatrixFunctions for PileupMatrix {
                             .or_insert(HashMap::new());
 
 
-                        // Apppend the sample index to each variant abundance... so many loops >:(
+                        // Apppend the sample index to each variant abundance
                         // Initialize the variant position index
                         // Also turns out to be the total number of variant positions
                         for (pos, total_depth) in depth.iter().enumerate() {
@@ -212,7 +212,6 @@ impl PileupMatrixFunctions for PileupMatrix {
                                 for (variant, base_info) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(base_info.clone());
-                                    variant_depth = base_info.depth.iter().sum::<u32>() as f64;
                                     sample_map.combine_sample(base_info, sample_idx);
                                 }
                             }
@@ -250,7 +249,6 @@ impl PileupMatrixFunctions for PileupMatrix {
 
                 let sample_count = sample_names.len();
 
-
                 let variant_info_all =
                     Arc::new(
                         Mutex::new(
@@ -287,7 +285,7 @@ impl PileupMatrixFunctions for PileupMatrix {
                         |(position, hash)| {
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
-                            if hash.keys().len() > 1 {
+                            if hash.keys().len() > 0 {
 //                                let mut depths = Vec::new();
 
                                 for (variant, base_info) in hash.iter() {

@@ -20,7 +20,7 @@ pub enum PileupStats {
 //        variants_in_reads: HashMap<i64, BTreeMap<i32, String>>,
 //        variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>>,
         variant_count: Vec<f64>,
-        depth: Vec<f64>,
+        depth: Vec<i32>,
 //        indels: HashMap<i32, BTreeMap<String, BTreeSet<i64>>>,
 //        genotypes_per_position: HashMap<usize, usize>,
 //        mean_genotypes: f64,
@@ -81,12 +81,12 @@ pub trait PileupFunctions {
     fn len(&mut self) -> usize;
 
     fn add_contig(&mut self,
-                  variant_map: HashMap<i64, HashMap<Variant, Base>>,
+                  variant_map: Option<&HashMap<i64, HashMap<Variant, Base>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
                   contig_len: usize,
-                  method: &str,
+                  sample_idx: usize,
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>);
 
@@ -154,12 +154,12 @@ impl PileupFunctions for PileupStats {
     }
 
     fn add_contig(&mut self,
-                  variant_map: HashMap<i64, HashMap<Variant, Base>>,
+                  variant_map: Option<&HashMap<i64, HashMap<Variant, Base>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
                   contig_len: usize,
-                  _method: &str,
+                  sample_idx: usize,
                   coverages: Vec<f64>,
                   ups_and_downs: Vec<i32>) {
         match self {
@@ -176,7 +176,10 @@ impl PileupFunctions for PileupStats {
                 ref mut method,
                 ..
             } => {
-                *variants = variant_map;
+                *variants = match variant_map {
+                    Some(map) => map.clone(),
+                    _ => HashMap::new(),
+                };
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
@@ -186,36 +189,35 @@ impl PileupFunctions for PileupStats {
                 *method = method.to_string();
 
                 let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
-                *depth = vec![0.; ups_and_downs.len()];
+                *depth = vec![0; ups_and_downs.len()];
                 let mut cumulative_sum = 0;
                 for (pos, current) in ups_and_downs.iter().enumerate() {
                     cumulative_sum += *current;
-                    depth[pos] = cumulative_sum as f64;
+                    depth[pos] = cumulative_sum;
                 }
 
                 // Calculate how many reads have variant at each position
                 // to go into linear regression predicting read error rate
                 depth.par_iter().enumerate().for_each(
-                    |(pos, _d)|{
-                        let mut variant_count_safe = variant_count_safe.lock().unwrap();
+                    |(pos, d)|{
+                    let mut variant_count_safe = variant_count_safe.lock().unwrap();
 //                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
-                        let var_set = match variants.get(&(pos as i64)) {
-                            Some(set) => set.to_owned(),
-                            None => HashMap::new(),
-                        };
+                    let mut var_set = match variants.get(&(pos as i64)) {
+                        Some(set) => set.to_owned(),
+                        None => HashMap::new(),
+                    };
 
-                        // Add depth of variant to count file if variant is present
-                        if var_set.len() > 1 {
-                            for (var, base) in var_set.iter() {
-                                let var_depth = match base.variant {
-                                    Variant::None => 0,
-                                    _ => base.depth.par_iter().sum(),
-                                };
-                                if var_depth != 0 {
-                                    variant_count_safe[pos] += var_depth as f64;
-                                }
-                            }
+                    // Add depth of variant to count file if variant is present
+                    for (var, base) in var_set.iter_mut() {
+                        base.totaldepth[sample_idx] = *d;
+                        let var_depth = match base.variant {
+                            Variant::None => 0,
+                            _ => base.depth.par_iter().sum(),
+                        };
+                        if var_depth != 0 {
+                            variant_count_safe[pos] += var_depth as f64;
                         }
+                    }
                 });
                 *variant_count = variant_count_safe.lock().unwrap().to_vec();
 
@@ -233,7 +235,9 @@ impl PileupFunctions for PileupStats {
                 target_len,
                 ..
             } => {
-                let data = vec![("Y", variant_count.clone()), ("X", depth.clone())];
+                // convert depth to f64 for this to work
+                let depth_64: Vec<f64> = depth.par_iter().map(|x| *x as f64).collect();
+                let data = vec![("Y", variant_count.clone()), ("X", depth_64.clone())];
 //                println!("{:?}", variant_count.clone());
 //                println!("{:?}", depth.clone());
                 let data = RegressionDataBuilder::new()
