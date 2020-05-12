@@ -212,7 +212,9 @@ impl PileupMatrixFunctions for PileupMatrix {
                                 for (variant, base_info) in abundance_map.iter() {
                                     let sample_map = position_variants.entry(variant.clone())
                                         .or_insert(base_info.clone());
-                                    sample_map.combine_sample(base_info, sample_idx);
+                                    sample_map.combine_sample(base_info, sample_idx, *total_depth);
+                                    info!("depths {:?} {:?}", sample_map.totaldepth, total_depth);
+
                                 }
                             }
 //                            // calc reference variant depth
@@ -309,8 +311,10 @@ impl PileupMatrixFunctions for PileupMatrix {
                                                     geom_mean_f.lock().unwrap();
 
 //                                                let _sample_coverage = contig_coverages[idx];
-                                                let var_depth = base_info.depth[index] as f64 + 1.;
-                                                let total_depth = base_info.totaldepth[index] as f64 + 1.;
+                                                let var_depth
+                                                    = base_info.depth[index] as f64 + 1.;
+                                                let total_depth
+                                                    = base_info.totaldepth[index] as f64 + 1.;
                                                 rel_abund[index] =
                                                     var_depth / total_depth;
                                                 geom_mean_v[index] += (var_depth).ln();

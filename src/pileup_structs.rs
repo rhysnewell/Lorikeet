@@ -81,7 +81,7 @@ pub trait PileupFunctions {
     fn len(&mut self) -> usize;
 
     fn add_contig(&mut self,
-                  variant_map: Option<&HashMap<i64, HashMap<Variant, Base>>>,
+                  variant_map: Option<&mut HashMap<i64, HashMap<Variant, Base>>>,
                   tid: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -154,7 +154,7 @@ impl PileupFunctions for PileupStats {
     }
 
     fn add_contig(&mut self,
-                  variant_map: Option<&HashMap<i64, HashMap<Variant, Base>>>,
+                  variant_map: Option<&mut HashMap<i64, HashMap<Variant, Base>>>,
                   target_id: i32,
                   total_indels_in_contig: usize,
                   contig_name: Vec<u8>,
@@ -176,10 +176,7 @@ impl PileupFunctions for PileupStats {
                 ref mut method,
                 ..
             } => {
-                *variants = match variant_map {
-                    Some(map) => map.clone(),
-                    _ => HashMap::new(),
-                };
+
                 *tid = target_id;
                 *total_indels = total_indels_in_contig;
                 *target_name = contig_name;
@@ -187,6 +184,10 @@ impl PileupFunctions for PileupStats {
                 *coverage = coverages[1] as f64;
                 *variance = coverages[2] as f64;
                 *method = method.to_string();
+                *variants = match variant_map {
+                    Some(map) => map.clone(),
+                    _ => HashMap::new(),
+                };
 
                 let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
                 *depth = vec![0; ups_and_downs.len()];
@@ -198,18 +199,15 @@ impl PileupFunctions for PileupStats {
 
                 // Calculate how many reads have variant at each position
                 // to go into linear regression predicting read error rate
-                depth.par_iter().enumerate().for_each(
-                    |(pos, d)|{
+                depth.par_iter_mut().enumerate().for_each(|(pos, d)| {
                     let mut variant_count_safe = variant_count_safe.lock().unwrap();
 //                        let mut adjusted_depth = adjusted_depth.lock().unwrap();
                     let mut var_set = match variants.get(&(pos as i64)) {
                         Some(set) => set.to_owned(),
                         None => HashMap::new(),
                     };
-
                     // Add depth of variant to count file if variant is present
                     for (var, base) in var_set.iter_mut() {
-                        base.totaldepth[sample_idx] = *d;
                         let var_depth = match base.variant {
                             Variant::None => 0,
                             _ => base.depth.par_iter().sum(),
@@ -219,6 +217,7 @@ impl PileupFunctions for PileupStats {
                         }
                     }
                 });
+
                 *variant_count = variant_count_safe.lock().unwrap().to_vec();
 
                 debug!("new contig added {} with coverage {} and variance {}", tid, coverage, variance);
