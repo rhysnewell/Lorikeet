@@ -263,33 +263,33 @@ pub struct Base {
     // Filter tag
     pub filters: Vec<HashSet<Filter>>,
     // Depth of good quality reads
-    pub depth: Vec<u32>,
+    pub depth: Vec<i32>,
     // Depth including bad quality reads
-    pub truedepth: Vec<u32>,
+    pub truedepth: Vec<i32>,
     // Depth as decided by CoverM
-    pub totaldepth: Vec<u32>,
+    pub totaldepth: Vec<i32>,
     //Physical coverage of valid inserts across locus
-    pub physicalcov: Vec<u32>,
+    pub physicalcov: Vec<i32>,
     // Mean base quality at locus
-    pub baseq: Vec<u32>,
+    pub baseq: Vec<i32>,
     // Mean read mapping quality at locus
-    pub mapq: Vec<u32>,
+    pub mapq: Vec<i32>,
     // Variant confidence / quality by depth
-    pub conf: Vec<u32>,
+    pub conf: Vec<i32>,
     // Nucleotide count at each locus
-    pub nucs: HashMap<char, Vec<u32>>,
+    pub nucs: HashMap<char, Vec<i32>>,
     // Percentage of As, Cs, Gs, Ts weighted by Q & MQ at locus
-    pub pernucs: HashMap<char, Vec<u32>>,
+    pub pernucs: HashMap<char, Vec<i32>>,
     // insertion count at locus
-    pub ic: Vec<u32>,
+    pub ic: Vec<i32>,
     // deletion count at locus
-    pub dc: Vec<u32>,
+    pub dc: Vec<i32>,
     // number of reads clipped here
-    pub xc: Vec<u32>,
+    pub xc: Vec<i32>,
     // allele count in genotypes, for each ALT allele.
-    pub ac: Vec<u32>,
+    pub ac: Vec<i32>,
     // fraction in support for alternate allele
-    pub af: Vec<u32>,
+    pub af: Vec<f64>,
     // Frequency of variant
     pub freq: Vec<f64>,
 }
@@ -298,30 +298,44 @@ impl Base {
     pub fn combine_sample(&mut self, other: &Base, sample_idx: usize) {
         if &self != &other {
             self.filters[sample_idx] = other.filters[sample_idx].clone();
+            self.depth[sample_idx] = other.depth[sample_idx];
+            self.truedepth[sample_idx] = other.truedepth[sample_idx];
+            self.totaldepth[sample_idx] = other.totaldepth[sample_idx];
+            self.physicalcov[sample_idx] = other.physicalcov[sample_idx];
+            self.baseq[sample_idx] = other.baseq[sample_idx];
+            self.mapq[sample_idx] = other.mapq[sample_idx];
+            self.conf[sample_idx] = other.conf[sample_idx];
+            self.ic[sample_idx] = other.ic[sample_idx];
+            self.dc[sample_idx] = other.dc[sample_idx];
+            self.xc[sample_idx] = other.xc[sample_idx];
+            self.ac[sample_idx] = other.ac[sample_idx];
+            self.af[sample_idx] = other.af[sample_idx];
+            self.freq[sample_idx] = other.freq[sample_idx];
+
         }
     }
 
-    pub fn new(variant: Variant) -> Base {
+    pub fn new(pos: i64, refr: Vec<u8>, sample_count: usize) -> Base {
         Base {
-            pos: 0,
-            refr: vec!(),
-            variant: variant,
-            filters: vec!(),
-            depth: vec!(),
-            truedepth: vec!(),
-            totaldepth: vec!(),
-            physicalcov: vec!(),
-            baseq: vec!(),
-            mapq: vec!(),
-            conf: vec!(),
+            pos,
+            refr,
+            variant: Variant::None,
+            filters: vec![HashSet::new(); sample_count],
+            depth: vec![0; sample_count],
+            truedepth: vec![0; sample_count],
+            totaldepth: vec![0; sample_count],
+            physicalcov: vec![0; sample_count],
+            baseq: vec![0; sample_count],
+            mapq: vec![0; sample_count],
+            conf: vec![0; sample_count],
             nucs: HashMap::new(),
             pernucs: HashMap::new(),
-            ic: vec!(),
-            dc: vec!(),
-            xc: vec!(),
-            ac: vec!(),
-            af: vec!(),
-            freq: vec!(),
+            ic: vec![0; sample_count],
+            dc: vec![0; sample_count],
+            xc: vec![0; sample_count],
+            ac: vec![0; sample_count],
+            af: vec![0.; sample_count],
+            freq: vec![0.; sample_count],
         }
     }
 
@@ -340,27 +354,23 @@ impl Base {
                 filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
             }
 
-            Some(Base {
-                    pos: record.pos(),
-                    refr: alleles[0].to_vec(),
-                    variant: variants[0].to_owned(),
-                    filters: vec!(),
-                    depth: vec!(),
-                    truedepth: vec!(),
-                    totaldepth: vec!(),
-                    physicalcov: vec!(),
-                    baseq: vec!(),
-                    mapq: vec!(),
-                    conf: vec!(),
-                    nucs: HashMap::new(),
-                    pernucs: HashMap::new(),
-                    ic: vec!(),
-                    dc: vec!(),
-                    xc: vec!(),
-                    ac: vec!(),
-                    af: vec!(),
-                    freq: vec!(),
-            })
+            let mut base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
+            if variants.len() == 1 {
+                base.variant = variants[0].clone();
+                base.filters[sample_idx] = filter_hash;
+                base.depth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                base.truedepth[sample_idx] = record.info(b"TD").integer().unwrap().unwrap()[0];
+                base.physicalcov[sample_idx] = record.info(b"PC").integer().unwrap().unwrap()[0];
+                base.baseq[sample_idx] = record.info(b"BQ").integer().unwrap().unwrap()[0];
+                base.mapq[sample_idx] = record.info(b"MQ").integer().unwrap().unwrap()[0];
+                base.conf[sample_idx] = record.info(b"QD").integer().unwrap().unwrap()[0];
+                base.ic[sample_idx] = record.info(b"IC").integer().unwrap().unwrap()[0];
+                base.dc[sample_idx] = record.info(b"DC").integer().unwrap().unwrap()[0];
+                base.xc[sample_idx] = record.info(b"XC").integer().unwrap().unwrap()[0];
+                base.ac[sample_idx] = record.info(b"AC").integer().unwrap().unwrap()[0];
+                base.af[sample_idx] = record.info(b"AF").float().unwrap().unwrap()[0] as f64;
+            };
+            Some(base)
         } else {
             None
         }
@@ -512,6 +522,7 @@ pub fn collect_variants(
                         Variant::None
                     }
                 } else if alt_allele[0] == b'<' {
+                    // TODO Catch <DUP> structural variants here
                     // skip any other special alleles
                     Variant::None
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
