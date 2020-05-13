@@ -11,7 +11,7 @@ use rust_htslib::bcf::record;
 use std::path::Path;
 use std::fs::OpenOptions;
 
-use model::*;
+use model::variants::*;
 
 pub enum VariantStats {
     VariantContigStats {

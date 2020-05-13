@@ -2,6 +2,7 @@ use std;
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use rust_htslib::bam::{self, record::Cigar};
 use rust_htslib::{bcf::Reader, bcf::*};
+use bird_tool_utils::command;
 
 use external_command_checker;
 use estimation::contig_variants::*;
@@ -10,7 +11,7 @@ use estimation::codon_structs::*;
 use coverm::bam_generator::*;
 use rayon::prelude::*;
 use estimation::alignment_properties::{InsertSize, AlignmentProperties};
-use model::*;
+use model::variants::*;
 
 use crate::*;
 use std::str;
@@ -131,23 +132,24 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut read_to_id = Arc::new(Mutex::new(HashMap::new()));
     // Loop through bam generators in parallel
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+//        info!("Generating VCF");
+
         let mut bam_generated = bam_generator.start();
-        info!("Generating VCF");
+
         let mut bam_properties =
             AlignmentProperties::default(InsertSize::default());
 
 //        let mut tlens = Vec::new();
 
         let stoit_name = bam_generated.name().to_string();
-        let mut vcf_reader = get_vcf(bam_generated.name(), &m,
-                                 sample_idx, n_threads / sample_count);
+
 
         let split_threads = (n_threads / sample_count);
         bam_generated.set_threads(split_threads);
-        vcf_reader.set_threads(split_threads);
 
         let header = bam_generated.header().clone(); // bam header
         let target_names = header.target_names(); // contig names
+        println!("Target Nanme {:?}", target_names);
         let mut record: bam::record::Record = bam::Record::new();
 //        let mut vcf_record: bcf::record::Record = bcf::Reader::empty_record();
         let mut ups_and_downs: Vec<i32> = Vec::new();
@@ -162,19 +164,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 //        let mut indels = HashMap::new();
 
         let mut variant_map = HashMap::new();
-        vcf_reader.records().into_iter().for_each(|vcf_record| {
-            let mut vcf_record = vcf_record.unwrap();
-            let variant_rid = vcf_record.rid().unwrap();
-            let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx);
-            match base_option {
-                Some(base) => {
-                    let variant_con = variant_map.entry(variant_rid as i32).or_insert(HashMap::new());
-                    let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
-                    variant_pos.entry(base.variant.to_owned()).or_insert(base);
-                },
-                None => {},
-            }
-        });
+
 
         let mut last_tid: i32 = -2; // no such tid in a real BAM file
         let mut total_indels_in_current_contig = 0;
@@ -446,9 +436,34 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                - perhaps something went wrong in the mapping?",
                   stoit_name);
         }
+        let bam_name = bam_generated.name().to_string();
         bam_generated.finish();
+        let mut vcf_reader = get_vcf(&bam_name, &m,
+                                     sample_idx, n_threads / sample_count);
+        vcf_reader.set_threads(split_threads);
+        vcf_reader.records().into_iter().for_each(|vcf_record| {
+            let mut vcf_record = vcf_record.unwrap();
+            let header = vcf_record.header();
+            let variant_rid = vcf_record.rid().unwrap();
+            // Check bam header names and vcf header names are in same order
+            // Sanity check
+            if target_names[variant_rid as usize]
+                == header.rid2name(vcf_record.rid().unwrap()).unwrap() {
+                let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx);
+                match base_option {
+                    Some(base) => {
+                        let variant_con = variant_map.entry(variant_rid as i32).or_insert(HashMap::new());
+                        let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
+                        variant_pos.entry(base.variant.to_owned()).or_insert(base);
+                    },
+                    None => {},
+                }
+            } else {
+                panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+            }
+        });
         let mut variant_matrix = variant_matrix.lock().unwrap();
-        variant_matrix.add_sample(stoit_name, sample_idx);
+        variant_matrix.add_sample(stoit_name, sample_idx, variant_map);
     });
     if mode=="genotype" {
         let mut variant_matrix = variant_matrix.lock().unwrap();
@@ -636,8 +651,12 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> Rea
         .expect(&format!("Failed to create vcf tempfile"));
 
     let cmd_string = format!(
-        "set -e -o pipefail; samtools index -@ {} {} {} && \
-                     pilon --genome {} --bam {} --vcf --output {} --fix none --threads {}",
+        "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
+                     samtools index -@ {} {} {} && \
+                     pilon --genome {} --bam {} --vcf --fix none --output {} --threads {}",
+        threads - 1,
+        bam_path,
+        bam_path,
         threads - 1,
         bam_path,
         &(bam_path.to_string() + ".bai"),
@@ -647,13 +666,14 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize) -> Rea
             .expect("Failed to convert tempfile path to str"),
         threads);
     info!("Queuing cmd_string: {}", cmd_string);
-    std::process::Command::new("bash")
+    command::finish_command_safely(
+        std::process::Command::new("bash")
         .arg("-c")
         .arg(&cmd_string)
-        .output()
-        .expect("Unable to execute bash");
+        .spawn()
+        .expect("Unable to execute bash"), "pilon");
     let vcf_path = &(vcf_file.path().to_str().unwrap().to_string() + ".vcf");
-    info!("VCF Path {:?}", vcf_path);
+    debug!("VCF Path {:?}", vcf_path);
     let vcf_reader = Reader::from_path(vcf_path)
         .expect("Failed to read pilon vcf output");
 

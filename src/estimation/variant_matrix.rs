@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use estimation::contig_variants::*;
-use model::*;
+use model::variants::*;
 use std::str;
 use std::path::Path;
 use std::io::prelude::*;
@@ -22,6 +22,9 @@ pub enum VariantMatrix {
         // TID, Position, Base, Var Depth, Total Depth
         all_variants: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
         variants_map: HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>,
+        // Placeholder hashmap for the depths of each contig for a sample
+        // Deleted after use
+        depths: HashMap<i32, Vec<i32>>,
         contigs: HashMap<i32, Vec<u8>>,
         target_names: HashMap<i32, String>,
         target_lengths: HashMap<i32, f64>,
@@ -48,6 +51,7 @@ impl VariantMatrix {
             average_genotypes: HashMap::new(),
             all_variants: HashMap::new(),
             variants_map: HashMap::new(),
+            depths: HashMap::new(),
             contigs: HashMap::new(),
             target_names: HashMap::new(),
             target_lengths: HashMap::new(),
@@ -69,7 +73,8 @@ impl VariantMatrix {
 pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
-    fn add_sample(&mut self, sample_name: String, sample_idx: usize);
+    fn add_sample(&mut self, sample_name: String, sample_idx: usize,
+                  variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
 
     /// Takes [VariantStats](contig_variants/VariantStats) struct for single contig and adds to
     /// [VariantMatrix](VariantMatrix)
@@ -137,13 +142,46 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn add_sample(&mut self, sample_name: String, sample_idx: usize) {
+    fn add_sample(&mut self, sample_name: String, sample_idx: usize,
+                  variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
+                ref mut all_variants,
+                ref mut depths,
                 ..
             } => {
                 sample_names[sample_idx] = sample_name;
+
+                for (tid, depth) in depths.iter() {
+                    // Initialize contig id in variant hashmap
+                    let contig_variants = all_variants.entry(*tid)
+                        .or_insert(HashMap::new());
+                    let placeholder = HashMap::new();
+                    let variants = match variant_records.get(tid) {
+                        Some(map) => map,
+                        _ => &placeholder,
+                    };
+
+                    // Apppend the sample index to each variant abundance
+                    // Initialize the variant position index
+                    // Also turns out to be the total number of variant positions
+                    for (pos, total_depth) in depth.iter().enumerate() {
+                        let position_variants = contig_variants.entry(pos as i64)
+                            .or_insert(HashMap::new());
+                        let mut variant_depth: f64 = 0.;
+
+                        if variants.contains_key(&(pos as i64)) {
+                            let abundance_map = variants.get(&(pos as i64)).unwrap();
+                            for (variant, base_info) in abundance_map.iter() {
+                                let sample_map = position_variants.entry(variant.clone())
+                                    .or_insert(base_info.clone());
+                                sample_map.combine_sample(base_info, sample_idx, *total_depth);
+                            }
+                        }
+                    }
+                }
+                *depths = HashMap::new();
             }
         }
     }
@@ -163,6 +201,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut target_names,
                 ref mut target_lengths,
                 ref mut variances,
+                ref mut depths,
                 ..
             } => {
                 match variant_stats {
@@ -191,30 +230,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                         target_names.entry(tid)
                             .or_insert(str::from_utf8(&target_name).unwrap().to_string());
                         target_lengths.entry(tid).or_insert(target_len);
-
-                        // Initialize contig id in variant hashmap
-                        let contig_variants = all_variants.entry(tid)
-                            .or_insert(HashMap::new());
-
-
-                        // Apppend the sample index to each variant abundance
-                        // Initialize the variant position index
-                        // Also turns out to be the total number of variant positions
-                        for (pos, total_depth) in depth.iter().enumerate() {
-                            let position_variants = contig_variants.entry(pos as i64)
-                                .or_insert(HashMap::new());
-                            let mut variant_depth: f64 = 0.;
-
-                            if variants.contains_key(&(pos as i64)) {
-                                let abundance_map = variants.get(&(pos as i64)).unwrap();
-                                for (variant, base_info) in abundance_map.iter() {
-                                    let sample_map = position_variants.entry(variant.clone())
-                                        .or_insert(base_info.clone());
-                                    sample_map.combine_sample(base_info, sample_idx, *total_depth);
-                                }
-                            }
-                        }
-
+                        // copy across depths
+                        depths.entry(tid).or_insert(depth);
                         contigs.entry(tid).or_insert(contig);
                         
                     }

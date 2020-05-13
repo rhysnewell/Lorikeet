@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-use model::*;
+use model::variants::*;
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
