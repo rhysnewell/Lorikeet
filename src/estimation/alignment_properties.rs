@@ -20,7 +20,7 @@ use coverm::bam_generator::*;
 use rust_htslib::bam::{self, record::Cigar};
 use statrs::statistics::{OrderStatistics, Statistics};
 
-use crate::model::Variant;
+use crate::model::variants::Variant;
 
 #[derive(Clone, Debug, Copy, Deserialize, Serialize)]
 pub struct AlignmentProperties {

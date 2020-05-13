@@ -1,9 +1,9 @@
-extern crate lorikeet_rs as lorikeet;
+extern crate lorikeet_genome;
 
-use lorikeet::*;
-use lorikeet::estimation::contig;
-use lorikeet::external_command_checker;
-use lorikeet::cli::*;
+use lorikeet_genome::*;
+use lorikeet_genome::estimation::contig;
+use lorikeet_genome::external_command_checker;
+use lorikeet_genome::cli::*;
 
 extern crate rust_htslib;
 use rust_htslib::bam;
@@ -42,8 +42,6 @@ use env_logger::Builder;
 
 extern crate tempfile;
 use tempfile::NamedTempFile;
-
-
 
 const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 
