@@ -258,7 +258,7 @@ impl FuzzyDBSCAN {
             }
         }
         if !noise_cluster.is_empty() {
-            // we don't want noise, so we just ignore it for now
+            info!("{} Variants Clustered as noise during Fuzzy DBSCAN", noise_cluster.len());
             clusters.push(noise_cluster);
         }
         clusters

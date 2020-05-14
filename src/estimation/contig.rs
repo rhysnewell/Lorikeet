@@ -131,6 +131,8 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut read_cnt_id: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
     let mut read_to_id = Arc::new(Mutex::new(HashMap::new()));
     // Loop through bam generators in parallel
+    let split_threads = std::cmp::max(n_threads / sample_count, 1);
+
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
 //        info!("Generating VCF");
 
@@ -144,7 +146,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let stoit_name = bam_generated.name().to_string();
 
 
-        let split_threads = (n_threads / sample_count);
         bam_generated.set_threads(split_threads);
 
         let header = bam_generated.header().clone(); // bam header
@@ -439,7 +440,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let bam_name = bam_generated.name().to_string();
         bam_generated.finish();
         let mut vcf_reader = get_vcf(&bam_name, &m,
-                                     sample_idx, n_threads / sample_count);
+                                     sample_idx, split_threads);
         vcf_reader.set_threads(split_threads);
         vcf_reader.records().into_iter().for_each(|vcf_record| {
             let mut vcf_record = vcf_record.unwrap();
