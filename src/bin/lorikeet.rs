@@ -1190,7 +1190,7 @@ fn get_streamed_filtered_bam_readers(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    p.threads / n_samples,
+                    std::cmp::max(p.threads / n_samples, 1),
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     filter_params.flag_filters.clone(),
                     filter_params.min_aligned_length_single,
