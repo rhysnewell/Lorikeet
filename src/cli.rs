@@ -92,6 +92,7 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   -d, --outdir                          Output directory
 {}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
@@ -176,8 +177,6 @@ Other arguments (optional):
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
-   --bam-file-cache-directory            Output BAM files generated during
-                                         alignment to this directory
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
@@ -223,6 +222,7 @@ Define mapping(s) (required):
                                          gene locations on reference genome.
                                          -i and -f are already set. Only used if
                                          not GFF file is not premade.
+   -d, --outdir                          Output directory.
 {}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
@@ -307,8 +307,6 @@ Other arguments (optional):
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
-   --bam-file-cache-directory            Output BAM files generated during
-                                         alignment to this directory
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
@@ -349,6 +347,7 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   -d, --outdir                          Output directory
 {}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
@@ -423,8 +422,6 @@ Other arguments (optional):
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
-   --bam-file-cache-directory            Output BAM files generated during
-                                         alignment to this directory
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
@@ -464,6 +461,7 @@ Define mapping(s) (required):
                                          <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   -d, --outdir                          Output directory
 {}
    --minimap2-params PARAMS              Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
@@ -508,8 +506,9 @@ Alignment filtering (optional):
                                          bases must be aligned.
                                          Conflicts --allow-improper-pairs. [default 0.0]
    --allow-improper-pairs                Allows reads to be mapped as improper pairs
-   --include-supplementary                    Includes read alignments flagged as supplementary
-   --include-secondary                        Includes read alignments flagged as secondary
+   --include-supplementary               Includes read alignments flagged as supplementary
+   --include-secondary                   Includes read alignments flagged as secondary
+
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -560,8 +559,7 @@ Other arguments (optional):
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
-   --bam-file-cache-directory            Output BAM files generated during
-                                         alignment to this directory
+
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
@@ -802,10 +800,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .multiple(true)
                     .required_unless_one(
                         &["full-help"]))
-                .arg(Arg::with_name("bam-file-cache-directory")
+                .arg(Arg::with_name("outdir")
                     .long("bam-file-cache-directory")
-                    .takes_value(true)
-                    .conflicts_with("bam-files"))
+                    .short("d")
+                    .takes_value(true))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -896,10 +894,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-variant-depth")
                     .short("f")
                     .default_value("10"))
-                .arg(Arg::with_name("depth-threshold")
-                    .long("depth-threshold")
-                    .short("d")
-                    .default_value("50"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
@@ -998,12 +992,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("reference")
                     .takes_value(true)
                     .required_unless_one(&["full-help"]))
-                .arg(Arg::with_name("bam-file-cache-directory")
+                .arg(Arg::with_name("outdir")
                     .long("bam-file-cache-directory")
-                    .takes_value(true)
-                    .conflicts_with("bam-files"))
+                    .short("d")
+                    .takes_value(true))
                 .arg(Arg::with_name("threads")
-                    .short("-t")
+                    .short("t")
                     .long("threads")
                     .default_value("1")
                     .takes_value(true))
@@ -1079,10 +1073,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-variant-depth")
                     .short("f")
                     .default_value("10"))
-                .arg(Arg::with_name("depth-threshold")
-                    .long("depth-threshold")
-                    .short("d")
-                    .default_value("50"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
@@ -1176,16 +1166,28 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-files","read1","coupled","interleaved","full-help"])
                     .conflicts_with("bam-files"))
+                .arg(Arg::with_name("longreads")
+                    .long("longreads")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                .arg(Arg::with_name("longread-bam-files")
+                    .short("l")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longreads", "sharded"]))
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
                     .multiple(true)
                     .takes_value(true)
                     .required_unless_one(&["full-help"]))
-                .arg(Arg::with_name("bam-file-cache-directory")
+                .arg(Arg::with_name("outdir")
                     .long("bam-file-cache-directory")
-                    .takes_value(true)
-                    .conflicts_with("bam-files"))
+                    .short("d")
+                    .takes_value(true))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -1274,10 +1276,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("strain-ani")
                     .long("strain-ani")
                     .short("a"))
-                .arg(Arg::with_name("depth-threshold")
-                    .long("depth-threshold")
-                    .short("d")
-                    .default_value("50"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
@@ -1367,16 +1365,28 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-files","read1","coupled","interleaved","full-help"])
                     .conflicts_with("bam-files"))
+                .arg(Arg::with_name("longreads")
+                    .long("longreads")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                .arg(Arg::with_name("longread-bam-files")
+                    .short("l")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longreads", "sharded"]))
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
                     .multiple(true)
                     .takes_value(true)
                     .required_unless_one(&["full-help"]))
-                .arg(Arg::with_name("bam-file-cache-directory")
+                .arg(Arg::with_name("outdir")
                     .long("bam-file-cache-directory")
-                    .takes_value(true)
-                    .required_unless("bam-files"))
+                    .short("d")
+                    .takes_value(true))
                 .arg(Arg::with_name("vcfs")
                     .long("vcfs")
                     .multiple(true)
@@ -1477,10 +1487,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("strain-ani")
                     .short("a")
                     .takes_value(true))
-                .arg(Arg::with_name("depth-threshold")
-                    .long("depth-threshold")
-                    .short("d")
-                    .default_value("50"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
@@ -1635,6 +1641,18 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-file","read1","interleaved","single","full-help"])
                     .conflicts_with("bam-file"))
+                .arg(Arg::with_name("longreads")
+                    .long("longreads")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                .arg(Arg::with_name("longread-bam-files")
+                    .short("l")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longreads", "sharded"]))
                 .arg(Arg::with_name("interleaved")
                     .long("interleaved")
                     .multiple(true)
@@ -1655,10 +1673,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true)
                     .required_unless_one(
                         &["full-help"]))
-                .arg(Arg::with_name("bam-file-cache-directory")
+                .arg(Arg::with_name("outdir")
                     .long("bam-file-cache-directory")
-                    .takes_value(true)
-                    .conflicts_with("bam-file"))
+                    .short("d")
+                    .takes_value(true))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")

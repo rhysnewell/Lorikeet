@@ -21,6 +21,10 @@ pub fn check_for_pilon() {
     self::check_for_external_command_presence("pilon", "which pilon");
 }
 
+pub fn check_for_sniffles() {
+    self::check_for_external_command_presence("sniffles", "which sniffles");
+}
+
 pub fn check_for_roary() {
     self::check_for_external_command_presence("roary", "which roary");
 }
