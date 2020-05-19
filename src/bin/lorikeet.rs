@@ -132,7 +132,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters,
+                               None);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -142,7 +143,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters,
+                               None);
                 } else {
                     let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -150,7 +152,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters,
+                               None);
                 }
             } else {
                 let mapping_program = parse_mapping_program(&m);
@@ -176,7 +179,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters,
+                               None);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -188,7 +192,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                generator_sets,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters,
+                               None);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -204,7 +209,8 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters.clone());
+                               filter_params.flag_filters.clone(),
+                               None);
                 }
             }
         },
@@ -220,7 +226,12 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-
+            let mut long_readers = vec!();
+            if m.is_present("longread-bam-files") {
+                let longreads = m.values_of("longread-bam-files").unwrap().collect();
+                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    longreads);
+            };
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
@@ -237,7 +248,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        bam_readers,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -247,7 +258,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        bam_readers,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 } else {
                     let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -255,7 +266,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        bam_readers,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 }
             } else {
                 let mapping_program = parse_mapping_program(&m);
@@ -266,8 +277,7 @@ fn main(){
                         m,
                         mapping_program,
                         &None,
-                        &filter_params,
-                    );
+                        &filter_params);
                     let mut all_generators = vec!();
                     let mut indices = vec!(); // Prevent indices from being dropped
                     for set in generator_sets {
@@ -281,7 +291,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        all_generators,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -293,7 +303,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        generator_sets,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -309,7 +319,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        all_generators,
-                                       filter_params.flag_filters.clone());
+                                       filter_params.flag_filters.clone(), None);
                 }
             }
         },
@@ -325,24 +335,31 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+            
+            let mut long_readers = vec!();
+            if m.is_present("longread-bam-files") {
+                let longreads = m.values_of("longread-bam-files").unwrap().collect();
+                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    longreads);
+            };
 
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
-                        bam_files,
-                        filter_params.flag_filters.clone(),
-                        filter_params.min_aligned_length_single,
-                        filter_params.min_percent_identity_single,
-                        filter_params.min_aligned_percent_single,
-                        filter_params.min_aligned_length_pair,
-                        filter_params.min_percent_identity_pair,
-                        filter_params.min_aligned_percent_pair);
+                    let mut bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
+                            bam_files,
+                            filter_params.flag_filters.clone(),
+                            filter_params.min_aligned_length_single,
+                            filter_params.min_percent_identity_single,
+                            filter_params.min_aligned_percent_single,
+                            filter_params.min_aligned_length_pair,
+                            filter_params.min_percent_identity_pair,
+                            filter_params.min_aligned_percent_pair);
                     run_pileup(m,
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers))
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -352,16 +369,19 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers))
+
                 } else {
-                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    let mut bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
+                    
                     run_pileup(m,
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers))
                 }
+
             } else {
                 let mapping_program = parse_mapping_program(&m);
                 external_command_checker::check_for_samtools();
@@ -386,7 +406,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -398,7 +418,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                generator_sets,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -414,7 +434,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters.clone());
+                               filter_params.flag_filters.clone(), Some(long_readers));
                 }
             }
         },
@@ -430,11 +450,11 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
+
                 if filter_params.doing_filtering() {
-                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let mut bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -443,11 +463,12 @@ fn main(){
                         filter_params.min_aligned_length_pair,
                         filter_params.min_percent_identity_pair,
                         filter_params.min_aligned_percent_pair);
+
                     run_pileup(m,
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, None);
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -456,15 +477,15 @@ fn main(){
                     run_pileup(m, mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, None);
                 } else {
-                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    let mut bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
-                                       mode,
-                                       &mut estimators,
-                                       bam_readers,
-                                       filter_params.flag_filters);
+                               mode,
+                               &mut estimators,
+                               bam_readers,
+                               filter_params.flag_filters, None);
                 }
             } else if m.is_present("read1") |
                 m.is_present("interleaved") |
@@ -490,10 +511,10 @@ fn main(){
                     }
                     debug!("Finished collecting generators.");
                     run_pileup(m,
-                                       mode,
-                                       &mut estimators,
-                                       all_generators,
-                                       filter_params.flag_filters);
+                               mode,
+                               &mut estimators,
+                               all_generators,
+                               filter_params.flag_filters, None);
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -505,7 +526,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        generator_sets,
-                                       filter_params.flag_filters);
+                                       filter_params.flag_filters, None);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -521,7 +542,7 @@ fn main(){
                                        mode,
                                        &mut estimators,
                                        all_generators,
-                                       filter_params.flag_filters.clone());
+                                       filter_params.flag_filters.clone(), None);
                 }
             }
         },
@@ -537,6 +558,12 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+            let mut long_readers = vec!();
+            if m.is_present("longread-bam-files") {
+                let longreads = m.values_of("longread-bam-files").unwrap().collect();
+                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    longreads);
+            };
 
             if m.is_present("bam-file") {
                 let bam_files: Vec<&str> = m.values_of("bam-file").unwrap().collect();
@@ -554,7 +581,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 } else {
                     let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -562,7 +589,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 }
             } else {
                 let mapping_program = parse_mapping_program(&m);
@@ -588,7 +615,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -600,7 +627,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                generator_sets,
-                               filter_params.flag_filters);
+                               filter_params.flag_filters, Some(long_readers));
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -616,7 +643,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters.clone());
+                               filter_params.flag_filters.clone(), Some(long_readers));
                 }
             }
         },
@@ -1244,7 +1271,8 @@ fn run_pileup<'a,
     mode: &str,
     estimators: &mut EstimatorsAndTaker,
     bam_readers: Vec<T>,
-    flag_filters: FlagFilter) {
+    flag_filters: FlagFilter,
+    long_readers: Option<Vec<bam_generator::BamFileNamedReader>>) {
     match mode {
         "polymorph" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1288,6 +1316,7 @@ fn run_pileup<'a,
             contig::pileup_variants(
                 m,
                 bam_readers,
+                long_readers,
                 mode,
                 &mut estimators.estimators,
                 fasta_reader,
@@ -1303,6 +1332,7 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
+                false,
                 false);
         },
         "genotype" => {
@@ -1338,6 +1368,7 @@ fn run_pileup<'a,
             contig::pileup_variants(
                 m,
                 bam_readers,
+                long_readers,
                 mode,
                 &mut estimators.estimators,
                 fasta_reader,
@@ -1353,7 +1384,8 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
-                include_soft_clipping);
+                include_soft_clipping,
+                m.is_present("longread-bam-files"));
         },
         "summarize" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1386,6 +1418,7 @@ fn run_pileup<'a,
             contig::pileup_variants(
                 m,
                 bam_readers,
+                long_readers,
                 mode,
                 &mut estimators.estimators,
                 fasta_reader,
@@ -1401,6 +1434,7 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
+                false,
                 false);
         },
         "evolve" => {
@@ -1434,6 +1468,7 @@ fn run_pileup<'a,
             contig::pileup_variants(
                 m,
                 bam_readers,
+                long_readers,
                 mode,
                 &mut estimators.estimators,
                 fasta_reader,
@@ -1449,6 +1484,7 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
+                false,
                 false);
         },
         "polish" => {
@@ -1487,6 +1523,7 @@ fn run_pileup<'a,
             contig::pileup_variants(
                 m,
                 bam_readers,
+                long_readers,
                 mode,
                 &mut estimators.estimators,
                 fasta_reader,
@@ -1502,6 +1539,7 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
+                false,
                 false);
         },
         _ => panic!("Unknown lorikeet mode"),
