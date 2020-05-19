@@ -52,7 +52,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     include_soft_clipping: bool,
     is_long_read: bool) {
 
-    let sample_count = bam_readers.len();
+    let mut sample_count = bam_readers.len();
     let reference = Arc::new(Mutex::new(reference));
     let coverage_estimators = Arc::new(Mutex::new(coverage_estimators));
     let mut ani = 0.;
@@ -63,12 +63,13 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Get the indices of the longread bams
     let longreads = match long_readers {
         Some(vec) => {
+            sample_count += vec.len();
             vec
         },
         _ => vec!(),
     };
-    info!("{} Longread BAM files of {} Total BAMs",
-          longreads.len(), bam_readers.len() + longreads.len());
+    info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
+          longreads.len(), bam_readers.len(), sample_count);
 
     match mode {
         "evolve" => {
@@ -695,13 +696,21 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
 
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
-            let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
-            return generate_vcf(bam_path, m, threads, longread)
+            if longread {
+                let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+                return generate_vcf(bam_path, m, threads, longread)
+            } else {
+                let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+                return generate_vcf(bam_path, m, threads, longread)
+            }
         } else {
             let vcf_path = vcf_path[0];
             let vcf = Reader::from_path(vcf_path).unwrap();
             return vcf
         }
+    } else if longread {
+        let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+        return generate_vcf(bam_path, m, threads, longread)
     } else if m.is_present("bam-files") {
         let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
         return generate_vcf(bam_path, m, threads, longread)
@@ -760,6 +769,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
+                .stderr(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("Unable to execute bash"), "pilon");
@@ -798,13 +808,14 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
+                .stderr(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("Unable to execute bash"), "sniffles");
-        let vcf_path = &(vcf_file.path().to_str().unwrap().to_string() + ".vcf");
+        let vcf_path = vcf_file.path();
         debug!("VCF Path {:?}", vcf_path);
         let vcf_reader = Reader::from_path(vcf_path)
-            .expect("Failed to read pilon vcf output");
+            .expect("Failed to read sniffles vcf output");
 
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader
