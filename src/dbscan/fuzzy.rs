@@ -125,7 +125,7 @@ impl MetricSpace for Var<> {
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
-//                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
+                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
 
                 return 1. - rho
             }
@@ -139,8 +139,10 @@ impl MetricSpace for Var<> {
                 let row_depth = self.deps[0] as f64;
                 let col_depth = other.deps[0] as f64;
 
+                // Calculate Aitchinson Distance
                 let distance = (((row_freq / geom_var[0] as f64).ln() - (col_freq / geom_var[0] as f64).ln()).powf(2.)
                     + ((row_depth / geom_dep[0] as f64).ln() - (col_depth / geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
+                debug!("Distance {}", distance);
                 distance
             }
         }
