@@ -56,18 +56,23 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let reference = Arc::new(Mutex::new(reference));
     let coverage_estimators = Arc::new(Mutex::new(coverage_estimators));
     let mut ani = 0.;
-    // Print file header
-    let variant_matrix = Arc::new(Mutex::new(VariantMatrix::new_matrix(sample_count)));
+
+
     let gff_map = Arc::new(Mutex::new(HashMap::new()));
     let mut codon_table = CodonTable::setup();
-    // Get the indices of the longread bams
+
+    // Get long reads bams if they exist
     let longreads = match long_readers {
         Some(vec) => {
+            // update sample count
             sample_count += vec.len();
             vec
         },
         _ => vec!(),
     };
+
+    let variant_matrix = Arc::new(Mutex::new(VariantMatrix::new_matrix(sample_count)));
+
     info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
           longreads.len(), bam_readers.len(), sample_count);
 
@@ -214,6 +219,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
 }
 
+/// Process all reads in a BAM file
 fn process_bam<R: NamedBamReader + Send,
                 G: NamedBamReaderGenerator<R> + Send>(
     bam_generator: G,
@@ -255,7 +261,6 @@ fn process_bam<R: NamedBamReader + Send,
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
     let mut record: bam::record::Record = bam::Record::new();
-//        let mut vcf_record: bcf::record::Record = bcf::Reader::empty_record();
     let mut ups_and_downs: Vec<i32> = Vec::new();
     let mut num_mapped_reads_total: u64 = 0;
     let mut num_mapped_reads_in_current_contig: u64 = 0;
@@ -264,11 +269,7 @@ fn process_bam<R: NamedBamReader + Send,
     let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
-//        let mut nuc_freq = HashMap::new();
-//        let mut indels = HashMap::new();
-
     let mut variant_map = HashMap::new();
-
 
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
@@ -281,9 +282,13 @@ fn process_bam<R: NamedBamReader + Send,
     while bam_generated.read(&mut record)
         .expect("Error while reading BAM record") == true {
 
-        if (!flag_filters.include_supplementary && record.is_supplementary()) ||
-            (!flag_filters.include_secondary && record.is_secondary()) ||
-            (!flag_filters.include_improper_pairs && !record.is_proper_pair()){
+        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread) ||
+            (!flag_filters.include_secondary && record.is_secondary() && !longread) ||
+            (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread){
+            skipped_reads += 1;
+            continue;
+        } else if (!flag_filters.include_supplementary && record.is_supplementary() && longread) ||
+            (!flag_filters.include_secondary && record.is_secondary() && longread) {
             skipped_reads += 1;
             continue;
         }
@@ -296,13 +301,15 @@ fn process_bam<R: NamedBamReader + Send,
                 skipped_reads += 1;
                 continue;
             }
-            // Check if new read to id
-            if !read_to_id.lock().unwrap().contains_key(&record.qname().to_vec()) {
-                let mut read_to_id = read_to_id.lock().unwrap();
-                let mut read_cnt_id = read_cnt_id.lock().unwrap();
-                read_to_id.entry(record.qname().to_vec())
-                    .or_insert(*read_cnt_id);
-                *read_cnt_id += 1;
+            if longread {
+                // Check if new read to id
+                if !read_to_id.lock().unwrap().contains_key(&record.qname().to_vec()) {
+                    let mut read_to_id = read_to_id.lock().unwrap();
+                    let mut read_cnt_id = read_cnt_id.lock().unwrap();
+                    read_to_id.entry(record.qname().to_vec())
+                        .or_insert(*read_cnt_id);
+                    *read_cnt_id += 1;
+                }
             }
 
 
@@ -371,6 +378,9 @@ fn process_bam<R: NamedBamReader + Send,
 
             num_mapped_reads_in_current_contig += 1;
 
+            let mut variant_matrix = variant_matrix.lock().unwrap();
+
+
             // for each chunk of the cigar string
             let mut cursor: usize = record.pos() as usize;
             let quals = record.qual();
@@ -381,13 +391,16 @@ fn process_bam<R: NamedBamReader + Send,
                         // if M, X, or = increment start and decrement end index
                         ups_and_downs[cursor] += 1;
                         let final_pos = cursor + cig.len() as usize;
-                        for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                        if longread {
+                            for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                                let mut current_variants = variant_matrix.variants(tid, cursor as i64).unwrap();
+
 //                                let base = record.seq()[qpos];
 //                                let refr = ref_seq[cursor as usize];
 //                                let mut nuc_freq = nuc_freq.lock().unwrap();
 //                                let nuc_map = nuc_freq
 //                                    .entry(cursor as i32).or_insert(BTreeMap::new());
-
+//
 //                                if base != refr {
 //                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
 //                                    let id = nuc_map.entry(base as char).or_insert(BTreeSet::new());
@@ -398,31 +411,33 @@ fn process_bam<R: NamedBamReader + Send,
 //                                    let mut read_to_id = read_to_id.lock().unwrap();
 //                                    id.insert(read_to_id[&record.qname().to_vec()]);
 //                                }
-                            cursor += 1;
+                                cursor += 1;
+                            }
+                        } else {
+                            cursor += cig.len() as usize;
                         }
-
                         if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                             ups_and_downs[final_pos] -= 1;
                         }
                         read_cursor += cig.len() as usize;
                     },
                     Cigar::Del(_) => {
-                        if include_indels {
-//                                let refr = (ref_seq[cursor as usize] as char).to_string();
-//                                let insert = refr +
-//                                    &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
-//                                let refr = str::from_utf8(&ref_seq[cursor as usize..
-//                                    cursor as usize + cig.len() as usize]).unwrap().to_string();
-//                                if refr != insert {
-//                                    let indel_map = indels
-//                                        .entry(cursor as i32).or_insert(BTreeMap::new());
-//                                    let id = indel_map.entry(insert)
-//                                        .or_insert(BTreeSet::new());
-//                                    let mut read_to_id = read_to_id.lock().unwrap();
-//                                    id.insert(read_to_id[&record.qname().to_vec()]);
-//                                    total_indels_in_current_contig += cig.len() as u64;
-//                                }
-                        }
+//                        if longreads {
+//                            let refr = (ref_seq[cursor as usize] as char).to_string();
+//                            let insert = refr +
+//                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
+//                            let refr = str::from_utf8(&ref_seq[cursor as usize..
+//                                cursor as usize + cig.len() as usize]).unwrap().to_string();
+//                            if refr != insert {
+//                                let indel_map = indels
+//                                    .entry(cursor as i32).or_insert(BTreeMap::new());
+//                                let id = indel_map.entry(insert)
+//                                    .or_insert(BTreeSet::new());
+//                                let mut read_to_id = read_to_id.lock().unwrap();
+//                                id.insert(read_to_id[&record.qname().to_vec()]);
+//                                total_indels_in_current_contig += cig.len() as u64;
+//                            }
+//                        }
 
                         cursor += cig.len() as usize;
 
@@ -432,44 +447,44 @@ fn process_bam<R: NamedBamReader + Send,
                         cursor += cig.len() as usize;
                     },
                     Cigar::Ins(_) => {
-                        if include_indels {
-//                                let refr = (ref_seq[cursor as usize] as char).to_string();
-//                                let insert = match str::from_utf8(&record.seq().as_bytes()[
-//                                    read_cursor..read_cursor + cig.len() as usize]) {
-//                                    Ok(ins) => { ins.to_string() },
-//                                    Err(_e) => { "".to_string() },
-//                                };
-
-//                                let indel_map = indels.entry(cursor as i32)
-//                                    .or_insert(BTreeMap::new());
-
-//                                let id = indel_map.entry(refr + &insert)
-//                                    .or_insert(BTreeSet::new());
-//                                let mut read_to_id = read_to_id.lock().unwrap();
-//                                id.insert(read_to_id[&record.qname().to_vec()]);
-                        }
+//                        if longreads {
+//                            let refr = (ref_seq[cursor as usize] as char).to_string();
+//                            let insert = match str::from_utf8(&record.seq().as_bytes()[
+//                                read_cursor..read_cursor + cig.len() as usize]) {
+//                                Ok(ins) => { ins.to_string() },
+//                                Err(_e) => { "".to_string() },
+//                            };
+//
+//                            let indel_map = indels.entry(cursor as i32)
+//                                .or_insert(BTreeMap::new());
+//
+//                            let id = indel_map.entry(refr + &insert)
+//                                .or_insert(BTreeSet::new());
+//                            let mut read_to_id = read_to_id.lock().unwrap();
+//                            id.insert(read_to_id[&record.qname().to_vec()]);
+//                        }
                         read_cursor += cig.len() as usize;
                         total_indels_in_current_contig += cig.len() as u64;
                     },
                     Cigar::SoftClip(_) => {
-                        // soft clipped portions of reads can be included as insertions
+                        // soft clipped portions of reads can be included as structural variants
                         // not sure if this correct protocol or not
-                        if include_soft_clipping {
-//                                let refr = (ref_seq[cursor as usize] as char).to_string();
-//                                let insert = match str::from_utf8(&record.seq().as_bytes()[
-//                                    read_cursor..read_cursor + cig.len() as usize]) {
-//                                    Ok(ins) => {ins.to_string()},
-//                                    Err(_e) => {"".to_string()},
-//                                };
-//                                let indel_map = indels.entry(cursor as i32)
-//                                    .or_insert(BTreeMap::new());
-
-//                                let id = indel_map.entry(refr + &insert)
-//                                    .or_insert(BTreeSet::new());
-//                                let mut read_to_id = read_to_id.lock().unwrap();
-//                                id.insert(read_to_id[&record.qname().to_vec()]);
-                            total_indels_in_current_contig += cig.len() as u64;
-                        }
+//                        if longreads {
+//                            let refr = (ref_seq[cursor as usize] as char).to_string();
+//                            let insert = match str::from_utf8(&record.seq().as_bytes()[
+//                                read_cursor..read_cursor + cig.len() as usize]) {
+//                                Ok(ins) => {ins.to_string()},
+//                                Err(_e) => {"".to_string()},
+//                            };
+//                            let indel_map = indels.entry(cursor as i32)
+//                                .or_insert(BTreeMap::new());
+//
+//                            let id = indel_map.entry(refr + &insert)
+//                                .or_insert(BTreeSet::new());
+//                            let mut read_to_id = read_to_id.lock().unwrap();
+//                            id.insert(read_to_id[&record.qname().to_vec()]);
+//                            total_indels_in_current_contig += cig.len() as u64;
+//                        }
                         read_cursor += cig.len() as usize;
                     },
                     Cigar::HardClip(_) | Cigar::Pad(_) => {
@@ -556,10 +571,15 @@ fn process_bam<R: NamedBamReader + Send,
             == header.rid2name(vcf_record.rid().unwrap()).unwrap() {
             let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx);
             match base_option {
-                Some(base) => {
-                    let variant_con = variant_map.entry(variant_rid as i32).or_insert(HashMap::new());
-                    let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
-                    variant_pos.entry(base.variant.to_owned()).or_insert(base);
+                Some(bases) => {
+                    if bases.len() > 1 {
+//                        println!("Bases {:?}", bases)
+                    }
+                    for base in bases {
+                        let variant_con = variant_map.entry(variant_rid as i32).or_insert(HashMap::new());
+                        let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
+                        variant_pos.entry(base.variant.to_owned()).or_insert(base);
+                    }
                 },
                 None => {},
             }
@@ -684,7 +704,7 @@ fn process_previous_contigs_var(
     }
 }
 
-/// Get or generate vcf file using pilon
+/// Get or generate vcf file
 pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
                sample_idx: usize, threads: usize, longread: bool) -> Reader {
     // if vcfs are already provided find correct one first
@@ -692,7 +712,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
         // Filter out bams that don't have stoit name and get their sample idx
         let vcf_path: Vec<&str> = vcf_paths.iter().cloned()
-                        .filter(|x| x.contains(stoit_name)).collect();
+            .filter(|x| x.contains(stoit_name)).collect();
 
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
@@ -728,7 +748,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
 
 }
 
-/// Makes direct call to pilon
+/// Makes direct call to pilon or sniffles
 pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longread: bool) -> Reader {
 
     // setup temp directory

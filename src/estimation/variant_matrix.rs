@@ -21,7 +21,7 @@ pub enum VariantMatrix {
         variances: HashMap<i32, Vec<f64>>,
         // TID, Position, Base, Var Depth, Total Depth
         all_variants: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        variants_map: HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>,
+        variants_map: HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>,
         // Placeholder hashmap for the depths of each contig for a sample
         // Deleted after use
         depths: HashMap<i32, Vec<i32>>,
@@ -76,6 +76,9 @@ pub trait VariantMatrixFunctions {
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
                   variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
 
+    /// Returns the variants at the current position as mutable reference
+    fn variants(&mut self, tid: i32, pos: i64) -> Option<&mut HashMap<Variant, Base>>;
+
     /// Takes [VariantStats](contig_variants/VariantStats) struct for single contig and adds to
     /// [VariantMatrix](VariantMatrix)
     fn add_contig(&mut self,
@@ -97,17 +100,17 @@ pub trait VariantMatrixFunctions {
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) ;
 
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64>;
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64>;
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64>;
 
     fn print_variant_stats(&self, output_prefix: &str);
 
@@ -182,6 +185,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                     }
                 }
                 *depths = HashMap::new();
+            }
+        }
+    }
+
+    fn variants(&mut self, tid: i32, pos: i64) -> Option<&mut HashMap<Variant, Base>> {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut all_variants,
+                ..
+            } => {
+                match all_variants.get_mut(&tid) {
+                    Some(contig_variants) => {
+                        return contig_variants.get_mut(&pos)
+                    },
+                    _ => return None,
+                };
             }
         }
     }
@@ -649,7 +668,7 @@ impl VariantMatrixFunctions for VariantMatrix {
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) {
 
         if clusters.len() > 1 {
@@ -842,9 +861,9 @@ impl VariantMatrixFunctions for VariantMatrix {
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64> {
 
-        let read_set = Arc::new(Mutex::new(BTreeSet::new()));
+        let read_set = Arc::new(Mutex::new(HashSet::new()));
 
         variants.par_iter().for_each(|assignment|{
             let variant = &variant_info[assignment.index];
@@ -860,9 +879,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, BTreeMap<Variant, BTreeSet<i64>>>>) -> BTreeSet<i64> {
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64> {
 
-        let mut variant_set = BTreeSet::new();
+        let mut variant_set = HashSet::new();
 
         variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone();
 

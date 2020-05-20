@@ -8,10 +8,10 @@ use bio::stats::LogProb;
 use itertools::Itertools;
 use ordered_float::NotNan;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use rust_htslib::{bcf, bcf::record::Numeric};
+use rust_htslib::{bcf, bcf::record::Numeric, bam::record::Cigar};
 
-
-
+use std::sync::{Arc, Mutex};
+use rayon::prelude::*;
 //use crate::grammar;
 
 //pub mod model.evidence;
@@ -288,6 +288,8 @@ pub struct Base {
     pub af: Vec<f64>,
     // Frequency of variant
     pub freq: Vec<f64>,
+    // Read ids assigned to variant
+    pub reads: HashSet<i64>,
 }
 
 impl Base {
@@ -338,34 +340,52 @@ impl Base {
             ac: vec![0; sample_count],
             af: vec![0.; sample_count],
             freq: vec![0.; sample_count],
+            reads: HashSet::new(),
         }
     }
 
-    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize) -> Option<Base> {
+    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize) -> Option<Vec<Base>> {
 
         let variants = collect_variants(record, false,
                                         false, None);
         if variants.len() > 0 {
-            debug!("Variants {:?}", variants);
-
-            // Get elements from record
-            let header = record.header();
-            let filters = record.filters();
-            let alleles = record.alleles();
 
             // Separate filters into hashset of filter struct
             let mut filter_hash = HashSet::new();
-            for filter in filters {
-                filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
+            {
+                let filters = record.filters();
+                let header = record.header();
+                for filter in filters {
+                    filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
+                }
             }
-
-            let mut base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
-            // TODO: Handle the case where a single site has multiple variants
-            //       Not sure if pilon ever produces alleles on the same vcf record though
-            if variants.len() == 1 {
+            let mut bases = vec!();
+            for (idx, variant) in variants.iter().enumerate() {
+                // Get elements from record
+                let alleles = record.alleles();
+                let mut base = Base::new(record.pos(), alleles[idx].to_vec(), sample_count);
+                // TODO: Handle the case where a single site has multiple variants
+                //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
-                base.variant = variants[0].clone();
-                base.filters[sample_idx] = filter_hash;
+//                let variant = match variant {
+//                    Variant::SNV(c) => {
+//                        if c == &base.refr[0] {
+////                            println!("Variant 1 {:?} {:?}", variant, base.refr);
+//
+//                            Variant::None
+//                        } else {
+//                            println!("Variant SNV {:?} {:?}", variant, base.refr);
+//                            variant.clone()
+//                        }
+//                    },
+//                    _ => {
+////                        println!("Variant 2 {:?}", variant);
+//                        variant.clone()
+//                    }
+//                };
+
+                base.variant = variant.clone();
+                base.filters[sample_idx] = filter_hash.clone();
                 base.depth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                 base.truedepth[sample_idx] = record.info(b"TD").integer().unwrap().unwrap()[0];
                 base.physicalcov[sample_idx] = record.info(b"PC").integer().unwrap().unwrap()[0];
@@ -377,11 +397,16 @@ impl Base {
                 base.xc[sample_idx] = record.info(b"XC").integer().unwrap().unwrap()[0];
                 base.ac[sample_idx] = record.info(b"AC").integer().unwrap().unwrap()[0];
                 base.af[sample_idx] = record.info(b"AF").float().unwrap().unwrap()[0] as f64;
+                bases.push(base);
             };
-            Some(base)
+            Some(bases)
         } else {
             None
         }
+    }
+
+    pub fn assign_read(&mut self, cig: Cigar, read_id: i64) {
+
     }
 }
 
@@ -504,66 +529,68 @@ pub fn collect_variants(
     } else {
         let alleles = record.alleles();
         let ref_allele = alleles[0];
-
+        let mut variant_vec = vec!();
         alleles
             .iter()
-            .skip(1)
+//            .skip(1)
             .enumerate()
-            .map(|(i, alt_allele)| {
+            .for_each(|(i, alt_allele)| {
                 if alt_allele == b"<*>" {
                     // dummy non-ref allele, signifying potential homozygous reference site
                     if omit_snvs {
-                        Variant::None
+                        variant_vec.push(Variant::None)
                     } else {
-                        Variant::None
+                        variant_vec.push(Variant::None)
                     }
                 } else if alt_allele == b"<DEL>" {
                     if let Some(ref svlens) = svlens {
                         if let Some(svlen) = svlens[i] {
-                            Variant::Deletion(svlen)
+                            variant_vec.push(Variant::Deletion(svlen))
                         } else {
                             // TODO fail with an error in this case
-                            Variant::None
+                            variant_vec.push(Variant::None)
                         }
                     } else {
                         // TODO fail with an error in this case
-                        Variant::None
+                        variant_vec.push(Variant::None)
                     }
                 } else if alt_allele[0] == b'<' {
                     // TODO Catch <DUP> structural variants here
                     // skip any other special alleles
-                    Variant::None
+                    variant_vec.push(Variant::None)
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
                     // SNV
                     if omit_snvs {
-                        Variant::None
+                        variant_vec.push(Variant::None)
+                    } else if alt_allele == &ref_allele {
+                        variant_vec.push(Variant::None)
                     } else {
-                        Variant::SNV(alt_allele[0])
+                        variant_vec.push(Variant::SNV(alt_allele[0]))
                     }
                 } else if alt_allele.len() == ref_allele.len() {
                     // MNV
-                    Variant::MNV(alt_allele.to_vec())
+                    variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                 } else {
                     let indel_len =
                         (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
                     // TODO fix position if variant is like this: cttt -> ct
 
                     if omit_indels || !is_valid_len(indel_len) {
-                        Variant::None
+                        variant_vec.push(Variant::None)
                     } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
-                        Variant::Deletion(
+                        variant_vec.push(Variant::Deletion(
                             (ref_allele.len() - alt_allele.len()) as u32,
-                        )
+                        ))
                     } else if is_valid_insertion_alleles(ref_allele, alt_allele) {
-                        Variant::Insertion(
+                        variant_vec.push(Variant::Insertion(
                             alt_allele[ref_allele.len()..].to_owned(),
-                        )
+                        ))
                     } else {
-                        Variant::None
+                        variant_vec.push(Variant::None)
                     }
                 }
-            })
-            .collect_vec()
+            });
+        variant_vec
     };
 
     variants
