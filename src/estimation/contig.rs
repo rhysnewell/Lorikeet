@@ -378,9 +378,8 @@ fn process_bam<R: NamedBamReader + Send,
 
             num_mapped_reads_in_current_contig += 1;
 
+            // Lock variant matrix to collect variants
             let mut variant_matrix = variant_matrix.lock().unwrap();
-
-
             // for each chunk of the cigar string
             let mut cursor: usize = record.pos() as usize;
             let quals = record.qual();
@@ -394,23 +393,25 @@ fn process_bam<R: NamedBamReader + Send,
                         if longread {
                             for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                                 let mut current_variants = variant_matrix.variants(tid, cursor as i64).unwrap();
-
-//                                let base = record.seq()[qpos];
-//                                let refr = ref_seq[cursor as usize];
-//                                let mut nuc_freq = nuc_freq.lock().unwrap();
-//                                let nuc_map = nuc_freq
-//                                    .entry(cursor as i32).or_insert(BTreeMap::new());
-//
-//                                if base != refr {
-//                                    let nuc_freq = Arc::clone(nuc_freq.lock().unwrap());
-//                                    let id = nuc_map.entry(base as char).or_insert(BTreeSet::new());
-//                                    let mut read_to_id = read_to_id.lock().unwrap();
-//                                    id.insert(read_to_id[&record.qname().to_vec()]);
-//                                } else {
-//                                    let id = nuc_map.entry("R".as_bytes()[0] as char).or_insert(BTreeSet::new());
-//                                    let mut read_to_id = read_to_id.lock().unwrap();
-//                                    id.insert(read_to_id[&record.qname().to_vec()]);
-//                                }
+                                let read_char = record.seq()[qpos];
+                                let refr_char = ref_seq[cursor as usize];
+                                current_variants.par_iter_mut().for_each(|(variant, base)|{
+                                    match variant {
+                                        Variant::SNV(alt) => {
+                                            if *alt != refr_char && *alt == read_char {
+                                                let mut read_to_id = read_to_id.lock().unwrap();
+                                                base.assign_read(read_to_id[&record.qname().to_vec()])
+                                            }
+                                        },
+                                        Variant::None => {
+                                            if refr_char == read_char {
+                                                let mut read_to_id = read_to_id.lock().unwrap();
+                                                base.assign_read(read_to_id[&record.qname().to_vec()])
+                                            }
+                                        },
+                                        _ => {}
+                                    }
+                                });
                                 cursor += 1;
                             }
                         } else {
@@ -422,7 +423,7 @@ fn process_bam<R: NamedBamReader + Send,
                         read_cursor += cig.len() as usize;
                     },
                     Cigar::Del(_) => {
-//                        if longreads {
+                        if longread {
 //                            let refr = (ref_seq[cursor as usize] as char).to_string();
 //                            let insert = refr +
 //                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
@@ -437,7 +438,7 @@ fn process_bam<R: NamedBamReader + Send,
 //                                id.insert(read_to_id[&record.qname().to_vec()]);
 //                                total_indels_in_current_contig += cig.len() as u64;
 //                            }
-//                        }
+                        }
 
                         cursor += cig.len() as usize;
 
@@ -558,8 +559,11 @@ fn process_bam<R: NamedBamReader + Send,
     let bam_name = bam_generated.name().to_string();
     bam_generated.finish();
 
-    let mut vcf_reader = get_vcf(&bam_name, &m,
-                                 sample_idx, split_threads, longread);
+    let mut vcf_reader = get_vcf(&bam_name,
+                                 &m,
+                                 sample_idx,
+                                 split_threads,
+                                 longread);
     vcf_reader.set_threads(split_threads);
     vcf_reader.records().into_iter().for_each(|vcf_record| {
         let mut vcf_record = vcf_record.unwrap();
@@ -571,10 +575,8 @@ fn process_bam<R: NamedBamReader + Send,
             == header.rid2name(vcf_record.rid().unwrap()).unwrap() {
             let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx);
             match base_option {
+
                 Some(bases) => {
-                    if bases.len() > 1 {
-//                        println!("Bases {:?}", bases)
-                    }
                     for base in bases {
                         let variant_con = variant_map.entry(variant_rid as i32).or_insert(HashMap::new());
                         let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());

@@ -21,7 +21,6 @@ pub enum VariantMatrix {
         variances: HashMap<i32, Vec<f64>>,
         // TID, Position, Base, Var Depth, Total Depth
         all_variants: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        variants_map: HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>,
         // Placeholder hashmap for the depths of each contig for a sample
         // Deleted after use
         depths: HashMap<i32, Vec<i32>>,
@@ -50,7 +49,6 @@ impl VariantMatrix {
             variances: HashMap::new(),
             average_genotypes: HashMap::new(),
             all_variants: HashMap::new(),
-            variants_map: HashMap::new(),
             depths: HashMap::new(),
             contigs: HashMap::new(),
             target_names: HashMap::new(),
@@ -76,7 +74,8 @@ pub trait VariantMatrixFunctions {
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
                   variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
 
-    /// Returns the variants at the current position as mutable reference
+    /// Returns the variants at the current position
+    /// as a mutable reference
     fn variants(&mut self, tid: i32, pos: i64) -> Option<&mut HashMap<Variant, Base>>;
 
     /// Takes [VariantStats](contig_variants/VariantStats) struct for single contig and adds to
@@ -100,17 +99,17 @@ pub trait VariantMatrixFunctions {
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) ;
 
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64>;
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64>;
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64>;
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64>;
 
     fn print_variant_stats(&self, output_prefix: &str);
 
@@ -124,7 +123,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut all_variants,
-                ref mut variants_map,
                 ref mut contigs,
                 ref mut target_names,
                 ref mut target_lengths,
@@ -135,7 +133,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 *coverages = HashMap::new();
                 *average_genotypes = HashMap::new();
                 *all_variants = HashMap::new();
-                *variants_map = HashMap::new();
                 *contigs = HashMap::new();
                 *target_names = HashMap::new();
                 *target_lengths = HashMap::new();
@@ -197,10 +194,12 @@ impl VariantMatrixFunctions for VariantMatrix {
             } => {
                 match all_variants.get_mut(&tid) {
                     Some(contig_variants) => {
-                        return contig_variants.get_mut(&pos)
+                        contig_variants.get_mut(&pos.clone())
                     },
-                    _ => return None,
-                };
+                    _ => {
+                        None
+                    },
+                }
             }
         }
     }
@@ -215,7 +214,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut all_variants,
-                ref mut variants_map,
                 ref mut contigs,
                 ref mut target_names,
                 ref mut target_lengths,
@@ -401,7 +399,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut geom_mean_dep,
                 ref mut geom_mean_frq,
                 ref mut pred_variants,
-//                variant_map,
+                all_variants,
                 target_lengths,
                 ..
             } => {
@@ -434,11 +432,10 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 // Perform read phasing clustering and return new clusters
                 // and shared read info between clusters
-//                let (clusters, shared_read_count, mut condensed)
-//                    = Self::linkage_clustering(&clusters,
-//                                               &variant_info,
-//                                               &snps_map,
-//                                               &indels_map);
+                let (clusters, shared_read_count, mut condensed)
+                    = Self::linkage_clustering(&clusters,
+                                               &variant_info,
+                                               all_variants);
 
                 // Collapse clusters with enough shared read info starting with smallest cluster
 //                if clusters.len() > 1 {
@@ -540,7 +537,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     } else if !pred_set.contains(&Variant::None) {
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
                     } else {
-                        prediction_variants.remove_entry(cluster);
+//                        prediction_variants.remove_entry(cluster);
                     }
                 }
 //                debug!("Prediction count {:?}", prediction_count);
@@ -560,106 +557,127 @@ impl VariantMatrixFunctions for VariantMatrix {
             } => {
 
                 pred_variants.par_iter().for_each(|(strain_index, genotype)|{
-                    if *strain_index != 0 {
+                    let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
+                    debug!("Genotype {:?}", genotype);
 
-                        let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
+                    let file_path = Path::new(&file_name);
 
-                        let file_path = Path::new(&file_name);
+                    // Open haplotype file or create one
+                    let mut file_open = File::create(file_path)
+                        .expect("No Read or Write Permission in current directory");
 
-                        // Open haplotype file or create one
-                        let mut file_open = File::create(file_path)
-                            .expect("No Read or Write Permission in current directory");
+                    let mut genotype = genotype.clone();
+                    let mut multivariant_sites = 0;
+                    let mut tot_variations = 0;
 
-                        let mut genotype = genotype.clone();
+                    // Generate the variant genome
+                    for (tid, original_contig) in contigs.iter() {
+                        let mut contig = String::new();
 
-                        // Generate the variant genome
-                        for (tid, original_contig) in contigs.iter() {
-                            let mut contig = String::new();
-
-                            let mut skip_n = 0;
-                            let mut skip_cnt = 0;
+                        let mut skip_n = 0;
+                        let mut skip_cnt = 0;
 //                            let char_cnt = 0;
-                            let mut variations = 0;
+                        let mut variations = 0;
 
-                            for (pos, base) in original_contig.iter().enumerate() {
-                                if skip_cnt < skip_n {
-                                    skip_cnt += 1;
-                                } else {
+                        for (pos, base) in original_contig.iter().enumerate() {
+                            if skip_cnt < skip_n {
+                                skip_cnt += 1;
+                            } else {
+                                skip_n = 0;
+                                skip_cnt = 0;
+                                if genotype.contains_key(&tid) {
+                                    let tid_genotype = genotype.get_mut(&tid).unwrap();
 
-                                    skip_n = 0;
-                                    skip_cnt = 0;
-                                    if genotype.contains_key(&tid) {
-                                        let tid_genotype = genotype.get_mut(&tid).unwrap();
-
-                                        if tid_genotype.contains_key(&(pos as i64)) {
-
-                                            let categories = &genotype[tid][&(pos as i64)];
-                                            let mut hash = HashSet::new();
-                                            if categories.contains_key(&fuzzy::Category::Core) {
-                                                hash = categories[&fuzzy::Category::Core].clone();
-                                            } else if categories.contains_key(&fuzzy::Category::Border) {
-                                                hash = categories[&fuzzy::Category::Border].clone();
-                                            }
-
-                                            let mut max_var = Variant::None;
-                                            for var in hash.iter() {
-                                                // If there are two variants possible for
-                                                // a single site and one is the reference
-                                                // we will choose the reference
-                                                if max_var == Variant::None {
-                                                    max_var = var.clone();
-                                                }
-                                            }
-                                            match max_var {
-
-                                                Variant::Deletion(size) => {
-                                                    // Skip the next n bases but rescue the reference prefix
-                                                    skip_n = size - 1;
-                                                    skip_cnt = 0;
-    //                                                let first_byte = max_var.as_bytes()[0];
-    //                                                contig = contig + str::from_utf8(
-    //                                                    &[first_byte]).unwrap();
-                                                    variations += 1;
-                                                },
-                                                Variant::Insertion(alt) | Variant::Insertion(alt) => {
-                                                    // Insertions have a reference prefix that needs to be removed
-                                                    let removed_first_base = str::from_utf8(
-                                                        &alt[1..]).unwrap();
-                                                    contig = contig + removed_first_base;
-                                                    variations += 1;
-                                                },
-                                                Variant::None => {
-                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                },
-                                                Variant::SNV(alt) => {
-                                                    contig = contig + str::from_utf8(&[alt]).unwrap();
-                                                    variations += 1;
-                                                },
-                                                _ => {
-                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                }
-                                            }
+                                    if tid_genotype.contains_key(&(pos as i64)) {
+                                        let categories = &genotype[tid][&(pos as i64)];
+                                        let mut hash = HashSet::new();
+                                        if categories.contains_key(&fuzzy::Category::Core) {
+                                            hash = categories[&fuzzy::Category::Core].clone();
+                                        } else if categories.contains_key(&fuzzy::Category::Border) {
+                                            hash = categories[&fuzzy::Category::Border].clone();
                                         } else {
-                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                                            hash = categories[&fuzzy::Category::Noise].clone();
+                                        }
+
+                                        let mut max_var = Variant::None;
+
+                                        for var in hash.iter() {
+                                            // If there are two variants possible for
+                                            // a single site and one is the reference
+                                            // we will choose the reference
+                                            if max_var == Variant::None {
+                                                max_var = var.clone();
+                                            }
+                                        }
+                                        if hash.len() > 1 {
+                                            multivariant_sites += 1;
+                                            debug!("Multi hash {:?} {:?}", hash, max_var)
+                                        }
+                                        match max_var {
+                                            Variant::Deletion(size) => {
+                                                // Skip the next n bases but rescue the reference prefix
+                                                debug!("DEL {:?}", size);
+
+                                                skip_n = size - 1;
+                                                skip_cnt = 0;
+//                                                let first_byte = max_var.as_bytes()[0];
+//                                                contig = contig + str::from_utf8(
+//                                                    &[first_byte]).unwrap();
+                                                variations += 1;
+                                            },
+                                            Variant::Insertion(alt) => {
+                                                debug!("INS {:?}", alt);
+
+                                                // Insertions have a reference prefix that needs to be removed
+                                                let removed_first_base = str::from_utf8(
+                                                    &alt[1..]).unwrap();
+                                                contig = contig + removed_first_base;
+                                                variations += 1;
+                                            },
+                                            Variant::None => {
+                                                contig = contig + str::from_utf8(&[*base]).unwrap();
+                                            },
+                                            Variant::MNV(alt) => {
+                                                debug!("MNV {:?}", alt);
+                                                skip_n = alt.len() as u32 - 1;
+                                                skip_cnt = 0;
+                                                let removed_first_base = str::from_utf8(
+                                                    &alt[1..]).unwrap();
+                                                contig = contig + removed_first_base;
+                                                variations += 1;
+                                            },
+                                            Variant::SNV(alt) => {
+                                                debug!("SNV {:?}", alt);
+
+                                                contig = contig + str::from_utf8(&[alt]).unwrap();
+                                                variations += 1;
+                                            },
+                                            _ => {
+                                                contig = contig + str::from_utf8(&[*base]).unwrap();
+                                            }
                                         }
                                     } else {
-                                        contig = str::from_utf8(&original_contig)
-                                            .expect("Can't convert to str").to_string();
+                                        contig = contig + str::from_utf8(&[*base]).unwrap();
                                     }
+                                } else {
+                                    contig = str::from_utf8(&original_contig)
+                                        .expect("Can't convert to str").to_string();
                                 }
-                            };
-                            writeln!(file_open, ">{}_strain_{}\t#variants_{}",
-                                     target_names[tid],
-                                     strain_index,
-                                     variations).expect("Unable to write to file");
+                            }
+                        };
+                        writeln!(file_open, ">{}_strain_{}\t#variants_{}",
+                                 target_names[tid],
+                                 strain_index,
+                                 variations).expect("Unable to write to file");
 
-
-                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                file_open.write(line).unwrap();
-                                file_open.write(b"\n").unwrap();
-                            };
-                        }
+                        for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                            file_open.write(line).unwrap();
+                            file_open.write(b"\n").unwrap();
+                        };
+                        tot_variations += variations;
                     }
+                    debug!("{} Multivariant sites and single variant sites {} for Strain {}",
+                          multivariant_sites, tot_variations, strain_index);
                 });
             }
         }
@@ -668,7 +686,7 @@ impl VariantMatrixFunctions for VariantMatrix {
     /// Connects fuzzy DBSCAN clusters based on shared read information
     fn linkage_clustering(clusters: &Vec<Vec<fuzzy::Assignment>>,
                           variant_info: &Vec<fuzzy::Var>,
-                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>)
+                          variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>)
                           -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>) {
 
         if clusters.len() > 1 {
@@ -699,58 +717,38 @@ impl VariantMatrixFunctions for VariantMatrix {
                     // Loop through second cluster
                     clust2.par_iter().for_each(|assignment2| {
                         if assignment1.index != assignment2.index {
-                                let var1 = &variant_info[assignment1.index];
-                                let var2 = &variant_info[assignment2.index];
+                            let var1 = &variant_info[assignment1.index];
+                            let var2 = &variant_info[assignment2.index];
 
-                                // Read ids of first variant
-                                let set1 = Self::get_variant_set(var1,
-                                                                 variant_map);
+                            // Read ids of first variant
+                            let set1 = Self::get_variant_set(var1,
+                                                             variant_map);
 
-                                // Read ids of second variant
-                                let set2 = Self::get_variant_set(var2,
-                                                                 variant_map);
+                            // Read ids of second variant
+                            let set2 = Self::get_variant_set(var2,
+                                                             variant_map);
 
-                                // Extend each cluster read set
-                                {
-                                    let mut clust1_index =
-                                        clust1_index.lock().unwrap();
-                                    if !clust1_index.contains(&assignment1.index) {
-                                        let mut clust1_set =
-                                            clust1_set.lock().unwrap();
-                                        clust1_set.par_extend(&set1);
+                            // Extend each cluster read set
+                            {
+                                let mut clust1_index =
+                                    clust1_index.lock().unwrap();
+                                if !clust1_index.contains(&assignment1.index) {
+                                    let mut clust1_set =
+                                        clust1_set.lock().unwrap();
+                                    clust1_set.par_extend(&set1);
 
-                                        clust1_index.insert(assignment1.index);
-                                    };
-                                    let mut clust2_index =
-                                        clust2_index.lock().unwrap();
-                                    if !clust2_index.contains(&assignment2.index) {
-                                        let mut clust2_set =
-                                            clust2_set.lock().unwrap();
-                                        clust2_set.par_extend(&set2);
+                                    clust1_index.insert(assignment1.index);
+                                };
+                                let mut clust2_index =
+                                    clust2_index.lock().unwrap();
+                                if !clust2_index.contains(&assignment2.index) {
+                                    let mut clust2_set =
+                                        clust2_set.lock().unwrap();
+                                    clust2_set.par_extend(&set2);
 
-                                        clust2_index.insert(assignment2.index);
-                                    };
-                                }
-                                // Intersection of two read sets
-//                            let intersection: BTreeSet<_> = set1.intersection(&set2).collect();
-//
-//                            if intersection.len() >= 1 {
-//
-//                                let mut clusters_changed =
-//                                   clusters_changed.lock().unwrap();
-//
-//                                clusters_changed[indices[0]].push(assignment2.clone());
-//                                clusters_changed[indices[1]].push(assignment1.clone());
-//
-//                                let mut clust1_set =
-//                                    clust1_set.lock().unwrap();
-//                                clust1_set.par_extend(&set2);
-//
-//                                let mut clust2_set =
-//                                    clust2_set.lock().unwrap();
-//                                clust2_set.par_extend(&set1);
-//
-//                           }
+                                    clust2_index.insert(assignment2.index);
+                                };
+                            }
                         }
                     });
                 });
@@ -758,15 +756,14 @@ impl VariantMatrixFunctions for VariantMatrix {
                 // Add the jaccard's similarity to the hashmap for the two clusters
                 let clust1_set = clust1_set.lock().unwrap();
                 let clust2_set = clust2_set.lock().unwrap();
+                debug!("Read IDs {:?} {:?}", clust1_set, clust2_set);
                 let intersection: HashSet<_> = clust1_set
                     .intersection(&clust2_set).collect();
-//            let indices_set: HashSet<_> = [indices[0], indices[1]].iter().cloned().collect();
                 let mut clusters_shared_reads = clusters_shared_reads
                     .lock().unwrap();
                 let mut cluster_map = clusters_shared_reads.entry(indices[0])
                     .or_insert(HashMap::new());
-//                let jaccard = intersection.len() as f64 /
-//                    ((clust1_set.len() + clust2_set.len() - intersection.len()) as f64);
+
                 let jaccard = intersection.len() as f64 /
                     std::cmp::min(clust1_set.len(), clust2_set.len()) as f64;
                 let mut jaccard_distances = jaccard_distances.lock().unwrap();
@@ -861,14 +858,14 @@ impl VariantMatrixFunctions for VariantMatrix {
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64> {
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64> {
 
         let read_set = Arc::new(Mutex::new(HashSet::new()));
 
         variants.par_iter().for_each(|assignment|{
             let variant = &variant_info[assignment.index];
-            let variant_set = &variant_map[&variant.tid][&variant.pos][&variant.var];
-            variant_set.par_iter().for_each(|id|{
+            let base = &variant_map[&variant.tid][&variant.pos][&variant.var].reads;
+            base.par_iter().for_each(|id|{
                 let mut read_set = read_set.lock().unwrap();
                 read_set.insert(*id);
             });
@@ -879,11 +876,11 @@ impl VariantMatrixFunctions for VariantMatrix {
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, HashSet<i64>>>>) -> HashSet<i64> {
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64> {
 
         let mut variant_set = HashSet::new();
 
-        variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone();
+        variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone().reads;
 
         return variant_set
     }
