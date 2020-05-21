@@ -1,0 +1,9 @@
+05/21/2020 04:15:21 PM INFO Organizing SVs
+05/21/2020 04:15:21 PM INFO Organizing SVs for /mnt/c/Users/Rhys/Documents/Lorikeet/tests/data/two_contigs_genotype1.bed
+05/21/2020 04:15:21 PM INFO SVs organized
+05/21/2020 04:15:21 PM INFO Generating .fasta haplotypes with SVs
+05/21/2020 04:15:21 PM INFO Generating SVs for h1
+05/21/2020 04:15:21 PM WARNING Variant with coordinates contig_9_pilon:3566-3567 overlaps with variant contig_9_pilon:3562-3572 in the current haplotype. Skipped
+05/21/2020 04:15:21 PM WARNING Skipped 1 SVs for the current haplotype as they overlapped others
+05/21/2020 04:15:21 PM INFO Haplotypes with SVs generated
+05/21/2020 04:15:21 PM INFO Done

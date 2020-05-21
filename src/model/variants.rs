@@ -367,23 +367,6 @@ impl Base {
                 // TODO: Handle the case where a single site has multiple variants
                 //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
-//                let variant = match variant {
-//                    Variant::SNV(c) => {
-//                        if c == &base.refr[0] {
-////                            println!("Variant 1 {:?} {:?}", variant, base.refr);
-//
-//                            Variant::None
-//                        } else {
-//                            println!("Variant SNV {:?} {:?}", variant, base.refr);
-//                            variant.clone()
-//                        }
-//                    },
-//                    _ => {
-////                        println!("Variant 2 {:?}", variant);
-//                        variant.clone()
-//                    }
-//                };
-
                 base.variant = variant.clone();
                 base.filters[sample_idx] = filter_hash.clone();
                 base.depth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
@@ -405,8 +388,8 @@ impl Base {
         }
     }
 
-    pub fn assign_read(&mut self, cig: Cigar, read_id: i64) {
-
+    pub fn assign_read(&mut self, read_id: i64) {
+        self.reads.insert(read_id);
     }
 }
 
