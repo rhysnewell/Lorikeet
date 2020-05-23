@@ -313,11 +313,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 for (variant, base_info) in hash.iter() {
 
                                     match variant {
-                                        Variant::None => {},
+//                                        Variant::None => {},
                                         _ => {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
-
                                             let mut rel_abund = vec![0.0; sample_count as usize];
 
                                             // Get the mean abundance across samples
@@ -353,6 +352,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
                                             };
+                                            info!("{:?}", point);
 
                                             variant_info_all.push(point);
                                         },
@@ -405,6 +405,9 @@ impl VariantMatrixFunctions for VariantMatrix {
             } => {
 
                 info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
+                if variant_info.len() == 1 {
+                    info!("Where did the variants go? {:?}", variant_info);
+                }
                 let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
                     eps_max: e_max,
@@ -764,8 +767,12 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let mut cluster_map = clusters_shared_reads.entry(indices[0])
                     .or_insert(HashMap::new());
 
+//                // Scaled Jaccard Similarity Based on Minimum Set size
                 let jaccard = intersection.len() as f64 /
-                    std::cmp::min(clust1_set.len(), clust2_set.len()) as f64;
+                    std::cmp::min(clust1_set.len() + 1, clust2_set.len() + 1) as f64;
+                // Normal Jaccard's Similarity
+//                let jaccard = intersection.len() as f64 /
+//                    (clust1_set.len() + clust2_set.len() + 1) as f64;
                 let mut jaccard_distances = jaccard_distances.lock().unwrap();
                 // Check to see if we have two or more samples
                 if jaccard_distances.len() > 1 {
