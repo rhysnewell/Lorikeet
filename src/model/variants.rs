@@ -360,10 +360,11 @@ impl Base {
                 }
             }
             let mut bases = vec!();
+//            let mut refr_base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
             for (idx, variant) in variants.iter().enumerate() {
                 // Get elements from record
                 let alleles = record.alleles();
-                let mut base = Base::new(record.pos(), alleles[idx].to_vec(), sample_count);
+                let mut base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
                 // TODO: Handle the case where a single site has multiple variants
                 //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
@@ -515,7 +516,7 @@ pub fn collect_variants(
         let mut variant_vec = vec!();
         alleles
             .iter()
-//            .skip(1)
+            .skip(1)
             .enumerate()
             .for_each(|(i, alt_allele)| {
                 if alt_allele == b"<*>" {

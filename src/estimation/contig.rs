@@ -810,11 +810,14 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             .expect(&format!("Failed to create vcf tempfile"));
 
         let cmd_string = format!(
-            "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
+            "set -e -o pipefail; samtools sort -O BAM -@ {} {} | \
+                     samtools calmd -b -@ {} - {} > {} &&
                      samtools index -@ {} {} {} && \
                      sniffles -m {} -v {} --tmp_file {} --threads {}",
             threads - 1,
             bam_path,
+            threads - 1,
+            m.value_of("reference").unwrap(),
             bam_path,
             threads - 1,
             bam_path,
@@ -830,8 +833,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
-                .stderr(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
+//                .stderr(std::process::Stdio::null())
+//                .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("Unable to execute bash"), "sniffles");
         let vcf_path = vcf_file.path();
