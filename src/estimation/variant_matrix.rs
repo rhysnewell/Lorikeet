@@ -352,8 +352,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
                                             };
-                                            info!("{:?}", point);
-
                                             variant_info_all.push(point);
                                         },
                                     }

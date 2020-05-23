@@ -344,7 +344,7 @@ impl Base {
         }
     }
 
-    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize) -> Option<Vec<Base>> {
+    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize, longread: bool) -> Option<Vec<Base>> {
 
         let variants = collect_variants(record, false,
                                         false, None);
@@ -360,27 +360,74 @@ impl Base {
                 }
             }
             let mut bases = vec!();
-//            let mut refr_base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
+            let mut refr_base_empty = true;
             for (idx, variant) in variants.iter().enumerate() {
                 // Get elements from record
-                let alleles = record.alleles();
-                let mut base = Base::new(record.pos(), alleles[0].to_vec(), sample_count);
+                let mut base = Base::new(record.pos(), record.alleles()[idx].to_vec(), sample_count);
                 // TODO: Handle the case where a single site has multiple variants
                 //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
-                base.variant = variant.clone();
-                base.filters[sample_idx] = filter_hash.clone();
-                base.depth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                base.truedepth[sample_idx] = record.info(b"TD").integer().unwrap().unwrap()[0];
-                base.physicalcov[sample_idx] = record.info(b"PC").integer().unwrap().unwrap()[0];
-                base.baseq[sample_idx] = record.info(b"BQ").integer().unwrap().unwrap()[0];
-                base.mapq[sample_idx] = record.info(b"MQ").integer().unwrap().unwrap()[0];
-                base.conf[sample_idx] = record.info(b"QD").integer().unwrap().unwrap()[0];
-                base.ic[sample_idx] = record.info(b"IC").integer().unwrap().unwrap()[0];
-                base.dc[sample_idx] = record.info(b"DC").integer().unwrap().unwrap()[0];
-                base.xc[sample_idx] = record.info(b"XC").integer().unwrap().unwrap()[0];
-                base.ac[sample_idx] = record.info(b"AC").integer().unwrap().unwrap()[0];
-                base.af[sample_idx] = record.info(b"AF").float().unwrap().unwrap()[0] as f64;
+                if longread {
+                    base.variant = variant.clone();
+                    base.depth[sample_idx] = match record.format(b"AD").integer() {
+                        Ok(val) => {
+                            val[0][0]
+                        },
+                        _ => {
+                            match record.info(b"SUPPORT").integer() {
+                                Ok(val) => {
+                                    match val {
+                                        Some(dep) => dep[0],
+                                        _ => 0,
+                                    }
+                                },
+                                _ => 0,
+                            }
+                        }
+                    };
+
+                    base.truedepth[sample_idx] = match record.format(b"DP").integer() {
+                        Ok(val) => {
+                            val[0][0]
+                        },
+                        _ => 0,
+                    };
+                    let refr_depth = base.truedepth[sample_idx] - base.depth[sample_idx];
+                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
+                    base.freq[sample_idx] = base.af[sample_idx];
+                    if refr_base_empty {
+                        let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
+                        refr_base.af[sample_idx] = base.af[sample_idx];
+                        refr_base.truedepth[sample_idx] = match record.format(b"DP").integer() {
+                            Ok(val) => {
+                                val[0][0]
+                            },
+                            _ => 0,
+                        };
+                        refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
+                        refr_base.depth[sample_idx] = refr_depth;
+                        bases.push(refr_base);
+                        refr_base_empty = false;
+                    }
+                } else {
+                    base.variant = variant.clone();
+                    base.filters[sample_idx] = filter_hash.clone();
+                    base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                    base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
+                    base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
+                    base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
+                    if refr_base_empty {
+                        let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
+                        refr_base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                        refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
+                        refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.truedepth[sample_idx] as f64;
+
+                        bases.push(refr_base);
+                        refr_base_empty = false;
+                    }
+                };
+
                 bases.push(base);
             };
             Some(bases)
@@ -560,7 +607,7 @@ pub fn collect_variants(
                     // TODO fix position if variant is like this: cttt -> ct
 
                     if omit_indels || !is_valid_len(indel_len) {
-                        variant_vec.push(Variant::None)
+                        variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                     } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
                         variant_vec.push(Variant::Deletion(
                             (ref_allele.len() - alt_allele.len()) as u32,
@@ -570,7 +617,7 @@ pub fn collect_variants(
                             alt_allele[ref_allele.len()..].to_owned(),
                         ))
                     } else {
-                        variant_vec.push(Variant::None)
+                        variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                     }
                 }
             });
