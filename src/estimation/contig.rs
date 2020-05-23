@@ -573,7 +573,7 @@ fn process_bam<R: NamedBamReader + Send,
         // Sanity check
         if target_names[variant_rid as usize]
             == header.rid2name(vcf_record.rid().unwrap()).unwrap() {
-            let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx);
+            let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx, longread);
             match base_option {
 
                 Some(bases) => {
@@ -764,17 +764,19 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-    let vcf_file = tempfile::Builder::new()
-        .prefix("lorikeet-vcf")
+    let vcf_dir = tempfile::Builder::new()
+        .prefix("lorikeet-snippy")
         .tempfile_in(tmp_dir.path())
         .expect(&format!("Failed to create vcf tempfile"));
     if !longread {
-        external_command_checker::check_for_pilon();
+        external_command_checker::check_for_snippy();
         external_command_checker::check_for_samtools();
+        let snippy_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/snippy");
+
         let cmd_string = format!(
             "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
                      samtools index -@ {} {} {} && \
-                     pilon --genome {} --bam {} --vcf --fix none --output {} --threads {}",
+                     snippy --reference {} --bam {} --outdir {} --cpus {} --force",
             threads - 1,
             bam_path,
             bam_path,
@@ -783,8 +785,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             &(bam_path.to_string() + ".bai"),
             m.value_of("reference").unwrap(),
             bam_path,
-            vcf_file.path().to_str()
-                .expect("Failed to convert tempfile path to str"),
+            snippy_path,
             threads);
         info!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(
@@ -794,8 +795,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
                 .stderr(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .spawn()
-                .expect("Unable to execute bash"), "pilon");
-        let vcf_path = &(vcf_file.path().to_str().unwrap().to_string() + ".vcf");
+                .expect("Unable to execute bash"), "snippy");
+        let vcf_path = &(snippy_path.to_string() + "/snps.vcf");
         debug!("VCF Path {:?}", vcf_path);
         let vcf_reader = Reader::from_path(vcf_path)
             .expect("Failed to read pilon vcf output");
@@ -803,41 +804,33 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader
     } else {
-        external_command_checker::check_for_sniffles();
-        let sniff_file = tempfile::Builder::new()
-            .prefix("lorikeet-sniff")
-            .tempfile_in(tmp_dir.path())
-            .expect(&format!("Failed to create vcf tempfile"));
+        external_command_checker::check_for_svim();
+        let svim_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/svim");
+
 
         let cmd_string = format!(
-            "set -e -o pipefail; samtools sort -O BAM -@ {} {} | \
-                     samtools calmd -b -@ {} - {} > {} &&
+            "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
                      samtools index -@ {} {} {} && \
-                     sniffles -m {} -v {} --tmp_file {} --threads {}",
+                     svim alignment --read_names --sequence_alleles {} {} {}",
             threads - 1,
             bam_path,
-            threads - 1,
-            m.value_of("reference").unwrap(),
             bam_path,
             threads - 1,
             bam_path,
             &(bam_path.to_string() + ".bai"),
+            svim_path,
             bam_path,
-            vcf_file.path().to_str()
-                .expect("Failed to convert tempfile path to str"),
-            sniff_file.path().to_str()
-                .expect("Failed to convert tempfile path to str"),
-            threads);
+            m.value_of("reference").unwrap());
         info!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
-//                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
 //                .stdout(std::process::Stdio::null())
                 .spawn()
-                .expect("Unable to execute bash"), "sniffles");
-        let vcf_path = vcf_file.path();
+                .expect("Unable to execute bash"), "sniv");
+        let vcf_path = &(svim_path.to_string() + "/variants.vcf");
         debug!("VCF Path {:?}", vcf_path);
         let vcf_reader = Reader::from_path(vcf_path)
             .expect("Failed to read sniffles vcf output");
