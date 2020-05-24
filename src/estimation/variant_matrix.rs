@@ -72,7 +72,7 @@ pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
-                  variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
+                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
 
     /// Returns the variants at the current position
     /// as a mutable reference
@@ -143,7 +143,7 @@ impl VariantMatrixFunctions for VariantMatrix {
     }
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
-                  variant_records: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) {
+                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
@@ -311,7 +311,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                             if hash.keys().len() > 0 {
 
                                 for (variant, base_info) in hash.iter() {
-
                                     match variant {
 //                                        Variant::None => {},
                                         _ => {
@@ -329,18 +328,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 let mut geom_mean_f =
                                                     geom_mean_f.lock().unwrap();
 
-
                                                 let var_depth
-                                                    = base_info.depth[index] as f64 + 1.;
+                                                    = base_info.depth[index] as f64;
+                                                if var_depth < 0. {
+                                                    println!("Neg var depth {:?}", base_info)
+                                                }
                                                 let total_depth
                                                     = base_info.totaldepth[index] as f64 + 1.;
+//                                                base_info.freq[index] = ;
                                                 rel_abund[index] =
                                                     var_depth / total_depth;
-                                                geom_mean_v[index] += (var_depth).ln();
+                                                geom_mean_v[index] += (var_depth + 1.).ln();
                                                 geom_mean_d[index] += (total_depth).ln();
-                                                geom_mean_f[index] += (var_depth
+                                                geom_mean_f[index] += ((var_depth + 1.)
                                                     / total_depth).ln();
                                             });
+
 
                                             let mut variant_info_all = variant_info_all
                                                 .lock().unwrap();

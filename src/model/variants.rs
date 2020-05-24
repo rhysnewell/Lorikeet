@@ -264,7 +264,7 @@ pub struct Base {
     pub truedepth: Vec<i32>,
     // Depth as decided by CoverM
     pub totaldepth: Vec<i32>,
-    //Physical coverage of valid inserts across locus
+    // Physical coverage of valid inserts across locus
     pub physicalcov: Vec<i32>,
     // Mean base quality at locus
     pub baseq: Vec<i32>,
@@ -371,28 +371,36 @@ impl Base {
                     base.variant = variant.clone();
                     base.depth[sample_idx] = match record.format(b"AD").integer() {
                         Ok(val) => {
-                            val[0][0]
+                            if val[0][0] >= 0 {
+                                val[0][0]
+                            } else {
+                                match record.info(b"SUPPORT").integer() {
+                                    Ok(val) => {
+                                        match val {
+                                            Some(dep) => dep[0],
+                                            _ => 0,
+                                        }
+                                    },
+                                    _ => 0,
+                                }
+                            }
                         },
                         _ => {
-                            match record.info(b"SUPPORT").integer() {
-                                Ok(val) => {
-                                    match val {
-                                        Some(dep) => dep[0],
-                                        _ => 0,
-                                    }
-                                },
-                                _ => 0,
-                            }
+                            0
                         }
                     };
 
                     base.truedepth[sample_idx] = match record.format(b"DP").integer() {
                         Ok(val) => {
-                            val[0][0]
+                            if val[0][0] >= 0 {
+                                val[0][0]
+                            } else {
+                                0
+                            }
                         },
                         _ => 0,
                     };
-                    let refr_depth = base.truedepth[sample_idx] - base.depth[sample_idx];
+                    let refr_depth = std::cmp::max(0, base.truedepth[sample_idx] - base.depth[sample_idx]);
                     base.af[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
                     base.freq[sample_idx] = base.af[sample_idx];
                     let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
@@ -402,7 +410,11 @@ impl Base {
                         refr_base.af[sample_idx] = base.af[sample_idx];
                         refr_base.truedepth[sample_idx] = match record.format(b"DP").integer() {
                             Ok(val) => {
-                                val[0][0]
+                                if val[0][0] >= 0 {
+                                    val[0][0]
+                                } else {
+                                    0
+                                }
                             },
                             _ => 0,
                         };
@@ -416,8 +428,9 @@ impl Base {
                     base.filters[sample_idx] = filter_hash.clone();
                     base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                     base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
-                    base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
                     base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
+                    base.freq[sample_idx] = (base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64);
+
                     if refr_base_empty {
                         let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
                         refr_base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
