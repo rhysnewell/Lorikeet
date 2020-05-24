@@ -105,11 +105,11 @@ pub trait VariantMatrixFunctions {
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64>;
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>>;
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64>;
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>>;
 
     fn print_variant_stats(&self, output_prefix: &str);
 
@@ -706,8 +706,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let clust2 = &clusters[indices[1]];
 
                 // Total read set for each cluster
-                let clust1_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
-                let clust2_set: Arc<Mutex<HashSet<i64>>> = Arc::new(Mutex::new(HashSet::new()));
+                let clust1_set: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+                let clust2_set: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
 
                 // Cluster assignment index to avoid reappending to sets
                 let clust1_index = Arc::new(Mutex::new(HashSet::new()));
@@ -736,7 +736,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 if !clust1_index.contains(&assignment1.index) {
                                     let mut clust1_set =
                                         clust1_set.lock().unwrap();
-                                    clust1_set.par_extend(&set1);
+                                    clust1_set.par_extend(set1);
 
                                     clust1_index.insert(assignment1.index);
                                 };
@@ -745,7 +745,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 if !clust2_index.contains(&assignment2.index) {
                                     let mut clust2_set =
                                         clust2_set.lock().unwrap();
-                                    clust2_set.par_extend(&set2);
+                                    clust2_set.par_extend(set2);
 
                                     clust2_index.insert(assignment2.index);
                                 };
@@ -863,7 +863,7 @@ impl VariantMatrixFunctions for VariantMatrix {
     /// Get all of the associated read ids for a given cluster
     fn get_read_set(variants: &fuzzy::Cluster,
                     variant_info: &Vec<fuzzy::Var>,
-                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64> {
+                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>> {
 
         let read_set = Arc::new(Mutex::new(HashSet::new()));
 
@@ -872,7 +872,7 @@ impl VariantMatrixFunctions for VariantMatrix {
             let base = &variant_map[&variant.tid][&variant.pos][&variant.var].reads;
             base.par_iter().for_each(|id|{
                 let mut read_set = read_set.lock().unwrap();
-                read_set.insert(*id);
+                read_set.insert(id.clone());
             });
         });
         let read_set = read_set.lock().unwrap().clone();
@@ -881,7 +881,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
     /// Extract the read ids associated with a particular variant
     fn get_variant_set(variant: &fuzzy::Var,
-                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<i64> {
+                       variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>> {
 
         let mut variant_set = HashSet::new();
 

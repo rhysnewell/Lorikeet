@@ -289,7 +289,7 @@ pub struct Base {
     // Frequency of variant
     pub freq: Vec<f64>,
     // Read ids assigned to variant
-    pub reads: HashSet<i64>,
+    pub reads: HashSet<Vec<u8>>,
 }
 
 impl Base {
@@ -395,6 +395,8 @@ impl Base {
                     let refr_depth = base.truedepth[sample_idx] - base.depth[sample_idx];
                     base.af[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
                     base.freq[sample_idx] = base.af[sample_idx];
+                    let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
+                    base.reads.par_extend(reads);
                     if refr_base_empty {
                         let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
                         refr_base.af[sample_idx] = base.af[sample_idx];
@@ -436,7 +438,7 @@ impl Base {
         }
     }
 
-    pub fn assign_read(&mut self, read_id: i64) {
+    pub fn assign_read(&mut self, read_id: Vec<u8>) {
         self.reads.insert(read_id);
     }
 }

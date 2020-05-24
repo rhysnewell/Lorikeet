@@ -145,8 +145,8 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
         }
     }
-    let read_cnt_id: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
-    let read_to_id = Arc::new(Mutex::new(HashMap::new()));
+//    let read_cnt_id: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
+//    let read_to_id = Arc::new(Mutex::new(HashMap::new()));
     // Loop through bam generators in parallel
     let split_threads = std::cmp::max(n_threads / sample_count, 1);
 
@@ -159,8 +159,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     &coverage_estimators,
                     &variant_matrix,
                     &gff_map,
-                    &read_cnt_id,
-                    &read_to_id,
                     split_threads,
                     m,
                     output_prefix,
@@ -185,8 +183,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     &coverage_estimators,
                     &variant_matrix,
                     &gff_map,
-                    &read_cnt_id,
-                    &read_to_id,
                     split_threads,
                     m,
                     output_prefix,
@@ -229,8 +225,6 @@ fn process_bam<R: NamedBamReader + Send,
     coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
     variant_matrix: &Arc<Mutex<VariantMatrix>>,
     gff_map: &Arc<Mutex<HashMap<String, Vec<Record>>>>,
-    read_cnt_id: &Arc<Mutex<i64>>,
-    read_to_id: &Arc<Mutex<HashMap<Vec<u8>, i64>>>,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -300,16 +294,6 @@ fn process_bam<R: NamedBamReader + Send,
             } else if record.mapq() < mapq_threshold {
                 skipped_reads += 1;
                 continue;
-            }
-            if longread {
-                // Check if new read to id
-                if !read_to_id.lock().unwrap().contains_key(&record.qname().to_vec()) {
-                    let mut read_to_id = read_to_id.lock().unwrap();
-                    let mut read_cnt_id = read_cnt_id.lock().unwrap();
-                    read_to_id.entry(record.qname().to_vec())
-                        .or_insert(*read_cnt_id);
-                    *read_cnt_id += 1;
-                }
             }
 
 
@@ -399,14 +383,12 @@ fn process_bam<R: NamedBamReader + Send,
                                     match variant {
                                         Variant::SNV(alt) => {
                                             if *alt != refr_char && *alt == read_char {
-                                                let mut read_to_id = read_to_id.lock().unwrap();
-                                                base.assign_read(read_to_id[&record.qname().to_vec()])
+                                                base.assign_read(record.qname().to_vec())
                                             }
                                         },
                                         Variant::None => {
                                             if refr_char == read_char {
-                                                let mut read_to_id = read_to_id.lock().unwrap();
-                                                base.assign_read(read_to_id[&record.qname().to_vec()])
+                                                base.assign_read(record.qname().to_vec())
                                             }
                                         },
                                         _ => {}
