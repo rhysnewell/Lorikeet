@@ -836,15 +836,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         let snippy_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/snippy");
 
         let cmd_string = format!(
-            "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
-                     samtools index -@ {} {} {} && \
-                     snippy --reference {} --bam {} --outdir {} --cpus {} --force",
-            threads - 1,
-            bam_path,
-            bam_path,
-            threads - 1,
-            bam_path,
-            &(bam_path.to_string() + ".bai"),
+            "set -e -o pipefail; snippy --reference {} --bam {} --outdir {} --cpus {} --force",
             m.value_of("reference").unwrap(),
             bam_path,
             snippy_path,
@@ -871,15 +863,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
 
 
         let cmd_string = format!(
-            "set -e -o pipefail; samtools sort -O BAM -@ {} -o '{}' {} && \
-                     samtools index -@ {} {} {} && \
-                     svim alignment --read_names --sequence_alleles {} {} {}",
-            threads - 1,
-            bam_path,
-            bam_path,
-            threads - 1,
-            bam_path,
-            &(bam_path.to_string() + ".bai"),
+            "set -e -o pipefail; svim alignment --read_names --sequence_alleles {} {} {}",
             svim_path,
             bam_path,
             m.value_of("reference").unwrap());
