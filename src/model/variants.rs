@@ -294,11 +294,11 @@ pub struct Base {
 
 impl Base {
     pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
-        if self.truedepth[sample_idx] == 0 {
-            self.truedepth[sample_idx] = d;
-            if self.variant == Variant::None {
-                self.depth[sample_idx] = d;
-            }
+        if self.totaldepth[sample_idx] == 0 {
+            self.totaldepth[sample_idx] = d;
+//            if self.variant == Variant::None {
+//                self.depth[sample_idx] = d;
+//            }
         }
     }
 
@@ -400,7 +400,7 @@ impl Base {
                         }
                     };
 
-                    base.truedepth[sample_idx] = match record.format(b"DP").integer() {
+                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
                         Ok(val) => {
                             if val[0][0] >= 0 {
                                 val[0][0]
@@ -410,15 +410,15 @@ impl Base {
                         },
                         _ => base.depth[sample_idx],
                     };
-                    let refr_depth = std::cmp::max(0, base.truedepth[sample_idx] - base.depth[sample_idx]);
-                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
+                    let refr_depth = std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
+                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
                     base.freq[sample_idx] = base.af[sample_idx];
                     let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
                     base.reads.par_extend(reads);
                     if refr_base_empty {
                         let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
                         refr_base.af[sample_idx] = base.af[sample_idx];
-                        refr_base.truedepth[sample_idx] = match record.format(b"DP").integer() {
+                        refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
                             Ok(val) => {
                                 if val[0][0] >= 0 {
                                     val[0][0]
@@ -437,17 +437,17 @@ impl Base {
                     // Get relevant flag from freebayes output on short read samples
                     base.variant = variant.clone();
                     base.filters[sample_idx] = filter_hash.clone();
-                    base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                     base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
                     base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
-                    base.freq[sample_idx] = (base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64);
+                    base.freq[sample_idx] = (base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64);
 
                     if refr_base_empty {
                         let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
-                        refr_base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
                         refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
-                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.truedepth[sample_idx] as f64;
+                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
 
                         bases.push(refr_base);
                         refr_base_empty = false;
