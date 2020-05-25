@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 use rust_htslib::bam::{self, record::Cigar};
 use rust_htslib::{bcf::Reader, bcf::*};
 use bird_tool_utils::command;
+use glob::glob;
 
 use external_command_checker;
 use estimation::contig_variants::*;
@@ -62,7 +63,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut codon_table = CodonTable::setup();
 
     // Get long reads bams if they exist
-    let longreads = match long_readers {
+    let mut longreads = match long_readers {
         Some(vec) => {
             // update sample count
             sample_count += vec.len();
@@ -150,6 +151,46 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Loop through bam generators in parallel
     let split_threads = std::cmp::max(n_threads / sample_count, 1);
 
+    bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+        process_vcf(bam_generator,
+                    split_threads,
+                    sample_idx,
+                    sample_count,
+                    &variant_matrix,
+                    false,m)
+    });
+
+    longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+        process_vcf(bam_generator,
+                    split_threads,
+                    sample_idx,
+                    sample_count,
+                    &variant_matrix,
+                    true, m)
+    });
+
+
+    // Annoyingly read in bam file again
+    let mut bam_path = "".to_string();
+    let mut longreads = vec!();
+    let mut bam_readers = vec!();
+    if m.is_present("longread-bam-files") {
+        let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
+        longreads = generate_named_bam_readers_from_bam_files(longreads_path);
+    }
+    if m.is_present("bam-files") {
+        let bam_paths = m.values_of("bam-files").unwrap().collect::<Vec<&str>>();
+        bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
+
+    } else {
+        let cache = m.value_of("outdir").unwrap().to_string() + "/*.bam";
+        let bam_paths = glob(&cache).expect("Failed to read cache")
+            .map(|p| p.expect("Failed to read cached bam path")
+                .to_str().unwrap().to_string()).collect::<Vec<String>>();
+        let bam_paths = bam_paths.iter().map(|p| &**p).collect::<Vec<&str>>();
+        bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
+    }
+
     // Process Short Read BAMs
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_bam(bam_generator,
@@ -215,33 +256,15 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
 }
 
-/// Process all reads in a BAM file
-fn process_bam<R: NamedBamReader + Send,
-                G: NamedBamReaderGenerator<R> + Send>(
+fn process_vcf<R: NamedBamReader + Send,
+    G: NamedBamReaderGenerator<R> + Send>(
     bam_generator: G,
+    split_threads: usize,
     sample_idx: usize,
     sample_count: usize,
-    reference: &Arc<Mutex<bio::io::fasta::IndexedReader<File>>>,
-    coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
     variant_matrix: &Arc<Mutex<VariantMatrix>>,
-    gff_map: &Arc<Mutex<HashMap<String, Vec<Record>>>>,
-    split_threads: usize,
-    m: &clap::ArgMatches,
-    output_prefix: &str,
-    coverage_fold: f32,
-    codon_table: &CodonTable,
-    min_var_depth: usize,
-    contig_end_exclusion: u64,
-    min: f32, max: f32,
-    ani: f32,
-    mode: &str,
-    include_soft_clipping: bool,
-    include_indels: bool,
-    flag_filters: &FlagFilter,
-    mapq_threshold: u8,
-    method: &str,
-    longread: bool) {
-
+    longread: bool,
+    m: &clap::ArgMatches) {
     let mut bam_generated = bam_generator.start();
 
     let mut bam_properties =
@@ -293,187 +316,202 @@ fn process_bam<R: NamedBamReader + Send,
             panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
         }
     });
-    {
-        let mut variant_matrix = variant_matrix.lock().unwrap();
-        variant_matrix.add_sample(stoit_name.clone(), sample_idx, &variant_map);
-    }
-    // Annoyingly read in bam file again
-    let mut bam_path = "".to_string();
-    if longread {
-        bam_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_count - sample_idx - 1].to_string();
-    } else if m.is_present("bam-files") {
-        bam_path = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx].to_string();
-    } else {
-        let cache = m.value_of("outdir").unwrap().to_string() + "/";
-        let stoit_name: Vec<&str> = stoit_name.split("/").collect();
-        let stoit_name = stoit_name.join(".");
-        let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");
-        bam_path = (cache + &(stoit_name + ".bam"));
-    }
 
-    let mut bam_generators = generate_named_bam_readers_from_bam_files(vec![&bam_path]);
+    let mut variant_matrix = variant_matrix.lock().unwrap();
 
-    for bam_generator in bam_generators {
-        let mut bam_generated = bam_generator.start();
+    variant_matrix.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header);
+}
 
-        let mut bam_properties =
-            AlignmentProperties::default(InsertSize::default());
+/// Process all reads in a BAM file
+fn process_bam<R: NamedBamReader + Send,
+                G: NamedBamReaderGenerator<R> + Send>(
+    bam_generator: G,
+    sample_idx: usize,
+    sample_count: usize,
+    reference: &Arc<Mutex<bio::io::fasta::IndexedReader<File>>>,
+    coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
+    variant_matrix: &Arc<Mutex<VariantMatrix>>,
+    gff_map: &Arc<Mutex<HashMap<String, Vec<Record>>>>,
+    split_threads: usize,
+    m: &clap::ArgMatches,
+    output_prefix: &str,
+    coverage_fold: f32,
+    codon_table: &CodonTable,
+    min_var_depth: usize,
+    contig_end_exclusion: u64,
+    min: f32, max: f32,
+    ani: f32,
+    mode: &str,
+    include_soft_clipping: bool,
+    include_indels: bool,
+    flag_filters: &FlagFilter,
+    mapq_threshold: u8,
+    method: &str,
+    longread: bool) {
 
-        let stoit_name = bam_generated.name().to_string();
+    let mut bam_generated = bam_generator.start();
+
+    let mut bam_properties =
+        AlignmentProperties::default(InsertSize::default());
+
+    let stoit_name = bam_generated.name().to_string();
+
+    bam_generated.set_threads(split_threads);
+
+    let header = bam_generated.header().clone(); // bam header
+    let target_names = header.target_names(); // contig names
+    let mut record: bam::record::Record = bam::Record::new();
+    let mut ups_and_downs: Vec<i32> = Vec::new();
+    let mut num_mapped_reads_total: u64 = 0;
+    let mut num_mapped_reads_in_current_contig: u64 = 0;
+    let mut total_edit_distance_in_current_contig: u64 = 0;
+
+    let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
+    let mut last_tid: i32 = -2; // no such tid in a real BAM file
+    let mut total_indels_in_current_contig = 0;
 
 
-        bam_generated.set_threads(split_threads);
+    // for record in records
+    let mut skipped_reads = 0;
 
-        let header = bam_generated.header().clone(); // bam header
-        let target_names = header.target_names(); // contig names
-        let mut record: bam::record::Record = bam::Record::new();
-        let mut ups_and_downs: Vec<i32> = Vec::new();
-        let mut num_mapped_reads_total: u64 = 0;
-        let mut num_mapped_reads_in_current_contig: u64 = 0;
-        let mut total_edit_distance_in_current_contig: u64 = 0;
-
-        let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
-        let mut last_tid: i32 = -2; // no such tid in a real BAM file
-        let mut total_indels_in_current_contig = 0;
-
-
-        // for record in records
-        let mut skipped_reads = 0;
-
-        while bam_generated.read(&mut record)
-            .expect("Error while reading BAM record") == true {
-            if (!flag_filters.include_supplementary && record.is_supplementary() && !longread) ||
-                (!flag_filters.include_secondary && record.is_secondary() && !longread) ||
-                (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread) {
-                skipped_reads += 1;
-                continue;
-            } else if (!flag_filters.include_supplementary && record.is_supplementary() && longread) ||
-                (!flag_filters.include_secondary && record.is_secondary() && longread) {
+    while bam_generated.read(&mut record)
+        .expect("Error while reading BAM record") == true {
+        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread) ||
+            (!flag_filters.include_secondary && record.is_secondary() && !longread) ||
+            (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread) {
+            skipped_reads += 1;
+            continue;
+        } else if (!flag_filters.include_supplementary && record.is_supplementary() && longread) ||
+            (!flag_filters.include_secondary && record.is_secondary() && longread) {
+            skipped_reads += 1;
+            continue;
+        }
+        // if reference has changed, print the last record
+        let tid = record.tid();
+        if !record.is_unmapped() { // if mapped
+            if record.seq().len() == 0 {
+                continue
+            } else if record.mapq() < mapq_threshold {
                 skipped_reads += 1;
                 continue;
             }
+
+
             // if reference has changed, print the last record
-            let tid = record.tid();
-            if !record.is_unmapped() { // if mapped
-                if record.seq().len() == 0 {
-                    continue
-                } else if record.mapq() < mapq_threshold {
-                    skipped_reads += 1;
-                    continue;
+            if tid != last_tid {
+                if last_tid != -2 {
+                    let contig_len = header.target_len(last_tid as u32)
+                        .expect("Corrupt BAM file?") as usize;
+                    let contig_name = target_names[last_tid as usize].to_vec();
+                    let total_mismatches = total_edit_distance_in_current_contig -
+                        total_indels_in_current_contig;
+
+                    process_previous_contigs_var(
+                        mode,
+                        ani,
+                        last_tid,
+                        ups_and_downs,
+                        &coverage_estimators,
+                        min, max,
+                        total_indels_in_current_contig as usize,
+                        contig_end_exclusion,
+                        min_var_depth,
+                        contig_len,
+                        contig_name,
+                        &variant_matrix,
+                        ref_seq,
+                        sample_idx,
+                        method,
+                        total_mismatches,
+                        &gff_map,
+                        &codon_table,
+                        coverage_fold,
+                        num_mapped_reads_in_current_contig,
+                        sample_count,
+                        output_prefix,
+                        &stoit_name,
+                        longread);
                 }
 
-
-                // if reference has changed, print the last record
-                if tid != last_tid {
-                    if last_tid != -2 {
-                        let contig_len = header.target_len(last_tid as u32)
-                            .expect("Corrupt BAM file?") as usize;
-                        let contig_name = target_names[last_tid as usize].to_vec();
-                        let total_mismatches = total_edit_distance_in_current_contig -
-                            total_indels_in_current_contig;
-
-                        process_previous_contigs_var(
-                            mode,
-                            ani,
-                            last_tid,
-                            variant_map.get_mut(&tid),
-                            ups_and_downs,
-                            &coverage_estimators,
-                            min, max,
-                            total_indels_in_current_contig as usize,
-                            contig_end_exclusion,
-                            min_var_depth,
-                            contig_len,
-                            contig_name,
-                            &variant_matrix,
-                            ref_seq,
-                            sample_idx,
-                            method,
-                            total_mismatches,
-                            &gff_map,
-                            &codon_table,
-                            coverage_fold,
-                            num_mapped_reads_in_current_contig,
-                            sample_count,
-                            output_prefix,
-                            &stoit_name);
-                    }
-
-                    ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-                    debug!("Working on new reference {}",
-                           std::str::from_utf8(target_names[tid as usize]).unwrap());
-                    last_tid = tid;
-                    num_mapped_reads_total += num_mapped_reads_in_current_contig;
-                    num_mapped_reads_in_current_contig = 0;
-                    total_edit_distance_in_current_contig = 0;
-                    total_indels_in_current_contig = 0;
+                ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                debug!("Working on new reference {}",
+                       std::str::from_utf8(target_names[tid as usize]).unwrap());
+                last_tid = tid;
+                num_mapped_reads_total += num_mapped_reads_in_current_contig;
+                num_mapped_reads_in_current_contig = 0;
+                total_edit_distance_in_current_contig = 0;
+                total_indels_in_current_contig = 0;
 //                    nuc_freq = HashMap::new();
 //                    indels = HashMap::new();
 
-                    let mut reference = reference.lock().unwrap();
-                    match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
-                        Ok(reference) => reference,
-                        Err(e) => {
-                            println!("Cannot read sequence from reference {:?}", e);
-                            std::process::exit(1)
-                        },
-                    };
-                    ref_seq = Vec::new();
-                    match reference.read(&mut ref_seq) {
-                        Ok(reference) => reference,
-                        Err(e) => {
-                            println!("Cannot read sequence from reference {:?}", e);
-                            std::process::exit(1)
-                        },
-                    };
-                }
+                let mut reference = reference.lock().unwrap();
+                match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
+                    Ok(reference) => reference,
+                    Err(e) => {
+                        println!("Cannot read sequence from reference {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+                ref_seq = Vec::new();
+                match reference.read(&mut ref_seq) {
+                    Ok(reference) => reference,
+                    Err(e) => {
+                        println!("Cannot read sequence from reference {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+            }
 
-                num_mapped_reads_in_current_contig += 1;
+            num_mapped_reads_in_current_contig += 1;
 
-                // Lock variant matrix to collect variants
-                let mut variant_matrix = variant_matrix.lock().unwrap();
-                // for each chunk of the cigar string
-                let mut cursor: usize = record.pos() as usize;
-                let quals = record.qual();
-                let mut read_cursor: usize = 0;
-                for cig in record.cigar().iter() {
-                    match cig {
-                        Cigar::Match(_) | Cigar::Diff(_) | Cigar::Equal(_) => {
-                            // if M, X, or = increment start and decrement end index
-                            ups_and_downs[cursor] += 1;
-                            let final_pos = cursor + cig.len() as usize;
-                            if longread {
-                                for qpos in read_cursor..(read_cursor + cig.len() as usize) {
-                                    let mut current_variants = variant_matrix.variants(tid, cursor as i64).unwrap();
-                                    let read_char = record.seq()[qpos];
-                                    let refr_char = ref_seq[cursor as usize];
-                                    current_variants.par_iter_mut().for_each(|(variant, base)| {
-                                        match variant {
-                                            Variant::SNV(alt) => {
-                                                if *alt != refr_char && *alt == read_char {
-                                                    base.assign_read(record.qname().to_vec())
-                                                }
-                                            },
-                                            Variant::None => {
-                                                if refr_char == read_char {
-                                                    base.assign_read(record.qname().to_vec())
-                                                }
-                                            },
-                                            _ => {}
-                                        }
-                                    });
-                                    cursor += 1;
+            // Lock variant matrix to collect variants
+            let mut variant_matrix = variant_matrix.lock().unwrap();
+            // for each chunk of the cigar string
+            let mut cursor: usize = record.pos() as usize;
+            let quals = record.qual();
+            let mut read_cursor: usize = 0;
+            for cig in record.cigar().iter() {
+                match cig {
+                    Cigar::Match(_) | Cigar::Diff(_) | Cigar::Equal(_) => {
+                        // if M, X, or = increment start and decrement end index
+                        ups_and_downs[cursor] += 1;
+                        let final_pos = cursor + cig.len() as usize;
+                        if longread || !longread {
+                            for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                                match variant_matrix.variants(tid, cursor as i64) {
+                                    Some(current_variants) => {
+                                        let read_char = record.seq()[qpos];
+                                        let refr_char = ref_seq[cursor as usize];
+                                        current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                            match variant {
+                                                Variant::SNV(alt) => {
+                                                    if *alt != refr_char && *alt == read_char {
+                                                        base.assign_read(record.qname().to_vec())
+                                                    }
+                                                },
+                                                Variant::None => {
+                                                    if refr_char == read_char {
+                                                        base.assign_read(record.qname().to_vec())
+                                                    }
+                                                },
+                                                _ => {}
+                                            }
+                                        });
+                                    },
+                                    _ => {},
                                 }
-                            } else {
-                                cursor += cig.len() as usize;
+                                cursor += 1;
                             }
-                            if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
-                                ups_and_downs[final_pos] -= 1;
-                            }
-                            read_cursor += cig.len() as usize;
-                        },
-                        Cigar::Del(_) => {
-                            if longread {
+                        } else {
+                            cursor += cig.len() as usize;
+                        }
+                        if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
+                            ups_and_downs[final_pos] -= 1;
+                        }
+                        read_cursor += cig.len() as usize;
+                    },
+                    Cigar::Del(_) => {
+                        if longread {
 //                            let refr = (ref_seq[cursor as usize] as char).to_string();
 //                            let insert = refr +
 //                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
@@ -488,15 +526,15 @@ fn process_bam<R: NamedBamReader + Send,
 //                                id.insert(read_to_id[&record.qname().to_vec()]);
 //                                total_indels_in_current_contig += cig.len() as u64;
 //                            }
-                            }
+                        }
 
-                            cursor += cig.len() as usize;
-                        },
-                        Cigar::RefSkip(_) => {
-                            // if D or N, move the cursor
-                            cursor += cig.len() as usize;
-                        },
-                        Cigar::Ins(_) => {
+                        cursor += cig.len() as usize;
+                    },
+                    Cigar::RefSkip(_) => {
+                        // if D or N, move the cursor
+                        cursor += cig.len() as usize;
+                    },
+                    Cigar::Ins(_) => {
 //                        if longreads {
 //                            let refr = (ref_seq[cursor as usize] as char).to_string();
 //                            let insert = match str::from_utf8(&record.seq().as_bytes()[
@@ -513,12 +551,12 @@ fn process_bam<R: NamedBamReader + Send,
 //                            let mut read_to_id = read_to_id.lock().unwrap();
 //                            id.insert(read_to_id[&record.qname().to_vec()]);
 //                        }
-                            read_cursor += cig.len() as usize;
-                            total_indels_in_current_contig += cig.len() as u64;
-                        },
-                        Cigar::SoftClip(_) => {
-                            // soft clipped portions of reads can be included as structural variants
-                            // not sure if this correct protocol or not
+                        read_cursor += cig.len() as usize;
+                        total_indels_in_current_contig += cig.len() as u64;
+                    },
+                    Cigar::SoftClip(_) => {
+                        // soft clipped portions of reads can be included as structural variants
+                        // not sure if this correct protocol or not
 //                        if longreads {
 //                            let refr = (ref_seq[cursor as usize] as char).to_string();
 //                            let insert = match str::from_utf8(&record.seq().as_bytes()[
@@ -535,86 +573,81 @@ fn process_bam<R: NamedBamReader + Send,
 //                            id.insert(read_to_id[&record.qname().to_vec()]);
 //                            total_indels_in_current_contig += cig.len() as u64;
 //                        }
-                            read_cursor += cig.len() as usize;
-                        },
-                        Cigar::HardClip(_) | Cigar::Pad(_) => {}
-                    }
-                }
-                // Determine the number of mismatching bases in this read by
-                // looking at the NM tag.
-                total_edit_distance_in_current_contig += match
-                record.aux("NM".as_bytes()) {
-                    Some(aux) => {
-                        aux.integer() as u64
+                        read_cursor += cig.len() as usize;
                     },
-                    None => {
-                        panic!("Mapping record encountered that does not have an 'NM' \
-                                auxiliary tag in the SAM/BAM format. This is required \
-                                to work out some coverage statistics");
-                    }
-                };
+                    Cigar::HardClip(_) | Cigar::Pad(_) => {}
+                }
             }
+            // Determine the number of mismatching bases in this read by
+            // looking at the NM tag.
+            total_edit_distance_in_current_contig += match
+            record.aux("NM".as_bytes()) {
+                Some(aux) => {
+                    aux.integer() as u64
+                },
+                None => {
+                    panic!("Mapping record encountered that does not have an 'NM' \
+                            auxiliary tag in the SAM/BAM format. This is required \
+                            to work out some coverage statistics");
+                }
+            };
         }
-        if last_tid != -2 {
-            let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-            let contig_name = target_names[last_tid as usize].to_vec();
-            let total_mismatches = total_edit_distance_in_current_contig -
-                total_indels_in_current_contig;
+    }
+    if last_tid != -2 {
+        let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+        let contig_name = target_names[last_tid as usize].to_vec();
+        let total_mismatches = total_edit_distance_in_current_contig -
+            total_indels_in_current_contig;
 
+        process_previous_contigs_var(
+            mode,
+            ani,
+            last_tid,
+            ups_and_downs,
+            &coverage_estimators,
+            min, max,
+            total_indels_in_current_contig as usize,
+            contig_end_exclusion,
+            min_var_depth,
+            contig_len,
+            contig_name,
+            &variant_matrix,
+            ref_seq,
+            sample_idx,
+            method,
+            total_mismatches,
+            &gff_map,
+            &codon_table,
+            coverage_fold,
+            num_mapped_reads_in_current_contig,
+            sample_count,
+            output_prefix,
+            &stoit_name,
+            longread);
 
-            process_previous_contigs_var(
-                mode,
-                ani,
-                last_tid,
-                variant_map.get_mut(&last_tid),
-                ups_and_downs,
-                &coverage_estimators,
-                min, max,
-                total_indels_in_current_contig as usize,
-                contig_end_exclusion,
-                min_var_depth,
-                contig_len,
-                contig_name,
-                &variant_matrix,
-                ref_seq,
-                sample_idx,
-                method,
-                total_mismatches,
-                &gff_map,
-                &codon_table,
-                coverage_fold,
-                num_mapped_reads_in_current_contig,
-                sample_count,
-                output_prefix,
-                &stoit_name);
-
-            num_mapped_reads_total += num_mapped_reads_in_current_contig;
-        }
-
-
-        info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
-              stoit_name, num_mapped_reads_total,
-              bam_generated.num_detected_primary_alignments(), 2,
-              (num_mapped_reads_total * 100) as f64 /
-                  bam_generated.num_detected_primary_alignments() as f64, skipped_reads);
-
-
-        if bam_generated.num_detected_primary_alignments() == 0 {
-            warn!("No primary alignments were observed for sample {} \
-               - perhaps something went wrong in the mapping?",
-                  stoit_name);
-        }
-        bam_generated.finish();
+        num_mapped_reads_total += num_mapped_reads_in_current_contig;
     }
 
 
+    info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
+          stoit_name, num_mapped_reads_total,
+          bam_generated.num_detected_primary_alignments(), 2,
+          (num_mapped_reads_total * 100) as f64 /
+              bam_generated.num_detected_primary_alignments() as f64, skipped_reads);
+
+
+    if bam_generated.num_detected_primary_alignments() == 0 {
+        warn!("No primary alignments were observed for sample {} \
+           - perhaps something went wrong in the mapping?",
+              stoit_name);
+    }
+    bam_generated.finish();
 }
 
 fn process_previous_contigs_var(
     mode: &str,
     ani: f32,
     last_tid: i32,
-    variant_map: Option<&mut HashMap<i64, HashMap<Variant, Base>>>,
     ups_and_downs: Vec<i32>,
     coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
     min: f32, max: f32,
@@ -634,9 +667,16 @@ fn process_previous_contigs_var(
     num_mapped_reads_in_current_contig: u64,
     sample_count: usize,
     output_prefix: &str,
-    stoit_name: &str) {
+    stoit_name: &str,
+    longread: bool,) {
 
     if last_tid != -2 {
+
+        // Adjust the sample index if the bam is from long reads
+        let mut sample_idx = sample_idx;
+        if longread {
+            sample_idx = sample_count - sample_idx - 1;
+        }
         let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.setup()
@@ -656,16 +696,17 @@ fn process_previous_contigs_var(
                                                               max as f64,
                                                               contig_end_exclusion);
 
-        // adds contig info to variant struct
-        variant_struct.add_contig(variant_map,
-                                 last_tid.clone(),
-                                 total_indels_in_current_contig,
-                                 contig_name.clone(),
-                                 contig_len,
-                                 sample_idx,
-                                 coverages,
-                                 ups_and_downs);
+        let mut variant_matrix = variant_matrix.lock().unwrap();
 
+        // adds contig info to variant struct
+        variant_struct.add_contig(variant_matrix.variants_of_contig(last_tid),
+                                  last_tid.clone(),
+                                  total_indels_in_current_contig,
+                                  contig_name.clone(),
+                                  contig_len,
+                                  sample_idx,
+                                  coverages,
+                                  ups_and_downs);
 
         if ani == 0. {
             variant_struct.calc_error(ani);
@@ -699,12 +740,11 @@ fn process_previous_contigs_var(
 
             },
             "summarize" | "genotype" => {
-                let mut variant_matrix = variant_matrix.lock().unwrap();
                 // calculates minimum number of genotypes possible for each variant location
                 variant_matrix.add_contig(variant_struct,
-                                         sample_count,
-                                         sample_idx,
-                                         ref_sequence);
+                                          sample_count,
+                                          sample_idx,
+                                          ref_sequence);
             },
             "evolve" => {
                 let gff_map = gff_map.lock().unwrap();
@@ -767,7 +807,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
 
 }
 
-/// Makes direct call to pilon or sniffles
+/// Makes direct call to snippy or SVIM
 pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longread: bool) -> Reader {
 
     // setup temp directory

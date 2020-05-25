@@ -10,6 +10,7 @@ extern crate clap;
 extern crate seq_io;
 extern crate bio_types;
 extern crate linregress;
+extern crate glob;
 extern crate coverm;
 extern crate bird_tool_utils;
 extern crate csv;
@@ -28,7 +29,6 @@ extern crate rust_htslib;
 //extern crate plotly;
 extern crate strum;
 
-extern crate approx;
 #[macro_use]
 extern crate log;
 extern crate strum_macros;

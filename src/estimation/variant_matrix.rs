@@ -10,6 +10,7 @@ use std::fs::File;
 use dbscan::fuzzy;
 use kodama::{Method, linkage};
 use itertools::{Itertools};
+use rust_htslib::bam::HeaderView;
 
 
 #[derive(Debug)]
@@ -72,11 +73,14 @@ pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
-                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>);
+                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
+                  header: &HeaderView);
 
     /// Returns the variants at the current position
     /// as a mutable reference
     fn variants(&mut self, tid: i32, pos: i64) -> Option<&mut HashMap<Variant, Base>>;
+
+    fn variants_of_contig(&mut self, tid: i32) -> Option<&mut HashMap<i64, HashMap<Variant, Base>>>;
 
     /// Takes [VariantStats](contig_variants/VariantStats) struct for single contig and adds to
     /// [VariantMatrix](VariantMatrix)
@@ -143,7 +147,8 @@ impl VariantMatrixFunctions for VariantMatrix {
     }
 
     fn add_sample(&mut self, sample_name: String, sample_idx: usize,
-                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) {
+                  variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
+                   header: &HeaderView) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
@@ -152,21 +157,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ..
             } => {
                 sample_names[sample_idx] = sample_name;
+                let target_count = header.target_count();
 
-                for (tid, depth) in depths.iter() {
+                for tid in (0..target_count).into_iter() {
                     // Initialize contig id in variant hashmap
-                    let contig_variants = all_variants.entry(*tid)
+                    let contig_variants = all_variants.entry(tid as i32)
                         .or_insert(HashMap::new());
                     let placeholder = HashMap::new();
-                    let variants = match variant_records.get(tid) {
+                    let variants = match variant_records.get(&(tid as i32)) {
                         Some(map) => map,
                         _ => &placeholder,
                     };
-
+                    let target_len = header.target_len(tid).unwrap();
                     // Apppend the sample index to each variant abundance
                     // Initialize the variant position index
                     // Also turns out to be the total number of variant positions
-                    for (pos, total_depth) in depth.iter().enumerate() {
+                    for pos in (0..target_len).into_iter() {
                         let position_variants = contig_variants.entry(pos as i64)
                             .or_insert(HashMap::new());
                         let mut variant_depth: f64 = 0.;
@@ -174,14 +180,15 @@ impl VariantMatrixFunctions for VariantMatrix {
                         if variants.contains_key(&(pos as i64)) {
                             let abundance_map = variants.get(&(pos as i64)).unwrap();
                             for (variant, base_info) in abundance_map.iter() {
+//                                info!("{:?}", base_info);
+
                                 let sample_map = position_variants.entry(variant.clone())
                                     .or_insert(base_info.clone());
-                                sample_map.combine_sample(base_info, sample_idx, *total_depth);
+                                sample_map.combine_sample(base_info, sample_idx, 0);
                             }
                         }
                     }
                 }
-                *depths = HashMap::new();
             }
         }
     }
@@ -200,6 +207,17 @@ impl VariantMatrixFunctions for VariantMatrix {
                         None
                     },
                 }
+            }
+        }
+    }
+
+    fn variants_of_contig(&mut self, tid: i32) -> Option<&mut HashMap<i64, HashMap<Variant, Base>>> {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut all_variants,
+                ..
+            } => {
+                all_variants.get_mut(&tid)
             }
         }
     }
@@ -247,7 +265,17 @@ impl VariantMatrixFunctions for VariantMatrix {
                         target_names.entry(tid)
                             .or_insert(str::from_utf8(&target_name).unwrap().to_string());
                         target_lengths.entry(tid).or_insert(target_len);
+
                         // copy across depths
+                        let mut contig_variants = all_variants.entry(tid)
+                            .or_insert(HashMap::new());
+                        for (pos, d) in depth.iter().enumerate() {
+                            let position_variants = contig_variants.entry(pos as i64)
+                                .or_insert(HashMap::new());
+                            for (variant, base_info) in position_variants.iter_mut() {
+                                base_info.add_depth(sample_idx, *d);
+                            }
+                        }
                         depths.entry(tid).or_insert(depth);
                         contigs.entry(tid).or_insert(contig);
                         
@@ -331,15 +359,21 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 let var_depth
                                                     = base_info.depth[index] as f64;
                                                 if var_depth < 0. {
-                                                    println!("Neg var depth {:?}", base_info)
+                                                    info!("Neg var depth {:?}", base_info)
                                                 }
-                                                let total_depth
-                                                    = base_info.totaldepth[index] as f64 + 1.;
+                                                let mut total_depth
+                                                    = base_info.truedepth[index] as f64;
 //                                                base_info.freq[index] = ;
-                                                rel_abund[index] =
-                                                    var_depth / total_depth;
+                                                if total_depth == 0. {
+                                                    rel_abund[index] =
+                                                        var_depth / (total_depth + 1.);
+                                                } else {
+                                                    rel_abund[index] =
+                                                        var_depth / total_depth;
+                                                }
+
                                                 geom_mean_v[index] += (var_depth + 1.).ln();
-                                                geom_mean_d[index] += (total_depth).ln();
+                                                geom_mean_d[index] += (total_depth + 1.).ln();
                                                 geom_mean_f[index] += ((var_depth + 1.)
                                                     / total_depth).ln();
                                             });
@@ -350,7 +384,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             let point = fuzzy::Var {
                                                 pos: *position,
                                                 var: variant.clone(),
-                                                deps: base_info.totaldepth.clone(),
+                                                deps: base_info.truedepth.clone(),
                                                 vars: base_info.depth.clone(),
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
