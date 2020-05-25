@@ -293,6 +293,15 @@ pub struct Base {
 }
 
 impl Base {
+    pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
+        if self.truedepth[sample_idx] == 0 {
+            self.truedepth[sample_idx] = d;
+            if self.variant == Variant::None {
+                self.depth[sample_idx] = d;
+            }
+        }
+    }
+
     pub fn combine_sample(&mut self, other: &Base, sample_idx: usize, total_depth: i32) {
         if &self != &other {
             self.filters[sample_idx] = other.filters[sample_idx].clone();
@@ -368,11 +377,12 @@ impl Base {
                 //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
                 if longread {
+                    // get relevant flag for SVIM vcf on long read samples
                     base.variant = variant.clone();
                     base.depth[sample_idx] = match record.format(b"AD").integer() {
                         Ok(val) => {
-                            if val[0][0] >= 0 {
-                                val[0][0]
+                            if val[0][1] >= 0 {
+                                val[0][1]
                             } else {
                                 match record.info(b"SUPPORT").integer() {
                                     Ok(val) => {
@@ -395,10 +405,10 @@ impl Base {
                             if val[0][0] >= 0 {
                                 val[0][0]
                             } else {
-                                0
+                                base.depth[sample_idx]
                             }
                         },
-                        _ => 0,
+                        _ => base.depth[sample_idx],
                     };
                     let refr_depth = std::cmp::max(0, base.truedepth[sample_idx] - base.depth[sample_idx]);
                     base.af[sample_idx] = base.depth[sample_idx] as f64 / base.truedepth[sample_idx] as f64;
@@ -413,10 +423,10 @@ impl Base {
                                 if val[0][0] >= 0 {
                                     val[0][0]
                                 } else {
-                                    0
+                                    base.depth[sample_idx]
                                 }
                             },
-                            _ => 0,
+                            _ => base.depth[sample_idx],
                         };
                         refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
                         refr_base.depth[sample_idx] = refr_depth;
@@ -424,6 +434,7 @@ impl Base {
                         refr_base_empty = false;
                     }
                 } else {
+                    // Get relevant flag from freebayes output on short read samples
                     base.variant = variant.clone();
                     base.filters[sample_idx] = filter_hash.clone();
                     base.truedepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
