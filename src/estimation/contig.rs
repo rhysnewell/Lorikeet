@@ -351,6 +351,12 @@ fn process_bam<R: NamedBamReader + Send,
 
     let mut bam_generated = bam_generator.start();
 
+    // Adjust the sample index if the bam is from long reads
+    let mut sample_idx = sample_idx;
+    if longread {
+        sample_idx = sample_count - sample_idx - 1;
+    }
+
     let mut bam_properties =
         AlignmentProperties::default(InsertSize::default());
 
@@ -486,12 +492,15 @@ fn process_bam<R: NamedBamReader + Send,
                                             match variant {
                                                 Variant::SNV(alt) => {
                                                     if *alt != refr_char && *alt == read_char {
-                                                        base.assign_read(record.qname().to_vec())
+                                                        base.assign_read(record.qname().to_vec());
+                                                        base.truedepth[sample_idx] += 1;
                                                     }
                                                 },
                                                 Variant::None => {
                                                     if refr_char == read_char {
-                                                        base.assign_read(record.qname().to_vec())
+                                                        base.assign_read(record.qname().to_vec());
+                                                        base.truedepth[sample_idx] += 1;
+
                                                     }
                                                 },
                                                 _ => {}
@@ -672,11 +681,7 @@ fn process_previous_contigs_var(
 
     if last_tid != -2 {
 
-        // Adjust the sample index if the bam is from long reads
-        let mut sample_idx = sample_idx;
-        if longread {
-            sample_idx = sample_count - sample_idx - 1;
-        }
+
         let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.setup()

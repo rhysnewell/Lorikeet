@@ -325,22 +325,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                             vec![1. as f64; sample_count as usize]));
 
                 // get basic variant info and store as fuzzy::Var
-                all_variants.par_iter().for_each(|(tid, variant_abundances)| {
+                all_variants.par_iter_mut().for_each(|(tid, variant_abundances)| {
                     let contig_coverages = coverages.get(tid)
                         .expect("Unable to retrieve contig coverage");
 
                     let _max_coverage = contig_coverages.iter().cloned().fold1(f64::max)
                         .expect("Unable to retrieve max coverage");
 
-                    variant_abundances.par_iter().for_each(
+                    variant_abundances.par_iter_mut().for_each(
                         |(position, hash)| {
                             // loop through each position that has variants ignoring positions that
                             // only contained the reference in all samples
                             if hash.keys().len() > 0 {
 
-                                for (variant, base_info) in hash.iter() {
+                                for (variant, base_info) in hash.iter_mut() {
                                     match variant {
-//                                        Variant::None => {},
+                                        Variant::None => {},
                                         _ => {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
@@ -348,7 +348,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                             // Get the mean abundance across samples
                                             let mut sample_idx: usize = 0;
-                                            (0..sample_count).into_iter().for_each(|index| {
+                                            for index in (0..sample_count).into_iter() {
                                                 let mut geom_mean_v =
                                                     geom_mean_v.lock().unwrap();
                                                 let mut geom_mean_d =
@@ -356,17 +356,20 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 let mut geom_mean_f =
                                                     geom_mean_f.lock().unwrap();
 
-                                                let var_depth
+                                                let mut var_depth
                                                     = base_info.depth[index] as f64;
-                                                if var_depth < 0. {
-                                                    info!("Neg var depth {:?}", base_info)
+                                                if var_depth <= 0. {
+                                                    debug!("No var depth {:?} {:?}", base_info.variant, base_info.truedepth);
+                                                    var_depth
+                                                        = base_info.truedepth[index] as f64;
+                                                    base_info.depth[index] = base_info.truedepth[index];
                                                 }
                                                 let mut total_depth
-                                                    = base_info.truedepth[index] as f64;
+                                                    = base_info.totaldepth[index] as f64;
 //                                                base_info.freq[index] = ;
-                                                if total_depth == 0. {
+                                                if total_depth <= 0. {
                                                     rel_abund[index] =
-                                                        var_depth / (total_depth + 1.);
+                                                        var_depth / (1.);
                                                 } else {
                                                     rel_abund[index] =
                                                         var_depth / total_depth;
@@ -375,8 +378,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 geom_mean_v[index] += (var_depth + 1.).ln();
                                                 geom_mean_d[index] += (total_depth + 1.).ln();
                                                 geom_mean_f[index] += ((var_depth + 1.)
-                                                    / total_depth).ln();
-                                            });
+                                                    / (total_depth + 1.)).ln();
+                                            };
 
 
                                             let mut variant_info_all = variant_info_all
@@ -384,7 +387,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             let point = fuzzy::Var {
                                                 pos: *position,
                                                 var: variant.clone(),
-                                                deps: base_info.truedepth.clone(),
+                                                deps: base_info.totaldepth.clone(),
                                                 vars: base_info.depth.clone(),
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
@@ -404,6 +407,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         }).collect::<Vec<f64>>();
                     return output
                 };
+                info!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
                 let geom_mean_v = geom_mean_v.lock().unwrap().clone();
                 let geom_mean_v = geom_mean(&geom_mean_v);
@@ -416,6 +420,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let geom_mean_f = geom_mean_f.lock().unwrap().clone();
                 let geom_mean_f = geom_mean(&geom_mean_f);
                 debug!("Geom Mean Frq {:?}", geom_mean_f);
+                info!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
                 *variant_info = variant_info_all;
                 *geom_mean_var = geom_mean_v;
