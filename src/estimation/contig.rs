@@ -1,5 +1,5 @@
 use std;
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use std::collections::{HashMap};
 use rust_htslib::bam::{self, record::Cigar};
 use rust_htslib::{bcf::Reader, bcf::*};
 use bird_tool_utils::command;
@@ -387,8 +387,7 @@ fn process_bam<R: NamedBamReader + Send,
             (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread) {
             skipped_reads += 1;
             continue;
-        } else if (!flag_filters.include_supplementary && record.is_supplementary() && longread) ||
-            (!flag_filters.include_secondary && record.is_secondary() && longread) {
+        } else if (!flag_filters.include_secondary && record.is_secondary() && longread) {
             skipped_reads += 1;
             continue;
         }
@@ -468,7 +467,9 @@ fn process_bam<R: NamedBamReader + Send,
                 };
             }
 
-            num_mapped_reads_in_current_contig += 1;
+            if !record.is_supplementary() {
+                num_mapped_reads_in_current_contig += 1;
+            }
 
             // Lock variant matrix to collect variants
             let mut variant_matrix = variant_matrix.lock().unwrap();
@@ -482,37 +483,33 @@ fn process_bam<R: NamedBamReader + Send,
                         // if M, X, or = increment start and decrement end index
                         ups_and_downs[cursor] += 1;
                         let final_pos = cursor + cig.len() as usize;
-                        if longread || !longread {
-                            for qpos in read_cursor..(read_cursor + cig.len() as usize) {
-                                match variant_matrix.variants(tid, cursor as i64) {
-                                    Some(current_variants) => {
-                                        let read_char = record.seq()[qpos];
-                                        let refr_char = ref_seq[cursor as usize];
-                                        current_variants.par_iter_mut().for_each(|(variant, base)| {
-                                            match variant {
-                                                Variant::SNV(alt) => {
-                                                    if *alt != refr_char && *alt == read_char {
-                                                        base.assign_read(record.qname().to_vec());
-                                                        base.truedepth[sample_idx] += 1;
-                                                    }
-                                                },
-                                                Variant::None => {
-                                                    if refr_char == read_char {
-                                                        base.assign_read(record.qname().to_vec());
-                                                        base.truedepth[sample_idx] += 1;
+                        for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                            match variant_matrix.variants(tid, cursor as i64) {
+                                Some(current_variants) => {
+                                    let read_char = record.seq()[qpos];
+                                    let refr_char = ref_seq[cursor as usize];
+                                    current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                        match variant {
+                                            Variant::SNV(alt) => {
+                                                if *alt != refr_char && *alt == read_char {
+                                                    base.assign_read(record.qname().to_vec());
+                                                    base.truedepth[sample_idx] += 1;
+                                                }
+                                            },
+                                            Variant::None => {
+                                                if refr_char == read_char {
+                                                    base.assign_read(record.qname().to_vec());
+                                                    base.truedepth[sample_idx] += 1;
 
-                                                    }
-                                                },
-                                                _ => {}
-                                            }
-                                        });
-                                    },
-                                    _ => {},
-                                }
-                                cursor += 1;
+                                                }
+                                            },
+                                            _ => {}
+                                        }
+                                    });
+                                },
+                                _ => {},
                             }
-                        } else {
-                            cursor += cig.len() as usize;
+                            cursor += 1;
                         }
                         if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
                             ups_and_downs[final_pos] -= 1;
@@ -804,7 +801,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         let stoit_name: Vec<&str> = stoit_name.split("/").collect();
         let stoit_name = stoit_name.join(".");
         let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");
-        let bam_path = (cache + &(stoit_name + ".bam"));
+        let bam_path = cache + &(stoit_name + ".bam");
         info!("Cached bam path {} ", bam_path);
 
         return generate_vcf(&bam_path, m, threads, longread)

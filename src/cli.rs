@@ -128,15 +128,15 @@ Alignment filtering (optional):
                                               bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                               aligned bases.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
+                                              Conflicts --proper-pairs-only. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                               identity e.g. 0.95 for 95%.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
+                                              Conflicts --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                               bases e.g. 0.95 means 95% of the read's
                                               bases must be aligned.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
-   --allow-improper-pairs                     Allows reads to be mapped as improper pairs
+                                              Conflicts --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                     Allows reads to be mapped as improper pairs
    --include-supplementary                    Includes read alignments flagged as supplementary
    --include-secondary                        Includes read alignments flagged as secondary
 
@@ -258,15 +258,15 @@ Alignment filtering (optional):
                                               bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                               aligned bases.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
+                                              Conflicts --proper-pairs-only. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                               identity e.g. 0.95 for 95%.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
+                                              Conflicts --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                               bases e.g. 0.95 means 95% of the read's
                                               bases must be aligned.
-                                              Conflicts --allow-improper-pairs. [default 0.0]
-   --allow-improper-pairs                     Allows reads to be mapped as improper pairs
+                                              Conflicts --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                     Allows reads to be mapped as improper pairs
    --include-supplementary                    Includes read alignments flagged as supplementary
    --include-secondary                        Includes read alignments flagged as secondary
 
@@ -373,15 +373,15 @@ Alignment filtering (optional):
                                          bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                          identity e.g. 0.95 for 95%.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
                                          bases must be aligned.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
-   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+                                         Conflicts --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                Allows reads to be mapped as improper pairs
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
 
@@ -497,15 +497,15 @@ Alignment filtering (optional):
                                          bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                          identity e.g. 0.95 for 95%.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
                                          bases must be aligned.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
-   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+                                         Conflicts --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                Allows reads to be mapped as improper pairs
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
 
@@ -849,19 +849,19 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
                     .takes_value(true)
-                    .default_value("0.97"))
+                    .default_value("0.0"))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("output-prefix")
                     .long("output-prefix")
                     .short("o")
@@ -909,8 +909,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
                 .arg(Arg::with_name("include-secondary")
@@ -1040,20 +1040,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
-                    .default_value("0.97")
+                    .default_value("0.0")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
@@ -1092,8 +1092,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
                 .arg(Arg::with_name("include-secondary")
@@ -1232,20 +1232,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
-                    .default_value("0.97")
+                    .default_value("0.0")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
@@ -1291,8 +1291,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
                 .arg(Arg::with_name("include-secondary")
@@ -1435,20 +1435,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
-                    .default_value("0.97")
+                    .default_value("0.0")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
@@ -1506,8 +1506,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
                 .arg(Arg::with_name("include-secondary")
@@ -1572,23 +1572,22 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
-                    .default_value("0.97")
+                    .default_value("0.0")
                     .takes_value(true))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
-
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("threads")
                     .long("threads")
                     .short("t")
@@ -1722,19 +1721,19 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-read-aligned-percent")
                     .long("min-read-aligned-percent")
                     .takes_value(true)
-                    .default_value("0.97"))
+                    .default_value("0.0"))
                 .arg(Arg::with_name("min-read-aligned-length-pair")
                     .long("min-read-aligned-length-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-percent-identity-pair")
                     .long("min-read-percent-identity-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("min-read-aligned-percent-pair")
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
-                    .conflicts_with("allow-improper-pairs"))
+                    .conflicts_with("proper-pairs-only"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
@@ -1772,8 +1771,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs")
-                    .long("allow-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only")
+                    .long("proper-pairs-only"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))

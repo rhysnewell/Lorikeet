@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use std::collections::{HashMap};
 use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;

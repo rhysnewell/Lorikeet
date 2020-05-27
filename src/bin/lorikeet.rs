@@ -891,7 +891,7 @@ impl FilterParameters {
     pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: m.is_present("allow-improper-pairs"),
+                include_improper_pairs: !m.is_present("proper-pairs-only"),
                 include_secondary: m.is_present("include-secondary"),
                 include_supplementary: m.is_present("include-supplementary"),
             },
