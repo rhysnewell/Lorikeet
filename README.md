@@ -8,17 +8,26 @@ A strain resolver for metagenomics.
 
 ## Installation
 
-#### option 1: Cargo
+#### Option 1: Conda - Recommended
 ```
-cargo install lorikeet-rs
+conda install lorikeet-genome
 ```
 
-#### option 2: Conda
-*Not implemented yet*
-
-#### option 3: Build manually
+#### Option 2: Cargo
 ```
-git clone https://github.com/rhysnewell/Lorikeet/git && cd Lorikeet && cargo build --release
+conda create -n lorikeet -c conda-forge -c bioconda -c defaults -y snippy=4.4.5 svim rust clangdev pkg-config zlib gsl \ 
+openblas zlib gsl starcode openblas bwa minimap2 fastani dashing && \ 
+cargo install lorikeet-genome
+```
+
+#### Option 3: Build manually
+You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
+paths in the your conda environment if they can't properly be found on your system.
+```
+conda create -n lorikeet -c conda-forge -c bioconda -c defaults -y snippy=4.4.5 svim rust clangdev pkg-config zlib gsl \ 
+openblas zlib gsl starcode openblas bwa minimap2 fastani dashing && \ 
+git clone https://github.com/rhysnewell/Lorikeet/git && \ 
+cd Lorikeet && cargo build --release
 ```
 
 
@@ -51,9 +60,9 @@ Genotype from bam:
 
 `lorikeet genotype -b input.bam -r input_genome.fna --e-min 0.1 --e-max 0.5 --pts-min 0.1 --pts-max 0.5`
 
-Genotype from reads:
+Genotype from short reads and longread bam:
 
-`lorikeet genotype -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq`
+`lorikeet genotype -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
 
 ## Output
 
