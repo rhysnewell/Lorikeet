@@ -150,10 +150,12 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 //    let read_to_id = Arc::new(Mutex::new(HashMap::new()));
     // Loop through bam generators in parallel
     let split_threads = std::cmp::max(n_threads / sample_count, 1);
+    let short_threads = std::cmp::max(n_threads / bam_readers.len(), 1);
+    let long_threads = std::cmp::max(n_threads / longreads.len(), 1);
 
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
-                    split_threads,
+                    short_threads,
                     sample_idx,
                     sample_count,
                     &variant_matrix,
@@ -162,7 +164,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
     longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
-                    split_threads,
+                    long_threads,
                     sample_idx,
                     sample_count,
                     &variant_matrix,
@@ -872,11 +874,11 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
                 .stderr(std::process::Stdio::null())
 //                .stdout(std::process::Stdio::null())
                 .spawn()
-                .expect("Unable to execute bash"), "sniv");
+                .expect("Unable to execute bash"), "svim");
         let vcf_path = &(svim_path.to_string() + "/variants.vcf");
         debug!("VCF Path {:?}", vcf_path);
         let vcf_reader = Reader::from_path(vcf_path)
-            .expect("Failed to read sniffles vcf output");
+            .expect("Failed to read SVIM vcf output");
 
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader
