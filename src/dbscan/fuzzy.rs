@@ -4,6 +4,7 @@ use std::f64;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 use model::variants::*;
+use coverm::coverage_takers::CoverageTakerType::CachedSingleFloatCoverageTaker;
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -181,6 +182,16 @@ pub struct Assignment {
     pub label: f64,
     /// A high-level category.
     pub category: Category,
+}
+
+impl Assignment {
+    pub fn new() -> Assignment {
+        Assignment {
+            index: 0,
+            label: 0.,
+            category: Category::Noise,
+        }
+    }
 }
 
 /// A group of [assigned](Assignment) points.
