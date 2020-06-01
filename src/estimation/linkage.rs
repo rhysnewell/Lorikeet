@@ -54,11 +54,17 @@ pub fn linkage_clustering_of_clusters(
             // Loop through first cluster
             (0..clust1_size).into_par_iter().for_each(|index1| {
                 // Loop through second cluster
-                let clust1 = clust1.lock().unwrap();
-                let assignment1 = &clust1[index1];
+                let mut assignment1 = fuzzy::Assignment::new();
+                {
+                    let clust1 = clust1.lock().unwrap();
+                    assignment1 = clust1[index1].clone();
+                }
                 (0..clust2_size).into_par_iter().for_each(|index2| {
-                    let clust2 = clust2.lock().unwrap();
-                    let assignment2 = &clust2[index2];
+                    let mut assignment2 = fuzzy::Assignment::new();
+                    {
+                        let clust2 = clust2.lock().unwrap();
+                        assignment2 = clust2[index2].clone();
+                    }
                     if assignment1.index != assignment2.index {
                         let var1 = &variant_info[assignment1.index];
                         let var2 = &variant_info[assignment2.index];
