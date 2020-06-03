@@ -151,7 +151,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Loop through bam generators in parallel
     let split_threads = std::cmp::max(n_threads / sample_count, 1);
     let short_threads = std::cmp::max(n_threads / bam_readers.len(), 1);
-    let long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+    let mut long_threads = 1;
 
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
@@ -162,24 +162,24 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     false,m)
     });
 
-    longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
-        process_vcf(bam_generator,
-                    long_threads,
-                    sample_idx,
-                    sample_count,
-                    &variant_matrix,
-                    true, m)
-    });
+    if longreads.len() > 0 {
+        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+        longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            process_vcf(bam_generator,
+                        long_threads,
+                        sample_idx,
+                        sample_count,
+                        &variant_matrix,
+                        true, m)
+        });
+    }
 
 
     // Annoyingly read in bam file again
     let mut bam_path = "".to_string();
     let mut longreads = vec!();
     let mut bam_readers = vec!();
-    if m.is_present("longread-bam-files") {
-        let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
-        longreads = generate_named_bam_readers_from_bam_files(longreads_path);
-    }
+
     if m.is_present("bam-files") {
         let bam_paths = m.values_of("bam-files").unwrap().collect::<Vec<&str>>();
         bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
@@ -217,29 +217,36 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     mapq_threshold, method, false)
     });
 
-    // Process Long Read BAMs
-    longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
-        process_bam(bam_generator,
-                    sample_idx,
-                    sample_count,
-                    &reference,
-                    &coverage_estimators,
-                    &variant_matrix,
-                    &gff_map,
-                    split_threads,
-                    m,
-                    output_prefix,
-                    coverage_fold,
-                    &codon_table,
-                    min_var_depth,
-                    contig_end_exclusion,
-                    min, max, ani,
-                    mode,
-                    include_soft_clipping,
-                    include_indels,
-                    &flag_filters,
-                    mapq_threshold, method, true)
-    });
+    // Process Long Read BAMs if they are present
+    if m.is_present("longread-bam-files") {
+        let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
+        longreads = generate_named_bam_readers_from_bam_files(longreads_path);
+    }
+    if longreads.len() > 0 {
+        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+        longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            process_bam(bam_generator,
+                        sample_idx,
+                        sample_count,
+                        &reference,
+                        &coverage_estimators,
+                        &variant_matrix,
+                        &gff_map,
+                        split_threads,
+                        m,
+                        output_prefix,
+                        coverage_fold,
+                        &codon_table,
+                        min_var_depth,
+                        contig_end_exclusion,
+                        min, max, ani,
+                        mode,
+                        include_soft_clipping,
+                        include_indels,
+                        &flag_filters,
+                        mapq_threshold, method, true)
+        });
+    }
 
     if mode=="genotype" {
         let mut variant_matrix = variant_matrix.lock().unwrap();

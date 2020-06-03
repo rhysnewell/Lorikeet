@@ -1,5 +1,8 @@
-[![Build Status](https://travis-ci.com/rhysnewell/Lorikeet.svg?branch=master)](https://travis-ci.com/rhysnewell/Lorikeet)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+![](https://travis-ci.com/rhysnewell/Lorikeet.svg?branch=master)
+![](https://anaconda.org/bioconda/lorikeet-genome/badges/license.svg)
+![](https://anaconda.org/bioconda/lorikeet-genome/badges/version.svg)
+![](https://anaconda.org/bioconda/lorikeet-genome/badges/latest_release_relative_date.svg)
+![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
 
 
 ![](docs/static/images/lorikeet_logo_crop.png)
