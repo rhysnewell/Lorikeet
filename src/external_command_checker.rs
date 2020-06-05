@@ -9,6 +9,14 @@ pub fn check_for_samtools() {
     self::check_for_external_command_presence("samtools", "which samtools");
 }
 
+pub fn check_for_bcftools() {
+    self::check_for_external_command_presence("bcftools", "which bcftools");
+}
+
+pub fn check_for_vt() {
+    self::check_for_external_command_presence("vt", "which vt");
+}
+
 pub fn check_for_prokka() {
     self::check_for_external_command_presence("prokka", "which prokka");
 }
@@ -31,8 +39,16 @@ pub fn check_for_sniffles() {
     self::check_for_external_command_presence("sniffles", "which sniffles");
 }
 
-pub fn check_for_roary() {
-    self::check_for_external_command_presence("roary", "which roary");
+pub fn check_for_freebayes() {
+    self::check_for_external_command_presence("freebayes", "which freebayes");
+}
+
+pub fn check_for_freebayes_parallel() {
+    self::check_for_external_command_presence("freebayes-parallel", "which freebayes-parallel");
+}
+
+pub fn check_for_fasta_generate_regions() {
+    self::check_for_external_command_presence("fasta_generate_regions.py", "which fasta_generate_regions.py")
 }
 
 pub fn check_for_minimap2() {

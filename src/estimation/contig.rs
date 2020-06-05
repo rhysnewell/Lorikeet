@@ -153,13 +153,20 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let short_threads = std::cmp::max(n_threads / bam_readers.len(), 1);
     let mut long_threads = 1;
 
+    // Get the total amound of bases in reference using the index
+    let reference_length = bio::io::fasta::Index::with_fasta_file(
+        &Path::new(m.value_of("reference").unwrap())).unwrap()
+        .sequences().iter().fold(0, |acc, seq| acc + seq.len);
+
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
                     short_threads,
                     sample_idx,
                     sample_count,
                     &variant_matrix,
-                    false,m)
+                    false,
+                    m,
+                    reference_length)
     });
 
     if longreads.len() > 0 {
@@ -170,7 +177,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         sample_idx,
                         sample_count,
                         &variant_matrix,
-                        true, m)
+                        true,
+                        m,
+                        reference_length)
         });
     }
 
@@ -273,7 +282,8 @@ fn process_vcf<R: NamedBamReader + Send,
     sample_count: usize,
     variant_matrix: &Arc<Mutex<VariantMatrix>>,
     longread: bool,
-    m: &clap::ArgMatches) {
+    m: &clap::ArgMatches,
+    reference_length: u64) {
     let mut bam_generated = bam_generator.start();
 
     let mut bam_properties =
@@ -289,13 +299,16 @@ fn process_vcf<R: NamedBamReader + Send,
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     let mut variant_map = HashMap::new();
 
-    // Drop Bam Early and then reread in later
+    // Write Bam Early and then reread in later
     bam_generated.finish();
+
+    // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
                                  &m,
                                  sample_idx,
                                  split_threads,
-                                 longread);
+                                 longread,
+                                 reference_length);
     vcf_reader.set_threads(split_threads);
     let mut sample_idx = sample_idx;
     if longread {
@@ -776,7 +789,7 @@ fn process_previous_contigs_var(
 
 /// Get or generate vcf file
 pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
-               sample_idx: usize, threads: usize, longread: bool) -> Reader {
+               sample_idx: usize, threads: usize, longread: bool, reference_length: u64) -> Reader {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -788,10 +801,10 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
             if longread {
                 let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
-                return generate_vcf(bam_path, m, threads, longread)
+                return generate_vcf(bam_path, m, threads, longread, reference_length)
             } else {
                 let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
-                return generate_vcf(bam_path, m, threads, longread)
+                return generate_vcf(bam_path, m, threads, longread, reference_length)
             }
         } else {
             let vcf_path = vcf_path[0];
@@ -800,10 +813,10 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         }
     } else if longread {
         let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
-        return generate_vcf(bam_path, m, threads, longread)
+        return generate_vcf(bam_path, m, threads, longread, reference_length)
     } else if m.is_present("bam-files") {
         let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
-        return generate_vcf(bam_path, m, threads, longread)
+        return generate_vcf(bam_path, m, threads, longread, reference_length)
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
         let cache = m.value_of("outdir").unwrap().to_string() + "/";
@@ -813,13 +826,13 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         let bam_path = cache + &(stoit_name + ".bam");
         info!("Cached bam path {} ", bam_path);
 
-        return generate_vcf(&bam_path, m, threads, longread)
+        return generate_vcf(&bam_path, m, threads, longread, reference_length)
     }
 
 }
 
 /// Makes direct call to snippy or SVIM
-pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longread: bool) -> Reader {
+pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longread: bool, reference_length: u64) -> Reader {
 
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo")
@@ -832,33 +845,84 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-    let vcf_dir = tempfile::Builder::new()
-        .prefix("lorikeet-snippy")
-        .tempfile_in(tmp_dir.path())
-        .expect(&format!("Failed to create vcf tempfile"));
     if !longread {
-        external_command_checker::check_for_snippy();
+        external_command_checker::check_for_freebayes();
+        external_command_checker::check_for_freebayes_parallel();
+        external_command_checker::check_for_fasta_generate_regions();
         external_command_checker::check_for_samtools();
-        let snippy_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/snippy");
+        external_command_checker::check_for_vt();
+        external_command_checker::check_for_bcftools();
 
-        let cmd_string = format!(
-            "set -e -o pipefail; snippy --reference {} --bam {} --outdir {} --cpus {} --force",
-            m.value_of("reference").unwrap(),
+        let region_size = reference_length / threads as u64;
+
+        let index_path = m.value_of("reference").unwrap().to_string() + ".fai";
+
+        let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
+
+        let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
+
+        // Generate uncompressed filtered SAM file
+        let sam_cmd_string = format!(
+            "samtools view -h -O SAM {} -@ {} | \
+            samclip --max 10 --ref {} | \
+            samtools sort -@ {} -n -l 0 -T /tmp --threads 7 -m 571M | \
+            samtools fixmate -@ {} -m - - | \
+            samtools sort -@ {} -l 0 -T /tmp --threads 7 -m 571M | \
+            samtools markdup -@ {} -T /tmp -r -s - - > {}",
             bam_path,
-            snippy_path,
-            threads);
-        info!("Queuing cmd_string: {}", cmd_string);
+            threads-1,
+            index_path,
+            threads-1,
+            threads-1,
+            threads-1,
+            threads-1,
+            tmp_bam_path);
+        info!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
-                .arg(&cmd_string)
-                .stderr(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
+                .arg(&sam_cmd_string)
+//                .stderr(std::process::Stdio::null())
+//                .stdout(std::process::Stdio::null())
                 .spawn()
-                .expect("Unable to execute bash"), "snippy");
-        let vcf_path = &(snippy_path.to_string() + "/snps.vcf");
-        debug!("VCF Path {:?}", vcf_path);
-        let vcf_reader = Reader::from_path(vcf_path)
+                .expect("Unable to execute bash"), "samtools");
+
+        // check and build bam index if it doesn't exist
+        if !Path::new(&(tmp_bam_path.to_string() + ".bai")).exists() {
+            bam::index::build(tmp_bam_path, Some(&(tmp_bam_path.to_string() + ".bai")),
+                              bam::index::Type::BAI, threads as u32);
+        }
+
+        // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
+        let vcf_cmd_string = format!(
+            "set -e -o pipefail;  \
+            freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
+            --min-repeat-entropy {} --strict-vcf -m {} {} | \
+            bcftools view --include 'FMT/GT=\"1/1\" && QUAL>=100 && FMT/DP>=10 && (FMT/AO)/(FMT/DP)>=0' | \
+            vt normalize -r {} - | \
+            bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
+            index_path,
+            region_size,
+            threads,
+            m.value_of("reference").unwrap(),
+            m.value_of("min-variant-depth").unwrap(),
+            m.value_of("base-quality-threshold").unwrap(),
+            m.value_of("min-repeat-entropy").unwrap(),
+            m.value_of("mapq-threshold").unwrap(),
+            tmp_bam_path,
+            m.value_of("reference").unwrap(),
+            freebayes_path);
+        info!("Queuing cmd_string: {}", vcf_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&vcf_cmd_string)
+//                .stderr(std::process::Stdio::null())
+//                .stdout(std::process::Stdio::null())
+                .spawn()
+                .expect("Unable to execute bash"), "freebayes");
+        debug!("VCF Path {:?}", freebayes_path);
+        let vcf_reader = Reader::from_path(freebayes_path)
             .expect("Failed to read pilon vcf output");
 
         tmp_dir.close().expect("Failed to close temp directory");
