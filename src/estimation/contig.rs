@@ -300,7 +300,9 @@ fn process_vcf<R: NamedBamReader + Send,
     let mut variant_map = HashMap::new();
 
     // Write Bam Early and then reread in later
+    info!("About to generate BAM");
     bam_generated.finish();
+    info!("Finished BAM");
 
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
@@ -849,6 +851,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_fasta_generate_regions();
+        external_command_checker::check_for_samclip();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
         external_command_checker::check_for_bcftools();
@@ -859,38 +862,39 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
 
-        let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
+//        let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
         // Generate uncompressed filtered SAM file
-        let sam_cmd_string = format!(
-            "samtools view -h -O SAM {} -@ {} | \
-            samclip --max 10 --ref {} | \
-            samtools sort -@ {} -n -l 0 -T /tmp --threads 7 -m 571M | \
-            samtools fixmate -@ {} -m - - | \
-            samtools sort -@ {} -l 0 -T /tmp --threads 7 -m 571M | \
-            samtools markdup -@ {} -T /tmp -r -s - - > {}",
-            bam_path,
-            threads-1,
-            index_path,
-            threads-1,
-            threads-1,
-            threads-1,
-            threads-1,
-            tmp_bam_path);
-        info!("Queuing cmd_string: {}", sam_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&sam_cmd_string)
-//                .stderr(std::process::Stdio::null())
-//                .stdout(std::process::Stdio::null())
-                .spawn()
-                .expect("Unable to execute bash"), "samtools");
+//        let sam_cmd_string = format!(
+//            "samtools view -h -O SAM {} -@ {} | \
+//            samclip --max 10 --ref {} | \
+//            samtools sort -@ {} -n -l 0 -T /tmp --threads 7 -m 571M | \
+//            samtools fixmate -@ {} -m - - | \
+//            samtools sort -@ {} -l 0 -T /tmp --threads 7 -m 571M | \
+//            samtools markdup -@ {} -T /tmp -r -s - - > {}",
+//            bam_path,
+//            threads-1,
+//            index_path,
+//            threads-1,
+//            threads-1,
+//            threads-1,
+//            threads-1,
+//            tmp_bam_path);
+//        info!("Queuing cmd_string: {}", sam_cmd_string);
+//        command::finish_command_safely(
+//            std::process::Command::new("bash")
+//                .arg("-c")
+//                .arg(&sam_cmd_string)
+////                .stderr(std::process::Stdio::null())
+////                .stdout(std::process::Stdio::null())
+//                .spawn()
+//                .expect("Unable to execute bash"), "samtools");
 
         // check and build bam index if it doesn't exist
-        if !Path::new(&(tmp_bam_path.to_string() + ".bai")).exists() {
-            bam::index::build(tmp_bam_path, Some(&(tmp_bam_path.to_string() + ".bai")),
-                              bam::index::Type::BAI, threads as u32);
+        if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
+            bam::index::build(bam_path, Some(&(bam_path.to_string() + ".bai")),
+                              bam::index::Type::BAI, threads as u32).expect(
+                &format!("Unable to index bam at {}", &bam_path));
         }
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
@@ -899,7 +903,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
             --min-repeat-entropy {} --strict-vcf -m {} {} | \
             bcftools view --include 'FMT/GT=\"1/1\" && QUAL>=100 && FMT/DP>=10 && (FMT/AO)/(FMT/DP)>=0' | \
-            vt normalize -r {} - | \
+            vt normalize -n -r {} - | \
             bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
             index_path,
             region_size,
@@ -909,7 +913,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             m.value_of("base-quality-threshold").unwrap(),
             m.value_of("min-repeat-entropy").unwrap(),
             m.value_of("mapq-threshold").unwrap(),
-            tmp_bam_path,
+            bam_path,
             m.value_of("reference").unwrap(),
             freebayes_path);
         info!("Queuing cmd_string: {}", vcf_cmd_string);
@@ -917,8 +921,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&vcf_cmd_string)
-//                .stderr(std::process::Stdio::null())
-//                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("Unable to execute bash"), "freebayes");
         debug!("VCF Path {:?}", freebayes_path);

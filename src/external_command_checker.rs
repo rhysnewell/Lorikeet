@@ -9,6 +9,10 @@ pub fn check_for_samtools() {
     self::check_for_external_command_presence("samtools", "which samtools");
 }
 
+pub fn check_for_samclip() {
+    self::check_for_external_command_presence("samclip", "which samclip");
+}
+
 pub fn check_for_bcftools() {
     self::check_for_external_command_presence("bcftools", "which bcftools");
 }
