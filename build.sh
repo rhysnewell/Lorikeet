@@ -1,12 +1,19 @@
 #!/bin/bash -e
 
-echo $CONDA_PREFIX
+PREFIX=$CONDA_PREFIX
+echo $PREFIX
 
 # Build statically linked binary with Rust
-C_INCLUDE_PATH=$CONDA_PREFIX/include \
-LIBRARY_PATH=$CONDA_PREFIX/lib \
-LIBCLANG_PATH=$CONDA_PREFIX/lib/libclang.so \
+C_INCLUDE_PATH=$PREFIX/include \
+LIBRARY_PATH=$PREFIX/lib \
+LIBCLANG_PATH=$PREFIX/lib/libclang.so \
 cargo build --release
 
 # Install the binaries
-cargo install --root $CONDA_PREFIX
+C_INCLUDE_PATH=$PREFIX/include \
+LIBRARY_PATH=$PREFIX/lib \
+LIBCLANG_PATH=$PREFIX/lib/libclang.so \
+cargo install --root $PREFIX
+
+# Backup install
+# cp target/release/lorikeet $CONDA_PREFIX/bin/ && cp target/release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin/
