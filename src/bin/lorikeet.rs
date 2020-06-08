@@ -346,7 +346,7 @@ fn main(){
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {
-                    let mut bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                             bam_files,
                             filter_params.flag_filters.clone(),
                             filter_params.min_aligned_length_single,
@@ -372,7 +372,7 @@ fn main(){
                                filter_params.flag_filters, Some(long_readers))
 
                 } else {
-                    let mut bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     
                     run_pileup(m,
@@ -454,7 +454,7 @@ fn main(){
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
 
                 if filter_params.doing_filtering() {
-                    let mut bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                         bam_files,
                         filter_params.flag_filters.clone(),
                         filter_params.min_aligned_length_single,
@@ -479,7 +479,7 @@ fn main(){
                                bam_readers,
                                filter_params.flag_filters, None);
                 } else {
-                    let mut bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
                     run_pileup(m,
                                mode,
@@ -1086,7 +1086,7 @@ fn get_streamed_bam_readers<'a>(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    p.threads / n_samples,
+                    std::cmp::max(p.threads / n_samples, 1),
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     discard_unmapped,
                     p.mapping_options,

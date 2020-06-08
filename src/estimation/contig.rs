@@ -300,7 +300,9 @@ fn process_vcf<R: NamedBamReader + Send,
     let mut variant_map = HashMap::new();
 
     // Write Bam Early and then reread in later
+    info!("About to generate BAM");
     bam_generated.finish();
+    info!("Finished BAM");
 
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
@@ -849,6 +851,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_fasta_generate_regions();
+        external_command_checker::check_for_samclip();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
         external_command_checker::check_for_bcftools();
@@ -899,7 +902,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
             --min-repeat-entropy {} --strict-vcf -m {} {} | \
             bcftools view --include 'FMT/GT=\"1/1\" && QUAL>=100 && FMT/DP>=10 && (FMT/AO)/(FMT/DP)>=0' | \
-            vt normalize -r {} - | \
+            vt normalize -n -r {} - | \
             bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
             index_path,
             region_size,
