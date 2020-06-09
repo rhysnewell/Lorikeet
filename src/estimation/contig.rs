@@ -860,8 +860,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
 
         let index_path = m.value_of("reference").unwrap().to_string() + ".fai";
 
-        let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
-
+//        let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
+        let freebayes_path = &("freebayes.vcf");
 //        let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
         // Generate uncompressed filtered SAM file
@@ -935,6 +935,12 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         external_command_checker::check_for_svim();
         let svim_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/svim");
 
+        // check and build bam index if it doesn't exist
+        if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
+            bam::index::build(bam_path, Some(&(bam_path.to_string() + ".bai")),
+                              bam::index::Type::BAI, threads as u32).expect(
+                &format!("Unable to index bam at {}", &bam_path));
+        }
 
         let cmd_string = format!(
             "set -e -o pipefail; svim alignment --read_names --sequence_alleles {} {} {}",
