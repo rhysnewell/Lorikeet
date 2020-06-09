@@ -867,9 +867,9 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
         let sam_cmd_string = format!(
             "samtools view -h -O SAM {} -@ {} | \
             samclip --max 10 --ref {} | \
-            samtools sort -@ {} -n -l 0 -T /tmp --threads 7 -m 571M | \
+            samtools sort -@ {} -n -l 0 -T /tmp | \
             samtools fixmate -@ {} -m - - | \
-            samtools sort -@ {} -l 0 -T /tmp --threads 7 -m 571M | \
+            samtools sort -@ {} -l 0 -T /tmp | \
             samtools markdup -@ {} -T /tmp -r -s - - > {}",
             bam_path,
             threads-1,
@@ -901,7 +901,6 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             "set -e -o pipefail;  \
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
             --min-repeat-entropy {} --strict-vcf -m {} {} | \
-            bcftools view --include 'FMT/GT=\"1/1\" && QUAL>=100 && FMT/DP>=10 && (FMT/AO)/(FMT/DP)>=0' | \
             vt normalize -n -r {} - | \
             bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
             index_path,
