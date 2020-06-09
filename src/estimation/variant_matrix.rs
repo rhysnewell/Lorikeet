@@ -384,6 +384,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             }
                         });
                 });
+
                 let variant_info_all = variant_info_all.lock().unwrap().clone();
                 let geom_mean = |input: &Vec<f64>| -> Vec<f64> {
                     let output = input.iter()
@@ -392,6 +393,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         }).collect::<Vec<f64>>();
                     return output
                 };
+
                 info!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
                 let geom_mean_v = geom_mean_v.lock().unwrap().clone();
@@ -572,7 +574,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     }
                 }
 //                debug!("Prediction count {:?}", prediction_count);
-                debug!("Prediction categories {:?}", prediction_features);
+//                debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants.clone();
             }
         }
@@ -589,7 +591,6 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 pred_variants.par_iter().for_each(|(strain_index, genotype)|{
                     let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
-                    debug!("Genotype {:?}", genotype);
 
                     let file_path = Path::new(&file_name);
 
@@ -647,7 +648,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         match max_var {
                                             Variant::Deletion(size) => {
                                                 // Skip the next n bases but rescue the reference prefix
-                                                debug!("DEL {:?}", size);
+//                                                debug!("DEL {:?}", size);
 
                                                 skip_n = size - 1;
                                                 skip_cnt = 0;
@@ -657,7 +658,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::Insertion(alt) => {
-                                                debug!("INS {:?}", alt);
+//                                                debug!("INS {:?}", alt);
 
                                                 // Insertions have a reference prefix that needs to be removed
                                                 let removed_first_base = str::from_utf8(
@@ -666,10 +667,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::None => {
+                                                debug!("None variant {:?}", max_var);
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                             },
                                             Variant::MNV(alt) => {
-                                                debug!("MNV {:?}", alt);
+//                                                debug!("MNV {:?}", alt);
                                                 skip_n = alt.len() as u32 - 1;
                                                 skip_cnt = 0;
                                                 let removed_first_base = str::from_utf8(
@@ -678,12 +680,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::SNV(alt) => {
-                                                debug!("SNV {:?}", alt);
+//                                                debug!("SNV {:?}", alt);
 
                                                 contig = contig + str::from_utf8(&[alt]).unwrap();
                                                 variations += 1;
                                             },
                                             _ => {
+                                                debug!("Unknown variant {:?}", max_var);
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                             }
                                         }
