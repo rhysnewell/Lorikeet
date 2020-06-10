@@ -250,6 +250,8 @@ impl Filter {
 /// Information about each base position
 #[derive(Clone, Debug, PartialEq)]
 pub struct Base {
+    // Contig ID
+    pub tid: u32,
     // Position on contig 0-based
     pub pos: i64,
     // Reference allele
@@ -290,6 +292,8 @@ pub struct Base {
     pub freq: Vec<f64>,
     // Read ids assigned to variant
     pub reads: HashSet<Vec<u8>>,
+    // CLR transformed relative abundances
+    pub rel_abunds: Vec<f64>
 }
 
 impl Base {
@@ -328,8 +332,9 @@ impl Base {
         self.totaldepth[sample_idx] = depth
     }
 
-    pub fn new(pos: i64, refr: Vec<u8>, sample_count: usize) -> Base {
+    pub fn new(tid: u32, pos: i64, refr: Vec<u8>, sample_count: usize) -> Base {
         Base {
+            tid,
             pos,
             refr,
             variant: Variant::None,
@@ -349,6 +354,7 @@ impl Base {
             ac: vec![0; sample_count],
             af: vec![0.; sample_count],
             freq: vec![0.; sample_count],
+            rel_abunds: vec![0.; sample_count],
             reads: HashSet::new(),
         }
     }
@@ -372,7 +378,9 @@ impl Base {
             let mut refr_base_empty = true;
             for (idx, variant) in variants.iter().enumerate() {
                 // Get elements from record
-                let mut base = Base::new(record.pos(), record.alleles()[idx].to_vec(), sample_count);
+                let mut base = Base::new(record.rid().unwrap(),
+                                         record.pos(), record.alleles()[idx].to_vec(),
+                                         sample_count);
                 // TODO: Handle the case where a single site has multiple variants
                 //       Not sure if pilon ever produces alleles on the same vcf record though
                 // Populate Base struct with known info tags
@@ -416,7 +424,8 @@ impl Base {
                     let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
                     base.reads.par_extend(reads);
                     if refr_base_empty {
-                        let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
+                        let mut refr_base = Base::new(record.rid().unwrap(),
+                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
                         refr_base.af[sample_idx] = base.af[sample_idx];
                         refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
                             Ok(val) => {
@@ -443,7 +452,8 @@ impl Base {
                     base.freq[sample_idx] = (base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64);
 
                     if refr_base_empty {
-                        let mut refr_base = Base::new(record.pos(), record.alleles()[0].to_vec(), sample_count);
+                        let mut refr_base = Base::new(record.rid().unwrap(),
+                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
                         refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
                         refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;

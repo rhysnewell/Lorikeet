@@ -300,9 +300,7 @@ fn process_vcf<R: NamedBamReader + Send,
     let mut variant_map = HashMap::new();
 
     // Write Bam Early and then reread in later
-    info!("About to generate BAM");
     bam_generated.finish();
-    info!("Finished BAM");
 
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
@@ -323,7 +321,7 @@ fn process_vcf<R: NamedBamReader + Send,
         // Check bam header names and vcf header names are in same order
         // Sanity check
         if target_names[variant_rid as usize]
-            == header.rid2name(vcf_record.rid().unwrap()).unwrap() {
+            == header.rid2name(variant_rid).unwrap() {
             let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx, longread);
             match base_option {
 
