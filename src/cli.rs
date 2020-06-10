@@ -1516,6 +1516,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
+                .arg(Arg::with_name("include-longreads-svs"))
                 .arg(Arg::with_name("include-secondary")
                     .long("include-secondary"))
                 .arg(Arg::with_name("include-soft-clipping")
