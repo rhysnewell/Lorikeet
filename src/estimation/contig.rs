@@ -227,7 +227,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     });
 
     // Process Long Read BAMs if they are present
-    if m.is_present("longread-bam-files") && m.is_present("include-longread-svs") {
+    if m.is_present("longread-bam-files") {
         let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
         longreads = generate_named_bam_readers_from_bam_files(longreads_path);
     }
