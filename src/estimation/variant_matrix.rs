@@ -369,6 +369,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                             let mut variant_info_all = variant_info_all
                                                 .lock().unwrap();
+//                                            base_info.rel_abunds = rel_abund;
                                             let point = fuzzy::Var {
                                                 pos: *position,
                                                 var: variant.clone(),
@@ -376,6 +377,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 vars: base_info.depth.clone(),
                                                 rel_abunds: rel_abund,
                                                 tid: *tid,
+                                                reads: base_info.reads.clone()
                                             };
                                             variant_info_all.push(point);
                                         },

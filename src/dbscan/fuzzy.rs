@@ -60,6 +60,7 @@ pub struct Var {
     pub vars: Vec<i32>,
     pub rel_abunds: Vec<f64>,
     pub tid: i32,
+    pub reads: HashSet<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -126,12 +127,25 @@ impl MetricSpace for Var<> {
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
-                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}", phi, phi_dist, rho, 1.-rho);
+                // Read ids of first variant
+                let set1 = &self.reads;
 
-                return 1. - rho
+                // Read ids of second variant
+                let set2 = &other.reads;
+
+                // Add the jaccard's similarity to the hashmap for the two clusters
+                let intersection: HashSet<_> = set1
+                    .intersection(&set2).collect();
+                let jaccard = intersection.len() as f64 /
+                    (set1.len() + set2.len() + 1) as f64;
+
+                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}, jaccard {}", phi, phi_dist, rho, 1.-rho, 1.-jaccard);
+
+                return phi_dist
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
+                // arbitrarily high distance
                 20.
             } else {
                 let row_freq = self.vars[0] as f64;

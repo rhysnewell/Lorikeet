@@ -70,14 +70,12 @@ pub fn linkage_clustering_of_clusters(
                         let var2 = &variant_info[assignment2.index];
 
                         // Read ids of first variant
-                        let set1 = get_variant_set(var1,
-                                                         variant_map);
+                        let set1 = &var1.reads;
 
                         // Read ids of second variant
-                        let set2 = get_variant_set(var2,
-                                                         variant_map);
+                        let set2 = &var2.reads;
 
-                        debug!("Read IDs {:?} {:?}", set1, set2);
+//                        debug!("Read IDs {:?} {:?}", set1, set2);
                         let read_intersection: HashSet<_> = set1
                             .intersection(&set2).collect();
 
@@ -88,7 +86,7 @@ pub fn linkage_clustering_of_clusters(
                             if !clust1_index.contains(&assignment1.index) {
                                 let mut clust1_set =
                                     clust1_set.lock().unwrap();
-                                clust1_set.par_extend(set1);
+                                clust1_set.par_extend(set1.clone());
 
                                 clust1_index.insert(assignment1.index);
                             };
@@ -97,14 +95,14 @@ pub fn linkage_clustering_of_clusters(
                             if !clust2_index.contains(&assignment2.index) {
                                 let mut clust2_set =
                                     clust2_set.lock().unwrap();
-                                clust2_set.par_extend(set2);
+                                clust2_set.par_extend(set2.clone());
 
                                 clust2_index.insert(assignment2.index);
                             };
                         } else if read_intersection.len() > 0 {
                             // Append both variant ids as we are going to extend each cluster
                             // Since the variants are connected by at least one read
-                            debug!("Read IDs {:?} {:?}", set1, set2);
+//                            debug!("Read IDs {:?} {:?}", set1, set2);
                             let mut clust1_index =
                                 clust1_index.lock().unwrap();
                             if !clust1_index.contains(&assignment1.index) {
@@ -128,13 +126,13 @@ pub fn linkage_clustering_of_clusters(
                             if !clust2_index.contains(&assignment2.index) {
                                 let mut clust2_set =
                                     clust2_set.lock().unwrap();
-                                clust2_set.par_extend(set2);
+                                clust2_set.par_extend(set2.clone());
                                 clust2_index.insert(assignment2.index);
                             };
                             if !clust2_index.contains(&assignment1.index) {
                                 let mut clust2_set =
                                     clust2_set.lock().unwrap();
-                                clust2_set.par_extend(set1);
+                                clust2_set.par_extend(set1.clone());
                                 clust2_index.insert(assignment1.index);
                                 let mut clusters = clusters.lock().unwrap();
                                 clusters[indices[1]].push(assignment1.clone());
@@ -155,7 +153,7 @@ pub fn linkage_clustering_of_clusters(
             let mut cluster_map = clusters_shared_reads.entry(indices[0])
                 .or_insert(HashMap::new());
 
-//                // Scaled Jaccard Similarity Based on Minimum Set size
+            // Scaled Jaccard Similarity Based on Minimum Set size
             let jaccard = intersection.len() as f64 /
                 std::cmp::min(clust1_set.len() + 1, clust2_set.len() + 1) as f64;
 
@@ -277,12 +275,10 @@ pub fn linkage_clustering_of_variants(
             let var2 = &variant_info[indices[1]];
 
             // Read ids of first variant
-            let set1 = get_variant_set(var1,
-                                       variant_map);
+            let set1 = &var1.reads;
 
             // Read ids of second variant
-            let set2 = get_variant_set(var2,
-                                       variant_map);
+            let set2 = &var2.reads;
 
             // Add the jaccard's similarity to the hashmap for the two clusters
             debug!("Read IDs {:?} {:?}", set1, set2);
