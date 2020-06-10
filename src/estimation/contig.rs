@@ -169,7 +169,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     reference_length)
     });
 
-    if longreads.len() > 0 {
+    if longreads.len() > 0 && m.is_present("include-longread-svs"){
         long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
@@ -227,7 +227,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     });
 
     // Process Long Read BAMs if they are present
-    if m.is_present("longread-bam-files") {
+    if m.is_present("longread-bam-files") && m.is_present("include-longread-svs") {
         let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
         longreads = generate_named_bam_readers_from_bam_files(longreads_path);
     }
