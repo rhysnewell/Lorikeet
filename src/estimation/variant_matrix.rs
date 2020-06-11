@@ -101,8 +101,6 @@ pub trait VariantMatrixFunctions {
                           output_prefix: &str);
 
     fn print_variant_stats(&self, output_prefix: &str);
-
-
 }
 
 impl VariantMatrixFunctions for VariantMatrix {

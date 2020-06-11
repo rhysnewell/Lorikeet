@@ -7,19 +7,27 @@
 
 ![](docs/static/images/lorikeet_logo_crop.png)
 
-A strain resolver for metagenomics.
+## Introduction
+
+Lorikeet is a within-species variant analysis pipeline for metagenomic communities that utilizes both long and short read datasets.
+Lorikeet combines short read variant calling with Freebayes and long read structural variant calling with SVIM to generate a 
+complete variant landscape present across samples within a microbial community. SNV are also linked together using read 
+information to help provide likely genotypes based on observed physical linkages.
 
 ## Installation
 
 #### Option 1: Conda - Recommended
 ```
-conda install lorikeet-genome
+conda create -n lorikeet -c bioconda lorikeet-genome && \
+conda activate lorikeet
 ```
 
 #### Option 2: Cargo
 ```
-conda create -n lorikeet -c conda-forge -c bioconda -c defaults -y snippy=4.4.5 svim rust clangdev pkg-config zlib gsl \ 
-openblas zlib gsl starcode openblas bwa minimap2 fastani dashing && \ 
+conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
+freebayes=1.3.2 bcftools vt samclip rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+fastani dashing && \ 
+conda activate lorikeet && \ 
 cargo install lorikeet-genome
 ```
 
@@ -27,10 +35,13 @@ cargo install lorikeet-genome
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-conda create -n lorikeet -c conda-forge -c bioconda -c defaults -y snippy=4.4.5 svim rust clangdev pkg-config zlib gsl \ 
-openblas zlib gsl starcode openblas bwa minimap2 fastani dashing && \ 
+conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
+freebayes=1.3.2 bcftools vt samclip rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+fastani dashing && \ 
+conda activate lorikeet && \ 
 git clone https://github.com/rhysnewell/Lorikeet/git && \ 
-cd Lorikeet && cargo build --release
+cd Lorikeet && \ 
+bash build.sh
 ```
 
 
