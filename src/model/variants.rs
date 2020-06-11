@@ -665,5 +665,7 @@ pub fn collect_variants(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
 
 }
