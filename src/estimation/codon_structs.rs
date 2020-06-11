@@ -318,7 +318,36 @@ pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+    use model::variants;
     use bio::io::{gff};
+
+    fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
+        Base {
+            tid: 0,
+            pos,
+            refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
+            variant: Variant::SNV(var_char),
+            filters: vec!(),
+            depth: vec![5; sample_count],
+            truedepth: vec![5; sample_count],
+            totaldepth: vec![5; sample_count],
+            physicalcov: vec![0; sample_count],
+            baseq: vec![0; sample_count],
+            mapq: vec![0; sample_count],
+            conf: vec![0; sample_count],
+            nucs: HashMap::new(),
+            pernucs: HashMap::new(),
+            ic: vec![0; sample_count],
+            dc: vec![0; sample_count],
+            xc: vec![0; sample_count],
+            ac: vec![0; sample_count],
+            af: vec![0.; sample_count],
+            freq: vec![0.; sample_count],
+            rel_abunds: vec![0.; sample_count],
+            reads: HashSet::new(),
+        }
+    }
 
     #[test]
     fn test_floor_division() {
@@ -331,35 +360,40 @@ mod tests {
         let mut codon_table = CodonTable::setup();
         codon_table.get_codon_table(11);
 
+        let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
+        let sample_count = 2;
+
         let mut gene_records
             = gff::Reader::from_file("tests/data/dnds.gff", gff::GffType::GFF3).expect("Incorrect file path");
-        let mut variant_abundances: HashMap<i32, BTreeMap<String, (f64, f64)>> = HashMap::new();
-        variant_abundances.insert(13, BTreeMap::new());
-        variant_abundances.insert(14, BTreeMap::new());
-        let hash = variant_abundances.entry(7).or_insert(BTreeMap::new());
-        hash.insert("G".to_string(), (5., 10.));
-        hash.insert("R".to_string(), (5., 10.));
+        let mut variant_abundances: HashMap<i64, HashMap<Variant, Base>> = HashMap::new();
+        variant_abundances.insert(13, HashMap::new());
+        variant_abundances.insert(14, HashMap::new());
+        let hash = variant_abundances.entry(7).or_insert(HashMap::new());
 
-        let hash = variant_abundances.entry(11).or_insert(BTreeMap::new());
-        hash.insert("C".to_string(), (5., 10.));
-        hash.insert("R".to_string(), (5., 10.));
+        // Create fake variants
+        let var_1 = create_base(&ref_sequence, "G".bytes().nth(0).unwrap(), 7, 2);
+        let var_2 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 11, 2);
+        let var_3 = create_base(&ref_sequence, "A".bytes().nth(0).unwrap(), 13, 2);
+        let var_4 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 14, 2);
 
-        let hash = variant_abundances.entry(13).or_insert(BTreeMap::new());
-        hash.insert("A".to_string(), (5., 10.));
-        hash.insert("R".to_string(), (5., 10.));
 
-        let hash = variant_abundances.entry(14).or_insert(BTreeMap::new());
-        hash.insert("C".to_string(), (5., 10.));
-        hash.insert("R".to_string(), (5., 10.));
+        hash.insert(var_1.variant.clone(), var_1);
+
+        let hash = variant_abundances.entry(11).or_insert(HashMap::new());
+        hash.insert(var_2.variant.clone(), var_2);
+
+        let hash = variant_abundances.entry(13).or_insert(HashMap::new());
+        hash.insert(var_3.variant.clone(), var_3);
+
+        let hash = variant_abundances.entry(14).or_insert(HashMap::new());
+        hash.insert(var_4.variant.clone(), var_4);
 
         for gene_record in gene_records.records() {
             let gene_record = gene_record.unwrap();
-            let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
 
             let dnds = codon_table.find_mutations(
                 &gene_record,
                 &variant_abundances,
-                &HashMap::new(),
                 &ref_sequence,
                 &Vec::new());
             assert_eq!(format!("{:.4}", dnds), format!("{}", 0.1247));
