@@ -1,5 +1,5 @@
 use kodama::{Method, linkage};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
 use model::variants::*;
 use dbscan::fuzzy;
 use rayon::prelude::*;
@@ -262,9 +262,8 @@ pub fn linkage_clustering_of_variants(
 //    -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>)
 {
     if variant_info.len() > 1 {
-        let jaccard_distances = Arc::new(Mutex::new(
-            vec![0.; (variant_info.len().pow(2) - variant_info.len()) / 2])
-        );
+        // Initiate the hashmap linking each variant to the variants it shares reads with
+        let links = Arc::new(Mutex::new(HashMap::new()));
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..variant_info.len()).into_iter()
             .permutations(2)
@@ -281,7 +280,7 @@ pub fn linkage_clustering_of_variants(
             let set2 = &var2.reads;
 
             // Add the jaccard's similarity to the hashmap for the two clusters
-            debug!("Read IDs {:?} {:?}", set1, set2);
+//            debug!("Read IDs {:?} {:?}", set1, set2);
             let intersection: HashSet<_> = set1
                 .intersection(&set2).collect();
 
@@ -289,92 +288,37 @@ pub fn linkage_clustering_of_variants(
 //            let jaccard = intersection.len() as f64 /
 //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
 //             Normal Jaccard's Similarity
-            let jaccard = intersection.len() as f64 /
-                (set1.len() + set2.len() + 1) as f64;
-            let mut jaccard_distances = jaccard_distances.lock().unwrap();
-            // Check to see if we have two or more samples
-            if jaccard_distances.len() > 1 {
-                // Place each measure at appropriate index
-                jaccard_distances[
-                    get_condensed_index(
-                        indices[0], indices[1], variant_info.len()).unwrap_or_else(|| 0)]
-                    = 1. - jaccard;
-            } else {
-                // If only 1 sample, then just put in first index
-                jaccard_distances[0] = 1. - jaccard;
+            if intersection.len() > 0 {
+                let mut links = links.lock().unwrap();
+                // Intialize links for each indices including itself
+                let mut links_out = links.entry(indices[0]).or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
+                links_out.insert(indices[1]);
+                let mut links_out = links.entry(indices[1]).or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
+                links_out.insert(indices[0]);
             }
         });
-
-        let mut jaccard_distances = jaccard_distances.lock().unwrap().to_vec();
-        // Perform HAC using kodama
-        let dend = linkage(&mut jaccard_distances,
-                           variant_info.len(), Method::Ward);
-
-        info!("Dendogram {:?}", &dend);
-//        let changed = Arc::new(Mutex::new(0));
-//        // Step through each step in the dendrogram and combine clusters
-//        // that are under a certain dissimilarity
-//        dend.steps().into_par_iter().for_each(|step| {
-//            // Check to see that these are leaf clusters
-//            if step.cluster1 <= clusters.len() - 1 && step.cluster2 <= clusters.len() - 1 {
-//                // combine clusters
-//                if step.dissimilarity < 0.2 {
-//                    let mut new_cluster = Vec::new();
-//                    new_cluster.par_extend(clusters[step.cluster1].par_iter().cloned());
-//                    new_cluster.par_extend(clusters[step.cluster2].par_iter().cloned());
-//
-//                    let mut clusters_changed
-//                        = clusters_changed.lock().unwrap();
-////                        if clusters[step.cluster1].len() >= clusters[step.cluster2].len() {
-////                            clusters_changed.push(clusters[step.cluster1].clone());
-////                        } else {
-////                            clusters_changed.push(clusters[step.cluster2].clone());
-////                        }
-//                    let mut changed = changed.lock().unwrap();
-//                    *changed += 1;
-//                    clusters_changed.push(new_cluster);
-//                } else { // cluster is by itself
-//                    let mut clusters_changed
-//                        = clusters_changed.lock().unwrap();
-//                    clusters_changed.push(clusters[step.cluster1].clone());
-//                    clusters_changed.push(clusters[step.cluster2].clone());
-//                }
-//                // Check individually for leaf clusters
-//            } else if step.cluster1 <= clusters.len() - 1 {
-//                let mut clusters_changed
-//                    = clusters_changed.lock().unwrap();
-//                clusters_changed.push(clusters[step.cluster1].clone());
-//            } else if step.cluster2 <= clusters.len() - 1 {
-//                let mut clusters_changed
-//                    = clusters_changed.lock().unwrap();
-//                clusters_changed.push(clusters[step.cluster2].clone());
-//            }
-//        });
-//
-//        let mut clusters_changed
-//            = clusters_changed.lock().unwrap().clone();
-//        let changed = changed.lock().unwrap();
-//        // If the number of clusters changed, then we rerun linkage clustering
-//        // First use of recursion properly, nice.
-//        if *changed > 0 {
-//            let (clusters_changed, clusters_shared_reads, jaccard_distances)
-//                = linkage_clustering(&clusters_changed,
-//                                     variant_info,
-//                                     variant_map);
-//            return (clusters_changed, jaccard_distances.to_vec())
-//        } else {
-//            return (clusters.clone(), jaccard_distances.to_vec())
-//        }
-//    } else {
-//        // create placeholder jaccard hashmap when there is only one cluster to prevent nothing
-//        // from being returned
-//        let mut jaccard_map = HashMap::new();
-//        let mut input = HashMap::new();
-//        input.insert(1, 1.0);
-//        jaccard_map.insert(0, input);
-//
-//        return (clusters.clone(), jaccard_map, vec![1.0])
-//    }
+        let links = links.lock().unwrap();
+        debug!("Links {:?}", links);
+        let final_links = Arc::new(Mutex::new(HashSet::new()));
+        // extend the links for each anchor point by the union of all the indices
+        links.par_iter().for_each(|(main_link, current_links)|{
+            let anchors = Arc::new(
+                Mutex::new(current_links.clone()));
+            current_links.par_iter().for_each(|index| {
+                match links.get(&index) {
+                    Some(other_links) => {
+                        let mut anchors = anchors.lock().unwrap();
+                        anchors.par_extend(other_links.par_iter())
+                    },
+                    _ => {},
+                }
+            });
+            let mut final_links = final_links.lock().unwrap();
+            let anchors = anchors.lock().unwrap().clone();
+            final_links.insert(anchors);
+        });
+        let final_links = final_links.lock().unwrap();
+        debug!("final links {:?}", final_links)
     }
 }
 
