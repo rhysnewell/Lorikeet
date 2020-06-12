@@ -462,13 +462,13 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 // Perform read phasing clustering and return new clusters
                 // and shared read info between clusters
-//                linkage_clustering_of_variants(&clusters,
-//                                               &variant_info,
-//                                               all_variants);
-                let (clusters, shared_read_count, mut condensed)
-                    = linkage_clustering_of_clusters(&clusters,
-                                           &variant_info,
-                                           all_variants);
+                linkage_clustering_of_variants(&clusters,
+                                               &variant_info,
+                                               all_variants);
+//                let (clusters, shared_read_count, mut condensed)
+//                    = linkage_clustering_of_clusters(&clusters,
+//                                           &variant_info,
+//                                           all_variants);
 
                 // Collapse clusters with enough shared read info starting with smallest cluster
 //                if clusters.len() > 1 {
