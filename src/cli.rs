@@ -538,9 +538,8 @@ Other arguments (optional):
    --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
                                          The fraction of points needed to be within e-max
                                          to begin border clustering.
-   --output-format FORMAT                Shape of output: 'sparse' for long format,
-                                         'dense' for species-by-site.
-                                         [default: dense]
+   --include-longread-svs                Include structural variants produced by SVIM in genotyping
+                                         analysis. Can often overestimate number of variants present.
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -1489,7 +1488,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
-                    .default_value("0"))
+                    .default_value("10"))
                 .arg(Arg::with_name("base-quality-threshold")
                     .long("base-quality-threshold")
                     .short("q")
@@ -1516,7 +1515,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
-                .arg(Arg::with_name("include-longreads-svs"))
+                .arg(Arg::with_name("include-longread-svs")
+                    .long("include-longread-svs"))
                 .arg(Arg::with_name("include-secondary")
                     .long("include-secondary"))
                 .arg(Arg::with_name("include-soft-clipping")

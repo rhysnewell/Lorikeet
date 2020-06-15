@@ -141,7 +141,7 @@ impl MetricSpace for Var<> {
 
                 debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}, jaccard {}", phi, phi_dist, rho, 1.-rho, 1.-jaccard);
 
-                return phi_dist
+                return 1.-rho
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
@@ -211,17 +211,34 @@ impl Assignment {
 /// A group of [assigned](Assignment) points.
 pub type Cluster = Vec<Assignment>;
 
+trait Dedup<T: PartialEq + Clone> {
+    fn clear_duplicates(&mut self);
+}
+
+impl<T: PartialEq + Clone> Dedup<T> for Vec<Cluster> {
+    fn clear_duplicates(&mut self) {
+        let mut already_seen = vec![];
+        self.retain(|item| match already_seen.contains(item) {
+            true => false,
+            _ => {
+                already_seen.push(item.clone());
+                true
+            }
+        })
+    }
+}
+
 /// An instance of the FuzzyDBSCAN algorithm.
 ///
 /// Note that when setting `eps_min = eps_max` and `pts_min = pts_max` the algorithm will reduce to classic DBSCAN.
 pub struct FuzzyDBSCAN {
-    /// The minimum fuzzy local neighborhood radius.
+    /// The minimum fuzzy local neighbourhood radius.
     pub eps_min: f64,
-    /// The maximum fuzzy local neighborhood radius.
+    /// The maximum fuzzy local neighbourhood radius.
     pub eps_max: f64,
-    /// The minimum fuzzy neighborhood density (number of points).
+    /// The minimum fuzzy neighbourhood density (number of points).
     pub pts_min: f64,
-    /// The maximum fuzzy neighborhood density (number of points).
+    /// The maximum fuzzy neighbourhood density (number of points).
     pub pts_max: f64,
     /// The minimum threshold required for a label to become a Core point.
     pub phi: f64,
@@ -251,23 +268,64 @@ impl FuzzyDBSCAN {
 
 impl FuzzyDBSCAN {
     /// Clusters a list of `points`.
-    pub fn cluster<P: MetricSpace>(&self, points: &[P]) -> Vec<Cluster> {
-        self.fuzzy_dbscan(points)
+    pub fn cluster<P: MetricSpace>(&self, points: &[P], initial_clusters: Vec<Cluster>) -> Vec<Cluster> {
+        self.fuzzy_dbscan(points, initial_clusters)
     }
 }
 
 impl FuzzyDBSCAN {
-    fn fuzzy_dbscan<P: MetricSpace>(&self, points: &[P]) -> Vec<Cluster> {
+    fn fuzzy_dbscan<P: MetricSpace>(&self, points: &[P], initial_clusters: Vec<Cluster>) -> Vec<Cluster> {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
+
+        for initial in initial_clusters {
+            // Work out which point in our initial clusters has the highest density to other
+            // points
+            let mut point_label_max = 0.;
+            let mut point_index= 0;
+            let mut point_neighbours = HashSet::new();
+
+            for core_point in initial.iter() {
+//                if visited[core_point.index] {
+//                    continue;
+//                }
+//                visited[core_point.index] = true;
+                let neighbour_indices = self.region_query(points, core_point.index);
+                let point_label = self.mu_min_p(
+                    self.density(core_point.index, &neighbour_indices, points));
+                // check if new label is better than max
+                if point_label > point_label_max {
+                    point_label_max = point_label;
+                    point_index = core_point.index;
+                    point_neighbours = neighbour_indices;
+                }
+            }
+            // Extend neighbour indices with known connections
+            let mut initial = initial.par_iter().map(|link| link.index)
+                .collect::<HashSet<usize>>();
+            initial.remove(&point_index);
+            point_neighbours.par_extend(initial.par_iter());
+
+            // Cluster based on that core point
+            clusters.push(self.expand_cluster_fuzzy(
+                        point_label_max,
+                        point_index,
+                        point_neighbours,
+                        points,
+                        &mut visited,
+            ));
+        }
+
+        // Cluster any unvisited points
         for point_index in 0..points.len() {
             if visited[point_index] {
                 continue;
             }
             visited[point_index] = true;
-            let neighbor_indices = self.region_query(points, point_index);
-            let point_label = self.mu_min_p(self.density(point_index, &neighbor_indices, points));
+            let neighbour_indices = self.region_query(points, point_index);
+            let point_label = self.mu_min_p(
+                self.density(point_index, &neighbour_indices, points));
             if point_label == 0.0 {
                 noise_cluster.push(Assignment {
                     index: point_index,
@@ -278,7 +336,7 @@ impl FuzzyDBSCAN {
                 clusters.push(self.expand_cluster_fuzzy(
                     point_label,
                     point_index,
-                    neighbor_indices,
+                    neighbour_indices,
                     points,
                     &mut visited,
                 ));
@@ -288,6 +346,26 @@ impl FuzzyDBSCAN {
             info!("{} Variants Clustered as noise during Fuzzy DBSCAN", noise_cluster.len());
             clusters.push(noise_cluster);
         }
+
+        // Sort the clusters by smallest to largest
+        clusters.par_sort_by(
+            |a, b| a.len().cmp(&b.len())
+        );
+
+        debug!("Clusters {:?}", clusters.len());
+
+        // Deduplicate clusters by sorted indices
+        clusters.dedup_by_key(|cluster| {
+            let mut dedup_key = cluster.par_iter().map(|var|
+                                var.index).collect::<Vec<usize>>();
+            dedup_key.par_sort();
+            dedup_key.dedup();
+            debug!("dedup_key {:?}", dedup_key);
+            dedup_key
+        });
+
+        debug!("Dedup Clusters {:?}", clusters.len());
+
         clusters
     }
 
@@ -295,7 +373,7 @@ impl FuzzyDBSCAN {
         &self,
         point_label: f64,
         point_index: usize,
-        mut neighbor_indices: HashSet<usize>,
+        mut neighbour_indices: HashSet<usize>,
         points: &[P],
         visited: &mut [bool],
     ) -> Vec<Assignment> {
@@ -305,27 +383,27 @@ impl FuzzyDBSCAN {
             label: point_label,
         }];
         let mut border_points = Vec::new();
-        let mut neighbor_visited = vec![false; points.len()];
-        while let Some(neighbor_index) = take_arbitrary(&mut neighbor_indices) {
-            neighbor_visited[neighbor_index] = true;
-            visited[neighbor_index] = true;
-            let neighbor_neighbor_indices = self.region_query(points, neighbor_index);
-            let neighbor_label =
-                self.mu_min_p(self.density(neighbor_index, &neighbor_neighbor_indices, points));
-            if neighbor_label >= self.phi {
-                for neighbor_neighbor_index in neighbor_neighbor_indices {
-                    if !neighbor_visited[neighbor_neighbor_index] {
-                        neighbor_indices.insert(neighbor_neighbor_index);
+        let mut neighbour_visited = vec![false; points.len()];
+        while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
+            neighbour_visited[neighbour_index] = true;
+            visited[neighbour_index] = true;
+            let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
+            let neighbour_label =
+                self.mu_min_p(self.density(neighbour_index, &neighbour_neighbour_indices, points));
+            if neighbour_label >= self.phi {
+                for neighbour_neighbour_index in neighbour_neighbour_indices {
+                    if !neighbour_visited[neighbour_neighbour_index] {
+                        neighbour_indices.insert(neighbour_neighbour_index);
                     }
                 }
                 cluster.push(Assignment {
-                    index: neighbor_index,
+                    index: neighbour_index,
                     category: Category::Core,
-                    label: neighbor_label,
+                    label: neighbour_label,
                 });
             } else {
                 border_points.push(Assignment {
-                    index: neighbor_index,
+                    index: neighbour_index,
                     category: Category::Border,
                     label: f64::MAX,
                 });
@@ -349,24 +427,24 @@ impl FuzzyDBSCAN {
         points
             .into_par_iter()
             .enumerate()
-            .filter(|(neighbor_index, neighbor_point)| {
-                *neighbor_index != point_index
-                    && neighbor_point.distance(&points[point_index],
+            .filter(|(neighbour_index, neighbour_point)| {
+                *neighbour_index != point_index
+                    && neighbour_point.distance(&points[point_index],
                                                &self.geom_var,
                                                &self.geom_dep,
                                                &self.geom_frq) <= self.eps_max
-            }).map(|(neighbor_index, _)| neighbor_index)
+            }).map(|(neighbour_index, _)| neighbour_index)
             .collect() //TODO: would be neat to prevent this allocation.
     }
 
     fn density<P: MetricSpace>(
         &self,
         point_index: usize,
-        neighbor_indices: &HashSet<usize>,
+        neighbour_indices: &HashSet<usize>,
         points: &[P],
     ) -> f64 {
-        let density: f64 = neighbor_indices.par_iter().fold(|| 0.0, |sum, &neighbor_index| {
-            sum + self.mu_distance(&points[point_index], &points[neighbor_index])
+        let density: f64 = neighbour_indices.par_iter().fold(|| 0.0, |sum, &neighbour_index| {
+            sum + self.mu_distance(&points[point_index], &points[neighbour_index])
         }).sum();
         density + 1.0
     }

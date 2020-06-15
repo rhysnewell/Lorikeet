@@ -452,26 +452,25 @@ impl VariantMatrixFunctions for VariantMatrix {
                     geom_frq: geom_mean_frq.clone(),
                 };
 
+                // Perform read phasing clustering and return initial clusters
+                let links = linkage_clustering_of_variants(&variant_info);
+
                 // run fuzzy DBSCAN
-                let mut clusters = fuzzy_scanner.cluster(&variant_info[..]);
+                let mut clusters = fuzzy_scanner.cluster(
+                    &variant_info[..],
+                    links);
 
-                // Sort the clusters by smallest to largest
-                clusters.sort_by(
-                    |a, b| a.len().cmp(&b.len())
-                );
 
-                // Perform read phasing clustering and return new clusters
-                // and shared read info between clusters
-                linkage_clustering_of_variants(&clusters,
-                                               &variant_info,
-                                               all_variants);
 //                let (clusters, shared_read_count, mut condensed)
 //                    = linkage_clustering_of_clusters(&clusters,
 //                                           &variant_info,
 //                                           all_variants);
 
                 // Collapse clusters with enough shared read info starting with smallest cluster
-//                if clusters.len() > 1 {
+//                if links.len() > 1 {
+//                    for link_set in links.into_iter() {
+//
+//                    }
 //                    for (cluster_index, cluster) in clusters.iter().enumerate() {
 ////                    println!("{}", cluster.len());
 //                        let cluster_map = shared_read_count.get(&cluster_index)

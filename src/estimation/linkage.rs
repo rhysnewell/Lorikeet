@@ -254,12 +254,9 @@ pub fn linkage_clustering_of_clusters(
     }
 }
 
-/// Connects fuzzy DBSCAN clusters based on shared read information
-pub fn linkage_clustering_of_variants(
-    clusters: &Vec<Vec<fuzzy::Assignment>>,
-    variant_info: &Vec<fuzzy::Var>,
-    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>)
-//    -> (Vec<Vec<fuzzy::Assignment>>, HashMap<usize, HashMap<usize, f64>>, Vec<f64>)
+/// Connects variants into initial clusters based on shared read sets
+pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
+    -> Vec<fuzzy::Cluster>
 {
     if variant_info.len() > 1 {
         // Initiate the hashmap linking each variant to the variants it shares reads with
@@ -291,34 +288,55 @@ pub fn linkage_clustering_of_variants(
             if intersection.len() > 0 {
                 let mut links = links.lock().unwrap();
                 // Intialize links for each indices including itself
-                let mut links_out = links.entry(indices[0]).or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
+                let mut links_out = links.entry(indices[0])
+                    .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
                 links_out.insert(indices[1]);
-                let mut links_out = links.entry(indices[1]).or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
+                let mut links_out = links.entry(indices[1])
+                    .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
                 links_out.insert(indices[0]);
             }
         });
         let links = links.lock().unwrap();
         debug!("Links {:?}", links);
-        let final_links = Arc::new(Mutex::new(HashSet::new()));
+        let condensed_links = Arc::new(Mutex::new(HashSet::new()));
+
         // extend the links for each anchor point by the union of all the indices
         links.par_iter().for_each(|(main_link, current_links)|{
             let anchors = Arc::new(
                 Mutex::new(current_links.clone()));
+            debug!("Main Link {:?}", main_link);
             current_links.par_iter().for_each(|index| {
                 match links.get(&index) {
                     Some(other_links) => {
+                        debug!("Tendril {:?}", other_links);
                         let mut anchors = anchors.lock().unwrap();
                         anchors.par_extend(other_links.par_iter())
                     },
                     _ => {},
                 }
             });
-            let mut final_links = final_links.lock().unwrap();
+            let mut condensed_links = condensed_links.lock().unwrap();
+//            condensed_links.par_iter().for_each(link_set)
             let anchors = anchors.lock().unwrap().clone();
-            final_links.insert(anchors);
+            condensed_links.insert(anchors);
         });
-        let final_links = final_links.lock().unwrap();
-        debug!("final links {:?}", final_links)
+        let condensed_links = condensed_links.lock().unwrap();
+        debug!("condensed links {:?}", &condensed_links);
+        let mut initial_clusters = Vec::new();
+        condensed_links.iter().for_each(|link_set| {
+
+            initial_clusters.push(link_set.par_iter().map(|link| {
+                fuzzy::Assignment {
+                    index: *link,
+                    label: 1.,
+                    category: fuzzy::Category::Core,
+                }
+            }).collect::<fuzzy::Cluster>())
+        });
+
+        return initial_clusters
+    } else {
+        Vec::new()
     }
 }
 
