@@ -298,19 +298,14 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
             }
         });
         let links = links.lock().unwrap();
-        debug!("Links {:?}", links);
         let condensed_links = Mutex::new(HashSet::new());
 
         // extend the links for each anchor point by the union of all the indices
-        links.iter().for_each(|(main_link, current_links)|{
-            let anchors =
-                Mutex::new(current_links.clone());
-            debug!("Main Link {:?}", main_link);
-            current_links.par_iter().for_each(|index| {
+        links.par_iter().for_each(|(main_link, current_links)|{
+            let mut anchors = current_links.clone();
+            current_links.iter().for_each(|index| {
                 match links.get(&index) {
                     Some(other_links) => {
-                        debug!("Tendril {:?}", other_links);
-                        let mut anchors = anchors.lock().unwrap();
                         anchors.par_extend(other_links.par_iter())
                     },
                     _ => {},
@@ -318,7 +313,6 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
             });
             let mut condensed_links = condensed_links.lock().unwrap();
 //            condensed_links.par_iter().for_each(link_set)
-            let anchors = anchors.lock().unwrap().clone();
             condensed_links.insert(anchors);
         });
         let condensed_links = condensed_links.lock().unwrap();

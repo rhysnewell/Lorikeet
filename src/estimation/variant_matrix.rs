@@ -647,7 +647,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         match max_var {
                                             Variant::Deletion(size) => {
                                                 // Skip the next n bases but rescue the reference prefix
-//                                                debug!("DEL {:?}", size);
 
                                                 skip_n = size - 1;
                                                 skip_cnt = 0;
@@ -657,7 +656,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::Insertion(alt) => {
-//                                                debug!("INS {:?}", alt);
 
                                                 // Insertions have a reference prefix that needs to be removed
                                                 let removed_first_base = str::from_utf8(
@@ -666,11 +664,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::None => {
-                                                debug!("None variant {:?}", max_var);
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                             },
                                             Variant::MNV(alt) => {
-//                                                debug!("MNV {:?}", alt);
                                                 skip_n = alt.len() as u32 - 1;
                                                 skip_cnt = 0;
                                                 let removed_first_base = str::from_utf8(
@@ -679,13 +675,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 variations += 1;
                                             },
                                             Variant::SNV(alt) => {
-//                                                debug!("SNV {:?}", alt);
 
                                                 contig = contig + str::from_utf8(&[alt]).unwrap();
                                                 variations += 1;
                                             },
                                             _ => {
-                                                debug!("Unknown variant {:?}", max_var);
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                             }
                                         }
@@ -709,8 +703,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                         };
                         tot_variations += variations;
                     }
-                    debug!("{} Multivariant sites and single variant sites {} for Strain {}",
-                          multivariant_sites, tot_variations, strain_index);
                 });
             }
         }
