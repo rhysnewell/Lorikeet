@@ -431,7 +431,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ..
             } => {
 
-                info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
                 if variant_info.len() == 1 {
                     info!("Where did the variants go? {:?}", variant_info);
                 }
@@ -456,6 +455,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let links = linkage_clustering_of_variants(&variant_info);
 
                 // run fuzzy DBSCAN
+                info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
                 let mut clusters = fuzzy_scanner.cluster(
                     &variant_info[..],
                     links);

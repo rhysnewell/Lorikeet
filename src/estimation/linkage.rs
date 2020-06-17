@@ -258,9 +258,10 @@ pub fn linkage_clustering_of_clusters(
 pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
     -> Vec<fuzzy::Cluster>
 {
+    info!("Phasing {} variants...", variant_info.len());
     if variant_info.len() > 1 {
         // Initiate the hashmap linking each variant to the variants it shares reads with
-        let links = Arc::new(Mutex::new(HashMap::new()));
+        let links = Mutex::new(HashMap::new());
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..variant_info.len()).into_iter()
             .permutations(2)
@@ -298,12 +299,12 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
         });
         let links = links.lock().unwrap();
         debug!("Links {:?}", links);
-        let condensed_links = Arc::new(Mutex::new(HashSet::new()));
+        let condensed_links = Mutex::new(HashSet::new());
 
         // extend the links for each anchor point by the union of all the indices
-        links.par_iter().for_each(|(main_link, current_links)|{
-            let anchors = Arc::new(
-                Mutex::new(current_links.clone()));
+        links.iter().for_each(|(main_link, current_links)|{
+            let anchors =
+                Mutex::new(current_links.clone());
             debug!("Main Link {:?}", main_link);
             current_links.par_iter().for_each(|index| {
                 match links.get(&index) {
@@ -345,7 +346,7 @@ pub fn get_read_set(variants: &fuzzy::Cluster,
                 variant_info: &Vec<fuzzy::Var>,
                 variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>> {
 
-    let read_set = Arc::new(Mutex::new(HashSet::new()));
+    let read_set = Mutex::new(HashSet::new());
 
     variants.par_iter().for_each(|assignment|{
         let variant = &variant_info[assignment.index];
