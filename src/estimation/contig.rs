@@ -158,6 +158,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         &Path::new(m.value_of("reference").unwrap())).unwrap()
         .sequences().iter().fold(0, |acc, seq| acc + seq.len);
 
+    info!("Running SNP calling on {} shortread samples", bam_readers.len());
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
                     short_threads,
@@ -171,6 +172,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
     if longreads.len() > 0 && m.is_present("include-longread-svs"){
         long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+        info!("Running structural variant detection on {} longread samples", longreads.len());
         longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
                         long_threads,
@@ -203,6 +205,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
 
     // Process Short Read BAMs
+    info!("Performing guided variant calling...");
     bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_bam(bam_generator,
                     sample_idx,
@@ -314,6 +317,8 @@ fn process_vcf<R: NamedBamReader + Send,
     if longread {
         sample_idx = sample_count - sample_idx - 1;
     }
+
+    info!("Collecting VCF records for sample {}", sample_idx);
     vcf_reader.records().into_iter().for_each(|vcf_record| {
         let mut vcf_record = vcf_record.unwrap();
         let header = vcf_record.header();
@@ -322,7 +327,10 @@ fn process_vcf<R: NamedBamReader + Send,
         // Sanity check
         if target_names[variant_rid as usize]
             == header.rid2name(variant_rid).unwrap() {
-            let base_option = Base::from_vcf_record(&mut vcf_record, sample_count, sample_idx, longread);
+            let base_option = Base::from_vcf_record(&mut vcf_record,
+                                                    sample_count,
+                                                    sample_idx,
+                                                    longread);
             match base_option {
 
                 Some(bases) => {
@@ -830,7 +838,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
 
 }
 
-/// Makes direct call to snippy or SVIM
+/// Makes direct call to freebayes or SVIM
 pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longread: bool, reference_length: u64) -> Reader {
 
     // setup temp directory
@@ -877,7 +885,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             threads-1,
             threads-1,
             tmp_bam_path);
-        info!("Queuing cmd_string: {}", sam_cmd_string);
+        debug!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
@@ -912,7 +920,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             tmp_bam_path,
             m.value_of("reference").unwrap(),
             freebayes_path);
-        info!("Queuing cmd_string: {}", vcf_cmd_string);
+        debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
@@ -946,7 +954,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches, threads: usize, longre
             svim_path,
             bam_path,
             m.value_of("reference").unwrap());
-        info!("Queuing cmd_string: {}", cmd_string);
+        debug!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
