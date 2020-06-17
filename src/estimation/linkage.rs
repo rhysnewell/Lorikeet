@@ -1,5 +1,6 @@
 use kodama::{Method, linkage};
 use std::collections::{HashMap, HashSet, BTreeSet};
+use std::sync::mpsc::channel;
 use model::variants::*;
 use dbscan::fuzzy;
 use rayon::prelude::*;
@@ -298,10 +299,12 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
             }
         });
         let links = links.lock().unwrap();
-        let condensed_links = Mutex::new(HashSet::new());
+
+        // Create condensed links sender and receiver, avoiding use of mutex
+        let (condensed_links_s, condensed_links_r) = channel();
 
         // extend the links for each anchor point by the union of all the indices
-        links.par_iter().for_each(|(main_link, current_links)|{
+        links.par_iter().for_each_with(condensed_links_s, |s, (main_link, current_links)|{
             let mut anchors = current_links.clone();
             current_links.iter().for_each(|index| {
                 match links.get(&index) {
@@ -311,24 +314,25 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
                     _ => {},
                 }
             });
-            let mut condensed_links = condensed_links.lock().unwrap();
 //            condensed_links.par_iter().for_each(link_set)
-            condensed_links.insert(anchors);
+            s.send(anchors).unwrap();
         });
-        let condensed_links = condensed_links.lock().unwrap();
-        debug!("condensed links {:?}", &condensed_links);
-        let mut initial_clusters = Vec::new();
-        condensed_links.iter().for_each(|link_set| {
 
-            initial_clusters.push(link_set.par_iter().map(|link| {
+        // Collect receiver into hashset
+        let condensed_links: HashSet<_> = condensed_links_r.iter().collect();
+        debug!("condensed links {:?}", &condensed_links);
+        let (initial_clusters_s, initial_clusters_r) = channel();
+        condensed_links.par_iter().for_each_with(initial_clusters_s, |s, link_set| {
+
+            s.send(link_set.par_iter().map(|link| {
                 fuzzy::Assignment {
                     index: *link,
                     label: 1.,
                     category: fuzzy::Category::Core,
                 }
-            }).collect::<fuzzy::Cluster>())
+            }).collect::<fuzzy::Cluster>()).unwrap()
         });
-
+        let initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
         return initial_clusters
     } else {
         Vec::new()
