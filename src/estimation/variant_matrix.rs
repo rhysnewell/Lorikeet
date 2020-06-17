@@ -394,7 +394,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     return output
                 };
 
-                info!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
+                debug!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
                 let geom_mean_v = geom_mean_v.lock().unwrap().clone();
                 let geom_mean_v = geom_mean(&geom_mean_v);
@@ -407,7 +407,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let geom_mean_f = geom_mean_f.lock().unwrap().clone();
                 let geom_mean_f = geom_mean(&geom_mean_f);
                 debug!("Geom Mean Frq {:?}", geom_mean_f);
-                info!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
+                debug!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
                 *variant_info = variant_info_all;
                 *geom_mean_var = geom_mean_v;
