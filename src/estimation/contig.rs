@@ -732,7 +732,7 @@ fn process_previous_contigs_var(
                                   ups_and_downs);
 
         if ani == 0. {
-            variant_struct.calc_error(ani);
+//            variant_struct.calc_error(ani);
 
 
             // filters variants across contig
@@ -740,7 +740,7 @@ fn process_previous_contigs_var(
 //                min_var_depth,
 //                coverage_fold as f64);
         } else {
-            let min_var_depth = variant_struct.calc_error(ani);
+//            let min_var_depth = variant_struct.calc_error(ani);
 
             info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
 

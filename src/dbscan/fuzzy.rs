@@ -287,10 +287,10 @@ impl FuzzyDBSCAN {
             let mut point_neighbours = HashSet::new();
 
             for core_point in initial.iter() {
-//                if visited[core_point.index] {
-//                    continue;
-//                }
-//                visited[core_point.index] = true;
+                if visited[core_point.index] {
+                    continue;
+                }
+                visited[core_point.index] = true;
                 let neighbour_indices = self.region_query(points, core_point.index);
                 let point_label = self.mu_min_p(
                     self.density(core_point.index, &neighbour_indices, points));
