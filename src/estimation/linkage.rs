@@ -304,7 +304,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
         let (condensed_links_s, condensed_links_r) = channel();
 
         // extend the links for each anchor point by the union of all the indices
-        links.par_iter().for_each_with(condensed_links_s, |s, (main_link, current_links)|{
+        links.par_iter().for_each_with(condensed_links_s, |s, (_, current_links)|{
             let mut anchors = current_links.clone();
             current_links.iter().for_each(|index| {
                 match links.get(&index) {
@@ -314,7 +314,6 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
                     _ => {},
                 }
             });
-//            condensed_links.par_iter().for_each(link_set)
             s.send(anchors).unwrap();
         });
 
