@@ -99,7 +99,6 @@ impl MetricSpace for Var<> {
                 let mean_col = get_mean(&col_vals);
 
                 // lovell et al. Phi and Phi distance
-                // https://github.com/tpq/propr/blob/17263691e9e84b778d3977fffd33b467e4205ef9/src/lr2propr.cpp
                 // propr log ratios to vlr and lr2rho
 
                 let mut row_var = 0.;

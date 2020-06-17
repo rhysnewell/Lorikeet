@@ -455,57 +455,18 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let links = linkage_clustering_of_variants(&variant_info);
 
                 // run fuzzy DBSCAN
-                info!("Running fuzzyDBSCAN with {} Variants", variant_info.len());
+                info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
                 let mut clusters = fuzzy_scanner.cluster(
                     &variant_info[..],
                     links);
-
-
-//                let (clusters, shared_read_count, mut condensed)
-//                    = linkage_clustering_of_clusters(&clusters,
-//                                           &variant_info,
-//                                           all_variants);
-
-                // Collapse clusters with enough shared read info starting with smallest cluster
-//                if links.len() > 1 {
-//                    for link_set in links.into_iter() {
-//
-//                    }
-//                    for (cluster_index, cluster) in clusters.iter().enumerate() {
-////                    println!("{}", cluster.len());
-//                        let cluster_map = shared_read_count.get(&cluster_index)
-//                            .unwrap();
-//                        for (clust2, jaccard) in cluster_map {
-//                            debug!("Cluster {} Cluster {} Jaccard's {}",
-//                                   cluster_index+1, *clust2+1, jaccard);
-//                        };
-//                    };
-//                };
-
-//                let dend = linkage(&mut condensed,
-//                                   clusters.len(), Method::Ward);
-//                info!("Dendogram {:?}", dend);
 
                 let mut genome_length = 0.;
                 for (tid, length) in target_lengths {
                     genome_length += *length;
                 };
-//                let required_variants = (1. - 0.9999) * genome_length;
-//                debug!("Genome Length {} Required Variants {}", genome_length, required_variants);
-//
-//                let mut clusters_kept = Vec::new();
-//                let mut noise = Vec::new();
-//
-//                for (index, cluster) in clusters.iter().enumerate() {
-//                    if cluster.len() as f64 >= required_variants {
-//                        debug!("Cluster {} Variants {}", index+1, cluster.len());
-//                        clusters_kept.push(cluster);
-//                    } else {
-//                        noise.par_extend(cluster.par_iter().cloned());
-//                    };
-//                };
-//                clusters_kept.push(&noise);
 
+                // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
+                // keep hashmaps updated using channel()
                 let prediction_variants = Arc::new(
                     Mutex::new(
                         HashMap::new()));
@@ -516,7 +477,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     Mutex::new(
                         HashMap::new()));
 
-
+                // Organize clusters into genotypes by recollecting full variant information
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
                     cluster.par_iter().for_each(|assignment|{
 
@@ -525,8 +486,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .or_insert(HashSet::new());
                         count.insert(assignment.index);
 
-
-//                        *category += 1;
                         let variant = &variant_info[assignment.index];
                         let mut prediction_variants = prediction_variants
                             .lock()
