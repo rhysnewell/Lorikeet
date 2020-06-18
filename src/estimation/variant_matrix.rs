@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use estimation::contig_variants::*;
 use estimation::linkage::*;
 use model::variants::*;
@@ -136,7 +136,6 @@ impl VariantMatrixFunctions for VariantMatrix {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
                 ref mut all_variants,
-                ref mut depths,
                 ..
             } => {
                 sample_names[sample_idx] = sample_name;
@@ -158,8 +157,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                     for pos in (0..target_len).into_iter() {
                         let position_variants = contig_variants.entry(pos as i64)
                             .or_insert(HashMap::new());
-                        let mut variant_depth: f64 = 0.;
-
                         if variants.contains_key(&(pos as i64)) {
                             let abundance_map = variants.get(&(pos as i64)).unwrap();
                             for (variant, base_info) in abundance_map.iter() {
@@ -213,7 +210,6 @@ impl VariantMatrixFunctions for VariantMatrix {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut coverages,
-                ref mut average_genotypes,
                 ref mut all_variants,
                 ref mut contigs,
                 ref mut target_names,
@@ -229,14 +225,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                         target_len,
                         coverage,
                         variance,
-                        variants,
                         depth,
 //                        variations_per_n,
                         ..
                     } => {
-                        let ag = average_genotypes.entry(tid).or_insert(
-                            vec![0.0 as f64; sample_count]);
-//                        ag[sample_idx] = mean_genotypes;
                         let var = variances.entry(tid).or_insert(
                             vec![0.0 as f64; sample_count]
                         );
@@ -250,12 +242,12 @@ impl VariantMatrixFunctions for VariantMatrix {
                         target_lengths.entry(tid).or_insert(target_len);
 
                         // copy across depths
-                        let mut contig_variants = all_variants.entry(tid)
+                        let contig_variants = all_variants.entry(tid)
                             .or_insert(HashMap::new());
                         for (pos, d) in depth.iter().enumerate() {
                             let position_variants = contig_variants.entry(pos as i64)
                                 .or_insert(HashMap::new());
-                            for (variant, base_info) in position_variants.iter_mut() {
+                            for (_variant, base_info) in position_variants.iter_mut() {
                                 base_info.add_depth(sample_idx, *d);
                             }
                         }
@@ -324,13 +316,62 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 for (variant, base_info) in hash.iter_mut() {
                                     match variant {
                                         Variant::None => {},
-                                        _ => {
+                                        Variant::SNV(_) => {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
                                             let mut rel_abund = vec![0.0; sample_count as usize];
 
                                             // Get the mean abundance across samples
-                                            let mut sample_idx: usize = 0;
+                                            for index in (0..sample_count).into_iter() {
+                                                let mut geom_mean_v =
+                                                    geom_mean_v.lock().unwrap();
+                                                let mut geom_mean_d =
+                                                    geom_mean_d.lock().unwrap();
+                                                let mut geom_mean_f =
+                                                    geom_mean_f.lock().unwrap();
+
+                                                let mut var_depth
+                                                    = base_info.truedepth[index] as f64;
+                                                debug!("No var depth {:?} {:?} {:?} {:?} {:?}", base_info.variant,
+                                                       base_info.depth,
+                                                       base_info.truedepth,
+                                                        base_info.totaldepth, base_info.referencedepth);
+                                                let total_depth
+                                                    = base_info.totaldepth[index] as f64;
+//                                                base_info.freq[index] = ;
+                                                if total_depth <= 0. {
+                                                    rel_abund[index] =
+                                                        var_depth / (1.);
+                                                } else {
+                                                    rel_abund[index] =
+                                                        var_depth / total_depth;
+                                                }
+
+                                                geom_mean_v[index] += (var_depth + 1.).ln();
+                                                geom_mean_d[index] += (total_depth + 1.).ln();
+                                                geom_mean_f[index] += ((var_depth + 1.)
+                                                    / (total_depth + 1.)).ln();
+                                            };
+
+
+                                            let mut variant_info_all = variant_info_all
+                                                .lock().unwrap();
+//                                            base_info.rel_abunds = rel_abund;
+                                            let point = fuzzy::Var {
+                                                pos: *position,
+                                                var: variant.clone(),
+                                                deps: base_info.totaldepth.clone(),
+                                                vars: base_info.depth.clone(),
+                                                rel_abunds: rel_abund,
+                                                tid: *tid,
+                                                reads: base_info.reads.clone()
+                                            };
+                                            variant_info_all.push(point);
+                                        },
+                                        _ => {
+                                            let mut rel_abund = vec![0.0; sample_count as usize];
+
+                                            // Get the mean abundance across samples
                                             for index in (0..sample_count).into_iter() {
                                                 let mut geom_mean_v =
                                                     geom_mean_v.lock().unwrap();
@@ -342,12 +383,15 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 let mut var_depth
                                                     = base_info.depth[index] as f64;
                                                 if var_depth <= 0. {
-                                                    debug!("No var depth {:?} {:?}", base_info.variant, base_info.truedepth);
+                                                    debug!("No var depth {:?} {:?} {:?} {:?} {:?}", base_info.variant,
+                                                           base_info.depth,
+                                                           base_info.truedepth,
+                                                           base_info.totaldepth, base_info.referencedepth);
                                                     var_depth
                                                         = base_info.truedepth[index] as f64;
                                                     base_info.depth[index] = base_info.truedepth[index];
                                                 }
-                                                let mut total_depth
+                                                let total_depth
                                                     = base_info.totaldepth[index] as f64;
 //                                                base_info.freq[index] = ;
                                                 if total_depth <= 0. {
@@ -426,7 +470,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut geom_mean_dep,
                 ref mut geom_mean_frq,
                 ref mut pred_variants,
-                all_variants,
                 target_lengths,
                 ..
             } => {
@@ -456,12 +499,12 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 // run fuzzy DBSCAN
                 info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
-                let mut clusters = fuzzy_scanner.cluster(
+                let clusters = fuzzy_scanner.cluster(
                     &variant_info[..],
                     links);
 
                 let mut genome_length = 0.;
-                for (tid, length) in target_lengths {
+                for (_tid, length) in target_lengths {
                     genome_length += *length;
                 };
 
@@ -516,14 +559,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                     });
                 });
 
-                let mut prediction_count = prediction_count.lock().unwrap();
+                let prediction_count = prediction_count.lock().unwrap();
                 let prediction_features = prediction_features.lock().unwrap();
-                let mut prediction_variants = prediction_variants.lock().unwrap();
+                let prediction_variants = prediction_variants.lock().unwrap();
 
 
                 for (cluster, pred_set) in prediction_features.iter() {
                     if pred_set.len() > 1 {
-                        let count = prediction_count[cluster].len() as f64;
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
                     } else if !pred_set.contains(&Variant::None) {
                         info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
@@ -557,8 +599,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                         .expect("No Read or Write Permission in current directory");
 
                     let mut genotype = genotype.clone();
-                    let mut multivariant_sites = 0;
-                    let mut tot_variations = 0;
 
                     // Generate the variant genome
                     for (tid, original_contig) in contigs.iter() {
@@ -580,7 +620,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                     if tid_genotype.contains_key(&(pos as i64)) {
                                         let categories = &genotype[tid][&(pos as i64)];
-                                        let mut hash = HashSet::new();
+                                        let hash;
                                         if categories.contains_key(&fuzzy::Category::Core) {
                                             hash = categories[&fuzzy::Category::Core].clone();
                                         } else if categories.contains_key(&fuzzy::Category::Border) {
@@ -600,7 +640,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             }
                                         }
                                         if hash.len() > 1 {
-                                            multivariant_sites += 1;
+//                                            multivariant_sites += 1;
                                             debug!("Multi hash {:?} {:?}", hash, max_var)
                                         }
                                         match max_var {
@@ -660,7 +700,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             file_open.write(line).unwrap();
                             file_open.write(b"\n").unwrap();
                         };
-                        tot_variations += variations;
+//                        tot_variations += variations;
                     }
                 });
             }

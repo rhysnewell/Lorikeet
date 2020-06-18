@@ -19,6 +19,7 @@ use ordered_float::NotNan;
 use coverm::bam_generator::*;
 use rust_htslib::bam::{self, record::Cigar};
 use statrs::statistics::{OrderStatistics, Statistics};
+use rayon::prelude::*;
 
 use crate::model::variants::Variant;
 
@@ -152,13 +153,12 @@ impl AlignmentProperties {
     pub fn update_properties(tlens: &mut Vec<f64>, properties: &mut AlignmentProperties) -> Result<Self, Box<dyn Error>> {
         let upper = tlens.percentile(95);
         let lower = tlens.percentile(5);
-        let mut valid = tlens
-            .into_iter()
-            .map(|l| {
-                *l <= upper && *l >= lower;
-                *l
-            })
-            .collect_vec();
+        let mut valid: Vec<_> = tlens
+            .into_par_iter()
+            .filter(|l| {
+                **l <= upper && **l >= lower
+            }).map(|l| *l)
+            .collect();
         properties.insert_size.mean = valid.median();
         properties.insert_size.sd = valid.iter().std_dev();
         Ok(*properties)

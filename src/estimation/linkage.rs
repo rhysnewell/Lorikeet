@@ -28,13 +28,13 @@ pub fn linkage_clustering_of_clusters(
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..total_clusters).into_iter()
             .combinations(2)
-            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)| {
+            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|indices| {
 
             // Get clusters by index
-            let mut clust1 = Arc::new(Mutex::new(vec!()));
-            let mut clust2 = Arc::new(Mutex::new(vec!()));
-            let mut clust1_size = 0;
-            let mut clust2_size = 0;
+            let clust1;
+            let clust2;
+            let clust1_size;
+            let clust2_size;
             {
                 let clusters = clusters.lock().unwrap();
                 let clust1_h = clusters[indices[0]].clone();
@@ -55,13 +55,13 @@ pub fn linkage_clustering_of_clusters(
             // Loop through first cluster
             (0..clust1_size).into_par_iter().for_each(|index1| {
                 // Loop through second cluster
-                let mut assignment1 = fuzzy::Assignment::new();
+                let assignment1;
                 {
                     let clust1 = clust1.lock().unwrap();
                     assignment1 = clust1[index1].clone();
                 }
                 (0..clust2_size).into_par_iter().for_each(|index2| {
-                    let mut assignment2 = fuzzy::Assignment::new();
+                    let assignment2;
                     {
                         let clust2 = clust2.lock().unwrap();
                         assignment2 = clust2[index2].clone();
@@ -151,7 +151,7 @@ pub fn linkage_clustering_of_clusters(
 
             let mut clusters_shared_reads = clusters_shared_reads
                 .lock().unwrap();
-            let mut cluster_map = clusters_shared_reads.entry(indices[0])
+            let cluster_map = clusters_shared_reads.entry(indices[0])
                 .or_insert(HashMap::new());
 
             // Scaled Jaccard Similarity Based on Minimum Set size
@@ -182,7 +182,7 @@ pub fn linkage_clustering_of_clusters(
             cluster_map.entry(indices[1]).or_insert(jaccard);
         });
 
-        let mut clusters_shared_reads = clusters_shared_reads.lock().unwrap().clone();
+        let clusters_shared_reads = clusters_shared_reads.lock().unwrap().clone();
         let mut jaccard_distances = jaccard_distances.lock().unwrap().to_vec();
         let clusters = clusters.lock().unwrap();
         // Perform HAC using kodama
@@ -229,7 +229,7 @@ pub fn linkage_clustering_of_clusters(
             }
         });
 
-        let mut clusters_changed
+        let clusters_changed
             = clusters_changed.lock().unwrap().clone();
         let changed = changed.lock().unwrap();
         // If the number of clusters changed, then we rerun linkage clustering
@@ -266,7 +266,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..variant_info.len()).into_iter()
             .permutations(2)
-            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|(indices)| {
+            .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|indices| {
 
             // Get variants by index
             let var1 = &variant_info[indices[0]];
@@ -290,10 +290,10 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
             if intersection.len() > 0 {
                 let mut links = links.lock().unwrap();
                 // Intialize links for each indices including itself
-                let mut links_out = links.entry(indices[0])
+                let links_out = links.entry(indices[0])
                     .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
                 links_out.insert(indices[1]);
-                let mut links_out = links.entry(indices[1])
+                let links_out = links.entry(indices[1])
                     .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
                 links_out.insert(indices[0]);
             }
@@ -361,9 +361,8 @@ pub fn get_read_set(variants: &fuzzy::Cluster,
 pub fn get_variant_set(variant: &fuzzy::Var,
                    variant_map: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>) -> HashSet<Vec<u8>> {
 
-    let mut variant_set = HashSet::new();
 
-    variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone().reads;
+    let variant_set = variant_map[&variant.tid][&variant.pos][&variant.var].clone().reads;
 
     return variant_set
 }

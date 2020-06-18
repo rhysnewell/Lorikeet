@@ -38,7 +38,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     long_readers: Option<Vec<U>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
-    mut reference: bio::io::fasta::IndexedReader<File>,
+    reference: bio::io::fasta::IndexedReader<File>,
     _print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     mapq_threshold: u8,
@@ -63,7 +63,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut codon_table = CodonTable::setup();
 
     // Get long reads bams if they exist
-    let mut longreads = match long_readers {
+    let longreads = match long_readers {
         Some(vec) => {
             // update sample count
             sample_count += vec.len();
@@ -187,7 +187,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
 
     // Annoyingly read in bam file again
-    let mut bam_path = "".to_string();
     let mut longreads = vec!();
     let mut bam_readers = vec!();
 
@@ -272,7 +271,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi);
         variant_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
-        let mut variant_matrix = variant_matrix.lock().unwrap();
+        let variant_matrix = variant_matrix.lock().unwrap();
         variant_matrix.print_variant_stats(output_prefix);
     }
 }
@@ -289,8 +288,8 @@ fn process_vcf<R: NamedBamReader + Send,
     reference_length: u64) {
     let mut bam_generated = bam_generator.start();
 
-    let mut bam_properties =
-        AlignmentProperties::default(InsertSize::default());
+//    let mut bam_properties =
+//        AlignmentProperties::default(InsertSize::default());
 
     let stoit_name = bam_generated.name().to_string();
 
@@ -312,7 +311,7 @@ fn process_vcf<R: NamedBamReader + Send,
                                  split_threads,
                                  longread,
                                  reference_length);
-    vcf_reader.set_threads(split_threads);
+    vcf_reader.set_threads(split_threads).expect("Unable to set threads on VCF reader");
     let mut sample_idx = sample_idx;
     if longread {
         sample_idx = sample_count - sample_idx - 1;
@@ -387,8 +386,8 @@ fn process_bam<R: NamedBamReader + Send,
         sample_idx = sample_count - sample_idx - 1;
     }
 
-    let mut bam_properties =
-        AlignmentProperties::default(InsertSize::default());
+//    let mut bam_properties =
+//        AlignmentProperties::default(InsertSize::default());
 
     let stoit_name = bam_generated.name().to_string();
 
@@ -417,7 +416,7 @@ fn process_bam<R: NamedBamReader + Send,
             (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread) {
             skipped_reads += 1;
             continue;
-        } else if (!flag_filters.include_secondary && record.is_secondary() && longread) {
+        } else if !flag_filters.include_secondary && record.is_secondary() && longread {
             skipped_reads += 1;
             continue;
         }
