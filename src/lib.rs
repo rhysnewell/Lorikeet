@@ -37,7 +37,6 @@ extern crate derive_builder;
 extern crate serde_derive;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate derive_new;
 extern crate pest_derive;
 

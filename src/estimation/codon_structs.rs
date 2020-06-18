@@ -4,6 +4,7 @@ use bio::alphabets::dna;
 use bio_types::strand;
 use model::variants::{Variant, Base};
 
+#[allow(dead_code)]
 pub struct GeneInfo {
     name: String,
     locations: HashMap<u32, (u64, u64)>,

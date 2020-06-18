@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::f64;
-use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
 use model::variants::*;
-use coverm::coverage_takers::CoverageTakerType::CachedSingleFloatCoverageTaker;
 
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
@@ -17,32 +15,6 @@ fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     } else {
         None
     }
-}
-
-/// An enum that decides whether a cluster should be updated or duplicated
-#[derive(Debug, Clone)]
-pub enum Update {
-    Push,
-    Clone,
-}
-
-pub fn update_clusters(original_cluster: &mut Cluster, variants: &Vec<Var>, var_to_check: &Var) -> Update {
-    let skip = false;
-
-    let to_do = Arc::new(
-        Mutex::new(
-            Update::Push));
-
-    original_cluster.par_iter().for_each(|assignment|{
-        if !skip {
-            let var_in_cluster = &variants[assignment.index];
-            if var_in_cluster.tid == var_to_check.tid && var_in_cluster.pos == var_to_check.pos {
-
-            }
-        }
-    });
-    let to_do = to_do.lock().unwrap().clone();
-    return to_do
 }
 
 /// A trait to compute distances between points.
@@ -63,11 +35,6 @@ pub struct Var {
     pub reads: HashSet<Vec<u8>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Point {
-    pub values: Vec<f64>,
-}
-
 impl MetricSpace for Var<> {
     fn distance(&self, other: &Self, geom_var: &Vec<f64>,
                 geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
@@ -78,7 +45,7 @@ impl MetricSpace for Var<> {
             } else {
                 let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
-                        ((v + 1.) / geom_means[i] as f64).ln()
+                        ((v + 1.) / geom_means[i]).ln()
                     }).collect();
                     return output
                 };
@@ -89,17 +56,19 @@ impl MetricSpace for Var<> {
                 };
 
 
+//                debug!("row values {:?} geom_var {:?} geom_frq {:?}", &self.vars, &geom_var, &geom_frq);
+                let row_vals: Vec<f64> = clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
 
-                let row_vals: Vec<f64> = clr(&self.rel_abunds, geom_frq);
-
-                let col_vals: Vec<f64> = clr(&other.rel_abunds, geom_frq);
+                let col_vals: Vec<f64> = clr(&other.vars.iter().map(|v| *v as f64).collect(), geom_var);
+                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
 
                 let mean_row = get_mean(&row_vals);
 
                 let mean_col = get_mean(&col_vals);
 
-                // lovell et al. Phi and Phi distance
-                // propr log ratios to vlr and lr2rho
+                // lovell et al. Phi and Phi distance: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004075
+                // Rho: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/
+                // propr log ratios to vlr and lr2rho: https://github.com/tpq/propr/blob/master/src/lr2propr.cpp
 
                 let mut row_var = 0.;
                 let mut col_var = 0.;
@@ -126,19 +95,20 @@ impl MetricSpace for Var<> {
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
-                // Read ids of first variant
-                let set1 = &self.reads;
+//                // Read ids of first variant
+//                let set1 = &self.reads;
+//
+//                // Read ids of second variant
+//                let set2 = &other.reads;
+//
+//                // Add the jaccard's similarity to the hashmap for the two clusters
+//                let intersection: HashSet<_> = set1
+//                    .intersection(&set2).collect();
+//                let jaccard = intersection.len() as f64 /
+//                    (set1.len() + set2.len() + 1) as f64;
 
-                // Read ids of second variant
-                let set2 = &other.reads;
-
-                // Add the jaccard's similarity to the hashmap for the two clusters
-                let intersection: HashSet<_> = set1
-                    .intersection(&set2).collect();
-                let jaccard = intersection.len() as f64 /
-                    (set1.len() + set2.len() + 1) as f64;
-
-                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}, jaccard {}", phi, phi_dist, rho, 1.-rho, 1.-jaccard);
+                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}, jaccard {}",
+                       phi, phi_dist, rho, 1.-rho, 1.);
 
                 return 1.-rho
             }
@@ -160,20 +130,6 @@ impl MetricSpace for Var<> {
                 distance
             }
         }
-    }
-}
-
-impl MetricSpace for Point {
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
-                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
-        let mut sum_squares = Arc::new(Mutex::new(0.));
-        self.values.par_iter().zip(other.values.par_iter()).for_each(|(x, y)|{
-            let mut sum_squares = sum_squares.lock().unwrap();
-            *sum_squares += (x - y).powf(2.)
-        });
-        let sum_squares: f64 = *sum_squares.lock().unwrap();
-        let dist: f64 = sum_squares.sqrt();
-        return dist
     }
 }
 

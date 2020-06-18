@@ -1,42 +1,15 @@
 
-use std::cmp::Ordering;
 use std::fmt::Debug;
-use std::ops::{Deref, Range};
+use std::ops::Range;
 use std::collections::{HashSet, HashMap};
 
 use bio::stats::LogProb;
 use itertools::Itertools;
 use ordered_float::NotNan;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use rust_htslib::{bcf, bcf::record::Numeric, bam::record::Cigar};
+use rust_htslib::{bcf, bcf::record::Numeric};
 
-use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-//use crate::grammar;
-
-//pub mod model.evidence;
-//pub mod likelihood;
-//pub mod modes;
-//pub mod sample;
-//
-//#[derive(Debug, Clone)]
-//pub struct Contamination {
-//    pub by: usize,
-//    pub fraction: f64,
-//}
-//
-//#[derive(Ord, Eq, PartialOrd, PartialEq, Clone, Debug)]
-//pub struct Event {
-//    pub name: String,
-//    pub vafs: grammar::VAFTree,
-//    pub strand_bias: StrandBias,
-//}
-//
-//impl Event {
-//    pub fn is_artifact(&self) -> bool {
-//        self.strand_bias != StrandBias::None
-//    }
-//}
 
 pub type AlleleFreq = NotNan<f64>;
 
@@ -266,6 +239,7 @@ pub struct Base {
     pub truedepth: Vec<i32>,
     // Depth as decided by CoverM
     pub totaldepth: Vec<i32>,
+    pub referencedepth: Vec<i32>,
     // Physical coverage of valid inserts across locus
     pub physicalcov: Vec<i32>,
     // Mean base quality at locus
@@ -342,6 +316,7 @@ impl Base {
             depth: vec![0; sample_count],
             truedepth: vec![0; sample_count],
             totaldepth: vec![0; sample_count],
+            referencedepth: vec![0; sample_count],
             physicalcov: vec![0; sample_count],
             baseq: vec![0; sample_count],
             mapq: vec![0; sample_count],
@@ -381,8 +356,7 @@ impl Base {
                 let mut base = Base::new(record.rid().unwrap(),
                                          record.pos(), record.alleles()[idx].to_vec(),
                                          sample_count);
-                // TODO: Handle the case where a single site has multiple variants
-                //       Not sure if pilon ever produces alleles on the same vcf record though
+
                 // Populate Base struct with known info tags
                 if longread {
                     // get relevant flag for SVIM vcf on long read samples
@@ -408,59 +382,61 @@ impl Base {
                         }
                     };
 
-                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-                        Ok(val) => {
-                            if val[0][0] >= 0 {
-                                val[0][0]
-                            } else {
-                                base.depth[sample_idx]
-                            }
-                        },
-                        _ => base.depth[sample_idx],
-                    };
-                    let refr_depth = std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
-                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
-                    base.freq[sample_idx] = base.af[sample_idx];
+//                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
+//                        Ok(val) => {
+//                            if val[0][0] >= 0 {
+//                                val[0][0]
+//                            } else {
+//                                base.depth[sample_idx]
+//                            }
+//                        },
+//                        _ => base.depth[sample_idx],
+//                    };
+//                    let refr_depth = std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
+//                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
+//                    base.freq[sample_idx] = base.af[sample_idx];
                     let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
                     base.reads.par_extend(reads);
                     if refr_base_empty {
-                        let mut refr_base = Base::new(record.rid().unwrap(),
-                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
-                        refr_base.af[sample_idx] = base.af[sample_idx];
-                        refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-                            Ok(val) => {
-                                if val[0][0] >= 0 {
-                                    val[0][0]
-                                } else {
-                                    base.depth[sample_idx]
-                                }
-                            },
-                            _ => base.depth[sample_idx],
-                        };
-                        refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
-                        refr_base.depth[sample_idx] = refr_depth;
-                        bases.push(refr_base);
-                        refr_base_empty = false;
+//                        let mut refr_base = Base::new(record.rid().unwrap(),
+//                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
+//                        refr_base.af[sample_idx] = base.af[sample_idx];
+//                        refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
+//                            Ok(val) => {
+//                                if val[0][0] >= 0 {
+//                                    val[0][0]
+//                                } else {
+//                                    base.depth[sample_idx]
+//                                }
+//                            },
+//                            _ => base.depth[sample_idx],
+//                        };
+//                        refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
+//                        refr_base.depth[sample_idx] = refr_depth;
+//                        bases.push(refr_base);
+//                        refr_base_empty = false;
                     }
                 } else {
                     // Get relevant flag from freebayes output on short read samples
                     base.variant = variant.clone();
                     base.filters[sample_idx] = filter_hash.clone();
-                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+//                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                     base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
                     base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
-                    base.freq[sample_idx] = (base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64);
+//                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+
+                    base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
 
                     if refr_base_empty {
-                        let mut refr_base = Base::new(record.rid().unwrap(),
-                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
-                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                        refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
-                        refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
-                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
-
-                        bases.push(refr_base);
-                        refr_base_empty = false;
+//                        let mut refr_base = Base::new(record.rid().unwrap(),
+//                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
+//                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+//                        refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
+//                        refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+//                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
+//
+//                        bases.push(refr_base);
+//                        refr_base_empty = false;
                     }
                 };
 

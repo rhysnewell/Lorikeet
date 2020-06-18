@@ -226,12 +226,12 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-            let mut long_readers = vec!();
-            if m.is_present("longread-bam-files") {
-                let longreads = m.values_of("longread-bam-files").unwrap().collect();
-                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
-                    longreads);
-            };
+//            let mut long_readers = vec!();
+//            if m.is_present("longread-bam-files") {
+//                let longreads = m.values_of("longread-bam-files").unwrap().collect();
+//                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+//                    longreads);
+//            };
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
                 if filter_params.doing_filtering() {

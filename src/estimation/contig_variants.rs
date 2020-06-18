@@ -6,7 +6,6 @@ use rayon::prelude::*;
 use estimation::codon_structs::*;
 use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
-use rust_htslib::bcf::record;
 
 use std::path::Path;
 use std::fs::OpenOptions;
@@ -385,7 +384,6 @@ impl VariantFunctions for VariantStats {
                     None => &placeholder,
                 };
                 debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
-                let print_stream = Arc::new(Mutex::new(std::io::stdout()));
                 gff_records.par_iter().enumerate().for_each(|(_id, gene)| {
                     let dnds = codon_table.find_mutations(gene, variants, ref_sequence, depth);
                     let strand = gene.strand().expect("No strandedness found");
@@ -456,6 +454,7 @@ impl VariantFunctions for VariantStats {
 }
 
 // helper function to get the index of condensed matrix from it square form
+#[allow(dead_code)]
 fn condensed_index(i: usize, j: usize, n: usize) -> Option<usize>{
     if i == j {
         return None
