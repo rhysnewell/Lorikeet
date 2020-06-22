@@ -319,7 +319,9 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
 
             anchors.par_sort();
             anchors.dedup();
-            s.send(anchors).unwrap();
+            if anchors.len() > 2 {
+                s.send(anchors).unwrap();
+            }
         });
 
         // Collect receiver into hashset
