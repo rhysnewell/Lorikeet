@@ -332,16 +332,18 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                                 let mut var_depth
                                                     = base_info.truedepth[index] as f64;
-                                                debug!("No var depth {:?} {:?} {:?} {:?} {:?}", base_info.variant,
+                                                debug!("No var depth {:?} {:?} {:?} {:?} {:?}",
+                                                       base_info.variant,
                                                        base_info.depth,
                                                        base_info.truedepth,
-                                                        base_info.totaldepth, base_info.referencedepth);
+                                                       base_info.totaldepth,
+                                                       base_info.referencedepth);
                                                 let total_depth
                                                     = base_info.totaldepth[index] as f64;
 //                                                base_info.freq[index] = ;
                                                 if total_depth <= 0. {
                                                     rel_abund[index] =
-                                                        var_depth / (1.);
+                                                        var_depth / 1.;
                                                 } else {
                                                     rel_abund[index] =
                                                         var_depth / total_depth;

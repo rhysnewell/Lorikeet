@@ -60,7 +60,7 @@ impl MetricSpace for Var<> {
                 let row_vals: Vec<f64> = clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
 
                 let col_vals: Vec<f64> = clr(&other.vars.iter().map(|v| *v as f64).collect(), geom_var);
-                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
+//                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
 
                 let mean_row = get_mean(&row_vals);
 
@@ -95,6 +95,9 @@ impl MetricSpace for Var<> {
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
 
+                // reciprocal concordance correlation coeffecient between 0 and 2
+                let concordance = -2. * covar / (row_var + col_var) + 1.;
+
 //                // Read ids of first variant
 //                let set1 = &self.reads;
 //
@@ -107,10 +110,10 @@ impl MetricSpace for Var<> {
 //                let jaccard = intersection.len() as f64 /
 //                    (set1.len() + set2.len() + 1) as f64;
 
-                debug!("Phi {}, Phi-D {}, Rho {}, Rho-M {}, jaccard {}",
-                       phi, phi_dist, rho, 1.-rho, 1.);
+                debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
+                       phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
 
-                return 1.-rho
+                return concordance
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
