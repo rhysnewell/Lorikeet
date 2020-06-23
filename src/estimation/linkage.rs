@@ -256,7 +256,7 @@ pub fn linkage_clustering_of_clusters(
 }
 
 /// Connects variants into initial clusters based on shared read sets
-pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
+pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_size: usize)
     -> Vec<fuzzy::Cluster>
 {
     info!("Phasing {} variants...", variant_info.len());
@@ -267,6 +267,9 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
         (0..variant_info.len()).into_iter()
             .permutations(2)
             .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|indices| {
+
+            //TODO: Filter these links based on linkage disequilibrium or some other
+            //      probabilistic parameter?
 
             // Get variants by index
             let var1 = &variant_info[indices[0]];
@@ -319,7 +322,10 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>)
 
             anchors.par_sort();
             anchors.dedup();
-            if anchors.len() > 2 {
+
+            // Filter out final links that aren't of size n
+            // 20 is chosen here as a placeholder
+            if anchors.len() > anchor_size {
                 s.send(anchors).unwrap();
             }
         });

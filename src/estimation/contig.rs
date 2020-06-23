@@ -267,8 +267,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
         let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
         let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
+        let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
 
-        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi);
+        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi, anchor_size);
         variant_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
         let variant_matrix = variant_matrix.lock().unwrap();
