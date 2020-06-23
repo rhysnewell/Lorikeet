@@ -256,7 +256,7 @@ pub fn linkage_clustering_of_clusters(
 }
 
 /// Connects variants into initial clusters based on shared read sets
-pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_size: usize)
+pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_size: usize, anchor_similarity: f64)
     -> Vec<fuzzy::Cluster>
 {
     info!("Phasing {} variants...", variant_info.len());
@@ -286,11 +286,23 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
             let intersection: HashSet<_> = set1
                 .intersection(&set2).collect();
 
+            let union: HashSet<_> = set1
+                .union(&set2).collect();
+
             // Scaled Jaccard Similarity Based on Minimum Set size
 //            let jaccard = intersection.len() as f64 /
 //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
 //             Normal Jaccard's Similarity
             if intersection.len() > 0 {
+                // get relative frequencies of each Haplotype
+                let pool_size = union.len() as f64;
+                let x_11 = intersection.len() as f64 / pool_size;
+                let p1 = set1.len() as f64 / pool_size;
+                let q1 = set2.len() as f64 / pool_size;
+
+                // Calculate Linkage D
+                let dis = x_11 - p1 * q1;
+
                 let mut links = links.lock().unwrap();
                 // Intialize links for each indices including itself
                 let links_out = links.entry(indices[0])
@@ -308,20 +320,20 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
 
         // extend the links for each anchor point by the union of all the indices
         links.par_iter().for_each_with(condensed_links_s, |s, (_, current_links)|{
-            let mut anchors: Vec<_> = current_links.iter().cloned().collect::<Vec<_>>();
+            let mut anchors = current_links.clone();
 
             current_links.iter().for_each(|index| {
                 match links.get(&index) {
                     Some(other_links) => {
-                        let mut other_links: Vec<_> = other_links.par_iter().cloned().collect();
+//                        let mut other_links: Vec<_> = other_links.par_iter().cloned().collect();
                         anchors.par_extend(other_links.par_iter())
                     },
                     _ => {},
                 }
             });
 
-            anchors.par_sort();
-            anchors.dedup();
+//            anchors.par_sort();
+//            anchors.dedup();
 
             // Filter out final links that aren't of size n
             // 20 is chosen here as a placeholder
@@ -330,9 +342,20 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
             }
         });
 
-        // Collect receiver into hashset
-        let condensed_links: HashSet<_> = condensed_links_r.iter().collect();
-        debug!("condensed links {:?}", &condensed_links);
+        // Collect receiver into vec and sort by length
+        let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
+        condensed_links.par_sort_by_key(|key| key.len());
+        debug!("pre filtering condensed links {:?}", &condensed_links);
+
+        // Filter highly similar sets
+        condensed_links.dedup_by(|a, b| {
+            let intersection: HashSet<_> = a.intersection(&b).collect();
+            let union: HashSet<_> = a.union(&b).collect();
+            let jaccard = intersection.len() as f64 / union.len() as f64;
+            jaccard > anchor_similarity
+        });
+
+        debug!("post filtering condensed links {:?}", &condensed_links);
         let (initial_clusters_s, initial_clusters_r) = channel();
         condensed_links.par_iter().for_each_with(initial_clusters_s, |s, link_set| {
             s.send(link_set.par_iter().map(|link| {
@@ -344,6 +367,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
             }).collect::<fuzzy::Cluster>()).unwrap()
         });
         let initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
+
         return initial_clusters
     } else {
         Vec::new()

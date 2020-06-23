@@ -94,7 +94,8 @@ pub trait VariantMatrixFunctions {
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
 
     /// Perform fuzzy DBSCAN clustering using proportionality
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64, anchor_size: usize);
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64,
+                      anchor_size: usize, anchor_similarity: f64);
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
     fn generate_genotypes(&mut self,
@@ -464,7 +465,8 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64, anchor_size: usize) {
+    fn run_fuzzy_scan(&mut self, e_min: f64, e_max: f64, pts_min: f64, pts_max: f64, phi: f64,
+                      anchor_size: usize, anchor_similarity: f64) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut variant_info,
@@ -497,7 +499,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 };
 
                 // Perform read phasing clustering and return initial clusters
-                let links = linkage_clustering_of_variants(&variant_info, anchor_size);
+                let links = linkage_clustering_of_variants(&variant_info,
+                                                           anchor_size, anchor_similarity);
 
                 // run fuzzy DBSCAN
                 info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
