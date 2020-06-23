@@ -104,6 +104,7 @@ pub trait VariantMatrixFunctions {
     fn print_variant_stats(&self, output_prefix: &str);
 }
 
+#[allow(unused)]
 impl VariantMatrixFunctions for VariantMatrix {
     fn setup(&mut self) {
         match self {

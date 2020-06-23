@@ -78,6 +78,7 @@ pub trait Translations {
 }
 
 impl Translations for CodonTable {
+    #[allow(unused)]
     fn get_codon_table(&mut self, table_id: usize) {
         // Convert NCBI format to something more usable
         let ncbi_format = NCBITable::get_translation_table(table_id);
@@ -119,6 +120,7 @@ impl Translations for CodonTable {
         }
     }
 
+    #[allow(unused)]
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
                       variants: &HashMap<i64, HashMap<Variant, Base>>,
@@ -301,6 +303,7 @@ impl Translations for CodonTable {
     }
 }
 
+#[allow(unused)]
 pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
 
     let codons = match strandedness{

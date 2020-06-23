@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 
 
 /// Connects fuzzy DBSCAN clusters based on shared read information
+#[allow(unused)]
 pub fn linkage_clustering_of_clusters(
                       clusters: &Vec<Vec<fuzzy::Assignment>>,
                       variant_info: &Vec<fuzzy::Var>,
@@ -256,6 +257,7 @@ pub fn linkage_clustering_of_clusters(
 }
 
 /// Connects variants into initial clusters based on shared read sets
+#[allow(unused)]
 pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_size: usize, anchor_similarity: f64)
     -> Vec<fuzzy::Cluster>
 {
