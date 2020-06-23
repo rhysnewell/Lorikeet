@@ -4,6 +4,7 @@ use std::f64;
 use rayon::prelude::*;
 use model::variants::*;
 
+#[allow(unused)]
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
     let key_copy = if let Some(key_ref) = set.iter().next() {
         Some(*key_ref)
@@ -35,6 +36,7 @@ pub struct Var {
     pub reads: HashSet<Vec<u8>>,
 }
 
+#[allow(unused)]
 impl MetricSpace for Var<> {
     fn distance(&self, other: &Self, geom_var: &Vec<f64>,
                 geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {

@@ -101,6 +101,7 @@ pub enum Variant {
     None,
 }
 
+#[allow(unused)]
 impl Variant {
 
     pub fn has_fragment_evidence(&self) -> bool {
@@ -198,6 +199,7 @@ pub enum Filter {
     None,
 }
 
+#[allow(unused)]
 impl Filter {
     pub fn from(string: &str) -> Filter {
         match string {
@@ -233,9 +235,9 @@ pub struct Base {
     pub variant: Variant,
     // Filter tag
     pub filters: Vec<HashSet<Filter>>,
-    // Depth of good quality reads
+    // Depth of good quality estimation.reads
     pub depth: Vec<i32>,
-    // Depth including bad quality reads
+    // Depth including bad quality estimation.reads
     pub truedepth: Vec<i32>,
     // Depth as decided by CoverM
     pub totaldepth: Vec<i32>,
@@ -256,7 +258,7 @@ pub struct Base {
     pub ic: Vec<i32>,
     // deletion count at locus
     pub dc: Vec<i32>,
-    // number of reads clipped here
+    // number of estimation.reads clipped here
     pub xc: Vec<i32>,
     // allele count in genotypes, for each ALT allele.
     pub ac: Vec<i32>,
@@ -270,6 +272,7 @@ pub struct Base {
     pub rel_abunds: Vec<f64>
 }
 
+#[allow(unused)]
 impl Base {
     pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
         if self.totaldepth[sample_idx] == 0 {

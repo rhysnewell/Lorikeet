@@ -48,6 +48,7 @@ pub enum VariantStats {
     }
 }
 
+#[allow(unused)]
 impl VariantStats {
     pub fn new_contig_stats(min: f64, max: f64,
                             contig_end_exclusion: u64) -> VariantStats {
@@ -141,6 +142,7 @@ impl VariantFunctions for VariantStats {
         }
     }
 
+    #[allow(unused)]
     fn len(&mut self) -> usize {
         match self {
             VariantStats::VariantContigStats {
@@ -152,6 +154,7 @@ impl VariantFunctions for VariantStats {
         }
     }
 
+    #[allow(unused)]
     fn add_contig(&mut self,
                   variant_map: Option<&mut HashMap<i64, HashMap<Variant, Base>>>,
                   target_id: i32,
@@ -223,6 +226,7 @@ impl VariantFunctions for VariantStats {
         }
     }
 
+    #[allow(unused)]
     fn calc_error(&mut self, ani: f32) -> usize {
         match self {
             VariantStats::VariantContigStats {
@@ -274,6 +278,7 @@ impl VariantFunctions for VariantStats {
         }
     }
 
+    #[allow(unused)]
     fn polish_contig(&mut self,
                      original_contig: &Vec<u8>,
                      output_prefix: &str) {
@@ -364,6 +369,7 @@ impl VariantFunctions for VariantStats {
         }
     }
 
+    #[allow(unused)]
     fn calc_gene_mutations(&mut self,
                            gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
                            ref_sequence: &Vec<u8>,
