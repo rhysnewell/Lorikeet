@@ -94,3 +94,6 @@ Polymorph produces a tab delimited file containing possible variants and their p
 #### Evolve
 Evolve will produce dN/dS values within coding regions based on the possible variants found along the reference.
 These dN/dS values only take single nucleotide polymorphisms into account but INDELs can still be reported.
+
+#### Summarize
+Produce a SNP summary report for each contig in the provided MAG
