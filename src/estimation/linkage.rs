@@ -284,7 +284,6 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
             let set2 = &var2.reads;
 
             // Add the jaccard's similarity to the hashmap for the two clusters
-//            debug!("Read IDs {:?} {:?}", set1, set2);
             let intersection: HashSet<_> = set1
                 .intersection(&set2).collect();
 

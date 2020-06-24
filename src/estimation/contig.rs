@@ -8,7 +8,6 @@ use estimation::codon_structs::*;
 use estimation::vcfs::process_vcf::*;
 use estimation::bams::process_bam::*;
 use coverm::bam_generator::*;
-use rayon::prelude::*;
 
 use crate::*;
 use std::str;
@@ -53,7 +52,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let coverage_estimators = Arc::new(Mutex::new(coverage_estimators));
     let mut ani = 0.;
 
-
+    // Gff map lists coding regions
     let gff_map = Arc::new(Mutex::new(HashMap::new()));
     let mut codon_table = CodonTable::setup();
 
@@ -61,11 +60,14 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let longreads = match long_readers {
         Some(vec) => {
             // update sample count
+            debug!("Longread bams 1 {:?}=", vec.len());
+
             sample_count += vec.len();
             vec
         },
         _ => vec!(),
     };
+
 
     let variant_matrix = Arc::new(Mutex::new(VariantMatrix::new_matrix(sample_count)));
 
@@ -154,9 +156,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         .sequences().iter().fold(0, |acc, seq| acc + seq.len);
 
     info!("Running SNP calling on {} shortread samples", bam_readers.len());
-    bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+    bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
-                    short_threads,
+                    n_threads,
                     sample_idx,
                     sample_count,
                     &variant_matrix,
@@ -168,9 +170,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     if longreads.len() > 0 && m.is_present("include-longread-svs"){
         long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         info!("Running structural variant detection on {} longread samples", longreads.len());
-        longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
-                        long_threads,
+                        n_threads,
                         sample_idx,
                         sample_count,
                         &variant_matrix,
@@ -178,6 +180,24 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         m,
                         reference_length)
         });
+    } else if longreads.len() > 0 {
+        // We need update the variant matrix anyway
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            let bam_generated = bam_generator.start();
+            let header = bam_generated.header().clone(); // bam header
+            let mut variant_map = HashMap::new();
+
+            let stoit_name = bam_generated.name().to_string();
+            // Longread adjusted sample index
+            let sample_idx_l = sample_count - sample_idx - 1;
+            debug!("Locking variant matrix...");
+            match variant_matrix.try_lock() {
+                Ok(ref mut variant_mat) => variant_mat.
+                    add_sample(stoit_name.clone(), sample_idx_l, &variant_map, &header),
+                Err(err) => panic!("Deadlock on {}", stoit_name),
+            }
+        });
+
     }
 
 
@@ -200,7 +220,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
     // Process Short Read BAMs
     info!("Performing guided variant calling...");
-    bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+    bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_bam(bam_generator,
                     sample_idx,
                     sample_count,
@@ -208,7 +228,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     &coverage_estimators,
                     &variant_matrix,
                     &gff_map,
-                    split_threads,
+                    n_threads,
                     m,
                     output_prefix,
                     coverage_fold,
@@ -230,7 +250,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
     if longreads.len() > 0 {
         long_threads = std::cmp::max(n_threads / longreads.len(), 1);
-        longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_bam(bam_generator,
                         sample_idx,
                         sample_count,
@@ -238,7 +258,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         &coverage_estimators,
                         &variant_matrix,
                         &gff_map,
-                        split_threads,
+                        n_threads,
                         m,
                         output_prefix,
                         coverage_fold,
@@ -265,12 +285,12 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
         let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
 
-
         variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi, anchor_size, anchor_similarity);
         variant_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
+        let window_size = m.value_of("window-size").unwrap().parse().unwrap();
         let variant_matrix = variant_matrix.lock().unwrap();
-        variant_matrix.print_variant_stats(output_prefix);
+        variant_matrix.print_variant_stats(output_prefix, window_size);
     }
 }
 

@@ -405,13 +405,8 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
-   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
-                                         Not recommended if using nanopore long read data.
-   --coverage-fold                       Percentage value of coverage to look above and below
-                                         when calculating variant locations. e.g. if coverage-fold
-                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
-                                         coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.5]
+   --include-longread-svs                Flag indicating whether to use SVIM to calculate structural
+                                         variants.
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -1254,6 +1249,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         "mean",
                         "metabat"])
                     .default_value("trimmed_mean"))
+                .arg(Arg::with_name("window-size")
+                    .long("window-size")
+                    .short("w")
+                    .default_value("1"))
                 .arg(Arg::with_name("epsilon")
                     .long("epsilon")
                     .short("e")
@@ -1278,7 +1277,18 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
-                    .default_value("0"))
+                    .default_value("10"))
+                .arg(Arg::with_name("base-quality-threshold")
+                    .long("base-quality-threshold")
+                    .short("q")
+                    .default_value("13"))
+                .arg(Arg::with_name("min-repeat-entropy")
+                    .long("min-repeat-entropy")
+                    .default_value("1.5"))
+                .arg(Arg::with_name("kmer-size")
+                    .long("kmer-size")
+                    .short("k")
+                    .default_value("4"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))
@@ -1298,8 +1308,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary")
                     .long("include-supplementary"))
-                .arg(Arg::with_name("include-indels")
-                    .long("include-indels"))
+                .arg(Arg::with_name("include-longread-svs")
+                    .long("include-longread-svs"))
                 .arg(Arg::with_name("output-prefix")
                     .long("output-prefix")
                     .short("o")
