@@ -330,7 +330,8 @@ Define mapping(s) (required):
                                          unless --sharded is specified, in which
                                          case they must be read name sorted (e.g.
                                          with samtools sort -n).
-
+   -l, --longread-bam-files <PATH> ..    Path to BAM files(s) generated from longreads.
+                                         Must be reference sorted.
   Or do mapping:
    -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
                                          e.g. concatenated genomes or assembly.
@@ -361,7 +362,7 @@ Define mapping(s) (required):
                                          that usage of this parameter has security
                                          implications if untrusted input is specified.
                                          [default \"\"]
-
+    *Longread mapping is currently unsupported*
 
 Alignment filtering (optional):
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
@@ -394,8 +395,16 @@ Other arguments (optional):
                                          A more thorough description of the different
                                          methods is available at
                                          https://github.com/rhysnewell/lorikeet
+   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
+                                         SV density.
+   --include-longread-svs                Include structural variants produced by SVIM in genotyping
+                                         analysis. Can often overestimate number of variants present.
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
+   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+                                         considered in the variant calling process.
+   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -439,6 +448,8 @@ Define mapping(s) (required):
                                          unless --sharded is specified, in which
                                          case they must be read name sorted (e.g.
                                          with samtools sort -n).
+  -l, --longread-bam-files <PATH> ..     Path to BAM files(s) generated from longreads.
+                                         Must be reference sorted.
 
   Or do mapping:
    -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
@@ -516,10 +527,12 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
-                                         Not recommended if using nanopore long read data.
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
+   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+                                         considered in the variant calling process.
+   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -538,11 +551,6 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
-   --coverage-fold                       Percentage value of coverage to look above and below
-                                         when calculating variant locations. e.g. if coverage-fold
-                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
-                                         coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -1280,7 +1288,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("10"))
                 .arg(Arg::with_name("base-quality-threshold")
                     .long("base-quality-threshold")
-                    .short("q")
                     .default_value("13"))
                 .arg(Arg::with_name("min-repeat-entropy")
                     .long("min-repeat-entropy")
