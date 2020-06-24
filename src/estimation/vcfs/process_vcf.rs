@@ -181,16 +181,12 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "samtools view -h -O SAM {} -@ {} | \
-            samclip --max 10 --ref {} | \
-            samtools sort -@ {} -n -l 0 -T /tmp | \
+            "samtools sort -@ {} -n -l 0 -T /tmp {} | \
             samtools fixmate -@ {} -m - - | \
             samtools sort -@ {} -l 0 -T /tmp | \
             samtools markdup -@ {} -T /tmp -r -s - - > {}",
+            threads-1,
             bam_path,
-            threads-1,
-            index_path,
-            threads-1,
             threads-1,
             threads-1,
             threads-1,
