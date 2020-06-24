@@ -5,7 +5,7 @@
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
 
 
-![](docs/static/images/lorikeet_logo_crop.png)
+![](docs/images/lorikeet_logo_crop.png)
 
 ## Introduction
 
@@ -47,7 +47,7 @@ bash build.sh
 
 ## Usage
 
-Input can either be reads and reference genome, or MAG. Or a BAM file and associated genome.
+Input can either be estimation.reads and reference genome, or MAG. Or a BAM file and associated genome.
 
 ```
 Strain genotyping analysis for metagenomics
@@ -74,9 +74,14 @@ Genotype from bam:
 
 `lorikeet genotype -b input.bam -r input_genome.fna --e-min 0.1 --e-max 0.5 --pts-min 0.1 --pts-max 0.5`
 
-Genotype from short reads and longread bam:
+Genotype from short estimation.reads and longread bam:
 
 `lorikeet genotype -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
+
+## Workflow
+
+![](docs/images/Lorikeet-workflow.png)
+
 
 ## Output
 
