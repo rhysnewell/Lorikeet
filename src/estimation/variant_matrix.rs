@@ -763,12 +763,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     for (var, base) in variants {
                                         match var {
                                             Variant::SNV(_) => {
-
+                                                // TODO: Fix this shit with a zip u lil bitch fite me
                                                 base.truedepth
                                                     .par_iter()
                                                     .enumerate()
-                                                    .for_each(|(index, count)| {
-                                                        if count > &0 {
+                                                    .zip(base.depth.par_iter().enumerate())
+                                                    .for_each(|((index, count_1), (_index_2, count_2))| {
+                                                        if count_1 > &0 || count_2 > &0 {
                                                             let mut snps_cnt_vec
                                                                 = snps_cnt_vec.lock().unwrap();
                                                             snps_cnt_vec[index] += 1;
@@ -785,8 +786,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 base.truedepth
                                                     .par_iter()
                                                     .enumerate()
-                                                    .for_each(|(index, count)| {
-                                                        if count > &0 {
+                                                    .zip(base.depth.par_iter().enumerate())
+                                                    .for_each(|((index, count_1), (_, count_2))| {
+                                                        if count_1 > &0 || count_2 > &0 {
                                                             let mut svs_cnt_vec
                                                                 = svs_cnt_vec.lock().unwrap();
                                                             svs_cnt_vec[index] += 1;

@@ -219,29 +219,31 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
 
     // Process Short Read BAMs
-    info!("Performing guided variant calling...");
-    bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
-        process_bam(bam_generator,
-                    sample_idx,
-                    sample_count,
-                    &reference,
-                    &coverage_estimators,
-                    &variant_matrix,
-                    &gff_map,
-                    n_threads,
-                    m,
-                    output_prefix,
-                    coverage_fold,
-                    &codon_table,
-                    min_var_depth,
-                    contig_end_exclusion,
-                    min, max, ani,
-                    mode,
-                    include_soft_clipping,
-                    include_indels,
-                    &flag_filters,
-                    mapq_threshold, method, false)
-    });
+    if bam_readers.len() > 0 {
+        info!("Performing guided variant calling...");
+        bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            process_bam(bam_generator,
+                        sample_idx,
+                        sample_count,
+                        &reference,
+                        &coverage_estimators,
+                        &variant_matrix,
+                        &gff_map,
+                        n_threads,
+                        m,
+                        output_prefix,
+                        coverage_fold,
+                        &codon_table,
+                        min_var_depth,
+                        contig_end_exclusion,
+                        min, max, ani,
+                        mode,
+                        include_soft_clipping,
+                        include_indels,
+                        &flag_filters,
+                        mapq_threshold, method, false)
+        });
+    }
 
     // Process Long Read BAMs if they are present
     if m.is_present("longread-bam-files") {
