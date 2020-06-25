@@ -222,7 +222,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     // Process Short Read BAMs
     if bam_readers.len() > 0 {
         info!("Performing guided variant calling...");
-        bam_readers.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_bam(bam_generator,
                         sample_idx,
                         sample_count,
@@ -253,7 +253,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     }
     if longreads.len() > 0 {
         long_threads = std::cmp::max(n_threads / longreads.len(), 1);
-        longreads.into_par_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_bam(bam_generator,
                         sample_idx,
                         sample_count,
