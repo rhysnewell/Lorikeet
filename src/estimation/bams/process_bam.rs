@@ -374,7 +374,6 @@ pub fn process_previous_contigs_var(
 
     if last_tid != -2 {
 
-
         let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.setup()
