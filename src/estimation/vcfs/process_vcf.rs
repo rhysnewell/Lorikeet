@@ -90,8 +90,8 @@ pub fn process_vcf<R: NamedBamReader + Send,
     {
         debug!("Locking variant matrix...");
         match variant_matrix.try_lock() {
-            Ok(ref mut variant_mat) => variant_mat.
-            add_sample(stoit_name.clone(), sample_idx, &variant_map, &header),
+            Ok(ref mut variant_mat) =>
+                variant_mat.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header),
             Err(err) => panic!("Deadlock on {}", stoit_name),
         }
 
