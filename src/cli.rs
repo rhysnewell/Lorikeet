@@ -546,6 +546,13 @@ Other arguments (optional):
    --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
                                          The fraction of points needed to be within e-max
                                          to begin border clustering.
+   -n, --minimum-seed-size <INT>         Minimum seed size for initiating fuzzy DBSCAN with. Corresponds
+                                         to the number of variants within the seed. [default: 20]
+   -s, --maximum-seed-similarity <FLOAT> The maximum Jaccard's similarity value allowed between two
+                                         seeds before they get concatenated into one seed. Prevents
+                                         overclustering. [default: 0.97]
+   --minimum-reads-in-link <INT>         Minimum amount of reads required to be shared between two
+                                         variants before they are counted as 'linked'. [default: 5]
    --include-longread-svs                Include structural variants produced by SVIM in genotyping
                                          analysis. Can often overestimate number of variants present.
    --min-covered-fraction FRACTION       Contigs with less coverage than this
@@ -1476,10 +1483,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("trimmed_mean"))
                 .arg(Arg::with_name("e-min")
                     .long("e-min")
-                    .default_value("0.05"))
+                    .default_value("0.01"))
                 .arg(Arg::with_name("e-max")
                     .long("e-max")
-                    .default_value("0.15"))
+                    .default_value("0.05"))
                 .arg(Arg::with_name("pts-min")
                     .long("pts-min")
                     .default_value("10"))
@@ -1510,6 +1517,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("minimum-seed-size")
                     .short("n")
                     .default_value("20"))
+                .arg(Arg::with_name("minimum-reads-in-link")
+                    .long("minimum-reads-in-link")
+                    .default_value("5"))
                 .arg(Arg::with_name("maximum-seed-similarity")
                     .long("maximum-seed-similarity")
                     .short("s")

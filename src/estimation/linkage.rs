@@ -258,7 +258,10 @@ pub fn linkage_clustering_of_clusters(
 
 /// Connects variants into initial clusters based on shared read sets
 #[allow(unused)]
-pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_size: usize, anchor_similarity: f64)
+pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>,
+                                      anchor_size: usize,
+                                      anchor_similarity: f64,
+                                      minimum_reads_in_link: usize)
     -> Vec<fuzzy::Cluster>
 {
     info!("Phasing {} variants...", variant_info.len());
@@ -294,7 +297,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
 //            let jaccard = intersection.len() as f64 /
 //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
 //             Normal Jaccard's Similarity
-            if intersection.len() > 0 {
+            if intersection.len() >= minimum_reads_in_link {
                 // get relative frequencies of each Haplotype
                 let pool_size = union.len() as f64;
                 let x_11 = intersection.len() as f64 / pool_size;
@@ -303,6 +306,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
 
                 // Calculate Linkage D
                 let dis = x_11 - p1 * q1;
+
 
                 let mut links = links.lock().unwrap();
                 // Intialize links for each indices including itself
@@ -333,11 +337,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>, anchor_siz
                 }
             });
 
-//            anchors.par_sort();
-//            anchors.dedup();
-
             // Filter out final links that aren't of size n
-            // 20 is chosen here as a placeholder
             if anchors.len() > anchor_size {
                 s.send(anchors).unwrap();
             }
