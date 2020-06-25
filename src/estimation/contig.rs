@@ -287,8 +287,11 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
         let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
         let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
+        let minimum_reads_in_link: usize = m.value_of("minimum-reads-in-link").unwrap().parse().unwrap();
 
-        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi, anchor_size, anchor_similarity);
+
+        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
+                                      anchor_size, anchor_similarity, minimum_reads_in_link);
         variant_matrix.generate_genotypes(output_prefix);
     } else if mode=="summarize" {
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();
