@@ -337,53 +337,54 @@ impl Base {
         }
     }
 
-    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize, longread: bool) -> Option<Vec<Base>> {
+    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize, longread: bool, min_qual: f32) -> Option<Vec<Base>> {
 
-        let variants = collect_variants(record, false,
-                                        false, None);
-        if variants.len() > 0 {
+        if record.qual() > min_qual {
+            let variants = collect_variants(record, false,
+                                            false, None);
+            if variants.len() > 0 {
 
-            // Separate filters into hashset of filter struct
-            let mut filter_hash = HashSet::new();
-            {
-                let filters = record.filters();
-                let header = record.header();
-                for filter in filters {
-                    filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
+                // Separate filters into hashset of filter struct
+                let mut filter_hash = HashSet::new();
+                {
+                    let filters = record.filters();
+                    let header = record.header();
+                    for filter in filters {
+                        filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
+                    }
                 }
-            }
-            let mut bases = vec!();
-            let mut refr_base_empty = true;
-            for (idx, variant) in variants.iter().enumerate() {
-                // Get elements from record
-                let mut base = Base::new(record.rid().unwrap(),
-                                         record.pos(), record.alleles()[idx].to_vec(),
-                                         sample_count);
+                let mut bases = vec!();
+                let mut refr_base_empty = true;
+                for (idx, variant) in variants.iter().enumerate() {
+                    // Get elements from record
+                    let mut base = Base::new(record.rid().unwrap(),
+                                             record.pos(), record.alleles()[idx].to_vec(),
+                                             sample_count);
 
-                // Populate Base struct with known info tags
-                if longread {
-                    // get relevant flag for SVIM vcf on long read samples
-                    base.variant = variant.clone();
-                    base.depth[sample_idx] = match record.format(b"AD").integer() {
-                        Ok(val) => {
-                            if val[0][1] >= 0 {
-                                val[0][1]
-                            } else {
-                                match record.info(b"SUPPORT").integer() {
-                                    Ok(val) => {
-                                        match val {
-                                            Some(dep) => dep[0],
-                                            _ => 0,
-                                        }
-                                    },
-                                    _ => 0,
+                    // Populate Base struct with known info tags
+                    if longread {
+                        // get relevant flag for SVIM vcf on long read samples
+                        base.variant = variant.clone();
+                        base.depth[sample_idx] = match record.format(b"AD").integer() {
+                            Ok(val) => {
+                                if val[0][1] >= 0 {
+                                    val[0][1]
+                                } else {
+                                    match record.info(b"SUPPORT").integer() {
+                                        Ok(val) => {
+                                            match val {
+                                                Some(dep) => dep[0],
+                                                _ => 0,
+                                            }
+                                        },
+                                        _ => 0,
+                                    }
                                 }
+                            },
+                            _ => {
+                                0
                             }
-                        },
-                        _ => {
-                            0
-                        }
-                    };
+                        };
 
 //                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
 //                        Ok(val) => {
@@ -398,9 +399,9 @@ impl Base {
 //                    let refr_depth = std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
 //                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
 //                    base.freq[sample_idx] = base.af[sample_idx];
-                    let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
-                    base.reads.par_extend(reads);
-                    if refr_base_empty {
+                        let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
+                        base.reads.par_extend(reads);
+                        if refr_base_empty {
 //                        let mut refr_base = Base::new(record.rid().unwrap(),
 //                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
 //                        refr_base.af[sample_idx] = base.af[sample_idx];
@@ -418,19 +419,19 @@ impl Base {
 //                        refr_base.depth[sample_idx] = refr_depth;
 //                        bases.push(refr_base);
 //                        refr_base_empty = false;
-                    }
-                } else {
-                    // Get relevant flag from freebayes output on short read samples
-                    base.variant = variant.clone();
-                    base.filters[sample_idx] = filter_hash.clone();
+                        }
+                    } else {
+                        // Get relevant flag from freebayes output on short read samples
+                        base.variant = variant.clone();
+                        base.filters[sample_idx] = filter_hash.clone();
 //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                    base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
-                    base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
+                        base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
+                        base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
 //                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
 
-                    base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
+                        base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
 
-                    if refr_base_empty {
+                        if refr_base_empty {
 //                        let mut refr_base = Base::new(record.rid().unwrap(),
 //                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
 //                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
@@ -440,12 +441,15 @@ impl Base {
 //
 //                        bases.push(refr_base);
 //                        refr_base_empty = false;
-                    }
-                };
+                        }
+                    };
 
-                bases.push(base);
-            };
-            Some(bases)
+                    bases.push(base);
+                };
+                Some(bases)
+            } else {
+                None
+            }
         } else {
             None
         }
