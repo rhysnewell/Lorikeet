@@ -14,7 +14,6 @@ use std::path::Path;
 use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
-use std::sync::{Arc, Mutex};
 
 #[allow(unused)]
 pub fn process_vcf<R: NamedBamReader + Send,
@@ -23,7 +22,7 @@ pub fn process_vcf<R: NamedBamReader + Send,
     split_threads: usize,
     sample_idx: usize,
     sample_count: usize,
-    variant_matrix: &Arc<Mutex<VariantMatrix>>,
+    variant_matrix: &mut VariantMatrix,
     longread: bool,
     m: &clap::ArgMatches,
     reference_length: u64) {
@@ -58,6 +57,7 @@ pub fn process_vcf<R: NamedBamReader + Send,
         sample_idx = sample_count - sample_idx - 1;
     }
 
+    let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
     info!("Collecting VCF records for sample {}", sample_idx);
     vcf_reader.records().into_iter().for_each(|vcf_record| {
         let mut vcf_record = vcf_record.unwrap();
@@ -70,7 +70,8 @@ pub fn process_vcf<R: NamedBamReader + Send,
             let base_option = Base::from_vcf_record(&mut vcf_record,
                                                     sample_count,
                                                     sample_idx,
-                                                    longread);
+                                                    longread,
+                                                    min_qual);
             match base_option {
 
                 Some(bases) => {
@@ -86,16 +87,7 @@ pub fn process_vcf<R: NamedBamReader + Send,
             panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
         }
     });
-
-    {
-        debug!("Locking variant matrix...");
-        match variant_matrix.try_lock() {
-            Ok(ref mut variant_mat) =>
-                variant_mat.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header),
-            Err(err) => panic!("Deadlock on {}", stoit_name),
-        }
-
-    }
+    variant_matrix.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header);
 
 }
 

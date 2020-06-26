@@ -14,7 +14,6 @@ use std::fs::File;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use bio::io::gff::Record;
-use std::sync::{Arc, Mutex};
 
 
 /// Process all reads in a BAM file
@@ -24,10 +23,10 @@ pub fn process_bam<R: NamedBamReader + Send,
     bam_generator: G,
     sample_idx: usize,
     sample_count: usize,
-    reference: &Arc<Mutex<bio::io::fasta::IndexedReader<File>>>,
-    coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
-    variant_matrix: &Arc<Mutex<VariantMatrix>>,
-    gff_map: &Arc<Mutex<HashMap<String, Vec<Record>>>>,
+    reference: &mut bio::io::fasta::IndexedReader<File>,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
+    variant_matrix: &mut VariantMatrix,
+    gff_map: &mut HashMap<String, Vec<Record>>,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -112,19 +111,19 @@ pub fn process_bam<R: NamedBamReader + Send,
                         ani,
                         last_tid,
                         ups_and_downs,
-                        &coverage_estimators,
+                        coverage_estimators,
                         min, max,
                         total_indels_in_current_contig as usize,
                         contig_end_exclusion,
                         min_var_depth,
                         contig_len,
                         contig_name,
-                        &variant_matrix,
+                        variant_matrix,
                         ref_seq,
                         sample_idx,
                         method,
                         total_mismatches,
-                        &gff_map,
+                        gff_map,
                         &codon_table,
                         coverage_fold,
                         num_mapped_reads_in_current_contig,
@@ -145,7 +144,6 @@ pub fn process_bam<R: NamedBamReader + Send,
 //                    nuc_freq = HashMap::new();
 //                    indels = HashMap::new();
 
-                let mut reference = reference.lock().unwrap();
                 match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
                     Ok(reference) => reference,
                     Err(e) => {
@@ -167,8 +165,6 @@ pub fn process_bam<R: NamedBamReader + Send,
                 num_mapped_reads_in_current_contig += 1;
             }
 
-            // Lock variant matrix to collect variants
-            let mut variant_matrix = variant_matrix.lock().unwrap();
             // for each chunk of the cigar string
             let mut cursor: usize = record.pos() as usize;
             let quals = record.qual();
@@ -305,19 +301,19 @@ pub fn process_bam<R: NamedBamReader + Send,
             ani,
             last_tid,
             ups_and_downs,
-            &coverage_estimators,
+            coverage_estimators,
             min, max,
             total_indels_in_current_contig as usize,
             contig_end_exclusion,
             min_var_depth,
             contig_len,
             contig_name,
-            &variant_matrix,
+            variant_matrix,
             ref_seq,
             sample_idx,
             method,
             total_mismatches,
-            &gff_map,
+            gff_map,
             &codon_table,
             coverage_fold,
             num_mapped_reads_in_current_contig,
@@ -351,19 +347,19 @@ pub fn process_previous_contigs_var(
     ani: f32,
     last_tid: i32,
     ups_and_downs: Vec<i32>,
-    coverage_estimators: &Arc<Mutex<&mut Vec<CoverageEstimator>>>,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32, max: f32,
     total_indels_in_current_contig: usize,
     contig_end_exclusion: u64,
     min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
-    variant_matrix: &Arc<Mutex<VariantMatrix>>,
+    variant_matrix: &mut VariantMatrix,
     ref_sequence: Vec<u8>,
     sample_idx: usize,
     method: &str,
     total_mismatches: u64,
-    gff_map: &Arc<Mutex<HashMap<String, Vec<Record>>>>,
+    gff_map: &mut HashMap<String, Vec<Record>>,
     codon_table: &CodonTable,
     coverage_fold: f32,
     num_mapped_reads_in_current_contig: u64,
@@ -374,7 +370,6 @@ pub fn process_previous_contigs_var(
 
     if last_tid != -2 {
 
-        let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.setup()
         });
@@ -393,7 +388,6 @@ pub fn process_previous_contigs_var(
                                                                 max as f64,
                                                                 contig_end_exclusion);
 
-        let mut variant_matrix = variant_matrix.lock().unwrap();
 
         // adds contig info to variant struct
         variant_struct.add_contig(variant_matrix.variants_of_contig(last_tid),
@@ -437,14 +431,13 @@ pub fn process_previous_contigs_var(
 
             },
             "summarize" | "genotype" => {
-                // calculates minimum number of genotypes possible for each variant location
+                // Add samples contig information to main struct
                 variant_matrix.add_contig(variant_struct,
                                           sample_count,
                                           sample_idx,
                                           ref_sequence);
             },
             "evolve" => {
-                let gff_map = gff_map.lock().unwrap();
                 variant_struct.calc_gene_mutations(&*gff_map, &ref_sequence, codon_table);
             },
             "polish" => {

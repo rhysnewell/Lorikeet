@@ -506,7 +506,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                            minimum_reads_in_link);
 
                 // run fuzzy DBSCAN
-                info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
+                if links.len() > 0 {
+                    info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
+                } else {
+                    warn!("No initial clusters formed, running fuzzyDBSCAN with no seeds. Perhaps lower linkage thresholds?")
+                }
                 let clusters = fuzzy_scanner.cluster(
                     &variant_info[..],
                     links);

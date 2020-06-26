@@ -152,8 +152,10 @@ Other arguments (optional):
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
+   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
+   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                         analysis. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -284,8 +286,10 @@ Other arguments (optional):
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth               Minimum depth threshold value a variant must occur at
+   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
+   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                         analysis. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -406,8 +410,12 @@ Other arguments (optional):
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
+   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
+   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                         analysis. [default: 10]
+   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                         analysis. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
                                          'dense' for species-by-site.
                                          [default: dense]
@@ -534,8 +542,10 @@ Other arguments (optional):
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth      Minimum depth threshold value a variant must occur at
+   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
+   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                         analysis. [default: 10]
    --e-min                               Minimum epsilon value used in fuzzyDBSCAN algorithm.
                                          The minimum distance between two points required for clustering.
    --e-max                               Maximum epsilon value used in fuzzyDBSCAN algorithm.
@@ -903,6 +913,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-variant-depth")
                     .short("f")
                     .default_value("10"))
+                .arg(Arg::with_name("min-variant-quality")
+                    .long("min-variant-quality")
+                    .default_value("10"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
                     .short("q")
@@ -1081,6 +1094,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("min-variant-quality")
+                    .long("min-variant-quality")
                     .default_value("10"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
@@ -1285,6 +1301,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("min-variant-quality")
+                    .long("min-variant-quality")
                     .default_value("10"))
                 .arg(Arg::with_name("strain-ani")
                     .long("strain-ani")
@@ -1505,6 +1524,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("min-variant-quality")
+                    .long("min-variant-quality")
                     .default_value("10"))
                 .arg(Arg::with_name("strain-ani")
                     .long("strain-ani")
@@ -1800,6 +1822,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("min-variant-depth")
                     .long("min-variant-depth")
                     .short("f")
+                    .default_value("10"))
+                .arg(Arg::with_name("min-variant-quality")
+                    .long("min-variant-quality")
                     .default_value("10"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
