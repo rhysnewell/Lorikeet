@@ -56,8 +56,9 @@ pub fn process_bam<R: NamedBamReader + Send,
 //        AlignmentProperties::default(InsertSize::default());
 
     let stoit_name = bam_generated.name().to_string();
-
+    debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
+    debug!("Managed to set threads.");
 
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
@@ -373,18 +374,18 @@ pub fn process_previous_contigs_var(
 
     if last_tid != -2 {
 
-        coverage_estimators.par_iter_mut().for_each(|estimator|{
+        coverage_estimators.iter_mut().for_each(|estimator|{
             estimator.setup()
         });
 
-        coverage_estimators.par_iter_mut().for_each(|estimator|{
+        coverage_estimators.iter_mut().for_each(|estimator|{
             estimator.add_contig(
                 &ups_and_downs,
                 num_mapped_reads_in_current_contig,
                 total_mismatches)
         });
 
-        let coverages: Vec<f64> = coverage_estimators.par_iter_mut()
+        let coverages: Vec<f64> = coverage_estimators.iter_mut()
             .map(|estimator| estimator.calculate_coverage(&vec![0]) as f64).collect();
 
         let mut variant_struct = VariantStats::new_contig_stats(min as f64,
@@ -435,6 +436,7 @@ pub fn process_previous_contigs_var(
             },
             "summarize" | "genotype" => {
                 // Add samples contig information to main struct
+                debug!("Adding in new info for contig...");
                 variant_matrix.add_contig(variant_struct,
                                           sample_count,
                                           sample_idx,

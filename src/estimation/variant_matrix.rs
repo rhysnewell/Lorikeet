@@ -157,21 +157,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                     // Apppend the sample index to each variant abundance
                     // Initialize the variant position index
                     // Also turns out to be the total number of variant positions
-//                    for pos in (0..target_len).into_iter() {
-//                        let position_variants = contig_variants.entry(pos as i64)
-//                            .or_insert(HashMap::new());
-//                        if variants.contains_key(&(pos as i64)) {
-//                            let abundance_map = variants.get(&(pos as i64)).unwrap();
-//                            for (variant, base_info) in abundance_map.iter() {
-////                                info!("{:?}", base_info);
-//
-//                                let sample_map = position_variants.entry(variant.clone())
-//                                    .or_insert(base_info.clone());
-//                                sample_map.combine_sample(base_info, sample_idx, 0);
-//                            }
-//                        }
-//                    }
-
                     for (pos, abundance_map) in variants.iter() {
                         let position_variants = contig_variants.entry(*pos as i64)
                             .or_insert(HashMap::new());

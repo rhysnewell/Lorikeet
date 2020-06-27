@@ -33,8 +33,9 @@ pub fn process_vcf<R: NamedBamReader + Send,
 
     let stoit_name = bam_generated.name().to_string();
 
-
+    debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
+    debug!("Managed to set threads.");
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
