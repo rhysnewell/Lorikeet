@@ -1,6 +1,5 @@
 use std::collections::{HashMap};
 use std::str;
-use std::sync::{Arc, Mutex};
 use std::io::prelude::*;
 use rayon::prelude::*;
 use estimation::codon_structs::*;
@@ -191,35 +190,8 @@ impl VariantFunctions for VariantStats {
                     _ => HashMap::new(),
                 };
 
-                let variant_count_safe = Arc::new(Mutex::new(vec![0.; ups_and_downs.len()]));
-                *depth = vec![0; ups_and_downs.len()];
-                let mut cumulative_sum = 0;
-                for (pos, current) in ups_and_downs.iter().enumerate() {
-                    cumulative_sum += *current;
-                    depth[pos] = cumulative_sum;
-                }
-
-                // Calculate how many reads have variant at each position
-                // to go into linear regression predicting read error rate
-                depth.par_iter_mut().enumerate().for_each(|(pos, d)| {
-                    let mut variant_count_safe = variant_count_safe.lock().unwrap();
-                    let mut var_set = match variants.get(&(pos as i64)) {
-                        Some(set) => set.to_owned(),
-                        None => HashMap::new(),
-                    };
-                    // Add depth of variant to count file if variant is present
-                    for (var, base) in var_set.iter_mut() {
-                        let var_depth = match base.variant {
-                            Variant::None => 0,
-                            _ => base.depth.par_iter().sum(),
-                        };
-                        if var_depth != 0 {
-                            variant_count_safe[pos] += var_depth as f64;
-                        }
-                    }
-                });
-
-                *variant_count = variant_count_safe.lock().unwrap().to_vec();
+                // Cumulative sum of ups and downs vec to get depth
+                *depth = ups_and_downs.par_iter().fold_with(0, |acc, x| acc + x ).collect();
 
                 debug!("new contig added {} with coverage {} and variance {}", tid, coverage, variance);
             }

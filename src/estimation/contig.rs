@@ -141,12 +141,6 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
         }
     }
-//    let read_cnt_id: Arc<Mutex<i64>> = Arc::new(Mutex::new(0));
-//    let read_to_id = Arc::new(Mutex::new(HashMap::new()));
-    // Loop through bam generators in parallel
-    let split_threads = std::cmp::max(n_threads / sample_count, 1);
-    let short_threads = std::cmp::max(n_threads / bam_readers.len(), 1);
-    let mut long_threads = 1;
 
     // Get the total amound of bases in reference using the index
     let reference_length = bio::io::fasta::Index::with_fasta_file(
@@ -166,7 +160,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     });
 
     if longreads.len() > 0 && m.is_present("include-longread-svs"){
-        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+//        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         info!("Running structural variant detection on {} longread samples", longreads.len());
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
@@ -224,7 +218,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         &mut coverage_estimators,
                         &mut variant_matrix,
                         &mut gff_map,
-                        split_threads,
+                        n_threads,
                         m,
                         output_prefix,
                         coverage_fold,
@@ -246,7 +240,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         longreads = generate_named_bam_readers_from_bam_files(longreads_path);
     }
     if longreads.len() > 0 {
-        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+//        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_bam(bam_generator,
                         sample_idx,
@@ -255,7 +249,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         &mut coverage_estimators,
                         &mut variant_matrix,
                         &mut gff_map,
-                        split_threads,
+                        n_threads,
                         m,
                         output_prefix,
                         coverage_fold,
