@@ -99,6 +99,10 @@ pub fn process_bam<R: NamedBamReader + Send,
 
             // if reference has changed, print the last record
             if tid != last_tid {
+                if tid < last_tid {
+                    error!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                    panic!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                }
                 if last_tid != -2 {
                     let contig_len = header.target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
@@ -179,21 +183,20 @@ pub fn process_bam<R: NamedBamReader + Send,
                             match variant_matrix.variants(tid, cursor as i64) {
                                 Some(current_variants) => {
                                     let read_char = record.seq()[qpos];
-                                    let refr_char = ref_seq[cursor as usize];
                                     current_variants.par_iter_mut().for_each(|(variant, base)| {
                                         match variant {
                                             Variant::SNV(alt) => {
-                                                if *alt != refr_char && *alt == read_char {
+                                                if *alt == read_char {
                                                     base.assign_read(record.qname().to_vec());
                                                     base.truedepth[sample_idx] += 1;
                                                 }
                                             },
-                                            Variant::None => {
-                                                if refr_char == read_char {
-                                                    base.assign_read(record.qname().to_vec());
-                                                    base.truedepth[sample_idx] += 1;
-                                                }
-                                            },
+//                                            Variant::None => {
+//                                                if refr_char == read_char {
+//                                                    base.assign_read(record.qname().to_vec());
+//                                                    base.truedepth[sample_idx] += 1;
+//                                                }
+//                                            },
                                             _ => {}
                                         }
                                     });
