@@ -1087,7 +1087,7 @@ fn get_streamed_bam_readers<'a>(
                     p.read1,
                     p.read2,
                     p.read_format.clone(),
-                    std::cmp::max(p.threads / n_samples, 1),
+                    p.threads,
                     bam_file_cache(p.read1).as_ref().map(String::as_ref),
                     discard_unmapped,
                     p.mapping_options,

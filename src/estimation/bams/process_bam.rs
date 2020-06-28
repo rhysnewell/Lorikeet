@@ -374,11 +374,11 @@ pub fn process_previous_contigs_var(
 
     if last_tid != -2 {
 
-        coverage_estimators.iter_mut().for_each(|estimator|{
+        coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.setup()
         });
 
-        coverage_estimators.iter_mut().for_each(|estimator|{
+        coverage_estimators.par_iter_mut().for_each(|estimator|{
             estimator.add_contig(
                 &ups_and_downs,
                 num_mapped_reads_in_current_contig,
