@@ -58,6 +58,8 @@ pub enum VariantType {
     Insertion(Option<Range<u32>>),
     #[strum(serialize = "DEL")]
     Deletion(Option<Range<u32>>),
+    #[strum(serialize = "INV")]
+    Inversion(Option<Range<u32>>),
     #[strum(serialize = "SNV")]
     SNV,
     #[strum(serialize = "MNV")]
@@ -71,6 +73,7 @@ impl From<&str> for VariantType {
         match string {
             "INS" => VariantType::Insertion(None),
             "DEL" => VariantType::Deletion(None),
+            "INV" => VariantType::Inversion(None),
             "SNV" => VariantType::SNV,
             "REF" => VariantType::None,
             _ => panic!("bug: given string does not describe a valid variant type"),
@@ -80,7 +83,8 @@ impl From<&str> for VariantType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub enum SVType {
-    Dup
+    DUP,
+    INV,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
@@ -95,6 +99,7 @@ pub struct SV {
 pub enum Variant {
     Deletion(u32),
     Insertion(Vec<u8>),
+    Inversion(Vec<u8>),
     SNV(u8),
     MNV(Vec<u8>),
     SV(SV),
@@ -108,6 +113,7 @@ impl Variant {
         match self {
             &Variant::Deletion(_) => true,
             &Variant::Insertion(_) => true,
+            &Variant::Inversion(_) => true,
             &Variant::SV(_) => true,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
@@ -133,6 +139,7 @@ impl Variant {
         match self {
             &Variant::Deletion(_) => true,
             &Variant::Insertion(_) => true,
+            &Variant::Inversion(_) => false,
             &Variant::SV(_) => false,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
@@ -148,8 +155,12 @@ impl Variant {
             (&Variant::Insertion(_), &VariantType::Insertion(Some(ref range))) => {
                 self.len() >= range.start && self.len() < range.end
             }
+            (&Variant::Inversion(_), &VariantType::Inversion(Some(ref range))) => {
+                self.len() >= range.start && self.len() < range.end
+            }
             (&Variant::Deletion(_), &VariantType::Deletion(None)) => true,
             (&Variant::Insertion(_), &VariantType::Insertion(None)) => true,
+            (&Variant::Inversion(_), &VariantType::Inversion(None)) => true,
             (&Variant::SNV(_), &VariantType::SNV) => true,
             (&Variant::MNV(_), &VariantType::MNV) => true,
             (&Variant::None, &VariantType::None) => true,
@@ -160,7 +171,7 @@ impl Variant {
     pub fn end(&self, start: u32) -> u32 {
         match self {
             &Variant::Deletion(length) => start + length,
-            &Variant::Insertion(_) => start + 1, // end of insertion is the next regular base
+            &Variant::Insertion(_) | &Variant::Inversion(_) => start + 1, // end of insertion is the next regular base
             &Variant::SV(sv) => sv.end,
             &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32,
@@ -170,7 +181,7 @@ impl Variant {
     pub fn centerpoint(&self, start: u32) -> u32 {
         match self {
             &Variant::Deletion(length) => start + length / 2,
-            &Variant::Insertion(_) => start, // end of insertion is the next regular base
+            &Variant::Insertion(_) | &Variant::Inversion(_) => start, // end of insertion is the next regular base
             &Variant::SV(sv) => (sv.start + sv.len) / 2,
             &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32 / 2,
@@ -180,7 +191,8 @@ impl Variant {
     pub fn len(&self) -> u32 {
         match self {
             &Variant::Deletion(l) => l,
-            &Variant::Insertion(ref s) => s.len() as u32,
+            &Variant::Insertion(ref s)
+            | &Variant::Inversion(ref s) => s.len() as u32,
             &Variant::SV(sv) => sv.len,
             &Variant::SNV(_) => 1,
             &Variant::MNV(ref alt) => alt.len() as u32,
@@ -469,6 +481,7 @@ pub fn collect_variants(
 ) -> Vec<Variant> {
     let pos = record.pos();
     let svlens = match record.info(b"SVLEN").integer() {
+        // Gets value from SVLEN tag in VCF record
         Ok(Some(svlens)) => Some(
             svlens
                 .into_iter()
@@ -519,6 +532,11 @@ pub fn collect_variants(
             && &ref_allele[..alt_allele.len()] == alt_allele)
     };
 
+    let is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+        alt_allele == b"<INV>"
+            || (ref_allele.len() == alt_allele.len())
+    };
+
     let variants = if let Some(svtype) = svtype {
         vec![if omit_indels {
             Variant::None
@@ -540,6 +558,29 @@ pub fn collect_variants(
                 if is_valid_insertion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
                     Variant::Insertion(
                         alt_allele[ref_allele.len()..].to_owned(),
+                    )
+                } else {
+                    Variant::None
+                }
+            }
+        } else if svtype == b"INV"{
+            // get sequence
+            let alleles = record.alleles();
+            if alleles.len() > 2 {
+                panic!("SVTYPE=INS but more than one ALT allele".to_owned());
+            }
+            let ref_allele = alleles[0];
+            let alt_allele = alleles[1];
+
+            if alt_allele == b"<INV>" {
+                // don't support inversions without exact sequence
+                Variant::None
+            } else {
+                let len = alt_allele.len();
+
+                if is_valid_inversion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
+                    Variant::Inversion(
+                        alt_allele.to_owned(),
                     )
                 } else {
                     Variant::None

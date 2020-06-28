@@ -247,9 +247,9 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
 
         let cmd_string = format!(
             "set -e -o pipefail; svim alignment --read_names --skip_genotyping \
-            --min_mapq {} --minimum_depth {} --sequence_alleles {} {} {}",
+            --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
+            --min_mapq {} --sequence_alleles {} {} {}",
             m.value_of("mapq-threshold").unwrap(),
-            m.value_of("min-variant-depth").unwrap(),
             svim_path,
             bam_path,
             m.value_of("reference").unwrap());

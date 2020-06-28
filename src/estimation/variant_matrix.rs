@@ -645,9 +645,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         match max_var {
                                             Variant::Deletion(size) => {
                                                 // Skip the next n bases but rescue the reference prefix
-
                                                 skip_n = size - 1;
                                                 skip_cnt = 0;
+                                                contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                // If we had the sequence we would rescure first base like this
 //                                                let first_byte = max_var.as_bytes()[0];
 //                                                contig = contig + str::from_utf8(
 //                                                    &[first_byte]).unwrap();
@@ -655,10 +656,21 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             },
                                             Variant::Insertion(alt) => {
 
-                                                // Insertions have a reference prefix that needs to be removed
+                                                // Prefix is removed during VCF record collection
                                                 let removed_first_base = str::from_utf8(
-                                                    &alt[1..]).unwrap();
+                                                    &alt).unwrap();
                                                 contig = contig + removed_first_base;
+                                                variations += 1;
+                                            },
+                                            Variant::Inversion(alt) => {
+                                                // Skip the next n bases but rescue the reference prefix
+                                                skip_n = alt.len() as u32 - 1;
+                                                skip_cnt = 0;
+                                                // Inversions don't have a first base prefix, so take
+                                                // wholes tring
+                                                let inversion = str::from_utf8(
+                                                    &alt).unwrap();
+                                                contig = contig + inversion;
                                                 variations += 1;
                                             },
                                             Variant::None => {
