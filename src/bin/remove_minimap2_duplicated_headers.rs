@@ -37,4 +37,5 @@ fn main() {
             }
         }
     }
+    debug!("Finished Removing dup headers");
 }

@@ -43,7 +43,7 @@ pub fn process_vcf<R: NamedBamReader + Send,
     let mut variant_map = HashMap::new();
 
     // Write Bam Early and then reread in later
-    bam_generated.finish();
+//    bam_generated.finish();
 
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
@@ -127,7 +127,7 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         return generate_vcf(bam_path, m, threads, longread, reference_length)
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
-        let cache = m.value_of("outdir").unwrap().to_string() + "/";
+        let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
         let stoit_name: Vec<&str> = stoit_name.split("/").collect();
         let stoit_name = stoit_name.join(".");
         let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");

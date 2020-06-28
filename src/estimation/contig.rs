@@ -8,6 +8,7 @@ use estimation::codon_structs::*;
 use estimation::vcfs::process_vcf::*;
 use estimation::bams::process_bam::*;
 use coverm::bam_generator::*;
+use bird_tool_utils::command;
 
 use crate::*;
 use std::str;
@@ -199,12 +200,30 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
 
     } else {
-        let cache = m.value_of("outdir").unwrap().to_string() + "/*.bam";
+        let ref_name = Path::new(m.value_of("reference").unwrap())
+            .file_name().unwrap()
+            .to_str().unwrap();
+        let cache = format!("{}/{}*.bam",
+                            m.value_of("bam-file-cache-directory").unwrap().to_string(),
+                            ref_name);
         let bam_paths = glob(&cache).expect("Failed to read cache")
             .map(|p| p.expect("Failed to read cached bam path")
                 .to_str().unwrap().to_string()).collect::<Vec<String>>();
         let bam_paths = bam_paths.iter().map(|p| &**p).collect::<Vec<&str>>();
+        let bam_cnts = bam_paths.len();
         bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
+        if m.value_of("bam-file-cache-directory").unwrap() == "/tmp" {
+            info!("Removing {} cached BAM files...", bam_cnts);
+            let remove_directory_cmd = format!("rm {}", cache);
+            command::finish_command_safely(
+                std::process::Command::new("bash")
+                    .arg("-c")
+                    .arg(remove_directory_cmd)
+                    .spawn()
+                    .expect("Unable to remove cached BAM files..."),
+                "rm"
+            );
+        }
     }
 
     // Process Short Read BAMs
