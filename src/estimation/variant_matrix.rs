@@ -662,11 +662,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 contig = contig + removed_first_base;
                                                 variations += 1;
                                             },
-                                            Variant::Inversion(alt) => {
-                                                // Skip the next n bases but rescue the reference prefix
+                                            Variant::Inversion(alt) | Variant::MNV(alt) => {
+                                                // Skip the next n bases
                                                 skip_n = alt.len() as u32 - 1;
                                                 skip_cnt = 0;
-                                                // Inversions don't have a first base prefix, so take
+                                                // Inversions and MNVs don't have a first base prefix, so take
                                                 // wholes tring
                                                 let inversion = str::from_utf8(
                                                     &alt).unwrap();
@@ -675,14 +675,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             },
                                             Variant::None => {
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
-                                            },
-                                            Variant::MNV(alt) => {
-                                                skip_n = alt.len() as u32 - 1;
-                                                skip_cnt = 0;
-                                                let removed_first_base = str::from_utf8(
-                                                    &alt[1..]).unwrap();
-                                                contig = contig + removed_first_base;
-                                                variations += 1;
                                             },
                                             Variant::SNV(alt) => {
 
