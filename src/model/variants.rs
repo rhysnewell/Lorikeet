@@ -571,7 +571,7 @@ pub fn collect_variants(
             }
             let ref_allele = alleles[0];
             let alt_allele = alleles[1];
-
+            debug!("Inversion being collected...");
             if alt_allele == b"<INV>" {
                 // don't support inversions without exact sequence
                 Variant::None
@@ -658,9 +658,6 @@ pub fn collect_variants(
                     } else {
                         variant_vec.push(Variant::SNV(alt_allele[0]))
                     }
-                } else if alt_allele.len() == ref_allele.len() {
-                    // MNV
-                    variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                 } else {
                     let indel_len =
                         (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
@@ -675,6 +672,10 @@ pub fn collect_variants(
                     } else if is_valid_insertion_alleles(ref_allele, alt_allele) {
                         variant_vec.push(Variant::Insertion(
                             alt_allele[ref_allele.len()..].to_owned(),
+                        ))
+                    } else if is_valid_inversion_alleles(ref_allele, alt_allele) {
+                        variant_vec.push(Variant::Inversion(
+                            alt_allele[..].to_owned(),
                         ))
                     } else {
                         variant_vec.push(Variant::MNV(alt_allele.to_vec()))
