@@ -15,5 +15,5 @@ LIBRARY_PATH=$PREFIX/lib \
 LIBCLANG_PATH=$PREFIX/lib/libclang.so \
 cargo install --force --root $PREFIX
 
-# Backup install
-#cp target/release/lorikeet $CONDA_PREFIX/bin/ && cp target/release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin/
+# move Rscript
+cp src/snp_density_plots.R $CONDA_PREFIX/bin/

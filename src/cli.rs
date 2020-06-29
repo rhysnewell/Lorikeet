@@ -575,6 +575,9 @@ Other arguments (optional):
                                          [default: 0.05]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
+   --plot                                Produce SNP density plots
+   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
+                                         SV density.
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
@@ -1310,10 +1313,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("a"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
-                    .short("q")
                     .default_value("10"))
                 .arg(Arg::with_name("base-quality-threshold")
                     .long("base-quality-threshold")
+                    .short("q")
                     .default_value("13"))
                 .arg(Arg::with_name("min-repeat-entropy")
                     .long("min-repeat-entropy")
@@ -1570,6 +1573,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only")
                     .long("proper-pairs-only"))
+                .arg(Arg::with_name("window-size")
+                    .long("window-size")
+                    .short("w")
+                    .default_value("1"))
+                .arg(Arg::with_name("plot")
+                    .long("plot"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
                 .arg(Arg::with_name("include-longread-svs")
