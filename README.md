@@ -26,7 +26,7 @@ conda activate lorikeet
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
 freebayes=1.3.2 bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing && \ 
+fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 cargo install lorikeet-genome
 ```
@@ -37,7 +37,7 @@ paths in the your conda environment if they can't properly be found on your syst
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
 freebayes=1.3.2 bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing && \ 
+fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 git clone https://github.com/rhysnewell/Lorikeet/git && \ 
 cd Lorikeet && \ 

@@ -11,6 +11,7 @@ use std::fs::File;
 use dbscan::fuzzy;
 use itertools::{Itertools, izip};
 use rust_htslib::bam::HeaderView;
+use bird_tool_utils::command;
 
 
 #[derive(Debug)]
@@ -723,6 +724,7 @@ impl VariantMatrixFunctions for VariantMatrix {
             } => {
                 let file_name = output_prefix.to_string()
                     + &".tsv".to_owned();
+                let snp_locs = format!("{}_snp_locations.tsv", output_prefix);
                 let file_path = Path::new(&file_name);
                 let mut file_open = match File::create(file_path) {
                     Ok(fasta) => fasta,
@@ -731,46 +733,65 @@ impl VariantMatrixFunctions for VariantMatrix {
                         std::process::exit(1)
                     },
                 };
+
+                let snp_loc_path = Path::new(&snp_locs);
+                let mut snp_loc_open = match File::create(snp_loc_path) {
+                    Ok(tsv) => tsv,
+                    Err(e) => {
+                        println!("Cannot create file {:?}", e);
+                        std::process::exit(1)
+                    },
+                };
+
+                // Snp density summary start
                 write!(file_open, "contigName\tcontigLen").unwrap();
+
+                // Snp location start
+                write!(snp_loc_open, "SNP\tchr\tpos").unwrap();
                 debug!("Sample Names {:?}", sample_names);
                 for sample_name in sample_names.iter(){
                     write!(file_open,
                            "\t{}.snvsPer{}kb\t{}.svsPer{}kb\t{}.snvCount\t{}.svCount",
-                           &sample_name, &window_size, &sample_name, &window_size, &sample_name, &sample_name).unwrap();
+                           &sample_name, &window_size, &sample_name, &window_size,
+                           &sample_name, &sample_name).unwrap();
+                    write!(snp_loc_open, "\t{}_depth", &sample_name).unwrap();
                 }
                 write!(file_open, "\n").unwrap();
+                write!(snp_loc_open, "\n").unwrap();
+
                 for (tid, contig_name) in target_names.iter() {
                     let contig_len =  target_lengths[tid];
                     write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
                     match all_variants.get(tid) {
                         Some(variants_in_contig) => {
                             // Set up channels that receive a vector of values for each sample
-                            let snps_cnt_vec = Mutex::new(vec![0; sample_names.len()]);
+                            let mut snps_cnt_vec = vec![0; sample_names.len()];
                             let svs_cnt_vec = Mutex::new(vec![0; sample_names.len()]);
 //                            let (snp_freq_s, snp_freq_r) = channel();
 //                            let (sv_freq_s, sv_freq_r) = channel();
 //                            let (snp_std_s, snp_std_r) = channel();
 //                            let (sv_std_s, sv_std_r) = channel();
                             let window = contig_len / window_size;
-                            variants_in_contig.par_iter()
-                                .for_each(|(position, variants)| {
+                            variants_in_contig.iter().enumerate()
+                                .for_each(|(index, (position, variants))| {
                                     // Get how many alleles are present at loci
                                     let alleles = variants.len();
                                     for (var, base) in variants {
                                         match var {
                                             Variant::SNV(_) => {
-                                                // TODO: Fix this shit with a zip u lil bitch fite me
+                                                write!(snp_loc_open, "SNP{}\t{}\t{}",
+                                                       index, contig_name, position).unwrap();
                                                 base.truedepth
-                                                    .par_iter()
+                                                    .iter()
                                                     .enumerate()
-                                                    .zip(base.depth.par_iter().enumerate())
+                                                    .zip(base.depth.iter().enumerate())
                                                     .for_each(|((index, count_1), (_index_2, count_2))| {
+                                                        write!(snp_loc_open, "\t{}", count_1);
                                                         if count_1 > &0 || count_2 > &0 {
-                                                            let mut snps_cnt_vec
-                                                                = snps_cnt_vec.lock().unwrap();
                                                             snps_cnt_vec[index] += 1;
                                                         }
-                                                    })
+                                                    });
+                                                write!(snp_loc_open, "\n").unwrap();
 
                                             },
                                             Variant::None => {
@@ -795,7 +816,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     };
 
                                 });
-                            let snps_cnt_vec = snps_cnt_vec.lock().unwrap().clone();
                             let svs_cnt_vec = svs_cnt_vec.lock().unwrap().clone();
                             let snps_per_win: Vec<_> = snps_cnt_vec.iter().map(|count| *count as f64 / window).collect();
                             let svs_per_win: Vec<_> = svs_cnt_vec.iter().map(|count| *count as f64 / window).collect();
@@ -815,47 +835,18 @@ impl VariantMatrixFunctions for VariantMatrix {
                             }
                         }
                     }
-//                    for (sample_idx, _sample_name) in sample_names.iter().enumerate() {
-//                        let window = contig_len / window_size;
-//                        let total_variants = variant_counts[&sample_idx][tid] as f64;
-//                        if total_variants > 0. {
-//                            let var_ten_kbs = total_variants / window;
-//                            let sample_sums = &variant_sums[&sample_idx][tid];
-//
-////                            let var_ratios = sample_sums[0]
-////                                .iter().zip(&sample_sums[1])
-////                                .map(|(var, dep)| { var / dep }).collect::<Vec<f64>>();
-////
-////                            let refr_ratios = sample_sums[2]
-////                                .iter().zip(&sample_sums[1])
-////                                .map(|(refr, dep)| { refr / dep }).collect::<Vec<f64>>();
-//
-//                            let var_ratios_mean: f64 = sample_sums[0].iter().sum::<f64>()
-//                                / sample_sums[1].len() as f64;
-//
-//                            let refr_ratios_mean: f64 = sample_sums[2].iter().sum::<f64>()
-//                                / sample_sums[1].len() as f64;
-//
-//                            let mut var_std: f64 = sample_sums[0].iter().map(|x|
-//                                {(*x - var_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-//                            var_std = (var_std / (sample_sums[1].len()) as f64).powf(1./2.);
-//
-//                            let mut ref_std: f64 = sample_sums[2].iter().map(|x|
-//                                {(*x - refr_ratios_mean).powf(2.)}).collect::<Vec<f64>>().iter().sum::<f64>();
-//                            ref_std = (ref_std / (sample_sums[1].len()) as f64).powf(1./2.);
-//
-//                            writeln!(file_open,
-//                                     "\t{:.3}\t{}\t{:.3}\t{:.3}\t{:.3}\t{:.3}",
-//                                     var_ten_kbs, total_variants,
-//                                     refr_ratios_mean, ref_std,
-//                                     var_ratios_mean, var_std).unwrap();
-//                        } else {
-//                            writeln!(file_open,
-//                                     "\t{}\t{}\t{}\t{}\t{}\t{}",
-//                                     0., 0., 0., 0., 0., 0.,).unwrap();
-//                        }
-//                    }
-                }
+                };
+
+                let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {}",
+                                           output_prefix, window_size);
+                command::finish_command_safely(
+                    std::process::Command::new("bash")
+                        .arg("-c")
+                        .arg(&plot_command)
+                        .stderr(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .spawn()
+                        .expect("Unable to execute Rscript"), "CMplot");
             }
         }
     }
