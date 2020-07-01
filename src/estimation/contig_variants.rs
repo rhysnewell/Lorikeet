@@ -191,7 +191,11 @@ impl VariantFunctions for VariantStats {
                 };
 
                 // Cumulative sum of ups and downs vec to get depth
-                *depth = ups_and_downs.par_iter().fold_with(0, |acc, x| acc + x ).collect();
+                *depth = ups_and_downs.iter().scan(0,
+                                                   |acc, &x| {
+                                                       *acc = *acc + x;
+                                                       Some(*acc)
+                                                   } ).collect();
 
                 debug!("new contig added {} with coverage {} and variance {}", tid, coverage, variance);
             }

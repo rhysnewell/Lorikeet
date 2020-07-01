@@ -299,9 +299,12 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
                                       anchor_size, anchor_similarity, minimum_reads_in_link);
         variant_matrix.generate_genotypes(output_prefix);
+        variant_matrix.write_vcf(output_prefix);
         if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
             variant_matrix.print_variant_stats(output_prefix, window_size);
+            variant_matrix.write_vcf(output_prefix);
+
         }
     } else if mode=="summarize" {
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();

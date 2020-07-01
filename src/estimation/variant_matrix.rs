@@ -10,8 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::fs::File;
 use dbscan::fuzzy;
 use itertools::{Itertools, izip};
-use rust_htslib::bam::HeaderView;
+use rust_htslib::{bcf::{self}, bam::HeaderView};
 use bird_tool_utils::command;
+use rayon::current_num_threads;
 
 
 #[derive(Debug)]
@@ -103,6 +104,8 @@ pub trait VariantMatrixFunctions {
                           output_prefix: &str);
 
     fn print_variant_stats(&self, output_prefix: &str, window_size: f64);
+
+    fn write_vcf(&self, output_prefix: &str);
 }
 
 #[allow(unused)]
@@ -847,6 +850,194 @@ impl VariantMatrixFunctions for VariantMatrix {
                         .stdout(std::process::Stdio::null())
                         .spawn()
                         .expect("Unable to execute Rscript"), "CMplot");
+            }
+        }
+    }
+
+    fn write_vcf(&self, output_prefix: &str) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                all_variants,
+                target_names,
+                target_lengths,
+                sample_names,
+                ..
+            } => {
+                // initiate header
+                let mut header = bcf::Header::new();
+                // Add program info
+                header.push_record(format!("##source=lorikeet-v{}",
+                                           env!("CARGO_PKG_VERSION")).as_bytes());
+
+
+                for sample in sample_names.iter() {
+                    header.push_sample(&sample.clone().into_bytes()[..]);
+                }
+
+                // Add contig info
+                for (tid, contig_name) in target_names {
+                    header.push_record(
+                        format!("##contig=<ID={}, length={}>",
+                                contig_name, target_lengths[tid]).as_bytes()
+                    );
+                }
+
+                // Add INFO flags
+                header.push_record(
+                    format!("##INFO=<ID=TYPE,Number=A,Type=String,\
+                    Description=\"The type of allele, either SNV, MNV, INS, DEL, or INV.\">").as_bytes());
+
+                header.push_record(
+                    format!("##INFO=<ID=SVLEN,Number=1,Type=Integer,\
+                    Description=\"Length of structural variant\">").as_bytes());
+
+                header.push_record(
+                    b"##INFO=<ID=TDP,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth\">",
+                );
+
+                header.push_record(
+                    b"##INFO=<ID=TAD,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth of alternative allele\">",
+                );
+
+                header.push_record(
+                    b"##INFO=<ID=TRD,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth of reference allele\">",
+                );
+
+
+                // Add FORMAT flags
+                header.push_record(
+                    format!("##FORMAT=<ID=DP,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth in each sample\">",
+                            sample_names.len()).as_bytes(),
+                );
+
+                header.push_record(
+                    format!("##FORMAT=<ID=AD,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth of alternative allele in each sample\">",
+                            sample_names.len()).as_bytes(),
+                );
+
+                header.push_record(
+                    format!("##FORMAT=<ID=RD,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth of reference allele in each sample\">",
+                            sample_names.len()).as_bytes(),
+                );
+
+                header.push_record(
+                    format!("##FORMAT=<ID=QA,Number={},Type=Float,\
+                            Description=\"Quality scores for allele in each sample\">",
+                            sample_names.len()).as_bytes(),
+                );
+
+                // Initiate writer
+                let mut bcf_writer = bcf::Writer::from_path(
+                    format!("{}.vcf", output_prefix),
+                    &header,
+                    true,
+                    bcf::Format::VCF,
+                ).expect(
+                    format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+
+                bcf_writer.set_threads(current_num_threads()).unwrap();
+
+
+                for (tid, position_variants) in all_variants.into_iter() {
+                    let contig_name = &target_names[tid];
+                    for (pos, variants) in position_variants.iter() {
+
+                        for (variant, base) in variants.iter() {
+                            // Create empty record for this variant
+                            let mut record = bcf_writer.empty_record();
+                            record.set_rid(
+                                Some(bcf_writer.header()
+                                    .name2rid(contig_name.as_bytes()).unwrap()));
+                            record.set_pos(*pos);
+
+                            let qual_sum = base.quals.iter().sum();
+                            record.set_qual(qual_sum);
+
+                            // Push info tags to record
+                            record.push_info_integer(b"TDP", &[base.totaldepth.iter().sum()]);
+                            record.push_info_integer(b"TAD", &[base.truedepth.iter().sum()]);
+                            record.push_info_integer(b"TRD", &[base.referencedepth.iter().sum()]);
+
+                            // Push format flags to record
+                            record.push_format_integer(b"DP", &base.totaldepth[..]);
+                            record.push_format_integer(b"AD", &base.truedepth[..]);
+                            record.push_format_integer(b"RD", &base.referencedepth[..]);
+                            record.push_format_float(b"QA", &base.quals[..]);
+
+                            let refr = &base.refr[..];
+
+                            match variant {
+                                Variant::SNV(alt) => {
+
+                                    // Collect and set the alleles to record
+                                    let alt = &[*alt];
+                                    let mut collect_alleles = vec![refr, alt];
+                                    record.set_alleles(&collect_alleles).unwrap();
+
+                                    record.push_info_string(b"TYPE", &[b"SNV"]);
+
+                                    bcf_writer.write(&record).expect("Unable to write record");
+
+                                },
+                                Variant::MNV(alt) => {
+
+                                    // Collect and set the alleles to record
+                                    let alt = [&refr[..], &alt[..]].concat();
+                                    let mut collect_alleles = vec![refr, &alt];
+                                    record.set_alleles(&collect_alleles).unwrap();
+
+                                    record.push_info_string(b"TYPE", &[b"MNV"]);
+                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                    bcf_writer.write(&record).expect("Unable to write record");
+                                },
+                                Variant::Inversion(alt) => {
+                                    // Collect and set the alleles to record
+                                    let alt = [&refr[..], &alt[..]].concat();
+                                    let mut collect_alleles = vec![refr, &alt];
+                                    record.set_alleles(&collect_alleles).unwrap();
+
+                                    record.push_info_string(b"TYPE", &[b"INV"]);
+                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                    bcf_writer.write(&record).expect("Unable to write record");
+                                },
+                                Variant::Insertion(alt) => {
+                                    // Collect and set the alleles to record
+                                    let alt = [&refr[..], &alt[..]].concat();
+                                    let mut collect_alleles = vec![refr, &alt];
+                                    record.set_alleles(&collect_alleles).unwrap();
+
+                                    record.push_info_string(b"TYPE", &[b"INS"]);
+                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                    bcf_writer.write(&record).expect("Unable to write record");
+                                },
+                                Variant::Deletion(alt) => {
+                                    // Collect and set the alleles to record
+                                    // Create deletion variant, attach refr to head of N
+                                    record.set_alleles(&vec![refr, format!(
+                                                                 "{}N", refr[0] as char)
+                                                                 .as_bytes()]).unwrap();
+
+                                    record.push_info_string(b"TYPE", &[b"DEL"]);
+                                    record.push_info_integer(b"SVLEN", &[*alt as i32]);
+
+                                    bcf_writer.write(&record).expect("Unable to write record");
+                                },
+                                _ => {},
+                            }
+                        }
+
+                    }
+
+                }
             }
         }
     }
