@@ -245,6 +245,8 @@ pub struct Base {
     pub refr: Vec<u8>,
     // Alternate allele Variant enum
     pub variant: Variant,
+    // The QUAL values across samples
+    pub quals: Vec<f32>,
     // Filter tag
     pub filters: Vec<HashSet<Filter>>,
     // Depth of good quality estimation.reads
@@ -286,9 +288,17 @@ pub struct Base {
 
 #[allow(unused)]
 impl Base {
+
+    /// Update depth as calculated by lorikeet and the reference depth
     pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
         if self.totaldepth[sample_idx] == 0 {
             self.totaldepth[sample_idx] = d;
+            let mut refr_depth = d - self.truedepth[sample_idx];
+            if refr_depth < 0 {
+                refr_depth = 0;
+            }
+            self.referencedepth[sample_idx] = refr_depth;
+
 //            if self.variant == Variant::None {
 //                self.depth[sample_idx] = d;
 //            }
@@ -297,6 +307,7 @@ impl Base {
 
     pub fn combine_sample(&mut self, other: &Base, sample_idx: usize, total_depth: i32) {
         if &self != &other {
+            self.quals[sample_idx] = other.quals[sample_idx];
             self.filters[sample_idx] = other.filters[sample_idx].clone();
             self.depth[sample_idx] = other.depth[sample_idx];
             self.truedepth[sample_idx] = other.truedepth[sample_idx];
@@ -317,17 +328,14 @@ impl Base {
         }
     }
 
-    pub fn update_total_depth(&mut self, depth: i32, sample_idx: usize) {
-        self.totaldepth[sample_idx] = depth
-    }
-
-    pub fn new(tid: u32, pos: i64, refr: Vec<u8>, sample_count: usize) -> Base {
+    pub fn new(tid: u32, pos: i64, sample_count: usize, refr: Vec<u8>) -> Base {
         Base {
             tid,
             pos,
             refr,
             variant: Variant::None,
             filters: vec![HashSet::new(); sample_count],
+            quals: vec![0.; sample_count],
             depth: vec![0; sample_count],
             truedepth: vec![0; sample_count],
             totaldepth: vec![0; sample_count],
@@ -370,8 +378,10 @@ impl Base {
                 for (idx, variant) in variants.iter().enumerate() {
                     // Get elements from record
                     let mut base = Base::new(record.rid().unwrap(),
-                                             record.pos(), record.alleles()[idx].to_vec(),
-                                             sample_count);
+                                             record.pos(),
+                                             sample_count,
+                                             record.alleles()[0].to_vec());
+                    base.quals[sample_idx] = record.qual();
 
                     // Populate Base struct with known info tags
                     if longread {
