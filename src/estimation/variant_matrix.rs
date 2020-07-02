@@ -12,6 +12,9 @@ use dbscan::fuzzy;
 use itertools::{Itertools, izip};
 use rust_htslib::{bcf::{self}, bam::HeaderView};
 use bird_tool_utils::command;
+use std::process::{Stdio, Command};
+use tempfile;
+use external_command_checker;
 use rayon::current_num_threads;
 
 
@@ -32,8 +35,6 @@ pub enum VariantMatrix {
         target_lengths: HashMap<i32, f64>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
-        clusters: HashMap<i32, HashMap<i32, BTreeMap<String, (i32, usize)>>>,
-        clusters_mean: HashMap<i32, f64>,
         variant_counts: HashMap<usize, HashMap<i32, usize>>,
         variant_sums: HashMap<usize, HashMap<i32, Vec<Vec<f64>>>>,
         variant_info: Vec<fuzzy::Var>,
@@ -58,8 +59,6 @@ impl VariantMatrix {
             target_lengths: HashMap::new(),
             sample_names: vec!["".to_string(); sample_count],
             kfrequencies: BTreeMap::new(),
-            clusters: HashMap::new(),
-            clusters_mean: HashMap::new(),
             variant_counts: HashMap::new(),
             variant_sums: HashMap::new(),
             variant_info: Vec::new(),
@@ -361,7 +360,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 var: variant.clone(),
                                                 deps: base_info.totaldepth.clone(),
                                                 vars: base_info.depth.clone(),
-                                                rel_abunds: rel_abund,
+//                                                rel_abunds: rel_abund,
                                                 tid: *tid,
                                                 reads: base_info.reads.clone()
                                             };
@@ -413,7 +412,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 var: variant.clone(),
                                                 deps: base_info.totaldepth.clone(),
                                                 vars: base_info.depth.clone(),
-                                                rel_abunds: rel_abund,
+//                                                rel_abunds: rel_abund,
                                                 tid: *tid,
                                                 reads: base_info.reads.clone()
                                             };
@@ -467,12 +466,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut geom_mean_dep,
                 ref mut geom_mean_frq,
                 ref mut pred_variants,
+                ref mut all_variants,
                 target_lengths,
                 ..
             } => {
 
                 if variant_info.len() == 1 {
-                    info!("Where did the variants go? {:?}", variant_info);
+                    warn!("Where did the variants go? {:?}", variant_info);
                 }
                 let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                     eps_min: e_min,
@@ -506,33 +506,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                     &variant_info[..],
                     links);
 
-                let mut genome_length = 0.;
-                for (_tid, length) in target_lengths {
-                    genome_length += *length;
-                };
-
                 // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
                 // keep hashmaps updated using channel()
-                let prediction_variants = Arc::new(
+                let prediction_variants =
                     Mutex::new(
-                        HashMap::new()));
-                let prediction_count = Arc::new(
+                        HashMap::new());
+
+                let all_variants =
                     Mutex::new(
-                        HashMap::new()));
-                let prediction_features = Arc::new(
-                    Mutex::new(
-                        HashMap::new()));
+                        all_variants);
 
                 // Organize clusters into genotypes by recollecting full variant information
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
+                    info!("Cluster {} Sites {}", rank + 1, cluster.len());
                     cluster.par_iter().for_each(|assignment|{
 
-                        let mut prediction_count = prediction_count.lock().unwrap();
-                        let count = prediction_count.entry(rank + 1)
-                            .or_insert(HashSet::new());
-                        count.insert(assignment.index);
-
-                        let variant = &variant_info[assignment.index];
+                        let variant: &fuzzy::Var = &variant_info[assignment.index];
                         let mut prediction_variants = prediction_variants
                             .lock()
                             .unwrap();
@@ -549,36 +538,34 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .entry(variant.pos)
                             .or_insert(HashMap::new());
 
-
                         let variant_set = variant_cat
                             .entry(assignment.category)
                             .or_insert(HashSet::new());
+
                         variant_set.insert(variant.var.to_owned());
 
-                        let mut prediction_features = prediction_features.lock().unwrap();
-                        let feature = prediction_features.entry(rank+1).or_insert(HashSet::new());
-                        feature.insert(variant.var.to_owned());
+                        // Add genotypes to base
+                        let mut all_variants = all_variants.lock().unwrap();
+                        let base_tid = all_variants.entry(variant.tid)
+                            .or_insert(HashMap::new());
+                        let base_pos = base_tid.entry(variant.pos)
+                            .or_insert(HashMap::new());
+                        match base_pos.get_mut(&variant.var) {
+                            Some(base_base) => {
+                                base_base.genotypes.insert(rank as i32 + 1);
+                            },
+                            None => {},
+                        };
 
                     });
                 });
 
-                let prediction_count = prediction_count.lock().unwrap();
-                let prediction_features = prediction_features.lock().unwrap();
                 let prediction_variants = prediction_variants.lock().unwrap();
-
-
-                for (cluster, pred_set) in prediction_features.iter() {
-                    if pred_set.len() > 1 {
-                        info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
-                    } else if !pred_set.contains(&Variant::None) {
-                        info!("Cluster {} Sites {}", cluster, prediction_count[cluster].len());
-                    } else {
-//                        prediction_variants.remove_entry(cluster);
-                    }
-                }
+                let mut all_variants = all_variants.lock().unwrap();
 //                debug!("Prediction count {:?}", prediction_count);
 //                debug!("Prediction categories {:?}", prediction_features);
                 *pred_variants = prediction_variants.clone();
+                **all_variants = all_variants.clone();
             }
         }
     }
@@ -652,7 +639,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 skip_n = size - 1;
                                                 skip_cnt = 0;
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                // If we had the sequence we would rescure first base like this
+                                                // If we had the sequence we would rescue first base like this
 //                                                let first_byte = max_var.as_bytes()[0];
 //                                                contig = contig + str::from_utf8(
 //                                                    &[first_byte]).unwrap();
@@ -906,6 +893,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                             Description=\"Total observed sequencing depth of reference allele\">",
                 );
 
+                header.push_record(
+                    b"##INFO=<ID=ST,Number=.,Type=Integer,\
+                            Description=\"The strain IDs assigned to this variant\">",
+                );
 
                 // Add FORMAT flags
                 header.push_record(
@@ -932,9 +923,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                             sample_names.len()).as_bytes(),
                 );
 
+                let vcf_presort = tempfile::NamedTempFile::new()
+                    .expect("Failed to create vcf tempfile");
                 // Initiate writer
                 let mut bcf_writer = bcf::Writer::from_path(
-                    format!("{}.vcf", output_prefix),
+                    vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
                     &header,
                     true,
                     bcf::Format::VCF,
@@ -956,13 +949,20 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     .name2rid(contig_name.as_bytes()).unwrap()));
                             record.set_pos(*pos);
 
+                            // Sum the quality scores across samples
                             let qual_sum = base.quals.iter().sum();
                             record.set_qual(qual_sum);
+
+                            // Collect strain information
+                            let mut strains = base.genotypes.iter().cloned()
+                                .collect::<Vec<i32>>();
+                            strains.sort();
 
                             // Push info tags to record
                             record.push_info_integer(b"TDP", &[base.totaldepth.iter().sum()]);
                             record.push_info_integer(b"TAD", &[base.truedepth.iter().sum()]);
                             record.push_info_integer(b"TRD", &[base.referencedepth.iter().sum()]);
+                            record.push_info_integer(b"ST", &strains[..]);
 
                             // Push format flags to record
                             record.push_format_integer(b"DP", &base.totaldepth[..]);
@@ -1034,8 +1034,29 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 _ => {},
                             }
                         }
-
                     }
+
+                    // Initiate sorting command
+                    // Since variants are in HashMap, they are unsorted.
+                    // Sorting using bcftools is fast so just do it for the user.
+                    external_command_checker::check_for_bcftools();
+
+                    let command_string = format!(
+                        "bcftools sort {} > {}.vcf",
+                                vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
+                                output_prefix
+                    );
+
+                    command::finish_command_safely(
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg(&command_string)
+                            .stderr(Stdio::null())
+                            .spawn()
+                            .expect("Unable to execute bash"),
+                        "bcftools"
+                    );
+
 
                 }
             }

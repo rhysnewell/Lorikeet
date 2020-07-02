@@ -249,12 +249,13 @@ pub struct Base {
     pub quals: Vec<f32>,
     // Filter tag
     pub filters: Vec<HashSet<Filter>>,
-    // Depth of good quality estimation.reads
+    // Depth of good quality reads
     pub depth: Vec<i32>,
-    // Depth including bad quality estimation.reads
+    // Depth including bad quality reads
     pub truedepth: Vec<i32>,
     // Depth as decided by CoverM
     pub totaldepth: Vec<i32>,
+    // Depth of the reference allele
     pub referencedepth: Vec<i32>,
     // Physical coverage of valid inserts across locus
     pub physicalcov: Vec<i32>,
@@ -283,7 +284,9 @@ pub struct Base {
     // Read ids assigned to variant
     pub reads: HashSet<Vec<u8>>,
     // CLR transformed relative abundances
-    pub rel_abunds: Vec<f64>
+    pub rel_abunds: Vec<f64>,
+    // Genotypes assigned to variant
+    pub genotypes: HashSet<i32>
 }
 
 #[allow(unused)]
@@ -293,12 +296,24 @@ impl Base {
     pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
         if self.totaldepth[sample_idx] == 0 {
             self.totaldepth[sample_idx] = d;
-            let mut refr_depth = d - self.truedepth[sample_idx];
-            if refr_depth < 0 {
-                refr_depth = 0;
-            }
-            self.referencedepth[sample_idx] = refr_depth;
+            match self.variant {
+                Variant::SNV(_) => {
+                    let mut refr_depth = d - self.truedepth[sample_idx];
+                    if refr_depth < 0 {
+                        refr_depth = 0;
+                    }
+                    self.referencedepth[sample_idx] = refr_depth;
+                },
+                _ => {
+                    self.truedepth[sample_idx] = self.depth[sample_idx];
+                    let mut refr_depth = d - self.truedepth[sample_idx];
+                    if refr_depth < 0 {
+                        refr_depth = 0;
+                    }
+                    self.referencedepth[sample_idx] = refr_depth;
+                }
 
+        }
 //            if self.variant == Variant::None {
 //                self.depth[sample_idx] = d;
 //            }
@@ -354,6 +369,7 @@ impl Base {
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],
             reads: HashSet::new(),
+            genotypes: HashSet::new(),
         }
     }
 
@@ -408,6 +424,27 @@ impl Base {
                             }
                         };
 
+                        base.truedepth[sample_idx] = match record.format(b"AD").integer() {
+                            Ok(val) => {
+                                if val[0][1] >= 0 {
+                                    val[0][1]
+                                } else {
+                                    match record.info(b"SUPPORT").integer() {
+                                        Ok(val) => {
+                                            match val {
+                                                Some(dep) => dep[0],
+                                                _ => 0,
+                                            }
+                                        },
+                                        _ => 0,
+                                    }
+                                }
+                            },
+                            _ => {
+                                0
+                            }
+                        };
+
 //                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
 //                        Ok(val) => {
 //                            if val[0][0] >= 0 {
@@ -423,25 +460,25 @@ impl Base {
 //                    base.freq[sample_idx] = base.af[sample_idx];
                         let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
                         base.reads.par_extend(reads);
-                        if refr_base_empty {
-//                        let mut refr_base = Base::new(record.rid().unwrap(),
-//                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
-//                        refr_base.af[sample_idx] = base.af[sample_idx];
-//                        refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-//                            Ok(val) => {
-//                                if val[0][0] >= 0 {
-//                                    val[0][0]
-//                                } else {
-//                                    base.depth[sample_idx]
-//                                }
-//                            },
-//                            _ => base.depth[sample_idx],
-//                        };
-//                        refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
-//                        refr_base.depth[sample_idx] = refr_depth;
-//                        bases.push(refr_base);
-//                        refr_base_empty = false;
-                        }
+//                        if refr_base_empty {
+////                        let mut refr_base = Base::new(record.rid().unwrap(),
+////                                                      record.pos(), record.alleles()[0].to_vec(), sample_count);
+////                        refr_base.af[sample_idx] = base.af[sample_idx];
+////                        refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
+////                            Ok(val) => {
+////                                if val[0][0] >= 0 {
+////                                    val[0][0]
+////                                } else {
+////                                    base.depth[sample_idx]
+////                                }
+////                            },
+////                            _ => base.depth[sample_idx],
+////                        };
+////                        refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
+////                        refr_base.depth[sample_idx] = refr_depth;
+////                        bases.push(refr_base);
+////                        refr_base_empty = false;
+//                        }
                     } else {
                         // Get relevant flag from freebayes output on short read samples
                         base.variant = variant.clone();
