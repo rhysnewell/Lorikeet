@@ -636,7 +636,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         match max_var {
                                             Variant::Deletion(size) => {
                                                 // Skip the next n bases but rescue the reference prefix
-                                                skip_n = size - 1;
+                                                skip_n = size;
                                                 skip_cnt = 0;
                                                 contig = contig + str::from_utf8(&[*base]).unwrap();
                                                 // If we had the sequence we would rescue first base like this
@@ -647,9 +647,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             },
                                             Variant::Insertion(alt) => {
 
-                                                // Prefix is removed during VCF record collection
+                                                // Remove prefix from variant
                                                 let removed_first_base = str::from_utf8(
-                                                    &alt).unwrap();
+                                                    &alt[1..]).unwrap();
                                                 contig = contig + removed_first_base;
                                                 variations += 1;
                                             },
