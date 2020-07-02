@@ -833,8 +833,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                     std::process::Command::new("bash")
                         .arg("-c")
                         .arg(&plot_command)
-                        .stderr(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
+                        .stderr(Stdio::piped())
+                        .stdout(Stdio::piped())
                         .spawn()
                         .expect("Unable to execute Rscript"), "CMplot");
             }
@@ -1043,7 +1043,10 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                     let command_string = format!(
                         "bcftools sort {} > {}.vcf",
-                                vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
+                                vcf_presort
+                                    .path()
+                                    .to_str()
+                                    .expect("Failed to convert tempfile to path"),
                                 output_prefix
                     );
 
@@ -1051,7 +1054,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         Command::new("bash")
                             .arg("-c")
                             .arg(&command_string)
-                            .stderr(Stdio::null())
+                            .stderr(Stdio::piped())
                             .spawn()
                             .expect("Unable to execute bash"),
                         "bcftools"
