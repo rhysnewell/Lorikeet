@@ -31,7 +31,7 @@ pub struct Var {
     pub var: Variant,
     pub deps: Vec<i32>,
     pub vars: Vec<i32>,
-    pub rel_abunds: Vec<f64>,
+//    pub rel_abunds: Vec<f64>,
     pub tid: i32,
     pub reads: HashSet<Vec<u8>>,
 }
