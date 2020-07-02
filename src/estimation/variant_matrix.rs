@@ -827,8 +827,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                     }
                 };
 
-                let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {}",
-                                           output_prefix, window_size);
+                let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {} && \
+                                                    mv SNP-Density*.pdf {}_snp_density_plot.pdf",
+                                                    output_prefix, window_size, output_prefix);
                 command::finish_command_safely(
                     std::process::Command::new("bash")
                         .arg("-c")

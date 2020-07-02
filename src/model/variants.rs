@@ -720,10 +720,6 @@ pub fn collect_variants(
                         variant_vec.push(Variant::Insertion(
                             alt_allele[ref_allele.len()..].to_owned(),
                         ))
-                    } else if is_valid_inversion_alleles(ref_allele, alt_allele) {
-                        variant_vec.push(Variant::Inversion(
-                            alt_allele[..].to_owned(),
-                        ))
                     } else {
                         variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                     }
