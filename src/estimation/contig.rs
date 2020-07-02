@@ -308,6 +308,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         }
     } else if mode=="summarize" {
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+        variant_matrix.write_vcf(output_prefix);
         variant_matrix.print_variant_stats(output_prefix, window_size);
     }
 }
