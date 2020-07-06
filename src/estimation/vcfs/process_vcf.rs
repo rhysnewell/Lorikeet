@@ -132,7 +132,6 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         let stoit_name = stoit_name.join(".");
         let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");
         let bam_path = cache + &(stoit_name + ".bam");
-        info!("Cached bam path {} ", bam_path);
 
         return generate_vcf(&bam_path, m, threads, longread, reference_length)
     }
@@ -189,8 +188,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&sam_cmd_string)
-                .stderr(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"), "samtools");
 
@@ -224,8 +223,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&vcf_cmd_string)
-                .stderr(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"), "freebayes");
         debug!("VCF Path {:?}", freebayes_path);
@@ -258,7 +257,7 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
-                .stderr(std::process::Stdio::null())
+                .stderr(std::process::Stdio::piped())
 //                .stdout(std::process::Stdio::null())
                 .spawn()
                 .expect("Unable to execute bash"), "svim");
