@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use dbscan::fuzzy;
-use itertools::{Itertools, izip};
+use itertools::{izip};
 use rust_htslib::{bcf::{self}, bam::HeaderView};
 use bird_tool_utils::command;
 use std::process::{Stdio, Command};
@@ -302,11 +302,6 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 // get basic variant info and store as fuzzy::Var
                 all_variants.par_iter_mut().for_each(|(tid, variant_abundances)| {
-                    let contig_coverages = coverages.get(tid)
-                        .expect("Unable to retrieve contig coverage");
-
-                    let _max_coverage = contig_coverages.iter().cloned().fold1(f64::max)
-                        .expect("Unable to retrieve max coverage");
 
                     variant_abundances.par_iter_mut().for_each(
                         |(position, hash)| {
