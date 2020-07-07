@@ -21,7 +21,7 @@ exclude = [
 [dependencies]
 ansi_term = "0.12.1"
 bio = "0.30.*"
-bio-types = "0.6"
+bio-types = "0.7"
 bird_tool_utils = "0.1.0"
 clap = "2"
 coverm = {git = "https://github.com/rhysnewell/CoverM"}
