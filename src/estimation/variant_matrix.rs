@@ -141,13 +141,21 @@ impl VariantMatrixFunctions for VariantMatrix {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
                 ref mut all_variants,
+                ref mut target_names,
+                ref mut target_lengths,
                 ..
             } => {
                 info!("adding sample {}", &sample_name);
                 sample_names[sample_idx] = sample_name;
                 let target_count = header.target_count();
+                let tid_names = header.target_names();
 
-                for tid in (0..target_count).into_iter() {
+                for target_name in (tid_names).into_iter() {
+                    let tid = header.tid(target_name).unwrap();
+                    target_names.entry(tid as i32)
+                        .or_insert(str::from_utf8(&target_name).unwrap().to_string());
+                    let target_len = header.target_len(tid).unwrap();
+                    target_lengths.entry(tid as i32).or_insert(target_len as f64);
                     // Initialize contig id in variant hashmap
                     let contig_variants = all_variants.entry(tid as i32)
                         .or_insert(HashMap::new());
@@ -213,8 +221,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut coverages,
                 ref mut all_variants,
                 ref mut contigs,
-                ref mut target_names,
-                ref mut target_lengths,
+//                ref mut target_names,
+//                ref mut target_lengths,
                 ref mut variances,
                 ref mut depths,
                 ..
@@ -222,8 +230,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 match variant_stats {
                     VariantStats::VariantContigStats {
                         tid,
-                        target_name,
-                        target_len,
+//                        target_name,
+//                        target_len,
                         coverage,
                         variance,
                         depth,
@@ -238,9 +246,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                             vec![0.0 as f64; sample_count]
                         );
                         cov[sample_idx] = coverage;
-                        target_names.entry(tid)
-                            .or_insert(str::from_utf8(&target_name).unwrap().to_string());
-                        target_lengths.entry(tid).or_insert(target_len);
 
                         // copy across depths
                         let contig_variants = all_variants.entry(tid)
@@ -930,8 +935,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
                         &header,
                         true,
-                        bcf::Format::VCF,
-                    ).expect(
+                        bcf::Format::VCF).expect(
                         format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
 
                     bcf_writer.set_threads(current_num_threads()).unwrap();

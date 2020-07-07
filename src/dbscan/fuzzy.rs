@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::f64;
 use rayon::prelude::*;
 use model::variants::*;
+use itertools::Itertools;
 
 #[allow(unused)]
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
@@ -51,12 +52,6 @@ impl MetricSpace for Var<> {
                     }).collect();
                     return output
                 };
-
-                let get_mean = |input: &Vec<f64>| -> f64 {
-                    let sum = input.par_iter().sum::<f64>();
-                    sum / input.len() as f64
-                };
-
 
 //                debug!("row values {:?} geom_var {:?} geom_frq {:?}", &self.vars, &geom_var, &geom_frq);
                 let row_vals: Vec<f64> = clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
@@ -430,6 +425,47 @@ impl FuzzyDBSCAN {
             (self.eps_max - distance) / (self.eps_max - self.eps_min)
         }
     }
+}
+
+fn get_mean(input: &Vec<f64>) -> f64 {
+    let sum = input.par_iter().sum::<f64>();
+    sum / input.len() as f64
+}
+
+fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
+
+    let mean_row = get_mean(&row_vals);
+
+    let mean_col = get_mean(&col_vals);
+
+    // lovell et al. Phi and Phi distance: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004075
+    // Rho: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/
+    // propr log ratios to vlr and lr2rho: https://github.com/tpq/propr/blob/master/src/lr2propr.cpp
+
+    let mut row_var = 0.;
+    let mut col_var = 0.;
+    let mut covar = 0.;
+
+    // Differential proportionality requires the calculation of VLR for different groupings of
+    // our measured variables: https://mran.microsoft.com/snapshot/2018-03-29/web/packages/propr/vignettes/e_differential.html
+
+    for combos in (0..row_vals.len()).into_iter().combinations(2) {
+        let ind_1 = combos[0];
+        let ind_2 = combos[1];
+
+    }
+    row_vals.iter()
+        .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
+        row_var += (r_freq - mean_row).powf(2.);
+        col_var += (c_freq - mean_col).powf(2.);
+        covar += (r_freq - mean_row) * (c_freq - mean_col)
+    });
+
+    row_var = row_var / (row_vals.len() as f64 - 1.);
+    col_var = col_var / (col_vals.len() as f64 - 1.);
+    covar = covar / (row_vals.len() as f64 - 1.);
+
+    let vlr = -2. * covar + row_var + col_var;
 }
 
 #[cfg(test)]
