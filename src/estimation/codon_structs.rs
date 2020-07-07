@@ -336,6 +336,8 @@ mod tests {
             depth: vec![5; sample_count],
             truedepth: vec![5; sample_count],
             totaldepth: vec![5; sample_count],
+            genotypes: HashSet::new(),
+            quals: vec![0.; sample_count],
             referencedepth: vec![0; sample_count],
             physicalcov: vec![0; sample_count],
             baseq: vec![0; sample_count],
