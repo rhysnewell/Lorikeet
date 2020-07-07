@@ -712,6 +712,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 variant_info,
                 ..
             } => {
+
                 let file_name = output_prefix.to_string()
                     + &".tsv".to_owned();
                 let snp_locs = format!("{}_snp_locations.tsv", output_prefix);
@@ -826,18 +827,19 @@ impl VariantMatrixFunctions for VariantMatrix {
                         }
                     }
                 };
-
-                let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {} && \
+                if variant_info.len() > 0 {
+                    let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {} && \
                                                     mv SNP-Density*.pdf {}_snp_density_plot.pdf",
-                                                    output_prefix, window_size, output_prefix);
-                command::finish_command_safely(
-                    std::process::Command::new("bash")
-                        .arg("-c")
-                        .arg(&plot_command)
-                        .stderr(Stdio::piped())
-                        .stdout(Stdio::piped())
-                        .spawn()
-                        .expect("Unable to execute Rscript"), "CMplot");
+                                               output_prefix, window_size, output_prefix);
+                    command::finish_command_safely(
+                        std::process::Command::new("bash")
+                            .arg("-c")
+                            .arg(&plot_command)
+                            .stderr(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .expect("Unable to execute Rscript"), "CMplot");
+                }
             }
         }
     }
@@ -849,219 +851,218 @@ impl VariantMatrixFunctions for VariantMatrix {
                 target_names,
                 target_lengths,
                 sample_names,
+                variant_info,
                 ..
             } => {
-                // initiate header
-                let mut header = bcf::Header::new();
-                // Add program info
-                header.push_record(format!("##source=lorikeet-v{}",
-                                           env!("CARGO_PKG_VERSION")).as_bytes());
+                if variant_info.len() > 0 {
+                    // initiate header
+                    let mut header = bcf::Header::new();
+                    // Add program info
+                    header.push_record(format!("##source=lorikeet-v{}",
+                                               env!("CARGO_PKG_VERSION")).as_bytes());
 
 
-                for sample in sample_names.iter() {
-                    header.push_sample(&sample.clone().into_bytes()[..]);
-                }
-
-                // Add contig info
-                for (tid, contig_name) in target_names {
-                    header.push_record(
-                        format!("##contig=<ID={}, length={}>",
-                                contig_name, target_lengths[tid]).as_bytes()
-                    );
-                }
-
-                // Add INFO flags
-                header.push_record(
-                    format!("##INFO=<ID=TYPE,Number=A,Type=String,\
-                    Description=\"The type of allele, either SNV, MNV, INS, DEL, or INV.\">").as_bytes());
-
-                header.push_record(
-                    format!("##INFO=<ID=SVLEN,Number=1,Type=Integer,\
-                    Description=\"Length of structural variant\">").as_bytes());
-
-                header.push_record(
-                    b"##INFO=<ID=TDP,Number=A,Type=Integer,\
-                            Description=\"Total observed sequencing depth\">",
-                );
-
-                header.push_record(
-                    b"##INFO=<ID=TAD,Number=A,Type=Integer,\
-                            Description=\"Total observed sequencing depth of alternative allele\">",
-                );
-
-                header.push_record(
-                    b"##INFO=<ID=TRD,Number=A,Type=Integer,\
-                            Description=\"Total observed sequencing depth of reference allele\">",
-                );
-
-                header.push_record(
-                    b"##INFO=<ID=ST,Number=.,Type=Integer,\
-                            Description=\"The strain IDs assigned to this variant\">",
-                );
-
-                // Add FORMAT flags
-                header.push_record(
-                    format!("##FORMAT=<ID=DP,Number={},Type=Integer,\
-                            Description=\"Observed sequencing depth in each sample\">",
-                            sample_names.len()).as_bytes(),
-                );
-
-                header.push_record(
-                    format!("##FORMAT=<ID=AD,Number={},Type=Integer,\
-                            Description=\"Observed sequencing depth of alternative allele in each sample\">",
-                            sample_names.len()).as_bytes(),
-                );
-
-                header.push_record(
-                    format!("##FORMAT=<ID=RD,Number={},Type=Integer,\
-                            Description=\"Observed sequencing depth of reference allele in each sample\">",
-                            sample_names.len()).as_bytes(),
-                );
-
-                header.push_record(
-                    format!("##FORMAT=<ID=QA,Number={},Type=Float,\
-                            Description=\"Quality scores for allele in each sample\">",
-                            sample_names.len()).as_bytes(),
-                );
-
-                let vcf_presort = tempfile::NamedTempFile::new()
-                    .expect("Failed to create vcf tempfile");
-                // Initiate writer
-                let mut bcf_writer = bcf::Writer::from_path(
-                    vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
-                    &header,
-                    true,
-                    bcf::Format::VCF,
-                ).expect(
-                    format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
-
-                bcf_writer.set_threads(current_num_threads()).unwrap();
-
-
-                for (tid, position_variants) in all_variants.into_iter() {
-                    let contig_name = &target_names[tid];
-                    for (pos, variants) in position_variants.iter() {
-
-                        for (variant, base) in variants.iter() {
-                            // Create empty record for this variant
-                            let mut record = bcf_writer.empty_record();
-                            record.set_rid(
-                                Some(bcf_writer.header()
-                                    .name2rid(contig_name.as_bytes()).unwrap()));
-                            record.set_pos(*pos);
-
-                            // Sum the quality scores across samples
-                            let qual_sum = base.quals.iter().sum();
-                            record.set_qual(qual_sum);
-
-                            // Collect strain information
-                            let mut strains = base.genotypes.iter().cloned()
-                                .collect::<Vec<i32>>();
-                            strains.sort();
-
-                            // Push info tags to record
-                            record.push_info_integer(b"TDP", &[base.totaldepth.iter().sum()]);
-                            record.push_info_integer(b"TAD", &[base.truedepth.iter().sum()]);
-                            record.push_info_integer(b"TRD", &[base.referencedepth.iter().sum()]);
-                            record.push_info_integer(b"ST", &strains[..]);
-
-                            // Push format flags to record
-                            record.push_format_integer(b"DP", &base.totaldepth[..]);
-                            record.push_format_integer(b"AD", &base.truedepth[..]);
-                            record.push_format_integer(b"RD", &base.referencedepth[..]);
-                            record.push_format_float(b"QA", &base.quals[..]);
-
-                            let refr = &base.refr[..];
-
-                            match variant {
-                                Variant::SNV(alt) => {
-
-                                    // Collect and set the alleles to record
-                                    let alt = &[*alt];
-                                    let mut collect_alleles = vec![refr, alt];
-                                    record.set_alleles(&collect_alleles).unwrap();
-
-                                    record.push_info_string(b"TYPE", &[b"SNV"]);
-
-                                    bcf_writer.write(&record).expect("Unable to write record");
-
-                                },
-                                Variant::MNV(alt) => {
-
-                                    // Collect and set the alleles to record
-                                    let alt = [&refr[..], &alt[..]].concat();
-                                    let mut collect_alleles = vec![refr, &alt];
-                                    record.set_alleles(&collect_alleles).unwrap();
-
-                                    record.push_info_string(b"TYPE", &[b"MNV"]);
-                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
-
-                                    bcf_writer.write(&record).expect("Unable to write record");
-                                },
-                                Variant::Inversion(alt) => {
-                                    // Collect and set the alleles to record
-                                    let alt = [&refr[..], &alt[..]].concat();
-                                    let mut collect_alleles = vec![refr, &alt];
-                                    record.set_alleles(&collect_alleles).unwrap();
-
-                                    record.push_info_string(b"TYPE", &[b"INV"]);
-                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
-
-                                    bcf_writer.write(&record).expect("Unable to write record");
-                                },
-                                Variant::Insertion(alt) => {
-                                    // Collect and set the alleles to record
-                                    let alt = [&refr[..], &alt[..]].concat();
-                                    let mut collect_alleles = vec![refr, &alt];
-                                    record.set_alleles(&collect_alleles).unwrap();
-
-                                    record.push_info_string(b"TYPE", &[b"INS"]);
-                                    record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
-
-                                    bcf_writer.write(&record).expect("Unable to write record");
-                                },
-                                Variant::Deletion(alt) => {
-                                    // Collect and set the alleles to record
-                                    // Create deletion variant, attach refr to head of N
-                                    record.set_alleles(&vec![refr, format!(
-                                                                 "{}N", refr[0] as char)
-                                                                 .as_bytes()]).unwrap();
-
-                                    record.push_info_string(b"TYPE", &[b"DEL"]);
-                                    record.push_info_integer(b"SVLEN", &[*alt as i32]);
-
-                                    bcf_writer.write(&record).expect("Unable to write record");
-                                },
-                                _ => {},
-                            }
-                        }
+                    for sample in sample_names.iter() {
+                        header.push_sample(&sample.clone().into_bytes()[..]);
                     }
 
-                    // Initiate sorting command
-                    // Since variants are in HashMap, they are unsorted.
-                    // Sorting using bcftools is fast so just do it for the user.
-                    external_command_checker::check_for_bcftools();
+                    // Add contig info
+                    for (tid, contig_name) in target_names {
+                        header.push_record(
+                            format!("##contig=<ID={}, length={}>",
+                                    contig_name, target_lengths[tid]).as_bytes()
+                        );
+                    }
 
-                    let command_string = format!(
-                        "bcftools sort {} > {}.vcf",
-                                vcf_presort
-                                    .path()
-                                    .to_str()
-                                    .expect("Failed to convert tempfile to path"),
-                                output_prefix
+                    // Add INFO flags
+                    header.push_record(
+                        format!("##INFO=<ID=TYPE,Number=A,Type=String,\
+                    Description=\"The type of allele, either SNV, MNV, INS, DEL, or INV.\">").as_bytes());
+
+                    header.push_record(
+                        format!("##INFO=<ID=SVLEN,Number=1,Type=Integer,\
+                    Description=\"Length of structural variant\">").as_bytes());
+
+                    header.push_record(
+                        b"##INFO=<ID=TDP,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth\">",
                     );
 
-                    command::finish_command_safely(
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg(&command_string)
-                            .stderr(Stdio::piped())
-                            .spawn()
-                            .expect("Unable to execute bash"),
-                        "bcftools"
+                    header.push_record(
+                        b"##INFO=<ID=TAD,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth of alternative allele\">",
                     );
 
+                    header.push_record(
+                        b"##INFO=<ID=TRD,Number=A,Type=Integer,\
+                            Description=\"Total observed sequencing depth of reference allele\">",
+                    );
 
+                    header.push_record(
+                        b"##INFO=<ID=ST,Number=.,Type=Integer,\
+                            Description=\"The strain IDs assigned to this variant\">",
+                    );
+
+                    // Add FORMAT flags
+                    header.push_record(
+                        format!("##FORMAT=<ID=DP,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth in each sample\">",
+                                sample_names.len()).as_bytes(),
+                    );
+
+                    header.push_record(
+                        format!("##FORMAT=<ID=AD,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth of alternative allele in each sample\">",
+                                sample_names.len()).as_bytes(),
+                    );
+
+                    header.push_record(
+                        format!("##FORMAT=<ID=RD,Number={},Type=Integer,\
+                            Description=\"Observed sequencing depth of reference allele in each sample\">",
+                                sample_names.len()).as_bytes(),
+                    );
+
+                    header.push_record(
+                        format!("##FORMAT=<ID=QA,Number={},Type=Float,\
+                            Description=\"Quality scores for allele in each sample\">",
+                                sample_names.len()).as_bytes(),
+                    );
+
+                    let vcf_presort = tempfile::NamedTempFile::new()
+                        .expect("Failed to create vcf tempfile");
+                    // Initiate writer
+                    let mut bcf_writer = bcf::Writer::from_path(
+                        vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
+                        &header,
+                        true,
+                        bcf::Format::VCF,
+                    ).expect(
+                        format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+
+                    bcf_writer.set_threads(current_num_threads()).unwrap();
+
+
+                    for (tid, position_variants) in all_variants.into_iter() {
+                        let contig_name = &target_names[tid];
+                        for (pos, variants) in position_variants.iter() {
+                            for (variant, base) in variants.iter() {
+                                // Create empty record for this variant
+                                let mut record = bcf_writer.empty_record();
+                                record.set_rid(
+                                    Some(bcf_writer.header()
+                                        .name2rid(contig_name.as_bytes()).unwrap()));
+                                record.set_pos(*pos);
+
+                                // Sum the quality scores across samples
+                                let qual_sum = base.quals.iter().sum();
+                                record.set_qual(qual_sum);
+
+                                // Collect strain information
+                                let mut strains = base.genotypes.iter().cloned()
+                                    .collect::<Vec<i32>>();
+                                strains.sort();
+
+                                // Push info tags to record
+                                record.push_info_integer(b"TDP", &[base.totaldepth.iter().sum()]);
+                                record.push_info_integer(b"TAD", &[base.truedepth.iter().sum()]);
+                                record.push_info_integer(b"TRD", &[base.referencedepth.iter().sum()]);
+                                record.push_info_integer(b"ST", &strains[..]);
+
+                                // Push format flags to record
+                                record.push_format_integer(b"DP", &base.totaldepth[..]);
+                                record.push_format_integer(b"AD", &base.truedepth[..]);
+                                record.push_format_integer(b"RD", &base.referencedepth[..]);
+                                record.push_format_float(b"QA", &base.quals[..]);
+
+                                let refr = &base.refr[..];
+
+                                match variant {
+                                    Variant::SNV(alt) => {
+
+                                        // Collect and set the alleles to record
+                                        let alt = &[*alt];
+                                        let mut collect_alleles = vec![refr, alt];
+                                        record.set_alleles(&collect_alleles).unwrap();
+
+                                        record.push_info_string(b"TYPE", &[b"SNV"]);
+
+                                        bcf_writer.write(&record).expect("Unable to write record");
+                                    },
+                                    Variant::MNV(alt) => {
+
+                                        // Collect and set the alleles to record
+                                        let alt = [&refr[..], &alt[..]].concat();
+                                        let mut collect_alleles = vec![refr, &alt];
+                                        record.set_alleles(&collect_alleles).unwrap();
+
+                                        record.push_info_string(b"TYPE", &[b"MNV"]);
+                                        record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                        bcf_writer.write(&record).expect("Unable to write record");
+                                    },
+                                    Variant::Inversion(alt) => {
+                                        // Collect and set the alleles to record
+                                        let alt = [&refr[..], &alt[..]].concat();
+                                        let mut collect_alleles = vec![refr, &alt];
+                                        record.set_alleles(&collect_alleles).unwrap();
+
+                                        record.push_info_string(b"TYPE", &[b"INV"]);
+                                        record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                        bcf_writer.write(&record).expect("Unable to write record");
+                                    },
+                                    Variant::Insertion(alt) => {
+                                        // Collect and set the alleles to record
+                                        let alt = [&refr[..], &alt[..]].concat();
+                                        let mut collect_alleles = vec![refr, &alt];
+                                        record.set_alleles(&collect_alleles).unwrap();
+
+                                        record.push_info_string(b"TYPE", &[b"INS"]);
+                                        record.push_info_integer(b"SVLEN", &[alt.len() as i32]);
+
+                                        bcf_writer.write(&record).expect("Unable to write record");
+                                    },
+                                    Variant::Deletion(alt) => {
+                                        // Collect and set the alleles to record
+                                        // Create deletion variant, attach refr to head of N
+                                        record.set_alleles(&vec![refr, format!(
+                                            "{}N", refr[0] as char)
+                                            .as_bytes()]).unwrap();
+
+                                        record.push_info_string(b"TYPE", &[b"DEL"]);
+                                        record.push_info_integer(b"SVLEN", &[*alt as i32]);
+
+                                        bcf_writer.write(&record).expect("Unable to write record");
+                                    },
+                                    _ => {},
+                                }
+                            }
+                        }
+
+                        // Initiate sorting command
+                        // Since variants are in HashMap, they are unsorted.
+                        // Sorting using bcftools is fast so just do it for the user.
+                        external_command_checker::check_for_bcftools();
+
+                        let command_string = format!(
+                            "bcftools sort {} > {}.vcf",
+                            vcf_presort
+                                .path()
+                                .to_str()
+                                .expect("Failed to convert tempfile to path"),
+                            output_prefix
+                        );
+
+                        command::finish_command_safely(
+                            Command::new("bash")
+                                .arg("-c")
+                                .arg(&command_string)
+                                .stderr(Stdio::piped())
+                                .spawn()
+                                .expect("Unable to execute bash"),
+                            "bcftools"
+                        );
+                    }
                 }
             }
         }
