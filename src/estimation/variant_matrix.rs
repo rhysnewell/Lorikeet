@@ -939,7 +939,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                         &header,
                         true,
                         bcf::Format::VCF).expect(
-                        format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+                        format!("Unable to create VCF output: {}.vcf",
+                                output_prefix).as_str());
 
                     bcf_writer.set_threads(current_num_threads()).unwrap();
 
@@ -1055,6 +1056,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .expect("Failed to convert tempfile to path"),
                         output_prefix
                     );
+                    if log_enabled!(Level::Debug) {
+                        vcf_presort.keep().unwrap();
+                    }
 
                     command::finish_command_safely(
                         Command::new("bash")
