@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, BTreeMap};
 use estimation::contig_variants::*;
 use estimation::linkage::*;
 use model::variants::*;
-use std::str;
+use std::{str, ffi::OsStr};
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
@@ -16,7 +16,8 @@ use std::process::{Stdio, Command};
 use tempfile;
 use external_command_checker;
 use rayon::current_num_threads;
-
+use env_logger;
+use log::Level;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -928,11 +929,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 sample_names.len()).as_bytes(),
                     );
 
-                    let vcf_presort = tempfile::NamedTempFile::new()
-                        .expect("Failed to create vcf tempfile");
+                    let vcf_presort = tempfile::Builder::new()
+                        .prefix("lorikeet-fifo")
+                        .tempfile().expect("Unable to create VCF tempfile");
+
                     // Initiate writer
                     let mut bcf_writer = bcf::Writer::from_path(
-                        vcf_presort.path().to_str().expect("Failed to convert tempfile to path"),
+                        vcf_presort.path(),
                         &header,
                         true,
                         bcf::Format::VCF).expect(
@@ -1037,31 +1040,31 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                             }
                         }
-
-                        // Initiate sorting command
-                        // Since variants are in HashMap, they are unsorted.
-                        // Sorting using bcftools is fast so just do it for the user.
-                        external_command_checker::check_for_bcftools();
-
-                        let command_string = format!(
-                            "bcftools sort {} > {}.vcf",
-                            vcf_presort
-                                .path()
-                                .to_str()
-                                .expect("Failed to convert tempfile to path"),
-                            output_prefix
-                        );
-
-                        command::finish_command_safely(
-                            Command::new("bash")
-                                .arg("-c")
-                                .arg(&command_string)
-                                .stderr(Stdio::piped())
-                                .spawn()
-                                .expect("Unable to execute bash"),
-                            "bcftools"
-                        );
                     }
+
+                    // Initiate sorting command
+                    // Since variants are in HashMap, they are unsorted.
+                    // Sorting using bcftools is fast so just do it for the user.
+                    external_command_checker::check_for_bcftools();
+
+                    let command_string = format!(
+                        "bcftools sort {} > {}.vcf",
+                        &vcf_presort
+                            .path()
+                            .to_str()
+                            .expect("Failed to convert tempfile to path"),
+                        output_prefix
+                    );
+
+                    command::finish_command_safely(
+                        Command::new("bash")
+                            .arg("-c")
+                            .arg(&command_string)
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .expect("Unable to execute bash"),
+                        "bcftools"
+                    );
                 }
             }
         }
@@ -1073,4 +1076,102 @@ pub fn add_entry(shared_read_counts: &mut HashMap<usize, HashMap<usize, usize>>,
                  clust1: usize, clust2: usize, count: usize) {
     let entry = shared_read_counts.entry(clust1).or_insert(HashMap::new());
     entry.insert(clust2, count);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use estimation::contig_variants::*;
+    use std::collections::HashSet;
+    use model::variants;
+
+    fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
+        Base {
+            tid: 0,
+            pos,
+            refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
+            variant: Variant::SNV(var_char),
+            filters: vec!(),
+            depth: vec![0, 5],
+            truedepth: vec![0, 5],
+            totaldepth: vec![5, 5],
+            genotypes: HashSet::new(),
+            quals: vec![0.; sample_count],
+            referencedepth: vec![5, 0],
+            physicalcov: vec![0; sample_count],
+            baseq: vec![0; sample_count],
+            mapq: vec![0; sample_count],
+            conf: vec![0; sample_count],
+            nucs: HashMap::new(),
+            pernucs: HashMap::new(),
+            ic: vec![0; sample_count],
+            dc: vec![0; sample_count],
+            xc: vec![0; sample_count],
+            ac: vec![0; sample_count],
+            af: vec![0.; sample_count],
+            freq: vec![0.; sample_count],
+            rel_abunds: vec![0.; sample_count],
+            reads: HashSet::new(),
+        }
+    }
+
+    #[test]
+    fn test_stats_and_mat() {
+
+        let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
+        let sample_count = 2;
+
+        let mut variant_abundances: HashMap<i64, HashMap<Variant, Base>> = HashMap::new();
+
+        // Setup variant matrix
+        let mut var_mat = VariantMatrix::new_matrix(2);
+
+        // Create fake variants
+        let var_1 = create_base(&ref_sequence, "G".bytes().nth(0).unwrap(), 7, 2);
+        let var_2 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 11, 2);
+        let var_3 = create_base(&ref_sequence, "A".bytes().nth(0).unwrap(), 13, 2);
+        let var_4 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 14, 2);
+
+        let mut ups_and_downs = vec![0; ref_sequence.len()];
+        ups_and_downs[0] = 5;
+        ups_and_downs[ref_sequence.len() - 1] = -5;
+
+        // Setup sample 1
+        let mut var_stats = VariantStats::new_contig_stats(0., 5., 0);
+        var_stats.add_contig(Some(&mut variant_abundances), 0, 0,
+                             b"test".to_vec(), ref_sequence.len(), 0,
+                             vec![10., 10., 0.], ups_and_downs);
+        var_mat.add_contig(var_stats, 2, 0, ref_sequence.clone());
+
+        {
+            // Add variants in
+            let hash = variant_abundances.entry(7).or_insert(HashMap::new());
+            hash.insert(var_1.variant.clone(), var_1);
+
+            let hash = variant_abundances.entry(11).or_insert(HashMap::new());
+            hash.insert(var_2.variant.clone(), var_2);
+
+            let hash = variant_abundances.entry(13).or_insert(HashMap::new());
+            hash.insert(var_3.variant.clone(), var_3);
+
+            let hash = variant_abundances.entry(14).or_insert(HashMap::new());
+            hash.insert(var_4.variant.clone(), var_4);
+        }
+        // Add sample 2
+        let mut ups_and_downs = vec![0; ref_sequence.len()];
+        ups_and_downs[0] = 5;
+        ups_and_downs[ref_sequence.len() - 1] = -5;
+        let mut var_stats = VariantStats::new_contig_stats(0., 5., 0);
+        var_stats.add_contig(Some(&mut variant_abundances), 0, 0,
+                             b"test".to_vec(), ref_sequence.len(), 1,
+                             vec![10., 10., 0.], ups_and_downs);
+
+        var_mat.add_contig(var_stats, 2, 1, ref_sequence.clone());
+
+        var_mat.generate_distances(0, "test");
+
+        var_mat.run_fuzzy_scan(0.01, 0.05, 0.01, 0.01,
+                               0., 0, 0., 0)
+
+    }
 }
