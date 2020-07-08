@@ -16,8 +16,6 @@ use std::process::{Stdio, Command};
 use tempfile;
 use external_command_checker;
 use rayon::current_num_threads;
-use env_logger;
-use log::Level;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
