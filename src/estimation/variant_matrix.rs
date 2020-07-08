@@ -1049,16 +1049,25 @@ impl VariantMatrixFunctions for VariantMatrix {
                     external_command_checker::check_for_bcftools();
 
                     let command_string = format!(
-                        "bcftools sort {} > {}.vcf",
+                        "mv {} {}.vcf",
                         &vcf_presort
                             .path()
                             .to_str()
                             .expect("Failed to convert tempfile to path"),
                         output_prefix
                     );
-                    if log_enabled!(Level::Debug) {
-                        vcf_presort.keep().unwrap();
-                    }
+                    // This fails randomly, not sure what causes it so will keep unsorted for now
+//                    let command_string = format!(
+//                        "bcftools sort {} > {}.vcf",
+//                        &vcf_presort
+//                            .path()
+//                            .to_str()
+//                            .expect("Failed to convert tempfile to path"),
+//                        output_prefix
+//                    );
+//                    if log_enabled!(Level::Debug) {
+//                        vcf_presort.keep().unwrap();
+//                    }
 
                     command::finish_command_safely(
                         Command::new("bash")
