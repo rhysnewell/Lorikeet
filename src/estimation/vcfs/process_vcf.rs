@@ -157,7 +157,6 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_fasta_generate_regions();
-        external_command_checker::check_for_samclip();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
         external_command_checker::check_for_bcftools();
