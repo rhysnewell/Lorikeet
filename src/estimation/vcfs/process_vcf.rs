@@ -89,7 +89,6 @@ pub fn process_vcf<R: NamedBamReader + Send,
         }
     });
     variant_matrix.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header);
-
 }
 
 

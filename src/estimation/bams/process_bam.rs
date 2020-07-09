@@ -192,12 +192,12 @@ pub fn process_bam<R: NamedBamReader + Send,
                                                     base.truedepth[sample_idx] += 1;
                                                 }
                                             },
-//                                            Variant::None => {
-//                                                if refr_char == read_char {
-//                                                    base.assign_read(record.qname().to_vec());
-//                                                    base.truedepth[sample_idx] += 1;
-//                                                }
-//                                            },
+                                            Variant::None => {
+                                                if base.refr[0] == read_char {
+                                                    base.assign_read(record.qname().to_vec());
+                                                    base.truedepth[sample_idx] += 1;
+                                                }
+                                            },
                                             _ => {}
                                         }
                                     });
