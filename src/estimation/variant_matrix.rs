@@ -315,8 +315,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                 for (variant, base_info) in hash.iter_mut() {
                                     match variant {
-                                        Variant::None => {},
-                                        Variant::SNV(_) => {
+                                        Variant::SNV(_) | Variant::None => {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
                                             let mut rel_abund = vec![0.0; sample_count as usize];
