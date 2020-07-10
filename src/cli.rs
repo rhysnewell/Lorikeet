@@ -220,7 +220,7 @@ Define mapping(s) (required):
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
    --gff, -g <PATH>                      GFF3 file containing gene locations
                                          present in reference genome.
-   --prodigal-params                     Paramaters passed onto prodigal to call
+   --prokka-params                       Paramaters passed onto prokka to call
                                          gene locations on reference genome.
                                          -i and -f are already set. Only used if
                                          not GFF file is not premade.
@@ -285,14 +285,15 @@ Other arguments (optional):
                                          Not recommended if using nanopore long read data.
    -q, mapq-threshold <INT>              Mapping quality threshold used to verify
                                          a variant. [default: 10]
+   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+                                         considered in the variant calling process.
+   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
    --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
                                          analysis. [default: 10]
-   --output-format FORMAT                Shape of output: 'sparse' for long format,
-                                         'dense' for species-by-site.
-                                         [default: dense]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -412,8 +413,6 @@ Other arguments (optional):
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
-   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                         analysis. [default: 10]
    --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
                                          analysis. [default: 10]
    --output-format FORMAT                Shape of output: 'sparse' for long format,
@@ -1105,6 +1104,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("mapq-threshold")
                     .short("q")
                     .default_value("0"))
+                .arg(Arg::with_name("base-quality-threshold")
+                    .long("base-quality-threshold")
+                    .short("q")
+                    .default_value("13"))
+                .arg(Arg::with_name("min-repeat-entropy")
+                    .long("min-repeat-entropy")
+                    .default_value("1.5"))
                 .arg(Arg::with_name("kmer-size")
                     .long("kmer-size")
                     .short("k")
@@ -1122,10 +1128,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only")
                     .long("proper-pairs-only"))
+                .arg(Arg::with_name("window-size")
+                    .long("window-size")
+                    .short("w")
+                    .default_value("1"))
+                .arg(Arg::with_name("plot")
+                    .long("plot"))
                 .arg(Arg::with_name("nanopore")
                     .long("nanopore"))
+                .arg(Arg::with_name("include-longread-svs")
+                    .long("include-longread-svs"))
                 .arg(Arg::with_name("include-secondary")
                     .long("include-secondary"))
+                .arg(Arg::with_name("include-soft-clipping")
+                    .long("include-soft-clipping"))
                 .arg(Arg::with_name("include-supplementary")
                     .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
@@ -1134,6 +1150,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("output-prefix")
                     .short("o")
                     .default_value("output"))
+                .arg(Arg::with_name("ploidy")
+                    .long("ploidy")
+                    .default_value("2")
+                    .required(false))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))
@@ -1599,7 +1619,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("ploidy")
                     .default_value("2")
                     .required(false))
-
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))

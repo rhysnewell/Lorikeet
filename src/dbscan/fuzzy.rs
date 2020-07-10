@@ -107,7 +107,7 @@ impl MetricSpace for Var<> {
 //                let jaccard = intersection.len() as f64 /
 //                    (set1.len() + set2.len() + 1) as f64;
 
-                trace!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
+                debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
                        phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
 
                 return 1.-rho

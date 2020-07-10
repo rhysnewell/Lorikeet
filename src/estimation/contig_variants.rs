@@ -3,7 +3,6 @@ use std::str;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use estimation::codon_structs::*;
-use bio_types::strand;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 
 use std::path::Path;
@@ -102,11 +101,7 @@ pub trait VariantFunctions {
                      original_contig: &Vec<u8>,
                      output_prefix: &str);
 
-    /// Perform dN/dS calculations based on read mapping using modified Jukes-Cantor method
-    fn calc_gene_mutations(&mut self,
-                           gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
-                           ref_sequence: &Vec<u8>,
-                           codon_table: &CodonTable);
+
 
 //    /// Prints out variant info for current contig
 //    fn print_variants(&mut self, ref_sequence: &Vec<u8>, stoit_name: &str);
@@ -343,95 +338,6 @@ impl VariantFunctions for VariantStats {
 //                writeln!(file_open, "{:?}", contig);
             }
         }
-    }
-
-    #[allow(unused)]
-    fn calc_gene_mutations(&mut self,
-                           gff_map: &HashMap<String, Vec<bio::io::gff::Record>>,
-                           ref_sequence: &Vec<u8>,
-                           codon_table: &CodonTable) {
-        match self {
-            VariantStats::VariantContigStats {
-                variants,
-                tid: _,
-                target_name,
-                depth,
-                ..
-            } => {
-                let contig_name = String::from_utf8(target_name.clone())
-                    .expect("Cannot create string from target_name");
-                let placeholder = Vec::new();
-                let gff_records = match gff_map.get(&contig_name){
-                    Some(records) => records,
-                    None => &placeholder,
-                };
-                debug!("Calculating population dN/dS from reads for {} genes", gff_records.len());
-                gff_records.par_iter().enumerate().for_each(|(_id, gene)| {
-                    let dnds = codon_table.find_mutations(gene, variants, ref_sequence, depth);
-                    let strand = gene.strand().expect("No strandedness found");
-                    let frame: usize = gene.frame().parse().unwrap();
-                    let start = gene.start().clone() as usize - 1;
-                    let end = gene.end().clone() as usize;
-
-                    let strand_symbol = match strand {
-                        strand::Strand::Forward | strand::Strand::Unknown => {
-                            '+'.to_string()
-                        },
-                        strand::Strand::Reverse => {
-                            '-'.to_string()
-                        }
-
-                    };
-                    let gene_id = &gene.attributes()["ID"].split("_").collect::<Vec<&str>>()[1];
-                    let mut contig = gene.seqname().to_owned();
-                    contig = contig + "_";
-
-//                    for cursor in start..end+1 {
-//                        let variant_map = match variants.get(&(cursor as i64)){
-//                            Some(map) => map,
-//                            None => continue,
-//                        };
-//                        if variant_map.len() > 0 {
-//                            let mut print_stream = print_stream.lock().unwrap();
-//
-//
-//                            for variant in variant_map {
-//                                if variant.to_owned().contains("R"){
-//                                    continue
-//                                }
-//                                write!(print_stream, "{}\t{}\t{}\t{}\t{}\t{:.3}\t{}\t",
-//                                         contig.clone()+gene_id, gene.start(),
-//                                         gene.end(), frame, strand_symbol, dnds, cursor).expect("Unable to write to stream");
-//
-//
-//                                if variant.to_owned().contains("N") {
-//                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
-//                                           variant,
-//                                           str::from_utf8(
-//                                               &ref_sequence[cursor..cursor
-//                                                   + variant.len() as usize]).unwrap(),
-//                                           abundance.0, abundance.1, "D").expect("Unable to write to stream");
-//
-//                                } else if indel_map.contains_key(variant) {
-//                                     writeln!(print_stream,"{}\t{}\t{:.3}\t{}\t{}",
-//                                           variant,
-//                                           str::from_utf8(
-//                                               &[ref_sequence[cursor]]).unwrap(),
-//                                           abundance.0, abundance.1, "I").expect("Unable to write to stream");
-//                                } else {
-//                                    writeln!(print_stream, "{}\t{}\t{}\t{}\t{}",
-//                                             variant,
-//                                             ref_sequence[cursor] as char,
-//                                             abundance.0, abundance.1, "S").expect("Unable to write to stream");
-//                                }
-//                            }
-//                        }
-//                    }
-                });
-
-            }
-        }
-
     }
 }
 

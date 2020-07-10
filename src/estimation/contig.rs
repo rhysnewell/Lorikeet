@@ -4,9 +4,9 @@ use glob::glob;
 
 use external_command_checker;
 use estimation::variant_matrix::*;
-use estimation::codon_structs::*;
 use estimation::vcfs::process_vcf::*;
 use estimation::bams::process_bam::*;
+use estimation::codon_structs::*;
 use coverm::bam_generator::*;
 use bird_tool_utils::command;
 
@@ -17,10 +17,8 @@ use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use bio::io::gff;
-use nix::unistd;
-use nix::sys::stat;
 use tempdir::TempDir;
-use tempfile;
+use std::process::Stdio;
 
 #[allow(unused)]
 pub fn pileup_variants<R: NamedBamReader + Send,
@@ -88,48 +86,46 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     .expect("GFF File not found");
             } else {
                 external_command_checker::check_for_prokka();
-                let tmp_dir = TempDir::new("lorikeet_fifo")
-                    .expect("Unable to create temporary directory");
-                let fifo_path = tmp_dir.path().join("foo.pipe");
 
                 // create new fifo and give read, write and execute rights to the owner.
-                // This is required because we cannot open a Rust stream as a BAM file with
-                // rust-htslib.
-                unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
-                    .expect(&format!("Error creating named pipe {:?}", fifo_path));
+                let gff_dir = TempDir::new("lorikeet-prokka")
+                    .expect("unable to create prokka directory");
 
-                let gff_file = tempfile::Builder::new()
-                    .prefix("lorikeet-prodigal-gff")
-                    .tempfile_in(tmp_dir.path())
-                    .expect(&format!("Failed to create distances tempfile"));
                 let cmd_string = format!(
                     "set -e -o pipefail; \
-                     prokka -f gff -i {} -o {} {}",
+                     prokka --outdir {} --prefix prokka_out --force {} {}",
                     // prodigal
-                    m.value_of("reference").unwrap(),
-                    gff_file.path().to_str()
+                    gff_dir.path().to_str()
                         .expect("Failed to convert tempfile path to str"),
-                    m.value_of("prodigal-params").unwrap_or(""));
+                    m.value_of("prokka-params").unwrap_or(""),
+                    m.value_of("reference").unwrap());
                 info!("Queuing cmd_string: {}", cmd_string);
-                std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&cmd_string)
-                    .output()
-                    .expect("Unable to execute bash");
+                command::finish_command_safely(
+                    std::process::Command::new("bash")
+                        .arg("-c")
+                        .arg(&cmd_string)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .spawn()
+                        .expect("Unable to execute bash"), "prokka");
 
-                gff_reader = gff::Reader::from_file(gff_file.path().to_str()
-                                                        .expect("Failed to convert tempfile path to str"),
+                gff_reader = gff::Reader::from_file(format!("{}/prokka_out.gff", gff_dir.path().to_str()
+                                                        .expect("Failed to convert tempfile path to str")),
                                                     bio::io::gff::GffType::GFF3)
                     .expect("Failed to read prodigal output");
 
-                tmp_dir.close().expect("Failed to close temp directory");
+                gff_dir.close().expect("Failed to close temp directory");
 
             }
             gff_reader.records().into_iter().for_each(|record| {
-                let rec = record.unwrap();
-                let contig_genes = gff_map.entry(rec.seqname().to_owned())
-                    .or_insert(Vec::new());
-                contig_genes.push(rec);
+                match record {
+                    Ok(rec) => {
+                        let contig_genes = gff_map.entry(rec.seqname().to_owned())
+                            .or_insert(Vec::new());
+                        contig_genes.push(rec);
+                    },
+                    _ => {},
+                };
             });
         },
         "genotype" | "summarize" => {
@@ -298,7 +294,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
         variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
                                       anchor_size, anchor_similarity, minimum_reads_in_link);
-        variant_matrix.generate_genotypes(output_prefix);
+        variant_matrix.generate_genotypes(output_prefix, &mut reference);
         variant_matrix.write_vcf(output_prefix);
         if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
@@ -308,6 +304,12 @@ pub fn pileup_variants<R: NamedBamReader + Send,
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();
         variant_matrix.write_vcf(output_prefix);
         variant_matrix.print_variant_stats(output_prefix, window_size);
+    } else if mode=="evolve" {
+        let ref_name = Path::new(m.value_of("reference").unwrap())
+            .file_name().unwrap()
+            .to_str().unwrap();
+        variant_matrix.calc_gene_mutation(&mut gff_map, &mut reference, &codon_table,
+                                          ref_name, output_prefix)
     }
 }
 

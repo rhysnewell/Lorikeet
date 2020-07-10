@@ -524,10 +524,10 @@ fn main(){
                         &NoExclusionGenomeFilter {},
                     );
                     run_pileup(m,
-                                       mode,
-                                       &mut estimators,
-                                       generator_sets,
-                                       filter_params.flag_filters, None);
+                               mode,
+                               &mut estimators,
+                               generator_sets,
+                               filter_params.flag_filters, None);
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -540,10 +540,10 @@ fn main(){
                         }
                     }
                     run_pileup(m,
-                                       mode,
-                                       &mut estimators,
-                                       all_generators,
-                                       filter_params.flag_filters.clone(), None);
+                               mode,
+                               &mut estimators,
+                               all_generators,
+                               filter_params.flag_filters.clone(), None);
                 }
             }
         },
@@ -1105,6 +1105,7 @@ fn get_streamed_bam_readers<'a>(
     }
     return generator_set;
 }
+
 fn generate_cached_bam_file_name(directory: &str, reference: &str, read1_path: &str) -> String {
     debug!("Constructing BAM file cache name in directory {}, reference {}, read1_path {}",
            directory, reference, read1_path);
@@ -1436,7 +1437,7 @@ fn run_pileup<'a,
                 coverage_fold,
                 include_indels,
                 false,
-                false);
+                m.is_present("longread-bam-files"));
         },
         "evolve" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1447,7 +1448,7 @@ fn run_pileup<'a,
             let method = m.value_of("method").unwrap();
 
             let reference_path = Path::new(m.value_of("reference").unwrap());
-//            let index_path = reference_path.clone().to_owned() + ".fai";
+            let output_prefix = m.value_of("output-prefix").unwrap();
             let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
                 Ok(reader) => reader,
                 Err(_e) => generate_faidx(m),
@@ -1465,7 +1466,6 @@ fn run_pileup<'a,
             }
 
             info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
-            println!("gene\tstart\tend\tframe\tstrand\tdnds\tposition\tvariant\treference\tabundance\tdepth\tinfo");
             contig::pileup_variants(
                 m,
                 bam_readers,
@@ -1480,7 +1480,7 @@ fn run_pileup<'a,
                 min,
                 max,
                 contig_end_exclusion,
-                "",
+                output_prefix,
                 threads,
                 method,
                 coverage_fold,

@@ -111,6 +111,22 @@ pub fn process_bam<R: NamedBamReader + Send,
                     let total_mismatches = total_edit_distance_in_current_contig -
                         total_indels_in_current_contig;
 
+                    match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)
+                        },
+                    };
+                    ref_seq = Vec::new();
+                    match reference.read(&mut ref_seq) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)
+                        },
+                    };
+
                     process_previous_contigs_var(
                         mode,
                         ani,
@@ -149,21 +165,6 @@ pub fn process_bam<R: NamedBamReader + Send,
 //                    nuc_freq = HashMap::new();
 //                    indels = HashMap::new();
 
-                match reference.fetch_all(std::str::from_utf8(target_names[tid as usize]).unwrap()) {
-                    Ok(reference) => reference,
-                    Err(e) => {
-                        println!("Cannot read sequence from reference {:?}", e);
-                        std::process::exit(1)
-                    },
-                };
-                ref_seq = Vec::new();
-                match reference.read(&mut ref_seq) {
-                    Ok(reference) => reference,
-                    Err(e) => {
-                        println!("Cannot read sequence from reference {:?}", e);
-                        std::process::exit(1)
-                    },
-                };
             }
 
             if !record.is_supplementary() {
@@ -299,6 +300,21 @@ pub fn process_bam<R: NamedBamReader + Send,
         let contig_name = target_names[last_tid as usize].to_vec();
         let total_mismatches = total_edit_distance_in_current_contig -
             total_indels_in_current_contig;
+        match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
+            Ok(reference) => reference,
+            Err(e) => {
+                println!("Cannot read sequence from reference {:?}", e);
+                std::process::exit(1)
+            },
+        };
+        ref_seq = Vec::new();
+        match reference.read(&mut ref_seq) {
+            Ok(reference) => reference,
+            Err(e) => {
+                println!("Cannot read sequence from reference {:?}", e);
+                std::process::exit(1)
+            },
+        };
 
         process_previous_contigs_var(
             mode,
@@ -434,16 +450,12 @@ pub fn process_previous_contigs_var(
                 }
 
             },
-            "summarize" | "genotype" => {
+            "summarize" | "genotype" | "evolve" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
                 variant_matrix.add_contig(variant_struct,
                                           sample_count,
-                                          sample_idx,
-                                          ref_sequence);
-            },
-            "evolve" => {
-                variant_struct.calc_gene_mutations(&*gff_map, &ref_sequence, codon_table);
+                                          sample_idx);
             },
             "polish" => {
                 let stoit_name = stoit_name
