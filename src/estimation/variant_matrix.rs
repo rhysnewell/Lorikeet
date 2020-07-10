@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet, BTreeMap};
 use estimation::contig_variants::*;
+use estimation::codon_structs::*;
 use estimation::linkage::*;
 use model::variants::*;
-use std::{str, ffi::OsStr};
+use std::{str};
 use std::path::Path;
 use std::io::prelude::*;
 use rayon::prelude::*;
@@ -11,11 +12,15 @@ use std::fs::File;
 use dbscan::fuzzy;
 use itertools::{izip};
 use rust_htslib::{bcf::{self}, bam::HeaderView};
+use bio_types::strand::Strand;
+use bio::io::gff;
 use bird_tool_utils::command;
 use std::process::{Stdio, Command};
 use tempfile;
 use external_command_checker;
 use rayon::current_num_threads;
+use estimation::codon_structs::CodonTable;
+use itertools::Itertools;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -29,8 +34,7 @@ pub enum VariantMatrix {
         // Placeholder hashmap for the depths of each contig for a sample
         // Deleted after use
         depths: HashMap<i32, Vec<i32>>,
-        contigs: HashMap<i32, Vec<u8>>,
-        target_names: HashMap<i32, String>,
+        target_names: BTreeMap<i32, String>,
         target_lengths: HashMap<i32, f64>,
         sample_names: Vec<String>,
         kfrequencies: BTreeMap<Vec<u8>, Vec<usize>>,
@@ -53,8 +57,7 @@ impl VariantMatrix {
             average_genotypes: HashMap::new(),
             all_variants: HashMap::new(),
             depths: HashMap::new(),
-            contigs: HashMap::new(),
-            target_names: HashMap::new(),
+            target_names: BTreeMap::new(),
             target_lengths: HashMap::new(),
             sample_names: vec!["".to_string(); sample_count],
             kfrequencies: BTreeMap::new(),
@@ -87,8 +90,7 @@ pub trait VariantMatrixFunctions {
     fn add_contig(&mut self,
                   variant_stats: VariantStats,
                   sample_count: usize,
-                  sample_idx: usize,
-                  contig: Vec<u8>);
+                  sample_idx: usize);
 
     /// Converts all variants into fuzzy::Var format
     fn generate_distances(&mut self, threads: usize, output_prefix: &str);
@@ -99,9 +101,17 @@ pub trait VariantMatrixFunctions {
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
     fn generate_genotypes(&mut self,
-                          output_prefix: &str);
+                          output_prefix: &str,
+                          reference: &mut bio::io::fasta::IndexedReader<File>);
 
     fn print_variant_stats(&self, output_prefix: &str, window_size: f64);
+
+    fn calc_gene_mutation(&self,
+                          gff_map: &mut HashMap<String, Vec<bio::io::gff::Record>>,
+                          reference: &mut bio::io::fasta::IndexedReader<File>,
+                          codon_table: &CodonTable,
+                          ref_name: &str,
+                          output_prefix: &str);
 
     fn write_vcf(&self, output_prefix: &str);
 }
@@ -114,7 +124,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut coverages,
                 ref mut average_genotypes,
                 ref mut all_variants,
-                ref mut contigs,
                 ref mut target_names,
                 ref mut target_lengths,
                 ref mut sample_names,
@@ -124,8 +133,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 *coverages = HashMap::new();
                 *average_genotypes = HashMap::new();
                 *all_variants = HashMap::new();
-                *contigs = HashMap::new();
-                *target_names = HashMap::new();
+                *target_names = BTreeMap::new();
                 *target_lengths = HashMap::new();
                 *sample_names = vec!();
                 *kfrequencies = BTreeMap::new();
@@ -213,13 +221,11 @@ impl VariantMatrixFunctions for VariantMatrix {
     fn add_contig(&mut self,
                   variant_stats: VariantStats,
                   sample_count: usize,
-                  sample_idx: usize,
-                  contig: Vec<u8>) {
+                  sample_idx: usize) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut coverages,
                 ref mut all_variants,
-                ref mut contigs,
 //                ref mut target_names,
 //                ref mut target_lengths,
                 ref mut variances,
@@ -257,8 +263,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                             }
                         }
                         depths.entry(tid).or_insert(depth);
-                        contigs.entry(tid).or_insert(contig);
-                        
                     }
                 }
             }
@@ -568,15 +572,16 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn generate_genotypes(&mut self, output_prefix: &str) {
+    #[allow(unused)]
+    fn generate_genotypes(&mut self, output_prefix: &str,
+                          reference: &mut bio::io::fasta::IndexedReader<File>) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 target_names,
-                contigs,
                 ref mut pred_variants,
                 ..
             } => {
-
+                let reference = Mutex::new(reference);
                 pred_variants.par_iter().for_each(|(strain_index, genotype)|{
                     let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
@@ -585,104 +590,128 @@ impl VariantMatrixFunctions for VariantMatrix {
                     // Open haplotype file or create one
                     let mut file_open = File::create(file_path)
                         .expect("No Read or Write Permission in current directory");
+                    let mut original_contig = Vec::new();
 
                     let mut genotype = genotype.clone();
 
                     // Generate the variant genome
-                    for (tid, original_contig) in contigs.iter() {
+                    for (tid, target_name) in target_names.iter() {
                         let mut contig = String::new();
-
+                        original_contig = Vec::new();
+                        {
+                            let mut reference = reference.lock().unwrap();
+                            match reference.fetch_all(
+                                std::str::from_utf8(target_name.as_bytes()).unwrap()) {
+                                Ok(reference) => reference,
+                                Err(e) => {
+                                    warn!("Cannot read sequence from reference {:?}", e);
+                                    std::process::exit(1)
+                                },
+                            };
+                            match reference.read(&mut original_contig) {
+                                Ok(reference) => reference,
+                                Err(e) => {
+                                    warn!("Cannot read sequence from reference {:?}", e);
+                                    std::process::exit(1)
+                                },
+                            };
+                        }
                         let mut skip_n = 0;
                         let mut skip_cnt = 0;
 //                            let char_cnt = 0;
                         let mut variations = 0;
 
-                        for (pos, base) in original_contig.iter().enumerate() {
-                            if skip_cnt < skip_n {
-                                skip_cnt += 1;
-                            } else {
-                                skip_n = 0;
-                                skip_cnt = 0;
-                                if genotype.contains_key(&tid) {
-                                    let tid_genotype = genotype.get_mut(&tid).unwrap();
-
-                                    if tid_genotype.contains_key(&(pos as i64)) {
-                                        let categories = &genotype[tid][&(pos as i64)];
-                                        let hash;
-                                        if categories.contains_key(&fuzzy::Category::Core) {
-                                            hash = categories[&fuzzy::Category::Core].clone();
-                                        } else if categories.contains_key(&fuzzy::Category::Border) {
-                                            hash = categories[&fuzzy::Category::Border].clone();
-                                        } else {
-                                            hash = categories[&fuzzy::Category::Noise].clone();
-                                        }
-
-                                        let mut max_var = Variant::None;
-
-                                        for var in hash.iter() {
-                                            // If there are two variants possible for
-                                            // a single site and one is the reference
-                                            // we will choose the reference
-                                            if max_var == Variant::None {
-                                                max_var = var.clone();
-                                            }
-                                        }
-                                        if hash.len() > 1 {
-//                                            multivariant_sites += 1;
-                                            debug!("Multi hash {:?} {:?}", hash, max_var)
-                                        }
-                                        match max_var {
-                                            Variant::Deletion(size) => {
-                                                // Skip the next n bases but rescue the reference prefix
-                                                skip_n = size;
-                                                skip_cnt = 0;
-                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                // If we had the sequence we would rescue first base like this
-//                                                let first_byte = max_var.as_bytes()[0];
-//                                                contig = contig + str::from_utf8(
-//                                                    &[first_byte]).unwrap();
-                                                variations += 1;
-                                            },
-                                            Variant::Insertion(alt) => {
-
-                                                // Remove prefix from variant
-                                                let removed_first_base = str::from_utf8(
-                                                    &alt[1..]).unwrap();
-                                                contig = contig + removed_first_base;
-                                                variations += 1;
-                                            },
-                                            Variant::Inversion(alt) | Variant::MNV(alt) => {
-                                                // Skip the next n bases
-                                                skip_n = alt.len() as u32 - 1;
-                                                skip_cnt = 0;
-                                                // Inversions and MNVs don't have a first base prefix, so take
-                                                // wholes tring
-                                                let inversion = str::from_utf8(
-                                                    &alt).unwrap();
-                                                contig = contig + inversion;
-                                                variations += 1;
-                                            },
-                                            Variant::None => {
-                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                            },
-                                            Variant::SNV(alt) => {
-
-                                                contig = contig + str::from_utf8(&[alt]).unwrap();
-                                                variations += 1;
-                                            },
-                                            _ => {
-                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                            }
-                                        }
-                                    } else {
-                                        contig = contig + str::from_utf8(&[*base]).unwrap();
-                                    }
+                        if genotype.contains_key(&tid) {
+                            for (pos, base) in original_contig.iter().enumerate() {
+                                if skip_cnt < skip_n {
+                                    skip_cnt += 1;
                                 } else {
-                                    contig = str::from_utf8(&original_contig)
-                                        .expect("Can't convert to str").to_string();
+                                    skip_n = 0;
+                                    skip_cnt = 0;
+    //                                if genotype.contains_key(&tid) {
+                                        let tid_genotype = genotype.get_mut(&tid).unwrap();
+
+                                        if tid_genotype.contains_key(&(pos as i64)) {
+                                            let categories = &genotype[tid][&(pos as i64)];
+                                            let hash;
+                                            if categories.contains_key(&fuzzy::Category::Core) {
+                                                hash = categories[&fuzzy::Category::Core].clone();
+                                            } else if categories.contains_key(&fuzzy::Category::Border) {
+                                                hash = categories[&fuzzy::Category::Border].clone();
+                                            } else {
+                                                hash = categories[&fuzzy::Category::Noise].clone();
+                                            }
+
+                                            let mut max_var = Variant::None;
+
+                                            for var in hash.iter() {
+                                                // If there are two variants possible for
+                                                // a single site and one is the reference
+                                                // we will choose the reference
+                                                if max_var == Variant::None {
+                                                    max_var = var.clone();
+                                                }
+                                            }
+                                            if hash.len() > 1 {
+    //                                            multivariant_sites += 1;
+                                                debug!("Multi hash {:?} {:?}", hash, max_var)
+                                            }
+                                            match max_var {
+                                                Variant::Deletion(size) => {
+                                                    // Skip the next n bases but rescue the reference prefix
+                                                    skip_n = size;
+                                                    skip_cnt = 0;
+                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                    // If we had the sequence we would rescue first base like this
+    //                                                let first_byte = max_var.as_bytes()[0];
+    //                                                contig = contig + str::from_utf8(
+    //                                                    &[first_byte]).unwrap();
+                                                    variations += 1;
+                                                },
+                                                Variant::Insertion(alt) => {
+
+                                                    // Remove prefix from variant
+                                                    let removed_first_base = str::from_utf8(
+                                                        &alt[1..]).unwrap();
+                                                    contig = contig + removed_first_base;
+                                                    variations += 1;
+                                                },
+                                                Variant::Inversion(alt) | Variant::MNV(alt) => {
+                                                    // Skip the next n bases
+                                                    skip_n = alt.len() as u32 - 1;
+                                                    skip_cnt = 0;
+                                                    // Inversions and MNVs don't have a first base prefix, so take
+                                                    // wholes tring
+                                                    let inversion = str::from_utf8(
+                                                        &alt).unwrap();
+                                                    contig = contig + inversion;
+                                                    variations += 1;
+                                                },
+                                                Variant::None => {
+                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                },
+                                                Variant::SNV(alt) => {
+
+                                                    contig = contig + str::from_utf8(&[alt]).unwrap();
+                                                    variations += 1;
+                                                },
+                                                _ => {
+                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                }
+                                            }
+                                        } else {
+                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                                        }
+    //                                } else {
+    //                                    contig = str::from_utf8(&original_contig)
+    //                                        .expect("Can't convert to str").to_string();
+    //                                }
                                 }
-                            }
-                        };
+                            };
+                        } else {
+                            contig = str::from_utf8(&original_contig)
+                                .expect("Can't convert to str").to_string();
+                        }
                         writeln!(file_open, ">{}_strain_{}\t#variants_{}",
                                  target_names[tid],
                                  strain_index,
@@ -837,6 +866,95 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .stdout(Stdio::piped())
                             .spawn()
                             .expect("Unable to execute Rscript"), "CMplot");
+                }
+            }
+        }
+    }
+
+    fn calc_gene_mutation(&self,
+                          gff_map: &mut HashMap<String, Vec<bio::io::gff::Record>>,
+                          reference: &mut bio::io::fasta::IndexedReader<File>,
+                          codon_table: &CodonTable,
+                          ref_name: &str,
+                          output_prefix: &str) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                target_names,
+                all_variants,
+                ..
+            } => {
+                let file_name = format!("{}_{}_dnds_values.gff",
+                                        output_prefix.to_string(), ref_name);
+
+                let file_path = Path::new(&file_name);
+//                let mut file_open = File::create(file_path)
+//                    .expect("Unable to create GFF file");
+                let mut gff_writer = gff::Writer::to_file(file_path,
+                                                          bio::io::gff::GffType::GFF3)
+                                                          .expect("unable to create GFF file");
+                for (tid, contig_name) in target_names.iter() {
+
+
+                    let mut ref_sequence = Vec::new();
+                    match reference.fetch_all(
+                        std::str::from_utf8(contig_name.as_bytes()).unwrap()) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)
+                        },
+                    };
+                    match reference.read(&mut ref_sequence) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            println!("Cannot read sequence from reference {:?}", e);
+                            std::process::exit(1)
+                        },
+                    };
+                    let mut placeholder = Vec::new();
+                    let gff_records = match gff_map.get_mut(contig_name){
+                        Some(records) => records,
+                        None => &mut placeholder,
+                    };
+                    debug!("Calculating population dN/dS from reads for {} genes on contig {}",
+                           gff_records.len(), contig_name);
+
+                    let placeholder_map = HashMap::new();
+                    let variants = match all_variants.get(tid) {
+                        Some(map) => map,
+                        None => &placeholder_map
+                    };
+
+                    gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
+                        let dnds = codon_table.find_mutations(gene, variants, &ref_sequence);
+                        gene.attributes_mut().insert(format!("dNdS"), format!("{}", dnds));
+                        debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
+                        gff_writer.write(gene);
+//                        let attributes = if !gene.attributes().is_empty() {
+//                            gene
+//                                .attributes()
+//                                .iter()
+//                                .map(|(a, b)| format!("{}{}{}", a, "=", b))
+//                                .join(";")
+//                        } else {
+//                            "".to_owned()
+//                        };
+//
+//                        let gff_line = format!(
+//                            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t",
+//                                            gene.seqname(),
+//                                            gene.source(),
+//                                            gene.feature_type(),
+//                                            gene.start(),
+//                                            gene.end(),
+//                                            gene.score().unwrap_or(0),
+//                                            gene.strand().unwrap_or(Strand::Unknown),
+//                                            gene.frame(),
+//                                            attributes);
+//                        println!("{}", gff_line);
+//                        writeln!(file_open, "{}", gff_line);
+                    });
+
                 }
             }
         }

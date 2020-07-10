@@ -73,8 +73,7 @@ pub trait Translations {
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
                       variants: &HashMap<i64, HashMap<Variant, Base>>,
-                      ref_sequence: &Vec<u8>,
-                      depth: &Vec<i32>) -> f64;
+                      ref_sequence: &Vec<u8>) -> f64;
 }
 
 impl Translations for CodonTable {
@@ -124,8 +123,7 @@ impl Translations for CodonTable {
     fn find_mutations(&self,
                       gene: &bio::io::gff::Record,
                       variants: &HashMap<i64, HashMap<Variant, Base>>,
-                      ref_sequence: &Vec<u8>,
-                      _depth: &Vec<i32>) -> f64 {
+                      ref_sequence: &Vec<u8>) -> f64 {
         let strand = gene.strand().expect("No strandedness found");
 
         // bio::gff documentation says start and end positions are 1-based, so we minus 1

@@ -5,7 +5,7 @@
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
 
 
-![](docs/images/lorikeet_logo_crop.png)
+![](docs/images/lorikeet_logo_crop_left.png)
 
 ## Introduction
 
@@ -17,6 +17,13 @@ information to help provide likely genotypes based on observed physical linkages
 ## Installation
 
 #### Option 1: Conda - Recommended
+
+Install into current conda environment:
+```
+conda install lorikeet-genome
+```
+
+Create fresh conda environment and install lorikeet there:
 ```
 conda create -n lorikeet -c bioconda lorikeet-genome && \
 conda activate lorikeet
@@ -25,7 +32,7 @@ conda activate lorikeet
 #### Option 2: Cargo
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-freebayes=1.3.2 samtools bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+freebayes=1.3.2 prokka samtools bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 cargo install lorikeet-genome
@@ -36,7 +43,7 @@ You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LI
 paths in the your conda environment if they can't properly be found on your system.
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-freebayes=1.3.2 samtools bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+freebayes=1.3.2 prokka samtools bcftools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 git clone https://github.com/rhysnewell/Lorikeet/git && \ 
