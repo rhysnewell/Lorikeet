@@ -273,51 +273,54 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>,
             .permutations(2)
             .collect::<Vec<Vec<usize>>>().into_par_iter().for_each(|indices| {
 
-            //TODO: Filter these links based on linkage disequilibrium or some other
-            //      probabilistic parameter?
 
             // Get variants by index
             let var1 = &variant_info[indices[0]];
             let var2 = &variant_info[indices[1]];
 
-            // Read ids of first variant
-            let set1 = &var1.reads;
+            if !(var1.tid == var2.tid && var1.pos == var2.pos) {
 
-            // Read ids of second variant
-            let set2 = &var2.reads;
+                // Read ids of first variant
+                let set1 = &var1.reads;
 
-            // Add the jaccard's similarity to the hashmap for the two clusters
-            let intersection: HashSet<_> = set1
-                .intersection(&set2).collect();
+                // Read ids of second variant
+                let set2 = &var2.reads;
 
-            let union: HashSet<_> = set1
-                .union(&set2).collect();
+                // Add the jaccard's similarity to the hashmap for the two clusters
+                let intersection: HashSet<_> = set1
+                    .intersection(&set2).collect();
 
-            // Scaled Jaccard Similarity Based on Minimum Set size
+                let union: HashSet<_> = set1
+                    .union(&set2).collect();
+
+                // Scaled Jaccard Similarity Based on Minimum Set size
 //            let jaccard = intersection.len() as f64 /
 //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
 //             Normal Jaccard's Similarity
-            if intersection.len() >= minimum_reads_in_link {
-                // get relative frequencies of each Haplotype
-                let pool_size = union.len() as f64;
-                let x_11 = intersection.len() as f64 / pool_size;
-                let p1 = set1.len() as f64 / pool_size;
-                let q1 = set2.len() as f64 / pool_size;
+                if intersection.len() >= minimum_reads_in_link {
+                    // get relative frequencies of each Haplotype
+                    let pool_size = union.len() as f64;
+                    let x_11 = intersection.len() as f64 / pool_size;
+                    let p1 = set1.len() as f64 / pool_size;
+                    let q1 = set2.len() as f64 / pool_size;
 
-                // Calculate Linkage D
-                let dis = x_11 - p1 * q1;
+                    // Calculate Linkage D
+                    let dis = x_11 - p1 * q1;
 
 
-                let mut links = links.lock().unwrap();
-                // Intialize links for each indices including itself
-                let links_out = links.entry(indices[0])
-                    .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
-                links_out.insert(indices[1]);
-                let links_out = links.entry(indices[1])
-                    .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
-                links_out.insert(indices[0]);
+                    let mut links = links.lock().unwrap();
+                    // Intialize links for each indices including itself
+                    let links_out = links.entry(indices[0])
+                        .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
+                    links_out.insert(indices[1]);
+                    let links_out = links.entry(indices[1])
+                        .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
+                    links_out.insert(indices[0]);
+                }
             }
         });
+        // TODO: Make sure SNPs at same location don't get put together
+
         let links = links.lock().unwrap();
 
         // Create condensed links sender and receiver, avoiding use of mutex
@@ -331,7 +334,20 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>,
                 match links.get(&index) {
                     Some(other_links) => {
 //                        let mut other_links: Vec<_> = other_links.par_iter().cloned().collect();
-                        anchors.par_extend(other_links.par_iter())
+                        // Get variants by index and check that there is no conflict in position
+                        // with any established links in current links
+                        let var_check_1 = &variant_info[*index];
+                        let (check_s, check_r) = channel();
+                        other_links.par_iter().for_each_with(check_s, |s_bool, index_to_check| {
+                            let var_check_2 = &variant_info[*index_to_check];
+                            s_bool.send(var_check_1.tid == var_check_2.tid &&
+                                var_check_1.pos == var_check_2.pos).unwrap()
+                        });
+                        let mut checked_links: HashSet<_> = check_r.iter().collect();
+
+                        if !checked_links.contains(&true) {
+                            anchors.par_extend(other_links.par_iter())
+                        }
                     },
                     _ => {},
                 }

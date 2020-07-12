@@ -44,7 +44,7 @@ impl MetricSpace for Var<> {
 
         if self.vars.len() > 1 {
             if self.pos == other.pos && self.tid == other.tid {
-                return 10.
+                return 40.
             } else {
                 let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
                     let output = input.par_iter().enumerate().map(|(i, v)| {
@@ -110,7 +110,7 @@ impl MetricSpace for Var<> {
                 debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
                        phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
 
-                return 1.-rho
+                return phi_dist
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
@@ -234,7 +234,7 @@ impl FuzzyDBSCAN {
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
 
-        for initial in initial_clusters {
+        for initial in initial_clusters.iter() {
             // Work out which point in our initial clusters has the highest density to other
             // points
             let mut point_label_max = 0.;
@@ -273,28 +273,30 @@ impl FuzzyDBSCAN {
         }
 
         // Cluster any unvisited points
-        for point_index in 0..points.len() {
-            if visited[point_index] {
-                continue;
-            }
-            visited[point_index] = true;
-            let neighbour_indices = self.region_query(points, point_index);
-            let point_label = self.mu_min_p(
-                self.density(point_index, &neighbour_indices, points));
-            if point_label == 0.0 {
-                noise_cluster.push(Assignment {
-                    index: point_index,
-                    category: Category::Noise,
-                    label: 1.0,
-                });
-            } else {
-                clusters.push(self.expand_cluster_fuzzy(
-                    point_label,
-                    point_index,
-                    neighbour_indices,
-                    points,
-                    &mut visited,
-                ));
+        if initial_clusters.len() == 0 {
+            for point_index in 0..points.len() {
+                if visited[point_index] {
+                    continue;
+                }
+                visited[point_index] = true;
+                let neighbour_indices = self.region_query(points, point_index);
+                let point_label = self.mu_min_p(
+                    self.density(point_index, &neighbour_indices, points));
+                if point_label == 0.0 {
+                    noise_cluster.push(Assignment {
+                        index: point_index,
+                        category: Category::Noise,
+                        label: 1.0,
+                    });
+                } else {
+                    clusters.push(self.expand_cluster_fuzzy(
+                        point_label,
+                        point_index,
+                        neighbour_indices,
+                        points,
+                        &mut visited,
+                    ));
+                }
             }
         }
         if !noise_cluster.is_empty() {
