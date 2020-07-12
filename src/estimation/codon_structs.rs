@@ -399,8 +399,7 @@ mod tests {
             let dnds = codon_table.find_mutations(
                 &gene_record,
                 &variant_abundances,
-                &ref_sequence,
-                &Vec::new());
+                &ref_sequence);
             assert_eq!(format!("{:.4}", dnds), format!("{}", 0.1247));
         }
 

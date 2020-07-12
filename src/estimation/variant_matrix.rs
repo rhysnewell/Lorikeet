@@ -1275,7 +1275,7 @@ mod tests {
         var_stats.add_contig(Some(&mut variant_abundances), 0, 0,
                              b"test".to_vec(), ref_sequence.len(), 0,
                              vec![10., 10., 0.], ups_and_downs);
-        var_mat.add_contig(var_stats, 2, 0, ref_sequence.clone());
+        var_mat.add_contig(var_stats, 2, 0);
 
         {
             // Add variants in
@@ -1300,7 +1300,7 @@ mod tests {
                              b"test".to_vec(), ref_sequence.len(), 1,
                              vec![10., 10., 0.], ups_and_downs);
 
-        var_mat.add_contig(var_stats, 2, 1, ref_sequence.clone());
+        var_mat.add_contig(var_stats, 2, 1);
 
         var_mat.generate_distances(0, "test");
 
