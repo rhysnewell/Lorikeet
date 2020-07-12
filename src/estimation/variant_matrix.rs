@@ -319,6 +319,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                 for (variant, base_info) in hash.iter_mut() {
                                     match variant {
+
                                         Variant::SNV(_) | Variant::None => {
                                             let _abundance: f64 = 0.;
                                             let _mean_var: f64 = 0.;
@@ -338,6 +339,7 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                                 let total_depth
                                                     = base_info.totaldepth[index] as f64;
+//                                                println!("var_depth {} tot {}", var_depth, total_depth);
 //                                                base_info.freq[index] = ;
                                                 if total_depth <= 0. {
                                                     rel_abund[index] =
@@ -524,6 +526,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     cluster.par_iter().for_each(|assignment|{
 
                         let variant: &fuzzy::Var = &variant_info[assignment.index];
+
                         let mut prediction_variants = prediction_variants
                             .lock()
                             .unwrap();
@@ -620,6 +623,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         let mut skip_cnt = 0;
 //                            let char_cnt = 0;
                         let mut variations = 0;
+                        let mut ref_alleles = 0;
 
                         if genotype.contains_key(&tid) {
                             for (pos, base) in original_contig.iter().enumerate() {
@@ -689,6 +693,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 },
                                                 Variant::None => {
                                                     contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                    ref_alleles += 1;
                                                 },
                                                 Variant::SNV(alt) => {
 
@@ -697,6 +702,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                 },
                                                 _ => {
                                                     contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                    ref_alleles += 1;
                                                 }
                                             }
                                         } else {
@@ -712,10 +718,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                             contig = str::from_utf8(&original_contig)
                                 .expect("Can't convert to str").to_string();
                         }
-                        writeln!(file_open, ">{}_strain_{}\t#variants_{}",
+                        writeln!(file_open, ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
                                  target_names[tid],
                                  strain_index,
-                                 variations).expect("Unable to write to file");
+                                 variations, ref_alleles).expect("Unable to write to file");
 
                         for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
                             file_open.write(line).unwrap();
