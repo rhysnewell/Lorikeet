@@ -58,7 +58,7 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let longreads = match long_readers {
         Some(vec) => {
             // update sample count
-            debug!("Longread bams 1 {:?}=", vec.len());
+            debug!("Longread bams {:?}", vec.len());
 
             sample_count += vec.len();
             vec

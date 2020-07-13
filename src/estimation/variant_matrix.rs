@@ -570,7 +570,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                     });
                     let mut prediction_set = prediction_set.lock().unwrap();
                     if !(prediction_set.len() == 1 && prediction_set.contains(&Variant::None)) {
-                        info!("Cluster {} contains {} alleles", rank + 1, cluster.len());
 
                     } else {
                         let mut prediction_variants = prediction_variants
@@ -734,21 +733,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 .expect("Can't convert to str").to_string();
                         }
 
-                        if variations > 0 {
-                            // Open haplotype file or create one
-                            let mut file_open = File::create(file_path)
-                                .expect("No Read or Write Permission in current directory");
+                        // Open haplotype file or create one
+                        let mut file_open = File::create(file_path)
+                            .expect("No Read or Write Permission in current directory");
 
-                            writeln!(file_open, ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
-                                     target_names[tid],
-                                     strain_index,
-                                     variations, ref_alleles).expect("Unable to write to file");
+                        info!("Cluster {} contains {} variant alleles and {} reference alleles",
+                              strain_index, variations, ref_alleles);
 
-                            for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                file_open.write(line).unwrap();
-                                file_open.write(b"\n").unwrap();
-                            };
-                        }
+                        writeln!(file_open, ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
+                                 target_names[tid],
+                                 strain_index,
+                                 variations, ref_alleles).expect("Unable to write to file");
+
+                        for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                            file_open.write(line).unwrap();
+                            file_open.write(b"\n").unwrap();
+                        };
 //                        tot_variations += variations;
                     }
                 });
