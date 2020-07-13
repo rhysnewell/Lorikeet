@@ -451,6 +451,12 @@ fn main(){
             let filter_params = FilterParameters::generate_from_clap(m);
             let threads = m.value_of("threads").unwrap().parse().unwrap();
             rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+            let mut long_readers = vec!();
+            if m.is_present("longread-bam-files") {
+                let longreads = m.values_of("longread-bam-files").unwrap().collect();
+                long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    longreads);
+            };
             if m.is_present("bam-files") {
                 let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
 
@@ -469,7 +475,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters, None);
+                               filter_params.flag_filters, Some(long_readers));
                 } else if m.is_present("sharded") {
                     external_command_checker::check_for_samtools();
                     let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
@@ -478,7 +484,7 @@ fn main(){
                     run_pileup(m, mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters, None);
+                               filter_params.flag_filters, Some(long_readers));
                 } else {
                     let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                         bam_files);
@@ -486,7 +492,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                bam_readers,
-                               filter_params.flag_filters, None);
+                               filter_params.flag_filters, Some(long_readers));
                 }
             } else if m.is_present("read1") |
                 m.is_present("interleaved") |
@@ -515,7 +521,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters, None);
+                               filter_params.flag_filters, Some(long_readers));
                 } else if m.is_present("sharded") {
                     let generator_sets = get_sharded_bam_readers(
                         m,
@@ -527,7 +533,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                generator_sets,
-                               filter_params.flag_filters, None);
+                               filter_params.flag_filters, Some(long_readers));
                 } else {
                     debug!("Not filtering..");
                     let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
@@ -543,7 +549,7 @@ fn main(){
                                mode,
                                &mut estimators,
                                all_generators,
-                               filter_params.flag_filters.clone(), None);
+                               filter_params.flag_filters.clone(), Some(long_readers));
                 }
             }
         },
@@ -1436,7 +1442,7 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
-                false,
+                m.is_present("include-soft-clipping"),
                 m.is_present("longread-bam-files"));
         },
         "evolve" => {
@@ -1485,8 +1491,8 @@ fn run_pileup<'a,
                 method,
                 coverage_fold,
                 include_indels,
-                false,
-                false);
+                m.is_present("include-soft-clipping"),
+                m.is_present("longread-bam-files"));
         },
         "polish" => {
             let print_zeros = !m.is_present("no-zeros");
@@ -1541,7 +1547,7 @@ fn run_pileup<'a,
                 coverage_fold,
                 include_indels,
                 false,
-                false);
+                m.is_present("longread-bam-files"));
         },
         _ => panic!("Unknown lorikeet mode"),
     }

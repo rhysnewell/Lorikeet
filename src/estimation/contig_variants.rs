@@ -2,7 +2,6 @@ use std::collections::{HashMap};
 use std::str;
 use std::io::prelude::*;
 use rayon::prelude::*;
-use estimation::codon_structs::*;
 use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 
 use std::path::Path;
