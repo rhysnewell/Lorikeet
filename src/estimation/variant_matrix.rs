@@ -611,6 +611,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                     let mut genotype = genotype.clone();
 
+                    let mut total_variant_alleles = 0;
+                    let mut total_reference_alleles = 0;
+
                     // Generate the variant genome
                     for (tid, target_name) in target_names.iter() {
                         let mut contig = String::new();
@@ -737,8 +740,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         let mut file_open = File::create(file_path)
                             .expect("No Read or Write Permission in current directory");
 
-                        info!("Cluster {} contains {} variant alleles and {} reference alleles",
-                              strain_index, variations, ref_alleles);
+
 
                         writeln!(file_open, ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
                                  target_names[tid],
@@ -749,8 +751,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                             file_open.write(line).unwrap();
                             file_open.write(b"\n").unwrap();
                         };
-//                        tot_variations += variations;
+                        total_variant_alleles += variations;
+                        total_reference_alleles += ref_alleles;
                     }
+                    info!("Cluster {} contains {} variant alleles and {} reference alleles",
+                          strain_index, total_variant_alleles, total_reference_alleles);
                 });
             }
         }
