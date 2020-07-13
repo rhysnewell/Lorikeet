@@ -124,7 +124,7 @@ impl Translations for CodonTable {
                       gene: &bio::io::gff::Record,
                       variants: &HashMap<i64, HashMap<Variant, Base>>,
                       ref_sequence: &Vec<u8>) -> f64 {
-        let strand = gene.strand().expect("No strandedness found");
+        let strand = gene.strand().unwrap_or(strand::Strand::Unknown);
 
         // bio::gff documentation says start and end positions are 1-based, so we minus 1
         // Additionally, end position is non-inclusive

@@ -514,16 +514,23 @@ impl VariantMatrixFunctions for VariantMatrix {
                     Mutex::new(
                         HashMap::new());
 
+
                 let all_variants =
                     Mutex::new(
                         all_variants);
 
                 // Organize clusters into genotypes by recollecting full variant information
                 clusters.par_iter().enumerate().for_each(|(rank, cluster)|{
-                    info!("Cluster {} Sites {}", rank + 1, cluster.len());
+                    // Sets for each cluster keeping track of which variant types are present in
+                    // a cluster
+                    let prediction_set = Mutex::new(
+                        HashSet::new());
                     cluster.par_iter().for_each(|assignment|{
 
                         let variant: &fuzzy::Var = &variant_info[assignment.index];
+
+                        let mut prediction_set = prediction_set.lock().unwrap();
+                        prediction_set.insert(variant.var.to_owned());
 
                         let mut prediction_variants = prediction_variants
                             .lock()
@@ -561,6 +568,19 @@ impl VariantMatrixFunctions for VariantMatrix {
                         };
 
                     });
+                    let mut prediction_set = prediction_set.lock().unwrap();
+                    if !(prediction_set.len() == 1 && prediction_set.contains(&Variant::None)) {
+                        info!("Cluster {} contains {} alleles", rank + 1, cluster.len());
+
+                    } else {
+                        let mut prediction_variants = prediction_variants
+                            .lock()
+                            .unwrap();
+
+                        prediction_variants
+                            .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
+                    }
+
                 });
 
                 let prediction_variants = prediction_variants.lock().unwrap();
