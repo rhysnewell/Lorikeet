@@ -1114,7 +1114,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("10"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
-                    .short("q")
                     .default_value("0"))
                 .arg(Arg::with_name("base-quality-threshold")
                     .long("base-quality-threshold")
