@@ -124,180 +124,181 @@ impl Translations for CodonTable {
                       gene: &bio::io::gff::Record,
                       variants: &HashMap<i64, HashMap<Variant, Base>>,
                       ref_sequence: &Vec<u8>) -> f64 {
-        let strand = gene.strand().unwrap_or(strand::Strand::Unknown);
+        match gene.strand() {
+            Some(strand) => {
 
-        // bio::gff documentation says start and end positions are 1-based, so we minus 1
-        // Additionally, end position is non-inclusive
-        let start = gene.start().clone() as usize - 1;
-        let end = gene.end().clone() as usize;
-        let frame: usize = gene.frame().parse().unwrap_or(0);
-        let gene_sequence = ref_sequence[start..end].to_vec();
-        debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
-        let codon_sequence = get_codons(&gene_sequence, frame, strand);
-        debug!("Codon Sequence {:?}", codon_sequence);
 
-        // Calculate N and S
-        let mut big_n: f64 = 0.0;
-        let mut big_s: f64 = 0.0;
-        for codon in codon_sequence.iter() {
-            if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
-                continue
-            } else {
-                let n = self.ns_sites[codon];
-                big_n += n;
-                big_s += 3.0 - n;
-            }
-        }
+                // bio::gff documentation says start and end positions are 1-based, so we minus 1
+                // Additionally, end position is non-inclusive
+                let start = gene.start().clone() as usize - 1;
+                let end = gene.end().clone() as usize;
+                let frame: usize = gene.frame().parse().unwrap_or(0);
+                let gene_sequence = ref_sequence[start..end].to_vec();
+                debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
+                let codon_sequence = get_codons(&gene_sequence, frame, strand);
+                debug!("Codon Sequence {:?}", codon_sequence);
 
-        debug!("getting ns_sites N {} S {}", big_n, big_s);
-
-        // Create Nd and Sd values
-        let mut big_nd: f64 = 0.0;
-        let mut big_sd: f64 = 0.0;
-
-        // dN/dS calculations when using NGS reads outlined here:
-        // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
-        // Note, we don't normalize for depth here and instead just use Jukes-Cantor model
-        let mut codon: Vec<u8> = vec!();
-        let mut new_codons: Vec<Vec<u8>> = vec!();
-        let mut positionals = 0;
-        let mut total_variants = 0;
-        let dummy = HashMap::new();
-        for (gene_cursor, cursor) in (start..end).into_iter().enumerate() {
-            let variant_set = match variants.get(&(cursor as i64)){
-                Some(map) => map,
-                None => &dummy,
-            };
-
-            let codon_idx = gene_cursor / 3 as usize;
-            let codon_cursor = gene_cursor % 3;
-            if String::from_utf8(codon.clone())
-                .expect("Unable to interpret codon").contains("N") {
-                continue
-            }
-
-            if codon_cursor == 0
-                || new_codons.len() == 0 {
-                for new_codon in new_codons.iter_mut() {
-                    if (codon.len() == 3)
-                        && (new_codon.len() == 3)
-                        && (codon != *new_codon){
-                        // get indices of different locations
-                        let mut pos = 0 as usize;
-                        let mut diffs = vec!();
-                        for (c1, c2) in codon.iter().zip(new_codon.iter()) {
-                            if c1 != c2 {
-                                diffs.push(pos);
-                            }
-                            pos += 1;
-                        }
-                        total_variants += diffs.len();
-                        // get permuations of positions
-                        let permutations: Vec<Vec<usize>> = diffs.iter().cloned().permutations(diffs.len()).collect();
-
-                        // calculate synonymous and non-synonymous for each permutation
-                        let mut ns = 0;
-                        let mut ss = 0;
-                        debug!("positional difference {:?} permutations {:?}", diffs, permutations.len());
-                        positionals += permutations.len();
-                        for permutation in permutations.iter() {
-                            let mut shifting = codon.clone();
-                            let mut old_shift;
-                            for pos in permutation {
-                                // Check if one amino acid change causes an syn or non-syn
-                                old_shift = shifting.clone();
-                                shifting[*pos] = new_codon[*pos];
-                                debug!("Old shift {:?}, new {:?}", old_shift, shifting);
-                                if self.aminos[&old_shift] != self.aminos[&shifting] {
-                                    ns += 1;
-                                } else {
-                                    ss += 1;
-                                }
-                            }
-                        }
-                        let nd = ns as f64 / permutations.len() as f64;
-                        let sd = ss as f64 / permutations.len() as f64;
-                        big_nd += nd;
-                        big_sd += sd;
+                // Calculate N and S
+                let mut big_n: f64 = 0.0;
+                let mut big_s: f64 = 0.0;
+                for codon in codon_sequence.iter() {
+                    if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
+                        continue
+                    } else {
+                        let n = self.ns_sites[codon];
+                        big_n += n;
+                        big_s += 3.0 - n;
                     }
                 }
-                // begin working on new codon
-                debug!("Codon idx {} codonds {} gene length {} new_codons {:?}",
-                         codon_idx, codon_sequence.len(), gene_sequence.len(), new_codons);
-                if codon_sequence.len() == 268 {
-                    debug!("{:?}", codon_sequence);
-                }
-                codon = codon_sequence[codon_idx].clone();
-                if codon.len() != 3 {
-                    continue
-                }
-                new_codons = Vec::new();
-                new_codons.push(codon.clone());
-            }
-            if variant_set.len() > 0 {
-                debug!("variant map {:?}", variant_set);
-                let mut variant_count = 0;
 
-                for (variant, base_info) in variant_set.iter() {
-                    match variant {
-                        Variant::SNV(var) => {
+                debug!("getting ns_sites N {} S {}", big_n, big_s);
 
-                            if variant_count > 0 {
-                                // Create a copy of codon up to this point
-                                // Not sure if reusing previous variants is bad, but
-                                // not doing so can cause randomness to dN/dS values
+                // Create Nd and Sd values
+                let mut big_nd: f64 = 0.0;
+                let mut big_sd: f64 = 0.0;
 
-                                new_codons.push(codon.clone());
+                // dN/dS calculations when using NGS reads outlined here:
+                // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
+                // Note, we don't normalize for depth here and instead just use Jukes-Cantor model
+                let mut codon: Vec<u8> = vec!();
+                let mut new_codons: Vec<Vec<u8>> = vec!();
+                let mut positionals = 0;
+                let mut total_variants = 0;
+                let dummy = HashMap::new();
+                for (gene_cursor, cursor) in (start..end).into_iter().enumerate() {
+                    let variant_set = match variants.get(&(cursor as i64)) {
+                        Some(map) => map,
+                        None => &dummy,
+                    };
 
-                                new_codons[variant_count][codon_cursor] = *var;
+                    let codon_idx = gene_cursor / 3 as usize;
+                    let codon_cursor = gene_cursor % 3;
+                    if String::from_utf8(codon.clone())
+                        .expect("Unable to interpret codon").contains("N") {
+                        continue
+                    }
 
-                                debug!("multi variant codon {:?}", new_codons);
-                            } else {
-
-                                for var_idx in 0..new_codons.len() {
-
-                                    new_codons[var_idx][codon_cursor] = *var;
+                    if codon_cursor == 0
+                        || new_codons.len() == 0 {
+                        for new_codon in new_codons.iter_mut() {
+                            if (codon.len() == 3)
+                                && (new_codon.len() == 3)
+                                && (codon != *new_codon) {
+                                // get indices of different locations
+                                let mut pos = 0 as usize;
+                                let mut diffs = vec!();
+                                for (c1, c2) in codon.iter().zip(new_codon.iter()) {
+                                    if c1 != c2 {
+                                        diffs.push(pos);
+                                    }
+                                    pos += 1;
                                 }
+                                total_variants += diffs.len();
+                                // get permuations of positions
+                                let permutations: Vec<Vec<usize>> = diffs.iter().cloned().permutations(diffs.len()).collect();
+
+                                // calculate synonymous and non-synonymous for each permutation
+                                let mut ns = 0;
+                                let mut ss = 0;
+                                debug!("positional difference {:?} permutations {:?}", diffs, permutations.len());
+                                positionals += permutations.len();
+                                for permutation in permutations.iter() {
+                                    let mut shifting = codon.clone();
+                                    let mut old_shift;
+                                    for pos in permutation {
+                                        // Check if one amino acid change causes an syn or non-syn
+                                        old_shift = shifting.clone();
+                                        shifting[*pos] = new_codon[*pos];
+                                        debug!("Old shift {:?}, new {:?}", old_shift, shifting);
+                                        if self.aminos[&old_shift] != self.aminos[&shifting] {
+                                            ns += 1;
+                                        } else {
+                                            ss += 1;
+                                        }
+                                    }
+                                }
+                                let nd = ns as f64 / permutations.len() as f64;
+                                let sd = ss as f64 / permutations.len() as f64;
+                                big_nd += nd;
+                                big_sd += sd;
                             }
-                            variant_count += 1;
-                        },
-                        _ => {
-                            // Frameshift mutations are not included in dN/dS calculations?
-                            // Seems weird, but all formulas say no
-                            debug!("Frameshift mutation variant {:?}", variant);
+                        }
+                        // begin working on new codon
+                        debug!("Codon idx {} codonds {} gene length {} new_codons {:?}",
+                               codon_idx, codon_sequence.len(), gene_sequence.len(), new_codons);
+                        if codon_sequence.len() == 268 {
+                            debug!("{:?}", codon_sequence);
+                        }
+                        codon = codon_sequence[codon_idx].clone();
+                        if codon.len() != 3 {
                             continue
-                        },
+                        }
+                        new_codons = Vec::new();
+                        new_codons.push(codon.clone());
                     }
+                    if variant_set.len() > 0 {
+                        debug!("variant map {:?}", variant_set);
+                        let mut variant_count = 0;
 
+                        for (variant, base_info) in variant_set.iter() {
+                            match variant {
+                                Variant::SNV(var) => {
+                                    if variant_count > 0 {
+                                        // Create a copy of codon up to this point
+                                        // Not sure if reusing previous variants is bad, but
+                                        // not doing so can cause randomness to dN/dS values
+
+                                        new_codons.push(codon.clone());
+
+                                        new_codons[variant_count][codon_cursor] = *var;
+
+                                        debug!("multi variant codon {:?}", new_codons);
+                                    } else {
+                                        for var_idx in 0..new_codons.len() {
+                                            new_codons[var_idx][codon_cursor] = *var;
+                                        }
+                                    }
+                                    variant_count += 1;
+                                },
+                                _ => {
+                                    // Frameshift mutations are not included in dN/dS calculations?
+                                    // Seems weird, but all formulas say no
+                                    debug!("Frameshift mutation variant {:?}", variant);
+                                    continue
+                                },
+                            }
+                        }
+                    }
                 }
-            }
-        }
 
-        debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
-               big_nd, big_n, big_sd, big_s, positionals, total_variants);
-        let mut pn = big_nd/big_n;
-        let mut ps = big_sd/big_s;
-        debug!("pn {} ps {}", pn, ps);
-        // Weirdly in the Jukes-Cantor model if pn or ps are 0.75 then the nat log does not resolve
-        // No one talks about this in the literature for some reason
-        if pn == 0.75 {
-            pn = 0.7499
-        }
-        if ps == 0.75 {
-            ps = 0.7499
-        }
-        let d_n = -(3.0/4.0)*(1.0-(4.0*pn)/3.0).ln();
-        let d_s = -(3.0/4.0)*(1.0-(4.0*ps)/3.0).ln();
-        debug!("dN {} dS {}", d_n, d_s);
-        let mut dnds = d_n/d_s;
+                debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
+                       big_nd, big_n, big_sd, big_s, positionals, total_variants);
+                let mut pn = big_nd / big_n;
+                let mut ps = big_sd / big_s;
+                debug!("pn {} ps {}", pn, ps);
+                // Weirdly in the Jukes-Cantor model if pn or ps are 0.75 then the nat log does not resolve
+                // No one talks about this in the literature for some reason
+                if pn == 0.75 {
+                    pn = 0.7499
+                }
+                if ps == 0.75 {
+                    ps = 0.7499
+                }
+                let d_n = -(3.0 / 4.0) * (1.0 - (4.0 * pn) / 3.0).ln();
+                let d_s = -(3.0 / 4.0) * (1.0 - (4.0 * ps) / 3.0).ln();
+                debug!("dN {} dS {}", d_n, d_s);
+                let mut dnds = d_n / d_s;
 
-        // negative dnds values make no sense, but occur nonetheless
-        // Just make them 0.0
-        if dnds < 0.0 {
-            dnds = 0.0
-        }
+                // negative dnds values make no sense, but occur nonetheless
+                // Just make them 0.0
+                if dnds < 0.0 {
+                    dnds = 0.0
+                }
 
-        return dnds
+                return dnds
+            },
+            _ => return 0.
+        }
     }
 }
 
