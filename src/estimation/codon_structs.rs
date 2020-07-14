@@ -127,7 +127,6 @@ impl Translations for CodonTable {
         match gene.strand() {
             Some(strand) => {
 
-
                 // bio::gff documentation says start and end positions are 1-based, so we minus 1
                 // Additionally, end position is non-inclusive
                 let start = gene.start().clone() as usize - 1;
@@ -142,7 +141,8 @@ impl Translations for CodonTable {
                 let mut big_n: f64 = 0.0;
                 let mut big_s: f64 = 0.0;
                 for codon in codon_sequence.iter() {
-                    if String::from_utf8(codon.clone()).expect("Unable to interpret codon").contains("N") {
+                    if String::from_utf8(codon.clone()).expect("Unable to interpret codon")
+                        .contains("N") || codon.len() != 3 {
                         continue
                     } else {
                         let n = self.ns_sites[codon];
