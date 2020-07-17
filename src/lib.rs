@@ -51,8 +51,7 @@ extern crate pest_derive;
 
 use clap::*;
 use std::process;
-use coverm::bam_generator::*;
-use std::marker::PhantomData;
+use coverm::genome_exclusion::*;
 
 pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
     match m.is_present(parameter) {
@@ -77,39 +76,3 @@ pub enum GenomeExclusionTypes {
     NoneType,
     GenomesAndContigsType,
 }
-
-
-
-pub enum LongreadMapping<S: NamedBamReader, U: NamedBamReaderGenerator<S>> {
-    ShardedBamNoExclusion(Vec<U>),
-    ShardedBamSeparator(Vec<U>),
-    ShardedBamGenomes(Vec<U>),
-    NamedBamReader(Vec<U>),
-    NamedBamStreamer(Vec<U>),
-    ReaderType(PhantomData<S>)
-}
-
-impl <S: NamedBamReader, U: NamedBamReaderGenerator<S>>LongreadMapping<S, U> {
-    pub fn len(&self) -> usize {
-        match self {
-            LongreadMapping::NamedBamStreamer(vec) => vec.len(),
-            LongreadMapping::ShardedBamNoExclusion(vec) => vec.len(),
-            LongreadMapping::ShardedBamSeparator(vec) => vec.len(),
-            LongreadMapping::ShardedBamGenomes(vec) => vec.len(),
-            LongreadMapping::NamedBamReader(vec) => vec.len(),
-            _ => panic!("Cannot return reader type"),
-        }
-    }
-
-    pub fn extract(self) -> Vec<U> {
-        match self {
-            LongreadMapping::NamedBamStreamer(vec) => vec,
-            LongreadMapping::ShardedBamNoExclusion(vec) => vec,
-            LongreadMapping::ShardedBamSeparator(vec) => vec,
-            LongreadMapping::ShardedBamGenomes(vec) => vec,
-            LongreadMapping::NamedBamReader(vec) => vec,
-            _ => panic!("Cannot extract reader type"),
-        }
-    }
-}
-
