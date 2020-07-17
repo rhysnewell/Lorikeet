@@ -131,7 +131,10 @@ impl Translations for CodonTable {
                 // Additionally, end position is non-inclusive
                 let start = gene.start().clone() as usize - 1;
                 let end = gene.end().clone() as usize;
-                let frame: usize = gene.frame().parse().unwrap_or(0);
+                let frame: usize = match gene.frame().parse() {
+                    Ok(frame_val) => frame_val,
+                    Err(_) => return 0.
+                };
                 let gene_sequence = ref_sequence[start..end].to_vec();
                 debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
                 let codon_sequence = get_codons(&gene_sequence, frame, strand);

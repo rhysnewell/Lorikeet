@@ -18,8 +18,8 @@ use bio::io::gff::Record;
 
 /// Process all reads in a BAM file
 #[allow(unused)]
-pub fn process_bam<R: NamedBamReader + Send,
-    G: NamedBamReaderGenerator<R> + Send>(
+pub fn process_bam<R: NamedBamReader,
+    G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
     sample_idx: usize,
     sample_count: usize,

@@ -59,6 +59,9 @@ pub fn check_for_minimap2() {
     self::check_for_external_command_presence("minimap2", "which minimap2");
 }
 
+pub fn check_for_ngmlr() {
+    self::check_for_external_command_presence("ngmlr", "which ngmlr");
+}
 
 fn check_for_external_command_presence(
     executable_name: &str, testing_cmd: &str) {

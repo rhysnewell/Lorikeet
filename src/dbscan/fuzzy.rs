@@ -205,21 +205,21 @@ pub struct FuzzyDBSCAN {
     pub geom_frq: Vec<f64>,
 }
 
-impl FuzzyDBSCAN {
-    /// Creates a new instance of the algorithm.
-    pub fn new() -> Self {
-        FuzzyDBSCAN {
-            eps_min: f64::NAN,
-            eps_max: f64::NAN,
-            pts_min: f64::NAN,
-            pts_max: f64::NAN,
-            phi: f64::NAN,
-            geom_var: Vec::new(),
-            geom_dep: Vec::new(),
-            geom_frq: Vec::new(),
-        }
-    }
-}
+// impl FuzzyDBSCAN {
+//     /// Creates a new instance of the algorithm.
+//     pub fn new() -> Self {
+//         FuzzyDBSCAN {
+//             eps_min: f64::NAN,
+//             eps_max: f64::NAN,
+//             pts_min: f64::NAN,
+//             pts_max: f64::NAN,
+//             phi: f64::NAN,
+//             geom_var: Vec::new(),
+//             geom_dep: Vec::new(),
+//             geom_frq: Vec::new(),
+//         }
+//     }
+// }
 
 impl FuzzyDBSCAN {
     /// Clusters a list of `points`.
@@ -301,7 +301,7 @@ impl FuzzyDBSCAN {
         }
         if !noise_cluster.is_empty() {
             info!("{} Variants Clustered as noise during Fuzzy DBSCAN", noise_cluster.len());
-            clusters.push(noise_cluster);
+            // clusters.push(noise_cluster);
         }
 
         // Sort the clusters by smallest to largest
