@@ -25,6 +25,7 @@ bio-types = "0.7"
 bird_tool_utils = "0.1.0"
 clap = "2"
 coverm = {git = "https://github.com/rhysnewell/CoverM"}
+galah = {git = "https://github.com/wwood/galah", rev = "64cb41a07d917c1af5d90a0b5f983a68b07543a9"}
 csv = "1"
 derive_builder = "0.9"
 derive-new = "0.5"
