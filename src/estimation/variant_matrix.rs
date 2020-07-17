@@ -488,9 +488,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                         _ => pts_max*variant_info.len() as f64,
                     },
                     phi,
-                    geom_var: geom_mean_var.clone(),
-                    geom_dep: geom_mean_dep.clone(),
-                    geom_frq: geom_mean_frq.clone(),
+                    geom_var: geom_mean_var.to_owned(),
+                    geom_dep: geom_mean_dep.to_owned(),
+                    geom_frq: geom_mean_frq.to_owned(),
                 };
 
                 // Perform read phasing clustering and return initial clusters

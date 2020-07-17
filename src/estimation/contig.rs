@@ -21,17 +21,16 @@ use tempdir::TempDir;
 use std::process::Stdio;
 
 #[allow(unused)]
-pub fn pileup_variants<R: NamedBamReader + Send,
-    G: NamedBamReaderGenerator<R> + Send,
-    S: NamedBamReader + Send,
-    U: NamedBamReaderGenerator<S> + Send,>(
+pub fn pileup_variants<R: NamedBamReader,
+    G: NamedBamReaderGenerator<R>,
+    S: NamedBamReader,
+    U: NamedBamReaderGenerator<S>>(
     m: &clap::ArgMatches,
     bam_readers: Vec<G>,
-    long_readers: Option<Vec<U>>,
+    mut longreads: Option<LongreadMapping<S, U>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     reference: bio::io::fasta::IndexedReader<File>,
-    _print_zero_coverage_contigs: bool,
     flag_filters: FlagFilter,
     mapq_threshold: u8,
     min_var_depth: usize,
@@ -54,23 +53,13 @@ pub fn pileup_variants<R: NamedBamReader + Send,
     let mut gff_map = HashMap::new();
     let mut codon_table = CodonTable::setup();
 
-    // Get long reads bams if they exist
-    let longreads = match long_readers {
-        Some(vec) => {
-            // update sample count
-            debug!("Longread bams {:?}", vec.len());
-
-            sample_count += vec.len();
-            vec
-        },
-        _ => vec!(),
-    };
 
 
     let mut variant_matrix = VariantMatrix::new_matrix(sample_count);
 
-    info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
-          longreads.len(), bam_readers.len(), sample_count);
+    // info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
+    //       longreads.len(),
+    //       bam_readers.len(), sample_count);
 
     match mode {
         "evolve" => {
@@ -156,10 +145,10 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                     reference_length)
     });
 
-    if longreads.len() > 0 && m.is_present("include-longread-svs"){
+    if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
 //        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
-        info!("Running structural variant detection on {} longread samples", longreads.len());
-        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        info!("Running structural variant detection...");
+        longreads.unwrap().extract().into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
                         n_threads,
                         sample_idx,
@@ -169,9 +158,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         m,
                         reference_length)
         });
-    } else if longreads.len() > 0 {
+    } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
-        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.unwrap().extract().into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             let bam_generated = bam_generator.start();
             let header = bam_generated.header().clone(); // bam header
             let mut variant_map = HashMap::new();
@@ -188,9 +177,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
 
     // Annoyingly read in bam file again
-    let mut longreads = vec!();
     let mut bam_readers = vec!();
 
+    // This is going to catch cached longread bam files from mapping
     if m.is_present("bam-files") {
         let bam_paths = m.values_of("bam-files").unwrap().collect::<Vec<&str>>();
         bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
@@ -251,11 +240,9 @@ pub fn pileup_variants<R: NamedBamReader + Send,
 
     // Process Long Read BAMs if they are present
     if m.is_present("longread-bam-files") {
+
         let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
-        longreads = generate_named_bam_readers_from_bam_files(longreads_path);
-    }
-    if longreads.len() > 0 {
-//        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+        let longreads = generate_named_bam_readers_from_bam_files(longreads_path);
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_bam(bam_generator,
                         sample_idx,
@@ -279,6 +266,10 @@ pub fn pileup_variants<R: NamedBamReader + Send,
                         mapq_threshold, method, true)
         });
     }
+    // if m.is_present("longread-bam-files") | m.is_present("longreads") {
+//        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
+
+    // }
 
     if mode=="genotype" {
         variant_matrix.generate_distances(n_threads, output_prefix);

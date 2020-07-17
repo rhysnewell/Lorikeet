@@ -16,8 +16,8 @@ use nix::sys::stat;
 use tempdir::TempDir;
 
 #[allow(unused)]
-pub fn process_vcf<R: NamedBamReader + Send,
-    G: NamedBamReaderGenerator<R> + Send>(
+pub fn process_vcf<R: NamedBamReader,
+    G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
     split_threads: usize,
     sample_idx: usize,

@@ -1,18 +1,72 @@
 use clap::*;
 
 
-const MAPPING_SOFTWARE_LIST: &[&str] = &["bwa-mem", "minimap2-sr", "minimap2-ont", "minimap2-pb","minimap2-no-preset"];
+const MAPPING_SOFTWARE_LIST: &[&str] = &["bwa-mem", "minimap2-sr", "minimap2-ont", "minimap2-pb","minimap2-no-preset", "ngmlr"];
 const DEFAULT_MAPPING_SOFTWARE: &str = "minimap2-sr";
+
+const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] = &["minimap2-ont", "minimap2-pb","ngmlr-ont", "ngmlr-pb"];
+const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "ngmlr-ont";
 
 
 const MAPPER_HELP: &'static str =
-    "   -p, --mapper <NAME>                   Underlying mapping software used
-                                         (\"minimap2-sr\", \"bwa-mem\", \"minimap2-ont\",
+    "    -p, --mapper <NAME>                   Underlying mapping software used
+                                         (\"minimap2-sr\", \"bwa-mem\",
+                                         \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
                                          \"minimap2-pb\", or \"minimap2-no-preset\").
                                          minimap2 -sr, -ont, -pb, -no-preset specify
                                          '-x' preset of minimap2 to be used
                                          (with map-ont, map-pb for -ont, -pb).
-                                         [default: \"minimap2-sr\"]";
+                                         [default: \"minimap2-sr\"] \
+         --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         both indexing command (if used) and for
+                                         mapping. Note that usage of this parameter
+                                         has security implications if untrusted input
+                                         is specified. '-a' is always specified.
+                                         [default \"\"]
+         --minimap2-reference-is-index         Treat reference as a minimap2 database, not
+                                         as a FASTA file.
+         --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
+                                         that usage of this parameter has security
+                                         implications if untrusted input is specified.
+                                         [default \"\"]\
+         --ngmlr-params PARAMS                 Extra parameters to provide to NGMLR.
+                                         --bam-fix, -x ont, -t are already set. Note
+                                         that usage of this parameter has security
+                                         implications if untrusted input is specified.";
+
+const ALIGNMENT_OPTIONS: &'static str =
+"Define mapping(s) (required):
+  Either define BAM:
+   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
+                                         reference sorted (e.g. with samtools sort)
+                                         unless --sharded is specified, in which
+                                         case they must be read name sorted (e.g.
+                                         with samtools sort -n).
+  -l, --longread-bam-files <PATH> ..     Path to BAM files(s) generated from longreads.
+                                         Must be reference sorted.
+
+  Or do mapping:
+   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
+                                         e.g. concatenated genomes or assembly.
+                                         If multiple references FASTA files are
+                                         provided and --sharded is specified,
+                                         then reads will be mapped to references
+                                         separately as sharded BAMs
+   --genome-fasta-files <PATH> ..        FASTA file paths
+   --genome-fasta-directory <PATH>       Directory containing FASTA files to be analyzed
+   -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
+                                         [default \"fna\"]
+   -t, --threads <INT>                   Number of threads for mapping / sorting
+   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
+   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
+   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
+                                         FASTA/Q files for mapping in order
+                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
+                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
+   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
+   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
+   --longreads <PATH> ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
+   -d, --outdir                          Output directory";
 
 pub fn filter_full_help() -> &'static str {
     "lorikeet filter: Remove alignments with insufficient identity.
@@ -68,44 +122,8 @@ pub fn polymorph_full_help() -> &'static str {
         static ref POLYMORPH_HELP: String = format!(
     "lorikeet polymorph: Print variant sites along a contig
 
-Define mapping(s) (required):
-  Either define BAM:
-   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
-                                         reference sorted (e.g. with samtools sort)
-                                         unless --sharded is specified, in which
-                                         case they must be read name sorted (e.g.
-                                         with samtools sort -n).
-
-  Or do mapping:
-   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
-                                         e.g. concatenated genomes or assembly.
-                                         If multiple references FASTA files are
-                                         provided and --sharded is specified,
-                                         then reads will be mapped to references
-                                         separately as sharded BAMs
-   -t, --threads <INT>                   Number of threads for mapping / sorting
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   -d, --outdir                          Output directory
 {}
-   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
-                                         both indexing command (if used) and for
-                                         mapping. Note that usage of this parameter
-                                         has security implications if untrusted input
-                                         is specified. '-a' is always specified.
-                                         [default \"\"]
-   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
-                                         as a FASTA file.
-   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]
+{}
 
 Sharding i.e. multiple reference sets (optional):
    --sharded                             If -b/--bam-files was used:
@@ -184,7 +202,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
     }
     &POLYMORPH_HELP
 }
@@ -194,50 +212,8 @@ pub fn evolve_full_help() -> &'static str {
         static ref EVOLVE_HELP: String = format!(
     "lorikeet evolve: Calculate dN/dS values in coding regions based on variants found in read mappings
 
-Define mapping(s) (required):
-  Either define BAM:
-   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
-                                         reference sorted (e.g. with samtools sort)
-                                         unless --sharded is specified, in which
-                                         case they must be read name sorted (e.g.
-                                         with samtools sort -n).
-
-  Or do mapping:
-   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
-                                         e.g. concatenated genomes or assembly.
-                                         If multiple references FASTA files are
-                                         provided and --sharded is specified,
-                                         then reads will be mapped to references
-                                         separately as sharded BAMs
-   -t, --threads <INT>                   Number of threads for mapping / sorting
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   --gff, -g <PATH>                      GFF3 file containing gene locations
-                                         present in reference genome.
-   --prokka-params                       Paramaters passed onto prokka to call
-                                         gene locations on reference genome.
-                                         -i and -f are already set. Only used if
-                                         not GFF file is not premade.
-   -d, --outdir                          Output directory.
 {}
-   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
-                                         both indexing command (if used) and for
-                                         mapping. Note that usage of this parameter
-                                         has security implications if untrusted input
-                                         is specified. '-a' is always specified.
-                                         [default \"\"]
-   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
-                                         as a FASTA file.
-   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]
+{}
 
 Sharding i.e. multiple reference sets (optional):
    --sharded                             If -b/--bam-files was used:
@@ -317,7 +293,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
     }
     &EVOLVE_HELP
 }
@@ -328,46 +304,8 @@ pub fn summarize_full_help() -> &'static str {
         static ref SUMMARIZE_HELP: String = format!(
     "lorikeet summarize: Provides per contig variant statistics for a metagenome
 
-Define mapping(s) (required):
-  Either define BAM:
-   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
-                                         reference sorted (e.g. with samtools sort)
-                                         unless --sharded is specified, in which
-                                         case they must be read name sorted (e.g.
-                                         with samtools sort -n).
-   -l, --longread-bam-files <PATH> ..    Path to BAM files(s) generated from longreads.
-                                         Must be reference sorted.
-  Or do mapping:
-   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
-                                         e.g. concatenated genomes or assembly.
-                                         If multiple references FASTA files are
-                                         provided and --sharded is specified,
-                                         then reads will be mapped to references
-                                         separately as sharded BAMs
-   -t, --threads <INT>                   Number of threads for mapping / sorting
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   -d, --outdir                          Output directory
 {}
-   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
-                                         both indexing command (if used) and for
-                                         mapping. Note that usage of this parameter
-                                         has security implications if untrusted input
-                                         is specified. '-a' is always specified.
-                                         [default \"\"]
-   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
-                                         as a FASTA file.
-   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]
-    *Longread mapping is currently unsupported*
+{}
 
 Alignment filtering (optional):
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
@@ -438,7 +376,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
     }
     &SUMMARIZE_HELP
 }
@@ -448,46 +386,8 @@ pub fn genotype_full_help() -> &'static str {
         static ref GENOTYPE_HELP: String = format!(
     "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
 
-Define mapping(s) (required):
-  Either define BAM:
-   -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
-                                         reference sorted (e.g. with samtools sort)
-                                         unless --sharded is specified, in which
-                                         case they must be read name sorted (e.g.
-                                         with samtools sort -n).
-  -l, --longread-bam-files <PATH> ..     Path to BAM files(s) generated from longreads.
-                                         Must be reference sorted.
-
-  Or do mapping:
-   -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
-                                         e.g. concatenated genomes or assembly.
-                                         If multiple references FASTA files are
-                                         provided and --sharded is specified,
-                                         then reads will be mapped to references
-                                         separately as sharded BAMs
-   -t, --threads <INT>                   Number of threads for mapping / sorting
-   -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
-   -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
-   -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
-                                         FASTA/Q files for mapping in order
-                                         <sample1_R1.fq.gz> <sample1_R2.fq.gz>
-                                         <sample2_R1.fq.gz> <sample2_R2.fq.gz> ..
-   --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
-   --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
-   -d, --outdir                          Output directory
 {}
-   --minimap2-params PARAMS              Extra parameters to provide to minimap2,
-                                         both indexing command (if used) and for
-                                         mapping. Note that usage of this parameter
-                                         has security implications if untrusted input
-                                         is specified. '-a' is always specified.
-                                         [default \"\"]
-   --minimap2-reference-is-index         Treat reference as a minimap2 database, not
-                                         as a FASTA file.
-   --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]
+{}
 
 Sharding i.e. multiple reference sets (optional):
    --sharded                             If -b/--bam-files was used:
@@ -586,7 +486,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
     }
     &GENOTYPE_HELP
 }
@@ -814,13 +714,38 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-files","read1","coupled","interleaved","full-help"])
                     .conflicts_with("bam-files"))
+                .arg(Arg::with_name("longreads")
+                    .long("longreads")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longread-bam-files"]))
+                .arg(Arg::with_name("longread-bam-files")
+                    .short("l")
+                    .multiple(true)
+                    .takes_value(true)
+                    .required(false)
+                    .conflicts_with_all(&["longreads"]))
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
+                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
+                .arg(Arg::with_name("genome-fasta-files")
+                    .long("genome-fasta-files")
+                    .short("g")
+                    .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(
-                        &["full-help"]))
+                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-directory")
+                    .long("genome-fasta-directory")
+                    .takes_value(true)
+                    .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-extension")
+                    .long("genome-fasta-extension")
+                    .short("x")
+                    .takes_value(true)
+                    .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
@@ -836,6 +761,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
                 )
                 .arg(
                     Arg::with_name("minimap2-params")
@@ -1015,7 +946,22 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
-                    .required_unless_one(&["full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
+                .arg(Arg::with_name("genome-fasta-files")
+                    .long("genome-fasta-files")
+                    .short("g")
+                    .takes_value(true)
+                    .multiple(true)
+                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-directory")
+                    .long("genome-fasta-directory")
+                    .takes_value(true)
+                    .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-extension")
+                    .long("genome-fasta-extension")
+                    .short("x")
+                    .takes_value(true)
+                    .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
@@ -1025,13 +971,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                    .conflicts_with_all(&["longread-bam-files"]))
                 .arg(Arg::with_name("longread-bam-files")
                     .short("l")
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longreads", "sharded"]))
+                    .conflicts_with_all(&["longreads"]))
                 .arg(Arg::with_name("threads")
                     .short("t")
                     .long("threads")
@@ -1043,6 +989,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
                 )
                 .arg(
                     Arg::with_name("minimap2-params")
@@ -1230,19 +1182,33 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                    .conflicts_with_all(&["longread-bam-files"]))
                 .arg(Arg::with_name("longread-bam-files")
                     .short("l")
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longreads", "sharded"]))
+                    .conflicts_with_all(&["longreads"]))
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
-                    .multiple(true)
                     .takes_value(true)
-                    .required_unless_one(&["full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
+                .arg(Arg::with_name("genome-fasta-files")
+                    .long("genome-fasta-files")
+                    .short("g")
+                    .takes_value(true)
+                    .multiple(true)
+                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-directory")
+                    .long("genome-fasta-directory")
+                    .takes_value(true)
+                    .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-extension")
+                    .long("genome-fasta-extension")
+                    .short("x")
+                    .takes_value(true)
+                    .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
@@ -1258,6 +1224,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
                 )
                 .arg(
                     Arg::with_name("minimap2-params")
@@ -1446,19 +1418,33 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                    .conflicts_with_all(&["longread-bam-files"]))
                 .arg(Arg::with_name("longread-bam-files")
                     .short("l")
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longreads", "sharded"]))
+                    .conflicts_with_all(&["longreads"]))
                 .arg(Arg::with_name("reference")
                     .short("-r")
                     .long("reference")
-                    .multiple(true)
                     .takes_value(true)
-                    .required_unless_one(&["full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
+                .arg(Arg::with_name("genome-fasta-files")
+                    .long("genome-fasta-files")
+                    .short("g")
+                    .takes_value(true)
+                    .multiple(true)
+                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-directory")
+                    .long("genome-fasta-directory")
+                    .takes_value(true)
+                    .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-extension")
+                    .long("genome-fasta-extension")
+                    .short("x")
+                    .takes_value(true)
+                    .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
@@ -1478,6 +1464,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
                 )
                 .arg(
                     Arg::with_name("minimap2-params")
@@ -1753,13 +1745,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longread-bam-files", "sharded"]))
+                    .conflicts_with_all(&["longread-bam-files"]))
                 .arg(Arg::with_name("longread-bam-files")
                     .short("l")
                     .multiple(true)
                     .takes_value(true)
                     .required(false)
-                    .conflicts_with_all(&["longreads", "sharded"]))
+                    .conflicts_with_all(&["longreads"]))
                 .arg(Arg::with_name("interleaved")
                     .long("interleaved")
                     .multiple(true)
@@ -1778,8 +1770,22 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .short("-r")
                     .long("reference")
                     .takes_value(true)
-                    .required_unless_one(
-                        &["full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
+                .arg(Arg::with_name("genome-fasta-files")
+                    .long("genome-fasta-files")
+                    .short("g")
+                    .takes_value(true)
+                    .multiple(true)
+                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-directory")
+                    .long("genome-fasta-directory")
+                    .takes_value(true)
+                    .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
+                .arg(Arg::with_name("genome-fasta-extension")
+                    .long("genome-fasta-extension")
+                    .short("x")
+                    .takes_value(true)
+                    .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
@@ -1795,6 +1801,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
                 )
                 .arg(
                     Arg::with_name("minimap2-params")
