@@ -27,7 +27,7 @@ pub fn pileup_variants<R: NamedBamReader,
     U: NamedBamReaderGenerator<S>>(
     m: &clap::ArgMatches,
     bam_readers: Vec<G>,
-    mut longreads: Option<LongreadMapping<S, U>>,
+    longreads: Vec<U>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     reference: bio::io::fasta::IndexedReader<File>,
@@ -57,9 +57,9 @@ pub fn pileup_variants<R: NamedBamReader,
 
     let mut variant_matrix = VariantMatrix::new_matrix(sample_count);
 
-    // info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
-    //       longreads.len(),
-    //       bam_readers.len(), sample_count);
+    info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
+          longreads.len(),
+          bam_readers.len(), sample_count);
 
     match mode {
         "evolve" => {
@@ -148,7 +148,7 @@ pub fn pileup_variants<R: NamedBamReader,
     if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
 //        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         info!("Running structural variant detection...");
-        longreads.unwrap().extract().into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             process_vcf(bam_generator,
                         n_threads,
                         sample_idx,
@@ -160,7 +160,7 @@ pub fn pileup_variants<R: NamedBamReader,
         });
     } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
-        longreads.unwrap().extract().into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             let bam_generated = bam_generator.start();
             let header = bam_generated.header().clone(); // bam header
             let mut variant_map = HashMap::new();

@@ -218,6 +218,9 @@ enum GenomeExclusionTypes {
 
 fn prepare_pileup
     (m: &clap::ArgMatches, mode: &str) {
+
+    // This function is amazingly painful. It handles every combination of longread and short read
+    // mapping or bam file reading. Could not make it smaller using dynamic or static dispatch
     set_log_level(m, true);
     let mut estimators = EstimatorsAndTaker::generate_from_clap(m);
     let filter_params = FilterParameters::generate_from_clap(m);
@@ -301,12 +304,7 @@ fn prepare_pileup
         }
     };
 
-    let mut long_readers = process_longreads(m,
-                                                             genome_exclusion_type,
-                                                             genome_exclusion_filter_separator_type,
-                                                            genome_exclusion_filter_non_type,
-                                                            genome_exclusion_genomes_and_contigs);
-
+    let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
 
     if m.is_present("bam-files") {
         let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -324,71 +322,255 @@ fn prepare_pileup
                 filter_params.min_aligned_length_pair,
                 filter_params.min_percent_identity_pair,
                 filter_params.min_aligned_percent_pair);
-            run_pileup(m,
-                       mode,
-                       &mut estimators,
-                       bam_readers,
-                       filter_params.flag_filters,
-                       long_readers,
-                       separator,
-                       &genomes_and_contigs_option)
-        } else if m.is_present("sharded") {
-            external_command_checker::check_for_samtools();
-            let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
 
-            match genome_exclusion_type {
-                GenomeExclusionTypes::NoneType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_filter_non_type.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               bam_readers,
-                               filter_params.flag_filters, long_readers,
-                                separator,
-                               &genomes_and_contigs_option);
+            if m.is_present("longread-bam-files") {
+                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+                let long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        bam_files);
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           long_readers,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else if m.is_present("longreads") {
+                // Perform mapping
+                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                external_command_checker::check_for_samtools();
+                let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &concatenated_genomes);
+                let mut all_generators = vec!();
+                let mut indices = vec!(); // Prevent indices from being dropped
+                for set in generator_sets {
+                    indices.push(set.index);
+                    for g in set.generators {
+                        all_generators.push(g)
+                    }
                 }
-                GenomeExclusionTypes::SeparatorType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_filter_separator_type.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               bam_readers,
-                               filter_params.flag_filters,
-                               long_readers,
-                               separator,
-                               &genomes_and_contigs_option);
-                }
-                GenomeExclusionTypes::GenomesAndContigsType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_genomes_and_contigs.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               bam_readers,
-                               filter_params.flag_filters,
-                               long_readers,
-                               separator,
-                               &genomes_and_contigs_option);
-                }
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           all_generators,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else {
+
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           bam_generator::generate_placeholder(),
+                           separator,
+                           &genomes_and_contigs_option)
             }
 
 
+        } else if m.is_present("sharded") {
+            external_command_checker::check_for_samtools();
+
+            match genome_exclusion_type {
+                GenomeExclusionTypes::NoneType => {
+                    let genome_exclusion_non_type = genome_exclusion_filter_non_type.unwrap();
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                        bam_files, sort_threads,
+                        &genome_exclusion_non_type);
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_non_type);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_non_type,
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
+                },
+                GenomeExclusionTypes::SeparatorType => {
+                    let genome_exclusion_separator = genome_exclusion_filter_separator_type.unwrap();
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                        bam_files, sort_threads,
+                        &genome_exclusion_separator);
+
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_separator);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_separator,
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
+
+                }
+                GenomeExclusionTypes::GenomesAndContigsType => {
+                    let genome_exclusion_genomes = genome_exclusion_genomes_and_contigs.unwrap();
+                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                        bam_files, sort_threads,
+                        &genome_exclusion_genomes);
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_genomes);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_genomes
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   bam_readers,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
+                }
+
+            }
         } else {
             let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
                 bam_files);
 
-            run_pileup(m,
-                       mode,
-                       &mut estimators,
-                       bam_readers,
-                       filter_params.flag_filters,
-                       long_readers,
-                       separator, &genomes_and_contigs_option)
+            if m.is_present("longread-bam-files") {
+                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+                let long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    bam_files);
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           long_readers,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else if m.is_present("longreads") {
+                // Perform mapping
+                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                external_command_checker::check_for_samtools();
+                let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &concatenated_genomes);
+                let mut all_generators = vec!();
+                let mut indices = vec!(); // Prevent indices from being dropped
+                for set in generator_sets {
+                    indices.push(set.index);
+                    for g in set.generators {
+                        all_generators.push(g)
+                    }
+                }
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           all_generators,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else {
+
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           bam_readers,
+                           filter_params.flag_filters,
+                           bam_generator::generate_placeholder(),
+                           separator,
+                           &genomes_and_contigs_option)
+            }
         }
 
     } else {
@@ -412,54 +594,202 @@ fn prepare_pileup
                 }
             }
             debug!("Finished collecting generators.");
-            run_pileup(m,
-                       mode,
-                       &mut estimators,
-                       all_generators,
-                       filter_params.flag_filters,
-                       long_readers, separator,
-                       &genomes_and_contigs_option);
+            if m.is_present("longread-bam-files") {
+                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+                let long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    bam_files);
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           long_readers,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else if m.is_present("longreads") {
+                // Perform mapping
+                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                external_command_checker::check_for_samtools();
+                let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &concatenated_genomes);
+                let mut long_generators = vec!();
+                let mut indices = vec!(); // Prevent indices from being dropped
+                for set in generator_sets {
+                    indices.push(set.index);
+                    for g in set.generators {
+                        long_generators.push(g)
+                    }
+                }
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           long_generators,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else {
+
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           bam_generator::generate_placeholder(),
+                           separator,
+                           &genomes_and_contigs_option)
+            }
         } else if m.is_present("sharded") {
             match genome_exclusion_type {
                 GenomeExclusionTypes::NoneType => {
+                    let genome_exclusion_filter_none = genome_exclusion_filter_non_type.unwrap();
                     let generator_sets = get_sharded_bam_readers(
                         m,
                         mapping_program,
                         &concatenated_genomes,
-                        &genome_exclusion_filter_non_type.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               generator_sets,
-                               filter_params.flag_filters,
-                               long_readers,
-                               separator, &genomes_and_contigs_option);
+                        &genome_exclusion_filter_none);
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_filter_none);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_filter_none,
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
                 }
                 GenomeExclusionTypes::SeparatorType => {
+                    let genome_exclusion_separator = genome_exclusion_filter_separator_type.unwrap();
                     let generator_sets = get_sharded_bam_readers(
                         m,
                         mapping_program,
                         &concatenated_genomes,
-                        &genome_exclusion_filter_separator_type.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               generator_sets,
-                               filter_params.flag_filters, long_readers,
-                               separator, &genomes_and_contigs_option);
+                        &genome_exclusion_separator);
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_separator);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_separator,
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
                 }
                 GenomeExclusionTypes::GenomesAndContigsType => {
+                    let genome_exclusion_genomes = genome_exclusion_genomes_and_contigs.unwrap();
                     let generator_sets = get_sharded_bam_readers(
                         m,
                         mapping_program,
                         &concatenated_genomes,
-                        &genome_exclusion_genomes_and_contigs.unwrap());
-                    run_pileup(m,
-                               mode,
-                               &mut estimators,
-                               generator_sets,
-                               filter_params.flag_filters, long_readers,
-                               separator, &genomes_and_contigs_option);
+                        &genome_exclusion_genomes);
+                    if m.is_present("longread-bam-files") {
+                        let long_files = m.values_of("longread-bam-files").unwrap().collect();
+                        let long_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
+                            long_files, sort_threads,
+                            &genome_exclusion_genomes);
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+
+                    } else if m.is_present("longreads") {
+                        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                        external_command_checker::check_for_samtools();
+                        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                        let long_readers = get_sharded_bam_readers(
+                            m,
+                            mapping_program,
+                            &concatenated_genomes,
+                            &genome_exclusion_genomes,
+                        );
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   long_readers,
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    } else {
+                        run_pileup(m,
+                                   mode,
+                                   &mut estimators,
+                                   generator_sets,
+                                   filter_params.flag_filters,
+                                   bam_generator::generate_placeholder(),
+                                   separator,
+                                   &genomes_and_contigs_option);
+                    }
                 }
             }
         } else {
@@ -473,107 +803,52 @@ fn prepare_pileup
                     all_generators.push(g)
                 }
             }
-            run_pileup(m,
-                       mode,
-                       &mut estimators,
-                       all_generators,
-                       filter_params.flag_filters.clone(), long_readers,
-                      separator, &genomes_and_contigs_option);
-        }
-    }
-}
-
-
-
-fn process_longreads
-    <'a, S: NamedBamReader,
-     U: NamedBamReaderGenerator<S>>
-     (m: &'a clap::ArgMatches,
-      genome_exclusion_type: GenomeExclusionTypes,
-      genome_exclusion_separator_type: Option<SeparatorGenomeExclusionFilter>,
-      genome_exclusion_filter_non_type: Option<NoExclusionGenomeFilter>,
-      genome_exclusion_genomes_and_contigs: Option<GenomesAndContigsExclusionFilter>) -> Option<LongreadMapping<S, U>> {
-
-    // Check if bam files provided
-    if m.is_present("longread-bam-files") {
-        let bam_files = m.values_of("longread-bam-files").unwrap().collect();
-        if m.is_present("sharded") {
-            external_command_checker::check_for_samtools();
-            let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-            match genome_exclusion_type {
-                GenomeExclusionTypes::NoneType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_filter_non_type.unwrap());
-                    return Some(LongreadMapping::ShardedBamNoExclusion(bam_readers))
+            if m.is_present("longread-bam-files") {
+                let bam_files = m.values_of("longread-bam-files").unwrap().collect();
+                let long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                    bam_files);
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           long_readers,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else if m.is_present("longreads") {
+                // Perform mapping
+                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+                external_command_checker::check_for_samtools();
+                let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &concatenated_genomes);
+                let mut long_generators = vec!();
+                let mut indices = vec!(); // Prevent indices from being dropped
+                for set in generator_sets {
+                    indices.push(set.index);
+                    for g in set.generators {
+                        long_generators.push(g)
+                    }
                 }
-                GenomeExclusionTypes::SeparatorType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_separator_type.unwrap());
-                    return Some(LongreadMapping::ShardedBamSeparator(bam_readers))
-                }
-                GenomeExclusionTypes::GenomesAndContigsType => {
-                    let bam_readers = shard_bam_reader::generate_sharded_bam_reader_from_bam_files(
-                        bam_files, sort_threads,
-                        &genome_exclusion_genomes_and_contigs.unwrap());
-                    return Some(LongreadMapping::ShardedBamGenomes(bam_readers))
-                }
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           long_generators,
+                           separator,
+                           &genomes_and_contigs_option)
+            } else {
+
+                run_pileup(m,
+                           mode,
+                           &mut estimators,
+                           all_generators,
+                           filter_params.flag_filters,
+                           bam_generator::generate_placeholder(),
+                           separator,
+                           &genomes_and_contigs_option)
             }
-        } else {
-            let long_readers = bam_generator::generate_named_bam_readers_from_bam_files(
-                bam_files);
-            return Some(LongreadMapping::NamedBamReader(long_readers))
         }
-    } else if m.is_present("longreads") {
-        // Perform mapping
-        let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
-        external_command_checker::check_for_samtools();
-        let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
-        if m.is_present("sharded") {
-            match genome_exclusion_type {
-                GenomeExclusionTypes::NoneType => {
-                    let generator_sets = get_sharded_bam_readers(
-                        m,
-                        mapping_program,
-                        &concatenated_genomes,
-                        &genome_exclusion_filter_non_type.unwrap(),
-                    );
-                    return Some(LongreadMapping::ShardedBamNoExclusion(generator_sets))
-                }
-                GenomeExclusionTypes::SeparatorType => {
-                    let generator_sets = get_sharded_bam_readers(
-                        m,
-                        mapping_program,
-                        &concatenated_genomes,
-                        &genome_exclusion_separator_type.unwrap(),
-                    );
-                    return Some(LongreadMapping::ShardedBamSeparator(generator_sets))
-                }
-                GenomeExclusionTypes::GenomesAndContigsType => {
-                    let generator_sets = get_sharded_bam_readers(
-                        m,
-                        mapping_program,
-                        &concatenated_genomes,
-                        &genome_exclusion_genomes_and_contigs.unwrap(),
-                    );
-                    return Some(LongreadMapping::ShardedBamGenomes(generator_sets))
-                }
-            }
-        } else {
-            let generator_sets = get_streamed_bam_readers(m, mapping_program, &None);
-            let mut all_generators = vec!();
-            let mut indices = vec!(); // Prevent indices from being dropped
-            for set in generator_sets {
-                indices.push(set.index);
-                for g in set.generators {
-                    all_generators.push(g)
-                }
-            }
-            return Some(LongreadMapping::NamedBamStreamer(all_generators))
-        }
-    } else {
-        None
     }
 }
 
@@ -1359,7 +1634,7 @@ fn run_pileup<'a,
     estimators: &mut EstimatorsAndTaker,
     bam_readers: Vec<T>,
     flag_filters: FlagFilter,
-    long_readers: Option<LongreadMapping<S, U>>,
+    long_readers: Vec<U>,
     separator: Option<u8>,
     genomes_and_contigs_option: &Option<GenomesAndContigs>) {
 
