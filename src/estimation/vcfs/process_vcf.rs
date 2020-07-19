@@ -1,5 +1,5 @@
 use std;
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use rust_htslib::{bam, bcf, bcf::Read};
 use bird_tool_utils::command;
 
@@ -25,13 +25,22 @@ pub fn process_vcf<R: NamedBamReader,
     variant_matrix: &mut VariantMatrix,
     longread: bool,
     m: &clap::ArgMatches,
-    reference_length: u64) {
+    reference_length: u64,
+    sample_groups: &mut HashMap<&str, HashSet<String>>) {
     let mut bam_generated = bam_generator.start();
 
 //    let mut bam_properties =
 //        AlignmentProperties::default(InsertSize::default());
 
-    let stoit_name = bam_generated.name().to_string();
+    let stoit_name = bam_generated.name().to_string().replace("/", ".");
+
+    if longread {
+        let group = sample_groups.entry("long").or_insert(HashSet::new());
+        group.insert(stoit_name.clone());
+    } else {
+        let group = sample_groups.entry("short").or_insert(HashSet::new());
+        group.insert(stoit_name.clone());
+    }
 
     debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
@@ -88,7 +97,7 @@ pub fn process_vcf<R: NamedBamReader,
             panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
         }
     });
-    variant_matrix.add_sample(stoit_name.clone(), sample_idx, &variant_map, &header);
+    variant_matrix.add_sample(stoit_name.to_string(), sample_idx, &variant_map, &header);
 }
 
 

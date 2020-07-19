@@ -22,7 +22,6 @@ extern crate kodama;
 extern crate statrs;
 
 // Utilities
-extern crate auto_enums;
 extern crate csv;
 extern crate clap;
 extern crate glob;

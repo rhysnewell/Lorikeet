@@ -1,5 +1,5 @@
 use std;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use glob::glob;
 
 use external_command_checker;
@@ -27,7 +27,7 @@ pub fn pileup_variants<R: NamedBamReader,
     U: NamedBamReaderGenerator<S>>(
     m: &clap::ArgMatches,
     bam_readers: Vec<G>,
-    longreads: Vec<U>,
+    longreads: Option<Vec<U>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     reference: bio::io::fasta::IndexedReader<File>,
@@ -53,7 +53,15 @@ pub fn pileup_variants<R: NamedBamReader,
     let mut gff_map = HashMap::new();
     let mut codon_table = CodonTable::setup();
 
-
+    let longreads = match longreads {
+        Some(vec) => {
+            sample_count += vec.len();
+            vec
+        },
+        None => {
+            vec!()
+        }
+    };
 
     let mut variant_matrix = VariantMatrix::new_matrix(sample_count);
 
@@ -133,6 +141,8 @@ pub fn pileup_variants<R: NamedBamReader,
         &Path::new(m.value_of("reference").unwrap())).unwrap()
         .sequences().iter().fold(0, |acc, seq| acc + seq.len);
 
+    let mut sample_groups = HashMap::new();
+
     info!("Running SNP calling on {} shortread samples", bam_readers.len());
     bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         process_vcf(bam_generator,
@@ -142,7 +152,8 @@ pub fn pileup_variants<R: NamedBamReader,
                     &mut variant_matrix,
                     false,
                     m,
-                    reference_length)
+                    reference_length,
+                    &mut sample_groups)
     });
 
     if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
@@ -156,7 +167,8 @@ pub fn pileup_variants<R: NamedBamReader,
                         &mut variant_matrix,
                         true,
                         m,
-                        reference_length)
+                        reference_length,
+                        &mut sample_groups)
         });
     } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
@@ -165,11 +177,13 @@ pub fn pileup_variants<R: NamedBamReader,
             let header = bam_generated.header().clone(); // bam header
             let mut variant_map = HashMap::new();
 
-            let stoit_name = bam_generated.name().to_string();
+            let stoit_name = bam_generated.name().to_string().replace("/", ".");
+            let group = sample_groups.entry("long").or_insert(HashSet::new());
+            group.insert(stoit_name.clone());
             // Longread adjusted sample index
             let sample_idx_l = sample_count - sample_idx - 1;
             variant_matrix.
-                add_sample(stoit_name.clone(), sample_idx_l, &variant_map, &header);
+                add_sample(stoit_name, sample_idx_l, &variant_map, &header);
 
         });
 
@@ -234,7 +248,7 @@ pub fn pileup_variants<R: NamedBamReader,
                         include_soft_clipping,
                         include_indels,
                         &flag_filters,
-                        mapq_threshold, method, false)
+                        mapq_threshold, method, &sample_groups)
         });
     }
 
@@ -263,7 +277,7 @@ pub fn pileup_variants<R: NamedBamReader,
                         include_soft_clipping,
                         include_indels,
                         &flag_filters,
-                        mapq_threshold, method, true)
+                        mapq_threshold, method, &sample_groups)
         });
     }
     // if m.is_present("longread-bam-files") | m.is_present("longreads") {

@@ -1,5 +1,5 @@
 use std;
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use rust_htslib::bam::{self, record::Cigar};
 
 use estimation::contig_variants::*;
@@ -42,20 +42,37 @@ pub fn process_bam<R: NamedBamReader,
     flag_filters: &FlagFilter,
     mapq_threshold: u8,
     method: &str,
-    longread: bool) {
+    sample_groups: &HashMap<&str, HashSet<String>>) {
 
     let mut bam_generated = bam_generator.start();
 
     // Adjust the sample index if the bam is from long reads
     let mut sample_idx = sample_idx;
-    if longread {
-        sample_idx = sample_count - sample_idx - 1;
-    }
+    let longread;
+
 
 //    let mut bam_properties =
 //        AlignmentProperties::default(InsertSize::default());
 
-    let stoit_name = bam_generated.name().to_string();
+    let stoit_name = bam_generated.name().to_string().replace("/", ".");
+    // adjust sample index for longread bams
+    if sample_groups.contains_key("long") {
+        if sample_groups["long"].contains(&stoit_name) {
+            longread = true;
+            sample_idx = sample_count - sample_idx - 1;
+            debug!("Longread {} {}", stoit_name, sample_idx)
+        } else {
+            longread = false;
+            debug!(" SOME Longread {} {}", stoit_name, sample_idx)
+
+        }
+    } else {
+        longread = false;
+
+        debug!(" NO Longread {} {}", stoit_name, sample_idx)
+
+    }
+
     debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
     debug!("Managed to set threads.");

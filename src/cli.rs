@@ -894,7 +894,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["read1","read2","coupled","interleaved","single","full-help"]))
                 .arg(Arg::with_name("gff")
-                    .short("g")
                     .long("gff")
                     .takes_value(true))
                 .arg(Arg::with_name("prokka-params")
