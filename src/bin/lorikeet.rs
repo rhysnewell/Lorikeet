@@ -16,18 +16,15 @@ use bio::alignment::sparse::*;
 extern crate coverm;
 use coverm::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use coverm::shard_bam_reader::*;
 use coverm::FlagFilter;
 use coverm::genome_exclusion::*;
 use coverm::mosdepth_genome_coverage_estimators::*;
-use coverm::{bam_generator::*, mapping_parameters::*, filter, mapping_index_maintenance};
+use coverm::{bam_generator::*, filter};
 
 use std::env;
 use std::str;
 use std::process;
 use std::collections::{BTreeMap, HashSet};
-use std::process::Stdio;
-use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
@@ -42,19 +39,6 @@ extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
-
-extern crate tempfile;
-use tempfile::NamedTempFile;
-
-fn galah_command_line_definition(
-) -> galah::cluster_argument_parsing::GalahClustererCommandDefinition {
-    galah::cluster_argument_parsing::GalahClustererCommandDefinition {
-        dereplication_ani_argument: "dereplication-ani".to_string(),
-        dereplication_prethreshold_ani_argument: "dereplication-prethreshold-ani".to_string(),
-        dereplication_quality_formula_argument: "dereplication-quality-formula".to_string(),
-        dereplication_precluster_method_argument: "dereplication-precluster-method".to_string(),
-    }
-}
 
 fn main(){
     let mut app = build_cli();
@@ -849,20 +833,6 @@ fn prepare_pileup
     }
 }
 
-fn extract_genomes_and_contigs_option(
-    m: &clap::ArgMatches,
-    genome_fasta_files: &Vec<&str>,
-) -> Option<GenomesAndContigs> {
-    match m.is_present("genome-definition") {
-        true => Some(coverm::genome_parsing::read_genome_definition_file(
-            m.value_of("genome-definition").unwrap(),
-        )),
-        false => Some(coverm::genome_parsing::read_genome_fasta_files(
-            &genome_fasta_files,
-        )),
-    }
-}
-
 fn parse_all_genome_definitions(m: &clap::ArgMatches) -> Option<GenomesAndContigs> {
     if m.is_present("single-genome") || m.is_present("separator") {
         None
@@ -906,140 +876,6 @@ fn parse_separator(m: &clap::ArgMatches) -> Option<u8> {
         // fasta file.
         Some(CONCATENATED_FASTA_FILE_SEPARATOR.as_bytes()[0])
     }
-}
-
-fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>, Option<GenomesAndContigs>){
-    let genome_fasta_files_opt = {
-        match bird_tool_utils::clap_utils::parse_list_of_genome_fasta_files(&m, false) {
-            Ok(paths) => {
-                if paths.len() == 0 {
-                    error!(
-                        "Genome paths were described, but ultimately none were found"
-                    );
-                    process::exit(1);
-                }
-                if m.is_present("checkm-tab-table") || m.is_present("genome-info") {
-                    let genomes_after_filtering =
-                        galah::cluster_argument_parsing::filter_genomes_through_checkm(
-                            &paths,
-                            &m,
-                            &galah_command_line_definition(),
-                        )
-                            .expect("Error parsing CheckM-related options");
-                    info!(
-                        "After filtering by CheckM, {} genomes remained",
-                        genomes_after_filtering.len()
-                    );
-                    if genomes_after_filtering.len() == 0 {
-                        error!("All genomes were filtered out, so none remain to be mapped to");
-                        process::exit(1);
-                    }
-                    Some(
-                        genomes_after_filtering
-                            .iter()
-                            .map(|s| s.to_string())
-                            .collect(),
-                    )
-                } else {
-                    Some(paths)
-                }
-            }
-            Err(_) => None,
-        }
-    };
-
-    let (concatenated_genomes, genomes_and_contigs_option) =
-        match m.is_present("reference") {
-            true => match genome_fasta_files_opt {
-                Some(genome_paths) => (
-                    None,
-                    extract_genomes_and_contigs_option(
-                        &m,
-                        &genome_paths.iter().map(|s| s.as_str()).collect(),
-                    ),
-                ),
-                None => (None, None),
-            },
-            false => {
-                // Dereplicate if required
-                let dereplicated_genomes: Vec<String> = if m.is_present("dereplicate") {
-                    dereplicate(&m, &genome_fasta_files_opt.unwrap())
-                } else {
-                    genome_fasta_files_opt.unwrap()
-                };
-                info!("Profiling {} genomes", dereplicated_genomes.len());
-
-                let list_of_genome_fasta_files = &dereplicated_genomes;
-                info!(
-                    "Generating concatenated reference FASTA file of {} genomes ..",
-                    list_of_genome_fasta_files.len()
-                );
-
-                (
-                    Some(
-                        coverm::mapping_index_maintenance::generate_concatenated_fasta_file(
-                            list_of_genome_fasta_files,
-                        ),
-                    ),
-                    extract_genomes_and_contigs_option(
-                        &m,
-                        &dereplicated_genomes
-                            .clone()
-                            .iter()
-                            .map(|s| s.as_str())
-                            .collect(),
-                    ),
-                )
-            }
-        };
-    return (concatenated_genomes, genomes_and_contigs_option)
-}
-
-fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Vec<String> {
-    info!(
-        "Found {} genomes specified before dereplication",
-        genome_fasta_files.len()
-    );
-
-    // Generate clusterer and check for dependencies
-    let clusterer = galah::cluster_argument_parsing::generate_galah_clusterer(
-        genome_fasta_files,
-        &m,
-        &galah_command_line_definition(),
-    ).expect("Failed to parse galah clustering arguments correctly");
-    galah::external_command_checker::check_for_dependencies();
-    info!("Dereplicating genome at {}% ANI ..", clusterer.ani*100.);
-
-    let cluster_indices = clusterer.cluster();
-    info!(
-        "Finished dereplication, finding {} representative genomes.",
-        cluster_indices.len()
-    );
-    debug!("Found cluster indices: {:?}", cluster_indices);
-    let reps = cluster_indices
-        .iter()
-        .map(|cluster| genome_fasta_files[cluster[0]].clone())
-        .collect::<Vec<_>>();
-    debug!("Found cluster representatives: {:?}", reps);
-
-    if m.is_present("output-dereplication-clusters") {
-        let path = m.value_of("output-dereplication-clusters").unwrap();
-        info!("Writing dereplication cluster memberships to {}", path);
-        let mut f =
-            std::fs::File::create(path).expect("Error creating dereplication cluster output file");
-        for cluster in cluster_indices.iter() {
-            let rep = cluster[0];
-            for member in cluster {
-                writeln!(
-                    f,
-                    "{}\t{}",
-                    genome_fasta_files[rep], genome_fasta_files[*member]
-                )
-                    .expect("Failed to write a specific line to dereplication cluster file");
-            }
-        }
-    }
-    reps
 }
 
 fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
@@ -1178,27 +1014,6 @@ impl EstimatorsAndTaker {
 }
 
 
-fn generate_faidx(m: &clap::ArgMatches) -> bio::io::fasta::IndexedReader<File> {
-    external_command_checker::check_for_samtools();
-    info!("Generating reference index");
-    let cmd_string = format!(
-        "set -e -o pipefail; \
-                     samtools faidx {}",
-        m.value_of("reference").unwrap());
-    debug!("Queuing cmd_string: {}", cmd_string);
-
-    std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&cmd_string)
-        .stdout(Stdio::piped())
-        .output()
-        .expect("Unable to execute bash");
-
-    let reference_path = Path::new(m.value_of("reference").unwrap());
-    return bio::io::fasta::IndexedReader::from_file(&reference_path).expect(
-        "Unable to generate index")
-}
-
 fn run_pileup<'a,
     R: NamedBamReader,
     T: NamedBamReaderGenerator<R>,
@@ -1216,22 +1031,12 @@ fn run_pileup<'a,
     match mode {
         "polymorph" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
-
             let output_prefix = m.value_of("output-prefix").unwrap().to_string();
             let include_indels = m.is_present("include-indels");
-
-            let reference_path = Path::new(m.value_of("reference").unwrap());
-//            let index_path = reference_path.clone().to_owned() + ".fai";
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(m),
-            };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
-
 
             let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
             let min = value_t!(m.value_of("trim-min"), f32).unwrap();
@@ -1241,8 +1046,6 @@ fn run_pileup<'a,
                                     min must be less than max, found {} and {}", min, max);
             }
 
-
-            info!("Beginning polymorph with {} bam readers and {} threads", bam_readers.len(), threads);
             println!("sample\ttid\tpos\tvariant\treference\tvariant_depth\tdepth\tgenotypes\tvaf_cluster\tgenotype");
             contig::pileup_variants(
                 m,
@@ -1250,7 +1053,6 @@ fn run_pileup<'a,
                 long_readers,
                 mode,
                 &mut estimators.estimators,
-                fasta_reader,
                 flag_filters,
                 mapq_threshold,
                 var_fraction,
@@ -1269,7 +1071,6 @@ fn run_pileup<'a,
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let reference_path = Path::new(m.value_of("reference").unwrap());
 
             let output_prefix = m.value_of("output-prefix").unwrap();
             let include_indels = m.is_present("include-indels");
@@ -1287,11 +1088,6 @@ fn run_pileup<'a,
                                     min must be less than max, found {} and {}", min, max);
             }
 
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(m),
-            };
-
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
@@ -1299,7 +1095,6 @@ fn run_pileup<'a,
                 long_readers,
                 mode,
                 &mut estimators.estimators,
-                fasta_reader,
                 flag_filters,
                 mapq_threshold,
                 var_fraction,
@@ -1318,7 +1113,6 @@ fn run_pileup<'a,
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let reference_path = Path::new(m.value_of("reference").unwrap());
 
             let output_prefix = m.value_of("output-prefix").unwrap();
             let include_indels = m.is_present("include-indels");
@@ -1335,11 +1129,6 @@ fn run_pileup<'a,
                                     min must be less than max, found {} and {}", min, max);
             }
 
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(m),
-            };
-
             info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
@@ -1347,7 +1136,6 @@ fn run_pileup<'a,
                 long_readers,
                 mode,
                 &mut estimators.estimators,
-                fasta_reader,
                 flag_filters,
                 mapq_threshold,
                 var_fraction,
@@ -1369,12 +1157,7 @@ fn run_pileup<'a,
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
 
-            let reference_path = Path::new(m.value_of("reference").unwrap());
             let output_prefix = m.value_of("output-prefix").unwrap();
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path){
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(m),
-            };
             let include_indels = m.is_present("include-indels");
 
             let threads = m.value_of("threads").unwrap().parse().unwrap();
@@ -1394,7 +1177,6 @@ fn run_pileup<'a,
                 long_readers,
                 mode,
                 &mut estimators.estimators,
-                fasta_reader,
                 flag_filters,
                 mapq_threshold,
                 var_fraction,
@@ -1423,12 +1205,7 @@ fn run_pileup<'a,
             let method = m.value_of("method").unwrap();
             let include_indels = m.is_present("include-indels");
 
-            let reference_path = Path::new(m.value_of("reference").unwrap());
 //            let index_path = reference_path.clone().to_owned() + ".fai";
-            let fasta_reader = match bio::io::fasta::IndexedReader::from_file(&reference_path) {
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(m),
-            };
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
 
@@ -1448,7 +1225,6 @@ fn run_pileup<'a,
                 long_readers,
                 mode,
                 &mut estimators.estimators,
-                fasta_reader,
                 flag_filters,
                 mapq_threshold,
                 var_fraction,

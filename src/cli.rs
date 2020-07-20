@@ -9,30 +9,30 @@ const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "ngmlr-ont";
 
 
 const MAPPER_HELP: &'static str =
-    "    -p, --mapper <NAME>                   Underlying mapping software used
+    "    -p, --mapper <NAME>             Underlying mapping software used
                                          (\"minimap2-sr\", \"bwa-mem\",
                                          \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
                                          \"minimap2-pb\", or \"minimap2-no-preset\").
                                          minimap2 -sr, -ont, -pb, -no-preset specify
                                          '-x' preset of minimap2 to be used
                                          (with map-ont, map-pb for -ont, -pb).
-                                         [default: \"minimap2-sr\"] \
-         --minimap2-params PARAMS              Extra parameters to provide to minimap2,
+                                         [default: \"minimap2-sr\"] \n
+         --minimap2-params PARAMS        Extra parameters to provide to minimap2,
                                          both indexing command (if used) and for
                                          mapping. Note that usage of this parameter
                                          has security implications if untrusted input
                                          is specified. '-a' is always specified.
-                                         [default \"\"]
-         --minimap2-reference-is-index         Treat reference as a minimap2 database, not
-                                         as a FASTA file.
-         --bwa-params PARAMS                   Extra parameters to provide to BWA. Note
+                                         [default \"\"] \n
+         --minimap2-reference-is-index   Treat reference as a minimap2 database, not
+                                         as a FASTA file.\n
+         --bwa-params PARAMS             Extra parameters to provide to BWA. Note
                                          that usage of this parameter has security
                                          implications if untrusted input is specified.
-                                         [default \"\"]\
-         --ngmlr-params PARAMS                 Extra parameters to provide to NGMLR.
+                                         [default \"\"]\n
+         --ngmlr-params PARAMS           Extra parameters to provide to NGMLR.
                                          --bam-fix, -x ont, -t are already set. Note
                                          that usage of this parameter has security
-                                         implications if untrusted input is specified.";
+                                         implications if untrusted input is specified.\n";
 
 const ALIGNMENT_OPTIONS: &'static str =
 "Define mapping(s) (required):
@@ -48,12 +48,11 @@ const ALIGNMENT_OPTIONS: &'static str =
   Or do mapping:
    -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
                                          e.g. concatenated genomes or assembly.
-                                         If multiple references FASTA files are
+                                         If multiple reference FASTA files are
                                          provided and --sharded is specified,
-                                         then reads will be mapped to references
+                                         then reads will be mapped to reference
                                          separately as sharded BAMs
-   --genome-fasta-files <PATH> ..        FASTA file paths
-   --genome-fasta-directory <PATH>       Directory containing FASTA files to be analyzed
+   -g, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
    -t, --threads <INT>                   Number of threads for mapping / sorting
@@ -726,19 +725,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true)
                     .required(false)
                     .conflicts_with_all(&["longreads"]))
-                .arg(Arg::with_name("reference")
-                    .short("-r")
-                    .long("reference")
-                    .takes_value(true)
-                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
                 .arg(Arg::with_name("genome-fasta-files")
-                    .long("genome-fasta-files")
-                    .short("g")
+                    .short("r")
+                    .long("reference")
+                    .alias("genome-fasta-files")
                     .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
+                    .short("g")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -749,7 +745,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
-                    .default_value("/tmp"))
+                    .default_value("/tmp/lorikeet-bam-cache"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -941,19 +937,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-files","read1","coupled","interleaved","full-help"])
                     .conflicts_with("bam-files"))
-                .arg(Arg::with_name("reference")
-                    .short("-r")
-                    .long("reference")
-                    .takes_value(true)
-                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
                 .arg(Arg::with_name("genome-fasta-files")
-                    .long("genome-fasta-files")
-                    .short("g")
+                    .short("r")
+                    .long("reference")
+                    .alias("genome-fasta-files")
                     .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
+                    .short("g")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -964,7 +957,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
-                    .default_value("/tmp"))
+                    .default_value("/tmp/lorikeet-bam-cache"))
                 .arg(Arg::with_name("longreads")
                     .long("longreads")
                     .multiple(true)
@@ -1188,19 +1181,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true)
                     .required(false)
                     .conflicts_with_all(&["longreads"]))
-                .arg(Arg::with_name("reference")
-                    .short("-r")
-                    .long("reference")
-                    .takes_value(true)
-                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
                 .arg(Arg::with_name("genome-fasta-files")
-                    .long("genome-fasta-files")
-                    .short("g")
+                    .short("r")
+                    .long("reference")
+                    .alias("genome-fasta-files")
                     .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
+                    .short("g")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1211,7 +1201,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
-                    .default_value("/tmp"))
+                    .default_value("/tmp/lorikeet-bam-cache"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -1424,19 +1414,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .takes_value(true)
                     .required(false)
                     .conflicts_with_all(&["longreads"]))
-                .arg(Arg::with_name("reference")
-                    .short("-r")
-                    .long("reference")
-                    .takes_value(true)
-                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
                 .arg(Arg::with_name("genome-fasta-files")
-                    .long("genome-fasta-files")
-                    .short("g")
+                    .short("r")
+                    .long("reference")
+                    .alias("genome-fasta-files")
                     .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
+                    .short("g")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1447,7 +1434,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
-                    .default_value("/tmp"))
+                    .default_value("/tmp/lorikeet-bam-cache"))
                 .arg(Arg::with_name("vcfs")
                     .long("vcfs")
                     .multiple(true)
@@ -1527,16 +1514,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("trimmed_mean"))
                 .arg(Arg::with_name("e-min")
                     .long("e-min")
-                    .default_value("0.01"))
+                    .default_value("0.1"))
                 .arg(Arg::with_name("e-max")
                     .long("e-max")
-                    .default_value("0.05"))
+                    .default_value("0.5"))
                 .arg(Arg::with_name("pts-min")
                     .long("pts-min")
-                    .default_value("10"))
+                    .default_value("0.05"))
                 .arg(Arg::with_name("pts-max")
                     .long("pts-max")
-                    .default_value("25"))
+                    .default_value("0.1"))
                 .arg(Arg::with_name("phi")
                     .long("phi")
                     .default_value("0.0"))
@@ -1765,19 +1752,16 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(
                         &["bam-file","read1","coupled","interleaved","full-help"])
                     .conflicts_with("bam-file"))
-                .arg(Arg::with_name("reference")
-                    .short("-r")
-                    .long("reference")
-                    .takes_value(true)
-                    .required_unless_one(&["genome-fasta-directory", "genome-fasta-files","full-help"]))
                 .arg(Arg::with_name("genome-fasta-files")
-                    .long("genome-fasta-files")
-                    .short("g")
+                    .short("r")
+                    .long("reference")
+                    .alias("reference")
                     .takes_value(true)
                     .multiple(true)
-                    .required_unless_one(&["reference", "genome-fasta-directory", "full-help"]))
+                    .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
+                    .short("g")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1788,7 +1772,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
                     .short("d")
-                    .default_value("/tmp"))
+                    .default_value("/tmp/lorikeet-bam-cache"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
