@@ -889,7 +889,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 };
                 if variant_info.len() > 0 {
                     let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {} && \
-                                                    mv SNP-Density*.pdf {}_snp_density_plot.pdf",
+                                                    mv -f SNP-Density*.pdf {}_snp_density_plot.pdf",
                                                output_prefix, window_size, output_prefix);
                     command::finish_command_safely(
                         std::process::Command::new("bash")

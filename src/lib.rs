@@ -50,7 +50,6 @@ extern crate pest_derive;
 
 use clap::*;
 use std::process;
-use coverm::genome_exclusion::*;
 
 pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
     match m.is_present(parameter) {

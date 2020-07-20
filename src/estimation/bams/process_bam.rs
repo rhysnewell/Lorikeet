@@ -8,10 +8,12 @@ use estimation::codon_structs::*;
 use coverm::bam_generator::*;
 use rayon::prelude::*;
 use model::variants::*;
+use utils::*;
 
 use std::str;
-use std::fs::File;
+use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
+use coverm::genomes_and_contigs::*;
 use coverm::FlagFilter;
 use bio::io::gff::Record;
 
@@ -23,10 +25,9 @@ pub fn process_bam<R: NamedBamReader,
     bam_generator: G,
     sample_idx: usize,
     sample_count: usize,
-    reference: &mut bio::io::fasta::IndexedReader<File>,
     coverage_estimators: &mut Vec<CoverageEstimator>,
-    variant_matrix: &mut VariantMatrix,
-    gff_map: &mut HashMap<String, Vec<Record>>,
+    variant_matrix_map: &mut HashMap<usize, VariantMatrix>,
+    gff_map: &mut HashMap<usize, HashMap<String, Vec<Record>>>,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -42,7 +43,9 @@ pub fn process_bam<R: NamedBamReader,
     flag_filters: &FlagFilter,
     mapq_threshold: u8,
     method: &str,
-    sample_groups: &HashMap<&str, HashSet<String>>) {
+    sample_groups: &HashMap<&str, HashSet<String>>,
+    genomes_and_contigs: &GenomesAndContigs,
+    reference_map: &HashMap<usize, String>) {
 
     let mut bam_generated = bam_generator.start();
 
@@ -88,6 +91,19 @@ pub fn process_bam<R: NamedBamReader,
     let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
+
+    let reference_stem = genomes_and_contigs.genome_of_contig(
+        &str::from_utf8(&target_names[0]).unwrap().to_string()).unwrap();
+    let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap();
+    let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+
+    let gff_map = gff_map.entry(ref_idx).or_insert(HashMap::new());
+    let mut variant_matrix = variant_matrix_map.entry(ref_idx)
+        .or_insert(VariantMatrix::new_matrix(sample_count));
+    let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
+        Ok(reader) => reader,
+        Err(_e) => generate_faidx(&reference_path),
+    };
 
 
     // for record in records

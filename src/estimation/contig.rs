@@ -8,17 +8,20 @@ use estimation::vcfs::process_vcf::*;
 use estimation::bams::process_bam::*;
 use estimation::codon_structs::*;
 use coverm::bam_generator::*;
-use bird_tool_utils::command;
+use bird_tool_utils::{command};
+use utils::*;
 
 use crate::*;
 use std::str;
-use std::fs::File;
-use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use bio::io::gff;
 use tempdir::TempDir;
 use std::process::Stdio;
+use coverm::genome_parsing::read_genome_fasta_files;
+use rayon::prelude::*;
+use std::sync::Mutex;
+use std::path::Path;
 
 #[allow(unused)]
 pub fn pileup_variants<R: NamedBamReader,
@@ -30,7 +33,6 @@ pub fn pileup_variants<R: NamedBamReader,
     longreads: Option<Vec<U>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
-    reference: bio::io::fasta::IndexedReader<File>,
     flag_filters: FlagFilter,
     mapq_threshold: u8,
     min_var_depth: usize,
@@ -44,8 +46,33 @@ pub fn pileup_variants<R: NamedBamReader,
     include_soft_clipping: bool,
     is_long_read: bool) {
 
+    let references = match m.values_of("genome-fasta-files") {
+        Some(vec) => {
+            let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
+            debug!("Reference files {:?}", reference_paths);
+            reference_paths
+        },
+        None => {
+            match m.value_of("genome-fasta-directory") {
+                Some(path) => {
+                    let ext = m.value_of("genome-fasta-extension").unwrap();
+                    let reference_glob = format!("{}/*.{}", path, ext);
+                    let reference_paths = glob(&reference_glob).expect("Failed to read cache")
+                        .map(|p| p.expect("Failed to read cached bam path")
+                            .to_str().unwrap().to_string()).collect::<Vec<String>>();
+                    debug!("Reference files {:?}", reference_paths);
+                    reference_paths
+
+                }
+                None => panic!("Can't find suitable references for variant calling")
+            }
+        }
+    };
+    let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
+    let genomes_and_contigs = read_genome_fasta_files(&references);
+
     let mut sample_count = bam_readers.len();
-    let mut reference = reference;
+    let mut reference_count = references.len();
     let mut coverage_estimators = coverage_estimators;
     let mut ani = 0.;
 
@@ -63,11 +90,20 @@ pub fn pileup_variants<R: NamedBamReader,
         }
     };
 
-    let mut variant_matrix = VariantMatrix::new_matrix(sample_count);
-
-    info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs",
+    let mut variant_matrix_map = HashMap::new();
+    // Put reference index in the variant map and initialize matrix
+    let mut reference_map = HashMap::new();
+    for reference in references.iter() {
+        debug!("Genomes {:?} contigs {:?}", &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome);
+        let ref_idx = genomes_and_contigs.genome_index(&Path::new(reference)
+            .file_stem().expect("problem determining file stem").to_str().unwrap().to_string()).unwrap();
+        reference_map.entry(ref_idx).or_insert(reference.to_string());
+        variant_matrix_map.entry(ref_idx).or_insert(
+            VariantMatrix::new_matrix(sample_count / references.len()));
+    }
+    info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs over {} genome(s)",
           longreads.len(),
-          bam_readers.len(), sample_count);
+          bam_readers.len(), sample_count, reference_count);
 
     match mode {
         "evolve" => {
@@ -76,54 +112,58 @@ pub fn pileup_variants<R: NamedBamReader,
             ani = 0.;
 
             let mut gff_reader;
-            if m.is_present("gff") {
-                let gff_file = m.value_of("gff").unwrap();
-                gff_reader = gff::Reader::from_file(gff_file,
-                                                    bio::io::gff::GffType::GFF3)
-                    .expect("GFF File not found");
-            } else {
+            if m.is_present("gff") || !m.is_present("gff") {
                 external_command_checker::check_for_prokka();
 
                 // create new fifo and give read, write and execute rights to the owner.
                 let gff_dir = TempDir::new("lorikeet-prokka")
                     .expect("unable to create prokka directory");
-
-                let cmd_string = format!(
+                for reference in references.iter() {
+                    let cmd_string = format!(
                     "set -e -o pipefail; \
-                     prokka --outdir {} --prefix prokka_out --force {} {}",
+                     prokka --outdir {} --prefix {} --force {} {}",
                     // prodigal
                     gff_dir.path().to_str()
                         .expect("Failed to convert tempfile path to str"),
+                    &reference,
                     m.value_of("prokka-params").unwrap_or(""),
-                    m.value_of("reference").unwrap());
-                info!("Queuing cmd_string: {}", cmd_string);
-                command::finish_command_safely(
-                    std::process::Command::new("bash")
-                        .arg("-c")
-                        .arg(&cmd_string)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .expect("Unable to execute bash"), "prokka");
+                    &reference);
+                    info!("Queuing cmd_string: {}", cmd_string);
+                    command::finish_command_safely(
+                        std::process::Command::new("bash")
+                            .arg("-c")
+                            .arg(&cmd_string)
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()
+                            .expect("Unable to execute bash"), "prokka");
 
-                gff_reader = gff::Reader::from_file(format!("{}/prokka_out.gff", gff_dir.path().to_str()
-                                                        .expect("Failed to convert tempfile path to str")),
-                                                    bio::io::gff::GffType::GFF3)
-                    .expect("Failed to read prodigal output");
+                    // Read in newly created gff
+                    gff_reader = gff::Reader::from_file(format!("{}/{}.gff", gff_dir.path().to_str()
+                        .expect("Failed to convert tempfile path to str"), &reference),
+                                                        bio::io::gff::GffType::GFF3)
+                        .expect("Failed to read prodigal output");
+
+                    // Map to reference id
+                    gff_reader.records().into_iter().for_each(|record| {
+                        match record {
+                            Ok(rec) => {
+                                let gff_ref = gff_map.entry(
+                                    genomes_and_contigs.genome_index(
+                                        &reference.to_string()).unwrap()).or_insert(HashMap::new());
+                                let contig_genes = gff_ref.entry(rec.seqname().to_owned())
+                                    .or_insert(Vec::new());
+                                contig_genes.push(rec);
+                            },
+                            _ => {},
+                        };
+                    });
+                }
 
                 gff_dir.close().expect("Failed to close temp directory");
 
             }
-            gff_reader.records().into_iter().for_each(|record| {
-                match record {
-                    Ok(rec) => {
-                        let contig_genes = gff_map.entry(rec.seqname().to_owned())
-                            .or_insert(Vec::new());
-                        contig_genes.push(rec);
-                    },
-                    _ => {},
-                };
-            });
+
         },
         "genotype" | "summarize" => {
             if m.is_present("strain-ani") {
@@ -136,52 +176,72 @@ pub fn pileup_variants<R: NamedBamReader,
         }
     }
 
-    // Get the total amound of bases in reference using the index
-    let reference_length = bio::io::fasta::Index::with_fasta_file(
-        &Path::new(m.value_of("reference").unwrap())).unwrap()
-        .sequences().iter().fold(0, |acc, seq| acc + seq.len);
+
 
     let mut sample_groups = HashMap::new();
 
     info!("Running SNP calling on {} shortread samples", bam_readers.len());
     bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+        // Get the appropriate sample index based on how many references we are using
+        let sample_idx = if references.len() == 1 {
+            sample_idx
+        } else {
+            sample_idx % references.len()
+        };
         process_vcf(bam_generator,
                     n_threads,
                     sample_idx,
-                    sample_count,
-                    &mut variant_matrix,
+                    sample_count / references.len(),
+                    &mut variant_matrix_map,
                     false,
                     m,
-                    reference_length,
-                    &mut sample_groups)
+                    &mut sample_groups,
+                    &genomes_and_contigs,
+                    &reference_map)
     });
 
     if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
 //        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
         info!("Running structural variant detection...");
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            // Get the appropriate sample index based on how many references we are using
+            let sample_idx = if references.len() == 1 {
+                sample_idx
+            } else {
+                sample_idx % references.len()
+            };
             process_vcf(bam_generator,
                         n_threads,
                         sample_idx,
-                        sample_count,
-                        &mut variant_matrix,
+                        sample_count / references.len(),
+                        &mut variant_matrix_map,
                         true,
                         m,
-                        reference_length,
-                        &mut sample_groups)
+                        &mut sample_groups, &genomes_and_contigs, &reference_map)
         });
     } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
             let bam_generated = bam_generator.start();
             let header = bam_generated.header().clone(); // bam header
+            let target_names = header.target_names(); // contig names
             let mut variant_map = HashMap::new();
 
             let stoit_name = bam_generated.name().to_string().replace("/", ".");
             let group = sample_groups.entry("long").or_insert(HashSet::new());
             group.insert(stoit_name.clone());
+
+            let reference_stem = genomes_and_contigs.genome_of_contig(
+                &str::from_utf8(&target_names[0]).unwrap().to_string()).unwrap();
+            let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap();
+
+            // Adjust sample index based on number of references
+            let sample_idx = sample_idx % references.len();
+            let sample_count = sample_count / references.len();
             // Longread adjusted sample index
             let sample_idx_l = sample_count - sample_idx - 1;
+
+            let mut variant_matrix = variant_matrix_map.entry(ref_idx).or_insert(VariantMatrix::new_matrix(sample_count));
             variant_matrix.
                 add_sample(stoit_name, sample_idx_l, &variant_map, &header);
 
@@ -199,21 +259,24 @@ pub fn pileup_variants<R: NamedBamReader,
         bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
 
     } else {
-        let ref_name = Path::new(m.value_of("reference").unwrap())
-            .file_name().unwrap()
-            .to_str().unwrap();
-        let cache = format!("{}/{}*.bam",
-                            m.value_of("bam-file-cache-directory").unwrap().to_string(),
-                            ref_name);
-        let bam_paths = glob(&cache).expect("Failed to read cache")
-            .map(|p| p.expect("Failed to read cached bam path")
-                .to_str().unwrap().to_string()).collect::<Vec<String>>();
-        let bam_paths = bam_paths.iter().map(|p| &**p).collect::<Vec<&str>>();
-        let bam_cnts = bam_paths.len();
-        bam_readers = generate_named_bam_readers_from_bam_files(bam_paths);
-        if m.value_of("bam-file-cache-directory").unwrap() == "/tmp" {
+
+        let mut all_bam_paths = vec!();
+
+        for ref_name in references.iter() {
+            let cache = format!("{}/{}*.bam",
+                                m.value_of("bam-file-cache-directory").unwrap().to_string(),
+                                ref_name);
+            let bam_paths = glob(&cache).expect("Failed to read cache")
+                .map(|p| p.expect("Failed to read cached bam path")
+                    .to_str().unwrap().to_string()).collect::<Vec<String>>();
+            all_bam_paths.extend(bam_paths);
+        }
+        let all_bam_paths = all_bam_paths.iter().map(|p| p.as_str()).collect::<Vec<&str>>();
+        let bam_cnts = all_bam_paths.len();
+        bam_readers = generate_named_bam_readers_from_bam_files(all_bam_paths);
+        if m.value_of("bam-file-cache-directory").unwrap() == "/tmp/lorikeet-bam-cache" {
             info!("Removing {} cached BAM files...", bam_cnts);
-            let remove_directory_cmd = format!("rm {}", cache);
+            let remove_directory_cmd = format!("rm -r {}", m.value_of("bam-file-cache-directory").unwrap());
             command::finish_command_safely(
                 std::process::Command::new("bash")
                     .arg("-c")
@@ -229,12 +292,18 @@ pub fn pileup_variants<R: NamedBamReader,
     if bam_readers.len() > 0 {
         info!("Performing guided variant calling...");
         bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+
+            // Get the appropriate sample index based on how many references we are using
+            let sample_idx = if references.len() == 1 {
+                sample_idx
+            } else {
+                sample_idx % references.len()
+            };
             process_bam(bam_generator,
                         sample_idx,
-                        sample_count,
-                        &mut reference,
+                        sample_count / references.len(),
                         &mut coverage_estimators,
-                        &mut variant_matrix,
+                        &mut variant_matrix_map,
                         &mut gff_map,
                         n_threads,
                         m,
@@ -248,7 +317,7 @@ pub fn pileup_variants<R: NamedBamReader,
                         include_soft_clipping,
                         include_indels,
                         &flag_filters,
-                        mapq_threshold, method, &sample_groups)
+                        mapq_threshold, method, &sample_groups, &genomes_and_contigs, &reference_map)
         });
     }
 
@@ -258,12 +327,17 @@ pub fn pileup_variants<R: NamedBamReader,
         let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
         let longreads = generate_named_bam_readers_from_bam_files(longreads_path);
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+            // Get the appropriate sample index based on how many references we are using
+            let sample_idx = if references.len() == 1 {
+                sample_idx
+            } else {
+                sample_idx % references.len()
+            };
             process_bam(bam_generator,
                         sample_idx,
-                        sample_count,
-                        &mut reference,
+                        sample_count / references.len(),
                         &mut coverage_estimators,
-                        &mut variant_matrix,
+                        &mut variant_matrix_map,
                         &mut gff_map,
                         n_threads,
                         m,
@@ -277,45 +351,52 @@ pub fn pileup_variants<R: NamedBamReader,
                         include_soft_clipping,
                         include_indels,
                         &flag_filters,
-                        mapq_threshold, method, &sample_groups)
+                        mapq_threshold, method, &sample_groups, &genomes_and_contigs, &reference_map)
         });
     }
-    // if m.is_present("longread-bam-files") | m.is_present("longreads") {
-//        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
 
-    // }
+    let gff_map = Mutex::new(gff_map);
+    variant_matrix_map.par_iter_mut().for_each(|(ref_idx, variant_matrix)|{
+        if mode == "genotype" {
+            variant_matrix.generate_distances(n_threads, output_prefix);
+            let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
+            let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
+            let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
+            let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
+            let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
+            let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
+            let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
+            let minimum_reads_in_link: usize = m.value_of("minimum-reads-in-link").unwrap().parse().unwrap();
+            let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+            let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
+                Ok(reader) => reader,
+                Err(_e) => generate_faidx(&reference_path),
+            };
 
-    if mode=="genotype" {
-        variant_matrix.generate_distances(n_threads, output_prefix);
-        let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
-        let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-        let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
-        let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-        let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
-        let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
-        let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
-        let minimum_reads_in_link: usize = m.value_of("minimum-reads-in-link").unwrap().parse().unwrap();
-
-
-        variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
-                                      anchor_size, anchor_similarity, minimum_reads_in_link);
-        variant_matrix.generate_genotypes(output_prefix, &mut reference);
-        variant_matrix.write_vcf(output_prefix);
-        if m.is_present("plot") {
+            variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
+                                          anchor_size, anchor_similarity, minimum_reads_in_link);
+            variant_matrix.generate_genotypes(&genomes_and_contigs.genomes[*ref_idx], &mut reference);
+            variant_matrix.write_vcf(&genomes_and_contigs.genomes[*ref_idx]);
+            if m.is_present("plot") {
+                let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                variant_matrix.print_variant_stats(&genomes_and_contigs.genomes[*ref_idx], window_size);
+            }
+        } else if mode == "summarize" {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-            variant_matrix.print_variant_stats(output_prefix, window_size);
+            variant_matrix.write_vcf(&genomes_and_contigs.genomes[*ref_idx]);
+            variant_matrix.print_variant_stats(&genomes_and_contigs.genomes[*ref_idx], window_size);
+        } else if mode == "evolve" {
+            let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+            let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
+                Ok(reader) => reader,
+                Err(_e) => generate_faidx(&reference_path),
+            };
+            let mut gff_map = gff_map.lock().unwrap();
+            let mut gff_ref = gff_map.get_mut(ref_idx).expect(&format!("No GFF records for reference {:?}", reference_path));
+            variant_matrix.calc_gene_mutation(&mut gff_ref, &mut reference, &codon_table,
+                                              Path::new(&reference_path).file_stem().unwrap().to_str().unwrap(), &genomes_and_contigs.genomes[*ref_idx])
         }
-    } else if mode=="summarize" {
-        let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-        variant_matrix.write_vcf(output_prefix);
-        variant_matrix.print_variant_stats(output_prefix, window_size);
-    } else if mode=="evolve" {
-        let ref_name = Path::new(m.value_of("reference").unwrap())
-            .file_name().unwrap()
-            .to_str().unwrap();
-        variant_matrix.calc_gene_mutation(&mut gff_map, &mut reference, &codon_table,
-                                          ref_name, output_prefix)
-    }
+    });
 }
 
 #[cfg(test)]
