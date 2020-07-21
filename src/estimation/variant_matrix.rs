@@ -14,7 +14,7 @@ use itertools::{izip};
 use rust_htslib::{bcf::{self}, bam::HeaderView};
 use bio::io::gff;
 use bird_tool_utils::command;
-use std::process::{Stdio, Command};
+use std::process::{Stdio};
 use tempfile;
 use external_command_checker;
 use rayon::current_num_threads;

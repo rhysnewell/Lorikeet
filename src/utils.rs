@@ -18,114 +18,12 @@ pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 pub const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMAP2_SR;
 
-pub fn get_sharded_bam_readers<'a, 'b, T>(
-    m: &'a clap::ArgMatches,
-    mapping_program: MappingProgram,
-    reference_tempfile: &'a Option<NamedTempFile>,
-    genome_exclusion: &'b T,
-    longread: bool
-) -> Vec<ShardedBamReaderGenerator<'b, T>>
-    where
-        T: GenomeExclusion,
-{
-    // Check the output BAM directory actually exists and is writeable
-    if m.is_present("bam-file-cache-directory") {
-        setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
-    }
-    let discard_unmapped = m.is_present("discard-unmapped");
-    let sort_threads = m.value_of("threads").unwrap().parse::<i32>().unwrap();
-    let params =
-        if !longread {
-            MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile)
-        } else {
-            MappingParameters::generate_longread_from_clap(&m, mapping_program, &reference_tempfile)
-        };    let mut bam_readers = vec![];
-    let mut concatenated_reference_name: Option<String> = None;
-    let mut concatenated_read_names: Option<String> = None;
-
-    for reference_wise_params in params {
-        let index = setup_mapping_index(&reference_wise_params, &m, mapping_program);
-
-        let reference = reference_wise_params.reference;
-        let reference_name = std::path::Path::new(reference)
-            .file_name()
-            .expect("Unable to convert reference to file name")
-            .to_str()
-            .expect("Unable to covert file name into str")
-            .to_string();
-        concatenated_reference_name = match concatenated_reference_name {
-            Some(prev) => Some(format!("{}|{}", prev, reference_name)),
-            None => Some(reference_name),
-        };
-        let bam_file_cache = |naming_readset| -> Option<String> {
-            let bam_file_cache_path;
-            match m.is_present("bam-file-cache-directory") {
-                false => None,
-                true => {
-                    bam_file_cache_path = generate_cached_bam_file_name(
-                        m.value_of("bam-file-cache-directory").unwrap(),
-                        match reference_tempfile {
-                            Some(_) => CONCATENATED_REFERENCE_CACHE_STEM,
-                            None => reference,
-                        },
-                        naming_readset,
-                    );
-                    info!("Caching BAM file to {}", bam_file_cache_path);
-                    Some(bam_file_cache_path)
-                }
-            }
-        };
-        let n_samples = reference_wise_params.len() as u16;
-
-        for p in reference_wise_params {
-            bam_readers.push(
-                shard_bam_reader::generate_named_sharded_bam_readers_from_reads(
-                    mapping_program,
-                    match index {
-                        Some(ref index) => index.index_path(),
-                        None => reference,
-                    },
-                    p.read1,
-                    p.read2,
-                    p.read_format.clone(),
-                    p.threads / n_samples,
-                    bam_file_cache(p.read1).as_ref().map(String::as_ref),
-                    discard_unmapped,
-                    p.mapping_options,
-                ),
-            );
-            let name = &std::path::Path::new(p.read1)
-                .file_name()
-                .expect("Unable to convert read1 name to file name")
-                .to_str()
-                .expect("Unable to covert file name into str")
-                .to_string();
-            concatenated_read_names = match concatenated_read_names {
-                Some(prev) => Some(format!("{}|{}", prev, name)),
-                None => Some(name.to_string()),
-            };
-        }
-
-        debug!("Finished BAM setup");
-    }
-    let gen = ShardedBamReaderGenerator {
-        stoit_name: format!(
-            "{}/{}",
-            concatenated_reference_name.unwrap(),
-            concatenated_read_names.unwrap()
-        ),
-        read_sorted_bam_readers: bam_readers,
-        sort_threads: sort_threads,
-        genome_exclusion: genome_exclusion,
-    };
-    return vec![gen];
-}
-
 pub fn get_streamed_bam_readers<'a>(
     m: &'a clap::ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
-    longread: bool
+    longread: bool,
+    references: &'a Option<Vec<&'a str>>,
 ) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
@@ -135,9 +33,9 @@ pub fn get_streamed_bam_readers<'a>(
 
     let params =
         if !longread {
-            MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile)
+            MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile, &references)
         } else {
-            MappingParameters::generate_longread_from_clap(&m, mapping_program, &reference_tempfile)
+            MappingParameters::generate_longread_from_clap(&m, mapping_program, &reference_tempfile, &references)
         };    let mut generator_set = vec![];
     for reference_wise_params in params {
         let mut bam_readers = vec![];
@@ -201,7 +99,9 @@ pub fn get_streamed_filtered_bam_readers(
     mapping_program: MappingProgram,
     reference_tempfile: &Option<NamedTempFile>,
     filter_params: &FilterParameters,
-    longread: bool) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
+    longread: bool,
+    references: &Option<Vec<&str>>,
+) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
         setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
@@ -210,9 +110,9 @@ pub fn get_streamed_filtered_bam_readers(
 
     let params =
         if !longread {
-            MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile)
+            MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile, &references)
         } else {
-            MappingParameters::generate_longread_from_clap(&m, mapping_program, &reference_tempfile)
+            MappingParameters::generate_longread_from_clap(&m, mapping_program, &reference_tempfile, &references)
         };
     let mut generator_set = vec![];
     for reference_wise_params in params {
@@ -545,7 +445,7 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
     return (concatenated_genomes, genomes_and_contigs_option)
 }
 
-pub fn parse_references<'a>(m: &'a clap::ArgMatches) -> Vec<String> {
+pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
     let references = match m.values_of("reference") {
         Some(vec) => {
             let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
