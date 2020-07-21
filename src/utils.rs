@@ -12,6 +12,7 @@ use std::fs::File;
 use std::process::Stdio;
 use std::io::Write;
 use tempfile::NamedTempFile;
+use glob::glob;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -496,6 +497,9 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
         }
     };
 
+    debug!("Found paths {:?}", &genome_fasta_files_opt);
+
+
     let (concatenated_genomes, genomes_and_contigs_option) =
         match m.is_present("reference") {
             true => match genome_fasta_files_opt {
@@ -515,13 +519,9 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
                 } else {
                     genome_fasta_files_opt.unwrap()
                 };
-                info!("Profiling {} genomes", dereplicated_genomes.len());
+                debug!("Profiling {} genomes", dereplicated_genomes.len());
 
                 let list_of_genome_fasta_files = &dereplicated_genomes;
-                info!(
-                    "Generating concatenated reference FASTA file of {} genomes ..",
-                    list_of_genome_fasta_files.len()
-                );
 
                 (
                     Some(
@@ -540,7 +540,35 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
                 )
             }
         };
+
+    debug!("Found genome_and_contigs {:?}", &genomes_and_contigs_option);
     return (concatenated_genomes, genomes_and_contigs_option)
+}
+
+pub fn parse_references<'a>(m: &'a clap::ArgMatches) -> Vec<String> {
+    let references = match m.values_of("reference") {
+        Some(vec) => {
+            let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
+            debug!("Reference files {:?}", reference_paths);
+            reference_paths
+        },
+        None => {
+            match m.value_of("genome-fasta-directory") {
+                Some(path) => {
+                    let ext = m.value_of("genome-fasta-extension").unwrap();
+                    let reference_glob = format!("{}/*.{}", path, ext);
+                    let reference_paths = glob(&reference_glob).expect("Failed to read cache")
+                        .map(|p| p.expect("Failed to read cached bam path")
+                            .to_str().unwrap().to_string()).collect::<Vec<String>>();
+                    debug!("Reference files {:?}", reference_paths);
+                    reference_paths
+
+                }
+                None => panic!("Can't find suitable references for variant calling")
+            }
+        }
+    };
+    return references
 }
 
 pub fn extract_genomes_and_contigs_option(
@@ -632,4 +660,13 @@ pub fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Ve
         }
     }
     reps
+}
+
+pub fn extract_genome<'a>(tid: u32, target_names: &'a Vec<&[u8]>, split_char: u8) -> &'a [u8] {
+    let target_name = target_names[tid as usize];
+    trace!("target name {:?}, separator {:?}", target_name, split_char);
+    let offset = find_first(target_name, split_char).expect(
+        &format!("Contig name {} does not contain split symbol, so cannot determine which genome it belongs to",
+                 std::str::from_utf8(target_name).unwrap()));
+    return &target_name[(0..offset)];
 }

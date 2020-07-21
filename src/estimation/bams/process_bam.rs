@@ -23,7 +23,6 @@ use bio::io::gff::Record;
 pub fn process_bam<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
-    sample_idx: usize,
     sample_count: usize,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     variant_matrix_map: &mut HashMap<usize, VariantMatrix>,
@@ -50,7 +49,6 @@ pub fn process_bam<R: NamedBamReader,
     let mut bam_generated = bam_generator.start();
 
     // Adjust the sample index if the bam is from long reads
-    let mut sample_idx = sample_idx;
     let longread;
 
 
@@ -59,24 +57,8 @@ pub fn process_bam<R: NamedBamReader,
 
     let stoit_name = bam_generated.name().to_string().replace("/", ".");
     // adjust sample index for longread bams
-    if sample_groups.contains_key("long") {
-        if sample_groups["long"].contains(&stoit_name) {
-            longread = true;
-            sample_idx = sample_count - sample_idx - 1;
-            debug!("Longread {} {}", stoit_name, sample_idx)
-        } else {
-            longread = false;
-            debug!(" SOME Longread {} {}", stoit_name, sample_idx)
 
-        }
-    } else {
-        longread = false;
 
-        debug!(" NO Longread {} {}", stoit_name, sample_idx)
-
-    }
-
-    debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
     debug!("Managed to set threads.");
 
@@ -104,6 +86,30 @@ pub fn process_bam<R: NamedBamReader,
         Ok(reader) => reader,
         Err(_e) => generate_faidx(&reference_path),
     };
+
+    let sample_idx = match variant_matrix {
+        VariantMatrix::VariantContigMatrix {
+            sample_names,
+            ..
+        } => {
+            sample_names.iter().position(|p| {p == &stoit_name}).unwrap()
+        }
+    };
+
+    if sample_groups.contains_key("long") {
+        if sample_groups["long"].contains(&stoit_name) {
+            longread = true;
+            debug!("Longread {} {}", stoit_name, sample_idx)
+        } else {
+            longread = false;
+            debug!(" SOME Longread {} {}", stoit_name, sample_idx)
+
+        }
+    } else {
+        longread = false;
+        debug!(" NO Longread {} {}", stoit_name, sample_idx)
+
+    }
 
 
     // for record in records

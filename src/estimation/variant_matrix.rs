@@ -150,7 +150,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut target_lengths,
                 ..
             } => {
-                info!("adding sample {}", &sample_name);
+                info!("adding sample {} at index {}", &sample_name, &sample_idx);
                 sample_names[sample_idx] = sample_name;
                 let target_count = header.target_count();
                 let tid_names = header.target_names();
@@ -267,7 +267,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn generate_distances(&mut self, _threads: usize, _output_prefix: &str) {
+    fn generate_distances(&mut self, _threads: usize, output_prefix: &str) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 all_variants,
@@ -450,6 +450,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 debug!("Geom Mean Frq {:?}", geom_mean_f);
                 debug!("geoms {:?} {:?} {:?}", geom_mean_d, geom_mean_v, geom_mean_f);
 
+                info!("Beginning analysis of {} with {} variants", &output_prefix, &variant_info_all.len());
+
                 *variant_info = variant_info_all;
                 *geom_mean_var = geom_mean_v;
                 *geom_mean_dep = geom_mean_d;
@@ -606,6 +608,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                     let file_name = format!("{}_strain_{}.fna", output_prefix.to_string(), strain_index);
 
                     let file_path = Path::new(&file_name);
+                    // Open haplotype file or create one
+                    let mut file_open = File::create(file_path)
+                        .expect("No Read or Write Permission in current directory");
 
                     let mut original_contig = Vec::new();
 
@@ -735,12 +740,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                             contig = str::from_utf8(&original_contig)
                                 .expect("Can't convert to str").to_string();
                         }
-
-                        // Open haplotype file or create one
-                        let mut file_open = File::create(file_path)
-                            .expect("No Read or Write Permission in current directory");
-
-
 
                         writeln!(file_open, ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
                                  target_names[tid],
@@ -1010,7 +1009,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     header.push_record(format!("##source=lorikeet-v{}",
                                                env!("CARGO_PKG_VERSION")).as_bytes());
 
-
+                    debug!("samples {:?}", &sample_names);
                     for sample in sample_names.iter() {
                         header.push_sample(&sample.clone().into_bytes()[..]);
                     }
@@ -1083,7 +1082,8 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                     // Initiate writer
                     let mut bcf_writer = bcf::Writer::from_path(
-                        vcf_presort.path(),
+                        format!("{}.vcf",
+                                output_prefix).as_str(),
                         &header,
                         true,
                         bcf::Format::VCF).expect(
@@ -1126,6 +1126,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 record.push_format_float(b"QA", &base.quals[..]);
 
                                 let refr = &base.refr[..];
+
 
                                 match variant {
                                     Variant::SNV(alt) => {
@@ -1196,14 +1197,14 @@ impl VariantMatrixFunctions for VariantMatrix {
                     // Sorting using bcftools is fast so just do it for the user.
                     external_command_checker::check_for_bcftools();
 
-                    let command_string = format!(
-                        "mv {} {}.vcf",
-                        &vcf_presort
-                            .path()
-                            .to_str()
-                            .expect("Failed to convert tempfile to path"),
-                        output_prefix
-                    );
+                    // let command_string = format!(
+                    //     "mv {} {}.vcf",
+                    //     &vcf_presort
+                    //         .path()
+                    //         .to_str()
+                    //         .expect("Failed to convert tempfile to path"),
+                    //     output_prefix
+                    // );
                     // This fails randomly, not sure what causes it so will keep unsorted for now
 //                    let command_string = format!(
 //                        "bcftools sort {} > {}.vcf",
@@ -1217,15 +1218,15 @@ impl VariantMatrixFunctions for VariantMatrix {
 //                        vcf_presort.keep().unwrap();
 //                    }
 
-                    command::finish_command_safely(
-                        Command::new("bash")
-                            .arg("-c")
-                            .arg(&command_string)
-                            .stderr(Stdio::piped())
-                            .spawn()
-                            .expect("Unable to execute bash"),
-                        "bcftools"
-                    );
+                    // command::finish_command_safely(
+                    //     Command::new("bash")
+                    //         .arg("-c")
+                    //         .arg(&command_string)
+                    //         .stderr(Stdio::piped())
+                    //         .spawn()
+                    //         .expect("Unable to execute bash"),
+                    //     "bcftools"
+                    // );
                 }
             }
         }
