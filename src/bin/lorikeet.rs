@@ -17,15 +17,13 @@ extern crate coverm;
 use coverm::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use coverm::genome_exclusion::*;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::{bam_generator::*, filter};
 
 use std::env;
 use std::str;
 use std::process;
-use std::collections::{BTreeMap, HashSet};
-use std::io::Write;
+use std::collections::{BTreeMap};
 use std::path::Path;
 
 extern crate clap;
@@ -201,8 +199,6 @@ fn prepare_pileup
     let threads = m.value_of("threads").unwrap().parse().unwrap();
     rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
 
-    let separator = parse_separator(m);
-
     let references = parse_references(m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
@@ -239,7 +235,7 @@ fn prepare_pileup
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -285,7 +281,7 @@ fn prepare_pileup
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -323,7 +319,9 @@ fn prepare_pileup
                 mapping_program,
                 &None,
                 &filter_params,
-                false);
+                false,
+                &Some(references.clone())
+            );
             let mut all_generators = vec!();
             let mut indices = vec!(); // Prevent indices from being dropped
             for set in generator_sets {
@@ -348,7 +346,7 @@ fn prepare_pileup
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -376,7 +374,7 @@ fn prepare_pileup
             }
         } else {
             debug!("Not filtering..");
-            let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, false);
+            let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, false, &Some(references.clone()));
             let mut all_generators = vec!();
             let mut indices = vec!(); // Prevent indices from being dropped
             for set in generator_sets {
@@ -400,7 +398,7 @@ fn prepare_pileup
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true);
+                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {

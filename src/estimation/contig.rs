@@ -18,9 +18,6 @@ use coverm::FlagFilter;
 use bio::io::gff;
 use tempdir::TempDir;
 use std::process::Stdio;
-use coverm::genome_parsing::read_genome_fasta_files;
-use rayon::prelude::*;
-use std::sync::Mutex;
 use std::path::Path;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 
