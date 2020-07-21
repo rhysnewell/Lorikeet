@@ -264,7 +264,7 @@ pub fn linkage_clustering_of_variants(variant_info: &Vec<fuzzy::Var>,
                                       minimum_reads_in_link: usize)
     -> Vec<fuzzy::Cluster>
 {
-    info!("Phasing {} variants...", variant_info.len());
+    debug!("Phasing {} variants...", variant_info.len());
     if variant_info.len() > 1 {
         // Initiate the hashmap linking each variant to the variants it shares reads with
         let links = Mutex::new(HashMap::new());

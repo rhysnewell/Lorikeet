@@ -23,18 +23,21 @@ pub fn process_vcf<R: NamedBamReader,
     G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
     split_threads: usize,
-    sample_idx: usize,
+    mut prev_ref_idx: &mut i32,
+    mut per_ref_sample_idx: &mut i32,
     sample_count: usize,
     variant_matrix_map: &mut HashMap<usize, VariantMatrix>,
     longread: bool,
     m: &clap::ArgMatches,
     sample_groups: &mut HashMap<&str, HashSet<String>>,
     genomes_and_contigs: &GenomesAndContigs,
-    reference_map: &HashMap<usize, String>) {
+    reference_map: &HashMap<usize, String>,
+    short_sample_count: &usize) {
 
     let mut bam_generated = bam_generator.start();
 
     let stoit_name = bam_generated.name().to_string().replace("/", ".");
+    debug!("Stoit_name {:?}", &stoit_name);
 
     if longread {
         let group = sample_groups.entry("long").or_insert(HashSet::new());
@@ -44,13 +47,10 @@ pub fn process_vcf<R: NamedBamReader,
         group.insert(stoit_name.clone());
     }
 
-    debug!("Setting threads...");
     bam_generated.set_threads(split_threads);
-    debug!("Managed to set threads.");
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
-    debug!("retrieving genome id with contig {:?}", str::from_utf8(&target_names[0]));
 
     // Get the total amound of bases in reference using the index
     let reference_stem = genomes_and_contigs.genome_of_contig(
@@ -58,6 +58,7 @@ pub fn process_vcf<R: NamedBamReader,
         .expect(&format!("Found invalid contig in bam, {:?}. Please provide corresponding reference genomes", str::from_utf8(&target_names[0]).unwrap()));
     let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap();
     let reference = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+    debug!("retrieving genome id with contig {:?} from {} for sample {}", str::from_utf8(&target_names[0]), &reference, &stoit_name);
 
     let reference_length = match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
         Ok(index) => index.sequences().iter().fold(0, |acc, seq| acc + seq.len),
@@ -66,6 +67,13 @@ pub fn process_vcf<R: NamedBamReader,
             bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)).unwrap().sequences().iter().fold(0, |acc, seq| acc + seq.len)
         }
     };
+
+    if ref_idx as i32 == *prev_ref_idx {
+        *per_ref_sample_idx += 1;
+    } else {
+        *prev_ref_idx = ref_idx as i32;
+        *per_ref_sample_idx = 0;
+    }
 
     // Get the variant matrix for current reference
     let mut variant_matrix = variant_matrix_map.entry(ref_idx).or_insert(
@@ -78,21 +86,19 @@ pub fn process_vcf<R: NamedBamReader,
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(&stoit_name,
                                  &m,
-                                 sample_idx,
+                                 *per_ref_sample_idx as usize,
                                  split_threads,
                                  longread,
                                  reference_length,
-                                 reference);
-    let mut sample_idx = sample_idx;
-    if longread {
-        sample_idx = sample_count - sample_idx - 1;
-    }
+                                 reference,
+                                 ref_idx);
+
     match vcf_reader {
         Ok(ref mut reader) => {
             reader.set_threads(split_threads).expect("Unable to set threads on VCF reader");
 
             let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
-            info!("Collecting VCF records for sample {} against {}", sample_idx, &reference_stem);
+            info!("Collecting VCF records for sample {} against {}", per_ref_sample_idx, &reference_stem);
             reader.records().into_iter().for_each(|vcf_record| {
                 let mut vcf_record = vcf_record.unwrap();
                 let header = vcf_record.header();
@@ -103,7 +109,7 @@ pub fn process_vcf<R: NamedBamReader,
                     == header.rid2name(variant_rid).unwrap() {
                     let base_option = Base::from_vcf_record(&mut vcf_record,
                                                             sample_count,
-                                                            sample_idx,
+                                                            *per_ref_sample_idx as usize,
                                                             longread,
                                                             min_qual);
                     match base_option {
@@ -123,11 +129,19 @@ pub fn process_vcf<R: NamedBamReader,
                     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
                 }
             });
-            variant_matrix.add_sample(stoit_name.to_string(), sample_idx, &variant_map, &header);
+            if longread {
+                variant_matrix.add_sample(stoit_name.to_string(), (*short_sample_count as i32 + *per_ref_sample_idx) as usize, &variant_map, &header);
+            } else {
+                variant_matrix.add_sample(stoit_name.to_string(), *per_ref_sample_idx as usize, &variant_map, &header);
+            }
         },
         Err(_) => {
-            info!("No VCF records found for sample {} against {}", sample_idx, &reference_stem);
-            variant_matrix.add_sample(stoit_name.to_string(), sample_idx, &variant_map, &header);
+            info!("No VCF records found for sample {} against {}", per_ref_sample_idx, &reference_stem);
+            if longread {
+                variant_matrix.add_sample(stoit_name.to_string(), (*short_sample_count as i32 + *per_ref_sample_idx) as usize, &variant_map, &header);
+            } else {
+                variant_matrix.add_sample(stoit_name.to_string(), *per_ref_sample_idx as usize, &variant_map, &header);
+            }
         }
     }
 
@@ -139,7 +153,7 @@ pub fn process_vcf<R: NamedBamReader,
 #[allow(unused)]
 pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
                sample_idx: usize, threads: usize, longread: bool,
-               reference_length: u64, reference: &String) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+               reference_length: u64, reference: &String, ref_idx: usize) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -150,10 +164,12 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
             if longread {
-                let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+                let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
+                    .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
                 return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
             } else {
-                let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+                let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
+                    .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
                 return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
             }
         } else {
@@ -162,18 +178,18 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
             return vcf
         }
     } else if longread && m.is_present("longread-bam-files") {
-        let bam_path: &str = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+        let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
+            .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
         return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
     } else if m.is_present("bam-files") {
-        let bam_path: &str = m.values_of("bam-files").unwrap().collect::<Vec<&str>>()[sample_idx];
+        let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
+            .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
         return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
         let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
-        let stoit_name: Vec<&str> = stoit_name.split("/").collect();
-        let stoit_name = stoit_name.join(".");
-        let stoit_name = stoit_name.replace(|c: char| !c.is_ascii(), "");
-        let bam_path = cache + &(stoit_name + ".bam");
+
+        let bam_path = cache + &(stoit_name.to_string() + ".bam");
 
         return generate_vcf(&bam_path, m, threads, longread, reference_length, reference)
     }
