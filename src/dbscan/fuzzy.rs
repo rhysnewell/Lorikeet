@@ -434,6 +434,7 @@ fn get_mean(input: &Vec<f64>) -> f64 {
     sum / input.len() as f64
 }
 
+#[allow(unused)]
 fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
 
     let mean_row = get_mean(&row_vals);

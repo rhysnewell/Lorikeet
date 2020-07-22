@@ -65,7 +65,9 @@ const ALIGNMENT_OPTIONS: &'static str =
    --interleaved <PATH> ..               Interleaved FASTA/Q files(s) for mapping.
    --single <PATH> ..                    Unpaired FASTA/Q files(s) for mapping.
    --longreads <PATH> ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
-   -d, --outdir                          Output directory";
+   --bam-file-cache-directory            Directory to store cached BAM files. BAM files are stored
+                                         in /tmp by default.
+   -d, --output-directory                Output directory";
 
 pub fn filter_full_help() -> &'static str {
     "lorikeet filter: Remove alignments with insufficient identity.
@@ -645,7 +647,6 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tgenotype \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
-\tpolymorph\tReport variant sites along contigs
 \tsummarize\tSummarizes contig stats from one or multiple samples
 \tevolve   \tCalculate dN/dS values for genes from read mappings
 
@@ -744,8 +745,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
-                    .short("d")
-                    .default_value("/tmp/lorikeet-bam-cache"))
+                    .takes_value(true))
+                .arg(Arg::with_name("output-directory")
+                    .long("output-directory")
+                    .short("o")
+                    .default_value("./"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -810,10 +814,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("min-read-aligned-percent-pair")
                     .takes_value(true)
                     .conflicts_with("proper-pairs-only"))
-                .arg(Arg::with_name("output-prefix")
-                    .long("output-prefix")
-                    .short("o")
-                    .default_value("output"))
                 .arg(Arg::with_name("method")
                     .short("m")
                     .long("method")
@@ -956,8 +956,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
-                    .short("d")
-                    .default_value("/tmp/lorikeet-bam-cache"))
+                    .takes_value(true))
+                .arg(Arg::with_name("output-directory")
+                    .long("output-directory")
+                    .short("o")
+                    .default_value("./"))
                 .arg(Arg::with_name("longreads")
                     .long("longreads")
                     .multiple(true)
@@ -1101,10 +1104,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
-                .arg(Arg::with_name("output-prefix")
-                    .long("output-prefix")
-                    .short("o")
-                    .default_value("output"))
                 .arg(Arg::with_name("ploidy")
                     .long("ploidy")
                     .default_value("2")
@@ -1200,8 +1199,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
-                    .short("d")
-                    .default_value("/tmp/lorikeet-bam-cache"))
+                    .takes_value(true))
+                .arg(Arg::with_name("output-directory")
+                    .long("output-directory")
+                    .short("o")
+                    .default_value("./"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")
@@ -1338,10 +1340,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("include-supplementary"))
                 .arg(Arg::with_name("include-longread-svs")
                     .long("include-longread-svs"))
-                .arg(Arg::with_name("output-prefix")
-                    .long("output-prefix")
-                    .short("o")
-                    .default_value("output"))
                 .arg(Arg::with_name("verbose")
                     .short("v")
                     .long("verbose"))
@@ -1434,8 +1432,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
-                    .short("d")
-                    .default_value("/tmp/lorikeet-bam-cache"))
+                    .takes_value(true))
+                .arg(Arg::with_name("output-directory")
+                    .long("output-directory")
+                    .short("o")
+                    .default_value("./"))
                 .arg(Arg::with_name("vcfs")
                     .long("vcfs")
                     .multiple(true)
@@ -1601,10 +1602,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .long("include-supplementary"))
                 .arg(Arg::with_name("include-indels")
                     .long("include-indels"))
-                .arg(Arg::with_name("output-prefix")
-                    .long("output-prefix")
-                    .short("o")
-                    .default_value("output"))
                 .arg(Arg::with_name("ploidy")
                     .long("ploidy")
                     .default_value("2")
@@ -1720,7 +1717,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         &["bam-file","coupled","interleaved","single","full-help"])
                     .conflicts_with("bam-file"))
                 .arg(Arg::with_name("coupled")
-                    .short("-c")
+                    .short("c")
                     .long("coupled")
                     .multiple(true)
                     .takes_value(true)
@@ -1772,8 +1769,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("fna"))
                 .arg(Arg::with_name("bam-file-cache-directory")
                     .long("bam-file-cache-directory")
-                    .short("d")
-                    .default_value("/tmp/lorikeet-bam-cache"))
+                    .takes_value(true))
+                .arg(Arg::with_name("output-directory")
+                    .long("output-directory")
+                    .short("o")
+                    .default_value("./"))
                 .arg(Arg::with_name("threads")
                     .short("-t")
                     .long("threads")

@@ -26,6 +26,7 @@ use std::process;
 use std::collections::{BTreeMap};
 use std::path::Path;
 
+extern crate tempdir;
 extern crate clap;
 use clap::*;
 
@@ -202,7 +203,15 @@ fn prepare_pileup
     let references = parse_references(m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
-    let genomes_and_contigs_option = extract_genomes_and_contigs_option(&m, &references);
+    // Temp directory that will house all cached bams for variant calling
+    let tmp_dir = match m.is_present("bam-file-cache-directory") {
+        false => Some(tempdir::TempDir::new("lorikeet_fifo")
+            .expect("Unable to create temporary directory")),
+        true => None,
+    };
+
+    let genomes_and_contigs_option
+        = extract_genomes_and_contigs_option(&m, &references);
     debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
     if m.is_present("bam-files") {
         let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -230,12 +239,16 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option,
+                           tmp_dir
+                )
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
+                let generator_sets =
+                    get_streamed_bam_readers(m, mapping_program, &None, true,
+                                             &Some(references.clone()), &tmp_dir);
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -250,7 +263,9 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(all_generators),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option,
+                            tmp_dir
+                )
             } else {
 
                 run_pileup(m,
@@ -259,7 +274,7 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             }
 
         } else {
@@ -276,12 +291,15 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
+
+                let generator_sets =
+                    get_streamed_bam_readers(m, mapping_program, &None,
+                                             true, &Some(references.clone()), &tmp_dir);
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -296,7 +314,7 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(all_generators),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else {
 
                 run_pileup(m,
@@ -305,7 +323,7 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             }
         }
 
@@ -320,7 +338,8 @@ fn prepare_pileup
                 &None,
                 &filter_params,
                 false,
-                &Some(references.clone())
+                &Some(references.clone()),
+                &tmp_dir
             );
             let mut all_generators = vec!();
             let mut indices = vec!(); // Prevent indices from being dropped
@@ -341,12 +360,15 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
+                let generator_sets =
+                    get_streamed_bam_readers(m, mapping_program, &None,
+                                             true, &Some(references.clone()), &tmp_dir);
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -361,7 +383,7 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_generators),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else {
 
                 run_pileup(m,
@@ -370,11 +392,13 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             }
         } else {
             debug!("Not filtering..");
-            let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, false, &Some(references.clone()));
+            let generator_sets =
+                get_streamed_bam_readers(m, mapping_program, &None,
+                                         false, &Some(references.clone()), &tmp_dir);
             let mut all_generators = vec!();
             let mut indices = vec!(); // Prevent indices from being dropped
             for set in generator_sets {
@@ -393,12 +417,14 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(m, mapping_program, &None, true, &Some(references.clone()));
+                let generator_sets =
+                    get_streamed_bam_readers(m, mapping_program, &None,
+                                             true, &Some(references.clone()), &tmp_dir);
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {
@@ -413,7 +439,7 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_generators),
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             } else {
 
                 run_pileup(m,
@@ -422,35 +448,9 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option)
+                           genomes_and_contigs_option, tmp_dir)
             }
         }
-    }
-}
-
-fn parse_separator(m: &clap::ArgMatches) -> Option<u8> {
-    let single_genome = m.is_present("single-genome");
-    if single_genome {
-        Some("0".as_bytes()[0])
-    } else if m.is_present("separator") {
-        let separator_str = m.value_of("separator").unwrap().as_bytes();
-        if separator_str.len() != 1 {
-            eprintln!(
-                "error: Separator can only be a single character, found {} ({}).",
-                separator_str.len(),
-                str::from_utf8(separator_str).unwrap()
-            );
-            process::exit(1);
-        }
-        Some(separator_str[0])
-    } else if m.is_present("bam-files") || m.is_present("reference") {
-        // Argument parsing enforces that genomes have been specified as FASTA
-        // files.
-        None
-    } else {
-        // Separator is set by CoverM and written into the generated reference
-        // fasta file.
-        Some(CONCATENATED_FASTA_FILE_SEPARATOR.as_bytes()[0])
     }
 }
 
@@ -601,7 +601,9 @@ fn run_pileup<'a,
     bam_readers: Vec<T>,
     flag_filters: FlagFilter,
     long_readers: Option<Vec<U>>,
-    genomes_and_contigs_option: Option<GenomesAndContigs>) {
+    genomes_and_contigs_option: Option<GenomesAndContigs>,
+    tmp_bam_file_cache: Option<tempdir::TempDir>,
+) {
 
     match mode {
         "polymorph" => {
@@ -609,7 +611,16 @@ fn run_pileup<'a,
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
-            let output_prefix = m.value_of("output-prefix").unwrap().to_string();
+            let output_prefix = match m.is_present("output-directory") {
+                true => {
+                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
+                        Ok(_) => {},
+                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
+                    };
+                    m.value_of("output-directory").unwrap()
+                },
+                false => "./"
+            };
             let include_indels = m.is_present("include-indels");
             let threads = m.value_of("threads").unwrap().parse().unwrap();
 
@@ -643,14 +654,25 @@ fn run_pileup<'a,
                 include_indels,
                 false,
                 false,
-                genomes_and_contigs);
+                genomes_and_contigs,
+                tmp_bam_file_cache,
+            );
         },
         "genotype" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
 
-            let output_prefix = m.value_of("output-prefix").unwrap();
+            let output_prefix = match m.is_present("output-directory") {
+                true => {
+                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
+                        Ok(_) => {},
+                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
+                    };
+                    m.value_of("output-directory").unwrap()
+                },
+                false => "./"
+            };
             let include_indels = m.is_present("include-indels");
             let include_soft_clipping = m.is_present("include-soft-clipping");
 
@@ -687,14 +709,25 @@ fn run_pileup<'a,
                 include_indels,
                 include_soft_clipping,
                 m.is_present("longread-bam-files"),
-                genomes_and_contigs);
+                genomes_and_contigs,
+                tmp_bam_file_cache,
+            );
         },
         "summarize" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
 
-            let output_prefix = m.value_of("output-prefix").unwrap();
+            let output_prefix = match m.is_present("output-directory") {
+                true => {
+                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
+                        Ok(_) => {},
+                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
+                    };
+                    m.value_of("output-directory").unwrap()
+                },
+                false => "./"
+            };
             let include_indels = m.is_present("include-indels");
 
             let threads = m.value_of("threads").unwrap().parse().unwrap();
@@ -731,7 +764,9 @@ fn run_pileup<'a,
                 include_indels,
                 m.is_present("include-soft-clipping"),
                 m.is_present("longread-bam-files"),
-                genomes_and_contigs);
+                genomes_and_contigs,
+                tmp_bam_file_cache,
+            );
         },
         "evolve" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
@@ -740,7 +775,16 @@ fn run_pileup<'a,
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
             let method = m.value_of("method").unwrap();
 
-            let output_prefix = m.value_of("output-prefix").unwrap();
+            let output_prefix = match m.is_present("output-directory") {
+                true => {
+                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
+                        Ok(_) => {},
+                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
+                    };
+                    m.value_of("output-directory").unwrap()
+                },
+                false => "./"
+            };
             let include_indels = m.is_present("include-indels");
 
             let threads = m.value_of("threads").unwrap().parse().unwrap();
@@ -775,15 +819,22 @@ fn run_pileup<'a,
                 include_indels,
                 m.is_present("include-soft-clipping"),
                 m.is_present("longread-bam-files"),
-                genomes_and_contigs);
+                genomes_and_contigs,
+                tmp_bam_file_cache,
+            );
         },
         "polish" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let output_prefix = m.value_of("reference").unwrap().to_string();
-            let output_prefix = output_prefix
-                .split("..").last().unwrap()
-                .split("/").last().unwrap().split(".").next().unwrap();
-
+            let output_prefix = match m.is_present("output-directory") {
+                true => {
+                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
+                        Ok(_) => {},
+                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
+                    };
+                    m.value_of("output-directory").unwrap()
+                },
+                false => "./"
+            };
 
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
             let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
@@ -825,7 +876,9 @@ fn run_pileup<'a,
                 include_indels,
                 false,
                 m.is_present("longread-bam-files"),
-                genomes_and_contigs);
+                genomes_and_contigs,
+                tmp_bam_file_cache,
+            );
         },
         _ => panic!("Unknown lorikeet mode"),
     }

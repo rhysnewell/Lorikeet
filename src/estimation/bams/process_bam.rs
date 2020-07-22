@@ -500,7 +500,7 @@ pub fn process_previous_contigs_var(
                 let stoit_name = stoit_name
                     .split("..").last().unwrap()
                     .split("/").last().unwrap();
-                let output_prefix = output_prefix.to_string() + "_" + stoit_name;
+                let output_prefix = format!("{}/{}", output_prefix.to_string(), stoit_name);
                 variant_struct.polish_contig(&ref_sequence,
                                              &output_prefix);
             }
