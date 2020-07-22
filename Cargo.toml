@@ -12,6 +12,7 @@ readme = "README.md"
 exclude = [
   "tests/*"
 ]
+default-run = "lorikeet"
 
 
 [features]
