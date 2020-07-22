@@ -51,6 +51,9 @@ pub fn process_vcf<R: NamedBamReader,
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
+    let bam_path = bam_generated.path();
+    debug!("Bam stored at {}", &bam_path);
+
 
     // Get the total amound of bases in reference using the index
     let reference_stem = genomes_and_contigs.genome_of_contig(
@@ -91,7 +94,8 @@ pub fn process_vcf<R: NamedBamReader,
                                  longread,
                                  reference_length,
                                  reference,
-                                 ref_idx);
+                                 ref_idx,
+                                 bam_path);
 
     match vcf_reader {
         Ok(ref mut reader) => {
@@ -153,7 +157,8 @@ pub fn process_vcf<R: NamedBamReader,
 #[allow(unused)]
 pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
                sample_idx: usize, threads: usize, longread: bool,
-               reference_length: u64, reference: &String, ref_idx: usize) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+               reference_length: u64, reference: &String, ref_idx: usize,
+               bam_path: &str) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -164,12 +169,12 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
             if longread {
-                let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
-                    .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
+                // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
+                //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
                 return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
             } else {
-                let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
-                    .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
+                // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
+                //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
                 return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
             }
         } else {
@@ -178,18 +183,18 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
             return vcf
         }
     } else if longread && m.is_present("longread-bam-files") {
-        let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
-            .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
+        // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
+        //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
         return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
     } else if m.is_present("bam-files") {
-        let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
-            .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
+        // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
+        //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
         return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
-        let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
-
-        let bam_path = cache + &(stoit_name.to_string() + ".bam");
+        // let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
+        //
+        // let bam_path = cache + &(stoit_name.to_string() + ".bam");
 
         return generate_vcf(&bam_path, m, threads, longread, reference_length, reference)
     }

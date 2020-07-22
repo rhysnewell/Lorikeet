@@ -1,9 +1,7 @@
 use crate::*;
 
 use coverm::bam_generator::{self, *};
-use coverm::shard_bam_reader::{self, ShardedBamReaderGenerator};
 use coverm::mapping_parameters::*;
-use coverm::genome_exclusion::*;
 use coverm::genomes_and_contigs::*;
 use coverm::mapping_index_maintenance;
 use coverm::FlagFilter;
@@ -11,6 +9,7 @@ use coverm::FlagFilter;
 use std::fs::File;
 use std::process::Stdio;
 use std::io::Write;
+use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use glob::glob;
 
@@ -24,6 +23,7 @@ pub fn get_streamed_bam_readers<'a>(
     reference_tempfile: &'a Option<NamedTempFile>,
     longread: bool,
     references: &'a Option<Vec<&'a str>>,
+    tmp_bam_file_cache: &Option<TempDir>
 ) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
@@ -45,7 +45,13 @@ pub fn get_streamed_bam_readers<'a>(
         let bam_file_cache = |naming_readset| -> Option<String> {
             let bam_file_cache_path;
             match m.is_present("bam-file-cache-directory") {
-                false => None,
+                false => {
+                    bam_file_cache_path = generate_cached_bam_file_name(
+                        tmp_bam_file_cache.as_ref().unwrap().path().to_str().unwrap(),
+                        reference,
+                        naming_readset);
+                    Some(bam_file_cache_path)
+                },
                 true => {
                     bam_file_cache_path = generate_cached_bam_file_name(
                         m.value_of("bam-file-cache-directory").unwrap(),
@@ -101,6 +107,7 @@ pub fn get_streamed_filtered_bam_readers(
     filter_params: &FilterParameters,
     longread: bool,
     references: &Option<Vec<&str>>,
+    tmp_bam_file_cache: &Option<TempDir>,
 ) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
@@ -123,7 +130,13 @@ pub fn get_streamed_filtered_bam_readers(
         let bam_file_cache = |naming_readset| -> Option<String> {
             let bam_file_cache_path;
             match m.is_present("bam-file-cache-directory") {
-                false => None,
+                false => {
+                    bam_file_cache_path = generate_cached_bam_file_name(
+                        tmp_bam_file_cache.as_ref().unwrap().path().to_str().unwrap(),
+                                reference,
+                                naming_readset);
+                    Some(bam_file_cache_path)
+                },
                 true => {
                     bam_file_cache_path = generate_cached_bam_file_name(
                         m.value_of("bam-file-cache-directory").unwrap(),

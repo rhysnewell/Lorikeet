@@ -809,6 +809,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 write!(file_open, "\n").unwrap();
                 write!(snp_loc_open, "\n").unwrap();
 
+                let mut snps = 0;
+
                 for (tid, contig_name) in target_names.iter() {
                     let contig_len =  target_lengths[tid];
                     write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
@@ -842,6 +844,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                         }
                                                     });
                                                 write!(snp_loc_open, "\n").unwrap();
+                                                snps += 1;
 
                                             },
                                             Variant::None => {
@@ -886,9 +889,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                         }
                     }
                 };
-                if variant_info.len() > 0 {
+                if snps > 0 {
                     let plot_command = format!("set -eou pipefail; snp_density_plots.R {} {} && \
-                                                    mv -f SNP-Density*.pdf {}_snp_density_plot.pdf",
+                                                    mv SNP-Density*.pdf {}_snp_density_plot.pdf",
                                                output_prefix, window_size, output_prefix);
                     command::finish_command_safely(
                         std::process::Command::new("bash")
@@ -898,6 +901,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .stdout(Stdio::piped())
                             .spawn()
                             .expect("Unable to execute Rscript"), "CMplot");
+                } else {
+                    std::fs::remove_file(snp_loc_path).expect("Unable to remove file");
                 }
             }
         }
@@ -1227,6 +1232,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     //         .expect("Unable to execute bash"),
                     //     "bcftools"
                     // );
+                    debug!("Finished writing VCF file for {}", &output_prefix);
                 }
             }
         }
