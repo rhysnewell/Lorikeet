@@ -52,7 +52,7 @@ const ALIGNMENT_OPTIONS: &'static str =
                                          provided and --sharded is specified,
                                          then reads will be mapped to reference
                                          separately as sharded BAMs
-   -g, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
+   -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
    -t, --threads <INT>                   Number of threads for mapping / sorting
@@ -506,7 +506,7 @@ pub fn build_cli() -> App<'static, 'static> {
 
 {}
 
-  lorikeet polymorph --method metabat --bam-files my.bam --reference assembly.fna
+  lorikeet polymorph --bam-files my.bam --reference assembly.fna
     --bam-file-cache-directory saved_bam_files --threads 10
 
 See lorikeet polymorph --full-help for further options and further detail.
@@ -533,8 +533,8 @@ the unfiltered BAM files in the saved_bam_files folder:")
 
 {}
 
-  lorikeet evolve --method metabat --bam-files my.bam --reference assembly.fna
-    --bam-file-cache-directory saved_bam_files --threads 10
+  lorikeet evolve --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10
 
 See lorikeet evolve --full-help for further options and further detail.
 ",
@@ -545,8 +545,7 @@ See lorikeet evolve --full-help for further options and further detail.
             ansi_term::Colour::Purple.paint(
                 "Example: Calculate gene dN/dS values from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
-                "Example: Calculate gene dN/dS values using MetaBAT adjusted coverage from a sorted BAM file, saving
-the unfiltered BAM files in the saved_bam_files folder:")
+                "Example: Calculate gene dN/dS values from reads against many genomes in a directory and cache bams and save output to directory:")
         ).to_string();
 
 
@@ -557,24 +556,23 @@ the unfiltered BAM files in the saved_bam_files folder:")
 
 {}
 
-  lorikeet summarize --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
+  lorikeet summarize --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --window-size 1
 
 {}
 
-  lorikeet summarize --method metabat --bam-files my.bam --reference assembly.fna
-    --bam-file-cache-directory saved_bam_files --threads 10
+  lorikeet summarize --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10
 
 See lorikeet summarize --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
                 "lorikeet summarize"),
             ansi_term::Colour::Green.paint(
-                "Summarizes contigs stats including mean variant abundance, total variants, \
-                and standard deviations"),
+                "Summarizes contigs stats across given window size"),
             ansi_term::Colour::Purple.paint(
-                "Example: Map paired reads to a reference and generate contig stats across samples"),
+                "Example: Map paired reads to a reference and generate contig stats across samples using a 1kb window size"),
             ansi_term::Colour::Purple.paint(
-                "Example: Summarizes contigs defined in reference from a sorted BAM file:"),
+                "Example: Summarizes genomic variation across contigs in genomes in directory using long and short reads:"),
         ).to_string();
 
         static ref GENOTYPE_HELP: String = format!(
@@ -588,8 +586,8 @@ See lorikeet summarize --full-help for further options and further detail.
 
 {}
 
-  lorikeet genotype --method metabat --bam-files my.bam --reference assembly.fna
-    --bam-file-cache-directory saved_bam_files --threads 10
+  lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --plot
 
 See lorikeet genotype --full-help for further options and further detail.
 ",
@@ -600,7 +598,7 @@ See lorikeet genotype --full-help for further options and further detail.
             ansi_term::Colour::Purple.paint(
                 "Example: Map paired reads to a reference and generate genotypes"),
             ansi_term::Colour::Purple.paint(
-                "Example: Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file:"),
+                "Example: Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file and plots the results:"),
         ).to_string();
 
         static ref FILTER_HELP: String = format!(
@@ -735,7 +733,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
-                    .short("g")
+                    .short("d")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -946,7 +944,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
-                    .short("g")
+                    .short("d")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1189,7 +1187,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
-                    .short("g")
+                    .short("d")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1422,7 +1420,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
-                    .short("g")
+                    .short("d")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
@@ -1759,7 +1757,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .required_unless_one(&["genome-fasta-directory", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-directory")
                     .long("genome-fasta-directory")
-                    .short("g")
+                    .short("d")
                     .takes_value(true)
                     .required_unless_one(&["reference", "genome-fasta-files", "full-help"]))
                 .arg(Arg::with_name("genome-fasta-extension")
