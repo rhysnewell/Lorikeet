@@ -256,7 +256,6 @@ pub fn process_bam<R: NamedBamReader,
                                                             }
                                                         },
                                                         _ => {
-                                                            debug!("found {:?} but not confirmed wrongly", &mnv);
                                                         },
                                                     }
                                                 })
@@ -290,11 +289,20 @@ pub fn process_bam<R: NamedBamReader,
                                                 if alt[mnv_pos] == read_char {
 
                                                     mnv = alt.clone();
-                                                    debug!("Potential MNV {} {:?} {}", &mnv_pos, &mnv, &read_char);
+                                                    debug!("Potential MNV  pos {} var {:?} read {} ref {:?}", &mnv_pos, &mnv, &read_char, &base.refr);
 
                                                     mnv_pos += 1;
                                                     potential_mnv = true;
                                                     mnv_cursor = cursor as i64;
+
+                                                    // Then it is automatically assigned
+                                                    if mnv_pos == mnv.len() {
+                                                        base.assign_read(record.qname().to_vec());
+                                                        base.truedepth[sample_idx] += 1;
+                                                        mnv = vec!();
+                                                        mnv_pos = 0;
+                                                        potential_mnv = false;
+                                                    }
                                                 }
                                             },
                                             Variant::None => {
