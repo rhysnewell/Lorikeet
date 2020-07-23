@@ -214,17 +214,70 @@ pub fn process_bam<R: NamedBamReader,
             let mut cursor: usize = record.pos() as usize;
             let quals = record.qual();
             let mut read_cursor: usize = 0;
+            let read_len = record.seq().len();
             for cig in record.cigar().iter() {
                 match cig {
                     Cigar::Match(_) | Cigar::Diff(_) | Cigar::Equal(_) => {
                         // if M, X, or = increment start and decrement end index
                         ups_and_downs[cursor] += 1;
                         let final_pos = cursor + cig.len() as usize;
+                        // For checking against mnv
+                        let mut potential_mnv = false;
+                        let mut mnv_pos = 0;
+                        let mut mnv = vec!();
+                        let mut mnv_cursor = 0;
                         for qpos in read_cursor..(read_cursor + cig.len() as usize) {
+                            // See if read is match MNV
+                            if potential_mnv {
+                                let read_char = record.seq()[qpos];
+                                debug!("MNV searching {} {:?} {}", &mnv_pos, &mnv, &read_char);
+                                if mnv[mnv_pos] == read_char {
+                                    mnv_pos += 1;
+                                    debug!("pos {} length {}", &mnv_pos, &mnv.len());
+                                    if mnv_pos == mnv.len() {
+                                        match variant_matrix.variants(tid, mnv_cursor) {
+
+                                            Some(current_variants) => {
+                                                current_variants.iter_mut().for_each(|(variant, base)| {
+                                                    match variant {
+                                                        Variant::MNV(alt) => {
+                                                            debug!("alt {:?} found {:?}", &alt, &mnv);
+
+                                                            if *alt == mnv {
+                                                                base.assign_read(record.qname().to_vec());
+                                                                base.truedepth[sample_idx] += 1;
+                                                                mnv = vec!();
+                                                                mnv_pos = 0;
+                                                                potential_mnv = false;
+                                                            } else {
+                                                                mnv = vec!();
+                                                                mnv_pos = 0;
+                                                                potential_mnv = false
+                                                            }
+                                                        },
+                                                        _ => {
+                                                            debug!("found {:?} but not confirmed wrongly", &mnv);
+                                                        },
+                                                    }
+                                                })
+                                            },
+                                            None => {
+                                                mnv = vec!();
+                                                mnv_pos = 0;
+                                                potential_mnv = false
+                                            },
+                                        }
+                                    }
+                                } else {
+                                    mnv = vec!();
+                                    mnv_pos = 0;
+                                    potential_mnv = false
+                                }
+                            }
                             match variant_matrix.variants(tid, cursor as i64) {
                                 Some(current_variants) => {
                                     let read_char = record.seq()[qpos];
-                                    current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                    current_variants.iter_mut().for_each(|(variant, base)| {
                                         match variant {
                                             Variant::SNV(alt) => {
                                                 if *alt == read_char {
@@ -232,10 +285,26 @@ pub fn process_bam<R: NamedBamReader,
                                                     base.truedepth[sample_idx] += 1;
                                                 }
                                             },
+                                            // We need to check every position of the MNV
+                                            Variant::MNV(alt) => {
+                                                if alt[mnv_pos] == read_char {
+
+                                                    mnv = alt.clone();
+                                                    debug!("Potential MNV {} {:?} {}", &mnv_pos, &mnv, &read_char);
+
+                                                    mnv_pos += 1;
+                                                    potential_mnv = true;
+                                                    mnv_cursor = cursor as i64;
+                                                }
+                                            },
                                             Variant::None => {
                                                 if base.refr[0] == read_char {
                                                     base.assign_read(record.qname().to_vec());
                                                     base.truedepth[sample_idx] += 1;
+                                                } else {
+                                                    mnv = vec!();
+                                                    mnv_pos = 0;
+                                                    potential_mnv = false
                                                 }
                                             },
                                             _ => {}
@@ -251,22 +320,23 @@ pub fn process_bam<R: NamedBamReader,
                         }
                         read_cursor += cig.len() as usize;
                     },
-                    Cigar::Del(_) => {
-                        if longread {
-//                            let refr = (ref_seq[cursor as usize] as char).to_string();
-//                            let insert = refr +
-//                                &std::iter::repeat("N").take(cig.len() as usize).collect::<String>();
-//                            let refr = str::from_utf8(&ref_seq[cursor as usize..
-//                                cursor as usize + cig.len() as usize]).unwrap().to_string();
-//                            if refr != insert {
-//                                let indel_map = indels
-//                                    .entry(cursor as i32).or_insert(BTreeMap::new());
-//                                let id = indel_map.entry(insert)
-//                                    .or_insert(BTreeSet::new());
-//                                let mut read_to_id = read_to_id.lock().unwrap();
-//                                id.insert(read_to_id[&record.qname().to_vec()]);
-//                                total_indels_in_current_contig += cig.len() as u64;
-//                            }
+                    Cigar::Del(del) => {
+                        match variant_matrix.variants(tid, cursor as i64) {
+                            Some(current_variants) => {
+                                current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                    match variant {
+                                        // We need to check every position of the MNV
+                                        Variant::Deletion(alt) => {
+                                            if alt == del {
+                                                base.assign_read(record.qname().to_vec());
+                                                base.truedepth[sample_idx] += 1;
+                                            }
+                                        },
+                                        _ => {}
+                                    }
+                                });
+                            },
+                            _ => {},
                         }
 
                         cursor += cig.len() as usize;
@@ -275,23 +345,26 @@ pub fn process_bam<R: NamedBamReader,
                         // if D or N, move the cursor
                         cursor += cig.len() as usize;
                     },
-                    Cigar::Ins(_) => {
-//                        if longreads {
-//                            let refr = (ref_seq[cursor as usize] as char).to_string();
-//                            let insert = match str::from_utf8(&record.seq().as_bytes()[
-//                                read_cursor..read_cursor + cig.len() as usize]) {
-//                                Ok(ins) => { ins.to_string() },
-//                                Err(_e) => { "".to_string() },
-//                            };
-//
-//                            let indel_map = indels.entry(cursor as i32)
-//                                .or_insert(BTreeMap::new());
-//
-//                            let id = indel_map.entry(refr + &insert)
-//                                .or_insert(BTreeSet::new());
-//                            let mut read_to_id = read_to_id.lock().unwrap();
-//                            id.insert(read_to_id[&record.qname().to_vec()]);
-//                        }
+                    Cigar::Ins(ins) => {
+                        let insertion = &record.seq().as_bytes()[read_cursor..read_cursor+cig.len() as usize];
+                        match variant_matrix.variants(tid, cursor as i64) {
+                            Some(current_variants) => {
+                                current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                    match variant {
+                                        // We need to check every position of the MNV
+                                        Variant::Insertion(alt) => {
+                                            if String::from_utf8(alt.to_vec()).expect("Unable to convert to string")
+                                                .contains(&String::from_utf8(insertion.to_vec()).expect("Unable to convert to string")) {
+                                                base.assign_read(record.qname().to_vec());
+                                                base.truedepth[sample_idx] += 1;
+                                            }
+                                        },
+                                        _ => {}
+                                    }
+                                });
+                            },
+                            _ => {},
+                        }
                         read_cursor += cig.len() as usize;
                         total_indels_in_current_contig += cig.len() as u64;
                     },

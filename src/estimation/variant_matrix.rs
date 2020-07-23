@@ -804,7 +804,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                            "\t{}.snvsPer{}kb\t{}.svsPer{}kb\t{}.snvCount\t{}.svCount",
                            &sample_name, &window_size, &sample_name, &window_size,
                            &sample_name, &sample_name).unwrap();
-                    write!(snp_loc_open, "\t{}_depth", &sample_name).unwrap();
                 }
                 write!(file_open, "\n").unwrap();
                 write!(snp_loc_open, "\n").unwrap();
@@ -831,19 +830,17 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     for (var, base) in variants {
                                         match var {
                                             Variant::SNV(_) => {
-                                                write!(snp_loc_open, "SNP{}\t{}\t{}",
+                                                write!(snp_loc_open, "SNP{}\t{}\t{}\n",
                                                        index, contig_name, position).unwrap();
                                                 base.truedepth
                                                     .iter()
                                                     .enumerate()
                                                     .zip(base.depth.iter().enumerate())
                                                     .for_each(|((index, count_1), (_index_2, count_2))| {
-                                                        write!(snp_loc_open, "\t{}", count_1);
                                                         if count_1 > &0 || count_2 > &0 {
                                                             snps_cnt_vec[index] += 1;
                                                         }
                                                     });
-                                                write!(snp_loc_open, "\n").unwrap();
                                                 snps += 1;
 
                                             },
