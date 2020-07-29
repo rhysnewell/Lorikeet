@@ -15,7 +15,6 @@ use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::genomes_and_contigs::*;
 use coverm::FlagFilter;
-use bio::io::gff::Record;
 
 
 /// Process all reads in a BAM file
@@ -25,8 +24,7 @@ pub fn process_bam<R: NamedBamReader,
     bam_generator: G,
     sample_count: usize,
     coverage_estimators: &mut Vec<CoverageEstimator>,
-    variant_matrix_map: &mut HashMap<usize, VariantMatrix>,
-    gff_map: &mut HashMap<usize, HashMap<String, Vec<Record>>>,
+    variant_matrix: &mut VariantMatrix,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -66,26 +64,18 @@ pub fn process_bam<R: NamedBamReader,
     let target_names = header.target_names(); // contig names
     let mut record: bam::record::Record = bam::Record::new();
     let mut ups_and_downs: Vec<i32> = Vec::new();
+    // Current contig name
+    let mut contig_name = Vec::new();
     let mut num_mapped_reads_total: u64 = 0;
     let mut num_mapped_reads_in_current_contig: u64 = 0;
     let mut total_edit_distance_in_current_contig: u64 = 0;
 
     let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
+    let mut ref_idx = 0;
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
 
-    let reference_stem = genomes_and_contigs.genome_of_contig(
-        &str::from_utf8(&target_names[0]).unwrap().to_string()).unwrap();
-    let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap();
-    let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
 
-    let gff_map = gff_map.entry(ref_idx).or_insert(HashMap::new());
-    let mut variant_matrix = variant_matrix_map.entry(ref_idx)
-        .or_insert(VariantMatrix::new_matrix(sample_count));
-    let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
-        Ok(reader) => reader,
-        Err(_e) => generate_faidx(&reference_path),
-    };
 
     let sample_idx = match variant_matrix {
         VariantMatrix::VariantContigMatrix {
@@ -146,9 +136,18 @@ pub fn process_bam<R: NamedBamReader,
                 if last_tid != -2 {
                     let contig_len = header.target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
-                    let contig_name = target_names[last_tid as usize].to_vec();
+                    contig_name = target_names[last_tid as usize].to_vec();
+                    ref_idx = genomes_and_contigs.genome_index_of_contig(
+                        &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
                     let total_mismatches = total_edit_distance_in_current_contig -
                         total_indels_in_current_contig;
+
+                    // Retrieve the reference based on the reference index from reference_map
+                    let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+                    let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
+                        Ok(reader) => reader,
+                        Err(_e) => generate_faidx(&reference_path),
+                    };
 
                     match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
                         Ok(reference) => reference,
@@ -168,34 +167,36 @@ pub fn process_bam<R: NamedBamReader,
 
                     process_previous_contigs_var(
                         mode,
-                        ani,
+                        ref_idx,
                         last_tid,
                         ups_and_downs,
                         coverage_estimators,
-                        min, max,
+                        min,
+                        max,
                         total_indels_in_current_contig as usize,
                         contig_end_exclusion,
-                        min_var_depth,
                         contig_len,
                         contig_name,
+                        genomes_and_contigs,
                         variant_matrix,
                         ref_seq,
                         sample_idx,
                         method,
                         total_mismatches,
-                        gff_map,
-                        &codon_table,
                         coverage_fold,
                         num_mapped_reads_in_current_contig,
                         sample_count,
                         output_prefix,
                         &stoit_name,
-                        longread);
+                    );
                 }
 
                 ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
                 debug!("Working on new reference {}",
                        std::str::from_utf8(target_names[tid as usize]).unwrap());
+                contig_name = target_names[tid as usize].to_vec();
+                ref_idx = genomes_and_contigs.genome_index_of_contig(
+                    &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
                 last_tid = tid;
                 num_mapped_reads_total += num_mapped_reads_in_current_contig;
                 num_mapped_reads_in_current_contig = 0;
@@ -228,14 +229,18 @@ pub fn process_bam<R: NamedBamReader,
                         let mut mnv_cursor = 0;
                         for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                             // See if read is match MNV
-                            if potential_mnv {
+                            if potential_mnv && (mnv_pos < mnv.len()) {
                                 let read_char = record.seq()[qpos];
                                 debug!("MNV searching {} {:?} {}", &mnv_pos, &mnv, &read_char);
                                 if mnv[mnv_pos] == read_char {
                                     mnv_pos += 1;
                                     debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                     if mnv_pos == mnv.len() {
-                                        match variant_matrix.variants(tid, mnv_cursor) {
+                                        match variant_matrix.variants(
+                                            ref_idx,
+                                            tid,
+                                            cursor as i64,
+                                        ) {
 
                                             Some(current_variants) => {
                                                 current_variants.iter_mut().for_each(|(variant, base)| {
@@ -273,7 +278,11 @@ pub fn process_bam<R: NamedBamReader,
                                     potential_mnv = false
                                 }
                             }
-                            match variant_matrix.variants(tid, cursor as i64) {
+                            match variant_matrix.variants(
+                                ref_idx,
+                                tid,
+                                cursor as i64,
+                            ) {
                                 Some(current_variants) => {
                                     let read_char = record.seq()[qpos];
                                     current_variants.iter_mut().for_each(|(variant, base)| {
@@ -329,7 +338,11 @@ pub fn process_bam<R: NamedBamReader,
                         read_cursor += cig.len() as usize;
                     },
                     Cigar::Del(del) => {
-                        match variant_matrix.variants(tid, cursor as i64) {
+                        match variant_matrix.variants(
+                            ref_idx,
+                            tid,
+                            cursor as i64,
+                        ) {
                             Some(current_variants) => {
                                 current_variants.par_iter_mut().for_each(|(variant, base)| {
                                     match variant {
@@ -355,7 +368,11 @@ pub fn process_bam<R: NamedBamReader,
                     },
                     Cigar::Ins(ins) => {
                         let insertion = &record.seq().as_bytes()[read_cursor..read_cursor+cig.len() as usize];
-                        match variant_matrix.variants(tid, cursor as i64) {
+                        match variant_matrix.variants(
+                            ref_idx,
+                            tid,
+                            cursor as i64,
+                        ) {
                             Some(current_variants) => {
                                 current_variants.par_iter_mut().for_each(|(variant, base)| {
                                     match variant {
@@ -417,9 +434,18 @@ pub fn process_bam<R: NamedBamReader,
     }
     if last_tid != -2 {
         let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
-        let contig_name = target_names[last_tid as usize].to_vec();
+        contig_name = target_names[last_tid as usize].to_vec();
+        ref_idx = genomes_and_contigs.genome_index_of_contig(
+            &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
         let total_mismatches = total_edit_distance_in_current_contig -
             total_indels_in_current_contig;
+
+        let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
+        let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
+            Ok(reader) => reader,
+            Err(_e) => generate_faidx(&reference_path),
+        };
+
         match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
             Ok(reference) => reference,
             Err(e) => {
@@ -438,29 +464,28 @@ pub fn process_bam<R: NamedBamReader,
 
         process_previous_contigs_var(
             mode,
-            ani,
+            ref_idx,
             last_tid,
             ups_and_downs,
             coverage_estimators,
-            min, max,
+            min,
+            max,
             total_indels_in_current_contig as usize,
             contig_end_exclusion,
-            min_var_depth,
             contig_len,
             contig_name,
+            &genomes_and_contigs,
             variant_matrix,
             ref_seq,
             sample_idx,
             method,
             total_mismatches,
-            gff_map,
-            &codon_table,
             coverage_fold,
             num_mapped_reads_in_current_contig,
             sample_count,
             output_prefix,
             &stoit_name,
-            longread);
+        );
 
         num_mapped_reads_total += num_mapped_reads_in_current_contig;
     }
@@ -484,29 +509,28 @@ pub fn process_bam<R: NamedBamReader,
 #[allow(unused)]
 pub fn process_previous_contigs_var(
     mode: &str,
-    ani: f32,
+    ref_idx: usize,
     last_tid: i32,
     ups_and_downs: Vec<i32>,
     coverage_estimators: &mut Vec<CoverageEstimator>,
-    min: f32, max: f32,
+    min: f32,
+    max: f32,
     total_indels_in_current_contig: usize,
     contig_end_exclusion: u64,
-    min_var_depth: usize,
     contig_len: usize,
     contig_name: Vec<u8>,
+    genomes_and_contigs: &GenomesAndContigs,
     variant_matrix: &mut VariantMatrix,
     ref_sequence: Vec<u8>,
     sample_idx: usize,
     method: &str,
     total_mismatches: u64,
-    gff_map: &mut HashMap<String, Vec<Record>>,
-    codon_table: &CodonTable,
     coverage_fold: f32,
     num_mapped_reads_in_current_contig: u64,
     sample_count: usize,
     output_prefix: &str,
     stoit_name: &str,
-    longread: bool,) {
+) {
 
     if last_tid != -2 {
 
@@ -522,41 +546,31 @@ pub fn process_previous_contigs_var(
         });
 
         let coverages: Vec<f64> = coverage_estimators.iter_mut()
-            .map(|estimator| estimator.calculate_coverage(&vec![0]) as f64).collect();
+            .map(|estimator|
+                estimator.calculate_coverage(&vec![0]) as f64).collect();
 
-        let mut variant_struct = VariantStats::new_contig_stats(min as f64,
-                                                                max as f64,
-                                                                contig_end_exclusion);
+        let mut variant_struct =
+            VariantStats::new_contig_stats(
+                min as f64,
+                max as f64,
+                contig_end_exclusion,
+            );
 
 
         // adds contig info to variant struct
-        variant_struct.add_contig(variant_matrix.variants_of_contig(last_tid),
-                                  last_tid.clone(),
-                                  total_indels_in_current_contig,
-                                  contig_name.clone(),
-                                  contig_len,
-                                  sample_idx,
-                                  coverages,
-                                  ups_and_downs);
-
-        if ani == 0. {
-//            variant_struct.calc_error(ani);
-
-
-            // filters variants across contig
-//            variant_struct.calc_variants(
-//                min_var_depth,
-//                coverage_fold as f64);
-        } else {
-//            let min_var_depth = variant_struct.calc_error(ani);
-
-            info!("Minimum Variant Depth set to {} for strain ANI of {}", min_var_depth, ani);
-
-            // filters variants across contig
-//            variant_struct.calc_variants(
-//                min_var_depth,
-//                coverage_fold as f64);
-        }
+        variant_struct.add_contig(
+            variant_matrix.variants_of_contig(
+                ref_idx,
+                last_tid,
+            ),
+            last_tid.clone(),
+            total_indels_in_current_contig,
+            contig_name.clone(),
+            contig_len,
+            sample_idx,
+            coverages,
+            ups_and_downs,
+        );
 
 
         match mode {
@@ -573,9 +587,12 @@ pub fn process_previous_contigs_var(
             "summarize" | "genotype" | "evolve" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
-                variant_matrix.add_contig(variant_struct,
-                                          sample_count,
-                                          sample_idx);
+                variant_matrix.add_contig(
+                    variant_struct,
+                    sample_count,
+                    sample_idx,
+                    ref_idx,
+                );
             },
             "polish" => {
                 let stoit_name = stoit_name

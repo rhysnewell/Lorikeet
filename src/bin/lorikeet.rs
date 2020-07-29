@@ -27,6 +27,8 @@ use std::collections::{BTreeMap};
 use std::path::Path;
 
 extern crate tempdir;
+extern crate tempfile;
+use tempfile::NamedTempFile;
 extern crate clap;
 use clap::*;
 
@@ -93,15 +95,6 @@ fn main(){
                     writer.write(&record).expect("Failed to write BAM record");
                 }
             }
-        },
-        Some("polymorph") => {
-            let m = matches.subcommand_matches("polymorph").unwrap();
-            let mode = "polymorph";
-            if m.is_present("full-help") {
-                println!("{}", polymorph_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
         },
         Some("summarize") => {
             let m = matches.subcommand_matches("summarize").unwrap();
@@ -217,7 +210,6 @@ fn prepare_pileup
         let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
 
         // Associate genomes and contig names, if required
-
         if filter_params.doing_filtering() {
             let bam_readers = bam_generator::generate_filtered_bam_readers_from_bam_files(
                 bam_files,
@@ -240,14 +232,17 @@ fn prepare_pileup
                            filter_params.flag_filters,
                            Some(long_readers),
                            genomes_and_contigs_option,
-                           tmp_dir
+                           tmp_dir, None
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
+                let (concatenated_genomes,
+                    genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+
                 let generator_sets =
-                    get_streamed_bam_readers(m, mapping_program, &None, true,
+                    get_streamed_bam_readers(m, mapping_program, &concatenated_genomes, true,
                                              &Some(references.clone()), &tmp_dir);
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
@@ -264,7 +259,8 @@ fn prepare_pileup
                            filter_params.flag_filters,
                            Some(all_generators),
                            genomes_and_contigs_option,
-                            tmp_dir
+                            tmp_dir,
+                           concatenated_genomes,
                 )
             } else {
 
@@ -274,7 +270,8 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option,
+                           tmp_dir, None)
             }
 
         } else {
@@ -291,14 +288,15 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, None)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
-
+                let (concatenated_genomes,
+                    genomes_and_contigs_option) = setup_genome_fasta_files(&m);
                 let generator_sets =
-                    get_streamed_bam_readers(m, mapping_program, &None,
+                    get_streamed_bam_readers(m, mapping_program, &concatenated_genomes,
                                              true, &Some(references.clone()), &tmp_dir);
                 let mut all_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
@@ -314,7 +312,7 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(all_generators),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             } else {
 
                 run_pileup(m,
@@ -323,19 +321,21 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, None)
             }
         }
 
     } else {
         let mapping_program = parse_mapping_program(m.value_of("mapper"));
         external_command_checker::check_for_samtools();
+        let (concatenated_genomes,
+            genomes_and_contigs_option) = setup_genome_fasta_files(&m);
         if filter_params.doing_filtering() {
             debug!("Filtering..");
             let generator_sets = get_streamed_filtered_bam_readers(
                 m,
                 mapping_program,
-                &None,
+                &concatenated_genomes,
                 &filter_params,
                 false,
                 &Some(references.clone()),
@@ -360,14 +360,14 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
 
                 external_command_checker::check_for_samtools();
                 let generator_sets =
-                    get_streamed_bam_readers(m, mapping_program, &None,
+                    get_streamed_bam_readers(m, mapping_program, &concatenated_genomes,
                                              true, &Some(references.clone()), &tmp_dir);
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
@@ -383,7 +383,7 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_generators),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             } else {
 
                 run_pileup(m,
@@ -392,12 +392,12 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             }
         } else {
             debug!("Not filtering..");
             let generator_sets =
-                get_streamed_bam_readers(m, mapping_program, &None,
+                get_streamed_bam_readers(m, mapping_program, &concatenated_genomes,
                                          false, &Some(references.clone()), &tmp_dir);
             let mut all_generators = vec!();
             let mut indices = vec!(); // Prevent indices from being dropped
@@ -417,13 +417,13 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
                 external_command_checker::check_for_samtools();
                 let generator_sets =
-                    get_streamed_bam_readers(m, mapping_program, &None,
+                    get_streamed_bam_readers(m, mapping_program, &concatenated_genomes,
                                              true, &Some(references.clone()), &tmp_dir);
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
@@ -439,7 +439,7 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            Some(long_generators),
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             } else {
 
                 run_pileup(m,
@@ -448,7 +448,7 @@ fn prepare_pileup
                            all_generators,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option, tmp_dir)
+                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
             }
         }
     }
@@ -603,61 +603,10 @@ fn run_pileup<'a,
     long_readers: Option<Vec<U>>,
     genomes_and_contigs_option: Option<GenomesAndContigs>,
     tmp_bam_file_cache: Option<tempdir::TempDir>,
+    concatenated_genomes: Option<NamedTempFile>,
 ) {
 
     match mode {
-        "polymorph" => {
-            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let method = m.value_of("method").unwrap();
-            let output_prefix = match m.is_present("output-directory") {
-                true => {
-                    match std::fs::create_dir_all(m.value_of("output-directory").unwrap().to_string()) {
-                        Ok(_) => {},
-                        Err(err) => panic!(format!("Unable to create output directory {:?}", err))
-                    };
-                    m.value_of("output-directory").unwrap()
-                },
-                false => "./"
-            };
-            let include_indels = m.is_present("include-indels");
-            let threads = m.value_of("threads").unwrap().parse().unwrap();
-
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!("error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}", min, max);
-            }
-
-            let genomes_and_contigs = genomes_and_contigs_option.unwrap();
-
-            println!("sample\ttid\tpos\tvariant\treference\tvariant_depth\tdepth\tgenotypes\tvaf_cluster\tgenotype");
-            contig::pileup_variants(
-                m,
-                bam_readers,
-                long_readers,
-                mode,
-                &mut estimators.estimators,
-                flag_filters,
-                mapq_threshold,
-                var_fraction,
-                min,
-                max,
-                contig_end_exclusion,
-                &output_prefix,
-                threads,
-                method,
-                coverage_fold,
-                include_indels,
-                false,
-                false,
-                genomes_and_contigs,
-                tmp_bam_file_cache,
-            );
-        },
         "genotype" => {
             let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
             let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
@@ -711,6 +660,7 @@ fn run_pileup<'a,
                 m.is_present("longread-bam-files"),
                 genomes_and_contigs,
                 tmp_bam_file_cache,
+                concatenated_genomes,
             );
         },
         "summarize" => {
@@ -766,6 +716,7 @@ fn run_pileup<'a,
                 m.is_present("longread-bam-files"),
                 genomes_and_contigs,
                 tmp_bam_file_cache,
+                concatenated_genomes,
             );
         },
         "evolve" => {
@@ -821,6 +772,7 @@ fn run_pileup<'a,
                 m.is_present("longread-bam-files"),
                 genomes_and_contigs,
                 tmp_bam_file_cache,
+                concatenated_genomes,
             );
         },
         "polish" => {
@@ -878,6 +830,7 @@ fn run_pileup<'a,
                 m.is_present("longread-bam-files"),
                 genomes_and_contigs,
                 tmp_bam_file_cache,
+                concatenated_genomes,
             );
         },
         _ => panic!("Unknown lorikeet mode"),

@@ -17,12 +17,14 @@ use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use bio::io::gff;
 use tempdir::TempDir;
+use tempfile::NamedTempFile;
 use std::process::Stdio;
 use std::path::Path;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 
 #[allow(unused)]
-pub fn pileup_variants<R: NamedBamReader,
+pub fn pileup_variants<
+    R: NamedBamReader,
     G: NamedBamReaderGenerator<R>,
     S: NamedBamReader,
     U: NamedBamReaderGenerator<S>>(
@@ -45,14 +47,19 @@ pub fn pileup_variants<R: NamedBamReader,
     is_long_read: bool,
     genomes_and_contigs: GenomesAndContigs,
     tmp_bam_file_cache: Option<TempDir>,
+    concatenated_genomes: Option<NamedTempFile>,
 ) {
 
     let references = parse_references(&m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
+    // let tmp_dir = TempDir::new("lorikeet_references").expect("Unable to create temporary directory");
 
+    // All different counts of samples I need. Changes depends on when using concatenated genomes or not
     let mut short_sample_count = bam_readers.len();
     let mut long_sample_count = 0;
     let mut reference_count = references.len();
+    let mut per_reference_samples = 0;
+    let mut per_reference_short_samples = 0;
     let mut coverage_estimators = coverage_estimators;
     let mut ani = 0.;
 
@@ -69,8 +76,19 @@ pub fn pileup_variants<R: NamedBamReader,
             vec!()
         }
     };
-
-    let mut variant_matrix_map = HashMap::new();
+    // TODO: Make this work with concatenated references
+    let mut variant_matrix = match concatenated_genomes {
+        Some(ref concat) => {
+            per_reference_samples = short_sample_count + long_sample_count;
+            per_reference_short_samples = short_sample_count;
+            VariantMatrix::new_matrix(per_reference_samples)
+        },
+        None => {
+            per_reference_samples = (short_sample_count + long_sample_count) / references.len();
+            per_reference_short_samples = short_sample_count / references.len();
+            VariantMatrix::new_matrix(per_reference_samples)
+        },
+    };
     // Put reference index in the variant map and initialize matrix
     let mut reference_map = HashMap::new();
     for reference in references.iter() {
@@ -78,9 +96,8 @@ pub fn pileup_variants<R: NamedBamReader,
         let ref_idx = genomes_and_contigs.genome_index(&Path::new(reference)
             .file_stem().expect("problem determining file stem").to_str().unwrap().to_string()).unwrap();
         reference_map.entry(ref_idx).or_insert(reference.to_string());
-        variant_matrix_map.entry(ref_idx).or_insert(
-            VariantMatrix::new_matrix((short_sample_count + long_sample_count) / references.len()));
     }
+
     info!("{} Longread BAM files and {} Shortread BAM files {} Total BAMs over {} genome(s)",
           longreads.len(),
           bam_readers.len(), (short_sample_count + long_sample_count), reference_count);
@@ -164,22 +181,26 @@ pub fn pileup_variants<R: NamedBamReader,
     let mut sample_groups = HashMap::new();
 
     info!("Running SNP calling on {} shortread samples", bam_readers.len());
+
     let mut prev_ref_idx = -1;
     let mut per_ref_sample_idx = 0;
     bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
         // Get the appropriate sample index based on how many references we are using
-        process_vcf(bam_generator,
-                    n_threads,
-                    &mut prev_ref_idx,
-                    &mut per_ref_sample_idx,
-                    (short_sample_count + long_sample_count) / references.len(),
-                    &mut variant_matrix_map,
-                    false,
-                    m,
-                    &mut sample_groups,
-                    &genomes_and_contigs,
-                    &reference_map,
-                    &(short_sample_count / references.len()))
+        process_vcf(
+            bam_generator,
+            n_threads,
+            &mut prev_ref_idx,
+            &mut per_ref_sample_idx,
+            per_reference_samples,
+            &mut variant_matrix,
+            false,
+            m,
+            &mut sample_groups,
+            &genomes_and_contigs,
+            &reference_map,
+            per_reference_short_samples,
+            &concatenated_genomes,
+        )
     });
 
     if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
@@ -190,18 +211,21 @@ pub fn pileup_variants<R: NamedBamReader,
         let mut prev_ref_idx = -1;
         let mut per_ref_sample_idx = 0;
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
-            process_vcf(bam_generator,
-                        n_threads,
-                        &mut prev_ref_idx,
-                        &mut per_ref_sample_idx,
-                        (short_sample_count + long_sample_count) / references.len(),
-                        &mut variant_matrix_map,
-                        true,
-                        m,
-                        &mut sample_groups,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        &(short_sample_count / references.len()))
+            process_vcf(
+                bam_generator,
+                n_threads,
+                &mut prev_ref_idx,
+                &mut per_ref_sample_idx,
+                per_reference_samples,
+                &mut variant_matrix,
+                true,
+                m,
+                &mut sample_groups,
+                &genomes_and_contigs,
+                &reference_map,
+                per_reference_short_samples,
+                &concatenated_genomes,
+            )
         });
     } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
@@ -219,22 +243,32 @@ pub fn pileup_variants<R: NamedBamReader,
             let group = sample_groups.entry("long").or_insert(HashSet::new());
             group.insert(stoit_name.clone());
 
-            let reference_stem = genomes_and_contigs.genome_of_contig(
-                &str::from_utf8(&target_names[0]).unwrap().to_string()).unwrap();
-            let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap() as i32;
-            if ref_idx == prev_ref_idx {
+            // Adjust indices based on whether or not we are using a concatenated reference or not
+            let (_reference, ref_idx) = match concatenated_genomes {
+                Some(ref temp_file) => (temp_file.path().to_str().unwrap().to_string(), 0),
+                None => {
+                    retrieve_genome_from_contig(
+                        target_names[0],
+                        &genomes_and_contigs,
+                        &reference_map,
+                    )
+                }
+            };
+            if ref_idx as i32 == prev_ref_idx {
                 per_ref_sample_idx += 1;
             } else {
-                prev_ref_idx = ref_idx;
+                prev_ref_idx = ref_idx as i32;
                 per_ref_sample_idx = 0;
             }
-            let sample_count_l = (short_sample_count + long_sample_count) / references.len();
 
-            let mut variant_matrix = variant_matrix_map.entry(ref_idx as usize)
-                .or_insert(VariantMatrix::new_matrix(sample_count_l));
             variant_matrix.
-                add_sample(stoit_name,
-                           ((short_sample_count / references.len()) as i32 + per_ref_sample_idx) as usize, &variant_map, &header);
+                add_sample(
+                    stoit_name,
+                    (per_reference_short_samples as i32 + per_ref_sample_idx) as usize,
+                    &variant_map,
+                    &header,
+                    &genomes_and_contigs,
+                );
 
         });
 
@@ -281,10 +315,9 @@ pub fn pileup_variants<R: NamedBamReader,
 
             // Get the appropriate sample index based on how many references we are using
             process_bam(bam_generator,
-                        (short_sample_count + long_sample_count) / references.len(),
+                        per_reference_samples,
                         &mut coverage_estimators,
-                        &mut variant_matrix_map,
-                        &mut gff_map,
+                        &mut variant_matrix,
                         n_threads,
                         m,
                         output_prefix,
@@ -309,10 +342,9 @@ pub fn pileup_variants<R: NamedBamReader,
         longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
 
             process_bam(bam_generator,
-                        (short_sample_count + long_sample_count) / references.len(),
+                        per_reference_samples,
                         &mut coverage_estimators,
-                        &mut variant_matrix_map,
-                        &mut gff_map,
+                        &mut variant_matrix,
                         n_threads,
                         m,
                         output_prefix,
@@ -329,49 +361,77 @@ pub fn pileup_variants<R: NamedBamReader,
         });
     }
 
-    variant_matrix_map.iter_mut().for_each(|(ref_idx, variant_matrix)|{
-        let per_ref_output_pre = format!("{}/{}", &output_prefix, &genomes_and_contigs.genomes[*ref_idx]);
+    if mode == "genotype" {
+        let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
+        let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
+        let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
+        let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
+        let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
+        let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
+        let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
+        let minimum_reads_in_link: usize = m.value_of("minimum-reads-in-link").unwrap().parse().unwrap();
 
-        if mode == "genotype" {
-            variant_matrix.generate_distances(n_threads, &per_ref_output_pre);
-            let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
-            let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-            let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
-            let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-            let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
-            let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
-            let anchor_similarity: f64 = m.value_of("maximum-seed-similarity").unwrap().parse().unwrap();
-            let minimum_reads_in_link: usize = m.value_of("minimum-reads-in-link").unwrap().parse().unwrap();
-            let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
-            let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(&reference_path),
-            };
+        // Calculate the geometric mean values and CLR for each variant, reference specific
+        variant_matrix.generate_distances();
 
+        // Generate initial read linked clusters
+        // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
+        variant_matrix.run_fuzzy_scan(
+            e_min,
+            e_max,
+            pts_min,
+            pts_max,
+            phi,
+            anchor_size,
+            anchor_similarity,
+            minimum_reads_in_link,
+        );
 
-            variant_matrix.run_fuzzy_scan(e_min, e_max, pts_min, pts_max, phi,
-                                          anchor_size, anchor_similarity, minimum_reads_in_link);
-            variant_matrix.generate_genotypes(&per_ref_output_pre, &mut reference);
-            variant_matrix.write_vcf(&per_ref_output_pre);
-            if m.is_present("plot") {
-                let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                variant_matrix.print_variant_stats(&per_ref_output_pre, window_size);
-            }
-        } else if mode == "summarize" {
+        // Write genotypes to disk, reference specific
+        variant_matrix.generate_genotypes(
+            &output_prefix,
+            &reference_map,
+            &genomes_and_contigs,
+        );
+
+        // Write variants in VCF format, reference specific
+        variant_matrix.write_vcf(
+            &output_prefix,
+            &genomes_and_contigs,
+        );
+
+        // If flagged, then create plots using CMplot
+        if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-            variant_matrix.write_vcf(&per_ref_output_pre);
-            variant_matrix.print_variant_stats(&per_ref_output_pre, window_size);
-        } else if mode == "evolve" {
-            let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
-            let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(&reference_path),
-            };
-            let mut gff_ref = gff_map.get_mut(ref_idx).expect(&format!("No GFF records for reference {:?}", reference_path));
-            variant_matrix.calc_gene_mutation(&mut gff_ref, &mut reference, &codon_table,
-                                              Path::new(&reference_path).file_stem().unwrap().to_str().unwrap(), &per_ref_output_pre)
+            variant_matrix.print_variant_stats(
+                window_size,
+                &output_prefix,
+                &genomes_and_contigs,
+            );
         }
-    });
+    } else if mode == "summarize" {
+        let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+
+        variant_matrix.write_vcf(
+            &output_prefix,
+            &genomes_and_contigs,
+        );
+
+        variant_matrix.print_variant_stats(
+            window_size,
+            &output_prefix,
+            &genomes_and_contigs,
+        );
+
+    } else if mode == "evolve" {
+
+        variant_matrix.calc_gene_mutation(
+            &mut gff_map,
+            &genomes_and_contigs,
+            &reference_map,
+            &codon_table,
+            &output_prefix)
+    }
 }
 
 #[cfg(test)]

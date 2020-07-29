@@ -303,7 +303,7 @@ impl VariantFunctions for VariantStats {
                                         skip_cnt = 0;
                                         variations += 1;
                                     },
-                                    Variant::Insertion(alt) | Variant::Insertion(alt) => {
+                                    Variant::Insertion(alt) | Variant::MNV(alt) => {
                                         // Insertions have a reference prefix that needs to be removed
                                         let removed_first_base = str::from_utf8(
                                             &alt[1..]).unwrap();
