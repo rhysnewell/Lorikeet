@@ -502,7 +502,7 @@ impl Base {
                             refr_base_empty = false;
                         }
                     };
-
+                    debug!("Variant {:?}", base.variant);
                     bases.push(base);
                 };
                 Some(bases)

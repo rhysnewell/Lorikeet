@@ -6,6 +6,8 @@ use coverm::genomes_and_contigs::*;
 use coverm::mapping_index_maintenance;
 use coverm::FlagFilter;
 
+use std::collections::HashMap;
+use std::str;
 use std::fs::File;
 use std::process::Stdio;
 use std::io::Write;
@@ -416,7 +418,11 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
         match m.is_present("reference") {
             true => match genome_fasta_files_opt {
                 Some(genome_paths) => (
-                    None,
+                    Some(
+                        coverm::mapping_index_maintenance::generate_concatenated_fasta_file(
+                            &genome_paths,
+                        ),
+                    ),
                     extract_genomes_and_contigs_option(
                         &m,
                         &genome_paths.iter().map(|s| s.as_str()).collect(),
@@ -458,7 +464,7 @@ pub fn setup_genome_fasta_files(m: &clap::ArgMatches) -> (Option<NamedTempFile>,
 }
 
 pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
-    let references = match m.values_of("reference") {
+    let references = match m.values_of("genome-fasta-files") {
         Some(vec) => {
             let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
             debug!("Reference files {:?}", reference_paths);
@@ -581,4 +587,40 @@ pub fn extract_genome<'a>(tid: u32, target_names: &'a Vec<&[u8]>, split_char: u8
         &format!("Contig name {} does not contain split symbol, so cannot determine which genome it belongs to",
                  std::str::from_utf8(target_name).unwrap()));
     return &target_name[(0..offset)];
+}
+
+pub fn retrieve_genome_from_contig<'a>(
+    target_name: &'a [u8],
+    genomes_and_contigs: &'a GenomesAndContigs,
+    reference_map: &'a HashMap<usize, String>,
+) -> (String, usize) {
+
+    let genome_from_contig = || -> &'a String {
+        genomes_and_contigs.genome_of_contig(
+            &str::from_utf8(&target_name).unwrap().to_string())
+            .expect(&format!("Found invalid contig in bam, {:?}. \
+                Please provide corresponding reference genomes",
+                             str::from_utf8(&target_name).unwrap()))
+    };
+
+    // Concatenated references have the reference file name in front of the contig name
+    // separated by the "~" symbol by default.
+    // TODO: Parse as a separator value to this function
+    let reference_stem = match str::from_utf8(&target_name).unwrap().splitn(2, "~").next() {
+        Some(ref_stem) => ref_stem,
+        None => genome_from_contig()
+    };
+
+    debug!("possible reference stem {:?}", reference_stem);
+    let ref_idx = match genomes_and_contigs.genome_index(
+        &reference_stem.to_string()) {
+        Some(idx) => idx,
+        None => genomes_and_contigs.genome_index(
+            genome_from_contig()
+        ).expect("Unable to parse genome name"),
+    };
+
+    let reference = reference_map.get(&ref_idx).expect("Unable to retrieve reference path").clone();
+    (reference, ref_idx)
+
 }

@@ -16,6 +16,7 @@ use nix::unistd;
 use nix::sys::stat;
 use tempdir::TempDir;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use tempfile::NamedTempFile;
 
 
 #[allow(unused)]
@@ -25,14 +26,16 @@ pub fn process_vcf<R: NamedBamReader,
     split_threads: usize,
     mut prev_ref_idx: &mut i32,
     mut per_ref_sample_idx: &mut i32,
-    sample_count: usize,
-    variant_matrix_map: &mut HashMap<usize, VariantMatrix>,
+    mut sample_count: usize,
+    variant_matrix: &mut VariantMatrix,
     longread: bool,
     m: &clap::ArgMatches,
     sample_groups: &mut HashMap<&str, HashSet<String>>,
     genomes_and_contigs: &GenomesAndContigs,
     reference_map: &HashMap<usize, String>,
-    short_sample_count: &usize) {
+    mut short_sample_count: usize,
+    concatenated_genomes: &Option<NamedTempFile>
+) {
 
     let mut bam_generated = bam_generator.start();
 
@@ -54,14 +57,19 @@ pub fn process_vcf<R: NamedBamReader,
     let bam_path = bam_generated.path();
     debug!("Bam stored at {}", &bam_path);
 
-
-    // Get the total amound of bases in reference using the index
-    let reference_stem = genomes_and_contigs.genome_of_contig(
-        &str::from_utf8(&target_names[0]).unwrap().to_string())
-        .expect(&format!("Found invalid contig in bam, {:?}. Please provide corresponding reference genomes", str::from_utf8(&target_names[0]).unwrap()));
-    let ref_idx = genomes_and_contigs.genome_index(&reference_stem).unwrap();
-    let reference = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
-    debug!("retrieving genome id with contig {:?} from {} for sample {}", str::from_utf8(&target_names[0]), &reference, &stoit_name);
+    // Adjust indices based on whether or not we are using a concatenated reference or not
+    let (reference, ref_idx) = match concatenated_genomes {
+        Some(ref temp_file) => (temp_file.path().to_str().unwrap().to_string(), 0),
+        None => {
+            retrieve_genome_from_contig(
+                target_names[0],
+                genomes_and_contigs,
+                reference_map,
+            )
+        }
+    };
+    debug!("retrieving genome id with contig {:?} from {} for sample {}",
+           str::from_utf8(&target_names[0]), &reference, &stoit_name);
 
     let reference_length = match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
         Ok(index) => index.sequences().iter().fold(0, |acc, seq| acc + seq.len),
@@ -78,46 +86,45 @@ pub fn process_vcf<R: NamedBamReader,
         *per_ref_sample_idx = 0;
     }
 
-    // Get the variant matrix for current reference
-    let mut variant_matrix = variant_matrix_map.entry(ref_idx).or_insert(
-        VariantMatrix::new_matrix(sample_count));
+
+    // Get VCF file from BAM using freebayes of SVIM
+    let mut vcf_reader = get_vcf(
+        &stoit_name,
+        &m,
+        split_threads,
+        longread,
+        reference_length,
+        &reference,
+        bam_path,
+    );
+
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     let mut variant_map = HashMap::new();
-
-
-    // Get VCF file from BAM using freebayes of SVIM
-    let mut vcf_reader = get_vcf(&stoit_name,
-                                 &m,
-                                 *per_ref_sample_idx as usize,
-                                 split_threads,
-                                 longread,
-                                 reference_length,
-                                 reference,
-                                 ref_idx,
-                                 bam_path);
 
     match vcf_reader {
         Ok(ref mut reader) => {
             reader.set_threads(split_threads).expect("Unable to set threads on VCF reader");
 
             let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
-            info!("Collecting VCF records for sample {} against {}", per_ref_sample_idx, &reference_stem);
+            info!("Collecting VCF records for sample {}", &stoit_name);
             reader.records().into_iter().for_each(|vcf_record| {
                 let mut vcf_record = vcf_record.unwrap();
-                let header = vcf_record.header();
+                let vcf_header = vcf_record.header();
                 let variant_rid = vcf_record.rid().unwrap();
                 // Check bam header names and vcf header names are in same order
                 // Sanity check
                 if target_names[variant_rid as usize]
-                    == header.rid2name(variant_rid).unwrap() {
-                    let base_option = Base::from_vcf_record(&mut vcf_record,
-                                                            sample_count,
-                                                            *per_ref_sample_idx as usize,
-                                                            longread,
-                                                            min_qual);
+                    == vcf_header.rid2name(variant_rid).unwrap() {
+                    let base_option =
+                        Base::from_vcf_record(
+                            &mut vcf_record,
+                            sample_count,
+                            *per_ref_sample_idx as usize,
+                            longread,
+                            min_qual,
+                        );
                     match base_option {
-
                         Some(bases) => {
                             for base in bases {
                                 let variant_con = variant_map
@@ -134,17 +141,41 @@ pub fn process_vcf<R: NamedBamReader,
                 }
             });
             if longread {
-                variant_matrix.add_sample(stoit_name.to_string(), (*short_sample_count as i32 + *per_ref_sample_idx) as usize, &variant_map, &header);
+                variant_matrix.add_sample(
+                    stoit_name.to_string(),
+                    (short_sample_count as i32 + *per_ref_sample_idx) as usize,
+                    &variant_map,
+                    &header,
+                    &genomes_and_contigs,
+                );
             } else {
-                variant_matrix.add_sample(stoit_name.to_string(), *per_ref_sample_idx as usize, &variant_map, &header);
+                variant_matrix.add_sample(
+                    stoit_name.to_string(),
+                    *per_ref_sample_idx as usize,
+                    &variant_map,
+                    &header,
+                    &genomes_and_contigs,
+                );
             }
         },
         Err(_) => {
-            info!("No VCF records found for sample {} against {}", per_ref_sample_idx, &reference_stem);
+            info!("No VCF records found for sample {}", &stoit_name);
             if longread {
-                variant_matrix.add_sample(stoit_name.to_string(), (*short_sample_count as i32 + *per_ref_sample_idx) as usize, &variant_map, &header);
+                variant_matrix.add_sample(
+                    stoit_name.to_string(),
+                    (short_sample_count as i32 + *per_ref_sample_idx) as usize,
+                    &variant_map,
+                    &header,
+                    &genomes_and_contigs,
+                );
             } else {
-                variant_matrix.add_sample(stoit_name.to_string(), *per_ref_sample_idx as usize, &variant_map, &header);
+                variant_matrix.add_sample(
+                    stoit_name.to_string(),
+                    *per_ref_sample_idx as usize,
+                    &variant_map,
+                    &header,
+                    &genomes_and_contigs,
+                );
             }
         }
     }
@@ -155,10 +186,15 @@ pub fn process_vcf<R: NamedBamReader,
 
 /// Get or generate vcf file
 #[allow(unused)]
-pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
-               sample_idx: usize, threads: usize, longread: bool,
-               reference_length: u64, reference: &String, ref_idx: usize,
-               bam_path: &str) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+pub fn get_vcf(
+    stoit_name: &str,
+    m: &clap::ArgMatches,
+    threads: usize,
+    longread: bool,
+    reference_length: u64,
+    reference: &String,
+    bam_path: &str,
+) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -203,8 +239,14 @@ pub fn get_vcf(stoit_name: &str, m: &clap::ArgMatches,
 
 /// Makes direct call to freebayes or SVIM
 #[allow(unused)]
-pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
-                    threads: usize, longread: bool, reference_length: u64, reference: &String) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+pub fn generate_vcf(
+    bam_path: &str,
+    m: &clap::ArgMatches,
+    threads: usize,
+    longread: bool,
+    reference_length: u64,
+    reference: &String
+) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
 
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo")
@@ -244,7 +286,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
             threads-1,
             threads-1,
             threads-1,
-            tmp_bam_path);
+            tmp_bam_path,
+        );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
@@ -279,7 +322,8 @@ pub fn generate_vcf(bam_path: &str, m: &clap::ArgMatches,
             m.value_of("mapq-threshold").unwrap(),
             tmp_bam_path,
             &reference,
-            freebayes_path);
+            freebayes_path,
+        );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
