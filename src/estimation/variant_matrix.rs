@@ -208,20 +208,37 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 for target_name in tid_names.into_iter() {
 
-                    let target_name_str =
+                    let mut target_name_str =
                         String::from_utf8(
                             target_name.to_vec())
                             .unwrap()
                             .splitn(2, "~")
                             .skip(1)
                             .next()
-                            .unwrap()
+                            .unwrap_or(
+                                std::str::from_utf8(
+                                    &target_name)
+                                    .unwrap()
+                            )
                             .to_string();
 
+                    let reference_index =
+                        match genomes_and_contigs
+                            .genome_index_of_contig(
+                                &target_name_str) {
+                            Some(idx) => idx,
+                            None => {
+                                target_name_str = String::from_utf8(
+                                    target_name.to_vec()).unwrap();
+                                genomes_and_contigs
+                                    .genome_index_of_contig(
+                                        &target_name_str
+                                    ).unwrap()
+                            }
+                        };
+
                     debug!("Adding contig {}", &target_name_str);
-                    let reference_index = genomes_and_contigs
-                        .genome_index_of_contig(
-                            &target_name_str).unwrap();
+
 
                     let tid =
                         header
@@ -842,6 +859,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                         let mut total_reference_alleles = 0;
 
                         // Generate the variant genome
+                        debug!("genotyping Reference index {} target names {:?}",
+                               &ref_index,
+                               &target_names);
                         for (tid, target_name) in target_names[ref_index].iter() {
                             let mut contig = String::new();
                             original_contig = Vec::new();
@@ -1052,76 +1072,86 @@ impl VariantMatrixFunctions for VariantMatrix {
                     write!(snp_loc_open, "\n").unwrap();
 
                     let mut snps = 0;
+                    debug!("Reference index {} target names {:?}", &ref_idx, &target_names);
 
-                    for (tid, contig_name) in target_names[ref_idx].iter() {
-                        let contig_len = target_lengths[ref_idx][&tid];
-                        write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
-                        match ref_variants.get(tid) {
-                            Some(variants_in_contig) => {
-                                // Set up channels that receive a vector of values for each sample
-                                let mut snps_cnt_vec = vec![0; sample_names.len()];
-                                let svs_cnt_vec = Mutex::new(vec![0; sample_names.len()]);
+                    match target_names.get(ref_idx) {
+                        Some(target_name_set) => {
+                            for (tid, contig_name) in target_name_set.iter() {
+                                let contig_len = target_lengths[ref_idx][&tid];
+                                write!(file_open, "{}\t{}", contig_name, contig_len).unwrap();
+                                match ref_variants.get(tid) {
+                                    Some(variants_in_contig) => {
+                                        // Set up channels that receive a vector of values
+                                        // for each sample
+                                        let mut snps_cnt_vec = vec![0; sample_names.len()];
+                                        let svs_cnt_vec = Mutex::new(vec![0; sample_names.len()]);
 
-                                let window = contig_len / window_size;
-                                variants_in_contig.iter().enumerate()
-                                    .for_each(|(index, (position, variants))| {
-                                        // Get how many alleles are present at loci
-                                        let alleles = variants.len();
-                                        for (var, base) in variants {
-                                            match var {
-                                                Variant::SNV(_) => {
-                                                    write!(snp_loc_open, "SNP{}\t{}\t{}\n",
-                                                           index, contig_name, position).unwrap();
-                                                    base.truedepth
-                                                        .iter()
-                                                        .enumerate()
-                                                        .zip(base.depth.iter().enumerate())
-                                                        .for_each(|((index, count_1), (_index_2, count_2))| {
-                                                            if count_1 > &0 || count_2 > &0 {
-                                                                snps_cnt_vec[index] += 1;
-                                                            }
-                                                        });
-                                                    snps += 1;
-                                                },
-                                                Variant::None => {
-                                                    // If biallelic or multiallelic then
-                                                    // I don't think we want the ref depth?
-                                                },
-                                                _ => {
-                                                    base.truedepth
-                                                        .par_iter()
-                                                        .enumerate()
-                                                        .zip(base.depth.par_iter().enumerate())
-                                                        .for_each(|((index, count_1), (_, count_2))| {
-                                                            if count_1 > &0 || count_2 > &0 {
-                                                                let mut svs_cnt_vec
-                                                                    = svs_cnt_vec.lock().unwrap();
-                                                                svs_cnt_vec[index] += 1;
-                                                            }
-                                                        })
-                                                }
-                                            };
-                                        };
-                                    });
-                                let svs_cnt_vec = svs_cnt_vec.lock().unwrap().clone();
-                                let snps_per_win: Vec<_> = snps_cnt_vec.iter().map(|count| *count as f64 / window).collect();
-                                let svs_per_win: Vec<_> = svs_cnt_vec.iter().map(|count| *count as f64 / window).collect();
+                                        let window = contig_len / window_size;
+                                        variants_in_contig.iter().enumerate()
+                                            .for_each(
+                                                |(index,
+                                                     (position, variants))| {
+                                                // Get how many alleles are present at loci
+                                                let alleles = variants.len();
+                                                for (var, base) in variants {
+                                                    match var {
+                                                        Variant::SNV(_) => {
+                                                            write!(snp_loc_open, "SNP{}\t{}\t{}\n",
+                                                                   index, contig_name, position).unwrap();
+                                                            base.truedepth
+                                                                .iter()
+                                                                .enumerate()
+                                                                .zip(base.depth.iter().enumerate())
+                                                                .for_each(|((index, count_1), (_index_2, count_2))| {
+                                                                    if count_1 > &0 || count_2 > &0 {
+                                                                        snps_cnt_vec[index] += 1;
+                                                                    }
+                                                                });
+                                                            snps += 1;
+                                                        },
+                                                        Variant::None => {
+                                                            // If biallelic or multiallelic then
+                                                            // I don't think we want the ref depth?
+                                                        },
+                                                        _ => {
+                                                            base.truedepth
+                                                                .par_iter()
+                                                                .enumerate()
+                                                                .zip(base.depth.par_iter().enumerate())
+                                                                .for_each(|((index, count_1), (_, count_2))| {
+                                                                    if count_1 > &0 || count_2 > &0 {
+                                                                        let mut svs_cnt_vec
+                                                                            = svs_cnt_vec.lock().unwrap();
+                                                                        svs_cnt_vec[index] += 1;
+                                                                    }
+                                                                })
+                                                        }
+                                                    };
+                                                };
+                                            });
+                                        let svs_cnt_vec = svs_cnt_vec.lock().unwrap().clone();
+                                        let snps_per_win: Vec<_> = snps_cnt_vec.iter().map(|count| *count as f64 / window).collect();
+                                        let svs_per_win: Vec<_> = svs_cnt_vec.iter().map(|count| *count as f64 / window).collect();
 
-                                for (snp_w, svs_w, snp_c, svs_c) in izip!(&snps_per_win, &svs_per_win, &snps_cnt_vec, &svs_cnt_vec) {
-                                    write!(file_open, "\t{}\t{}\t{}\t{}", snp_w, svs_w, snp_c, svs_c).unwrap();
+                                        for (snp_w, svs_w, snp_c, svs_c) in izip!(&snps_per_win, &svs_per_win, &snps_cnt_vec, &svs_cnt_vec) {
+                                            write!(file_open, "\t{}\t{}\t{}\t{}", snp_w, svs_w, snp_c, svs_c).unwrap();
+                                        }
+                                        write!(file_open, "\n").unwrap();
+                                    },
+                                    None => {
+                                        // Write out zeros for contigs with no variants
+                                        for (sample_idx, _sample_name) in sample_names.iter().enumerate() {
+                                            write!(file_open,
+                                                   "\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                                   0., 0., 0., 0., 0., 0., 0., ).unwrap();
+                                        }
+                                    }
                                 }
-                                write!(file_open, "\n").unwrap();
-                            },
-                            None => {
-                                // Write out zeros for contigs with no variants
-                                for (sample_idx, _sample_name) in sample_names.iter().enumerate() {
-                                    write!(file_open,
-                                           "\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                           0., 0., 0., 0., 0., 0., 0., ).unwrap();
-                                }
-                            }
-                        }
-                    };
+                            };
+                        },
+                        None => {},
+                    }
+
                     if snps > 1 {
                         let plot_command =
                             format!("set -eou pipefail; snp_density_plots.R {} {} && \

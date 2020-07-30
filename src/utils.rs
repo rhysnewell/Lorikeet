@@ -619,6 +619,7 @@ pub fn retrieve_genome_from_contig<'a>(
             genome_from_contig()
         ).expect("Unable to parse genome name"),
     };
+    debug!("Actual reference idx {:?}", ref_idx);
 
     let reference = reference_map.get(&ref_idx).expect("Unable to retrieve reference path").clone();
     (reference, ref_idx)

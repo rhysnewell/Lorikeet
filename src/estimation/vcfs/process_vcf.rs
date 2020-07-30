@@ -59,7 +59,8 @@ pub fn process_vcf<R: NamedBamReader,
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = match concatenated_genomes {
-        Some(ref temp_file) => (temp_file.path().to_str().unwrap().to_string(), 0),
+        Some(ref temp_file) =>
+            (temp_file.path().to_str().unwrap().to_string(), 0),
         None => {
             retrieve_genome_from_contig(
                 target_names[0],
