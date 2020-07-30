@@ -67,34 +67,53 @@ pub fn pileup_variants<
     let mut gff_map = HashMap::new();
     let mut codon_table = CodonTable::setup();
 
-    let longreads = match longreads {
-        Some(vec) => {
-            long_sample_count += vec.len();
-            vec
-        },
-        None => {
-            vec!()
-        }
-    };
+    let longreads =
+        match longreads {
+            Some(vec) => {
+                long_sample_count += vec.len();
+                vec
+            },
+            None => {
+                vec!()
+            }
+        };
     // TODO: Make this work with concatenated references
-    let mut variant_matrix = match concatenated_genomes {
-        Some(ref concat) => {
-            per_reference_samples = short_sample_count + long_sample_count;
-            per_reference_short_samples = short_sample_count;
-            VariantMatrix::new_matrix(per_reference_samples)
-        },
-        None => {
-            per_reference_samples = (short_sample_count + long_sample_count) / references.len();
-            per_reference_short_samples = short_sample_count / references.len();
-            VariantMatrix::new_matrix(per_reference_samples)
-        },
-    };
+    let mut variant_matrix =
+        match concatenated_genomes {
+            Some(ref concat) => {
+                per_reference_samples = short_sample_count + long_sample_count;
+                per_reference_short_samples = short_sample_count;
+                debug!("Per reference samples concatenated {}",
+                       &per_reference_samples);
+                VariantMatrix::new_matrix(per_reference_samples)
+            },
+            None => {
+                per_reference_samples = (short_sample_count + long_sample_count) / references.len();
+                per_reference_short_samples = short_sample_count / references.len();
+                debug!("Per reference samples not concatenated {}",
+                       &per_reference_samples);
+                VariantMatrix::new_matrix(per_reference_samples)
+            },
+        };
+
     // Put reference index in the variant map and initialize matrix
     let mut reference_map = HashMap::new();
     for reference in references.iter() {
-        debug!("Genomes {:?} contigs {:?}", &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome);
-        let ref_idx = genomes_and_contigs.genome_index(&Path::new(reference)
-            .file_stem().expect("problem determining file stem").to_str().unwrap().to_string()).unwrap();
+        debug!("Genomes {:?} contigs {:?}",
+               &genomes_and_contigs.genomes,
+               &genomes_and_contigs.contig_to_genome,
+        );
+        let ref_idx =
+            genomes_and_contigs
+                .genome_index(
+                    &Path::new(reference)
+                        .file_stem()
+                        .expect("problem determining file stem")
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                )
+                .unwrap();
         reference_map.entry(ref_idx).or_insert(reference.to_string());
     }
 
@@ -184,7 +203,10 @@ pub fn pileup_variants<
 
     let mut prev_ref_idx = -1;
     let mut per_ref_sample_idx = 0;
-    bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)|{
+    bam_readers
+        .into_iter()
+        .enumerate()
+        .for_each(|(sample_idx, bam_generator)|{
         // Get the appropriate sample index based on how many references we are using
         process_vcf(
             bam_generator,
@@ -210,7 +232,10 @@ pub fn pileup_variants<
         // changes in references
         let mut prev_ref_idx = -1;
         let mut per_ref_sample_idx = 0;
-        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads
+            .into_iter()
+            .enumerate()
+            .for_each(|(sample_idx, bam_generator)| {
             process_vcf(
                 bam_generator,
                 n_threads,
@@ -231,7 +256,10 @@ pub fn pileup_variants<
         // We need update the variant matrix anyway
         let mut prev_ref_idx = -1;
         let mut per_ref_sample_idx = 0;
-        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads
+            .into_iter()
+            .enumerate()
+            .for_each(|(sample_idx, bam_generator)| {
             let bam_generated = bam_generator.start();
             let header = bam_generated.header().clone(); // bam header
             let target_names = header.target_names(); // contig names
@@ -409,6 +437,7 @@ pub fn pileup_variants<
                 &genomes_and_contigs,
             );
         }
+        info!("Genotype analysis finished!");
     } else if mode == "summarize" {
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();
 
@@ -422,6 +451,7 @@ pub fn pileup_variants<
             &output_prefix,
             &genomes_and_contigs,
         );
+        info!("Sumamrize analysis finished!");
 
     } else if mode == "evolve" {
 
@@ -430,7 +460,10 @@ pub fn pileup_variants<
             &genomes_and_contigs,
             &reference_map,
             &codon_table,
-            &output_prefix)
+            &output_prefix
+        );
+        info!("Evolve analysis finished!");
+
     }
 }
 

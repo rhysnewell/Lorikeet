@@ -19,8 +19,10 @@ use coverm::FlagFilter;
 
 /// Process all reads in a BAM file
 #[allow(unused)]
-pub fn process_bam<R: NamedBamReader,
-    G: NamedBamReaderGenerator<R>>(
+pub fn process_bam<
+    R: NamedBamReader,
+    G: NamedBamReaderGenerator<R>,
+>(
     bam_generator: G,
     sample_count: usize,
     coverage_estimators: &mut Vec<CoverageEstimator>,
@@ -42,7 +44,8 @@ pub fn process_bam<R: NamedBamReader,
     method: &str,
     sample_groups: &HashMap<&str, HashSet<String>>,
     genomes_and_contigs: &GenomesAndContigs,
-    reference_map: &HashMap<usize, String>) {
+    reference_map: &HashMap<usize, String>,
+) {
 
     let mut bam_generated = bam_generator.start();
 

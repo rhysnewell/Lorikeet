@@ -203,8 +203,8 @@ fn prepare_pileup
         true => None,
     };
 
-    let genomes_and_contigs_option
-        = extract_genomes_and_contigs_option(&m, &references);
+    let (concatenated_genomes,
+        genomes_and_contigs_option) = setup_genome_fasta_files(&m);
     debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
     if m.is_present("bam-files") {
         let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -232,7 +232,8 @@ fn prepare_pileup
                            filter_params.flag_filters,
                            Some(long_readers),
                            genomes_and_contigs_option,
-                           tmp_dir, None
+                           tmp_dir,
+                           concatenated_genomes,
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
@@ -271,7 +272,8 @@ fn prepare_pileup
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
                            genomes_and_contigs_option,
-                           tmp_dir, None)
+                           tmp_dir,
+                           concatenated_genomes,                )
             }
 
         } else {
@@ -288,7 +290,10 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(long_readers),
-                           genomes_and_contigs_option, tmp_dir, None)
+                           genomes_and_contigs_option,
+                           tmp_dir,
+                           concatenated_genomes,
+                )
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
@@ -312,7 +317,10 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            Some(all_generators),
-                           genomes_and_contigs_option, tmp_dir, concatenated_genomes)
+                           genomes_and_contigs_option,
+                           tmp_dir,
+                           concatenated_genomes,
+                )
             } else {
 
                 run_pileup(m,
@@ -321,15 +329,17 @@ fn prepare_pileup
                            bam_readers,
                            filter_params.flag_filters,
                            None::<Vec<PlaceholderBamFileReader>>,
-                           genomes_and_contigs_option, tmp_dir, None)
+                           genomes_and_contigs_option,
+                           tmp_dir,
+                           concatenated_genomes,
+                )
             }
         }
 
     } else {
         let mapping_program = parse_mapping_program(m.value_of("mapper"));
         external_command_checker::check_for_samtools();
-        let (concatenated_genomes,
-            genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+
         if filter_params.doing_filtering() {
             debug!("Filtering..");
             let generator_sets = get_streamed_filtered_bam_readers(
@@ -638,7 +648,6 @@ fn run_pileup<'a,
             }
             let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
-            info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
                 bam_readers,
@@ -693,8 +702,6 @@ fn run_pileup<'a,
             }
             let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
-
-            info!("Beginning summarize with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
                 bam_readers,
@@ -749,8 +756,6 @@ fn run_pileup<'a,
             }
             let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
-
-            info!("Beginning evolve with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
                 bam_readers,
@@ -806,9 +811,6 @@ fn run_pileup<'a,
             }
             let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
-
-
-            info!("Beginning polishing with {} bam readers and {} threads", bam_readers.len(), threads);
             contig::pileup_variants(
                 m,
                 bam_readers,
