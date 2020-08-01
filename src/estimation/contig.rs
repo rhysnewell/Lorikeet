@@ -265,7 +265,7 @@ pub fn pileup_variants<
             let target_names = header.target_names(); // contig names
             let mut variant_map = HashMap::new();
 
-            let stoit_name = bam_generated.name().to_string().replace("/", ".");
+            let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
             debug!("Stoit_name {:?}", &stoit_name);
 
             let group = sample_groups.entry("long").or_insert(HashSet::new());
@@ -273,7 +273,15 @@ pub fn pileup_variants<
 
             // Adjust indices based on whether or not we are using a concatenated reference or not
             let (_reference, ref_idx) = match concatenated_genomes {
-                Some(ref temp_file) => (temp_file.path().to_str().unwrap().to_string(), 0),
+                Some(ref temp_file) => {
+                    stoit_name = format!(
+                        "{}.{}",
+                        temp_file.path().file_name().unwrap().to_str().unwrap(),
+                        stoit_name,
+                    );
+                    debug!("Renamed Stoit_name {:?}", &stoit_name);
+                    (temp_file.path().to_str().unwrap().to_string(), 0)
+                },
                 None => {
                     retrieve_genome_from_contig(
                         target_names[0],
@@ -315,25 +323,73 @@ pub fn pileup_variants<
 
         let mut all_bam_paths = vec!();
 
-        for ref_name in genomes_and_contigs.genomes.iter() {
-            let cache = format!("{}/{}*.bam",
-                                match m.is_present("bam-file-cache-directory") {
-                                    false => {
-                                        tmp_bam_file_cache.as_ref().unwrap().path().to_str().unwrap()
+        match concatenated_genomes {
+            Some(ref tmp_file) => {
+                let cache = format!("{}/{}*.bam",
+                                    match m.is_present("bam-file-cache-directory") {
+                                        false => {
+                                            tmp_bam_file_cache
+                                                .as_ref()
+                                                .unwrap()
+                                                .path()
+                                                .to_str()
+                                                .unwrap()
+                                        },
+                                        true => {
+                                            m.value_of("bam-file-cache-directory").unwrap()
+                                        }
                                     },
-                                    true => {
-                                        m.value_of("bam-file-cache-directory").unwrap()
-                                    }
-                                },
-                                ref_name);
-            let bam_paths = glob(&cache).expect("Failed to read cache")
-                .map(|p| p.expect("Failed to read cached bam path")
-                    .to_str().unwrap().to_string()).collect::<Vec<String>>();
-            all_bam_paths.extend(bam_paths);
+                                    tmp_file.path().file_stem().unwrap().to_str().unwrap(),
+                );
+                let bam_paths =
+                    glob(&cache)
+                        .expect("Failed to read cache")
+                        .map(|p| p.expect("Failed to read cached bam path")
+                        .to_str().unwrap().to_string()).collect::<Vec<String>>();
+                all_bam_paths.extend(bam_paths);
+            }
+            None => {
+                for ref_name in genomes_and_contigs.genomes.iter() {
+                    let cache = format!("{}/{}*.bam",
+                                        match m.is_present("bam-file-cache-directory") {
+                                            false => {
+                                                tmp_bam_file_cache
+                                                    .as_ref()
+                                                    .unwrap()
+                                                    .path()
+                                                    .to_str()
+                                                    .unwrap()
+                                            },
+                                            true => {
+                                                m.value_of("bam-file-cache-directory").unwrap()
+                                            }
+                                        },
+                                        ref_name);
+                    let bam_paths = glob(&cache).expect("Failed to read cache")
+                        .map(|p| p.expect("Failed to read cached bam path")
+                            .to_str().unwrap().to_string()).collect::<Vec<String>>();
+                    all_bam_paths.extend(bam_paths);
+                }
+            }
         }
-        let all_bam_paths = all_bam_paths.iter().map(|p| p.as_str()).collect::<Vec<&str>>();
-        let bam_cnts = all_bam_paths.len();
-        bam_readers = generate_named_bam_readers_from_bam_files(all_bam_paths);
+
+        debug!("Rereading in {}", all_bam_paths.len());
+        if all_bam_paths.len() == (short_sample_count + long_sample_count) {
+            let all_bam_paths =
+                all_bam_paths
+                    .iter()
+                    .map(|p| p.as_str())
+                    .collect::<Vec<&str>>();
+            let bam_cnts = all_bam_paths.len();
+            bam_readers = generate_named_bam_readers_from_bam_files(all_bam_paths);
+        } else {
+            panic!(format!(
+                "Original sample count {} does not match new sample count {}, \
+                please clear bam cache directory or ask for support at: github.com/rhysnewell/Lorikeet",
+                (short_sample_count + long_sample_count),
+                all_bam_paths.len(),
+            ))
+        }
     }
 
     // Process Short Read BAMs
@@ -342,23 +398,30 @@ pub fn pileup_variants<
         bam_readers.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
 
             // Get the appropriate sample index based on how many references we are using
-            process_bam(bam_generator,
-                        per_reference_samples,
-                        &mut coverage_estimators,
-                        &mut variant_matrix,
-                        n_threads,
-                        m,
-                        output_prefix,
-                        coverage_fold,
-                        &codon_table,
-                        min_var_depth,
-                        contig_end_exclusion,
-                        min, max, ani,
-                        mode,
-                        include_soft_clipping,
-                        include_indels,
-                        &flag_filters,
-                        mapq_threshold, method, &sample_groups, &genomes_and_contigs, &reference_map)
+            process_bam(
+                bam_generator,
+                per_reference_samples,
+                &mut coverage_estimators,
+                &mut variant_matrix,
+                n_threads,
+                m,
+                output_prefix,
+                coverage_fold,
+                &codon_table,
+                min_var_depth,
+                contig_end_exclusion,
+                min, max, ani,
+                mode,
+                include_soft_clipping,
+                include_indels,
+                &flag_filters,
+                mapq_threshold,
+                method,
+                &sample_groups,
+                &genomes_and_contigs,
+                &reference_map,
+                &concatenated_genomes,
+            )
         });
     }
 
@@ -367,25 +430,35 @@ pub fn pileup_variants<
 
         let longreads_path = m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>();
         let longreads = generate_named_bam_readers_from_bam_files(longreads_path);
-        longreads.into_iter().enumerate().for_each(|(sample_idx, bam_generator)| {
+        longreads
+            .into_iter()
+            .enumerate()
+            .for_each(|(sample_idx, bam_generator)| {
 
-            process_bam(bam_generator,
-                        per_reference_samples,
-                        &mut coverage_estimators,
-                        &mut variant_matrix,
-                        n_threads,
-                        m,
-                        output_prefix,
-                        coverage_fold,
-                        &codon_table,
-                        min_var_depth,
-                        contig_end_exclusion,
-                        min, max, ani,
-                        mode,
-                        include_soft_clipping,
-                        include_indels,
-                        &flag_filters,
-                        mapq_threshold, method, &sample_groups, &genomes_and_contigs, &reference_map)
+            process_bam(
+                bam_generator,
+                per_reference_samples,
+                &mut coverage_estimators,
+                &mut variant_matrix,
+                n_threads,
+                m,
+                output_prefix,
+                coverage_fold,
+                &codon_table,
+                min_var_depth,
+                contig_end_exclusion,
+                min, max, ani,
+                mode,
+                include_soft_clipping,
+                include_indels,
+                &flag_filters,
+                mapq_threshold,
+                method,
+                &sample_groups,
+                &genomes_and_contigs,
+                &reference_map,
+                &concatenated_genomes,
+            )
         });
     }
 
@@ -455,6 +528,9 @@ pub fn pileup_variants<
 
     } else if mode == "evolve" {
 
+        // TODO: This needs to account for both archaeal and bacterial genomes
+        //       being provided. Either through a list of GFFs or a taxonomy of
+        //       each genome stating which kingdom to parse to prokka
         variant_matrix.calc_gene_mutation(
             &mut gff_map,
             &genomes_and_contigs,

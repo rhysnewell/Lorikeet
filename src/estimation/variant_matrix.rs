@@ -19,7 +19,7 @@ use tempfile;
 use rayon::current_num_threads;
 use estimation::codon_structs::CodonTable;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use utils::generate_faidx;
+use utils::{generate_faidx, split_contig_name};
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -208,34 +208,23 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                 for target_name in tid_names.into_iter() {
 
-                    let mut target_name_str =
-                        String::from_utf8(
-                            target_name.to_vec())
-                            .unwrap()
-                            .splitn(2, "~")
-                            .skip(1)
-                            .next()
-                            .unwrap_or(
-                                std::str::from_utf8(
-                                    &target_name)
-                                    .unwrap()
-                            )
-                            .to_string();
+                    let mut target_name_str = String::from_utf8(
+                        target_name.to_vec()).unwrap();
 
                     let reference_index =
                         match genomes_and_contigs
-                            .genome_index_of_contig(
-                                &target_name_str) {
-                            Some(idx) => idx,
-                            None => {
-                                target_name_str = String::from_utf8(
-                                    target_name.to_vec()).unwrap();
-                                genomes_and_contigs
-                                    .genome_index_of_contig(
-                                        &target_name_str
-                                    ).unwrap()
-                            }
-                        };
+                        .genome_index_of_contig(
+                            &target_name_str) {
+                        Some(idx) => idx,
+                        None => {
+                            target_name_str = split_contig_name(
+                                &target_name.to_vec());
+                            genomes_and_contigs
+                                .genome_index_of_contig(
+                                    &target_name_str
+                                ).unwrap()
+                        }
+                    };
 
                     debug!("Adding contig {}", &target_name_str);
 

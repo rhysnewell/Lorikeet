@@ -625,3 +625,40 @@ pub fn retrieve_genome_from_contig<'a>(
     (reference, ref_idx)
 
 }
+
+// Splits a contig name based on the ~
+pub fn split_contig_name(target_name: &Vec<u8>) -> String {
+    String::from_utf8(
+        target_name.clone())
+        .unwrap()
+        .splitn(2, "~")
+        .skip(1)
+        .next()
+        .unwrap_or(
+            std::str::from_utf8(
+                &target_name)
+                .unwrap()
+        )
+        .to_string()
+}
+
+pub fn retrieve_reference_index_from_contig(
+    target_name: &Vec<u8>,
+    genomes_and_contigs: &GenomesAndContigs,
+) -> usize {
+    let target_name_str = String::from_utf8(
+        target_name.clone()).unwrap();
+
+    match genomes_and_contigs
+        .genome_index_of_contig(
+            &target_name_str) {
+        Some(idx) => idx,
+        None => {
+            let split_name = split_contig_name(target_name);
+            genomes_and_contigs
+                .genome_index_of_contig(
+                    &split_name
+                ).unwrap()
+        }
+    }
+}

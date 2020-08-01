@@ -11,10 +11,10 @@ use model::variants::*;
 use utils::*;
 
 use std::str;
-use std::path::Path;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::genomes_and_contigs::*;
 use coverm::FlagFilter;
+use tempfile::NamedTempFile;
 
 
 /// Process all reads in a BAM file
@@ -45,6 +45,7 @@ pub fn process_bam<
     sample_groups: &HashMap<&str, HashSet<String>>,
     genomes_and_contigs: &GenomesAndContigs,
     reference_map: &HashMap<usize, String>,
+    concatenated_genomes: &Option<NamedTempFile>,
 ) {
 
     let mut bam_generated = bam_generator.start();
@@ -69,6 +70,7 @@ pub fn process_bam<
     let mut ups_and_downs: Vec<i32> = Vec::new();
     // Current contig name
     let mut contig_name = Vec::new();
+    let mut contig_name_str = String::new();
     let mut num_mapped_reads_total: u64 = 0;
     let mut num_mapped_reads_in_current_contig: u64 = 0;
     let mut total_edit_distance_in_current_contig: u64 = 0;
@@ -78,14 +80,13 @@ pub fn process_bam<
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
 
-
-
     let sample_idx = match variant_matrix {
         VariantMatrix::VariantContigMatrix {
             sample_names,
             ..
         } => {
-            sample_names.iter().position(|p| {p == &stoit_name}).unwrap()
+            debug!("sample names {:?} and stoit_name {:?}", &sample_names, &stoit_name);
+            sample_names.iter().position(|p| p.contains(&stoit_name)).unwrap()
         }
     };
 
@@ -103,6 +104,16 @@ pub fn process_bam<
         debug!(" NO Longread {} {}", stoit_name, sample_idx)
 
     }
+
+    let mut reference =
+    match concatenated_genomes {
+        Some(reference_path) =>
+            match bio::io::fasta::IndexedReader::from_file(&reference_path.path()) {
+                Ok(reader) => reader,
+                Err(_e) => generate_faidx(&reference_path.path().to_str().unwrap()),
+            },
+        None => panic!("Concatenated reference file does not exist")
+    };
 
 
     // for record in records
@@ -140,30 +151,52 @@ pub fn process_bam<
                     let contig_len = header.target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
                     contig_name = target_names[last_tid as usize].to_vec();
-                    ref_idx = genomes_and_contigs.genome_index_of_contig(
-                        &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
+                    // contig_name_str = split_contig_name(&contig_name);
+                    ref_idx = retrieve_reference_index_from_contig(
+                        &contig_name,
+                        genomes_and_contigs,
+                    );
+
                     let total_mismatches = total_edit_distance_in_current_contig -
                         total_indels_in_current_contig;
 
                     // Retrieve the reference based on the reference index from reference_map
-                    let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
-                    let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
-                        Ok(reader) => reader,
-                        Err(_e) => generate_faidx(&reference_path),
-                    };
+                    // let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
 
-                    match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
+
+                    match reference.fetch_all(
+                        std::str::from_utf8(
+                            &contig_name[..]).unwrap()) {
                         Ok(reference) => reference,
-                        Err(e) => {
-                            println!("Cannot read sequence from reference {:?}", e);
-                            std::process::exit(1)
+                        Err(e) => match reference.fetch_all(
+                            &format!(
+                                "{}~{}",
+                                &genomes_and_contigs.genomes[ref_idx],
+                                std::str::from_utf8(
+                                    &contig_name[..]).unwrap())
+                        ) {
+                            Ok(reference) => reference,
+                            Err(e) => {
+                                println!("Cannot read sequence from reference {} {:?}",
+                                         format!(
+                                             "{}~{}",
+                                             &genomes_and_contigs.genomes[ref_idx],
+                                             std::str::from_utf8(
+                                                 &contig_name[..]).unwrap()),
+                                         e,
+                                );
+                                std::process::exit(1);
+                            }
                         },
                     };
                     ref_seq = Vec::new();
                     match reference.read(&mut ref_seq) {
                         Ok(reference) => reference,
                         Err(e) => {
-                            println!("Cannot read sequence from reference {:?}", e);
+                            println!("Cannot read sequence from reference {} {:?}",
+                                     std::str::from_utf8(&contig_name[..]).unwrap(),
+                                     e,
+                            );
                             std::process::exit(1)
                         },
                     };
@@ -195,11 +228,15 @@ pub fn process_bam<
                 }
 
                 ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
-                debug!("Working on new reference {}",
-                       std::str::from_utf8(target_names[tid as usize]).unwrap());
+
                 contig_name = target_names[tid as usize].to_vec();
-                ref_idx = genomes_and_contigs.genome_index_of_contig(
-                    &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
+                // contig_name_str = split_contig_name(&contig_name);
+                // debug!("Contig name {:?}", &contig_name_str);
+
+                // ref_idx = retrieve_reference_index_from_contig(
+                //     &contig_name,
+                //     genomes_and_contigs,
+                // );
                 last_tid = tid;
                 num_mapped_reads_total += num_mapped_reads_in_current_contig;
                 num_mapped_reads_in_current_contig = 0;
@@ -438,29 +475,48 @@ pub fn process_bam<
     if last_tid != -2 {
         let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
         contig_name = target_names[last_tid as usize].to_vec();
-        ref_idx = genomes_and_contigs.genome_index_of_contig(
-            &String::from_utf8(contig_name.clone()).unwrap()).unwrap();
+
+        ref_idx = retrieve_reference_index_from_contig(
+            &contig_name,
+            genomes_and_contigs,
+        );
         let total_mismatches = total_edit_distance_in_current_contig -
             total_indels_in_current_contig;
 
-        let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
-        let mut reference = match bio::io::fasta::IndexedReader::from_file(&Path::new(&reference_path)) {
-            Ok(reader) => reader,
-            Err(_e) => generate_faidx(&reference_path),
-        };
-
-        match reference.fetch_all(std::str::from_utf8(target_names[last_tid as usize]).unwrap()) {
+        match reference.fetch_all(
+            std::str::from_utf8(
+                &contig_name[..]).unwrap()) {
             Ok(reference) => reference,
-            Err(e) => {
-                println!("Cannot read sequence from reference {:?}", e);
-                std::process::exit(1)
-            },
+            Err(_) =>
+               match reference.fetch_all(
+                   &format!(
+                       "{}~{}",
+                       &genomes_and_contigs.genomes[ref_idx],
+                       std::str::from_utf8(
+                           &contig_name[..]).unwrap())
+               ) {
+                   Ok(reference) => reference,
+                   Err(e) => {
+                       println!("Cannot read sequence from reference {} {:?}",
+                                format!(
+                                    "{}~{}",
+                                    &genomes_and_contigs.genomes[ref_idx],
+                                    std::str::from_utf8(
+                                        &contig_name[..]).unwrap()),
+                                e,
+                       );
+                       std::process::exit(1);
+                   }
+               },
         };
         ref_seq = Vec::new();
         match reference.read(&mut ref_seq) {
             Ok(reference) => reference,
             Err(e) => {
-                println!("Cannot read sequence from reference {:?}", e);
+                println!("Cannot read sequence from reference {} {:?}",
+                         std::str::from_utf8(&contig_name[..]).unwrap(),
+                         e,
+                );
                 std::process::exit(1)
             },
         };
