@@ -377,8 +377,13 @@ fn prepare_pileup
 
                 external_command_checker::check_for_samtools();
                 let generator_sets =
-                    get_streamed_bam_readers(m, mapping_program, &concatenated_genomes,
-                                             true, &Some(references.clone()), &tmp_dir);
+                    get_streamed_bam_readers(
+                        m,
+                        mapping_program,
+                        &concatenated_genomes,
+                        true,
+                        &Some(references.clone()),
+                        &tmp_dir);
                 let mut long_generators = vec!();
                 let mut indices = vec!(); // Prevent indices from being dropped
                 for set in generator_sets {

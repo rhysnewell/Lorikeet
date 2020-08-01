@@ -38,8 +38,7 @@ pub fn process_vcf<R: NamedBamReader,
 ) {
 
     let mut bam_generated = bam_generator.start();
-
-    let stoit_name = bam_generated.name().to_string().replace("/", ".");
+    let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
     debug!("Stoit_name {:?}", &stoit_name);
 
     if longread {
@@ -59,8 +58,16 @@ pub fn process_vcf<R: NamedBamReader,
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = match concatenated_genomes {
-        Some(ref temp_file) =>
-            (temp_file.path().to_str().unwrap().to_string(), 0),
+        Some(ref temp_file) => {
+            stoit_name = format!(
+                "{}.{}",
+                temp_file.path().file_name().unwrap().to_str().unwrap(),
+                stoit_name,
+            );
+            debug!("Renamed Stoit_name {:?}", &stoit_name);
+
+            (temp_file.path().to_str().unwrap().to_string(), 0)
+        },
         None => {
             retrieve_genome_from_contig(
                 target_names[0],
