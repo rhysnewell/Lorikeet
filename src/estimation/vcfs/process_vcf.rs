@@ -38,8 +38,8 @@ pub fn process_vcf<R: NamedBamReader,
 ) {
 
     let mut bam_generated = bam_generator.start();
-    let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
-    debug!("Stoit_name {:?}", &stoit_name);
+    let mut stoit_name = bam_generated.name().to_string();
+
 
     if longread {
         let group = sample_groups.entry("long").or_insert(HashSet::new());
@@ -57,42 +57,65 @@ pub fn process_vcf<R: NamedBamReader,
     debug!("Bam stored at {}", &bam_path);
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
-    let (reference, ref_idx) = match concatenated_genomes {
-        Some(ref temp_file) => {
-            stoit_name = format!(
-                "{}.{}",
-                temp_file.path().file_name().unwrap().to_str().unwrap(),
-                stoit_name,
-            );
-            debug!("Renamed Stoit_name {:?}", &stoit_name);
+    let (reference, ref_idx) =
+        if stoit_name.contains(".fna") {
+            debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
+            let reference_stem = stoit_name.split(".fna").next().unwrap();
+            debug!("possible reference stem {:?}", reference_stem);
+            let ref_idx = match genomes_and_contigs.genome_index(
+                &reference_stem.to_string()) {
+                Some(idx) => idx,
+                None => panic!("Unable to retrieve reference index")
+            };
+            debug!("Actual reference idx {:?}", ref_idx);
 
-            (temp_file.path().to_str().unwrap().to_string(), 0)
-        },
-        None => {
-            retrieve_genome_from_contig(
-                target_names[0],
-                genomes_and_contigs,
-                reference_map,
-            )
-        }
-    };
+            let reference = reference_map
+                .get(&ref_idx)
+                .expect("Unable to retrieve reference path").clone();
+            (reference, ref_idx)
+        } else {
+            match concatenated_genomes {
+                Some(ref temp_file) => {
+                    stoit_name = format!(
+                        "{}.{}",
+                        temp_file.path().file_name().unwrap().to_str().unwrap(),
+                        stoit_name,
+                    );
+                    debug!("Renamed Stoit_name {:?}", &stoit_name);
+
+                    (temp_file.path().to_str().unwrap().to_string(), 0)
+                },
+                None => {
+                    retrieve_genome_from_contig(
+                        target_names[0],
+                        genomes_and_contigs,
+                        reference_map,
+                    )
+                }
+            }
+        };
+
+
     debug!("retrieving genome id with contig {:?} from {} for sample {}",
            str::from_utf8(&target_names[0]), &reference, &stoit_name);
 
-    let reference_length = match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
-        Ok(index) => index.sequences().iter().fold(0, |acc, seq| acc + seq.len),
-        Err(_e) => {
-            generate_faidx(&reference);
-            bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)).unwrap().sequences().iter().fold(0, |acc, seq| acc + seq.len)
-        }
-    };
-
-    if ref_idx as i32 == *prev_ref_idx {
-        *per_ref_sample_idx += 1;
-    } else {
-        *prev_ref_idx = ref_idx as i32;
-        *per_ref_sample_idx = 0;
-    }
+    let reference_length =
+        match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
+            Ok(index) =>
+                index
+                    .sequences()
+                    .iter()
+                    .fold(0, |acc, seq| acc + seq.len),
+            Err(_e) => {
+                generate_faidx(&reference);
+                bio::io::fasta::Index::with_fasta_file(
+                    &Path::new(&reference))
+                    .unwrap()
+                    .sequences()
+                    .iter()
+                    .fold(0, |acc, seq| acc + seq.len)
+            }
+        };
 
 
     // Get VCF file from BAM using freebayes of SVIM
