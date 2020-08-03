@@ -207,23 +207,25 @@ pub fn pileup_variants<
         .into_iter()
         .enumerate()
         .for_each(|(sample_idx, bam_generator)|{
-        // Get the appropriate sample index based on how many references we are using
-        process_vcf(
-            bam_generator,
-            n_threads,
-            &mut prev_ref_idx,
-            &mut per_ref_sample_idx,
-            per_reference_samples,
-            &mut variant_matrix,
-            false,
-            m,
-            &mut sample_groups,
-            &genomes_and_contigs,
-            &reference_map,
-            per_reference_short_samples,
-            &concatenated_genomes,
-        )
-    });
+            // Get the appropriate sample index based on how many references we are using
+            process_vcf(
+                bam_generator,
+                n_threads,
+                &mut prev_ref_idx,
+                &mut per_ref_sample_idx,
+                per_reference_samples,
+                &mut variant_matrix,
+                false,
+                m,
+                &mut sample_groups,
+                &genomes_and_contigs,
+                &reference_map,
+                per_reference_short_samples,
+                &concatenated_genomes,
+            );
+            per_ref_sample_idx += 1;
+
+        });
 
     if m.is_present("include-longread-svs") && (m.is_present("longreads") | m.is_present("longread-bam-files")){
 //        long_threads = std::cmp::max(n_threads / longreads.len(), 1);
@@ -236,22 +238,24 @@ pub fn pileup_variants<
             .into_iter()
             .enumerate()
             .for_each(|(sample_idx, bam_generator)| {
-            process_vcf(
-                bam_generator,
-                n_threads,
-                &mut prev_ref_idx,
-                &mut per_ref_sample_idx,
-                per_reference_samples,
-                &mut variant_matrix,
-                true,
-                m,
-                &mut sample_groups,
-                &genomes_and_contigs,
-                &reference_map,
-                per_reference_short_samples,
-                &concatenated_genomes,
-            )
-        });
+                process_vcf(
+                    bam_generator,
+                    n_threads,
+                    &mut prev_ref_idx,
+                    &mut per_ref_sample_idx,
+                    per_reference_samples,
+                    &mut variant_matrix,
+                    true,
+                    m,
+                    &mut sample_groups,
+                    &genomes_and_contigs,
+                    &reference_map,
+                    per_reference_short_samples,
+                    &concatenated_genomes,
+                );
+                per_ref_sample_idx += 1;
+
+            });
     } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
         // We need update the variant matrix anyway
         let mut prev_ref_idx = -1;
@@ -290,12 +294,6 @@ pub fn pileup_variants<
                     )
                 }
             };
-            if ref_idx as i32 == prev_ref_idx {
-                per_ref_sample_idx += 1;
-            } else {
-                prev_ref_idx = ref_idx as i32;
-                per_ref_sample_idx = 0;
-            }
 
             variant_matrix.
                 add_sample(
@@ -306,7 +304,10 @@ pub fn pileup_variants<
                     &genomes_and_contigs,
                 );
 
-        });
+                per_ref_sample_idx += 1;
+
+
+            });
 
     }
 
@@ -540,6 +541,23 @@ pub fn pileup_variants<
         );
         info!("Evolve analysis finished!");
 
+    } else if mode == "polish" {
+
+        variant_matrix.polish_genomes(
+            &output_prefix,
+            &reference_map,
+            &genomes_and_contigs,
+        );
+        // If flagged, then create plots using CMplot
+        if m.is_present("plot") {
+            let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+            variant_matrix.print_variant_stats(
+                window_size,
+                &output_prefix,
+                &genomes_and_contigs,
+            );
+        }
+        info!("Finished polishing input genomes!");
     }
 }
 

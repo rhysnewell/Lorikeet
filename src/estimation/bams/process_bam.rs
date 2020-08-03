@@ -51,7 +51,7 @@ pub fn process_bam<
     let mut bam_generated = bam_generator.start();
 
     // Adjust the sample index if the bam is from long reads
-    let longread;
+    let mut longread= false;
 
 
 //    let mut bam_properties =
@@ -90,19 +90,15 @@ pub fn process_bam<
         }
     };
 
+    debug!("sample groups {:?}", sample_groups);
     if sample_groups.contains_key("long") {
-        if sample_groups["long"].contains(&stoit_name) {
-            longread = true;
-            debug!("Longread {} {}", stoit_name, sample_idx)
-        } else {
-            longread = false;
-            debug!(" SOME Longread {} {}", stoit_name, sample_idx)
-
+        for longread_name in sample_groups["long"].iter() {
+            if stoit_name.contains(longread_name) {
+                longread = true;
+                debug!("Longread {} {}", stoit_name, sample_idx);
+                break
+            }
         }
-    } else {
-        longread = false;
-        debug!(" NO Longread {} {}", stoit_name, sample_idx)
-
     }
 
     let mut reference =
@@ -643,7 +639,7 @@ pub fn process_previous_contigs_var(
                 }
 
             },
-            "summarize" | "genotype" | "evolve" => {
+            "summarize" | "genotype" | "evolve" | "polish" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
                 variant_matrix.add_contig(
@@ -653,14 +649,14 @@ pub fn process_previous_contigs_var(
                     ref_idx,
                 );
             },
-            "polish" => {
-                let stoit_name = stoit_name
-                    .split("..").last().unwrap()
-                    .split("/").last().unwrap();
-                let output_prefix = format!("{}/{}", output_prefix.to_string(), stoit_name);
-                variant_struct.polish_contig(&ref_sequence,
-                                             &output_prefix);
-            }
+            // "polish" => {
+            //     let stoit_name = stoit_name
+            //         .split("..").last().unwrap()
+            //         .split("/").last().unwrap();
+            //     let output_prefix = format!("{}/{}", output_prefix.to_string(), stoit_name);
+            //     variant_struct.polish_contig(&ref_sequence,
+            //                                  &output_prefix);
+            // }
             _ => {panic!("unknown mode {}", mode);},
         }
     }

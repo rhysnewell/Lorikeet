@@ -118,10 +118,10 @@ Example usage:
 Rhys J.P. Newell <r.newell near uq.edu.au>"
 }
 
-pub fn polymorph_full_help() -> &'static str {
+pub fn polish_full_help() -> &'static str {
     lazy_static! {
-        static ref POLYMORPH_HELP: String = format!(
-    "lorikeet polymorph: Print variant sites along a contig
+        static ref POLISH_HELP: String = format!(
+    "lorikeet polish: Produce consensus genomes for input genomes per sample
 
 {}
 {}
@@ -139,25 +139,26 @@ Sharding i.e. multiple reference sets (optional):
 
 Alignment filtering (optional):
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                              aligned bases [default: 0]
+                                         aligned bases [default: 0]
    --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                              identity e.g. 0.95 for 95%. [default 0.0]
+                                         identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.97]
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                              aligned bases.
-                                              Conflicts --proper-pairs-only. [default 0.0]
+                                         aligned bases.
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                              identity e.g. 0.95 for 95%.
-                                              Conflicts --proper-pairs-only. [default 0.0]
+                                         identity e.g. 0.95 for 95%.
+                                         Conflicts --proper-pairs-only. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned.
-                                              Conflicts --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                     Allows reads to be mapped as improper pairs
-   --include-supplementary                    Includes read alignments flagged as supplementary
-   --include-secondary                        Includes read alignments flagged as secondary
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned.
+                                         Conflicts --proper-pairs-only. [default 0.0]
+   --proper-pairs-only                Allows reads to be mapped as improper pairs
+   --include-supplementary               Includes read alignments flagged as supplementary
+   --include-secondary                   Includes read alignments flagged as secondary
+
 
 Other arguments (optional):
    -m, --method <METHOD>                 Method for calculating coverage.
@@ -166,28 +167,26 @@ Other arguments (optional):
                                            mean
                                            metabat (\"MetaBAT adjusted coverage\")
                                          A more thorough description of the different
-                                         method is available at
+                                         methods is available at
                                          https://github.com/rhysnewell/lorikeet
-   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
+                                         table. [default: 4]
+   mapq-threshold <INT>                  Mapping quality threshold used to verify
                                          a variant. [default: 10]
+   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
+                                         considered in the variant calling process.
+   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
    --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
                                          analysis. [default: 10]
-   --output-format FORMAT                Shape of output: 'sparse' for long format,
-                                         'dense' for species-by-site.
-                                         [default: dense]
+   --include-longread-svs                Include structural variants produced by SVIM in genotyping
+                                         analysis. Can often overestimate number of variants present.
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
-   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
-                                         Not recommended if using nanopore long read data.
-   --coverage-fold                       Percentage value of coverage to look above and below
-                                         when calculating variant locations. e.g. if coverage-fold
-                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
-                                         coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -195,9 +194,13 @@ Other arguments (optional):
                                          [default: 0.05]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
+   --plot                                Produce SNP density plots
+   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
+                                         SV density.
    -t, --threads                         Number of threads used. [default: 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
+
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
@@ -205,7 +208,7 @@ Other arguments (optional):
 
 Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
     }
-    &POLYMORPH_HELP
+    &POLISH_HELP
 }
 
 pub fn evolve_full_help() -> &'static str {
@@ -260,9 +263,9 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
                                          Not recommended if using nanopore long read data.
-   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+   mapq-threshold <INT>                  Mapping quality threshold used to verify
                                          a variant. [default: 10]
-   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
@@ -343,9 +346,9 @@ Other arguments (optional):
                                          SV density.
    --include-longread-svs                Include structural variants produced by SVIM in genotyping
                                          analysis. Can often overestimate number of variants present.
-   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+   mapq-threshold <INT>                  Mapping quality threshold used to verify
                                          a variant. [default: 10]
-   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
@@ -435,9 +438,9 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   -q, mapq-threshold <INT>              Mapping quality threshold used to verify
+   mapq-threshold <INT>                  Mapping quality threshold used to verify
                                          a variant. [default: 10]
-   --base-quality-threshold <INT>        The minimum PHRED score for base in a read for it to be
+   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
@@ -495,26 +498,26 @@ Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
 pub fn build_cli() -> App<'static, 'static> {
     // specify _2 lazily because need to define it at runtime.
     lazy_static! {
-        static ref POLYMORPH_HELP: String = format!(
+        static ref POLISH_HELP: String = format!(
             "
                             {}
               {}
 
 {}
 
-  lorikeet polymorph --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
+  lorikeet polish --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
 
 {}
 
-  lorikeet polymorph --bam-files my.bam --reference assembly.fna
+  lorikeet polish --bam-files my.bam --reference genome.fna
     --bam-file-cache-directory saved_bam_files --threads 10
 
-See lorikeet polymorph --full-help for further options and further detail.
+See lorikeet polish --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet polymorph"),
+                "lorikeet polish"),
             ansi_term::Colour::Green.paint(
-                "Generate variant positions along contigs with a sample"),
+                "Generate consensus genomes from multiple samples"),
             ansi_term::Colour::Purple.paint(
                 "Example: Calculate variant positions from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
@@ -1471,7 +1474,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
         .subcommand(
             SubCommand::with_name("polish")
                 .about("Polish an assembly using highly abundant variant calls")
-                .help(POLYMORPH_HELP.as_str())
+                .help(POLISH_HELP.as_str())
                 .arg(Arg::with_name("full-help")
                     .long("full-help"))
                 .arg(Arg::with_name("bam-file")
@@ -1647,10 +1650,18 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("10"))
                 .arg(Arg::with_name("mapq-threshold")
                     .long("mapq-threshold")
-                    .short("q")
                     .default_value("0"))
-                .arg(Arg::with_name("include-indels")
-                    .long("include-indels"))
+                .arg(Arg::with_name("base-quality-threshold")
+                    .long("base-quality-threshold")
+                    .short("q")
+                    .default_value("13"))
+                .arg(Arg::with_name("min-repeat-entropy")
+                    .long("min-repeat-entropy")
+                    .default_value("1.5"))
+                .arg(Arg::with_name("include-secondary")
+                    .long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary")
+                    .long("include-supplementary"))
                 .arg(Arg::with_name("contig-end-exclusion")
                     .long("contig-end-exclusion")
                     .default_value("75"))
@@ -1662,6 +1673,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     .default_value("0.95"))
                 .arg(Arg::with_name("no-zeros")
                     .long("no-zeros"))
+                .arg(Arg::with_name("plot")
+                    .long("plot"))
                 .arg(Arg::with_name("proper-pairs-only")
                     .long("proper-pairs-only"))
                 .arg(Arg::with_name("verbose")
