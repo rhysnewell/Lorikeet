@@ -13,13 +13,13 @@ use std::io;
 use std::str::FromStr;
 use std::u32;
 
+use coverm::bam_generator::*;
 use csv;
 use itertools::Itertools;
 use ordered_float::NotNan;
-use coverm::bam_generator::*;
+use rayon::prelude::*;
 use rust_htslib::bam::{self, record::Cigar};
 use statrs::statistics::{OrderStatistics, Statistics};
-use rayon::prelude::*;
 
 use crate::model::variants::Variant;
 
@@ -129,8 +129,10 @@ impl AlignmentProperties {
     /// Estimate `AlignmentProperties` from each record in bam file.
     /// Only reads that are mapped, not duplicates and where quality checks passed are taken.
     /// Return will need to be extended to existing vector
-    pub fn estimate_from_record(record: &bam::Record, properties: &mut AlignmentProperties) -> Option<f64> {
-
+    pub fn estimate_from_record(
+        record: &bam::Record,
+        properties: &mut AlignmentProperties,
+    ) -> Option<f64> {
         let mut tlen = None;
         if record.is_unmapped() || record.is_duplicate() || record.is_quality_check_failed() {
             tlen
@@ -150,14 +152,16 @@ impl AlignmentProperties {
         }
     }
 
-    pub fn update_properties(tlens: &mut Vec<f64>, properties: &mut AlignmentProperties) -> Result<Self, Box<dyn Error>> {
+    pub fn update_properties(
+        tlens: &mut Vec<f64>,
+        properties: &mut AlignmentProperties,
+    ) -> Result<Self, Box<dyn Error>> {
         let upper = tlens.percentile(95);
         let lower = tlens.percentile(5);
         let mut valid: Vec<_> = tlens
             .into_par_iter()
-            .filter(|l| {
-                **l <= upper && **l >= lower
-            }).map(|l| *l)
+            .filter(|l| **l <= upper && **l >= lower)
+            .map(|l| *l)
             .collect();
         properties.insert_size.mean = valid.median();
         properties.insert_size.sd = valid.iter().std_dev();
@@ -221,14 +225,14 @@ impl InsertSize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
     use coverm::*;
     use rust_htslib::bam::record::Record;
+    use std::fs;
 
     #[test]
     fn test_estimate() {
-        let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
-            vec!["tests/data/test2.bam"]);
+        let bam_readers =
+            bam_generator::generate_named_bam_readers_from_bam_files(vec!["tests/data/test2.bam"]);
         for reader in bam_readers {
             let mut bam = reader.start();
 
@@ -245,11 +249,11 @@ mod tests {
 
     #[test]
     fn test_estimate_from_records() {
-        let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(
-            vec!["tests/data/test2.bam"]);
+        let bam_readers =
+            bam_generator::generate_named_bam_readers_from_bam_files(vec!["tests/data/test2.bam"]);
         for reader in bam_readers {
             let mut bam = reader.start();
-            let mut record= Record::new();
+            let mut record = Record::new();
             let mut tlens = Vec::new();
             let mut properties = AlignmentProperties {
                 insert_size: InsertSize::default(),
@@ -258,15 +262,19 @@ mod tests {
                 frac_max_softclip: 0.0,
             };
 
-            while bam.read(&mut record)
-                .expect("Error while reading BAM record") == true {
+            while bam
+                .read(&mut record)
+                .expect("Error while reading BAM record")
+                == true
+            {
                 match AlignmentProperties::estimate_from_record(&mut record, &mut properties) {
                     Some(tlen) => tlens.push(tlen),
-                    None => {},
+                    None => {}
                 };
             }
 
-            let props = AlignmentProperties::update_properties(&mut tlens, &mut properties).unwrap();
+            let props =
+                AlignmentProperties::update_properties(&mut tlens, &mut properties).unwrap();
             println!("{:?}", props);
 
             assert_eq!(props.insert_size.mean, 499.0);

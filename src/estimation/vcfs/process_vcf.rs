@@ -1,27 +1,25 @@
+use bird_tool_utils::command;
+use rust_htslib::{bam, bcf, bcf::Read};
 use std;
 use std::collections::{HashMap, HashSet};
-use rust_htslib::{bam, bcf, bcf::Read};
-use bird_tool_utils::command;
 
-use external_command_checker;
-use estimation::variant_matrix::*;
 use coverm::bam_generator::*;
+use estimation::variant_matrix::*;
+use external_command_checker;
 use model::variants::*;
 use utils::*;
 
 use crate::*;
-use std::str;
-use std::path::Path;
-use nix::unistd;
-use nix::sys::stat;
-use tempdir::TempDir;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use nix::sys::stat;
+use nix::unistd;
+use std::path::Path;
+use std::str;
+use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
-
 #[allow(unused)]
-pub fn process_vcf<R: NamedBamReader,
-    G: NamedBamReaderGenerator<R>>(
+pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
     split_threads: usize,
     mut prev_ref_idx: &mut i32,
@@ -34,12 +32,10 @@ pub fn process_vcf<R: NamedBamReader,
     genomes_and_contigs: &GenomesAndContigs,
     reference_map: &HashMap<usize, String>,
     mut short_sample_count: usize,
-    concatenated_genomes: &Option<NamedTempFile>
+    concatenated_genomes: &Option<NamedTempFile>,
 ) {
-
     let mut bam_generated = bam_generator.start();
     let mut stoit_name = bam_generated.name().to_string();
-
 
     if longread {
         let group = sample_groups.entry("long").or_insert(HashSet::new());
@@ -57,66 +53,57 @@ pub fn process_vcf<R: NamedBamReader,
     debug!("Bam stored at {}", &bam_path);
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
-    let (reference, ref_idx) =
-        if stoit_name.contains(".fna") {
-            debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
-            let reference_stem = stoit_name.split(".fna").next().unwrap();
-            debug!("possible reference stem {:?}", reference_stem);
-            let ref_idx = match genomes_and_contigs.genome_index(
-                &reference_stem.to_string()) {
-                Some(idx) => idx,
-                None => panic!("Unable to retrieve reference index")
-            };
-            debug!("Actual reference idx {:?}", ref_idx);
-
-            let reference = reference_map
-                .get(&ref_idx)
-                .expect("Unable to retrieve reference path").clone();
-            (reference, ref_idx)
-        } else {
-            match concatenated_genomes {
-                Some(ref temp_file) => {
-                    stoit_name = format!(
-                        "{}.{}",
-                        temp_file.path().file_name().unwrap().to_str().unwrap(),
-                        stoit_name,
-                    );
-                    debug!("Renamed Stoit_name {:?}", &stoit_name);
-
-                    (temp_file.path().to_str().unwrap().to_string(), 0)
-                },
-                None => {
-                    retrieve_genome_from_contig(
-                        target_names[0],
-                        genomes_and_contigs,
-                        reference_map,
-                    )
-                }
-            }
+    let (reference, ref_idx) = if stoit_name.contains(".fna") {
+        debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
+        let reference_stem = stoit_name.split(".fna").next().unwrap();
+        debug!("possible reference stem {:?}", reference_stem);
+        let ref_idx = match genomes_and_contigs.genome_index(&reference_stem.to_string()) {
+            Some(idx) => idx,
+            None => panic!("Unable to retrieve reference index"),
         };
+        debug!("Actual reference idx {:?}", ref_idx);
 
+        let reference = reference_map
+            .get(&ref_idx)
+            .expect("Unable to retrieve reference path")
+            .clone();
+        (reference, ref_idx)
+    } else {
+        match concatenated_genomes {
+            Some(ref temp_file) => {
+                stoit_name = format!(
+                    "{}.{}",
+                    temp_file.path().file_name().unwrap().to_str().unwrap(),
+                    stoit_name,
+                );
+                debug!("Renamed Stoit_name {:?}", &stoit_name);
 
-    debug!("retrieving genome id with contig {:?} from {} for sample {}",
-           str::from_utf8(&target_names[0]), &reference, &stoit_name);
-
-    let reference_length =
-        match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
-            Ok(index) =>
-                index
-                    .sequences()
-                    .iter()
-                    .fold(0, |acc, seq| acc + seq.len),
-            Err(_e) => {
-                generate_faidx(&reference);
-                bio::io::fasta::Index::with_fasta_file(
-                    &Path::new(&reference))
-                    .unwrap()
-                    .sequences()
-                    .iter()
-                    .fold(0, |acc, seq| acc + seq.len)
+                (temp_file.path().to_str().unwrap().to_string(), 0)
             }
-        };
+            None => {
+                retrieve_genome_from_contig(target_names[0], genomes_and_contigs, reference_map)
+            }
+        }
+    };
 
+    debug!(
+        "retrieving genome id with contig {:?} from {} for sample {}",
+        str::from_utf8(&target_names[0]),
+        &reference,
+        &stoit_name
+    );
+
+    let reference_length = match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
+        Ok(index) => index.sequences().iter().fold(0, |acc, seq| acc + seq.len),
+        Err(_e) => {
+            generate_faidx(&reference);
+            bio::io::fasta::Index::with_fasta_file(&Path::new(&reference))
+                .unwrap()
+                .sequences()
+                .iter()
+                .fold(0, |acc, seq| acc + seq.len)
+        }
+    };
 
     // Get VCF file from BAM using freebayes of SVIM
     let mut vcf_reader = get_vcf(
@@ -129,13 +116,14 @@ pub fn process_vcf<R: NamedBamReader,
         bam_path,
     );
 
-
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     let mut variant_map = HashMap::new();
 
     match vcf_reader {
         Ok(ref mut reader) => {
-            reader.set_threads(split_threads).expect("Unable to set threads on VCF reader");
+            reader
+                .set_threads(split_threads)
+                .expect("Unable to set threads on VCF reader");
 
             let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
             info!("Collecting VCF records for sample {}", &stoit_name);
@@ -188,7 +176,7 @@ pub fn process_vcf<R: NamedBamReader,
                     &genomes_and_contigs,
                 );
             }
-        },
+        }
         Err(_) => {
             info!("No VCF records found for sample {}", &stoit_name);
             if longread {
@@ -210,10 +198,7 @@ pub fn process_vcf<R: NamedBamReader,
             }
         }
     }
-
 }
-
-
 
 /// Get or generate vcf file
 #[allow(unused)]
@@ -230,42 +215,44 @@ pub fn get_vcf(
     if m.is_present("vcfs") {
         let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
         // Filter out bams that don't have stoit name and get their sample idx
-        let vcf_path: Vec<&str> = vcf_paths.iter().cloned()
-            .filter(|x| x.contains(stoit_name)).collect();
+        let vcf_path: Vec<&str> = vcf_paths
+            .iter()
+            .cloned()
+            .filter(|x| x.contains(stoit_name))
+            .collect();
 
         if vcf_path.len() > 1 || vcf_path.len() == 0 {
             info!("Could not associate VCF file with current BAM file. Re-running variant calling");
             if longread {
                 // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
+                return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
             } else {
                 // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
+                return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
             }
         } else {
             let vcf_path = vcf_path[0];
             let vcf = bcf::Reader::from_path(vcf_path);
-            return vcf
+            return vcf;
         }
     } else if longread && m.is_present("longread-bam-files") {
         // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
+        return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
     } else if m.is_present("bam-files") {
         // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, reference_length, reference)
+        return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
         // let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
         //
         // let bam_path = cache + &(stoit_name.to_string() + ".bam");
 
-        return generate_vcf(&bam_path, m, threads, longread, reference_length, reference)
+        return generate_vcf(&bam_path, m, threads, longread, reference_length, reference);
     }
-
 }
 
 /// Makes direct call to freebayes or SVIM
@@ -276,12 +263,10 @@ pub fn generate_vcf(
     threads: usize,
     longread: bool,
     reference_length: u64,
-    reference: &String
+    reference: &String,
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
-
     // setup temp directory
-    let tmp_dir = TempDir::new("lorikeet_fifo")
-        .expect("Unable to create temporary directory");
+    let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
     let fifo_path = tmp_dir.path().join("foo.pipe");
 
     // create new fifo and give read, write and execute rights to the owner.
@@ -303,7 +288,7 @@ pub fn generate_vcf(
         let index_path = reference.clone() + ".fai";
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
-//        let freebayes_path = &("freebayes.vcf");
+        //        let freebayes_path = &("freebayes.vcf");
         let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
         // Generate uncompressed filtered SAM file
@@ -312,11 +297,11 @@ pub fn generate_vcf(
             samtools fixmate -@ {} -m - - | \
             samtools sort -@ {} -l 0 -T /tmp | \
             samtools markdup -@ {} -T /tmp -r -s - - > {}",
-            threads-1,
+            threads - 1,
             bam_path,
-            threads-1,
-            threads-1,
-            threads-1,
+            threads - 1,
+            threads - 1,
+            threads - 1,
             tmp_bam_path,
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
@@ -327,13 +312,19 @@ pub fn generate_vcf(
                 .stderr(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .spawn()
-                .expect("Unable to execute bash"), "samtools");
+                .expect("Unable to execute bash"),
+            "samtools",
+        );
 
         // check and build bam index if it doesn't exist
         if !Path::new(&(tmp_bam_path.to_string() + ".bai")).exists() {
-            bam::index::build(tmp_bam_path, Some(&(tmp_bam_path.to_string() + ".bai")),
-                              bam::index::Type::BAI, threads as u32).expect(
-                &format!("Unable to index bam at {}", &tmp_bam_path));
+            bam::index::build(
+                tmp_bam_path,
+                Some(&(tmp_bam_path.to_string() + ".bai")),
+                bam::index::Type::BAI,
+                threads as u32,
+            )
+            .expect(&format!("Unable to index bam at {}", &tmp_bam_path));
         }
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
@@ -363,21 +354,27 @@ pub fn generate_vcf(
                 .stderr(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .spawn()
-                .expect("Unable to execute bash"), "freebayes");
+                .expect("Unable to execute bash"),
+            "freebayes",
+        );
         debug!("VCF Path {:?}", freebayes_path);
         let vcf_reader = bcf::Reader::from_path(&Path::new(freebayes_path));
 
         tmp_dir.close().expect("Failed to close temp directory");
-        return vcf_reader
+        return vcf_reader;
     } else {
         external_command_checker::check_for_svim();
         let svim_path = tmp_dir.path().to_str().unwrap().to_string();
 
         // check and build bam index if it doesn't exist
         if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
-            bam::index::build(bam_path, Some(&(bam_path.to_string() + ".bai")),
-                              bam::index::Type::BAI, threads as u32).expect(
-                &format!("Unable to index bam at {}", &bam_path));
+            bam::index::build(
+                bam_path,
+                Some(&(bam_path.to_string() + ".bai")),
+                bam::index::Type::BAI,
+                threads as u32,
+            )
+            .expect(&format!("Unable to index bam at {}", &bam_path));
         }
 
         let cmd_string = format!(
@@ -387,21 +384,24 @@ pub fn generate_vcf(
             m.value_of("mapq-threshold").unwrap(),
             &svim_path,
             &bam_path,
-            &reference);
+            &reference
+        );
         debug!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
                 .arg(&cmd_string)
                 .stderr(std::process::Stdio::piped())
-//                .stdout(std::process::Stdio::null())
+                //                .stdout(std::process::Stdio::null())
                 .spawn()
-                .expect("Unable to execute bash"), "svim");
+                .expect("Unable to execute bash"),
+            "svim",
+        );
         let vcf_path = &(svim_path + "/variants.vcf");
         debug!("VCF Path {:?}", vcf_path);
         let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
 
         tmp_dir.close().expect("Failed to close temp directory");
-        return vcf_reader
+        return vcf_reader;
     }
 }

@@ -1,46 +1,46 @@
 pub mod cli;
-pub mod external_command_checker;
+pub mod dbscan;
 pub mod estimation;
+pub mod external_command_checker;
 pub mod model;
 pub mod utils;
-pub mod dbscan;
 
 // HTS and bio files
-extern crate rust_htslib;
 extern crate bio;
-extern crate seq_io;
 extern crate bio_types;
+extern crate rust_htslib;
+extern crate seq_io;
 
 // Birds and CoverM
+extern crate bird_tool_utils;
 extern crate coverm;
 extern crate galah;
-extern crate bird_tool_utils;
 
 // Stats
-extern crate linregress;
 extern crate kodama;
+extern crate linregress;
 extern crate statrs;
 
 // Utilities
-extern crate csv;
 extern crate clap;
+extern crate csv;
+extern crate env_logger;
 extern crate glob;
 extern crate itertools;
-extern crate ordered_float;
-extern crate env_logger;
 extern crate nix;
-extern crate tempdir;
-extern crate tempfile;
+extern crate ordered_float;
 extern crate rand;
 extern crate rayon;
+extern crate tempdir;
+extern crate tempfile;
 
 //extern crate plotly;
 extern crate strum;
 
 #[macro_use]
 extern crate log;
-extern crate strum_macros;
 extern crate derive_builder;
+extern crate strum_macros;
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]

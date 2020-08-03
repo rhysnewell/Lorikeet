@@ -1,8 +1,8 @@
-use std::collections::{HashMap};
-use itertools::{izip, Itertools};
 use bio::alphabets::dna;
 use bio_types::strand;
-use model::variants::{Variant, Base};
+use itertools::{izip, Itertools};
+use model::variants::{Base, Variant};
+use std::collections::HashMap;
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -17,7 +17,6 @@ pub struct CodonTable {
     ns_sites: HashMap<Vec<u8>, f64>,
 }
 
-
 pub struct NCBITable {
     aas: String,
     starts: String,
@@ -26,34 +25,37 @@ pub struct NCBITable {
     base3: String,
 }
 
-
 impl NCBITable {
     // get translation tables in NCBI format
     // Kind of lazy storing and then converting every time but would take way too much time
     // to write out each table into CodonTable format by hand
     fn get_translation_table(table_id: usize) -> NCBITable {
         match table_id {
-            1 => {
-                NCBITable {
-                    aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
-                    starts: "---M------**--*----M---------------M----------------------------".to_owned(),
-                    base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
-                    base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
-                    base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
-                }
+            1 => NCBITable {
+                aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
+                starts: "---M------**--*----M---------------M----------------------------"
+                    .to_owned(),
+                base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG"
+                    .to_owned(),
+                base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG"
+                    .to_owned(),
+                base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG"
+                    .to_owned(),
             },
-            11 => {
-                NCBITable {
-                    aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
-                    starts: "---M------**--*----M------------MMMM---------------M------------".to_owned(),
-                    base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG".to_owned(),
-                    base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG".to_owned(),
-                    base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG".to_owned(),
-                }
+            11 => NCBITable {
+                aas: "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG".to_owned(),
+                starts: "---M------**--*----M------------MMMM---------------M------------"
+                    .to_owned(),
+                base1: "TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG"
+                    .to_owned(),
+                base2: "TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG"
+                    .to_owned(),
+                base3: "TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG"
+                    .to_owned(),
             },
             _ => {
                 panic!("Translation table {} not yet implemented", table_id);
-            },
+            }
         }
     }
 }
@@ -70,10 +72,12 @@ impl CodonTable {
 
 pub trait Translations {
     fn get_codon_table(&mut self, table_id: usize);
-    fn find_mutations(&self,
-                      gene: &bio::io::gff::Record,
-                      variants: &HashMap<i64, HashMap<Variant, Base>>,
-                      ref_sequence: &Vec<u8>) -> f64;
+    fn find_mutations(
+        &self,
+        gene: &bio::io::gff::Record,
+        variants: &HashMap<i64, HashMap<Variant, Base>>,
+        ref_sequence: &Vec<u8>,
+    ) -> f64;
 }
 
 impl Translations for CodonTable {
@@ -83,10 +87,14 @@ impl Translations for CodonTable {
         let ncbi_format = NCBITable::get_translation_table(table_id);
         let mut amino_hash = HashMap::new();
         let mut start_hash = HashMap::new();
-        for (aa, s, b1, b2, b3) in izip!(ncbi_format.aas.as_bytes(), ncbi_format.starts.as_bytes(),
-                                        ncbi_format.base1.as_bytes(), ncbi_format.base2.as_bytes(),
-                                        ncbi_format.base3.as_bytes()) {
-            let codon = vec!(*b1, *b2, *b3);
+        for (aa, s, b1, b2, b3) in izip!(
+            ncbi_format.aas.as_bytes(),
+            ncbi_format.starts.as_bytes(),
+            ncbi_format.base1.as_bytes(),
+            ncbi_format.base2.as_bytes(),
+            ncbi_format.base3.as_bytes()
+        ) {
+            let codon = vec![*b1, *b2, *b3];
             amino_hash.insert(codon.clone(), *aa as char);
             start_hash.insert(codon, *s as char);
         }
@@ -94,15 +102,15 @@ impl Translations for CodonTable {
         self.aminos = amino_hash;
         self.starts = start_hash;
 
-        let nucleotides: Vec<u8> = vec!(65, 84, 67, 71);
+        let nucleotides: Vec<u8> = vec![65, 84, 67, 71];
         debug!("nucleotides: {} ", String::from_utf8_lossy(&nucleotides));
-        for (codon, _aa) in self.aminos.iter(){
+        for (codon, _aa) in self.aminos.iter() {
             let mut n = 0.0;
             for (pos, cod) in codon.iter().enumerate() {
                 for nuc in nucleotides.iter() {
                     if cod == nuc {
                         // Ignore this nucleotide
-                        continue
+                        continue;
                     } else {
                         let mut codon_shift = codon.clone();
                         // Change one position of the codon
@@ -110,7 +118,7 @@ impl Translations for CodonTable {
 
                         if self.aminos[codon] != self.aminos[&codon_shift] {
                             // This change can cause a non-synonymous mutation
-                            n += 1.0/3.0;
+                            n += 1.0 / 3.0;
                         }
                     }
                 }
@@ -120,20 +128,21 @@ impl Translations for CodonTable {
     }
 
     #[allow(unused)]
-    fn find_mutations(&self,
-                      gene: &bio::io::gff::Record,
-                      variants: &HashMap<i64, HashMap<Variant, Base>>,
-                      ref_sequence: &Vec<u8>) -> f64 {
+    fn find_mutations(
+        &self,
+        gene: &bio::io::gff::Record,
+        variants: &HashMap<i64, HashMap<Variant, Base>>,
+        ref_sequence: &Vec<u8>,
+    ) -> f64 {
         match gene.strand() {
             Some(strand) => {
-
                 // bio::gff documentation says start and end positions are 1-based, so we minus 1
                 // Additionally, end position is non-inclusive
                 let start = gene.start().clone() as usize - 1;
                 let end = gene.end().clone() as usize;
                 let frame: usize = match gene.frame().parse() {
                     Ok(frame_val) => frame_val,
-                    Err(_) => return 0.
+                    Err(_) => return 0.,
                 };
                 let gene_sequence = ref_sequence[start..end].to_vec();
                 debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
@@ -144,9 +153,12 @@ impl Translations for CodonTable {
                 let mut big_n: f64 = 0.0;
                 let mut big_s: f64 = 0.0;
                 for codon in codon_sequence.iter() {
-                    if String::from_utf8(codon.clone()).expect("Unable to interpret codon")
-                        .contains("N") || codon.len() != 3 {
-                        continue
+                    if String::from_utf8(codon.clone())
+                        .expect("Unable to interpret codon")
+                        .contains("N")
+                        || codon.len() != 3
+                    {
+                        continue;
                     } else {
                         let n = self.ns_sites[codon];
                         big_n += n;
@@ -163,8 +175,8 @@ impl Translations for CodonTable {
                 // dN/dS calculations when using NGS reads outlined here:
                 // http://bioinformatics.cvr.ac.uk/blog/calculating-dnds-for-ngs-datasets/
                 // Note, we don't normalize for depth here and instead just use Jukes-Cantor model
-                let mut codon: Vec<u8> = vec!();
-                let mut new_codons: Vec<Vec<u8>> = vec!();
+                let mut codon: Vec<u8> = vec![];
+                let mut new_codons: Vec<Vec<u8>> = vec![];
                 let mut positionals = 0;
                 let mut total_variants = 0;
                 let dummy = HashMap::new();
@@ -177,19 +189,19 @@ impl Translations for CodonTable {
                     let codon_idx = gene_cursor / 3 as usize;
                     let codon_cursor = gene_cursor % 3;
                     if String::from_utf8(codon.clone())
-                        .expect("Unable to interpret codon").contains("N") {
-                        continue
+                        .expect("Unable to interpret codon")
+                        .contains("N")
+                    {
+                        continue;
                     }
 
-                    if codon_cursor == 0
-                        || new_codons.len() == 0 {
+                    if codon_cursor == 0 || new_codons.len() == 0 {
                         for new_codon in new_codons.iter_mut() {
-                            if (codon.len() == 3)
-                                && (new_codon.len() == 3)
-                                && (codon != *new_codon) {
+                            if (codon.len() == 3) && (new_codon.len() == 3) && (codon != *new_codon)
+                            {
                                 // get indices of different locations
                                 let mut pos = 0 as usize;
-                                let mut diffs = vec!();
+                                let mut diffs = vec![];
                                 for (c1, c2) in codon.iter().zip(new_codon.iter()) {
                                     if c1 != c2 {
                                         diffs.push(pos);
@@ -198,12 +210,17 @@ impl Translations for CodonTable {
                                 }
                                 total_variants += diffs.len();
                                 // get permuations of positions
-                                let permutations: Vec<Vec<usize>> = diffs.iter().cloned().permutations(diffs.len()).collect();
+                                let permutations: Vec<Vec<usize>> =
+                                    diffs.iter().cloned().permutations(diffs.len()).collect();
 
                                 // calculate synonymous and non-synonymous for each permutation
                                 let mut ns = 0;
                                 let mut ss = 0;
-                                debug!("positional difference {:?} permutations {:?}", diffs, permutations.len());
+                                debug!(
+                                    "positional difference {:?} permutations {:?}",
+                                    diffs,
+                                    permutations.len()
+                                );
                                 positionals += permutations.len();
                                 for permutation in permutations.iter() {
                                     let mut shifting = codon.clone();
@@ -227,14 +244,19 @@ impl Translations for CodonTable {
                             }
                         }
                         // begin working on new codon
-                        debug!("Codon idx {} codonds {} gene length {} new_codons {:?}",
-                               codon_idx, codon_sequence.len(), gene_sequence.len(), new_codons);
+                        debug!(
+                            "Codon idx {} codonds {} gene length {} new_codons {:?}",
+                            codon_idx,
+                            codon_sequence.len(),
+                            gene_sequence.len(),
+                            new_codons
+                        );
                         if codon_sequence.len() == 268 {
                             debug!("{:?}", codon_sequence);
                         }
                         codon = codon_sequence[codon_idx].clone();
                         if codon.len() != 3 {
-                            continue
+                            continue;
                         }
                         new_codons = Vec::new();
                         new_codons.push(codon.clone());
@@ -262,20 +284,22 @@ impl Translations for CodonTable {
                                         }
                                     }
                                     variant_count += 1;
-                                },
+                                }
                                 _ => {
                                     // Frameshift mutations are not included in dN/dS calculations?
                                     // Seems weird, but all formulas say no
                                     debug!("Frameshift mutation variant {:?}", variant);
-                                    continue
-                                },
+                                    continue;
+                                }
                             }
                         }
                     }
                 }
 
-                debug!("Nd {} N {}, Sd {} S {} total permutations {} variants {}",
-                       big_nd, big_n, big_sd, big_s, positionals, total_variants);
+                debug!(
+                    "Nd {} N {}, Sd {} S {} total permutations {} variants {}",
+                    big_nd, big_n, big_sd, big_s, positionals, total_variants
+                );
                 let mut pn = big_nd / big_n;
                 let mut ps = big_sd / big_s;
                 debug!("pn {} ps {}", pn, ps);
@@ -298,35 +322,37 @@ impl Translations for CodonTable {
                     dnds = 0.0
                 }
 
-                return dnds
-            },
-            _ => return 0.
+                return dnds;
+            }
+            _ => return 0.,
         }
     }
 }
 
 #[allow(unused)]
 pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
-
-    let codons = match strandedness{
-        strand::Strand::Forward | strand::Strand::Unknown => {
-            sequence[0+frame..].chunks(3).map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>()
-        },
+    let codons = match strandedness {
+        strand::Strand::Forward | strand::Strand::Unknown => sequence[0 + frame..]
+            .chunks(3)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<Vec<u8>>>(),
         strand::Strand::Reverse => {
             let rc = dna::revcomp(sequence);
-            rc[0+frame..].chunks(3).map(|chunk| chunk.to_vec()).collect::<Vec<Vec<u8>>>()
+            rc[0 + frame..]
+                .chunks(3)
+                .map(|chunk| chunk.to_vec())
+                .collect::<Vec<Vec<u8>>>()
         }
     };
-    return codons
+    return codons;
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
+    use bio::io::gff;
     use model::variants;
-    use bio::io::{gff};
+    use std::collections::HashSet;
 
     fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
         Base {
@@ -334,7 +360,7 @@ mod tests {
             pos,
             refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
             variant: Variant::SNV(var_char),
-            filters: vec!(),
+            filters: vec![],
             depth: vec![5; sample_count],
             truedepth: vec![5; sample_count],
             totaldepth: vec![5; sample_count],
@@ -360,8 +386,8 @@ mod tests {
 
     #[test]
     fn test_floor_division() {
-        assert_eq!(0/3 as usize, 0);
-        assert_eq!(803/3 as usize, 267);
+        assert_eq!(0 / 3 as usize, 0);
+        assert_eq!(803 / 3 as usize, 267);
     }
 
     #[test]
@@ -372,8 +398,8 @@ mod tests {
         let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
         let sample_count = 2;
 
-        let mut gene_records
-            = gff::Reader::from_file("tests/data/dnds.gff", gff::GffType::GFF3).expect("Incorrect file path");
+        let mut gene_records = gff::Reader::from_file("tests/data/dnds.gff", gff::GffType::GFF3)
+            .expect("Incorrect file path");
         let mut variant_abundances: HashMap<i64, HashMap<Variant, Base>> = HashMap::new();
         variant_abundances.insert(13, HashMap::new());
         variant_abundances.insert(14, HashMap::new());
@@ -384,7 +410,6 @@ mod tests {
         let var_2 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 11, 2);
         let var_3 = create_base(&ref_sequence, "A".bytes().nth(0).unwrap(), 13, 2);
         let var_4 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 14, 2);
-
 
         hash.insert(var_1.variant.clone(), var_1);
 
@@ -400,12 +425,8 @@ mod tests {
         for gene_record in gene_records.records() {
             let gene_record = gene_record.unwrap();
 
-            let dnds = codon_table.find_mutations(
-                &gene_record,
-                &variant_abundances,
-                &ref_sequence);
+            let dnds = codon_table.find_mutations(&gene_record, &variant_abundances, &ref_sequence);
             assert_eq!(format!("{:.4}", dnds), format!("{}", 0.1247));
         }
-
     }
 }

@@ -37,7 +37,9 @@ pub fn check_for_snippy() {
     self::check_for_external_command_presence("snippy", "which snippy");
 }
 
-pub fn check_for_svim() { self::check_for_external_command_presence("svim", "which svim"); }
+pub fn check_for_svim() {
+    self::check_for_external_command_presence("svim", "which svim");
+}
 
 pub fn check_for_sniffles() {
     self::check_for_external_command_presence("sniffles", "which sniffles");
@@ -52,7 +54,10 @@ pub fn check_for_freebayes_parallel() {
 }
 
 pub fn check_for_fasta_generate_regions() {
-    self::check_for_external_command_presence("fasta_generate_regions.py", "which fasta_generate_regions.py")
+    self::check_for_external_command_presence(
+        "fasta_generate_regions.py",
+        "which fasta_generate_regions.py",
+    )
 }
 
 pub fn check_for_minimap2() {
@@ -63,27 +68,33 @@ pub fn check_for_ngmlr() {
     self::check_for_external_command_presence("ngmlr", "which ngmlr");
 }
 
-fn check_for_external_command_presence(
-    executable_name: &str, testing_cmd: &str) {
+fn check_for_external_command_presence(executable_name: &str, testing_cmd: &str) {
     debug!("Checking for {} ..", executable_name);
     let mut cmd = std::process::Command::new("bash");
-    cmd
-        .arg("-c")
+    cmd.arg("-c")
         .arg(testing_cmd)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let mut process = cmd.spawn().expect("Unable to execute bash");
-    let es = process.wait()
-        .expect(&format!(
-            "Failed to glean exitstatus while checking for presence of {}",
-            executable_name));
+    let es = process.wait().expect(&format!(
+        "Failed to glean exitstatus while checking for presence of {}",
+        executable_name
+    ));
     if !es.success() {
-        error!("Could not find an available {} executable.", executable_name);
+        error!(
+            "Could not find an available {} executable.",
+            executable_name
+        );
         let mut err = String::new();
-        process.stderr.expect("Failed to grab stderr from failed executable finding process")
-            .read_to_string(&mut err).expect("Failed to read stderr into string");
+        process
+            .stderr
+            .expect("Failed to grab stderr from failed executable finding process")
+            .read_to_string(&mut err)
+            .expect("Failed to read stderr into string");
         error!("The STDERR was: {:?}", err);
-        panic!("Cannot continue without {}. Testing for presence with `{}` failed",
-               executable_name, testing_cmd);
+        panic!(
+            "Cannot continue without {}. Testing for presence with `{}` failed",
+            executable_name, testing_cmd
+        );
     }
 }

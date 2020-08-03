@@ -31,9 +31,9 @@ fn main() {
                 } else {
                     println!("{}", line);
                 }
-            },
+            }
             Err(e) => {
-                panic!("{}",e);
+                panic!("{}", e);
             }
         }
     }
