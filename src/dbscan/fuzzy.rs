@@ -1,9 +1,9 @@
-use std::collections::HashSet;
-use std::hash::Hash;
-use std::f64;
-use rayon::prelude::*;
-use model::variants::*;
 use itertools::Itertools;
+use model::variants::*;
+use rayon::prelude::*;
+use std::collections::HashSet;
+use std::f64;
+use std::hash::Hash;
 
 #[allow(unused)]
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
@@ -22,8 +22,13 @@ fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
 /// A trait to compute distances between points.
 pub trait MetricSpace: Sized + Send + Sync {
     /// Returns the distance between `self` and `other`.
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
-                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64;
+    fn distance(
+        &self,
+        other: &Self,
+        geom_var: &Vec<f64>,
+        geom_dep: &Vec<f64>,
+        geom_frq: &Vec<f64>,
+    ) -> f64;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,32 +37,40 @@ pub struct Var {
     pub var: Variant,
     pub deps: Vec<i32>,
     pub vars: Vec<i32>,
-//    pub rel_abunds: Vec<f64>,
+    //    pub rel_abunds: Vec<f64>,
     pub tid: i32,
     pub reads: HashSet<Vec<u8>>,
 }
 
 #[allow(unused)]
-impl MetricSpace for Var<> {
-    fn distance(&self, other: &Self, geom_var: &Vec<f64>,
-                geom_dep: &Vec<f64>, geom_frq: &Vec<f64>) -> f64 {
-
+impl MetricSpace for Var {
+    fn distance(
+        &self,
+        other: &Self,
+        geom_var: &Vec<f64>,
+        geom_dep: &Vec<f64>,
+        geom_frq: &Vec<f64>,
+    ) -> f64 {
         if self.vars.len() > 1 {
             if self.pos == other.pos && self.tid == other.tid {
-                return 40.
+                return 40.;
             } else {
                 let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
-                    let output = input.par_iter().enumerate().map(|(i, v)| {
-                        ((v + 1.) / geom_means[i]).ln()
-                    }).collect();
-                    return output
+                    let output = input
+                        .par_iter()
+                        .enumerate()
+                        .map(|(i, v)| ((v + 1.) / geom_means[i]).ln())
+                        .collect();
+                    return output;
                 };
 
-//                debug!("row values {:?} geom_var {:?} geom_frq {:?}", &self.vars, &geom_var, &geom_frq);
-                let row_vals: Vec<f64> = clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
+                //                debug!("row values {:?} geom_var {:?} geom_frq {:?}", &self.vars, &geom_var, &geom_frq);
+                let row_vals: Vec<f64> =
+                    clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
 
-                let col_vals: Vec<f64> = clr(&other.vars.iter().map(|v| *v as f64).collect(), geom_var);
-//                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
+                let col_vals: Vec<f64> =
+                    clr(&other.vars.iter().map(|v| *v as f64).collect(), geom_var);
+                //                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
 
                 let mean_row = get_mean(&row_vals);
 
@@ -71,12 +84,14 @@ impl MetricSpace for Var<> {
                 let mut col_var = 0.;
                 let mut covar = 0.;
 
-                row_vals.iter()
-                    .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
-                    row_var += (r_freq - mean_row).powf(2.);
-                    col_var += (c_freq - mean_col).powf(2.);
-                    covar += (r_freq - mean_row) * (c_freq - mean_col)
-                });
+                row_vals
+                    .iter()
+                    .zip(col_vals.iter())
+                    .for_each(|(r_freq, c_freq)| {
+                        row_var += (r_freq - mean_row).powf(2.);
+                        col_var += (c_freq - mean_col).powf(2.);
+                        covar += (r_freq - mean_row) * (c_freq - mean_col)
+                    });
 
                 row_var = row_var / (row_vals.len() as f64 - 1.);
                 col_var = col_var / (col_vals.len() as f64 - 1.);
@@ -85,9 +100,8 @@ impl MetricSpace for Var<> {
                 let vlr = -2. * covar + row_var + col_var;
                 let rho = 1. - vlr / (row_var + col_var);
 
-                let phi = 1. + row_var / col_var -
-                    2. * (row_var / col_var).sqrt()
-                        * covar / (col_var * row_var).sqrt();
+                let phi = 1. + row_var / col_var
+                    - 2. * (row_var / col_var).sqrt() * covar / (col_var * row_var).sqrt();
 
                 let phi_dist = ((row_var / col_var).ln()).abs() + 2.0_f64.ln()
                     - (covar / (col_var * row_var).sqrt() + 1.).ln();
@@ -95,22 +109,22 @@ impl MetricSpace for Var<> {
                 // reciprocal concordance correlation coeffecient between 0 and 2
                 let concordance = -2. * covar / (row_var + col_var) + 1.;
 
-//                // Read ids of first variant
-//                let set1 = &self.reads;
-//
-//                // Read ids of second variant
-//                let set2 = &other.reads;
-//
-//                // Add the jaccard's similarity to the hashmap for the two clusters
-//                let intersection: HashSet<_> = set1
-//                    .intersection(&set2).collect();
-//                let jaccard = intersection.len() as f64 /
-//                    (set1.len() + set2.len() + 1) as f64;
+                //                // Read ids of first variant
+                //                let set1 = &self.reads;
+                //
+                //                // Read ids of second variant
+                //                let set2 = &other.reads;
+                //
+                //                // Add the jaccard's similarity to the hashmap for the two clusters
+                //                let intersection: HashSet<_> = set1
+                //                    .intersection(&set2).collect();
+                //                let jaccard = intersection.len() as f64 /
+                //                    (set1.len() + set2.len() + 1) as f64;
 
                 // debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
                 //        phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
 
-                return phi_dist
+                return phi_dist;
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
@@ -124,15 +138,19 @@ impl MetricSpace for Var<> {
                 let col_depth = other.deps[0] as f64;
 
                 // Calculate Aitchinson Distance
-                let distance = (((row_freq / geom_var[0] as f64).ln() - (col_freq / geom_var[0] as f64).ln()).powf(2.)
-                    + ((row_depth / geom_dep[0] as f64).ln() - (col_depth / geom_dep[0] as f64).ln()).powf(2.)).powf(1. / 2.);
+                let distance = (((row_freq / geom_var[0] as f64).ln()
+                    - (col_freq / geom_var[0] as f64).ln())
+                .powf(2.)
+                    + ((row_depth / geom_dep[0] as f64).ln()
+                        - (col_depth / geom_dep[0] as f64).ln())
+                    .powf(2.))
+                .powf(1. / 2.);
                 debug!("Distance {}", distance);
                 distance
-            }
+            };
         }
     }
 }
-
 
 /// A high-level classification, as defined by the FuzzyDBSCAN algorithm.
 #[derive(Debug, PartialEq, Serialize, Clone, Copy, Hash, Eq)]
@@ -223,13 +241,21 @@ pub struct FuzzyDBSCAN {
 
 impl FuzzyDBSCAN {
     /// Clusters a list of `points`.
-    pub fn cluster<P: MetricSpace>(&self, points: &[P], initial_clusters: Vec<Cluster>) -> Vec<Cluster> {
+    pub fn cluster<P: MetricSpace>(
+        &self,
+        points: &[P],
+        initial_clusters: Vec<Cluster>,
+    ) -> Vec<Cluster> {
         self.fuzzy_dbscan(points, initial_clusters)
     }
 }
 
 impl FuzzyDBSCAN {
-    fn fuzzy_dbscan<P: MetricSpace>(&self, points: &[P], initial_clusters: Vec<Cluster>) -> Vec<Cluster> {
+    fn fuzzy_dbscan<P: MetricSpace>(
+        &self,
+        points: &[P],
+        initial_clusters: Vec<Cluster>,
+    ) -> Vec<Cluster> {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
@@ -238,7 +264,7 @@ impl FuzzyDBSCAN {
             // Work out which point in our initial clusters has the highest density to other
             // points
             let mut point_label_max = 0.;
-            let mut point_index= 0;
+            let mut point_index = 0;
             let mut point_neighbours = HashSet::new();
 
             for core_point in initial.iter() {
@@ -247,8 +273,8 @@ impl FuzzyDBSCAN {
                 }
                 visited[core_point.index] = true;
                 let neighbour_indices = self.region_query(points, core_point.index);
-                let point_label = self.mu_min_p(
-                    self.density(core_point.index, &neighbour_indices, points));
+                let point_label =
+                    self.mu_min_p(self.density(core_point.index, &neighbour_indices, points));
                 // check if new label is better than max
                 if point_label > point_label_max {
                     point_label_max = point_label;
@@ -257,18 +283,20 @@ impl FuzzyDBSCAN {
                 }
             }
             // Extend neighbour indices with known connections
-            let mut initial = initial.par_iter().map(|link| link.index)
+            let mut initial = initial
+                .par_iter()
+                .map(|link| link.index)
                 .collect::<HashSet<usize>>();
             initial.remove(&point_index);
             point_neighbours.par_extend(initial.par_iter());
 
             // Cluster based on that core point
             clusters.push(self.expand_cluster_fuzzy(
-                        point_label_max,
-                        point_index,
-                        point_neighbours,
-                        points,
-                        &mut visited,
+                point_label_max,
+                point_index,
+                point_neighbours,
+                points,
+                &mut visited,
             ));
         }
 
@@ -280,8 +308,8 @@ impl FuzzyDBSCAN {
                 }
                 visited[point_index] = true;
                 let neighbour_indices = self.region_query(points, point_index);
-                let point_label = self.mu_min_p(
-                    self.density(point_index, &neighbour_indices, points));
+                let point_label =
+                    self.mu_min_p(self.density(point_index, &neighbour_indices, points));
                 if point_label == 0.0 {
                     noise_cluster.push(Assignment {
                         index: point_index,
@@ -300,21 +328,24 @@ impl FuzzyDBSCAN {
             }
         }
         if !noise_cluster.is_empty() {
-            info!("{} Variants Clustered as noise during Fuzzy DBSCAN", noise_cluster.len());
+            info!(
+                "{} Variants Clustered as noise during Fuzzy DBSCAN",
+                noise_cluster.len()
+            );
             // clusters.push(noise_cluster);
         }
 
         // Sort the clusters by smallest to largest
-        clusters.par_sort_by(
-            |a, b| a.len().cmp(&b.len())
-        );
+        clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
 
         debug!("Clusters {:?}", clusters.len());
 
         // Deduplicate clusters by sorted indices
         clusters.dedup_by_key(|cluster| {
-            let mut dedup_key = cluster.par_iter().map(|var|
-                                var.index).collect::<Vec<usize>>();
+            let mut dedup_key = cluster
+                .par_iter()
+                .map(|var| var.index)
+                .collect::<Vec<usize>>();
             dedup_key.par_sort();
             dedup_key.dedup();
             debug!("dedup_key {:?}", dedup_key);
@@ -366,7 +397,7 @@ impl FuzzyDBSCAN {
                 });
             }
         }
-        border_points.par_iter_mut().for_each(|border_point|{
+        border_points.par_iter_mut().for_each(|border_point| {
             for cluster_point in &cluster {
                 let mu_distance =
                     self.mu_distance(&points[border_point.index], &points[cluster_point.index]);
@@ -386,11 +417,14 @@ impl FuzzyDBSCAN {
             .enumerate()
             .filter(|(neighbour_index, neighbour_point)| {
                 *neighbour_index != point_index
-                    && neighbour_point.distance(&points[point_index],
-                                               &self.geom_var,
-                                               &self.geom_dep,
-                                               &self.geom_frq) <= self.eps_max
-            }).map(|(neighbour_index, _)| neighbour_index)
+                    && neighbour_point.distance(
+                        &points[point_index],
+                        &self.geom_var,
+                        &self.geom_dep,
+                        &self.geom_frq,
+                    ) <= self.eps_max
+            })
+            .map(|(neighbour_index, _)| neighbour_index)
             .collect() //TODO: would be neat to prevent this allocation.
     }
 
@@ -400,9 +434,15 @@ impl FuzzyDBSCAN {
         neighbour_indices: &HashSet<usize>,
         points: &[P],
     ) -> f64 {
-        let density: f64 = neighbour_indices.par_iter().fold(|| 0.0, |sum, &neighbour_index| {
-            sum + self.mu_distance(&points[point_index], &points[neighbour_index])
-        }).sum();
+        let density: f64 = neighbour_indices
+            .par_iter()
+            .fold(
+                || 0.0,
+                |sum, &neighbour_index| {
+                    sum + self.mu_distance(&points[point_index], &points[neighbour_index])
+                },
+            )
+            .sum();
         density + 1.0
     }
 
@@ -417,8 +457,7 @@ impl FuzzyDBSCAN {
     }
 
     fn mu_distance<P: MetricSpace>(&self, a: &P, b: &P) -> f64 {
-        let distance = a.distance(b, &self.geom_var,
-                                  &self.geom_dep, &self.geom_frq);
+        let distance = a.distance(b, &self.geom_var, &self.geom_dep, &self.geom_frq);
         if distance <= self.eps_min {
             1.0
         } else if distance > self.eps_max {
@@ -436,7 +475,6 @@ fn get_mean(input: &Vec<f64>) -> f64 {
 
 #[allow(unused)]
 fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
-
     let mean_row = get_mean(&row_vals);
 
     let mean_col = get_mean(&col_vals);
@@ -455,14 +493,15 @@ fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
     for combos in (0..row_vals.len()).into_iter().combinations(2) {
         let ind_1 = combos[0];
         let ind_2 = combos[1];
-
     }
-    row_vals.iter()
-        .zip(col_vals.iter()).for_each(|(r_freq, c_freq)| {
-        row_var += (r_freq - mean_row).powf(2.);
-        col_var += (c_freq - mean_col).powf(2.);
-        covar += (r_freq - mean_row) * (c_freq - mean_col)
-    });
+    row_vals
+        .iter()
+        .zip(col_vals.iter())
+        .for_each(|(r_freq, c_freq)| {
+            row_var += (r_freq - mean_row).powf(2.);
+            col_var += (c_freq - mean_col).powf(2.);
+            covar += (r_freq - mean_row) * (c_freq - mean_col)
+        });
 
     row_var = row_var / (row_vals.len() as f64 - 1.);
     col_var = col_var / (col_vals.len() as f64 - 1.);
@@ -475,12 +514,10 @@ fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
 mod tests {
     use super::*;
 
-//    #[test]
-//    fn test_clustering() {
-//        let mut points =  vec![Var {
-//
-//        }];
-//    }
-
-
+    //    #[test]
+    //    fn test_clustering() {
+    //        let mut points =  vec![Var {
+    //
+    //        }];
+    //    }
 }

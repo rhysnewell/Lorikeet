@@ -1,13 +1,12 @@
-
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::ops::Range;
-use std::collections::{HashSet, HashMap};
 
 use bio::stats::LogProb;
 use itertools::Itertools;
 use ordered_float::NotNan;
-use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use rust_htslib::{bcf, bcf::record::Numeric};
+use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 use rayon::prelude::*;
 
@@ -108,7 +107,6 @@ pub enum Variant {
 
 #[allow(unused)]
 impl Variant {
-
     pub fn has_fragment_evidence(&self) -> bool {
         match self {
             &Variant::Deletion(_) => true,
@@ -191,8 +189,7 @@ impl Variant {
     pub fn len(&self) -> u32 {
         match self {
             &Variant::Deletion(l) => l,
-            &Variant::Insertion(ref s)
-            | &Variant::Inversion(ref s) => s.len() as u32,
+            &Variant::Insertion(ref s) | &Variant::Inversion(ref s) => s.len() as u32,
             &Variant::SV(sv) => sv.len,
             &Variant::SNV(_) => 1,
             &Variant::MNV(ref alt) => alt.len() as u32,
@@ -286,12 +283,11 @@ pub struct Base {
     // CLR transformed relative abundances
     pub rel_abunds: Vec<f64>,
     // Genotypes assigned to variant
-    pub genotypes: HashSet<i32>
+    pub genotypes: HashSet<i32>,
 }
 
 #[allow(unused)]
 impl Base {
-
     /// Update depth as calculated by lorikeet and the reference depth
     pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
         if self.totaldepth[sample_idx] == 0 {
@@ -303,7 +299,7 @@ impl Base {
                         refr_depth = 0;
                     }
                     self.referencedepth[sample_idx] = refr_depth;
-                },
+                }
                 _ => {
                     self.truedepth[sample_idx] = self.depth[sample_idx];
                     let mut refr_depth = d - self.truedepth[sample_idx];
@@ -312,11 +308,10 @@ impl Base {
                     }
                     self.referencedepth[sample_idx] = refr_depth;
                 }
-
-        }
-//            if self.variant == Variant::None {
-//                self.depth[sample_idx] = d;
-//            }
+            }
+            //            if self.variant == Variant::None {
+            //                self.depth[sample_idx] = d;
+            //            }
         }
     }
 
@@ -337,7 +332,6 @@ impl Base {
             self.ac[sample_idx] = other.ac[sample_idx];
             self.af[sample_idx] = other.af[sample_idx];
             self.freq[sample_idx] = other.freq[sample_idx];
-
         } else {
             self.totaldepth[sample_idx] = total_depth;
         }
@@ -373,30 +367,37 @@ impl Base {
         }
     }
 
-    pub fn from_vcf_record(record: &mut bcf::Record, sample_count: usize, sample_idx: usize, longread: bool, min_qual: f32) -> Option<Vec<Base>> {
-
+    pub fn from_vcf_record(
+        record: &mut bcf::Record,
+        sample_count: usize,
+        sample_idx: usize,
+        longread: bool,
+        min_qual: f32,
+    ) -> Option<Vec<Base>> {
         if record.qual() > min_qual {
-            let variants = collect_variants(record, false,
-                                            false, None);
+            let variants = collect_variants(record, false, false, None);
             if variants.len() > 0 {
-
                 // Separate filters into hashset of filter struct
                 let mut filter_hash = HashSet::new();
                 {
                     let filters = record.filters();
                     let header = record.header();
                     for filter in filters {
-                        filter_hash.insert(Filter::from_result(std::str::from_utf8(&header.id_to_name(filter)[..])));
+                        filter_hash.insert(Filter::from_result(std::str::from_utf8(
+                            &header.id_to_name(filter)[..],
+                        )));
                     }
                 }
-                let mut bases = vec!();
+                let mut bases = vec![];
                 let mut refr_base_empty = true;
                 for (idx, variant) in variants.iter().enumerate() {
                     // Get elements from record
-                    let mut base = Base::new(record.rid().unwrap(),
-                                             record.pos(),
-                                             sample_count,
-                                             record.alleles()[0].to_vec());
+                    let mut base = Base::new(
+                        record.rid().unwrap(),
+                        record.pos(),
+                        sample_count,
+                        record.alleles()[0].to_vec(),
+                    );
                     base.quals[sample_idx] = record.qual();
 
                     // Populate Base struct with known info tags
@@ -409,19 +410,15 @@ impl Base {
                                     val[0][1]
                                 } else {
                                     match record.info(b"SUPPORT").integer() {
-                                        Ok(val) => {
-                                            match val {
-                                                Some(dep) => dep[0],
-                                                _ => 0,
-                                            }
+                                        Ok(val) => match val {
+                                            Some(dep) => dep[0],
+                                            _ => 0,
                                         },
                                         _ => 0,
                                     }
                                 }
-                            },
-                            _ => {
-                                0
                             }
+                            _ => 0,
                         };
 
                         base.truedepth[sample_idx] = match record.format(b"AD").integer() {
@@ -430,51 +427,59 @@ impl Base {
                                     val[0][1]
                                 } else {
                                     match record.info(b"SUPPORT").integer() {
-                                        Ok(val) => {
-                                            match val {
-                                                Some(dep) => dep[0],
-                                                _ => 0,
-                                            }
+                                        Ok(val) => match val {
+                                            Some(dep) => dep[0],
+                                            _ => 0,
                                         },
                                         _ => 0,
                                     }
                                 }
-                            },
-                            _ => {
-                                0
                             }
+                            _ => 0,
                         };
 
-//                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-//                        Ok(val) => {
-//                            if val[0][0] >= 0 {
-//                                val[0][0]
-//                            } else {
-//                                base.depth[sample_idx]
-//                            }
-//                        },
-//                        _ => base.depth[sample_idx],
-//                    };
-                    let refr_depth = std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
-//                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
-//                    base.freq[sample_idx] = base.af[sample_idx];
-                        let reads = record.info(b"READS").string().unwrap().unwrap().iter().map(|read| read.to_vec()).collect::<HashSet<Vec<u8>>>();
+                        //                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
+                        //                        Ok(val) => {
+                        //                            if val[0][0] >= 0 {
+                        //                                val[0][0]
+                        //                            } else {
+                        //                                base.depth[sample_idx]
+                        //                            }
+                        //                        },
+                        //                        _ => base.depth[sample_idx],
+                        //                    };
+                        let refr_depth =
+                            std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
+                        //                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
+                        //                    base.freq[sample_idx] = base.af[sample_idx];
+                        let reads = record
+                            .info(b"READS")
+                            .string()
+                            .unwrap()
+                            .unwrap()
+                            .iter()
+                            .map(|read| read.to_vec())
+                            .collect::<HashSet<Vec<u8>>>();
                         base.reads.par_extend(reads);
                         if refr_base_empty {
-                            let mut refr_base = Base::new(record.rid().unwrap(),
-                                                          record.pos(), sample_count, record.alleles()[0].to_vec());
-//                            refr_base.af[sample_idx] = base.af[sample_idx];
-//                            refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-//                                Ok(val) => {
-//                                    if val[0][0] >= 0 {
-//                                        val[0][0]
-//                                    } else {
-//                                        base.depth[sample_idx]
-//                                    }
-//                                },
-//                                _ => base.depth[sample_idx],
-//                            };
-//                            refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
+                            let mut refr_base = Base::new(
+                                record.rid().unwrap(),
+                                record.pos(),
+                                sample_count,
+                                record.alleles()[0].to_vec(),
+                            );
+                            //                            refr_base.af[sample_idx] = base.af[sample_idx];
+                            //                            refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
+                            //                                Ok(val) => {
+                            //                                    if val[0][0] >= 0 {
+                            //                                        val[0][0]
+                            //                                    } else {
+                            //                                        base.depth[sample_idx]
+                            //                                    }
+                            //                                },
+                            //                                _ => base.depth[sample_idx],
+                            //                            };
+                            //                            refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
                             refr_base.depth[sample_idx] = refr_depth;
                             bases.push(refr_base);
                             refr_base_empty = false;
@@ -483,28 +488,35 @@ impl Base {
                         // Get relevant flag from freebayes output on short read samples
                         base.variant = variant.clone();
                         base.filters[sample_idx] = filter_hash.clone();
-//                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                        //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
-                        base.depth[sample_idx] = record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
-//                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+                        base.depth[sample_idx] =
+                            record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
+                        //                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
 
-//                        base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
+                        //                        base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
 
                         if refr_base_empty {
-                            let mut refr_base = Base::new(record.rid().unwrap(),
-                                                              record.pos(), sample_count, record.alleles()[0].to_vec());
-    //                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                            refr_base.baseq[sample_idx] = record.info(b"QR").integer().unwrap().unwrap()[0];
-                            refr_base.depth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
-    //                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
-    //
+                            let mut refr_base = Base::new(
+                                record.rid().unwrap(),
+                                record.pos(),
+                                sample_count,
+                                record.alleles()[0].to_vec(),
+                            );
+                            //                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
+                            refr_base.baseq[sample_idx] =
+                                record.info(b"QR").integer().unwrap().unwrap()[0];
+                            refr_base.depth[sample_idx] =
+                                record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+                            //                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
+                            //
                             bases.push(refr_base);
                             refr_base_empty = false;
                         }
                     };
                     debug!("Variant {:?}", base.variant);
                     bases.push(base);
-                };
+                }
                 Some(bases)
             } else {
                 None
@@ -570,18 +582,17 @@ pub fn collect_variants(
     let is_valid_insertion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
         alt_allele == b"<INS>"
             || (ref_allele.len() < alt_allele.len()
-            && ref_allele == &alt_allele[..ref_allele.len()])
+                && ref_allele == &alt_allele[..ref_allele.len()])
     };
 
     let is_valid_deletion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
         alt_allele == b"<DEL>"
             || (ref_allele.len() > alt_allele.len()
-            && &ref_allele[..alt_allele.len()] == alt_allele)
+                && &ref_allele[..alt_allele.len()] == alt_allele)
     };
 
     let is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
-        alt_allele == b"<INV>"
-            || (ref_allele.len() == alt_allele.len())
+        alt_allele == b"<INV>" || (ref_allele.len() == alt_allele.len())
     };
 
     let variants = if let Some(svtype) = svtype {
@@ -603,14 +614,12 @@ pub fn collect_variants(
                 let len = alt_allele.len() - ref_allele.len();
 
                 if is_valid_insertion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
-                    Variant::Insertion(
-                        alt_allele[ref_allele.len()..].to_owned(),
-                    )
+                    Variant::Insertion(alt_allele[ref_allele.len()..].to_owned())
                 } else {
                     Variant::None
                 }
             }
-        } else if svtype == b"INV"{
+        } else if svtype == b"INV" {
             // get sequence
             let alleles = record.alleles();
             if alleles.len() > 2 {
@@ -626,9 +635,7 @@ pub fn collect_variants(
                 let len = alt_allele.len();
 
                 if is_valid_inversion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
-                    Variant::Inversion(
-                        alt_allele.to_owned(),
-                    )
+                    Variant::Inversion(alt_allele.to_owned())
                 } else {
                     Variant::None
                 }
@@ -642,8 +649,9 @@ pub fn collect_variants(
                 }
             };
             if svlen == 0 {
-                panic!("Absolute value of SVLEN or END - POS must be greater than zero."
-                    .to_owned());
+                panic!(
+                    "Absolute value of SVLEN or END - POS must be greater than zero.".to_owned()
+                );
             }
             let alleles = record.alleles();
             if alleles.len() > 2 {
@@ -667,7 +675,7 @@ pub fn collect_variants(
     } else {
         let alleles = record.alleles();
         let ref_allele = alleles[0];
-        let mut variant_vec = vec!();
+        let mut variant_vec = vec![];
         alleles
             .iter()
             .skip(1)
@@ -734,6 +742,4 @@ pub fn collect_variants(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-
 }

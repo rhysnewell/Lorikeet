@@ -1,28 +1,24 @@
+use rust_htslib::bam::{self, record::Cigar};
 use std;
 use std::collections::{HashMap, HashSet};
-use rust_htslib::bam::{self, record::Cigar};
 
+use coverm::bam_generator::*;
+use estimation::codon_structs::*;
 use estimation::contig_variants::*;
 use estimation::variant_matrix::*;
-use estimation::codon_structs::*;
-use coverm::bam_generator::*;
-use rayon::prelude::*;
 use model::variants::*;
+use rayon::prelude::*;
 use utils::*;
 
-use std::str;
-use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::genomes_and_contigs::*;
+use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
+use std::str;
 use tempfile::NamedTempFile;
-
 
 /// Process all reads in a BAM file
 #[allow(unused)]
-pub fn process_bam<
-    R: NamedBamReader,
-    G: NamedBamReaderGenerator<R>,
->(
+pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bam_generator: G,
     sample_count: usize,
     coverage_estimators: &mut Vec<CoverageEstimator>,
@@ -34,7 +30,8 @@ pub fn process_bam<
     codon_table: &CodonTable,
     min_var_depth: usize,
     contig_end_exclusion: u64,
-    min: f32, max: f32,
+    min: f32,
+    max: f32,
     ani: f32,
     mode: &str,
     include_soft_clipping: bool,
@@ -47,19 +44,16 @@ pub fn process_bam<
     reference_map: &HashMap<usize, String>,
     concatenated_genomes: &Option<NamedTempFile>,
 ) {
-
     let mut bam_generated = bam_generator.start();
 
     // Adjust the sample index if the bam is from long reads
-    let mut longread= false;
+    let mut longread = false;
 
-
-//    let mut bam_properties =
-//        AlignmentProperties::default(InsertSize::default());
+    //    let mut bam_properties =
+    //        AlignmentProperties::default(InsertSize::default());
 
     let stoit_name = bam_generated.name().to_string().replace("/", ".");
     // adjust sample index for longread bams
-
 
     bam_generated.set_threads(split_threads);
     debug!("Managed to set threads.");
@@ -81,12 +75,15 @@ pub fn process_bam<
     let mut total_indels_in_current_contig = 0;
 
     let sample_idx = match variant_matrix {
-        VariantMatrix::VariantContigMatrix {
-            sample_names,
-            ..
-        } => {
-            debug!("sample names {:?} and stoit_name {:?}", &sample_names, &stoit_name);
-            sample_names.iter().position(|p| p.contains(&stoit_name)).unwrap()
+        VariantMatrix::VariantContigMatrix { sample_names, .. } => {
+            debug!(
+                "sample names {:?} and stoit_name {:?}",
+                &sample_names, &stoit_name
+            );
+            sample_names
+                .iter()
+                .position(|p| p.contains(&stoit_name))
+                .unwrap()
         }
     };
 
@@ -96,30 +93,33 @@ pub fn process_bam<
             if stoit_name.contains(longread_name) {
                 longread = true;
                 debug!("Longread {} {}", stoit_name, sample_idx);
-                break
+                break;
             }
         }
     }
 
-    let mut reference =
-    match concatenated_genomes {
-        Some(reference_path) =>
+    let mut reference = match concatenated_genomes {
+        Some(reference_path) => {
             match bio::io::fasta::IndexedReader::from_file(&reference_path.path()) {
                 Ok(reader) => reader,
                 Err(_e) => generate_faidx(&reference_path.path().to_str().unwrap()),
-            },
-        None => panic!("Concatenated reference file does not exist")
+            }
+        }
+        None => panic!("Concatenated reference file does not exist"),
     };
-
 
     // for record in records
     let mut skipped_reads = 0;
 
-    while bam_generated.read(&mut record)
-        .expect("Error while reading BAM record") == true {
-        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread) ||
-            (!flag_filters.include_secondary && record.is_secondary() && !longread) ||
-            (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread) {
+    while bam_generated
+        .read(&mut record)
+        .expect("Error while reading BAM record")
+        == true
+    {
+        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread)
+            || (!flag_filters.include_secondary && record.is_secondary() && !longread)
+            || (!flag_filters.include_improper_pairs && !record.is_proper_pair() && !longread)
+        {
             skipped_reads += 1;
             continue;
         } else if !flag_filters.include_secondary && record.is_secondary() && longread {
@@ -128,14 +128,14 @@ pub fn process_bam<
         }
         // if reference has changed, print the last record
         let tid = record.tid();
-        if !record.is_unmapped() { // if mapped
+        if !record.is_unmapped() {
+            // if mapped
             if record.seq().len() == 0 {
-                continue
+                continue;
             } else if record.mapq() < mapq_threshold {
                 skipped_reads += 1;
                 continue;
             }
-
 
             // if reference has changed, print the last record
             if tid != last_tid {
@@ -144,42 +144,37 @@ pub fn process_bam<
                     panic!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
                 }
                 if last_tid != -2 {
-                    let contig_len = header.target_len(last_tid as u32)
+                    let contig_len = header
+                        .target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
                     contig_name = target_names[last_tid as usize].to_vec();
                     // contig_name_str = split_contig_name(&contig_name);
-                    ref_idx = retrieve_reference_index_from_contig(
-                        &contig_name,
-                        genomes_and_contigs,
-                    );
+                    ref_idx =
+                        retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
 
-                    let total_mismatches = total_edit_distance_in_current_contig -
-                        total_indels_in_current_contig;
+                    let total_mismatches =
+                        total_edit_distance_in_current_contig - total_indels_in_current_contig;
 
                     // Retrieve the reference based on the reference index from reference_map
                     // let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
 
-
-                    match reference.fetch_all(
-                        std::str::from_utf8(
-                            &contig_name[..]).unwrap()) {
+                    match reference.fetch_all(std::str::from_utf8(&contig_name[..]).unwrap()) {
                         Ok(reference) => reference,
-                        Err(e) => match reference.fetch_all(
-                            &format!(
-                                "{}~{}",
-                                &genomes_and_contigs.genomes[ref_idx],
-                                std::str::from_utf8(
-                                    &contig_name[..]).unwrap())
-                        ) {
+                        Err(e) => match reference.fetch_all(&format!(
+                            "{}~{}",
+                            &genomes_and_contigs.genomes[ref_idx],
+                            std::str::from_utf8(&contig_name[..]).unwrap()
+                        )) {
                             Ok(reference) => reference,
                             Err(e) => {
-                                println!("Cannot read sequence from reference {} {:?}",
-                                         format!(
-                                             "{}~{}",
-                                             &genomes_and_contigs.genomes[ref_idx],
-                                             std::str::from_utf8(
-                                                 &contig_name[..]).unwrap()),
-                                         e,
+                                println!(
+                                    "Cannot read sequence from reference {} {:?}",
+                                    format!(
+                                        "{}~{}",
+                                        &genomes_and_contigs.genomes[ref_idx],
+                                        std::str::from_utf8(&contig_name[..]).unwrap()
+                                    ),
+                                    e,
                                 );
                                 std::process::exit(1);
                             }
@@ -189,12 +184,13 @@ pub fn process_bam<
                     match reference.read(&mut ref_seq) {
                         Ok(reference) => reference,
                         Err(e) => {
-                            println!("Cannot read sequence from reference {} {:?}",
-                                     std::str::from_utf8(&contig_name[..]).unwrap(),
-                                     e,
+                            println!(
+                                "Cannot read sequence from reference {} {:?}",
+                                std::str::from_utf8(&contig_name[..]).unwrap(),
+                                e,
                             );
                             std::process::exit(1)
-                        },
+                        }
                     };
 
                     process_previous_contigs_var(
@@ -223,7 +219,8 @@ pub fn process_bam<
                     );
                 }
 
-                ups_and_downs = vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
+                ups_and_downs =
+                    vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
 
                 contig_name = target_names[tid as usize].to_vec();
                 // contig_name_str = split_contig_name(&contig_name);
@@ -238,9 +235,8 @@ pub fn process_bam<
                 num_mapped_reads_in_current_contig = 0;
                 total_edit_distance_in_current_contig = 0;
                 total_indels_in_current_contig = 0;
-//                    nuc_freq = HashMap::new();
-//                    indels = HashMap::new();
-
+                //                    nuc_freq = HashMap::new();
+                //                    indels = HashMap::new();
             }
 
             if !record.is_supplementary() {
@@ -261,7 +257,7 @@ pub fn process_bam<
                         // For checking against mnv
                         let mut potential_mnv = false;
                         let mut mnv_pos = 0;
-                        let mut mnv = vec!();
+                        let mut mnv = vec![];
                         let mut mnv_cursor = 0;
                         for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                             // See if read is match MNV
@@ -272,53 +268,43 @@ pub fn process_bam<
                                     mnv_pos += 1;
                                     debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                     if mnv_pos == mnv.len() {
-                                        match variant_matrix.variants(
-                                            ref_idx,
-                                            tid,
-                                            cursor as i64,
-                                        ) {
+                                        match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                            Some(current_variants) => current_variants
+                                                .iter_mut()
+                                                .for_each(|(variant, base)| match variant {
+                                                    Variant::MNV(alt) => {
+                                                        debug!("alt {:?} found {:?}", &alt, &mnv);
 
-                                            Some(current_variants) => {
-                                                current_variants.iter_mut().for_each(|(variant, base)| {
-                                                    match variant {
-                                                        Variant::MNV(alt) => {
-                                                            debug!("alt {:?} found {:?}", &alt, &mnv);
-
-                                                            if *alt == mnv {
-                                                                base.assign_read(record.qname().to_vec());
-                                                                base.truedepth[sample_idx] += 1;
-                                                                mnv = vec!();
-                                                                mnv_pos = 0;
-                                                                potential_mnv = false;
-                                                            } else {
-                                                                mnv = vec!();
-                                                                mnv_pos = 0;
-                                                                potential_mnv = false
-                                                            }
-                                                        },
-                                                        _ => {
-                                                        },
+                                                        if *alt == mnv {
+                                                            base.assign_read(
+                                                                record.qname().to_vec(),
+                                                            );
+                                                            base.truedepth[sample_idx] += 1;
+                                                            mnv = vec![];
+                                                            mnv_pos = 0;
+                                                            potential_mnv = false;
+                                                        } else {
+                                                            mnv = vec![];
+                                                            mnv_pos = 0;
+                                                            potential_mnv = false
+                                                        }
                                                     }
-                                                })
-                                            },
+                                                    _ => {}
+                                                }),
                                             None => {
-                                                mnv = vec!();
+                                                mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false
-                                            },
+                                            }
                                         }
                                     }
                                 } else {
-                                    mnv = vec!();
+                                    mnv = vec![];
                                     mnv_pos = 0;
                                     potential_mnv = false
                                 }
                             }
-                            match variant_matrix.variants(
-                                ref_idx,
-                                tid,
-                                cursor as i64,
-                            ) {
+                            match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                                 Some(current_variants) => {
                                     let read_char = record.seq()[qpos];
                                     current_variants.iter_mut().for_each(|(variant, base)| {
@@ -363,22 +349,19 @@ pub fn process_bam<
                                             _ => {}
                                         }
                                     });
-                                },
-                                _ => {},
+                                }
+                                _ => {}
                             }
                             cursor += 1;
                         }
-                        if final_pos < ups_and_downs.len() { // True unless the read hits the contig end.
+                        if final_pos < ups_and_downs.len() {
+                            // True unless the read hits the contig end.
                             ups_and_downs[final_pos] -= 1;
                         }
                         read_cursor += cig.len() as usize;
-                    },
+                    }
                     Cigar::Del(del) => {
-                        match variant_matrix.variants(
-                            ref_idx,
-                            tid,
-                            cursor as i64,
-                        ) {
+                        match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                             Some(current_variants) => {
                                 current_variants.par_iter_mut().for_each(|(variant, base)| {
                                     match variant {
@@ -388,133 +371,130 @@ pub fn process_bam<
                                                 base.assign_read(record.qname().to_vec());
                                                 base.truedepth[sample_idx] += 1;
                                             }
-                                        },
+                                        }
                                         _ => {}
                                     }
                                 });
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
 
                         cursor += cig.len() as usize;
-                    },
+                    }
                     Cigar::RefSkip(_) => {
                         // if D or N, move the cursor
                         cursor += cig.len() as usize;
-                    },
+                    }
                     Cigar::Ins(ins) => {
-                        let insertion = &record.seq().as_bytes()[read_cursor..read_cursor+cig.len() as usize];
-                        match variant_matrix.variants(
-                            ref_idx,
-                            tid,
-                            cursor as i64,
-                        ) {
+                        let insertion =
+                            &record.seq().as_bytes()[read_cursor..read_cursor + cig.len() as usize];
+                        match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                             Some(current_variants) => {
                                 current_variants.par_iter_mut().for_each(|(variant, base)| {
                                     match variant {
                                         // We need to check every position of the MNV
                                         Variant::Insertion(alt) => {
-                                            if String::from_utf8(alt.to_vec()).expect("Unable to convert to string")
-                                                .contains(&String::from_utf8(insertion.to_vec()).expect("Unable to convert to string")) {
+                                            if String::from_utf8(alt.to_vec())
+                                                .expect("Unable to convert to string")
+                                                .contains(
+                                                    &String::from_utf8(insertion.to_vec())
+                                                        .expect("Unable to convert to string"),
+                                                )
+                                            {
                                                 base.assign_read(record.qname().to_vec());
                                                 base.truedepth[sample_idx] += 1;
                                             }
-                                        },
+                                        }
                                         _ => {}
                                     }
                                 });
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
                         read_cursor += cig.len() as usize;
                         total_indels_in_current_contig += cig.len() as u64;
-                    },
+                    }
                     Cigar::SoftClip(_) => {
                         // soft clipped portions of reads can be included as structural variants
                         // not sure if this correct protocol or not
-//                        if longreads {
-//                            let refr = (ref_seq[cursor as usize] as char).to_string();
-//                            let insert = match str::from_utf8(&record.seq().as_bytes()[
-//                                read_cursor..read_cursor + cig.len() as usize]) {
-//                                Ok(ins) => {ins.to_string()},
-//                                Err(_e) => {"".to_string()},
-//                            };
-//                            let indel_map = indels.entry(cursor as i32)
-//                                .or_insert(BTreeMap::new());
-//
-//                            let id = indel_map.entry(refr + &insert)
-//                                .or_insert(BTreeSet::new());
-//                            let mut read_to_id = read_to_id.lock().unwrap();
-//                            id.insert(read_to_id[&record.qname().to_vec()]);
-//                            total_indels_in_current_contig += cig.len() as u64;
-//                        }
+                        //                        if longreads {
+                        //                            let refr = (ref_seq[cursor as usize] as char).to_string();
+                        //                            let insert = match str::from_utf8(&record.seq().as_bytes()[
+                        //                                read_cursor..read_cursor + cig.len() as usize]) {
+                        //                                Ok(ins) => {ins.to_string()},
+                        //                                Err(_e) => {"".to_string()},
+                        //                            };
+                        //                            let indel_map = indels.entry(cursor as i32)
+                        //                                .or_insert(BTreeMap::new());
+                        //
+                        //                            let id = indel_map.entry(refr + &insert)
+                        //                                .or_insert(BTreeSet::new());
+                        //                            let mut read_to_id = read_to_id.lock().unwrap();
+                        //                            id.insert(read_to_id[&record.qname().to_vec()]);
+                        //                            total_indels_in_current_contig += cig.len() as u64;
+                        //                        }
                         read_cursor += cig.len() as usize;
-                    },
+                    }
                     Cigar::HardClip(_) | Cigar::Pad(_) => {}
                 }
             }
             // Determine the number of mismatching bases in this read by
             // looking at the NM tag.
-            total_edit_distance_in_current_contig += match
-            record.aux("NM".as_bytes()) {
-                Some(aux) => {
-                    aux.integer() as u64
-                },
+            total_edit_distance_in_current_contig += match record.aux("NM".as_bytes()) {
+                Some(aux) => aux.integer() as u64,
                 None => {
-                    panic!("Mapping record encountered that does not have an 'NM' \
+                    panic!(
+                        "Mapping record encountered that does not have an 'NM' \
                             auxiliary tag in the SAM/BAM format. This is required \
-                            to work out some coverage statistics");
+                            to work out some coverage statistics"
+                    );
                 }
             };
         }
     }
     if last_tid != -2 {
-        let contig_len = header.target_len(last_tid as u32).expect("Corrupt BAM file?") as usize;
+        let contig_len = header
+            .target_len(last_tid as u32)
+            .expect("Corrupt BAM file?") as usize;
         contig_name = target_names[last_tid as usize].to_vec();
 
-        ref_idx = retrieve_reference_index_from_contig(
-            &contig_name,
-            genomes_and_contigs,
-        );
-        let total_mismatches = total_edit_distance_in_current_contig -
-            total_indels_in_current_contig;
+        ref_idx = retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
+        let total_mismatches =
+            total_edit_distance_in_current_contig - total_indels_in_current_contig;
 
-        match reference.fetch_all(
-            std::str::from_utf8(
-                &contig_name[..]).unwrap()) {
+        match reference.fetch_all(std::str::from_utf8(&contig_name[..]).unwrap()) {
             Ok(reference) => reference,
-            Err(_) =>
-               match reference.fetch_all(
-                   &format!(
-                       "{}~{}",
-                       &genomes_and_contigs.genomes[ref_idx],
-                       std::str::from_utf8(
-                           &contig_name[..]).unwrap())
-               ) {
-                   Ok(reference) => reference,
-                   Err(e) => {
-                       println!("Cannot read sequence from reference {} {:?}",
-                                format!(
-                                    "{}~{}",
-                                    &genomes_and_contigs.genomes[ref_idx],
-                                    std::str::from_utf8(
-                                        &contig_name[..]).unwrap()),
-                                e,
-                       );
-                       std::process::exit(1);
-                   }
-               },
+            Err(_) => match reference.fetch_all(&format!(
+                "{}~{}",
+                &genomes_and_contigs.genomes[ref_idx],
+                std::str::from_utf8(&contig_name[..]).unwrap()
+            )) {
+                Ok(reference) => reference,
+                Err(e) => {
+                    println!(
+                        "Cannot read sequence from reference {} {:?}",
+                        format!(
+                            "{}~{}",
+                            &genomes_and_contigs.genomes[ref_idx],
+                            std::str::from_utf8(&contig_name[..]).unwrap()
+                        ),
+                        e,
+                    );
+                    std::process::exit(1);
+                }
+            },
         };
         ref_seq = Vec::new();
         match reference.read(&mut ref_seq) {
             Ok(reference) => reference,
             Err(e) => {
-                println!("Cannot read sequence from reference {} {:?}",
-                         std::str::from_utf8(&contig_name[..]).unwrap(),
-                         e,
+                println!(
+                    "Cannot read sequence from reference {} {:?}",
+                    std::str::from_utf8(&contig_name[..]).unwrap(),
+                    e,
                 );
                 std::process::exit(1)
-            },
+            }
         };
 
         process_previous_contigs_var(
@@ -545,18 +525,23 @@ pub fn process_bam<
         num_mapped_reads_total += num_mapped_reads_in_current_contig;
     }
 
-
-    info!("In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
-          stoit_name, num_mapped_reads_total,
-          bam_generated.num_detected_primary_alignments(), 2,
-          (num_mapped_reads_total * 100) as f64 /
-              bam_generated.num_detected_primary_alignments() as f64, skipped_reads);
-
+    info!(
+        "In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
+        stoit_name,
+        num_mapped_reads_total,
+        bam_generated.num_detected_primary_alignments(),
+        2,
+        (num_mapped_reads_total * 100) as f64
+            / bam_generated.num_detected_primary_alignments() as f64,
+        skipped_reads
+    );
 
     if bam_generated.num_detected_primary_alignments() == 0 {
-        warn!("No primary alignments were observed for sample {} \
+        warn!(
+            "No primary alignments were observed for sample {} \
            - perhaps something went wrong in the mapping?",
-              stoit_name);
+            stoit_name
+        );
     }
     bam_generated.finish();
 }
@@ -586,38 +571,30 @@ pub fn process_previous_contigs_var(
     output_prefix: &str,
     stoit_name: &str,
 ) {
-
     if last_tid != -2 {
+        coverage_estimators
+            .par_iter_mut()
+            .for_each(|estimator| estimator.setup());
 
-        coverage_estimators.par_iter_mut().for_each(|estimator|{
-            estimator.setup()
-        });
-
-        coverage_estimators.par_iter_mut().for_each(|estimator|{
+        coverage_estimators.par_iter_mut().for_each(|estimator| {
             estimator.add_contig(
                 &ups_and_downs,
                 num_mapped_reads_in_current_contig,
-                total_mismatches)
+                total_mismatches,
+            )
         });
 
-        let coverages: Vec<f64> = coverage_estimators.iter_mut()
-            .map(|estimator|
-                estimator.calculate_coverage(&vec![0]) as f64).collect();
+        let coverages: Vec<f64> = coverage_estimators
+            .iter_mut()
+            .map(|estimator| estimator.calculate_coverage(&vec![0]) as f64)
+            .collect();
 
         let mut variant_struct =
-            VariantStats::new_contig_stats(
-                min as f64,
-                max as f64,
-                contig_end_exclusion,
-            );
-
+            VariantStats::new_contig_stats(min as f64, max as f64, contig_end_exclusion);
 
         // adds contig info to variant struct
         variant_struct.add_contig(
-            variant_matrix.variants_of_contig(
-                ref_idx,
-                last_tid,
-            ),
+            variant_matrix.variants_of_contig(ref_idx, last_tid),
             last_tid.clone(),
             total_indels_in_current_contig,
             contig_name.clone(),
@@ -627,28 +604,20 @@ pub fn process_previous_contigs_var(
             ups_and_downs,
         );
 
-
         match mode {
             "polymorph" => {
-
                 // calculates minimum number of genotypes possible for each variant location
-//                variant_struct.generate_minimum_genotypes();
+                //                variant_struct.generate_minimum_genotypes();
                 if variant_struct.len() > 0 {
 
-//                    variant_struct.print_variants(&ref_sequence, stoit_name);
+                    //                    variant_struct.print_variants(&ref_sequence, stoit_name);
                 }
-
-            },
+            }
             "summarize" | "genotype" | "evolve" | "polish" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
-                variant_matrix.add_contig(
-                    variant_struct,
-                    sample_count,
-                    sample_idx,
-                    ref_idx,
-                );
-            },
+                variant_matrix.add_contig(variant_struct, sample_count, sample_idx, ref_idx);
+            }
             // "polish" => {
             //     let stoit_name = stoit_name
             //         .split("..").last().unwrap()
@@ -657,7 +626,9 @@ pub fn process_previous_contigs_var(
             //     variant_struct.polish_contig(&ref_sequence,
             //                                  &output_prefix);
             // }
-            _ => {panic!("unknown mode {}", mode);},
+            _ => {
+                panic!("unknown mode {}", mode);
+            }
         }
     }
 }
