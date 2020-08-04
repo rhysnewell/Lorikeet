@@ -82,7 +82,9 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             );
             sample_names
                 .iter()
-                .position(|p| p.contains(&stoit_name))
+                .position(
+                    |p|
+                        p.contains(&stoit_name.replace("lorikeet-genome", "")))
                 .unwrap()
         }
     };
