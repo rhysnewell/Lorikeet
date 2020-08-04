@@ -345,7 +345,7 @@ pub fn pileup_variants<
         match concatenated_genomes {
             Some(ref tmp_file) => {
                 let cache = format!(
-                    "{}/{}*.bam",
+                    "{}/*.bam",
                     match m.is_present("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache
@@ -359,7 +359,6 @@ pub fn pileup_variants<
                             m.value_of("bam-file-cache-directory").unwrap()
                         }
                     },
-                    tmp_file.path().file_stem().unwrap().to_str().unwrap(),
                 );
                 let bam_paths = glob(&cache)
                     .expect("Failed to read cache")

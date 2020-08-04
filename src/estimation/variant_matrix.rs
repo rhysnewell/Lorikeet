@@ -964,8 +964,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 total_reference_alleles += ref_alleles;
                             }
                             info!(
-                                "Cluster {} contains {} variant alleles and {} reference alleles",
-                                strain_index, total_variant_alleles, total_reference_alleles
+                                "Genome {}: Cluster {} contains {} variant alleles and {} reference alleles",
+                                &genomes_and_contigs.genomes[*ref_index], strain_index, total_variant_alleles, total_reference_alleles
                             );
                         });
                     });
