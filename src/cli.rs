@@ -983,7 +983,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
-                        .default_value("2")
+                        .default_value("1")
                         .required(false),
                 )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
@@ -1296,6 +1296,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("trim-max")
                         .long("trim-max")
                         .default_value("0.95"),
+                )
+                .arg(
+                    Arg::with_name("ploidy")
+                        .long("ploidy")
+                        .default_value("1")
+                        .required(false),
                 )
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
@@ -1652,11 +1658,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-soft-clipping").long("include-soft-clipping"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
-                .arg(Arg::with_name("include-indels").long("include-indels"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
-                        .default_value("2")
+                        .default_value("1")
                         .required(false),
                 )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
@@ -2035,6 +2040,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("plot").long("plot"))
+                .arg(
+                    Arg::with_name("ploidy")
+                        .long("ploidy")
+                        .default_value("1")
+                        .required(false),
+                )
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),

@@ -133,6 +133,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         if !record.is_unmapped() {
             // if mapped
             if record.seq().len() == 0 {
+                skipped_reads += 1;
                 continue;
             } else if record.mapq() < mapq_threshold {
                 skipped_reads += 1;
@@ -528,14 +529,14 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     }
 
     info!(
-        "In sample '{}', found {} reads mapped out of {} total ({:.*}%) and filtered {}",
+        "In sample '{}', found {} reads mapped out of {} total ({:.*}%)", // and filtered {}",
         stoit_name,
         num_mapped_reads_total,
         bam_generated.num_detected_primary_alignments(),
         2,
         (num_mapped_reads_total * 100) as f64
             / bam_generated.num_detected_primary_alignments() as f64,
-        skipped_reads
+        // skipped_reads
     );
 
     if bam_generated.num_detected_primary_alignments() == 0 {
