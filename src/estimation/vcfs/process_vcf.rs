@@ -49,8 +49,22 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
-    let bam_path = bam_generated.path();
-    debug!("Bam stored at {}", &bam_path);
+    let bam_path = bam_generated.path().to_string();
+
+    ////// QUARANTINE ZONE ///////
+    // TODO: Find work around for this mess
+    // Have to read each record to be able to complete the process
+    // Luckily this process is fairly fast
+    let mut record: bam::record::Record = bam::record::Record::new();
+    while bam_generated
+        .read(&mut record)
+        .expect("Failure to read BAM record")
+        == true
+    {
+
+    }
+    bam_generated.finish(); // Kill the nightmare here
+    ////// END QUARANTINE ////////
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = if stoit_name.contains(".fna") {
@@ -113,7 +127,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         longread,
         reference_length,
         &reference,
-        bam_path,
+        &bam_path,
     );
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
@@ -126,13 +140,15 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 .expect("Unable to set threads on VCF reader");
 
             let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
-            info!("Collecting VCF records for sample {}", &stoit_name);
+
+            let mut total_records = 0;
             reader.records().into_iter().for_each(|vcf_record| {
                 let mut vcf_record = vcf_record.unwrap();
                 let vcf_header = vcf_record.header();
                 let variant_rid = vcf_record.rid().unwrap();
                 // Check bam header names and vcf header names are in same order
                 // Sanity check
+                total_records += 1;
                 if target_names[variant_rid as usize]
                     == vcf_header.rid2name(variant_rid).unwrap() {
                     let base_option =
@@ -159,6 +175,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
                 }
             });
+            info!("Collected {} VCF records for sample {}", total_records, &stoit_name);
             if longread {
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
@@ -275,6 +292,10 @@ pub fn generate_vcf(
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
+    let mapq_thresh = std::cmp::max(
+        1,
+        m.value_of("mapq-threshold").unwrap().parse().unwrap());
+
     if !longread {
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
@@ -341,7 +362,7 @@ pub fn generate_vcf(
             m.value_of("min-variant-depth").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             m.value_of("min-repeat-entropy").unwrap(),
-            m.value_of("mapq-threshold").unwrap(),
+            mapq_thresh,
             tmp_bam_path,
             &reference,
             freebayes_path,
@@ -381,7 +402,7 @@ pub fn generate_vcf(
             "set -e -o pipefail; svim alignment --read_names --skip_genotyping \
             --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
             --min_mapq {} --sequence_alleles {} {} {}",
-            m.value_of("mapq-threshold").unwrap(),
+            mapq_thresh,
             &svim_path,
             &bam_path,
             &reference
