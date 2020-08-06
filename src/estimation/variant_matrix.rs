@@ -1143,6 +1143,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     }
 
                     if snps > 1 {
+                        info!("Creating SNP density plot for {}...", &reference_stem);
                         let plot_command = format!(
                             "set -eou pipefail; snp_density_plots.R {} {} && \
                                      mv SNP-Density*.pdf {}_snp_density_plot.pdf",
