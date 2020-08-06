@@ -271,24 +271,25 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                                     mnv_pos += 1;
                                     debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                     if mnv_pos == mnv.len() {
-                                        match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                        match variant_matrix.variants(ref_idx, tid, mnv_cursor) {
                                             Some(current_variants) => {
                                                 current_variants
                                                     .iter_mut()
-                                                    .for_each(|(variant, base)| match variant {
-                                                        Variant::MNV(alt) => {
-                                                            debug!("alt {:?} found {:?}", &alt, &mnv);
-                                                            if *alt == mnv {
-                                                                base.assign_read(
-                                                                    record.qname().to_vec(),
-                                                                );
-                                                                base.truedepth[sample_idx] += 1;
+                                                    .for_each(|(variant, base)|
+                                                        match variant {
+                                                            Variant::MNV(alt) => {
+                                                                debug!("alt {:?} found {:?}", &alt, &mnv);
+                                                                if *alt == mnv {
+                                                                    base.assign_read(
+                                                                        record.qname().to_vec(),
+                                                                    );
+                                                                    base.truedepth[sample_idx] += 1;
+                                                                }
                                                             }
-                                                        }
-                                                        _ => {
-                                                            debug!("Looping through non-MNV variants");
-                                                        }
-                                                    });
+                                                            _ => {
+                                                                debug!("Looping through non-MNV variants");
+                                                            }
+                                                        });
                                                 mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false;
@@ -299,7 +300,10 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                                                 mnv_pos = 0;
                                                 potential_mnv = false
                                             }
-                                        }
+                                        };
+                                        mnv = vec![];
+                                        mnv_pos = 0;
+                                        potential_mnv = false;
                                     }
                                 } else {
                                     debug!("Read did not contain correct MNV");
