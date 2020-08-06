@@ -140,6 +140,14 @@ pub trait VariantMatrixFunctions {
         genomes_and_contigs: &GenomesAndContigs,
     );
 
+    /// EM Algorithm for caclulating the abundances of each genotype in each sample
+    fn calculate_strain_abundances(
+        &mut self,
+        output_prefix: &str,
+        reference_map: &HashMap<usize, String>,
+        genomes_and_contigs: &GenomesAndContigs,
+    );
+
     /// Prints the per reference and per contig variant information e.g. How many SNPs were seen
     /// along a contig over the given window size on average
     fn print_variant_stats(
@@ -973,6 +981,28 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
+    fn calculate_strain_abundances(
+        &mut self,
+        output_prefix: &str,
+        reference_map: &HashMap<usize, String>,
+        genomes_and_contigs: &GenomesAndContigs,
+    ) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                target_names,
+                ref mut pred_variants,
+                all_variants,
+                ..
+            } => {
+                pred_variants
+                    .par_iter()
+                    .for_each(|(ref_index, strain_map)| {
+
+                });
+            }
+        }
+    }
+
     fn print_variant_stats(
         &self,
         window_size: f64,
@@ -1283,185 +1313,187 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .par_iter()
                     .for_each(|(ref_index, ref_variants)| {
 
-                    let reference_path =
-                        Path::new(reference_map
-                            .get(ref_index)
-                            .expect("reference index not found"));
-                    let mut reference =
-                        match bio::io::fasta::IndexedReader::from_file(
-                            &reference_path) {
-                            Ok(reader) => reader,
-                            Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
-                        };
+
+                        let reference_path =
+                            Path::new(reference_map
+                                .get(ref_index)
+                                .expect("reference index not found"));
+
+                        let mut reference =
+                            match bio::io::fasta::IndexedReader::from_file(
+                                &reference_path) {
+                                Ok(reader) => reader,
+                                Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                            };
 
 
 
-                    debug!("Reference index {} target names {:?}", &ref_index, &target_names);
+                        debug!("Reference index {} target names {:?}", &ref_index, &target_names);
 
-                    match target_names.get(ref_index) {
-                        Some(target_name_set) => {
-                            sample_names.iter().enumerate().for_each(|(sample_idx, sample_name)| {
-                                let sample_name = sample_name
-                                    .rsplit(".")
-                                    .skip(1)
-                                    .next()
-                                    .unwrap();
+                        match target_names.get(ref_index) {
+                            Some(target_name_set) => {
+                                sample_names.iter().enumerate().for_each(|(sample_idx, sample_name)| {
+                                    let sample_name = sample_name
+                                        .rsplit(".")
+                                        .skip(1)
+                                        .next()
+                                        .unwrap();
 
-                                let file_name =
-                                    format!(
-                                        "{}/{}_polished_{}.fna",
-                                        output_prefix.to_string(),
-                                        reference_path.file_stem().unwrap().to_str().unwrap(),
-                                        &sample_name,
-                                    );
+                                    let file_name =
+                                        format!(
+                                            "{}/{}_polished_{}.fna",
+                                            output_prefix.to_string(),
+                                            reference_path.file_stem().unwrap().to_str().unwrap(),
+                                            &sample_name,
+                                        );
 
-                                let file_path = Path::new(&file_name);
-                                // Open haplotype file or create one
-                                let mut file_open = File::create(file_path)
-                                    .expect("No Read or Write Permission in current directory");
+                                    let file_path = Path::new(&file_name);
+                                    // Open haplotype file or create one
+                                    let mut file_open = File::create(file_path)
+                                        .expect("No Read or Write Permission in current directory");
 
-                                let mut original_contig = Vec::new();
+                                    let mut original_contig = Vec::new();
 
-                                let mut total_variant_alleles = 0;
-                                let mut total_reference_alleles = 0;
+                                    let mut total_variant_alleles = 0;
+                                    let mut total_reference_alleles = 0;
 
-                                for (tid, target_name) in target_name_set.iter() {
-                                    // let contig_len = target_lengths[ref_idx][&tid];
-                                    let mut contig = String::new();
-                                    original_contig = Vec::new();
-                                    {
-                                        match reference.fetch_all(
-                                            std::str::from_utf8(target_name.as_bytes()).unwrap()) {
-                                            Ok(reference) => reference,
-                                            Err(e) => {
-                                                warn!("Cannot read sequence from reference {:?}", e);
-                                                std::process::exit(1)
-                                            },
-                                        };
-                                        match reference.read(&mut original_contig) {
-                                            Ok(reference) => reference,
-                                            Err(e) => {
-                                                warn!("Cannot read sequence from reference {:?}", e);
-                                                std::process::exit(1)
-                                            },
-                                        };
-                                    }
-                                    let mut skip_n = 0;
-                                    let mut skip_cnt = 0;
-                                    let mut variations = 0;
-                                    let mut ref_alleles = 0;
-
-                                    match ref_variants.get(tid) {
-                                        Some(variants_in_contig) => {
-
-                                            for (pos, base) in original_contig.iter().enumerate() {
-                                                if skip_cnt < skip_n {
-                                                    skip_cnt += 1;
-                                                } else {
-                                                    skip_n = 0;
-                                                    skip_cnt = 0;
-
-                                                    if variants_in_contig.contains_key(&(pos as i64)) {
-
-                                                        let hash = variants_in_contig
-                                                            .get(&(pos as i64))
-                                                            .unwrap();
-
-                                                        let mut max_var = Variant::None;
-                                                        let mut max_depth = 0;
-
-                                                        for (var, base) in hash.iter() {
-                                                            // If there are two variants possible for
-                                                            // a single site and one is the reference
-                                                            // we will choose the reference
-                                                            if max_depth == 0 {
-                                                                max_var = var.clone();
-                                                                max_depth = base.truedepth[sample_idx]
-                                                            } else if base.truedepth[sample_idx] > max_depth {
-                                                                max_var = var.clone();
-                                                                max_depth = base.truedepth[sample_idx]
-                                                            }
-                                                        }
-                                                        if hash.len() > 1 {
-                                                            //                                            multivariant_sites += 1;
-                                                            debug!("Multi hash {:?} {:?}", hash, max_var)
-                                                        }
-                                                        match max_var {
-                                                            Variant::Deletion(size) => {
-                                                                // Skip the next n bases but rescue the reference prefix
-                                                                skip_n = size;
-                                                                skip_cnt = 0;
-                                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                                // If we had the sequence we would rescue first base like this
-                                                                //                                                let first_byte = max_var.as_bytes()[0];
-                                                                //                                                contig = contig + str::from_utf8(
-                                                                //                                                    &[first_byte]).unwrap();
-                                                                variations += 1;
-                                                            },
-                                                            Variant::Insertion(alt) => {
-
-                                                                // Remove prefix from variant
-                                                                let removed_first_base = str::from_utf8(
-                                                                    &alt[1..]).unwrap();
-                                                                contig = contig + removed_first_base;
-                                                                variations += 1;
-                                                            },
-                                                            Variant::Inversion(alt) | Variant::MNV(alt) => {
-                                                                // Skip the next n bases
-                                                                skip_n = alt.len() as u32 - 1;
-                                                                skip_cnt = 0;
-                                                                // Inversions and MNVs don't have a first base prefix, so take
-                                                                // wholes tring
-                                                                let inversion = str::from_utf8(
-                                                                    &alt).unwrap();
-                                                                contig = contig + inversion;
-                                                                variations += 1;
-                                                            },
-                                                            Variant::None => {
-                                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                                ref_alleles += 1;
-                                                            },
-                                                            Variant::SNV(alt) => {
-                                                                contig = contig + str::from_utf8(&[alt]).unwrap();
-                                                                variations += 1;
-                                                            },
-                                                            _ => {
-                                                                contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                                ref_alleles += 1;
-                                                            }
-                                                        }
-                                                    } else {
-                                                        contig = contig + str::from_utf8(&[*base]).unwrap();
-                                                    }
-
-                                                }
+                                    for (tid, target_name) in target_name_set.iter() {
+                                        // let contig_len = target_lengths[ref_idx][&tid];
+                                        let mut contig = String::new();
+                                        original_contig = Vec::new();
+                                        {
+                                            match reference.fetch_all(
+                                                std::str::from_utf8(target_name.as_bytes()).unwrap()) {
+                                                Ok(reference) => reference,
+                                                Err(e) => {
+                                                    warn!("Cannot read sequence from reference {:?}", e);
+                                                    std::process::exit(1)
+                                                },
                                             };
-                                        },
-                                        None => {
-                                            // Write out zeros for contigs with no variants
-                                            contig = str::from_utf8(&original_contig)
-                                                .expect("Can't convert to str").to_string();
+                                            match reference.read(&mut original_contig) {
+                                                Ok(reference) => reference,
+                                                Err(e) => {
+                                                    warn!("Cannot read sequence from reference {:?}", e);
+                                                    std::process::exit(1)
+                                                },
+                                            };
                                         }
-                                    };
+                                        let mut skip_n = 0;
+                                        let mut skip_cnt = 0;
+                                        let mut variations = 0;
+                                        let mut ref_alleles = 0;
 
-                                    writeln!(
-                                        file_open,
-                                        ">{}_polished_{}_alt_alleles_{}_ref_alleles_{}",
-                                        target_names[ref_index][&tid],
-                                        sample_name,
-                                        variations,
-                                        ref_alleles
-                                    ).expect("Unable to write to file");
+                                        match ref_variants.get(tid) {
+                                            Some(variants_in_contig) => {
 
-                                    for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
-                                        file_open.write(line).unwrap();
-                                        file_open.write(b"\n").unwrap();
+                                                for (pos, base) in original_contig.iter().enumerate() {
+                                                    if skip_cnt < skip_n {
+                                                        skip_cnt += 1;
+                                                    } else {
+                                                        skip_n = 0;
+                                                        skip_cnt = 0;
+
+                                                        if variants_in_contig.contains_key(&(pos as i64)) {
+
+                                                            let hash = variants_in_contig
+                                                                .get(&(pos as i64))
+                                                                .unwrap();
+
+                                                            let mut max_var = Variant::None;
+                                                            let mut max_depth = 0;
+
+                                                            for (var, base) in hash.iter() {
+                                                                // If there are two variants possible for
+                                                                // a single site and one is the reference
+                                                                // we will choose the reference
+                                                                if max_depth == 0 {
+                                                                    max_var = var.clone();
+                                                                    max_depth = base.truedepth[sample_idx]
+                                                                } else if base.truedepth[sample_idx] > max_depth {
+                                                                    max_var = var.clone();
+                                                                    max_depth = base.truedepth[sample_idx]
+                                                                }
+                                                            }
+                                                            if hash.len() > 1 {
+                                                                //                                            multivariant_sites += 1;
+                                                                debug!("Multi hash {:?} {:?}", hash, max_var)
+                                                            }
+                                                            match max_var {
+                                                                Variant::Deletion(size) => {
+                                                                    // Skip the next n bases but rescue the reference prefix
+                                                                    skip_n = size;
+                                                                    skip_cnt = 0;
+                                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                                    // If we had the sequence we would rescue first base like this
+                                                                    //                                                let first_byte = max_var.as_bytes()[0];
+                                                                    //                                                contig = contig + str::from_utf8(
+                                                                    //                                                    &[first_byte]).unwrap();
+                                                                    variations += 1;
+                                                                },
+                                                                Variant::Insertion(alt) => {
+
+                                                                    // Remove prefix from variant
+                                                                    let removed_first_base = str::from_utf8(
+                                                                        &alt[1..]).unwrap();
+                                                                    contig = contig + removed_first_base;
+                                                                    variations += 1;
+                                                                },
+                                                                Variant::Inversion(alt) | Variant::MNV(alt) => {
+                                                                    // Skip the next n bases
+                                                                    skip_n = alt.len() as u32 - 1;
+                                                                    skip_cnt = 0;
+                                                                    // Inversions and MNVs don't have a first base prefix, so take
+                                                                    // wholes tring
+                                                                    let inversion = str::from_utf8(
+                                                                        &alt).unwrap();
+                                                                    contig = contig + inversion;
+                                                                    variations += 1;
+                                                                },
+                                                                Variant::None => {
+                                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                                    ref_alleles += 1;
+                                                                },
+                                                                Variant::SNV(alt) => {
+                                                                    contig = contig + str::from_utf8(&[alt]).unwrap();
+                                                                    variations += 1;
+                                                                },
+                                                                _ => {
+                                                                    contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                                    ref_alleles += 1;
+                                                                }
+                                                            }
+                                                        } else {
+                                                            contig = contig + str::from_utf8(&[*base]).unwrap();
+                                                        }
+
+                                                    }
+                                                };
+                                            },
+                                            None => {
+                                                // Write out zeros for contigs with no variants
+                                                contig = str::from_utf8(&original_contig)
+                                                    .expect("Can't convert to str").to_string();
+                                            }
+                                        };
+
+                                        writeln!(
+                                            file_open,
+                                            ">{}_polished_{}_alt_alleles_{}_ref_alleles_{}",
+                                            target_names[ref_index][&tid],
+                                            sample_name,
+                                            variations,
+                                            ref_alleles
+                                        ).expect("Unable to write to file");
+
+                                        for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                                            file_open.write(line).unwrap();
+                                            file_open.write(b"\n").unwrap();
+                                        };
                                     };
-                                };
-                            });
-                        },
-                        None => {},
-                    }
+                                });
+                            },
+                            None => {},
+                        }
                 });
             }
         }

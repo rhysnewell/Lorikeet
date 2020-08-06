@@ -362,6 +362,12 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                             }
                             cursor += 1;
                         }
+
+                        debug!("CIGAR ended, resetting MNV");
+                        mnv = vec![];
+                        mnv_pos = 0;
+                        potential_mnv = false;
+                        
                         if final_pos < ups_and_downs.len() {
                             // True unless the read hits the contig end.
                             ups_and_downs[final_pos] -= 1;
