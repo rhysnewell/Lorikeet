@@ -3,6 +3,7 @@ use bird_tool_utils::command;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use dbscan::fuzzy;
 use estimation::codon_structs::CodonTable;
+use estimation::genotype_abundances;
 use estimation::codon_structs::*;
 use estimation::contig_variants::*;
 use estimation::linkage::*;
@@ -747,14 +748,16 @@ impl VariantMatrixFunctions for VariantMatrix {
                             };
                         });
                         let mut prediction_set = prediction_set.lock().unwrap();
-                        if !(prediction_set.len() == 1 && prediction_set.contains(&Variant::None)) {} else {
-                            let mut prediction_variants = prediction_variants
-                                .lock()
-                                .unwrap();
-
-                            prediction_variants
-                                .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
-                        }
+                        // if prediction_set.len() == 1 && prediction_set.contains(&Variant::None) {
+                        //
+                        //     debug!("Removing cluster {}", rank + 1);
+                        //     let mut prediction_variants = prediction_variants
+                        //         .lock()
+                        //         .unwrap();
+                        //
+                        //     prediction_variants
+                        //         .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
+                        // }
                     });
                     let prediction_variants = prediction_variants.lock().unwrap().clone();
                     let mut prediction_variants_all = prediction_variants_all.lock().unwrap();
@@ -964,7 +967,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 )
                                 .expect("Unable to write to file");
 
-                                for line in contig.as_bytes().to_vec()[..].chunks(60).into_iter() {
+                                for line in contig
+                                    .as_bytes()
+                                    .to_vec()[..]
+                                    .chunks(60)
+                                    .into_iter() {
                                     file_open.write(line).unwrap();
                                     file_open.write(b"\n").unwrap();
                                 }
@@ -973,7 +980,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                             }
                             info!(
                                 "Genome {}: Cluster {} contains {} variant alleles and {} reference alleles",
-                                &genomes_and_contigs.genomes[*ref_index], strain_index, total_variant_alleles, total_reference_alleles
+                                &genomes_and_contigs.genomes[*ref_index],
+                                strain_index,
+                                total_variant_alleles,
+                                total_reference_alleles,
                             );
                         });
                     });
@@ -990,15 +1000,29 @@ impl VariantMatrixFunctions for VariantMatrix {
         match self {
             VariantMatrix::VariantContigMatrix {
                 target_names,
-                ref mut pred_variants,
+                pred_variants,
                 all_variants,
+                sample_names,
                 ..
             } => {
-                pred_variants
+                let number_of_samples = sample_names.len();
+                all_variants
                     .par_iter()
-                    .for_each(|(ref_index, strain_map)| {
+                    .for_each(|(ref_index, ref_variants)| {
+                        info!(
+                            "Calculating genpotype abundances for reference: {}",
+                            reference_map[&ref_index],
+                        );
+                        let number_of_genotypes = pred_variants.keys().len();
+                        // let genotype_vectors =
+                        //     vec![vec![Vec::new(); number_of_genotypes]; number_of_samples];
 
-                });
+                        for (tid, contig_variants) in ref_variants.iter() {
+                            for (pos, variants) in contig_variants.iter() {
+
+                            }
+                        }
+                    });
             }
         }
     }
