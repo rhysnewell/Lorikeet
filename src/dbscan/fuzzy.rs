@@ -341,15 +341,32 @@ impl FuzzyDBSCAN {
         debug!("Clusters {:?}", clusters.len());
 
         // Deduplicate clusters by sorted indices
-        clusters.dedup_by_key(|cluster| {
-            let mut dedup_key = cluster
+        clusters.dedup_by(|cluster1, cluster2| {
+
+            // Remove clusters that are completely contained within another cluster
+            let dedup_key_1 = cluster1
                 .par_iter()
                 .map(|var| var.index)
-                .collect::<Vec<usize>>();
-            dedup_key.par_sort();
-            dedup_key.dedup();
-            debug!("dedup_key {:?}", dedup_key);
-            dedup_key
+                .collect::<HashSet<usize>>();
+
+            let dedup_key_2 = cluster2
+                .par_iter()
+                .map(|var| var.index)
+                .collect::<HashSet<usize>>();
+
+            let intersection: HashSet<_> = dedup_key_1
+                .intersection(&dedup_key_2)
+                .collect();
+
+            let small_similarity = intersection.len() / dedup_key_1.len();
+
+            debug!(
+                "dedup_key_1 {:?} dedup_key_2 {:?} Similarity {}",
+                dedup_key_1,
+                dedup_key_2,
+                small_similarity,
+            );
+            small_similarity == 1
         });
 
         debug!("Dedup Clusters {:?}", clusters.len());
