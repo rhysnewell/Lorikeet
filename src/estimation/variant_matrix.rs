@@ -286,6 +286,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                             sample_map.combine_sample(base_info, sample_idx, 0);
                         }
                     }
+                    debug!("All Variants Lengths {} {:?} {:?}", tid,
+                           contig_variants.len(), target_names[&reference_index]);
                 }
             }
         }
@@ -320,10 +322,13 @@ impl VariantMatrixFunctions for VariantMatrix {
             VariantMatrix::VariantContigMatrix {
                 ref mut all_variants,
                 ..
-            } => match all_variants.get_mut(&ref_idx) {
-                Some(ref_variants) => ref_variants.get_mut(&tid.clone()),
-                _ => None,
-            },
+            } =>
+                match all_variants.get_mut(&ref_idx) {
+                    Some(ref_variants) => {
+                        ref_variants.get_mut(&tid)
+                    },
+                    _ => None,
+                },
         }
     }
 
@@ -1009,19 +1014,64 @@ impl VariantMatrixFunctions for VariantMatrix {
                 all_variants
                     .par_iter()
                     .for_each(|(ref_index, ref_variants)| {
-                        info!(
-                            "Calculating genpotype abundances for reference: {}",
-                            reference_map[&ref_index],
-                        );
-                        let number_of_genotypes = pred_variants.keys().len();
-                        // let genotype_vectors =
-                        //     vec![vec![Vec::new(); number_of_genotypes]; number_of_samples];
 
-                        for (tid, contig_variants) in ref_variants.iter() {
-                            for (pos, variants) in contig_variants.iter() {
+                        match pred_variants.get(&ref_index) {
+                            Some(genotype_map) => {
+                                info!(
+                                    "Calculating genpotype abundances for reference: {}",
+                                    reference_map[&ref_index],
+                                );
+                                let number_of_genotypes = pred_variants.keys().len();
 
+                                // The initialization vector for the EM algorithm
+                                // let mut genotype_vectors =
+                                //     vec![vec![Vec::new(); number_of_genotypes]; number_of_samples];
+
+                                // A key tracking the genotype_index and strain_id values
+                                let mut genotype_key: HashMap<usize, usize> = HashMap::new();
+                                for (genotype_idx, (strain_id, _)) in genotype_map.iter().enumerate() {
+                                    genotype_key.insert(*strain_id, genotype_idx);
+                                };
+
+                                for (tid, contig_variants) in ref_variants.iter() {
+                                    for (pos, pos_variants) in contig_variants.iter() {
+                                        if pos_variants.len() > 1 {
+                                            for (variant, base_info) in pos_variants.iter() {
+                                                match variant {
+                                                    Variant::SNV(_) |
+                                                    Variant::MNV(_) |
+                                                    Variant::SV(_) |
+                                                    Variant::Insertion(_) |
+                                                    Variant::Inversion(_) |
+                                                    Variant::Deletion(_) => {
+                                                        for (sample_index, lorikeet_depth) in base_info.truedepth.iter().enumerate() {
+                                                            // We divide the total depth of variant here
+                                                            // by the total amount of genotypes that
+                                                            // variant occurs in.
+                                                            // E.g. if a variant had a depth of 6
+                                                            // and occurred in 3 genotypes, then for each
+                                                            // genotype its initialization value would be 2
+                                                            // genotype_vectors[sample_index]
+                                                        }
+                                                    },
+                                                    Variant::None => {
+
+                                                    }
+                                                }
+
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            None => {
+                                info!(
+                                    "No genotypes created for : {}",
+                                    reference_map[&ref_index],
+                                );
                             }
                         }
+
                     });
             }
         }

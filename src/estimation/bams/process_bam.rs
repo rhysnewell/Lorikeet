@@ -60,6 +60,11 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
+
+    for target_name in target_names.iter() {
+        debug!("Target name {:?}", &str::from_utf8(target_name));
+    }
+
     let mut record: bam::record::Record = bam::Record::new();
     let mut ups_and_downs: Vec<i32> = Vec::new();
     // Current contig name
@@ -150,13 +155,20 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     let contig_len = header
                         .target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
-                    contig_name = target_names[last_tid as usize].to_vec();
-                    // contig_name_str = split_contig_name(&contig_name);
-                    ref_idx =
-                        retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
+
 
                     let total_mismatches =
                         total_edit_distance_in_current_contig - total_indels_in_current_contig;
+
+                    match variant_matrix.variants_of_contig(ref_idx, last_tid) {
+                        Some(map) => {
+                            debug!("Variant Matrix {:?}", map);
+                        },
+                        None => {
+                            debug!("Ref idx {} and tid {}", ref_idx, last_tid);
+
+                        }
+                    }
 
                     // Retrieve the reference based on the reference index from reference_map
                     // let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
@@ -221,6 +233,10 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                         &stoit_name,
                     );
                 }
+                contig_name = target_names[tid as usize].to_vec();
+                // contig_name_str = split_contig_name(&contig_name);
+                ref_idx =
+                    retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
 
                 ups_and_downs =
                     vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -245,6 +261,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             if !record.is_supplementary() {
                 num_mapped_reads_in_current_contig += 1;
             }
+
 
             // for each chunk of the cigar string
             let mut cursor: usize = record.pos() as usize;
@@ -364,7 +381,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                             cursor += 1;
                         }
 
-                        debug!("CIGAR ended, resetting MNV");
+                        // debug!("CIGAR ended, resetting MNV");
                         mnv = vec![];
                         mnv_pos = 0;
                         potential_mnv = false;
@@ -432,22 +449,31 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     Cigar::SoftClip(_) => {
                         // soft clipped portions of reads can be included as structural variants
                         // not sure if this correct protocol or not
-                        //                        if longreads {
-                        //                            let refr = (ref_seq[cursor as usize] as char).to_string();
-                        //                            let insert = match str::from_utf8(&record.seq().as_bytes()[
-                        //                                read_cursor..read_cursor + cig.len() as usize]) {
-                        //                                Ok(ins) => {ins.to_string()},
-                        //                                Err(_e) => {"".to_string()},
-                        //                            };
-                        //                            let indel_map = indels.entry(cursor as i32)
-                        //                                .or_insert(BTreeMap::new());
-                        //
-                        //                            let id = indel_map.entry(refr + &insert)
-                        //                                .or_insert(BTreeSet::new());
-                        //                            let mut read_to_id = read_to_id.lock().unwrap();
-                        //                            id.insert(read_to_id[&record.qname().to_vec()]);
-                        //                            total_indels_in_current_contig += cig.len() as u64;
-                        //                        }
+                        let insertion =
+                            &record.seq().as_bytes()[read_cursor..read_cursor + cig.len() as usize];
+                        match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                            Some(current_variants) => {
+                                current_variants.par_iter_mut().for_each(|(variant, base)| {
+                                    match variant {
+                                        // We need to check every position of the MNV
+                                        Variant::Insertion(alt) => {
+                                            if String::from_utf8(alt.to_vec())
+                                                .expect("Unable to convert to string")
+                                                .contains(
+                                                    &String::from_utf8(insertion.to_vec())
+                                                        .expect("Unable to convert to string"),
+                                                )
+                                            {
+                                                base.assign_read(record.qname().to_vec());
+                                                base.truedepth[sample_idx] += 1;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                });
+                            }
+                            _ => {}
+                        }
                         read_cursor += cig.len() as usize;
                     }
                     Cigar::HardClip(_) | Cigar::Pad(_) => {}
@@ -474,6 +500,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         contig_name = target_names[last_tid as usize].to_vec();
 
         ref_idx = retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
+
         let total_mismatches =
             total_edit_distance_in_current_contig - total_indels_in_current_contig;
 
