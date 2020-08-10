@@ -246,13 +246,14 @@ pub struct Base {
     pub quals: Vec<f32>,
     // Filter tag
     pub filters: Vec<HashSet<Filter>>,
-    // Depth of good quality reads
+    // Depth of this variant as decided by variant caller. Only includes good quality reads
+    // This values tends to be inconsistent so opt to use lorikeets depth value
     pub depth: Vec<i32>,
-    // Depth including bad quality reads
+    // Depth for this variant as decided by lorikeet. Includes low quality reads
     pub truedepth: Vec<i32>,
-    // Depth as decided by CoverM
+    // Depth at this location as decided by CoverM
     pub totaldepth: Vec<i32>,
-    // Depth of the reference allele
+    // Depth of the reference allele as decided by lorikeet. Includes low quality reds
     pub referencedepth: Vec<i32>,
     // Physical coverage of valid inserts across locus
     pub physicalcov: Vec<i32>,
@@ -527,6 +528,7 @@ impl Base {
     }
 
     pub fn assign_read(&mut self, read_id: Vec<u8>) {
+        debug!("assigning read {:?}", String::from_utf8(read_id.clone()));
         self.reads.insert(read_id);
     }
 }

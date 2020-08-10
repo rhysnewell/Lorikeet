@@ -287,6 +287,8 @@ pub fn linkage_clustering_of_variants(
 
                     // Read ids of second variant
                     let set2 = &var2.reads;
+                    // debug!("set 1 {:?}", &set1);
+                    // debug!("set 2 {:?}", &set2);
 
                     // Add the jaccard's similarity to the hashmap for the two clusters
                     let intersection: HashSet<_> = set1.intersection(&set2).collect();
