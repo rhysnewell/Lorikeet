@@ -302,7 +302,7 @@ impl Base {
                     self.referencedepth[sample_idx] = refr_depth;
                 }
                 _ => {
-                    self.truedepth[sample_idx] = self.depth[sample_idx];
+                    // self.truedepth[sample_idx] = self.depth[sample_idx];
                     let mut refr_depth = d - self.truedepth[sample_idx];
                     if refr_depth < 0 {
                         refr_depth = 0;
@@ -528,7 +528,6 @@ impl Base {
     }
 
     pub fn assign_read(&mut self, read_id: Vec<u8>) {
-        debug!("assigning read {:?}", String::from_utf8(read_id.clone()));
         self.reads.insert(read_id);
     }
 }

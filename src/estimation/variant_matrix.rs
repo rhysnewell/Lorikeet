@@ -670,13 +670,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                     };
 
                     // Perform read phasing clustering and return initial clusters
-                    let links = linkage_clustering_of_variants(
-                        &variant_info_vec,
-                        anchor_size,
-                        anchor_similarity,
-                        minimum_reads_in_link,
-                    );
-
+                    // let links = linkage_clustering_of_variants(
+                    //     &variant_info_vec,
+                    //     anchor_size,
+                    //     anchor_similarity,
+                    //     minimum_reads_in_link,
+                    // );
+                    let links = Vec::new();
                     // run fuzzy DBSCAN
                     if links.len() > 0 {
                         info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
@@ -833,6 +833,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                             let mut total_variant_alleles = 0;
                             let mut total_reference_alleles = 0;
 
+                            // If we find multiple variants at one site, then we
+                            // have overfitted this gentoype
+                            let mut overclustered = false;
+
                             for (tid, target_name) in target_names[ref_index].iter() {
                                 let mut contig = String::new();
                                 original_contig = Vec::new();
@@ -897,8 +901,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                     }
                                                 }
                                                 if hash.len() > 1 {
-                                                    //                                            multivariant_sites += 1;
-                                                    debug!("Multi hash {:?} {:?}", hash, max_var)
+                                                    //  multivariant_sites += 1;
+                                                    overclustered = true;
+                                                    debug!("Multi hash {:?} {:?}", hash, max_var);
+                                                    break
                                                 }
                                                 match max_var {
                                                     Variant::Deletion(size) => {
@@ -998,9 +1004,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
     fn calculate_strain_abundances(
         &mut self,
-        output_prefix: &str,
+        _output_prefix: &str,
         reference_map: &HashMap<usize, String>,
-        genomes_and_contigs: &GenomesAndContigs,
+        _genomes_and_contigs: &GenomesAndContigs,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -1024,45 +1030,71 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 let number_of_genotypes = pred_variants.keys().len();
 
                                 // The initialization vector for the EM algorithm
-                                // let mut genotype_vectors =
-                                //     vec![vec![Vec::new(); number_of_genotypes]; number_of_samples];
+                                let mut genotype_vectors =
+                                    vec![vec![genotype_abundances::Genotype::new(0); number_of_genotypes]; number_of_samples];
 
                                 // A key tracking the genotype_index and strain_id values
-                                let mut genotype_key: HashMap<usize, usize> = HashMap::new();
+                                let mut genotype_key: HashMap<i32, usize> = HashMap::new();
                                 for (genotype_idx, (strain_id, _)) in genotype_map.iter().enumerate() {
-                                    genotype_key.insert(*strain_id, genotype_idx);
+
+                                    genotype_key.insert(*strain_id as i32, genotype_idx);
                                 };
 
-                                for (tid, contig_variants) in ref_variants.iter() {
-                                    for (pos, pos_variants) in contig_variants.iter() {
-                                        if pos_variants.len() > 1 {
-                                            for (variant, base_info) in pos_variants.iter() {
-                                                match variant {
-                                                    Variant::SNV(_) |
-                                                    Variant::MNV(_) |
-                                                    Variant::SV(_) |
-                                                    Variant::Insertion(_) |
-                                                    Variant::Inversion(_) |
-                                                    Variant::Deletion(_) => {
-                                                        for (sample_index, lorikeet_depth) in base_info.truedepth.iter().enumerate() {
+                                genotype_vectors.par_iter_mut().for_each(|sample_vec| {
+                                    for (genotype_idx, (strain_id, _)) in genotype_map.iter().enumerate() {
+
+                                        sample_vec[genotype_idx] = genotype_abundances::Genotype::new(*strain_id);
+                                    };
+                                });
+
+                                genotype_vectors.par_iter_mut().enumerate().for_each(|(sample_index, sample_vec)| {
+                                    for (tid, contig_variants) in ref_variants.iter() {
+                                        for (pos, pos_variants) in contig_variants.iter() {
+                                            if pos_variants.len() > 1 {
+                                                for (variant, base_info) in pos_variants.iter() {
+                                                    match variant {
+                                                        Variant::SNV(_) |
+                                                        Variant::MNV(_) |
+                                                        Variant::SV(_) |
+                                                        Variant::Insertion(_) |
+                                                        Variant::Inversion(_) |
+                                                        Variant::Deletion(_) => {
                                                             // We divide the total depth of variant here
                                                             // by the total amount of genotypes that
                                                             // variant occurs in.
                                                             // E.g. if a variant had a depth of 6
                                                             // and occurred in 3 genotypes, then for each
                                                             // genotype its initialization value would be 2
-                                                            // genotype_vectors[sample_index]
+                                                            let lorikeet_depth = base_info.truedepth[sample_index] as f64;
+                                                            let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
+                                                            let weight = relative_abundance / base_info.genotypes.len() as f64;
+                                                            for strain_id in base_info.genotypes.iter() {
+                                                                let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                                                sample_vec[*genotype_idx].variant_weights.push(weight);
+                                                            }
+                                                        },
+                                                        Variant::None => {
+                                                            // debug!("Reference variant {:?}", base_info.truedepth);
+                                                            let lorikeet_depth = base_info.truedepth[sample_index] as f64;
+                                                            let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
+                                                            let weight = relative_abundance / base_info.genotypes.len() as f64;
+                                                            for strain_id in base_info.genotypes.iter() {
+                                                                let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                                                sample_vec[*genotype_idx].variant_weights.push(weight);
+                                                            }
                                                         }
-                                                    },
-                                                    Variant::None => {
-
                                                     }
-                                                }
 
+                                                }
                                             }
                                         }
                                     }
-                                }
+                                });
+                                genotype_vectors.par_iter_mut().enumerate().for_each(|(idx, sample_genotypes)|{
+                                    debug!("Genotype Vector before EM {} {:?}", idx, sample_genotypes);
+                                    genotype_abundances::calculate_abundances(sample_genotypes);
+                                    debug!("Genotype Vector after EM {} {:?}", idx, sample_genotypes);
+                                });
                             },
                             None => {
                                 info!(

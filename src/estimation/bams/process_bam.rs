@@ -366,6 +366,13 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                                                 if base.refr[0] == read_char {
                                                     base.assign_read(record.qname().to_vec());
                                                     base.truedepth[sample_idx] += 1;
+                                                    // info!(
+                                                    //     "Reference ref {} tid {} pos {} coverages {:?}",
+                                                    //     &ref_idx,
+                                                    //     &tid,
+                                                    //     &cursor,
+                                                    //     &base.truedepth,
+                                                    // )
                                                 } else {
                                                     mnv = vec!();
                                                     mnv_pos = 0;

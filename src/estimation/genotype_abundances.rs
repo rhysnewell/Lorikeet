@@ -1,8 +1,6 @@
-use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-use model::variants;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Genotype {
     // The variants in a genotype, not order is random but consistent with variant_weights
     // pub variants: Vec<variants::Variant>,
@@ -32,16 +30,26 @@ pub fn calculate_abundances(
 ) {
     // Placeholder stopping criterion vector
     // Going to check for small changes between theta_prev and theta_curr
-    let mut theta_prev_mean: f64 = 1.;
-    let mut theta_curr_mean: f64 = 2.;
-    let mut theta_curr = vec![1.; sample_genotypes.len()];
+    let mut theta_prev_mean: f64;
+    let mut theta_curr_mean: f64 = 1.;
+    // the difference between theta curr and theta prev
+    let mut omega = 1.;
+    // The minimum value of omega before stopping
     let eps = 0.001;
 
-    while (theta_curr_mean - theta_prev_mean).abs() > eps {
+
+    let mut theta_curr = vec![1.; sample_genotypes.len()];
+    let mut n = 0;
+
+    while omega > eps {
         // Update theta values
         theta_prev_mean = theta_curr_mean;
 
         for (index, genotype) in sample_genotypes.iter_mut().enumerate() {
+            if genotype.variant_weights.len() == 0 {
+                break
+            }
+
             // Step 1: update variant weights
             genotype.variant_weights =
                 genotype.variant_weights
@@ -57,7 +65,19 @@ pub fn calculate_abundances(
             theta_curr[index] = genotype.abundance_weight;
         }
 
-        // Update theta_curr_mean
+        // Update theta_curr_mean and omega
         theta_curr_mean = theta_curr.par_iter().sum::<f64>() / theta_curr.len() as f64;
+        omega = (theta_curr_mean - theta_prev_mean).abs();
+
+        debug!(
+            "Theta Current {:?} \
+            theta curr mean {} \
+            Omega {}",
+            &theta_curr,
+            &theta_prev_mean,
+            &omega,
+        );
+        n += 1;
     }
+    info!("EM Algorithm Finished in {} iterations", n);
 }

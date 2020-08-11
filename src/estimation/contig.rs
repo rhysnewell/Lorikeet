@@ -539,6 +539,9 @@ pub fn pileup_variants<
         // Write variants in VCF format, reference specific
         variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
+        // Get strain abundances
+        // variant_matrix.calculate_strain_abundances(&output_prefix, &reference_map, &genomes_and_contigs);
+
         // If flagged, then create plots using CMplot
         if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();

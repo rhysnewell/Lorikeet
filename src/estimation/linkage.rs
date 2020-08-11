@@ -374,7 +374,8 @@ pub fn linkage_clustering_of_variants(
         // Collect receiver into vec and sort by length
         let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
         condensed_links.par_sort_by_key(|key| key.len());
-        debug!("pre filtering condensed links {:?}", &condensed_links);
+
+
 
         // Filter highly similar sets
         condensed_links.dedup_by(|a, b| {
@@ -401,7 +402,12 @@ pub fn linkage_clustering_of_variants(
                 )
                 .unwrap()
             });
-        let initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
+        let mut initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
+
+        if initial_clusters.len() > 5 {
+            info!("Found more than 5 initial clusters: {}  Taking the best 5..", initial_clusters.len());
+            initial_clusters = initial_clusters[initial_clusters.len() - 5 .. initial_clusters.len()].to_vec();
+        }
 
         return initial_clusters;
     } else {
