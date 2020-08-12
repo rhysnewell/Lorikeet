@@ -836,6 +836,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             // If we find multiple variants at one site, then we
                             // have overfitted this gentoype
                             let mut overclustered = false;
+                            let mut multivariant_sites = 0;
 
                             for (tid, target_name) in target_names[ref_index].iter() {
                                 let mut contig = String::new();
@@ -901,10 +902,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                     }
                                                 }
                                                 if hash.len() > 1 {
-                                                    //  multivariant_sites += 1;
+                                                    multivariant_sites += 1;
                                                     overclustered = true;
                                                     debug!("Multi hash {:?} {:?}", hash, max_var);
-                                                    break
                                                 }
                                                 match max_var {
                                                     Variant::Deletion(size) => {
@@ -967,7 +967,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         .expect("Can't convert to str")
                                         .to_string();
                                 }
-
                                 writeln!(
                                     file_open,
                                     ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
@@ -976,7 +975,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     variations,
                                     ref_alleles
                                 )
-                                .expect("Unable to write to file");
+                                    .expect("Unable to write to file");
 
                                 for line in contig
                                     .as_bytes()
@@ -988,6 +987,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                                 total_variant_alleles += variations;
                                 total_reference_alleles += ref_alleles;
+                            }
+                            if overclustered {
+                                warn!(
+                                    "Genome {}: Cluster {} contains {} multi-variant sites. It may be overclustered.",
+                                    &genomes_and_contigs.genomes[*ref_index],
+                                    multivariant_sites,
+                                )
                             }
                             info!(
                                 "Genome {}: Cluster {} contains {} variant alleles and {} reference alleles",
