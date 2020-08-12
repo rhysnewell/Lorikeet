@@ -2021,6 +2021,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("min-repeat-entropy")
                         .default_value("1.5"),
                 )
+                .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
