@@ -304,8 +304,10 @@ pub fn generate_vcf(
         external_command_checker::check_for_vt();
         external_command_checker::check_for_bcftools();
 
-        let region_size = reference_length / threads as u64;
-
+        // Old way of calulating region size, not a good method
+        // let region_size = reference_length / threads as u64;
+        // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
+        let region_size = 100000;
         let index_path = reference.clone() + ".fai";
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
