@@ -992,6 +992,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 warn!(
                                     "Genome {}: Cluster {} contains {} multi-variant sites. It may be overclustered.",
                                     &genomes_and_contigs.genomes[*ref_index],
+                                    strain_index,
                                     multivariant_sites,
                                 )
                             }
