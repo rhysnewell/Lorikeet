@@ -309,6 +309,8 @@ pub fn generate_vcf(
         let index_path = reference.clone() + ".fai";
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
+        let freebayes_path_prenormalization = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes_prenormalization.vcf");
+
         //        let freebayes_path = &("freebayes.vcf");
         let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
@@ -347,12 +349,10 @@ pub fn generate_vcf(
         .expect(&format!("Unable to index bam at {}", &tmp_bam_path));
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
-        let vcf_cmd_string = format!(
+        let freebayes_cmd_string = format!(
             "set -e -o pipefail;  \
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
-            --min-repeat-entropy {} --strict-vcf -m {} {} | \
-            vt normalize -n -r {} - | \
-            bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
+            --min-repeat-entropy {} --strict-vcf -m {} {} > {}",
             index_path,
             region_size,
             threads,
@@ -362,19 +362,36 @@ pub fn generate_vcf(
             m.value_of("min-repeat-entropy").unwrap(),
             mapq_thresh,
             tmp_bam_path,
+            &freebayes_path_prenormalization,
+        );
+        let vt_cmd_string = format!(
+            "vt normalize -n -r {} {} | \
+            bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
             &reference,
+            &freebayes_path_prenormalization,
             freebayes_path,
         );
-        debug!("Queuing cmd_string: {}", vcf_cmd_string);
+        debug!("Queuing cmd_string: {}", freebayes_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
-                .arg(&vcf_cmd_string)
+                .arg(&freebayes_cmd_string)
                 .stderr(std::process::Stdio::piped())
                 // .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"),
             "freebayes",
+        );
+        debug!("Queuing cmd_string: {}", vt_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&vt_cmd_string)
+                .stderr(std::process::Stdio::piped())
+                // .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "vt",
         );
         debug!("VCF Path {:?}", freebayes_path);
         let vcf_reader = bcf::Reader::from_path(&Path::new(freebayes_path));
