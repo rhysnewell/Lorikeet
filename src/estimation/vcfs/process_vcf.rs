@@ -354,7 +354,7 @@ pub fn generate_vcf(
         let freebayes_cmd_string = format!(
             "set -e -o pipefail;  \
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
-            --min-repeat-entropy {} --strict-vcf -m {} {} > {}",
+            --min-repeat-entropy {} --strict-vcf -m {} {}  --debug > {}",
             index_path,
             region_size,
             threads,
