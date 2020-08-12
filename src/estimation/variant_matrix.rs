@@ -1439,11 +1439,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                         match target_names.get(ref_index) {
                             Some(target_name_set) => {
                                 sample_names.iter().enumerate().for_each(|(sample_idx, sample_name)| {
-                                    let sample_name = sample_name
-                                        .rsplit(".")
-                                        .skip(1)
-                                        .next()
-                                        .unwrap();
+                                    // let sample_name = sample_name
+                                    //     .rsplit(".")
+                                    //     .skip(1)
+                                    //     .next()
+                                    //     .unwrap();
 
                                     let file_name =
                                         format!(
