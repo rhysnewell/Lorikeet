@@ -307,7 +307,7 @@ pub fn generate_vcf(
         // Old way of calulating region size, not a good method
         // let region_size = reference_length / threads as u64;
         // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
-        let region_size = 100000;
+        let region_size = 10000;
         let index_path = reference.clone() + ".fai";
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
@@ -354,7 +354,7 @@ pub fn generate_vcf(
         let freebayes_cmd_string = format!(
             "set -e -o pipefail;  \
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
-            --min-repeat-entropy {} --strict-vcf -m {} {}  --debug > {}",
+            --min-repeat-entropy {} --strict-vcf -m {} {} > {}",
             index_path,
             region_size,
             threads,

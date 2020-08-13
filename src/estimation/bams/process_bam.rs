@@ -160,16 +160,6 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     let total_mismatches =
                         total_edit_distance_in_current_contig - total_indels_in_current_contig;
 
-                    match variant_matrix.variants_of_contig(ref_idx, last_tid) {
-                        Some(map) => {
-                            debug!("Variant Matrix {:?}", map);
-                        },
-                        None => {
-                            debug!("Ref idx {} and tid {}", ref_idx, last_tid);
-
-                        }
-                    }
-
                     // Retrieve the reference based on the reference index from reference_map
                     // let reference_path = reference_map.get(&ref_idx).expect("Unable to retrieve reference path");
 
