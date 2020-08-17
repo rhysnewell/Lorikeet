@@ -317,38 +317,34 @@ pub fn generate_vcf(
         let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
         // Generate uncompressed filtered SAM file
-        let sam_cmd_string = format!(
-            "samtools sort -@ {} -n -l 0 -T /tmp {} | \
-            samtools fixmate -@ {} -m - - | \
-            samtools sort -@ {} -l 0 -T /tmp | \
-            samtools markdup -@ {} -T /tmp -r -s - - > {}",
-            threads - 1,
-            bam_path,
-            threads - 1,
-            threads - 1,
-            threads - 1,
-            tmp_bam_path,
-        );
-        debug!("Queuing cmd_string: {}", sam_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&sam_cmd_string)
-                .stderr(std::process::Stdio::piped())
-                // .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "samtools",
-        );
+        // let sam_cmd_string = format!(
+        //     "samtools sort -@ {} -n -l 0 -T /tmp {} | \
+        //     samtools fixmate -@ {} -m - - > {}",
+        //     threads - 1,
+        //     bam_path,
+        //     threads - 1,
+        //     tmp_bam_path,
+        // );
+        // debug!("Queuing cmd_string: {}", sam_cmd_string);
+        // command::finish_command_safely(
+        //     std::process::Command::new("bash")
+        //         .arg("-c")
+        //         .arg(&sam_cmd_string)
+        //         .stderr(std::process::Stdio::piped())
+        //         // .stdout(std::process::Stdio::piped())
+        //         .spawn()
+        //         .expect("Unable to execute bash"),
+        //     "samtools",
+        // );
 
         // check and build bam index if it doesn't exist
         bam::index::build(
-            tmp_bam_path,
-            Some(&(tmp_bam_path.to_string() + ".bai")),
+            bam_path,
+            Some(&(bam_path.to_string() + ".bai")),
             bam::index::Type::BAI,
             threads as u32,
         )
-        .expect(&format!("Unable to index bam at {}", &tmp_bam_path));
+        .expect(&format!("Unable to index bam at {}", &bam_path));
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let freebayes_cmd_string = format!(
@@ -363,7 +359,7 @@ pub fn generate_vcf(
             m.value_of("base-quality-threshold").unwrap(),
             m.value_of("min-repeat-entropy").unwrap(),
             mapq_thresh,
-            tmp_bam_path,
+            bam_path,
             &freebayes_path_prenormalization,
         );
         let vt_cmd_string = format!(
