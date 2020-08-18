@@ -8,6 +8,8 @@ pub struct Genotype {
     pub index: usize,
     // The expected weights of each variant that decide the strain abundance
     pub variant_weights: Vec<f64>,
+    // The indices of all the genotypes that share this variant
+    pub variant_genotype_ids: Vec<Vec<usize>>,
     // The geometric weighting of this strains abundance
     // Strain abundance would be calculated as abundance_weight * total_abundance
     // denoted as `theta`
@@ -17,9 +19,9 @@ pub struct Genotype {
 impl Genotype {
     pub fn new(index: usize) -> Genotype {
         Genotype {
-            // variants: vec!(),
             index,
             variant_weights: vec!(),
+            variant_genotype_ids: vec!(),
             abundance_weight: 1.,
         }
     }
@@ -54,7 +56,14 @@ pub fn calculate_abundances(
             genotype.variant_weights =
                 genotype.variant_weights
                     .par_iter()
-                    .map(|w| w*genotype.abundance_weight)
+                    .enumerate()
+                    .map(|(variant_index, w)| {
+                        let pooled_weights = genotype.variant_genotype_ids[variant_index]
+                            .par_iter()
+                            .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
+                            .sum::<f64>();
+                        w*(genotype.abundance_weight / pooled_weights)
+                    })
                     .collect();
 
             // Step 2: update abundance weight based on mean of variant weights
@@ -79,5 +88,5 @@ pub fn calculate_abundances(
         );
         n += 1;
     }
-    info!("EM Algorithm Finished in {} iterations", n);
+    debug!("EM Algorithm Finished in {} iterations", n);
 }
