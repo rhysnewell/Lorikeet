@@ -1011,9 +1011,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
     fn calculate_strain_abundances(
         &mut self,
-        _output_prefix: &str,
+        output_prefix: &str,
         reference_map: &HashMap<usize, String>,
-        _genomes_and_contigs: &GenomesAndContigs,
+        genomes_and_contigs: &GenomesAndContigs,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -1028,10 +1028,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .par_iter()
                     .for_each(|(ref_index, ref_variants)| {
 
+
                         match pred_variants.get(&ref_index) {
                             Some(genotype_map) => {
                                 info!(
-                                    "Calculating genpotype abundances for reference: {}",
+                                    "Calculating genotype abundances for reference: {}",
                                     reference_map[&ref_index],
                                 );
                                 let number_of_genotypes = pred_variants.keys().len();
@@ -1041,16 +1042,16 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     vec![vec![genotype_abundances::Genotype::new(0); number_of_genotypes]; number_of_samples];
 
                                 // A key tracking the genotype_index and strain_id values
-                                let mut genotype_key: HashMap<i32, usize> = HashMap::new();
+                                let mut genotype_key: HashMap<usize, usize> = HashMap::new();
                                 for (genotype_idx, (strain_id, _)) in genotype_map.iter().enumerate() {
 
-                                    genotype_key.insert(*strain_id as i32, genotype_idx);
+                                    genotype_key.insert(*strain_id, genotype_idx);
                                 };
 
                                 genotype_vectors.par_iter_mut().for_each(|sample_vec| {
-                                    for (genotype_idx, (strain_id, _)) in genotype_map.iter().enumerate() {
-
-                                        sample_vec[genotype_idx] = genotype_abundances::Genotype::new(*strain_id);
+                                    for (strain_id, _) in genotype_map.iter() {
+                                        let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                        sample_vec[*genotype_idx] = genotype_abundances::Genotype::new(*strain_id);
                                     };
                                 });
 
@@ -1073,21 +1074,37 @@ impl VariantMatrixFunctions for VariantMatrix {
                                                             // and occurred in 3 genotypes, then for each
                                                             // genotype its initialization value would be 2
                                                             let lorikeet_depth = base_info.truedepth[sample_index] as f64;
-                                                            let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
-                                                            let weight = relative_abundance / base_info.genotypes.len() as f64;
+                                                            // let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
+                                                            let weight = lorikeet_depth / base_info.genotypes.len() as f64;
                                                             for strain_id in base_info.genotypes.iter() {
-                                                                let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                                                let genotype_idx = genotype_key.get(&(*strain_id as usize)).unwrap();
                                                                 sample_vec[*genotype_idx].variant_weights.push(weight);
+                                                                let genotype_indices = base_info.genotypes
+                                                                    .par_iter()
+                                                                    .map(|idx|
+                                                                        *genotype_key
+                                                                            .get(&(*idx as usize))
+                                                                            .unwrap())
+                                                                    .collect::<Vec<usize>>();
+                                                                sample_vec[*genotype_idx].variant_genotype_ids.push(genotype_indices);
                                                             }
                                                         },
                                                         Variant::None => {
                                                             // debug!("Reference variant {:?}", base_info.truedepth);
                                                             let lorikeet_depth = base_info.truedepth[sample_index] as f64;
-                                                            let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
-                                                            let weight = relative_abundance / base_info.genotypes.len() as f64;
+                                                            // let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
+                                                            let weight = lorikeet_depth / base_info.genotypes.len() as f64;
                                                             for strain_id in base_info.genotypes.iter() {
-                                                                let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                                                let genotype_idx = genotype_key.get(&(*strain_id as usize)).unwrap();
                                                                 sample_vec[*genotype_idx].variant_weights.push(weight);
+                                                                let genotype_indices = base_info.genotypes
+                                                                    .par_iter()
+                                                                    .map(|idx|
+                                                                        *genotype_key
+                                                                            .get(&(*idx as usize))
+                                                                            .unwrap())
+                                                                    .collect::<Vec<usize>>();
+                                                                sample_vec[*genotype_idx].variant_genotype_ids.push(genotype_indices);
                                                             }
                                                         }
                                                     }
@@ -1097,11 +1114,68 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         }
                                     }
                                 });
-                                genotype_vectors.par_iter_mut().enumerate().for_each(|(idx, sample_genotypes)|{
-                                    debug!("Genotype Vector before EM {} {:?}", idx, sample_genotypes);
-                                    genotype_abundances::calculate_abundances(sample_genotypes);
-                                    debug!("Genotype Vector after EM {} {:?}", idx, sample_genotypes);
+
+                                genotype_vectors
+                                    .par_iter_mut()
+                                    .enumerate()
+                                    .for_each(|(idx, sample_genotypes)|{
+                                        debug!("Genotype Vector before EM {} {:?}",
+                                               idx, sample_genotypes);
+                                        genotype_abundances::calculate_abundances(sample_genotypes);
+                                        debug!("Genotype Vector after EM {} {:?}",
+                                               idx, sample_genotypes);
                                 });
+
+                                let reference_stem = &genomes_and_contigs.genomes[*ref_index];
+                                debug!("Printing strain coverages {}", &reference_stem);
+                                let file_name = format!("{}/{}_strain_coverages.tsv", &output_prefix, &reference_stem,);
+
+                                let file_path = Path::new(&file_name);
+
+                                let mut file_open = match File::create(file_path) {
+                                    Ok(fasta) => fasta,
+                                    Err(e) => {
+                                        println!("Cannot create file {:?}", e);
+                                        std::process::exit(1)
+                                    }
+                                };
+
+                                // Snp density summary start
+
+                                write!(file_open, "Sample").unwrap();
+                                let mut printing_order = vec!();
+                                for (strain_id, _) in genotype_key.iter() {
+                                    write!(
+                                        file_open,
+                                        "\tstrain_{}",
+                                        strain_id
+                                    ).unwrap();
+                                    printing_order.push(*strain_id);
+                                }
+
+                                write!(file_open, "\n").unwrap();
+
+                                for (sample_idx, genotype) in genotype_vectors.iter().enumerate() {
+                                    let sample_name = &sample_names[sample_idx];
+                                    write!(
+                                        file_open,
+                                        "{} Expected Coverage",
+                                        &sample_name,
+                                    ).unwrap();
+                                    for strain_id in printing_order.iter() {
+                                        let genotype_idx = genotype_key.get(strain_id).unwrap();
+                                        write!(
+                                            file_open,
+                                            "\t{}",
+                                            genotype[*genotype_idx].abundance_weight
+                                        ).unwrap();
+                                    }
+                                    write!(
+                                        file_open,
+                                        "\n"
+                                    ).unwrap();
+                                }
+
                             },
                             None => {
                                 info!(
