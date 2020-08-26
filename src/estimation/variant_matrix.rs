@@ -1048,6 +1048,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     genotype_key.insert(*strain_id, genotype_idx);
                                 };
 
+                                debug!(
+                                    "Populating sample_vec with genotypes... {:?}",
+                                    &genotype_key,
+                                );
                                 genotype_vectors.par_iter_mut().for_each(|sample_vec| {
                                     for (strain_id, _) in genotype_map.iter() {
                                         let genotype_idx = genotype_key.get(strain_id).unwrap();
@@ -1055,6 +1059,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     };
                                 });
 
+                                debug!("Collecting variants...");
                                 genotype_vectors.par_iter_mut().enumerate().for_each(|(sample_index, sample_vec)| {
                                     for (tid, contig_variants) in ref_variants.iter() {
                                         for (pos, pos_variants) in contig_variants.iter() {
@@ -1115,6 +1120,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     }
                                 });
 
+                                debug!("Calculating abundances...");
                                 genotype_vectors
                                     .par_iter_mut()
                                     .enumerate()
