@@ -1035,7 +1035,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     "Calculating genotype abundances for reference: {}",
                                     reference_map[&ref_index],
                                 );
-                                let number_of_genotypes = pred_variants.keys().len();
+                                let number_of_genotypes = genotype_map.keys().len();
 
                                 // The initialization vector for the EM algorithm
                                 let mut genotype_vectors =
@@ -1051,6 +1051,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 debug!(
                                     "Populating sample_vec with genotypes... {:?}",
                                     &genotype_key,
+                                );
+                                debug!(
+                                    "Number of genotypes {} and genotype vectors {:?}",
+                                    number_of_genotypes,
+                                    genotype_vectors
                                 );
                                 genotype_vectors.par_iter_mut().for_each(|sample_vec| {
                                     for (strain_id, _) in genotype_map.iter() {
