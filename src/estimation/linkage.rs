@@ -281,7 +281,9 @@ pub fn linkage_clustering_of_variants(
                 let var1 = &variant_info[indices[0]];
                 let var2 = &variant_info[indices[1]];
 
-                if !(var1.tid == var2.tid && var1.pos == var2.pos) {
+                // Skipping over reference variants
+                if !(var1.tid == var2.tid && var1.pos == var2.pos) &&
+                    !(var1.var == Variant::None || var2.var == Variant::None) {
                     // Read ids of first variant
                     let set1 = &var1.reads;
 

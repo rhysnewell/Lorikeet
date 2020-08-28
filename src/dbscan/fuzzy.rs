@@ -301,7 +301,7 @@ impl FuzzyDBSCAN {
         }
 
         // Cluster any unvisited points
-        if initial_clusters.len() == 0 {
+        // if initial_clusters.len() == 0 {
             for point_index in 0..points.len() {
                 if visited[point_index] {
                     continue;
@@ -326,7 +326,7 @@ impl FuzzyDBSCAN {
                     ));
                 }
             }
-        }
+        // }
         if !noise_cluster.is_empty() {
             info!(
                 "{} Variants Clustered as noise during Fuzzy DBSCAN",
