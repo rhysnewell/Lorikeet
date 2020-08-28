@@ -131,6 +131,7 @@ pub trait VariantMatrixFunctions {
         anchor_size: usize,
         anchor_similarity: f64,
         minimum_reads_in_link: usize,
+        reference_map: &HashMap<usize, String>,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -632,6 +633,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         anchor_size: usize,
         anchor_similarity: f64,
         minimum_reads_in_link: usize,
+        reference_map: &HashMap<usize, String>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -670,18 +672,30 @@ impl VariantMatrixFunctions for VariantMatrix {
                     };
 
                     // Perform read phasing clustering and return initial clusters
-                    // let links = linkage_clustering_of_variants(
-                    //     &variant_info_vec,
-                    //     anchor_size,
-                    //     anchor_similarity,
-                    //     minimum_reads_in_link,
-                    // );
-                    let links = Vec::new();
+                    let links = linkage_clustering_of_variants(
+                        &variant_info_vec,
+                        anchor_size,
+                        anchor_similarity,
+                        minimum_reads_in_link,
+                    );
+                    // let links = Vec::new();
                     // run fuzzy DBSCAN
+                    let reference_path = Path::new(
+                        reference_map
+                            .get(ref_idx)
+                            .expect("reference index not found"),
+                    );
                     if links.len() > 0 {
-                        info!("Running Seeded fuzzyDBSCAN with {} initial clusters", links.len());
+                        info!(
+                            "Genome {}: Running Seeded fuzzyDBSCAN with {} initial clusters",
+                            links.len(),
+                            reference_path.file_stem().unwrap().to_str().unwrap(),
+                        );
                     } else {
-                        warn!("No initial clusters formed, running fuzzyDBSCAN with no seeds. Perhaps lower linkage thresholds?")
+                        warn!(
+                            "Genome {}: No initial clusters formed, running fuzzyDBSCAN with no seeds. Perhaps lower linkage thresholds?",
+                            reference_path.file_stem().unwrap().to_str().unwrap(),
+                        )
                     }
                     let clusters = fuzzy_scanner.cluster(
                         &variant_info_vec[..],
@@ -969,11 +983,12 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                                 writeln!(
                                     file_open,
-                                    ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
+                                    // ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
+                                    ">{}_strain_{}",
                                     target_names[ref_index][&tid],
                                     strain_index,
-                                    variations,
-                                    ref_alleles
+                                    // variations,
+                                    // ref_alleles
                                 )
                                     .expect("Unable to write to file");
 
