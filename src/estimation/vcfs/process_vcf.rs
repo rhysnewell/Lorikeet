@@ -60,11 +60,9 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         .read(&mut record)
         .expect("Failure to read BAM record")
         == true
-    {
-
-    }
+    {}
     bam_generated.finish(); // Kill the nightmare here
-    ////// END QUARANTINE ////////
+                            ////// END QUARANTINE ////////
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = if stoit_name.contains(".fna") {
@@ -175,7 +173,10 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
                 }
             });
-            info!("Collected {} VCF records for sample {}", total_records, &stoit_name);
+            info!(
+                "Collected {} VCF records for sample {}",
+                total_records, &stoit_name
+            );
             if longread {
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
@@ -292,9 +293,7 @@ pub fn generate_vcf(
     unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
         .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
-    let mapq_thresh = std::cmp::max(
-        1,
-        m.value_of("mapq-threshold").unwrap().parse().unwrap());
+    let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
     if !longread {
         external_command_checker::check_for_freebayes();
@@ -311,31 +310,32 @@ pub fn generate_vcf(
         let index_path = reference.clone() + ".fai";
 
         let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
-        let freebayes_path_prenormalization = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes_prenormalization.vcf");
+        let freebayes_path_prenormalization =
+            &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes_prenormalization.vcf");
 
         //        let freebayes_path = &("freebayes.vcf");
         let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
 
         // Generate uncompressed filtered SAM file
-        // let sam_cmd_string = format!(
-        //     "samtools sort -@ {} -n -l 0 -T /tmp {} | \
-        //     samtools fixmate -@ {} -m - - > {}",
-        //     threads - 1,
-        //     bam_path,
-        //     threads - 1,
-        //     tmp_bam_path,
-        // );
-        // debug!("Queuing cmd_string: {}", sam_cmd_string);
-        // command::finish_command_safely(
-        //     std::process::Command::new("bash")
-        //         .arg("-c")
-        //         .arg(&sam_cmd_string)
-        //         .stderr(std::process::Stdio::piped())
-        //         // .stdout(std::process::Stdio::piped())
-        //         .spawn()
-        //         .expect("Unable to execute bash"),
-        //     "samtools",
-        // );
+        let sam_cmd_string = format!(
+            "samtools sort -@ {} -n -l 0 -T /tmp {} | \
+            samtools fixmate -@ {} -m - - > {}",
+            threads - 1,
+            bam_path,
+            threads - 1,
+            tmp_bam_path,
+        );
+        debug!("Queuing cmd_string: {}", sam_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&sam_cmd_string)
+                .stderr(std::process::Stdio::piped())
+                // .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "samtools",
+        );
 
         // check and build bam index if it doesn't exist
         bam::index::build(
@@ -350,7 +350,7 @@ pub fn generate_vcf(
         let freebayes_cmd_string = format!(
             "set -e -o pipefail;  \
             freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
-            --min-repeat-entropy {} --strict-vcf -m {} {} > {}",
+            --min-repeat-entropy {} -p {} --strict-vcf -m {} {} > {}",
             index_path,
             region_size,
             threads,
@@ -358,6 +358,7 @@ pub fn generate_vcf(
             m.value_of("min-variant-depth").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             m.value_of("min-repeat-entropy").unwrap(),
+            m.value_of("ploidy").unwrap(),
             mapq_thresh,
             bam_path,
             &freebayes_path_prenormalization,
@@ -415,10 +416,7 @@ pub fn generate_vcf(
             "set -e -o pipefail; svim alignment --read_names --skip_genotyping \
             --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
             --min_mapq {} --sequence_alleles {} {} {}",
-            mapq_thresh,
-            &svim_path,
-            &bam_path,
-            &reference
+            mapq_thresh, &svim_path, &bam_path, &reference
         );
         debug!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(

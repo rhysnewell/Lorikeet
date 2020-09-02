@@ -302,30 +302,29 @@ impl FuzzyDBSCAN {
 
         // Cluster any unvisited points
         // if initial_clusters.len() == 0 {
-            for point_index in 0..points.len() {
-                if visited[point_index] {
-                    continue;
-                }
-                visited[point_index] = true;
-                let neighbour_indices = self.region_query(points, point_index);
-                let point_label =
-                    self.mu_min_p(self.density(point_index, &neighbour_indices, points));
-                if point_label == 0.0 {
-                    noise_cluster.push(Assignment {
-                        index: point_index,
-                        category: Category::Noise,
-                        label: 1.0,
-                    });
-                } else {
-                    clusters.push(self.expand_cluster_fuzzy(
-                        point_label,
-                        point_index,
-                        neighbour_indices,
-                        points,
-                        &mut visited,
-                    ));
-                }
+        for point_index in 0..points.len() {
+            if visited[point_index] {
+                continue;
             }
+            visited[point_index] = true;
+            let neighbour_indices = self.region_query(points, point_index);
+            let point_label = self.mu_min_p(self.density(point_index, &neighbour_indices, points));
+            if point_label == 0.0 {
+                noise_cluster.push(Assignment {
+                    index: point_index,
+                    category: Category::Noise,
+                    label: 1.0,
+                });
+            } else {
+                clusters.push(self.expand_cluster_fuzzy(
+                    point_label,
+                    point_index,
+                    neighbour_indices,
+                    points,
+                    &mut visited,
+                ));
+            }
+        }
         // }
         if !noise_cluster.is_empty() {
             info!(
@@ -342,7 +341,6 @@ impl FuzzyDBSCAN {
 
         // Deduplicate clusters by sorted indices
         clusters.dedup_by(|cluster1, cluster2| {
-
             // Remove clusters that are completely contained within another cluster
             let dedup_key_1 = cluster1
                 .par_iter()
@@ -354,17 +352,13 @@ impl FuzzyDBSCAN {
                 .map(|var| var.index)
                 .collect::<HashSet<usize>>();
 
-            let intersection: HashSet<_> = dedup_key_1
-                .intersection(&dedup_key_2)
-                .collect();
+            let intersection: HashSet<_> = dedup_key_1.intersection(&dedup_key_2).collect();
 
             let small_similarity = intersection.len() / dedup_key_1.len();
 
             debug!(
                 "dedup_key_1 {:?} dedup_key_2 {:?} Similarity {}",
-                dedup_key_1,
-                dedup_key_2,
-                small_similarity,
+                dedup_key_1, dedup_key_2, small_similarity,
             );
             small_similarity == 1
         });

@@ -7,6 +7,7 @@ use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 
 use glob::glob;
+use nix::{sys::stat, unistd};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -14,7 +15,6 @@ use std::process::Stdio;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use nix::{unistd, sys::stat};
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -92,7 +92,7 @@ pub fn get_streamed_bam_readers<'a>(
                     None => {
                         warn!("Not using reference index...");
                         reference
-                    },
+                    }
                 },
                 p.read1,
                 p.read2,
@@ -180,33 +180,31 @@ pub fn get_streamed_filtered_bam_readers(
         };
 
         for p in reference_wise_params {
-            bam_readers.push(
-                generate_filtered_named_bam_readers_from_reads(
-                    mapping_program,
-                    match index {
-                        Some(ref index) => index.index_path(),
-                        None => {
-                            warn!("Not using reference index...");
-                            reference
-                        },
-                    },
-                    p.read1,
-                    p.read2,
-                    p.read_format.clone(),
-                    p.threads,
-                    bam_file_cache(p.read1).as_ref().map(String::as_ref),
-                    filter_params.flag_filters.clone(),
-                    filter_params.min_aligned_length_single,
-                    filter_params.min_percent_identity_single,
-                    filter_params.min_aligned_percent_single,
-                    filter_params.min_aligned_length_pair,
-                    filter_params.min_percent_identity_pair,
-                    filter_params.min_aligned_percent_pair,
-                    p.mapping_options,
-                    discard_unmapped,
-                    reference_tempfile.is_none(),
-                ),
-            );
+            bam_readers.push(generate_filtered_named_bam_readers_from_reads(
+                mapping_program,
+                match index {
+                    Some(ref index) => index.index_path(),
+                    None => {
+                        warn!("Not using reference index...");
+                        reference
+                    }
+                },
+                p.read1,
+                p.read2,
+                p.read_format.clone(),
+                p.threads,
+                bam_file_cache(p.read1).as_ref().map(String::as_ref),
+                filter_params.flag_filters.clone(),
+                filter_params.min_aligned_length_single,
+                filter_params.min_percent_identity_single,
+                filter_params.min_aligned_percent_single,
+                filter_params.min_aligned_length_pair,
+                filter_params.min_percent_identity_pair,
+                filter_params.min_aligned_percent_pair,
+                p.mapping_options,
+                discard_unmapped,
+                reference_tempfile.is_none(),
+            ));
         }
 
         debug!("Finished BAM setup");
@@ -736,7 +734,6 @@ pub fn generate_named_bam_readers_from_reads(
     mapping_options: Option<&str>,
     include_reference_in_stoit_name: bool,
 ) -> StreamingNamedBamReaderGenerator {
-
     let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
     let fifo_path = tmp_dir.path().join("foo.pipe");
 

@@ -182,6 +182,7 @@ Other arguments (optional):
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -274,6 +275,7 @@ Other arguments (optional):
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -350,12 +352,13 @@ Other arguments (optional):
                                          SV density.
    --include-longread-svs                Include structural variants produced by SVIM in genotyping
                                          analysis. Can often overestimate number of variants present.
-   mapq-threshold <INT>                  Mapping quality threshold used to verify
+   --mapq-threshold <INT>                Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -442,12 +445,13 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   mapq-threshold <INT>                  Mapping quality threshold used to verify
+   --mapq-threshold <INT>                  Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
                                          entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
