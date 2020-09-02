@@ -87,9 +87,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             );
             sample_names
                 .iter()
-                .position(
-                    |p|
-                        p.contains(&stoit_name.replace("lorikeet-genome", "")))
+                .position(|p| p.contains(&stoit_name.replace("lorikeet-genome", "")))
                 .unwrap()
         }
     };
@@ -155,7 +153,6 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     let contig_len = header
                         .target_len(last_tid as u32)
                         .expect("Corrupt BAM file?") as usize;
-
 
                     let total_mismatches =
                         total_edit_distance_in_current_contig - total_indels_in_current_contig;
@@ -225,8 +222,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 }
                 contig_name = target_names[tid as usize].to_vec();
                 // contig_name_str = split_contig_name(&contig_name);
-                ref_idx =
-                    retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
+                ref_idx = retrieve_reference_index_from_contig(&contig_name, genomes_and_contigs);
 
                 ups_and_downs =
                     vec![0; header.target_len(tid as u32).expect("Corrupt BAM file?") as usize];
@@ -251,7 +247,6 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             if !record.is_supplementary() {
                 num_mapped_reads_in_current_contig += 1;
             }
-
 
             // for each chunk of the cigar string
             let mut cursor: usize = record.pos() as usize;
@@ -280,27 +275,31 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                                     if mnv_pos == mnv.len() {
                                         match variant_matrix.variants(ref_idx, tid, mnv_cursor) {
                                             Some(current_variants) => {
-                                                current_variants
-                                                    .iter_mut()
-                                                    .for_each(|(variant, base)|
-                                                        match variant {
-                                                            Variant::MNV(alt) => {
-                                                                debug!("alt {:?} found {:?}", &alt, &mnv);
-                                                                if *alt == mnv {
-                                                                    base.assign_read(
-                                                                        record.qname().to_vec(),
-                                                                    );
-                                                                    base.truedepth[sample_idx] += 1;
-                                                                }
+                                                current_variants.iter_mut().for_each(
+                                                    |(variant, base)| match variant {
+                                                        Variant::MNV(alt) => {
+                                                            debug!(
+                                                                "alt {:?} found {:?}",
+                                                                &alt, &mnv
+                                                            );
+                                                            if *alt == mnv {
+                                                                base.assign_read(
+                                                                    record.qname().to_vec(),
+                                                                );
+                                                                base.truedepth[sample_idx] += 1;
                                                             }
-                                                            _ => {
-                                                                debug!("Looping through non-MNV variants");
-                                                            }
-                                                        });
+                                                        }
+                                                        _ => {
+                                                            debug!(
+                                                                "Looping through non-MNV variants"
+                                                            );
+                                                        }
+                                                    },
+                                                );
                                                 mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false;
-                                            },
+                                            }
                                             None => {
                                                 debug!("No associated MNV found for {:?}", &mnv);
                                                 mnv = vec![];
@@ -382,7 +381,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                         mnv = vec![];
                         mnv_pos = 0;
                         potential_mnv = false;
-                        
+
                         if final_pos < ups_and_downs.len() {
                             // True unless the read hits the contig end.
                             ups_and_downs[final_pos] -= 1;

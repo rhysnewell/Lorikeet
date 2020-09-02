@@ -20,16 +20,14 @@ impl Genotype {
     pub fn new(index: usize) -> Genotype {
         Genotype {
             index,
-            variant_weights: vec!(),
-            variant_genotype_ids: vec!(),
+            variant_weights: vec![],
+            variant_genotype_ids: vec![],
             abundance_weight: 1.,
         }
     }
 }
 
-pub fn calculate_abundances(
-    sample_genotypes: &mut Vec<Genotype>,
-) {
+pub fn calculate_abundances(sample_genotypes: &mut Vec<Genotype>) {
     // Placeholder stopping criterion vector
     // Going to check for small changes between theta_prev and theta_curr
     let mut theta_prev_mean: f64;
@@ -38,7 +36,6 @@ pub fn calculate_abundances(
     let mut omega = 1.;
     // The minimum value of omega before stopping
     let eps = 0.001;
-
 
     let mut theta_curr = vec![1.; sample_genotypes.len()];
     let mut n = 0;
@@ -49,26 +46,26 @@ pub fn calculate_abundances(
 
         for (index, genotype) in sample_genotypes.iter_mut().enumerate() {
             if genotype.variant_weights.len() == 0 {
-                break
+                break;
             }
 
             // Step 1: update variant weights
-            genotype.variant_weights =
-                genotype.variant_weights
-                    .par_iter()
-                    .enumerate()
-                    .map(|(variant_index, w)| {
-                        let pooled_weights = genotype.variant_genotype_ids[variant_index]
-                            .par_iter()
-                            .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
-                            .sum::<f64>();
-                        w*(genotype.abundance_weight / pooled_weights)
-                    })
-                    .collect();
+            genotype.variant_weights = genotype
+                .variant_weights
+                .par_iter()
+                .enumerate()
+                .map(|(variant_index, w)| {
+                    let pooled_weights = genotype.variant_genotype_ids[variant_index]
+                        .par_iter()
+                        .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
+                        .sum::<f64>();
+                    w * (genotype.abundance_weight / pooled_weights)
+                })
+                .collect();
 
             // Step 2: update abundance weight based on mean of variant weights
-            genotype.abundance_weight =
-                genotype.variant_weights.par_iter().sum::<f64>() / genotype.variant_weights.len() as f64;
+            genotype.abundance_weight = genotype.variant_weights.par_iter().sum::<f64>()
+                / genotype.variant_weights.len() as f64;
 
             // Update list of theta_curr
             theta_curr[index] = genotype.abundance_weight;
@@ -82,9 +79,7 @@ pub fn calculate_abundances(
             "Theta Current {:?} \
             theta curr mean {} \
             Omega {}",
-            &theta_curr,
-            &theta_prev_mean,
-            &omega,
+            &theta_curr, &theta_prev_mean, &omega,
         );
         n += 1;
     }

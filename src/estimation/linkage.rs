@@ -282,8 +282,9 @@ pub fn linkage_clustering_of_variants(
                 let var2 = &variant_info[indices[1]];
 
                 // Skipping over reference variants
-                if !(var1.tid == var2.tid && var1.pos == var2.pos) &&
-                    !(var1.var == Variant::None || var2.var == Variant::None) {
+                if !(var1.tid == var2.tid && var1.pos == var2.pos)
+                    && !(var1.var == Variant::None || var2.var == Variant::None)
+                {
                     // Read ids of first variant
                     let set1 = &var1.reads;
 
@@ -377,8 +378,6 @@ pub fn linkage_clustering_of_variants(
         let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
         condensed_links.par_sort_by_key(|key| key.len());
 
-
-
         // Filter highly similar sets
         condensed_links.dedup_by(|a, b| {
             let intersection: HashSet<_> = a.intersection(&b).collect();
@@ -406,9 +405,13 @@ pub fn linkage_clustering_of_variants(
             });
         let mut initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
 
-        if initial_clusters.len() > 5 {
-            info!("Found more than 5 initial clusters: {}  Taking the best 5..", initial_clusters.len());
-            initial_clusters = initial_clusters[initial_clusters.len() - 5 .. initial_clusters.len()].to_vec();
+        if initial_clusters.len() > 50 {
+            info!(
+                "Found more than 50 initial clusters: {}  Taking the best 50..",
+                initial_clusters.len()
+            );
+            initial_clusters =
+                initial_clusters[initial_clusters.len() - 50..initial_clusters.len()].to_vec();
         }
 
         return initial_clusters;
