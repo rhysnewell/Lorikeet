@@ -114,6 +114,11 @@ pub fn pileup_variants<
                     .to_string(),
             )
             .unwrap();
+
+        debug!(
+            "Reference {}",
+            reference,
+        );
         reference_map
             .entry(ref_idx)
             .or_insert(reference.to_string());
