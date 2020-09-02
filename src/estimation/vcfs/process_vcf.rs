@@ -65,7 +65,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                             ////// END QUARANTINE ////////
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
-    let (reference, ref_idx) = if stoit_name.contains(".fna") {
+    let (reference, ref_idx) = if stoit_name.contains(".fna") && reference_map.len() > 1 {
         debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
         let reference_stem = stoit_name.split(".fna").next().unwrap();
         debug!("possible reference stem {:?}", reference_stem);
