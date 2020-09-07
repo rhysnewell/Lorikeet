@@ -314,14 +314,18 @@ pub fn generate_vcf(
             &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
         //        let freebayes_path = &("freebayes.vcf");
-        // let tmp_bam_path1 = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp1.bam");
+        let tmp_bam_path1 = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp1.bam");
         let tmp_bam_path2 = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp2.bam");
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N &&\
+            "samtools sort -@ {} {} > {} &&\
+            gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N &&\
             samtools index -@ {} {}",
+            threads - 1,
             bam_path,
+            tmp_bam_path1,
+            tmp_bam_path1,
             tmp_bam_path2,
             threads - 1,
             tmp_bam_path2,
