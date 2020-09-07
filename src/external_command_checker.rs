@@ -45,6 +45,10 @@ pub fn check_for_sniffles() {
     self::check_for_external_command_presence("sniffles", "which sniffles");
 }
 
+pub fn check_for_gatk() {
+    self::check_for_external_command_presence("gatk", "which gatk");
+}
+
 pub fn check_for_freebayes() {
     self::check_for_external_command_presence("freebayes", "which freebayes");
 }
