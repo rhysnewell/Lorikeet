@@ -466,13 +466,15 @@ impl Base {
                         }
                     } else {
                         // Get relevant flag from freebayes output on short read samples
-                        let allele_depths = record.format(b"AD").integer().unwrap();
+                        // let allele_depths = record.format(b"AD").integer().unwrap().clone();
                         base.variant = variant.clone();
                         base.filters[sample_idx] = filter_hash.clone();
                         //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         // base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
-                        base.depth[sample_idx] =
-                            allele_depths[0][1];
+                        base.depth[sample_idx] = match record.format(b"AD").integer() {
+                            Ok(val) => val[0][1],
+                            _ => 0,
+                        };
                         //                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
 
                         //                        base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
@@ -487,8 +489,10 @@ impl Base {
                             //                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                             // refr_base.baseq[sample_idx] =
                             //     record.info(b"QR").integer().unwrap().unwrap()[0];
-                            refr_base.depth[sample_idx] =
-                                allele_depths[0][0];
+                            refr_base.depth[sample_idx] = match record.format(b"AD").integer() {
+                                Ok(val) => val[0][0],
+                                _ => 0,
+                            };
                             //                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
                             //
                             bases.push(refr_base);
