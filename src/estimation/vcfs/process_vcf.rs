@@ -319,11 +319,13 @@ pub fn generate_vcf(
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
             "samtools sort -@ {} -n -l 0 -T /tmp {} | \
-            samtools fixmate -@ {} -m - - | \
-            gatk AddOrReplaceReadGroups -I - -O {} -SM 1 -LB N -PL N -PU N",
+            samtools fixmate -@ {} -m - - > {} && \
+            gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
             threads - 1,
             bam_path,
             threads - 1,
+            tmp_bam_path,
+            tmp_bam_path,
             tmp_bam_path,
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
