@@ -60,46 +60,10 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         .expect("Failure to read BAM record")
         == true
     {
-        // check read group
-        match record.aux("SM".as_bytes()) {
-            Some(_) => {
-                // do nothing
-            }
-            None => {
-                // add tag
-                record.push_aux("SM".as_bytes(), &bam::record::Aux::String(read_group))
-            }
-        }
-
-        match record.aux("LB".as_bytes()) {
-            Some(_) => {
-                // Do Nothing
-            }
-            None => {
-                // add tag
-                record.push_aux("LB".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
-            }
-        }
-
-        match record.aux("PL".as_bytes()) {
-            Some(_) => {
-                // Do Nothing
-            }
-            None => {
-                // add tag
-                record.push_aux("PL".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
-            }
-        }
-
-        match record.aux("PU".as_bytes()) {
-            Some(_) => {
-                // Do Nothing
-            }
-            None => {
-                // add tag
-                record.push_aux("PU".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
-            }
-        }
+        record.push_aux("SM".as_bytes(), &bam::record::Aux::String(read_group));
+        record.push_aux("LB".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
+        record.push_aux("PL".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
+        record.push_aux("PU".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
     }
     bam_generated.finish();
 
@@ -387,7 +351,7 @@ pub fn generate_vcf(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}",
-            bam_path,
+            tmp_bam_path,
             &reference,
             &vcf_path_prenormalization,
             threads,
