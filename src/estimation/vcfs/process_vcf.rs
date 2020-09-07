@@ -51,18 +51,59 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
     let bam_path = bam_generated.path().to_string();
 
-    ////// QUARANTINE ZONE ///////
-    // TODO: Find work around for this mess
-    // Have to read each record to be able to complete the process
-    // Luckily this process is fairly fast
+    // Set AUX tags used by GATK
+    // Also saves BAM file to disk
+    let read_group = stoit_name.as_bytes();
     let mut record: bam::record::Record = bam::record::Record::new();
     while bam_generated
         .read(&mut record)
         .expect("Failure to read BAM record")
         == true
-    {}
-    bam_generated.finish(); // Kill the nightmare here
-                            ////// END QUARANTINE ////////
+    {
+        // check read group
+        match record.aux("SM".as_bytes()) {
+            Some(_) => {
+                // do nothing
+                }
+            None => {
+                // add tag
+                record.push_aux("SM".as_bytes(), &bam::record::Aux::String(read_group))
+            }
+        }
+
+        match record.aux("LB".as_bytes()) {
+            Some(_) => {
+                // Do Nothing
+            }
+            None => {
+                // add tag
+                record.push_aux("LB".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
+            }
+        }
+
+        match record.aux("PL".as_bytes()) {
+            Some(_) => {
+                // Do Nothing
+            }
+            None => {
+                // add tag
+                record.push_aux("PL".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
+            }
+        }
+
+        match record.aux("PU".as_bytes()) {
+            Some(_) => {
+                // Do Nothing
+            }
+            None => {
+                // add tag
+                record.push_aux("PU".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
+            }
+        }
+
+    }
+    bam_generated.finish();
+
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = if stoit_name.contains(".fna") && reference_map.len() > 1 {
@@ -309,9 +350,9 @@ pub fn generate_vcf(
         let region_size = 10000;
         let index_path = reference.clone() + ".fai";
 
-        let freebayes_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes.vcf");
-        let freebayes_path_prenormalization =
-            &(tmp_dir.path().to_str().unwrap().to_string() + "/freebayes_prenormalization.vcf");
+        let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
+        let vcf_path_prenormalization =
+            &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
         //        let freebayes_path = &("freebayes.vcf");
         let tmp_bam_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp.bam");
@@ -349,26 +390,21 @@ pub fn generate_vcf(
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let freebayes_cmd_string = format!(
             "set -e -o pipefail;  \
-            freebayes-parallel <(fasta_generate_regions.py {} {}) {} -f {} -C {} -q {} \
-            --min-repeat-entropy {} -p {} --strict-vcf -m {} {} > {}",
-            index_path,
-            region_size,
-            threads,
-            &reference,
-            m.value_of("min-variant-depth").unwrap(),
-            m.value_of("base-quality-threshold").unwrap(),
-            m.value_of("min-repeat-entropy").unwrap(),
-            m.value_of("ploidy").unwrap(),
-            mapq_thresh,
+            gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
+            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}",
             bam_path,
-            &freebayes_path_prenormalization,
+            &reference,
+            &vcf_path_prenormalization,
+            threads,
+            m.value_of("ploidy").unwrap(),
+            m.value_of("base-quality-threshold").unwrap(),
+            mapq_thresh,
         );
         let vt_cmd_string = format!(
-            "vt normalize -n -r {} {} | \
-            bcftools annotate --remove '^INFO/TYPE,^INFO/DP,^INFO/RO,^INFO/AO,^INFO/AB,^FORMAT/GT,^FORMAT/DP,^FORMAT/RO,^FORMAT/AO,^FORMAT/QR,^FORMAT/QA,^FORMAT/GL' > {}",
+            "vt normalize -n -r {} {} > {}",
             &reference,
-            &freebayes_path_prenormalization,
-            freebayes_path,
+            &vcf_path_prenormalization,
+            vcf_path,
         );
         debug!("Queuing cmd_string: {}", freebayes_cmd_string);
         command::finish_command_safely(
