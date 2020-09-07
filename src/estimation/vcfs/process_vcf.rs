@@ -358,7 +358,8 @@ pub fn generate_vcf(
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
             --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES \
             --pcr-indel-model CONSERVATIVE --sites-only-vcf-output true --annotate-with-num-discovered-alleles true \
-            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles true",
+            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles true && \
+            cp {} ./vcf_prenorm.vcf",
             tmp_bam_path2,
             &reference,
             &vcf_path_prenormalization,
@@ -368,10 +369,12 @@ pub fn generate_vcf(
             mapq_thresh,
             m.value_of("heterozygosity").unwrap(),
             m.value_of("indel-heterozygosity").unwrap(),
+            &vcf_path_prenormalization,
         );
         let vt_cmd_string = format!(
-            "vt normalize -n -r {} {} > {}",
-            &reference, &vcf_path_prenormalization, vcf_path,
+            "vt normalize -n -r {} {} > {} && \
+            cp {} ./vcf_postnorm.vcf",
+            &reference, &vcf_path_prenormalization, vcf_path, vcf_path,
         );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
