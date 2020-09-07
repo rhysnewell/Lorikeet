@@ -319,8 +319,12 @@ pub fn generate_vcf(
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
-            bam_path, tmp_bam_path2,
+            "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N &&\
+            samtools index -@ {} {}",
+            bam_path,
+            tmp_bam_path2,
+            threads - 1,
+            tmp_bam_path2,
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
@@ -328,20 +332,20 @@ pub fn generate_vcf(
                 .arg("-c")
                 .arg(&sam_cmd_string)
                 .stderr(std::process::Stdio::piped())
-                // .stdout(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"),
             "samtools",
         );
 
         // check and build bam index if it doesn't exist
-        bam::index::build(
-            bam_path,
-            Some(&(tmp_bam_path2.to_string() + ".bai")),
-            bam::index::Type::BAI,
-            threads as u32,
-        )
-        .expect(&format!("Unable to index bam at {}", &bam_path));
+        // bam::index::build(
+        //     bam_path,
+        //     Some(&(tmp_bam_path2.to_string() + ".bai")),
+        //     bam::index::Type::BAI,
+        //     threads as u32,
+        // )
+        // .expect(&format!("Unable to index bam at {}", &bam_path));
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
