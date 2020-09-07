@@ -439,16 +439,6 @@ impl Base {
                             _ => 0,
                         };
 
-                        //                    base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-                        //                        Ok(val) => {
-                        //                            if val[0][0] >= 0 {
-                        //                                val[0][0]
-                        //                            } else {
-                        //                                base.depth[sample_idx]
-                        //                            }
-                        //                        },
-                        //                        _ => base.depth[sample_idx],
-                        //                    };
                         let refr_depth =
                             std::cmp::max(0, base.totaldepth[sample_idx] - base.depth[sample_idx]);
                         //                    base.af[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
@@ -469,30 +459,20 @@ impl Base {
                                 sample_count,
                                 record.alleles()[0].to_vec(),
                             );
-                            //                            refr_base.af[sample_idx] = base.af[sample_idx];
-                            //                            refr_base.totaldepth[sample_idx] = match record.format(b"DP").integer() {
-                            //                                Ok(val) => {
-                            //                                    if val[0][0] >= 0 {
-                            //                                        val[0][0]
-                            //                                    } else {
-                            //                                        base.depth[sample_idx]
-                            //                                    }
-                            //                                },
-                            //                                _ => base.depth[sample_idx],
-                            //                            };
-                            //                            refr_base.freq[sample_idx] = 1. - base.af[sample_idx];
+
                             refr_base.depth[sample_idx] = refr_depth;
                             bases.push(refr_base);
                             refr_base_empty = false;
                         }
                     } else {
                         // Get relevant flag from freebayes output on short read samples
+                        let allele_depths = record.format(b"AD").integer().unwrap();
                         base.variant = variant.clone();
                         base.filters[sample_idx] = filter_hash.clone();
                         //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                        base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
+                        // base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
                         base.depth[sample_idx] =
-                            record.info(b"AO").integer().unwrap().unwrap()[0] as i32;
+                            allele_depths[0][1];
                         //                    base.referencedepth[sample_idx] = record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
 
                         //                        base.freq[sample_idx] = base.depth[sample_idx] as f64 / base.totaldepth[sample_idx] as f64;
@@ -505,10 +485,10 @@ impl Base {
                                 record.alleles()[0].to_vec(),
                             );
                             //                        refr_base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
-                            refr_base.baseq[sample_idx] =
-                                record.info(b"QR").integer().unwrap().unwrap()[0];
+                            // refr_base.baseq[sample_idx] =
+                            //     record.info(b"QR").integer().unwrap().unwrap()[0];
                             refr_base.depth[sample_idx] =
-                                record.info(b"RO").integer().unwrap().unwrap()[0] as i32;
+                                allele_depths[0][0];
                             //                        refr_base.freq[sample_idx] = refr_base.depth[sample_idx] as f64 / refr_base.totaldepth[sample_idx] as f64;
                             //
                             bases.push(refr_base);

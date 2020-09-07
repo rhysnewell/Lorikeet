@@ -64,7 +64,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         match record.aux("SM".as_bytes()) {
             Some(_) => {
                 // do nothing
-                }
+            }
             None => {
                 // add tag
                 record.push_aux("SM".as_bytes(), &bam::record::Aux::String(read_group))
@@ -100,10 +100,8 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 record.push_aux("PU".as_bytes(), &bam::record::Aux::String("N".as_bytes()))
             }
         }
-
     }
     bam_generated.finish();
-
 
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = if stoit_name.contains(".fna") && reference_map.len() > 1 {
@@ -388,7 +386,7 @@ pub fn generate_vcf(
         .expect(&format!("Unable to index bam at {}", &bam_path));
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
-        let freebayes_cmd_string = format!(
+        let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}",
@@ -402,15 +400,13 @@ pub fn generate_vcf(
         );
         let vt_cmd_string = format!(
             "vt normalize -n -r {} {} > {}",
-            &reference,
-            &vcf_path_prenormalization,
-            vcf_path,
+            &reference, &vcf_path_prenormalization, vcf_path,
         );
-        debug!("Queuing cmd_string: {}", freebayes_cmd_string);
+        debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
                 .arg("-c")
-                .arg(&freebayes_cmd_string)
+                .arg(&vcf_cmd_string)
                 .stderr(std::process::Stdio::piped())
                 // .stdout(std::process::Stdio::piped())
                 .spawn()
@@ -428,8 +424,8 @@ pub fn generate_vcf(
                 .expect("Unable to execute bash"),
             "vt",
         );
-        debug!("VCF Path {:?}", freebayes_path);
-        let vcf_reader = bcf::Reader::from_path(&Path::new(freebayes_path));
+        debug!("VCF Path {:?}", vcf_path);
+        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
 
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader;
