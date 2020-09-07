@@ -355,7 +355,7 @@ pub fn generate_vcf(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}",
-            tmp_bam_path,
+            tmp_bam_path2,
             &reference,
             &vcf_path_prenormalization,
             threads,
