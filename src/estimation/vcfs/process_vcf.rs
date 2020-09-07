@@ -319,8 +319,8 @@ pub fn generate_vcf(
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "samtools sort -@ {} {} > {} &&\
-            gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N &&\
+            "samtools sort -@ {} {} > {} && \
+            gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N && \
             samtools index -@ {} {}",
             threads - 1,
             bam_path,
@@ -355,7 +355,9 @@ pub fn generate_vcf(
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
-            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}",
+            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}\
+            --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES\
+            --pcr-indel-model CONSERVATIVE --site-only-vcf-output true",
             tmp_bam_path2,
             &reference,
             &vcf_path_prenormalization,
@@ -363,6 +365,8 @@ pub fn generate_vcf(
             m.value_of("ploidy").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             mapq_thresh,
+            m.value_of("heterozygosity").unwrap(),
+            m.value_of("indel-heterozygosity").unwrap(),
         );
         let vt_cmd_string = format!(
             "vt normalize -n -r {} {} > {}",

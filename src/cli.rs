@@ -180,8 +180,14 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
-   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.01 implies on average a SNP should be detected
+                                         every 1 in 100 bp [default: 0.01]
+   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.001 implies on average an INDEL should be detected
+                                         every 1 in 1000 bp [default: 0.001]
    --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
@@ -273,8 +279,14 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
-   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.01 implies on average a SNP should be detected
+                                         every 1 in 100 bp [default: 0.01]
+   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.001 implies on average an INDEL should be detected
+                                         every 1 in 1000 bp [default: 0.001]
    --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
@@ -356,8 +368,14 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
-   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.01 implies on average a SNP should be detected
+                                         every 1 in 100 bp [default: 0.01]
+   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.001 implies on average an INDEL should be detected
+                                         every 1 in 1000 bp [default: 0.001]
    --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
@@ -449,8 +467,14 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
-   --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                         entropy > N bits per bp. Set to 0 to turn off. (default: 1.5)
+   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.01 implies on average a SNP should be detected
+                                         every 1 in 100 bp [default: 0.01]
+   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
+                                         probability that a locus is non-reference. A value of
+                                         0.001 implies on average an INDEL should be detected
+                                         every 1 in 1000 bp [default: 0.001]
    --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
@@ -944,9 +968,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("13"),
                 )
                 .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.5"),
+                    Arg::with_name("heterozygosity")
+                        .long("heterozygosity")
+                        .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("indel-heterozygosity")
+                        .long("indel-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("kmer-size")
@@ -1276,9 +1305,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("13"),
                 )
                 .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.5"),
+                    Arg::with_name("heterozygosity")
+                        .long("heterozygosity")
+                        .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("indel-heterozygosity")
+                        .long("indel-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("kmer-size")
@@ -1623,9 +1657,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("13"),
                 )
                 .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.5"),
+                    Arg::with_name("heterozygosity")
+                        .long("heterozygosity")
+                        .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("indel-heterozygosity")
+                        .long("indel-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("kmer-size")
@@ -2021,9 +2060,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("13"),
                 )
                 .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.5"),
+                    Arg::with_name("heterozygosity")
+                        .long("heterozygosity")
+                        .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("indel-heterozygosity")
+                        .long("indel-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
