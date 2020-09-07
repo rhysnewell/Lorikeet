@@ -337,7 +337,7 @@ pub fn generate_vcf(
         // check and build bam index if it doesn't exist
         bam::index::build(
             bam_path,
-            Some(&(bam_path.to_string() + ".bai")),
+            Some(&(tmp_bam_path2.to_string() + ".bai")),
             bam::index::Type::BAI,
             threads as u32,
         )
