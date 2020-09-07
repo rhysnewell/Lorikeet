@@ -98,6 +98,7 @@ pub fn pileup_variants<
                     .arg("-c")
                     .arg(&gen_ref_dict_cmd)
                     .stderr(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
                     .spawn()
                     .expect("Unable to execute bash"),
                 "gatk",
