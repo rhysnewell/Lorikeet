@@ -320,7 +320,7 @@ pub fn generate_vcf(
         let sam_cmd_string = format!(
             "samtools sort -@ {} -n -l 0 -T /tmp {} | \
             samtools fixmate -@ {} -m - - | \
-            gatk AddOrReplaceGroups -I - -O {} -SM 1 -LB N -PL N -PU N",
+            gatk AddOrReplaceReadGroups -I - -O {} -SM 1 -LB N -PL N -PU N",
             threads - 1,
             bam_path,
             threads - 1,
