@@ -407,7 +407,7 @@ pub fn linkage_clustering_of_variants(
 
         if initial_clusters.len() > 50 {
             info!(
-                "Found more than 50 initial clusters: {}  Taking the best 50..",
+                "Found more than 5 initial clusters: {}  Taking the best 5...",
                 initial_clusters.len()
             );
             initial_clusters =

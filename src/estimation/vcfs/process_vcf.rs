@@ -55,6 +55,20 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     // Also saves BAM file to disk
     let read_group = stoit_name.as_bytes();
     let mut record: bam::record::Record = bam::record::Record::new();
+    // for p in bam_generated.pileup() {
+    //     let pileup = p.unwrap();
+    //     let tid = pileup.tid();
+    //     let pos = pileup.pos();
+    //     let depth = pileup.depth();
+    //
+    //     let mut base = Base::new(tid, pos, );
+    //
+    //     for alignment in pileup.alignments() {
+    //         if !alignment.is_del() && !alignment.is_refskip() {
+    //
+    //         }
+    //     }
+    // }
     while bam_generated
         .read(&mut record)
         .expect("Failure to read BAM record")
@@ -358,8 +372,7 @@ pub fn generate_vcf(
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
             --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES \
             --pcr-indel-model CONSERVATIVE --sites-only-vcf-output true --annotate-with-num-discovered-alleles true \
-            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles true && \
-            cp {} ./vcf_prenorm.vcf",
+            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles true",
             tmp_bam_path2,
             &reference,
             &vcf_path_prenormalization,
@@ -369,12 +382,10 @@ pub fn generate_vcf(
             mapq_thresh,
             m.value_of("heterozygosity").unwrap(),
             m.value_of("indel-heterozygosity").unwrap(),
-            &vcf_path_prenormalization,
         );
         let vt_cmd_string = format!(
-            "vt normalize -n -r {} {} > {} && \
-            cp {} ./vcf_postnorm.vcf",
-            &reference, &vcf_path_prenormalization, vcf_path, vcf_path,
+            "vt normalize -n -r {} {} > {}",
+            &reference, &vcf_path_prenormalization, vcf_path,
         );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
