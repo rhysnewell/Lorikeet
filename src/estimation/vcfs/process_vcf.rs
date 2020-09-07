@@ -355,8 +355,8 @@ pub fn generate_vcf(
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
-            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {}\
-            --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES\
+            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
+            --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES \
             --pcr-indel-model CONSERVATIVE --sites-only-vcf-output true",
             tmp_bam_path2,
             &reference,
