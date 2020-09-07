@@ -335,12 +335,9 @@ pub fn generate_vcf(
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
     if !longread {
-        external_command_checker::check_for_freebayes();
-        external_command_checker::check_for_freebayes_parallel();
-        external_command_checker::check_for_fasta_generate_regions();
+        external_command_checker::check_for_gatk();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
-        external_command_checker::check_for_bcftools();
 
         // Old way of calulating region size, not a good method
         // let region_size = reference_length / threads as u64;
@@ -411,7 +408,7 @@ pub fn generate_vcf(
                 // .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"),
-            "freebayes",
+            "gatk",
         );
         debug!("Queuing cmd_string: {}", vt_cmd_string);
         command::finish_command_safely(
