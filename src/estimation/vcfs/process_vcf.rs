@@ -319,7 +319,8 @@ pub fn generate_vcf(
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
             "samtools sort -@ {} -n -l 0 -T /tmp {} | \
-            samtools fixmate -@ {} -m - - > {}",
+            samtools fixmate -@ {} -m - - | \
+            gatk AddOrReplaceGroups -I - -O {} -SM 1 -LB N -PL N -PU N",
             threads - 1,
             bam_path,
             threads - 1,
