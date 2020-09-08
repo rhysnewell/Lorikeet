@@ -472,10 +472,7 @@ impl Base {
                         //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         // base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
                         base.depth[sample_idx] = match record.format(b"AD").integer() {
-                            Ok(val) => {
-                                debug!("Depth values: {:?}", val);
-                                val[0][1]
-                            }
+                            Ok(val) => val[0][1],
                             _ => {
                                 debug!("No AD format");
 
