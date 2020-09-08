@@ -6,6 +6,7 @@ use coverm::mapping_index_maintenance;
 use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 
+use bio::io::fasta::IndexedReader;
 use glob::glob;
 use nix::{sys::stat, unistd};
 use std::collections::HashMap;
@@ -917,5 +918,67 @@ pub fn generate_filtered_named_bam_readers_from_reads(
         min_aligned_length_pair: min_aligned_length_pair,
         min_percent_identity_pair: min_percent_identity_pair,
         min_aligned_percent_pair: min_aligned_percent_pair,
+    };
+}
+
+pub fn retrieve_reference(concatenated_genomes: &Option<NamedTempFile>) -> IndexedReader<File> {
+    let reference = match concatenated_genomes {
+        Some(reference_path) => {
+            match bio::io::fasta::IndexedReader::from_file(&reference_path.path()) {
+                Ok(reader) => reader,
+                Err(_e) => generate_faidx(&reference_path.path().to_str().unwrap()),
+            }
+        }
+        None => panic!("Concatenated reference file does not exist"),
+    };
+
+    reference
+}
+
+pub fn fetch_contig_from_reference(
+    reference: &mut IndexedReader<File>,
+    contig_name: &Vec<u8>,
+    genomes_and_contigs: &GenomesAndContigs,
+    ref_idx: usize,
+) {
+    match reference.fetch_all(std::str::from_utf8(&contig_name[..]).unwrap()) {
+        Ok(reference) => reference,
+        Err(_e) => match reference.fetch_all(&format!(
+            "{}~{}",
+            &genomes_and_contigs.genomes[ref_idx],
+            std::str::from_utf8(&contig_name[..]).unwrap()
+        )) {
+            Ok(reference) => reference,
+            Err(e) => {
+                println!(
+                    "Cannot read sequence from reference {} {:?}",
+                    format!(
+                        "{}~{}",
+                        &genomes_and_contigs.genomes[ref_idx],
+                        std::str::from_utf8(&contig_name[..]).unwrap()
+                    ),
+                    e,
+                );
+                std::process::exit(1);
+            }
+        },
+    };
+}
+
+pub fn read_sequence_to_vec(
+    ref_seq: &mut Vec<u8>,
+    reference: &mut IndexedReader<File>,
+    contig_name: &Vec<u8>,
+) {
+    match reference.read(ref_seq) {
+        Ok(reference) => reference,
+        Err(e) => {
+            println!(
+                "Cannot read sequence from reference {} {:?}",
+                std::str::from_utf8(&contig_name[..]).unwrap(),
+                e,
+            );
+            std::process::exit(1)
+        }
     };
 }

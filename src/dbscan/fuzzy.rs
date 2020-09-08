@@ -301,31 +301,36 @@ impl FuzzyDBSCAN {
         }
 
         // Cluster any unvisited points
-        // if initial_clusters.len() == 0 {
-        for point_index in 0..points.len() {
-            if visited[point_index] {
-                continue;
-            }
-            visited[point_index] = true;
-            let neighbour_indices = self.region_query(points, point_index);
-            let point_label = self.mu_min_p(self.density(point_index, &neighbour_indices, points));
-            if point_label == 0.0 {
-                noise_cluster.push(Assignment {
-                    index: point_index,
-                    category: Category::Noise,
-                    label: 1.0,
-                });
-            } else {
-                clusters.push(self.expand_cluster_fuzzy(
-                    point_label,
-                    point_index,
-                    neighbour_indices,
-                    points,
-                    &mut visited,
-                ));
+        if initial_clusters.len() == 0
+            || visited
+                .iter()
+                .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
+        {
+            for point_index in 0..points.len() {
+                if visited[point_index] {
+                    continue;
+                }
+                visited[point_index] = true;
+                let neighbour_indices = self.region_query(points, point_index);
+                let point_label =
+                    self.mu_min_p(self.density(point_index, &neighbour_indices, points));
+                if point_label == 0.0 {
+                    noise_cluster.push(Assignment {
+                        index: point_index,
+                        category: Category::Noise,
+                        label: 1.0,
+                    });
+                } else {
+                    clusters.push(self.expand_cluster_fuzzy(
+                        point_label,
+                        point_index,
+                        neighbour_indices,
+                        points,
+                        &mut visited,
+                    ));
+                }
             }
         }
-        // }
         if !noise_cluster.is_empty() {
             info!(
                 "{} Variants Clustered as noise during Fuzzy DBSCAN",

@@ -673,13 +673,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                     };
 
                     // Perform read phasing clustering and return initial clusters
-                    // let links = linkage_clustering_of_variants(
-                    //     &variant_info_vec,
-                    //     anchor_size,
-                    //     anchor_similarity,
-                    //     minimum_reads_in_link,
-                    // );
-                    let links = Vec::new();
+                    let links = linkage_clustering_of_variants(
+                        &variant_info_vec,
+                        anchor_size,
+                        anchor_similarity,
+                        minimum_reads_in_link,
+                    );
+                    // let links = Vec::new();
                     // run fuzzy DBSCAN
                     let reference_path = Path::new(
                         reference_map
@@ -1223,7 +1223,12 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 write!(file_open, "\n").unwrap();
 
                                 for (sample_idx, genotype) in genotype_vectors.iter().enumerate() {
-                                    let sample_name = &sample_names[sample_idx];
+                                    let mut sample_name = &sample_names[sample_idx];
+                                    // remove tmp file name from sample id
+                                    let sample_name = match &sample_name[..4] {
+                                        ".tmp" => &sample_name[15..],
+                                        _ => &sample_name,
+                                    };
                                     write!(file_open, "{} Expected Coverage", &sample_name,)
                                         .unwrap();
                                     for strain_id in printing_order.iter() {
@@ -1577,11 +1582,12 @@ impl VariantMatrixFunctions for VariantMatrix {
                         match target_names.get(ref_index) {
                             Some(target_name_set) => {
                                 sample_names.iter().enumerate().for_each(|(sample_idx, sample_name)| {
-                                    // let sample_name = sample_name
-                                    //     .rsplit(".")
-                                    //     .skip(1)
-                                    //     .next()
-                                    //     .unwrap();
+
+                                    // remove tmp file name from sample id
+                                    let sample_name = match &sample_name[..4] {
+                                        ".tmp" => &sample_name[15..],
+                                        _ => &sample_name,
+                                    };
 
                                     let file_name =
                                         format!(
@@ -1763,8 +1769,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                         );
 
                         debug!("samples {:?}", &sample_names);
-                        for sample in sample_names.iter() {
-                            header.push_sample(&sample.clone().into_bytes()[..]);
+                        for sample_name in sample_names.iter() {
+                            // remove tmp file name from sample id
+                            let sample_name = match &sample_name[..4] {
+                                ".tmp" => &sample_name[15..],
+                                _ => &sample_name,
+                            };
+                            header.push_sample(&sample_name.to_string().into_bytes()[..]);
                         }
 
                         // Add contig info

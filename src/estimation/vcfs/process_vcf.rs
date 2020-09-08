@@ -51,52 +51,38 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
     let bam_path = bam_generated.path().to_string();
 
-    // Set AUX tags used by GATK
-    // Also saves BAM file to disk
-    let read_group = stoit_name.as_bytes();
-    let mut record: bam::record::Record = bam::record::Record::new();
-    // for p in bam_generated.pileup() {
-    //     let pileup = p.unwrap();
-    //     let tid = pileup.tid();
-    //     let pos = pileup.pos();
-    //     let depth = pileup.depth();
-    //
-    //     let mut base = Base::new(tid, pos, );
-    //
-    //     for alignment in pileup.alignments() {
-    //         if !alignment.is_del() && !alignment.is_refskip() {
-    //
-    //         }
-    //     }
-    // }
-    while bam_generated
-        .read(&mut record)
-        .expect("Failure to read BAM record")
-        == true
-    {
-        record.push_aux("SM".as_bytes(), &bam::record::Aux::String(read_group));
-        record.push_aux("LB".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
-        record.push_aux("PL".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
-        record.push_aux("PU".as_bytes(), &bam::record::Aux::String("N".as_bytes()));
-    }
-    bam_generated.finish();
-
     // Adjust indices based on whether or not we are using a concatenated reference or not
     let (reference, ref_idx) = if stoit_name.contains(".fna") && reference_map.len() > 1 {
         debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
         let reference_stem = stoit_name.split(".fna").next().unwrap();
         debug!("possible reference stem {:?}", reference_stem);
-        let ref_idx = match genomes_and_contigs.genome_index(&reference_stem.to_string()) {
-            Some(idx) => idx,
-            None => panic!("Unable to retrieve reference index"),
-        };
-        debug!("Actual reference idx {:?}", ref_idx);
 
-        let reference = reference_map
-            .get(&ref_idx)
-            .expect("Unable to retrieve reference path")
-            .clone();
-        (reference, ref_idx)
+        match concatenated_genomes {
+            Some(ref temp_file) => {
+                stoit_name = format!(
+                    "{}.{}",
+                    temp_file.path().file_name().unwrap().to_str().unwrap(),
+                    stoit_name,
+                );
+                debug!("Renamed Stoit_name {:?}", &stoit_name);
+
+                (temp_file.path().to_str().unwrap().to_string(), 0)
+            }
+            None => match genomes_and_contigs.genome_index(&reference_stem.to_string()) {
+                Some(ref_idx) => {
+                    debug!("Actual reference idx {:?}", ref_idx);
+
+                    let reference = reference_map
+                        .get(&ref_idx)
+                        .expect("Unable to retrieve reference path")
+                        .clone();
+                    (reference, ref_idx)
+                }
+                None => {
+                    retrieve_genome_from_contig(target_names[0], genomes_and_contigs, reference_map)
+                }
+            },
+        }
     } else {
         match concatenated_genomes {
             Some(ref temp_file) => {
@@ -114,6 +100,112 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             }
         }
     };
+
+    let mut reference_file = retrieve_reference(concatenated_genomes);
+
+    // minimum PHRED base quality
+    let bq = m
+        .value_of("base-quality-threshold")
+        .unwrap()
+        .parse()
+        .unwrap();
+    // Minimum MAPQ value
+    let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
+    // Minimum count for a SNP to be considered
+    let min_variant_depth: i32 = m.value_of("min-variant-depth").unwrap().parse().unwrap();
+    let min_variant_quality: f32 = m.value_of("min-variant-quality").unwrap().parse().unwrap();
+
+    // for each genomic position, only has hashmap when variants are present. Includes read ids
+    let mut variant_map = HashMap::new();
+
+    // use pileups to call SNPs for low quality variants
+    // That are usually skipped by GATK
+    match bam_generated.pileup() {
+        Some(pileups) => {
+            let mut last_tid = -2;
+            let mut contig_name = Vec::new();
+            let mut ref_idx = 0;
+            let mut ref_seq = Vec::new();
+
+            for p in pileups {
+                if !longread {
+                    let pileup = p.unwrap();
+                    let tid = pileup.tid() as i32;
+                    let pos = pileup.pos() as usize;
+                    let depth = pileup.depth();
+                    if tid != last_tid {
+                        if tid < last_tid {
+                            error!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                            panic!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                        }
+                        // Update all contig information
+                        contig_name = target_names[tid as usize].to_vec();
+                        fetch_contig_from_reference(
+                            &mut reference_file,
+                            &contig_name,
+                            genomes_and_contigs,
+                            ref_idx,
+                        );
+                        ref_seq = Vec::new();
+                        read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
+                        last_tid = tid;
+                    }
+
+                    let refr_base = ref_seq[pos];
+                    // let mut base = Base::new(tid, pos, );
+
+                    let mut base_dict = HashMap::new();
+
+                    for alignment in pileup.alignments() {
+                        let record = alignment.record();
+                        if record.mapq() >= mapq_thresh {
+                            if !alignment.is_del() && !alignment.is_refskip() {
+                                // query position in read
+                                let qpos = alignment.qpos().unwrap();
+                                let record_qual = record.qual()[qpos];
+                                if record_qual >= bq {
+                                    let read_base = alignment.record().seq()[qpos];
+                                    if read_base != refr_base {
+                                        let mut base =
+                                            base_dict.entry(read_base).or_insert(Base::new(
+                                                tid as u32,
+                                                pos as i64,
+                                                sample_count,
+                                                vec![refr_base],
+                                            ));
+
+                                        if base.variant == Variant::None {
+                                            base.variant = Variant::SNV(read_base);
+                                        }
+
+                                        base.depth[*per_ref_sample_idx as usize] += 1;
+                                        base.quals[*per_ref_sample_idx as usize] +=
+                                            record_qual as f32;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (var_char, base) in base_dict {
+                        if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
+                            && base.quals[*per_ref_sample_idx as usize] >= min_variant_quality
+                        {
+                            let variant_con =
+                                variant_map.entry(tid as i32).or_insert(HashMap::new());
+                            let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
+
+                            // Overwrite any existing variants called by mpileup
+                            variant_pos.insert(base.variant.to_owned(), base);
+                        }
+                    }
+                }
+            }
+        }
+        None => println!("no bam for pileups"),
+    }
+
+    bam_generated.finish();
 
     debug!(
         "retrieving genome id with contig {:?} from {} for sample {}",
@@ -144,9 +236,6 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         &reference,
         &bam_path,
     );
-
-    // for each genomic position, only has hashmap when variants are present. Includes read ids
-    let mut variant_map = HashMap::new();
 
     match vcf_reader {
         Ok(ref mut reader) => {
@@ -181,7 +270,9 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                                     .entry(variant_rid as i32).or_insert(HashMap::new());
                                 let variant_pos = variant_con
                                     .entry(base.pos).or_insert(HashMap::new());
-                                variant_pos.entry(base.variant.to_owned()).or_insert(base);
+
+                                // Overwrite any existing variants called by mpileup
+                                variant_pos.insert(base.variant.to_owned(), base);
                             }
                         },
                         None => {},
@@ -191,7 +282,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 }
             });
             info!(
-                "Collected {} VCF records for sample {}",
+                "Collected {} variant positions for sample {}",
                 total_records, &stoit_name
             );
             if longread {
@@ -355,15 +446,6 @@ pub fn generate_vcf(
                 .expect("Unable to execute bash"),
             "samtools",
         );
-
-        // check and build bam index if it doesn't exist
-        // bam::index::build(
-        //     bam_path,
-        //     Some(&(tmp_bam_path2.to_string() + ".bai")),
-        //     bam::index::Type::BAI,
-        //     threads as u32,
-        // )
-        // .expect(&format!("Unable to index bam at {}", &bam_path));
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
