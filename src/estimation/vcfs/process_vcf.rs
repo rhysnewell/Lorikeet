@@ -452,9 +452,9 @@ pub fn generate_vcf(
             "set -e -o pipefail;  \
             gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
-            --heterozygosity {} --indel-heterozygosity {} --output-mode EMIT_ALL_ACTIVE_SITES \
-            --pcr-indel-model CONSERVATIVE --sites-only-vcf-output true --annotate-with-num-discovered-alleles true \
-            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles true",
+            --heterozygosity {} --indel-heterozygosity {} \
+            --pcr-indel-model CONSERVATIVE \
+            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles false",
             tmp_bam_path2,
             &reference,
             &vcf_path_prenormalization,
