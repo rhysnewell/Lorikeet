@@ -273,7 +273,7 @@ pub fn linkage_clustering_of_variants(
         // Loop through each permutation of 2 clusters and observe shared variants in reads
         (0..variant_info.len())
             .into_iter()
-            .permutations(2)
+            .combinations(2)
             .collect::<Vec<Vec<usize>>>()
             .into_par_iter()
             .for_each(|indices| {
@@ -405,13 +405,13 @@ pub fn linkage_clustering_of_variants(
             });
         let mut initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
 
-        if initial_clusters.len() > 50 {
+        if initial_clusters.len() > 5 {
             info!(
                 "Found more than 5 initial clusters: {}  Taking the best 5...",
                 initial_clusters.len()
             );
             initial_clusters =
-                initial_clusters[initial_clusters.len() - 50..initial_clusters.len()].to_vec();
+                initial_clusters[initial_clusters.len() - 5..initial_clusters.len()].to_vec();
         }
 
         return initial_clusters;
