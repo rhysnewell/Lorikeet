@@ -87,7 +87,7 @@ pub trait VariantMatrixFunctions {
         &mut self,
         sample_name: String,
         sample_idx: usize,
-        variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
+        variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
         header: &HeaderView,
         genomes_and_contigs: &GenomesAndContigs,
     );
@@ -216,7 +216,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         &mut self,
         sample_name: String,
         sample_idx: usize,
-        variant_records: &HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
+        variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
         header: &HeaderView,
         genomes_and_contigs: &GenomesAndContigs,
     ) {
@@ -277,9 +277,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                         .or_insert(HashMap::new());
 
                     let placeholder = HashMap::new();
-                    let mut variants = match variant_records.get(&(tid as i32)) {
+                    let mut variants = match variant_records.remove(&(tid as i32)) {
                         Some(map) => map,
-                        _ => &placeholder,
+                        _ => placeholder,
                     };
                     let target_len = header.target_len(tid).unwrap();
                     // Apppend the sample index to each variant abundance
@@ -288,7 +288,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     for (pos, abundance_map) in variants.iter() {
                         let position_variants =
                             contig_variants.entry(*pos as i64).or_insert(HashMap::new());
-                        for (variant, base_info) in abundance_map {
+                        for (variant, base_info) in abundance_map.iter() {
                             let sample_map = position_variants
                                 .entry(variant.clone())
                                 .or_insert(base_info.clone());
