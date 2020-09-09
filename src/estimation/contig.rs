@@ -569,6 +569,13 @@ pub fn pileup_variants<
             &genomes_and_contigs,
         );
 
+        // Get sample distances
+        variant_matrix.calculate_sample_distances(
+            &output_prefix,
+            &reference_map,
+            &genomes_and_contigs,
+        );
+
         // If flagged, then create plots using CMplot
         if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
@@ -579,6 +586,13 @@ pub fn pileup_variants<
         let window_size = m.value_of("window-size").unwrap().parse().unwrap();
 
         variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+
+        // Get sample distances
+        variant_matrix.calculate_sample_distances(
+            &output_prefix,
+            &reference_map,
+            &genomes_and_contigs,
+        );
 
         variant_matrix.print_variant_stats(window_size, &output_prefix, &genomes_and_contigs);
         info!("Sumamrize analysis finished!");
@@ -596,6 +610,12 @@ pub fn pileup_variants<
         info!("Evolve analysis finished!");
     } else if mode == "polish" {
         variant_matrix.polish_genomes(&output_prefix, &reference_map, &genomes_and_contigs);
+        // Get sample distances
+        variant_matrix.calculate_sample_distances(
+            &output_prefix,
+            &reference_map,
+            &genomes_and_contigs,
+        );
         // If flagged, then create plots using CMplot
         if m.is_present("plot") {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();

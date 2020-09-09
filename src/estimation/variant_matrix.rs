@@ -8,6 +8,7 @@ use estimation::contig_variants::*;
 use estimation::genotype_abundances;
 use estimation::linkage::*;
 use itertools::izip;
+use itertools::Itertools;
 use model::variants::*;
 use rayon::current_num_threads;
 use rayon::prelude::*;
@@ -170,6 +171,13 @@ pub trait VariantMatrixFunctions {
     );
 
     fn polish_genomes(
+        &self,
+        output_prefix: &str,
+        reference_map: &HashMap<usize, String>,
+        genomes_and_contigs: &GenomesAndContigs,
+    );
+
+    fn calculate_sample_distances(
         &self,
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
@@ -652,137 +660,137 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let all_variants_genotyped = Arc::new(Mutex::new(all_variants.clone()));
                 // For each reference genome we will perform the DBSCAN clustering
                 variant_info.par_iter().for_each(|(ref_idx, variant_info_vec)| {
-                    if variant_info_vec.len() == 1 {
-                        warn!("Where did the variants go? {:?}", variant_info_vec);
-                    }
-                    let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
-                        eps_min: e_min,
-                        eps_max: e_max,
-                        pts_min: match pts_min {
-                            _ if pts_min > 1. => pts_min,
-                            _ => pts_min * variant_info_vec.len() as f64,
-                        },
-                        pts_max: match pts_max {
-                            _ if pts_max > 1. => pts_max,
-                            _ => pts_max * variant_info_vec.len() as f64,
-                        },
-                        phi,
-                        geom_var: geom_mean_var[ref_idx].to_owned(),
-                        geom_dep: geom_mean_dep[ref_idx].to_owned(),
-                        geom_frq: geom_mean_frq[ref_idx].to_owned(),
-                    };
+                    if variant_info_vec.len() > 1 {
+                        let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
+                            eps_min: e_min,
+                            eps_max: e_max,
+                            pts_min: match pts_min {
+                                _ if pts_min > 1. => pts_min,
+                                _ => pts_min * variant_info_vec.len() as f64,
+                            },
+                            pts_max: match pts_max {
+                                _ if pts_max > 1. => pts_max,
+                                _ => pts_max * variant_info_vec.len() as f64,
+                            },
+                            phi,
+                            geom_var: geom_mean_var[ref_idx].to_owned(),
+                            geom_dep: geom_mean_dep[ref_idx].to_owned(),
+                            geom_frq: geom_mean_frq[ref_idx].to_owned(),
+                        };
 
-                    // Perform read phasing clustering and return initial clusters
-                    let links = linkage_clustering_of_variants(
-                        &variant_info_vec,
-                        anchor_size,
-                        anchor_similarity,
-                        minimum_reads_in_link,
-                    );
-                    // let links = Vec::new();
-                    // run fuzzy DBSCAN
-                    let reference_path = Path::new(
-                        reference_map
-                            .get(ref_idx)
-                            .expect("reference index not found"),
-                    );
-                    if links.len() > 0 {
-                        info!(
-                            "Genome {}: Running Seeded fuzzyDBSCAN with {} initial clusters",
-                            links.len(),
+                        // Perform read phasing clustering and return initial clusters
+                        let links = linkage_clustering_of_variants(
+                            &variant_info_vec,
+                            anchor_size,
+                            anchor_similarity,
+                            minimum_reads_in_link,
+                        );
+                        // let links = Vec::new();
+                        // run fuzzy DBSCAN
+                        let reference_path = Path::new(
+                            reference_map
+                                .get(ref_idx)
+                                .expect("reference index not found"),
+                        );
+                        if links.len() > 0 {
+                            info!(
+                                "Genome {}: Running Seeded fuzzyDBSCAN with {} initial clusters",
+                                reference_path.file_stem().unwrap().to_str().unwrap(),
+                                links.len(),
+                            );
+                        } else {
+                            warn!(
+                                "Genome {}: No initial clusters formed, running fuzzyDBSCAN with no seeds.",
+                                reference_path.file_stem().unwrap().to_str().unwrap(),
+                            )
+                        }
+                        let clusters = fuzzy_scanner.cluster(
+                            &variant_info_vec[..],
+                            links,
                             reference_path.file_stem().unwrap().to_str().unwrap(),
                         );
-                    } else {
-                        warn!(
-                            "Genome {}: No initial clusters formed, running fuzzyDBSCAN with no seeds. Perhaps lower linkage thresholds?",
-                            reference_path.file_stem().unwrap().to_str().unwrap(),
-                        )
-                    }
-                    let clusters = fuzzy_scanner.cluster(
-                        &variant_info_vec[..],
-                        links);
 
-                    // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
-                    // keep hashmaps updated using channel()
-                    let prediction_variants =
-                        Mutex::new(
-                            HashMap::new());
+                        // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
+                        // keep hashmaps updated using channel()
+                        let prediction_variants =
+                            Mutex::new(
+                                HashMap::new());
 
-                    // Organize clusters into genotypes by recollecting full variant information
-                    clusters.par_iter().enumerate().for_each(|(rank, cluster)| {
-                        // Sets for each cluster keeping track of which variant types are present in
-                        // a cluster
-                        let prediction_set = Mutex::new(
-                            HashSet::new());
-                        cluster.par_iter().for_each(|assignment| {
-                            let variant: &fuzzy::Var = &variant_info_vec[assignment.index];
+                        // Organize clusters into genotypes by recollecting full variant information
+                        clusters.par_iter().enumerate().for_each(|(rank, cluster)| {
+                            // Sets for each cluster keeping track of which variant types are present in
+                            // a cluster
+                            let prediction_set = Mutex::new(
+                                HashSet::new());
+                            cluster.par_iter().for_each(|assignment| {
+                                let variant: &fuzzy::Var = &variant_info_vec[assignment.index];
 
-                            let mut prediction_set = prediction_set.lock().unwrap();
-                            prediction_set.insert(variant.var.to_owned());
+                                let mut prediction_set = prediction_set.lock().unwrap();
+                                prediction_set.insert(variant.var.to_owned());
 
-                            let mut prediction_variants = prediction_variants
-                                .lock()
-                                .unwrap();
+                                let mut prediction_variants = prediction_variants
+                                    .lock()
+                                    .unwrap();
 
-                            let variant_tid = prediction_variants
-                                .entry(rank + 1)
-                                .or_insert(HashMap::new());
-
-                            let variant_pos = variant_tid
-                                .entry(variant.tid)
-                                .or_insert(HashMap::new());
-
-                            let variant_cat = variant_pos
-                                .entry(variant.pos)
-                                .or_insert(HashMap::new());
-
-                            let variant_set = variant_cat
-                                .entry(assignment.category)
-                                .or_insert(HashSet::new());
-
-                            variant_set.insert(variant.var.to_owned());
-
-                            // Add genotypes to base
-                            let mut all_variants_genotyped =
-                                all_variants_genotyped.lock().unwrap();
-
-                            let ref_variants =
-                                all_variants_genotyped
-                                    .entry(*ref_idx)
+                                let variant_tid = prediction_variants
+                                    .entry(rank + 1)
                                     .or_insert(HashMap::new());
 
-                            let base_tid =
-                                ref_variants
+                                let variant_pos = variant_tid
                                     .entry(variant.tid)
                                     .or_insert(HashMap::new());
 
-                            let base_pos = base_tid
-                                .entry(variant.pos)
-                                .or_insert(HashMap::new());
+                                let variant_cat = variant_pos
+                                    .entry(variant.pos)
+                                    .or_insert(HashMap::new());
 
-                            match base_pos.get_mut(&variant.var) {
-                                Some(base_base) => {
-                                    base_base.genotypes.insert(rank as i32 + 1);
-                                },
-                                None => {},
-                            };
+                                let variant_set = variant_cat
+                                    .entry(assignment.category)
+                                    .or_insert(HashSet::new());
+
+                                variant_set.insert(variant.var.to_owned());
+
+                                // Add genotypes to base
+                                let mut all_variants_genotyped =
+                                    all_variants_genotyped.lock().unwrap();
+
+                                let ref_variants =
+                                    all_variants_genotyped
+                                        .entry(*ref_idx)
+                                        .or_insert(HashMap::new());
+
+                                let base_tid =
+                                    ref_variants
+                                        .entry(variant.tid)
+                                        .or_insert(HashMap::new());
+
+                                let base_pos = base_tid
+                                    .entry(variant.pos)
+                                    .or_insert(HashMap::new());
+
+                                match base_pos.get_mut(&variant.var) {
+                                    Some(base_base) => {
+                                        base_base.genotypes.insert(rank as i32 + 1);
+                                    },
+                                    None => {},
+                                };
+                            });
+                            let mut prediction_set = prediction_set.lock().unwrap();
+                            // if prediction_set.len() == 1 && prediction_set.contains(&Variant::None) {
+                            //
+                            //     debug!("Removing cluster {}", rank + 1);
+                            //     let mut prediction_variants = prediction_variants
+                            //         .lock()
+                            //         .unwrap();
+                            //
+                            //     prediction_variants
+                            //         .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
+                            // }
                         });
-                        let mut prediction_set = prediction_set.lock().unwrap();
-                        // if prediction_set.len() == 1 && prediction_set.contains(&Variant::None) {
-                        //
-                        //     debug!("Removing cluster {}", rank + 1);
-                        //     let mut prediction_variants = prediction_variants
-                        //         .lock()
-                        //         .unwrap();
-                        //
-                        //     prediction_variants
-                        //         .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
-                        // }
-                    });
-                    let prediction_variants = prediction_variants.lock().unwrap().clone();
-                    let mut prediction_variants_all = prediction_variants_all.lock().unwrap();
-                    prediction_variants_all.insert(*ref_idx, prediction_variants);
-
+                        let prediction_variants = prediction_variants.lock().unwrap().clone();
+                        let mut prediction_variants_all = prediction_variants_all.lock().unwrap();
+                        prediction_variants_all.insert(*ref_idx, prediction_variants);
+                    }
                 });
 
                 let all_variants_genotyped = all_variants_genotyped.lock().unwrap();
@@ -1244,7 +1252,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                             }
                             None => {
-                                info!("No genotypes created for : {}", reference_map[&ref_index],);
+                                // info!("No genotypes created for: {}", reference_map[&ref_index],);
                             }
                         }
                     });
@@ -1745,6 +1753,163 @@ impl VariantMatrixFunctions for VariantMatrix {
                             None => {},
                         }
                 });
+            }
+        }
+    }
+
+    fn calculate_sample_distances(
+        &self,
+        output_prefix: &str,
+        reference_map: &HashMap<usize, String>,
+        genomes_and_contigs: &GenomesAndContigs,
+    ) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                target_names,
+                pred_variants,
+                all_variants,
+                sample_names,
+                ..
+            } => {
+                let number_of_samples = sample_names.len();
+                all_variants
+                    .par_iter()
+                    .for_each(|(ref_index, ref_variants)| {
+                        if ref_variants.len() > 0 {
+                            info!(
+                                "Generating variant adjacency matrix for {}",
+                                reference_map[&ref_index],
+                            );
+
+                            // The initialization of adjacency matrix n*n n=samples
+                            let adjacency_matrix =
+                                Mutex::new(vec![vec![0; number_of_samples]; number_of_samples]);
+
+                            let sample_totals = Mutex::new(vec![0; number_of_samples]);
+
+                            debug!("Collecting variants...");
+
+                            for (tid, contig_variants) in ref_variants.iter() {
+                                for (pos, pos_variants) in contig_variants.iter() {
+                                    if pos_variants.len() > 1 {
+                                        for (variant, base_info) in pos_variants.iter() {
+                                            match variant {
+                                                Variant::SNV(_)
+                                                | Variant::MNV(_)
+                                                | Variant::SV(_)
+                                                | Variant::Insertion(_)
+                                                | Variant::Inversion(_)
+                                                | Variant::Deletion(_) => {
+                                                    // Update adjacency matrix for each variant
+                                                    // Evaluate each sample pairwise
+                                                    (0..number_of_samples)
+                                                        .into_iter()
+                                                        .combinations(2)
+                                                        .collect::<Vec<Vec<usize>>>()
+                                                        .into_par_iter()
+                                                        .for_each(|indices| {
+                                                            let d1 =
+                                                                base_info.truedepth[indices[0]];
+                                                            let d2 =
+                                                                base_info.truedepth[indices[1]];
+
+                                                            if d1 > 0 && d2 > 0 {
+                                                                // udpate both
+                                                                let mut adjacency_matrix =
+                                                                    adjacency_matrix
+                                                                        .lock()
+                                                                        .unwrap();
+                                                                let mut sample_totals =
+                                                                    sample_totals.lock().unwrap();
+                                                                sample_totals[indices[0]] += 1;
+                                                                sample_totals[indices[1]] += 1;
+
+                                                                adjacency_matrix[indices[0]]
+                                                                    [indices[1]] += 1;
+                                                                adjacency_matrix[indices[1]]
+                                                                    [indices[0]] += 1;
+                                                            } else if d1 > 0 && d2 <= 0 {
+                                                                // update only one
+                                                                let mut sample_totals =
+                                                                    sample_totals.lock().unwrap();
+                                                                sample_totals[indices[0]] += 1;
+                                                            } else if d1 <= 0 && d2 > 0 {
+                                                                let mut sample_totals =
+                                                                    sample_totals.lock().unwrap();
+                                                                sample_totals[indices[1]] += 1;
+                                                            }
+                                                        });
+                                                }
+                                                Variant::None => {
+                                                    // do nothing
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            let adjacency_matrix = adjacency_matrix.lock().unwrap();
+                            let sample_totals = sample_totals.lock().unwrap();
+
+                            let reference_stem = &genomes_and_contigs.genomes[*ref_index];
+                            debug!("Printing strain coverages {}", &reference_stem);
+                            let file_name = format!(
+                                "{}/{}_adjacency_matrix.tsv",
+                                &output_prefix, &reference_stem,
+                            );
+
+                            let file_path = Path::new(&file_name);
+
+                            let mut file_open = match File::create(file_path) {
+                                Ok(fasta) => fasta,
+                                Err(e) => {
+                                    println!("Cannot create file {:?}", e);
+                                    std::process::exit(1)
+                                }
+                            };
+
+                            // Adjacency summary start
+                            for sample_name in sample_names.iter() {
+                                // remove tmp file name from sample id
+                                let sample_name = match &sample_name[..4] {
+                                    ".tmp" => &sample_name[15..],
+                                    _ => &sample_name,
+                                };
+                                write!(file_open, "\t{}", sample_name).unwrap();
+                            }
+
+                            write!(file_open, "\n").unwrap();
+
+                            for (sample_idx_1, distance_vec) in adjacency_matrix.iter().enumerate()
+                            {
+                                let mut sample_name = &sample_names[sample_idx_1];
+                                // remove tmp file name from sample id
+                                let sample_name = match &sample_name[..4] {
+                                    ".tmp" => &sample_name[15..],
+                                    _ => &sample_name,
+                                };
+                                write!(file_open, "{}", &sample_name,).unwrap();
+                                for (sample_idx_2, count) in distance_vec.iter().enumerate() {
+                                    let jaccards_sim = if sample_idx_1 == sample_idx_2 {
+                                        1.
+                                    } else if sample_totals[sample_idx_1] > 0
+                                        || sample_totals[sample_idx_2] > 0
+                                    {
+                                        *count as f32
+                                            / (sample_totals[sample_idx_1] as f32
+                                                + sample_totals[sample_idx_2] as f32
+                                                - *count as f32)
+                                    } else {
+                                        0.
+                                    };
+
+                                    write!(file_open, "\t{}", 1. - jaccards_sim,).unwrap();
+                                }
+                                write!(file_open, "\n").unwrap();
+                            }
+                        }
+                    });
             }
         }
     }

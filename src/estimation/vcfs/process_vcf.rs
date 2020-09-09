@@ -283,7 +283,11 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             });
             info!(
                 "Collected {} variant positions for sample {}",
-                total_records, &stoit_name
+                total_records, // remove tmp file name from sample id
+                match &stoit_name[..4] {
+                    ".tmp" => &stoit_name[15..],
+                    _ => &stoit_name,
+                },
             );
             if longread {
                 variant_matrix.add_sample(

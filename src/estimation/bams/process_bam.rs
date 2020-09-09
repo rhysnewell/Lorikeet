@@ -497,6 +497,12 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         num_mapped_reads_total += num_mapped_reads_in_current_contig;
     }
 
+    // remove tmp file name from sample id
+    let stoit_name = match &stoit_name[..4] {
+        ".tmp" => &stoit_name[15..],
+        _ => &stoit_name,
+    };
+
     info!(
         "In sample '{}', found {} reads mapped out of {} total ({:.*}%)", // and filtered {}",
         stoit_name,

@@ -245,8 +245,9 @@ impl FuzzyDBSCAN {
         &self,
         points: &[P],
         initial_clusters: Vec<Cluster>,
+        ref_name: &str,
     ) -> Vec<Cluster> {
-        self.fuzzy_dbscan(points, initial_clusters)
+        self.fuzzy_dbscan(points, initial_clusters, ref_name)
     }
 }
 
@@ -255,6 +256,7 @@ impl FuzzyDBSCAN {
         &self,
         points: &[P],
         initial_clusters: Vec<Cluster>,
+        ref_name: &str,
     ) -> Vec<Cluster> {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
@@ -303,7 +305,7 @@ impl FuzzyDBSCAN {
         // Cluster any unvisited points
         if initial_clusters.len() == 0
             || visited
-                .iter()
+                .par_iter()
                 .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
         {
             for point_index in 0..points.len() {
@@ -368,7 +370,11 @@ impl FuzzyDBSCAN {
             small_similarity == 1
         });
 
-        debug!("Dedup Clusters {:?}", clusters.len());
+        info!(
+            "Genome {}: {} possible strains... ",
+            ref_name,
+            clusters.len()
+        );
 
         clusters
     }
