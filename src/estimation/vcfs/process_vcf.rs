@@ -293,7 +293,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
                     (short_sample_count as i32 + *per_ref_sample_idx) as usize,
-                    &variant_map,
+                    &mut variant_map,
                     &header,
                     &genomes_and_contigs,
                 );
@@ -301,7 +301,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
                     *per_ref_sample_idx as usize,
-                    &variant_map,
+                    &mut variant_map,
                     &header,
                     &genomes_and_contigs,
                 );
@@ -313,7 +313,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
                     (short_sample_count as i32 + *per_ref_sample_idx) as usize,
-                    &variant_map,
+                    &mut variant_map,
                     &header,
                     &genomes_and_contigs,
                 );
@@ -321,7 +321,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 variant_matrix.add_sample(
                     stoit_name.to_string(),
                     *per_ref_sample_idx as usize,
-                    &variant_map,
+                    &mut variant_map,
                     &header,
                     &genomes_and_contigs,
                 );

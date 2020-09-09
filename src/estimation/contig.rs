@@ -345,7 +345,7 @@ pub fn pileup_variants<
                 variant_matrix.add_sample(
                     stoit_name,
                     (per_reference_short_samples as i32 + per_ref_sample_idx) as usize,
-                    &variant_map,
+                    &mut variant_map,
                     &header,
                     &genomes_and_contigs,
                 );

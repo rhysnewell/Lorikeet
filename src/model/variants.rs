@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
@@ -244,8 +244,6 @@ pub struct Base {
     pub variant: Variant,
     // The QUAL values across samples
     pub quals: Vec<f32>,
-    // Filter tag
-    pub filters: Vec<HashSet<Filter>>,
     // Depth of this variant as decided by variant caller. Only includes good quality reads
     // This values tends to be inconsistent so opt to use lorikeets depth value
     pub depth: Vec<i32>,
@@ -255,28 +253,6 @@ pub struct Base {
     pub totaldepth: Vec<i32>,
     // Depth of the reference allele as decided by lorikeet. Includes low quality reds
     pub referencedepth: Vec<i32>,
-    // Physical coverage of valid inserts across locus
-    pub physicalcov: Vec<i32>,
-    // Mean base quality at locus
-    pub baseq: Vec<i32>,
-    // Mean read mapping quality at locus
-    pub mapq: Vec<i32>,
-    // Variant confidence / quality by depth
-    pub conf: Vec<i32>,
-    // Nucleotide count at each locus
-    pub nucs: HashMap<char, Vec<i32>>,
-    // Percentage of As, Cs, Gs, Ts weighted by Q & MQ at locus
-    pub pernucs: HashMap<char, Vec<i32>>,
-    // insertion count at locus
-    pub ic: Vec<i32>,
-    // deletion count at locus
-    pub dc: Vec<i32>,
-    // number of estimation.reads clipped here
-    pub xc: Vec<i32>,
-    // allele count in genotypes, for each ALT allele.
-    pub ac: Vec<i32>,
-    // fraction in support for alternate allele
-    pub af: Vec<f64>,
     // Frequency of variant
     pub freq: Vec<f64>,
     // Read ids assigned to variant
@@ -319,19 +295,9 @@ impl Base {
     pub fn combine_sample(&mut self, other: &Base, sample_idx: usize, total_depth: i32) {
         if &self != &other {
             self.quals[sample_idx] = other.quals[sample_idx];
-            self.filters[sample_idx] = other.filters[sample_idx].clone();
             self.depth[sample_idx] = other.depth[sample_idx];
             self.truedepth[sample_idx] = other.truedepth[sample_idx];
             self.totaldepth[sample_idx] = total_depth;
-            self.physicalcov[sample_idx] = other.physicalcov[sample_idx];
-            self.baseq[sample_idx] = other.baseq[sample_idx];
-            self.mapq[sample_idx] = other.mapq[sample_idx];
-            self.conf[sample_idx] = other.conf[sample_idx];
-            self.ic[sample_idx] = other.ic[sample_idx];
-            self.dc[sample_idx] = other.dc[sample_idx];
-            self.xc[sample_idx] = other.xc[sample_idx];
-            self.ac[sample_idx] = other.ac[sample_idx];
-            self.af[sample_idx] = other.af[sample_idx];
             self.freq[sample_idx] = other.freq[sample_idx];
         } else {
             self.totaldepth[sample_idx] = total_depth;
@@ -344,23 +310,11 @@ impl Base {
             pos,
             refr,
             variant: Variant::None,
-            filters: vec![HashSet::new(); sample_count],
             quals: vec![0.; sample_count],
             depth: vec![0; sample_count],
             truedepth: vec![0; sample_count],
             totaldepth: vec![0; sample_count],
             referencedepth: vec![0; sample_count],
-            physicalcov: vec![0; sample_count],
-            baseq: vec![0; sample_count],
-            mapq: vec![0; sample_count],
-            conf: vec![0; sample_count],
-            nucs: HashMap::new(),
-            pernucs: HashMap::new(),
-            ic: vec![0; sample_count],
-            dc: vec![0; sample_count],
-            xc: vec![0; sample_count],
-            ac: vec![0; sample_count],
-            af: vec![0.; sample_count],
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],
             reads: HashSet::new(),
@@ -468,7 +422,6 @@ impl Base {
                         // Get relevant flag from freebayes output on short read samples
                         // let allele_depths = record.format(b"AD").integer().unwrap().clone();
                         base.variant = variant.clone();
-                        base.filters[sample_idx] = filter_hash.clone();
                         //                    base.totaldepth[sample_idx] = record.info(b"DP").integer().unwrap().unwrap()[0];
                         // base.baseq[sample_idx] = record.info(b"QA").integer().unwrap().unwrap()[0];
                         base.depth[sample_idx] = match record.format(b"AD").integer() {
