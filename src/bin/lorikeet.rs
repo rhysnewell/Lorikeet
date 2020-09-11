@@ -197,9 +197,17 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
 
     // Temp directory that will house all cached bams for variant calling
     let tmp_dir = match m.is_present("bam-file-cache-directory") {
-        false => Some(
-            tempdir::TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory"),
-        ),
+        false => {
+            let tmp_direct = tempdir::TempDir::new("lorikeet_fifo")
+                .expect("Unable to create temporary directory");
+            debug!("Temp directory {}", tmp_direct.as_ref().to_str().unwrap());
+            std::fs::create_dir(format!("{}/long", &tmp_direct.as_ref().to_str().unwrap()))
+                .unwrap();
+            std::fs::create_dir(format!("{}/short", &tmp_direct.as_ref().to_str().unwrap()))
+                .unwrap();
+
+            Some(tmp_direct)
+        }
         true => None,
     };
 

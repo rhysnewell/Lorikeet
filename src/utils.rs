@@ -31,7 +31,17 @@ pub fn get_streamed_bam_readers<'a>(
 ) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
-        setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
+        if longread {
+            setup_bam_cache_directory(&format!(
+                "{}/long/",
+                m.value_of("bam-file-cache-directory").unwrap()
+            ));
+        } else {
+            setup_bam_cache_directory(&format!(
+                "{}/short/",
+                m.value_of("bam-file-cache-directory").unwrap()
+            ));
+        }
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
@@ -65,6 +75,7 @@ pub fn get_streamed_bam_readers<'a>(
                             .unwrap(),
                         reference,
                         naming_readset,
+                        longread,
                     );
                     Some(bam_file_cache_path)
                 }
@@ -76,6 +87,7 @@ pub fn get_streamed_bam_readers<'a>(
                             None => reference,
                         },
                         naming_readset,
+                        longread,
                     );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
@@ -127,7 +139,17 @@ pub fn get_streamed_filtered_bam_readers(
 ) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
-        setup_bam_cache_directory(m.value_of("bam-file-cache-directory").unwrap());
+        if longread {
+            setup_bam_cache_directory(&format!(
+                "{}/long/",
+                m.value_of("bam-file-cache-directory").unwrap()
+            ));
+        } else {
+            setup_bam_cache_directory(&format!(
+                "{}/short/",
+                m.value_of("bam-file-cache-directory").unwrap()
+            ));
+        }
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
@@ -162,6 +184,7 @@ pub fn get_streamed_filtered_bam_readers(
                             .unwrap(),
                         reference,
                         naming_readset,
+                        longread,
                     );
                     Some(bam_file_cache_path)
                 }
@@ -173,6 +196,7 @@ pub fn get_streamed_filtered_bam_readers(
                             None => reference,
                         },
                         naming_readset,
+                        longread,
                     );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
@@ -333,30 +357,57 @@ pub fn setup_bam_cache_directory(cache_directory: &str) {
     }
 }
 
-pub fn generate_cached_bam_file_name(directory: &str, reference: &str, read1_path: &str) -> String {
+pub fn generate_cached_bam_file_name(
+    directory: &str,
+    reference: &str,
+    read1_path: &str,
+    longread: bool,
+) -> String {
     debug!(
         "Constructing BAM file cache name in directory {}, reference {}, read1_path {}",
         directory, reference, read1_path
     );
-    std::path::Path::new(directory)
-        .to_str()
-        .expect("Unable to covert bam-file-cache-directory name into str")
-        .to_string()
-        + "/"
-        + &std::path::Path::new(reference)
-            .file_name()
-            .expect("Unable to convert reference to file name")
+    if longread {
+        std::path::Path::new(&format!("{}/long/", directory))
             .to_str()
-            .expect("Unable to covert file name into str")
+            .expect("Unable to covert bam-file-cache-directory name into str")
             .to_string()
-        + "."
-        + &std::path::Path::new(read1_path)
-            .file_name()
-            .expect("Unable to convert read1 name to file name")
+            + "/"
+            + &std::path::Path::new(reference)
+                .file_name()
+                .expect("Unable to convert reference to file name")
+                .to_str()
+                .expect("Unable to covert file name into str")
+                .to_string()
+            + "."
+            + &std::path::Path::new(read1_path)
+                .file_name()
+                .expect("Unable to convert read1 name to file name")
+                .to_str()
+                .expect("Unable to covert file name into str")
+                .to_string()
+            + ".bam"
+    } else {
+        std::path::Path::new(&format!("{}/short/", directory))
             .to_str()
-            .expect("Unable to covert file name into str")
+            .expect("Unable to covert bam-file-cache-directory name into str")
             .to_string()
-        + ".bam"
+            + "/"
+            + &std::path::Path::new(reference)
+                .file_name()
+                .expect("Unable to convert reference to file name")
+                .to_str()
+                .expect("Unable to covert file name into str")
+                .to_string()
+            + "."
+            + &std::path::Path::new(read1_path)
+                .file_name()
+                .expect("Unable to convert read1 name to file name")
+                .to_str()
+                .expect("Unable to covert file name into str")
+                .to_string()
+            + ".bam"
+    }
 }
 
 #[derive(Debug)]
