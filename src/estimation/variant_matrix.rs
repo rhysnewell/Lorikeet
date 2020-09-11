@@ -1870,13 +1870,14 @@ impl VariantMatrixFunctions for VariantMatrix {
                             };
 
                             // Adjacency summary start
+                            write!(file_open, "{: <20}", "").unwrap();
                             for sample_name in sample_names.iter() {
                                 // remove tmp file name from sample id
                                 let sample_name = match &sample_name[..4] {
                                     ".tmp" => &sample_name[15..],
                                     _ => &sample_name,
                                 };
-                                write!(file_open, "\t{}", sample_name).unwrap();
+                                write!(file_open, "\t{: <20}", sample_name).unwrap();
                             }
 
                             write!(file_open, "\n").unwrap();
@@ -1889,22 +1890,32 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     ".tmp" => &sample_name[15..],
                                     _ => &sample_name,
                                 };
-                                write!(file_open, "{}", &sample_name,).unwrap();
+                                write!(file_open, "{: <20}", &sample_name,).unwrap();
                                 for (sample_idx_2, count) in distance_vec.iter().enumerate() {
-                                    let jaccards_sim = if sample_idx_1 == sample_idx_2 {
-                                        1.
-                                    } else if sample_totals[sample_idx_1] > 0
-                                        || sample_totals[sample_idx_2] > 0
-                                    {
-                                        *count as f32
-                                            / (sample_totals[sample_idx_1] as f32
-                                                + sample_totals[sample_idx_2] as f32
-                                                - *count as f32)
+                                    // Return the jaccard's similarity between sets of variants in
+                                    // samples
+                                    // let jaccards_sim = if sample_idx_1 == sample_idx_2 {
+                                    //     1.
+                                    // } else if sample_totals[sample_idx_1] > 0
+                                    //     || sample_totals[sample_idx_2] > 0
+                                    // {
+                                    //     *count as f32
+                                    //         / (sample_totals[sample_idx_1] as f32
+                                    //             + sample_totals[sample_idx_2] as f32
+                                    //             - *count as f32)
+                                    // } else {
+                                    //     0.
+                                    // };
+
+                                    // Return shared variant count
+                                    let count = if sample_idx_1 == sample_idx_2 {
+                                        sample_totals[sample_idx_1] as f32
+                                            / (number_of_samples - 1) as f32
                                     } else {
-                                        0.
+                                        *count as f32
                                     };
 
-                                    write!(file_open, "\t{}", 1. - jaccards_sim,).unwrap();
+                                    write!(file_open, "\t{: <20}", count,).unwrap();
                                 }
                                 write!(file_open, "\n").unwrap();
                             }
@@ -2191,24 +2202,12 @@ mod tests {
             pos,
             refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
             variant: Variant::SNV(var_char),
-            filters: vec![],
             depth: vec![0, 5],
             truedepth: vec![0, 5],
             totaldepth: vec![5, 5],
             genotypes: HashSet::new(),
             quals: vec![0.; sample_count],
             referencedepth: vec![5, 0],
-            physicalcov: vec![0; sample_count],
-            baseq: vec![0; sample_count],
-            mapq: vec![0; sample_count],
-            conf: vec![0; sample_count],
-            nucs: HashMap::new(),
-            pernucs: HashMap::new(),
-            ic: vec![0; sample_count],
-            dc: vec![0; sample_count],
-            xc: vec![0; sample_count],
-            ac: vec![0; sample_count],
-            af: vec![0.; sample_count],
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],
             reads: HashSet::new(),

@@ -17,8 +17,8 @@ use tempfile::NamedTempFile;
 
 /// Process all reads in a BAM file
 #[allow(unused)]
-pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
-    bam_generator: G,
+pub fn process_bam<R: IndexedNamedBamReader>(
+    mut bam_generated: R,
     sample_count: usize,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     variant_matrix: &mut VariantMatrix,
@@ -43,7 +43,7 @@ pub fn process_bam<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     reference_map: &HashMap<usize, String>,
     concatenated_genomes: &Option<NamedTempFile>,
 ) {
-    let mut bam_generated = bam_generator.start();
+    // let mut bam_generated = bam_generator.start();
 
     // Adjust the sample index if the bam is from long reads
     let mut longread = false;

@@ -1588,8 +1588,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
                         .default_value("trimmed_mean"),
                 )
-                .arg(Arg::with_name("e-min").long("e-min").default_value("0.1"))
-                .arg(Arg::with_name("e-max").long("e-max").default_value("0.5"))
+                .arg(Arg::with_name("e-min").long("e-min").default_value("0.01"))
+                .arg(Arg::with_name("e-max").long("e-max").default_value("0.1"))
                 .arg(
                     Arg::with_name("pts-min")
                         .long("pts-min")

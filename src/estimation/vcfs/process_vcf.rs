@@ -19,8 +19,8 @@ use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
 #[allow(unused)]
-pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
-    bam_generator: G,
+pub fn process_vcf<R: IndexedNamedBamReader>(
+    mut bam_generated: R,
     split_threads: usize,
     mut prev_ref_idx: &mut i32,
     mut per_ref_sample_idx: &mut i32,
@@ -34,7 +34,7 @@ pub fn process_vcf<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     mut short_sample_count: usize,
     concatenated_genomes: &Option<NamedTempFile>,
 ) {
-    let mut bam_generated = bam_generator.start();
+    // let mut bam_generated = bam_generator.start();
     let mut stoit_name = bam_generated.name().to_string();
 
     if longread {
