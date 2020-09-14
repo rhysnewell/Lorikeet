@@ -12,9 +12,7 @@ use itertools::Itertools;
 use model::variants::*;
 use rayon::current_num_threads;
 use rayon::prelude::*;
-use rust_htslib::{
-    bcf::{self},
-};
+use rust_htslib::bcf::{self};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
@@ -23,8 +21,8 @@ use std::process::Stdio;
 use std::str;
 use std::sync::{Arc, Mutex};
 use tempfile;
-use utils::{generate_faidx};
 use tempfile::NamedTempFile;
+use utils::generate_faidx;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -238,28 +236,21 @@ impl VariantMatrixFunctions for VariantMatrix {
                 debug!("adding sample {} at index {}", &sample_name, &sample_idx);
                 sample_names[sample_idx] = sample_name;
 
-
-                let ref_target_names = target_names
-                    .entry(ref_idx)
-                    .or_insert(BTreeMap::new());
+                let ref_target_names = target_names.entry(ref_idx).or_insert(BTreeMap::new());
 
                 ref_target_names
                     .entry(tid as i32)
                     .or_insert(String::from_utf8(target_name).unwrap());
 
                 // let target_len = header.target_len(tid).unwrap();
-                let ref_target_lengths = target_lengths
-                    .entry(ref_idx)
-                    .or_insert(HashMap::new());
+                let ref_target_lengths = target_lengths.entry(ref_idx).or_insert(HashMap::new());
 
                 ref_target_lengths
                     .entry(tid as i32)
                     .or_insert(target_len as f64);
 
                 // Initialize contig id in variant hashmap
-                let reference_variants = all_variants
-                    .entry(ref_idx)
-                    .or_insert(HashMap::new());
+                let reference_variants = all_variants.entry(ref_idx).or_insert(HashMap::new());
 
                 let contig_variants = reference_variants
                     .entry(tid as i32)
@@ -1482,13 +1473,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 Ok(reader) => reader,
                                 Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
                             }
-                        },
-                        None => {
-                            match bio::io::fasta::IndexedReader::from_file(&reference_path) {
-                                Ok(reader) => reader,
-                                Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
-                            }
                         }
+                        None => match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+                            Ok(reader) => reader,
+                            Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                        },
                     };
 
                     // Reference specific GFF records
