@@ -13,7 +13,6 @@ use model::variants::*;
 use rayon::current_num_threads;
 use rayon::prelude::*;
 use rust_htslib::{
-    bam::HeaderView,
     bcf::{self},
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -24,7 +23,8 @@ use std::process::Stdio;
 use std::str;
 use std::sync::{Arc, Mutex};
 use tempfile;
-use utils::{generate_faidx, split_contig_name};
+use utils::{generate_faidx};
+use tempfile::NamedTempFile;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -83,13 +83,15 @@ pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
     /// Adds the variant information retrieved from VCF records on a per reference basis
-    fn add_sample(
+    fn add_reference_contig(
         &mut self,
         sample_name: String,
         sample_idx: usize,
         variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        header: &HeaderView,
-        genomes_and_contigs: &GenomesAndContigs,
+        tid: usize,
+        target_name: Vec<u8>,
+        ref_idx: usize,
+        target_len: u64,
     );
 
     /// Returns the alleles at the current position
@@ -141,6 +143,7 @@ pub trait VariantMatrixFunctions {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
+        concatenated_genomes: &Option<NamedTempFile>,
     );
 
     /// EM Algorithm for caclulating the abundances of each genotype in each sample
@@ -168,6 +171,7 @@ pub trait VariantMatrixFunctions {
         reference_map: &HashMap<usize, String>,
         codon_table: &CodonTable,
         output_prefix: &str,
+        concatenated_genomes: &Option<NamedTempFile>,
     );
 
     fn polish_genomes(
@@ -175,6 +179,7 @@ pub trait VariantMatrixFunctions {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
+        concatenated_genomes: &Option<NamedTempFile>,
     );
 
     fn calculate_sample_distances(
@@ -212,13 +217,15 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn add_sample(
+    fn add_reference_contig(
         &mut self,
         sample_name: String,
         sample_idx: usize,
         variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        header: &HeaderView,
-        genomes_and_contigs: &GenomesAndContigs,
+        tid: usize,
+        target_name: Vec<u8>,
+        ref_idx: usize,
+        target_len: u64,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -230,77 +237,51 @@ impl VariantMatrixFunctions for VariantMatrix {
             } => {
                 debug!("adding sample {} at index {}", &sample_name, &sample_idx);
                 sample_names[sample_idx] = sample_name;
-                let target_count = header.target_count();
-                let tid_names = header.target_names();
 
-                for target_name in tid_names.into_iter() {
-                    let mut target_name_str = String::from_utf8(target_name.to_vec()).unwrap();
 
-                    let reference_index =
-                        match genomes_and_contigs.genome_index_of_contig(&target_name_str) {
-                            Some(idx) => idx,
-                            None => {
-                                target_name_str = split_contig_name(&target_name.to_vec());
-                                genomes_and_contigs
-                                    .genome_index_of_contig(&target_name_str)
-                                    .unwrap()
-                            }
-                        };
+                let ref_target_names = target_names
+                    .entry(ref_idx)
+                    .or_insert(BTreeMap::new());
 
-                    debug!("Adding contig {}", &target_name_str);
+                ref_target_names
+                    .entry(tid as i32)
+                    .or_insert(String::from_utf8(target_name).unwrap());
 
-                    let tid = header.tid(target_name).unwrap();
+                // let target_len = header.target_len(tid).unwrap();
+                let ref_target_lengths = target_lengths
+                    .entry(ref_idx)
+                    .or_insert(HashMap::new());
 
-                    let ref_target_names = target_names
-                        .entry(reference_index)
-                        .or_insert(BTreeMap::new());
+                ref_target_lengths
+                    .entry(tid as i32)
+                    .or_insert(target_len as f64);
 
-                    ref_target_names
-                        .entry(tid as i32)
-                        .or_insert(target_name_str);
+                // Initialize contig id in variant hashmap
+                let reference_variants = all_variants
+                    .entry(ref_idx)
+                    .or_insert(HashMap::new());
 
-                    let target_len = header.target_len(tid).unwrap();
-                    let ref_target_lengths = target_lengths
-                        .entry(reference_index)
-                        .or_insert(HashMap::new());
-                    ref_target_lengths
-                        .entry(tid as i32)
-                        .or_insert(target_len as f64);
+                let contig_variants = reference_variants
+                    .entry(tid as i32)
+                    .or_insert(HashMap::new());
 
-                    // Initialize contig id in variant hashmap
-                    let reference_variants = all_variants
-                        .entry(reference_index)
-                        .or_insert(HashMap::new());
-
-                    let contig_variants = reference_variants
-                        .entry(tid as i32)
-                        .or_insert(HashMap::new());
-
-                    let placeholder = HashMap::new();
-                    let mut variants = match variant_records.remove(&(tid as i32)) {
-                        Some(map) => map,
-                        _ => placeholder,
-                    };
-                    let target_len = header.target_len(tid).unwrap();
-                    // Apppend the sample index to each variant abundance
-                    // Initialize the variant position index
-                    // Also turns out to be the total number of variant positions
-                    for (pos, abundance_map) in variants.iter() {
-                        let position_variants =
-                            contig_variants.entry(*pos as i64).or_insert(HashMap::new());
-                        for (variant, base_info) in abundance_map.iter() {
-                            let sample_map = position_variants
-                                .entry(variant.clone())
-                                .or_insert(base_info.clone());
-                            sample_map.combine_sample(base_info, sample_idx, 0);
-                        }
+                let placeholder = HashMap::new();
+                let mut variants = match variant_records.remove(&(tid as i32)) {
+                    Some(map) => map,
+                    _ => placeholder,
+                };
+                // Apppend the sample index to each variant abundance
+                // Initialize the variant position index
+                // Also turns out to be the total number of variant positions
+                for (pos, abundance_map) in variants.iter() {
+                    let position_variants =
+                        contig_variants.entry(*pos as i64).or_insert(HashMap::new());
+                    for (variant, base_info) in abundance_map.iter() {
+                        let sample_map = position_variants
+                            .entry(variant.clone())
+                            .or_insert(base_info.clone());
+                        sample_map.combine_sample(base_info, sample_idx, 0);
                     }
-                    debug!(
-                        "All Variants Lengths {} {:?} {:?}",
-                        tid,
-                        contig_variants.len(),
-                        target_names[&reference_index]
-                    );
                 }
             }
         }
@@ -809,6 +790,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
+        concatenated_genomes: &Option<NamedTempFile>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -825,11 +807,25 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     .get(ref_index)
                                     .expect("reference index not found"),
                             );
-                            let mut reference =
-                                match bio::io::fasta::IndexedReader::from_file(&reference_path) {
-                                    Ok(reader) => reader,
-                                    Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
-                                };
+
+                            // info!("{:?}", reference_path);
+
+                            let mut reference = match concatenated_genomes {
+                                Some(temp_file) => {
+                                    match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                                        Ok(reader) => reader,
+                                        Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                                    }
+                                },
+                                None => {
+                                    match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+                                        Ok(reader) => reader,
+                                        Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                                    }
+                                }
+                            };
+
+
                             let file_name = format!(
                                 "{}/{}_strain_{}.fna",
                                 output_prefix.to_string(),
@@ -1463,6 +1459,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         reference_map: &HashMap<usize, String>,
         codon_table: &CodonTable,
         output_prefix: &str,
+        concatenated_genomes: &Option<NamedTempFile>,
     ) {
         // Calculates parse the per reference information to functions in codon_structs
         // Writes the resulting gff records
@@ -1479,11 +1476,20 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .get(ref_idx)
                             .expect("reference index not found"),
                     );
-                    let mut reference =
-                        match bio::io::fasta::IndexedReader::from_file(&reference_path) {
-                            Ok(reader) => reader,
-                            Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
-                        };
+                    let mut reference = match concatenated_genomes {
+                        Some(temp_file) => {
+                            match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                                Ok(reader) => reader,
+                                Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                            }
+                        },
+                        None => {
+                            match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+                                Ok(reader) => reader,
+                                Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                            }
+                        }
+                    };
 
                     // Reference specific GFF records
                     let mut gff_ref = gff_map.get_mut(&ref_idx).expect(&format!(
@@ -1555,6 +1561,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
+        concatenated_genomes: &Option<NamedTempFile>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -1576,14 +1583,22 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 .get(ref_index)
                                 .expect("reference index not found"));
 
-                        let mut reference =
-                            match bio::io::fasta::IndexedReader::from_file(
-                                &reference_path) {
-                                Ok(reader) => reader,
-                                Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
-                            };
+                        info!("{:?}", reference_path);
 
-
+                        let mut reference = match concatenated_genomes {
+                            Some(temp_file) => {
+                                match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                                    Ok(reader) => reader,
+                                    Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                                }
+                            },
+                            None => {
+                                match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+                                    Ok(reader) => reader,
+                                    Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                                }
+                            }
+                        };
 
                         debug!("Reference index {} target names {:?}", &ref_index, &target_names);
 
