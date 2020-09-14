@@ -1,21 +1,25 @@
-use clap::ArgMatches;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use glob::glob;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+use rust_htslib::bam;
 
 pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
 ) {
+    let mut record: bam::record::Record = bam::Record::new();
     for bam_generator in bams {
         let mut bam = bam_generator.start();
         bam.set_threads(n_threads);
 
-        for p in bam.pileup() {
-            // Do nothing
-            for pileup in p {}
+        while bam
+            .read(&mut record)
+            .expect("Error while reading BAM record")
+            == true
+        {
+            // do nothing
         }
         bam.finish();
     }
@@ -47,7 +51,7 @@ pub fn recover_bams(
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
-            Some(ref tmp_file) => {
+            Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/short/*.bam",
                     match m.is_present("bam-file-cache-directory") {
@@ -114,7 +118,7 @@ pub fn recover_bams(
             .map(|p| p.as_str())
             .collect::<Vec<&str>>();
 
-        let bam_cnts = all_bam_paths.len();
+        let _bam_cnts = all_bam_paths.len();
         bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
             all_bam_paths,
             n_threads,
@@ -133,7 +137,7 @@ pub fn recover_bams(
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
-            Some(ref tmp_file) => {
+            Some(ref _tmp_file) => {
                 let cache = format!(
                     "{}/long/*.bam",
                     match m.is_present("bam-file-cache-directory") {
@@ -200,7 +204,7 @@ pub fn recover_bams(
             .map(|p| p.as_str())
             .collect::<Vec<&str>>();
 
-        let bam_cnts = all_bam_paths.len();
+        let _bam_cnts = all_bam_paths.len();
         bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
             all_bam_paths,
             n_threads,

@@ -17,12 +17,13 @@ use std::path::Path;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+use tempfile::Builder;
 
 #[allow(unused)]
 pub fn process_vcf<R: IndexedNamedBamReader>(
     mut bam_generated: R,
     split_threads: usize,
-    mut prev_ref_idx: &mut i32,
+    ref_idx: usize,
     mut per_ref_sample_idx: &mut i32,
     mut sample_count: usize,
     variant_matrix: &mut VariantMatrix,
@@ -45,63 +46,15 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
         group.insert(stoit_name.clone());
     }
 
+    let reference = &genomes_and_contigs.genomes[ref_idx];
+    let mut reference_file = retrieve_reference(concatenated_genomes);
+
+
     bam_generated.set_threads(split_threads);
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
     let bam_path = bam_generated.path().to_string();
-
-    // Adjust indices based on whether or not we are using a concatenated reference or not
-    let (reference, ref_idx) = if stoit_name.contains(".fna") && reference_map.len() > 1 {
-        debug!("Stoit_name {:?} {:?}", &stoit_name, &reference_map);
-        let reference_stem = stoit_name.split(".fna").next().unwrap();
-        debug!("possible reference stem {:?}", reference_stem);
-
-        match concatenated_genomes {
-            Some(ref temp_file) => {
-                stoit_name = format!(
-                    "{}.{}",
-                    temp_file.path().file_name().unwrap().to_str().unwrap(),
-                    stoit_name,
-                );
-                debug!("Renamed Stoit_name {:?}", &stoit_name);
-
-                (temp_file.path().to_str().unwrap().to_string(), 0)
-            }
-            None => match genomes_and_contigs.genome_index(&reference_stem.to_string()) {
-                Some(ref_idx) => {
-                    debug!("Actual reference idx {:?}", ref_idx);
-
-                    let reference = reference_map
-                        .get(&ref_idx)
-                        .expect("Unable to retrieve reference path")
-                        .clone();
-                    (reference, ref_idx)
-                }
-                None => {
-                    retrieve_genome_from_contig(target_names[0], genomes_and_contigs, reference_map)
-                }
-            },
-        }
-    } else {
-        match concatenated_genomes {
-            Some(ref temp_file) => {
-                stoit_name = format!(
-                    "{}.{}",
-                    temp_file.path().file_name().unwrap().to_str().unwrap(),
-                    stoit_name,
-                );
-                debug!("Renamed Stoit_name {:?}", &stoit_name);
-
-                (temp_file.path().to_str().unwrap().to_string(), 0)
-            }
-            None => {
-                retrieve_genome_from_contig(target_names[0], genomes_and_contigs, reference_map)
-            }
-        }
-    };
-
-    let mut reference_file = retrieve_reference(concatenated_genomes);
 
     // minimum PHRED base quality
     let bq = m
@@ -115,219 +68,218 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     let min_variant_depth: i32 = m.value_of("min-variant-depth").unwrap().parse().unwrap();
     let min_variant_quality: f32 = m.value_of("min-variant-quality").unwrap().parse().unwrap();
 
+    let mut total_records = 0;
+
     // for each genomic position, only has hashmap when variants are present. Includes read ids
-    let mut variant_map = HashMap::new();
+    for (tid, target) in target_names.iter().enumerate() {
+        let target_name = String::from_utf8(target.to_vec()).unwrap();
+        if target_name.contains(reference) {
+            let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> = HashMap::new();
+            // use pileups to call SNPs for low quality variants
+            // That are usually skipped by GATK
+            let target_len = header.target_len(tid as u32).unwrap();
+            bam_generated.fetch(tid as u32, 0, target_len);
+            match bam_generated.pileup() {
+                Some(pileups) => {
+                    let mut last_tid = -2;
+                    let mut contig_name = Vec::new();
+                    let mut ref_seq = Vec::new();
 
-    // use pileups to call SNPs for low quality variants
-    // That are usually skipped by GATK
-    match bam_generated.pileup() {
-        Some(pileups) => {
-            let mut last_tid = -2;
-            let mut contig_name = Vec::new();
-            let mut ref_idx = 0;
-            let mut ref_seq = Vec::new();
+                    for p in pileups {
+                        if !longread {
+                            let pileup = p.unwrap();
+                            let tid = pileup.tid() as i32;
+                            let pos = pileup.pos() as usize;
+                            let depth = pileup.depth();
+                            if tid != last_tid {
+                                if tid < last_tid {
+                                    error!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                                    panic!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
+                                }
+                                // Update all contig information
+                                contig_name = target_names[tid as usize].to_vec();
+                                fetch_contig_from_reference(
+                                    &mut reference_file,
+                                    &contig_name,
+                                    genomes_and_contigs,
+                                    ref_idx as usize,
+                                );
+                                ref_seq = Vec::new();
+                                read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
+                                last_tid = tid;
+                            }
 
-            for p in pileups {
-                if !longread {
-                    let pileup = p.unwrap();
-                    let tid = pileup.tid() as i32;
-                    let pos = pileup.pos() as usize;
-                    let depth = pileup.depth();
-                    if tid != last_tid {
-                        if tid < last_tid {
-                            error!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
-                            panic!("BAM file appears to be unsorted. Input BAM files must be sorted by reference (i.e. by samtools sort)");
-                        }
-                        // Update all contig information
-                        contig_name = target_names[tid as usize].to_vec();
-                        fetch_contig_from_reference(
-                            &mut reference_file,
-                            &contig_name,
-                            genomes_and_contigs,
-                            ref_idx,
-                        );
-                        ref_seq = Vec::new();
-                        read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
-                        last_tid = tid;
-                    }
+                            let refr_base = ref_seq[pos];
+                            // let mut base = Base::new(tid, pos, );
 
-                    let refr_base = ref_seq[pos];
-                    // let mut base = Base::new(tid, pos, );
+                            let mut base_dict = HashMap::new();
 
-                    let mut base_dict = HashMap::new();
+                            for alignment in pileup.alignments() {
+                                let record = alignment.record();
+                                if record.mapq() >= mapq_thresh {
+                                    if !alignment.is_del() && !alignment.is_refskip() {
+                                        // query position in read
+                                        let qpos = alignment.qpos().unwrap();
+                                        let record_qual = record.qual()[qpos];
+                                        if record_qual >= bq {
+                                            let read_base = alignment.record().seq()[qpos];
+                                            if read_base != refr_base {
+                                                let mut base =
+                                                    base_dict.entry(read_base).or_insert(Base::new(
+                                                        tid as u32,
+                                                        pos as i64,
+                                                        sample_count,
+                                                        vec![refr_base],
+                                                    ));
 
-                    for alignment in pileup.alignments() {
-                        let record = alignment.record();
-                        if record.mapq() >= mapq_thresh {
-                            if !alignment.is_del() && !alignment.is_refskip() {
-                                // query position in read
-                                let qpos = alignment.qpos().unwrap();
-                                let record_qual = record.qual()[qpos];
-                                if record_qual >= bq {
-                                    let read_base = alignment.record().seq()[qpos];
-                                    if read_base != refr_base {
-                                        let mut base =
-                                            base_dict.entry(read_base).or_insert(Base::new(
-                                                tid as u32,
-                                                pos as i64,
-                                                sample_count,
-                                                vec![refr_base],
-                                            ));
+                                                if base.variant == Variant::None {
+                                                    base.variant = Variant::SNV(read_base);
+                                                }
 
-                                        if base.variant == Variant::None {
-                                            base.variant = Variant::SNV(read_base);
+                                                base.depth[*per_ref_sample_idx as usize] += 1;
+                                                base.quals[*per_ref_sample_idx as usize] +=
+                                                    record_qual as f32;
+                                            }
                                         }
-
-                                        base.depth[*per_ref_sample_idx as usize] += 1;
-                                        base.quals[*per_ref_sample_idx as usize] +=
-                                            record_qual as f32;
                                     }
+                                }
+                            }
+
+                            for (var_char, base) in base_dict {
+                                if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
+                                    && base.quals[*per_ref_sample_idx as usize] >= min_variant_quality
+                                {
+                                    let variant_con =
+                                        variant_map.entry(tid as i32).or_insert(HashMap::new());
+                                    let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
+
+                                    // Overwrite any existing variants called by mpileup
+                                    variant_pos.insert(base.variant.to_owned(), base);
                                 }
                             }
                         }
                     }
-
-                    for (var_char, base) in base_dict {
-                        if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
-                            && base.quals[*per_ref_sample_idx as usize] >= min_variant_quality
-                        {
-                            let variant_con =
-                                variant_map.entry(tid as i32).or_insert(HashMap::new());
-                            let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
-
-                            // Overwrite any existing variants called by mpileup
-                            variant_pos.insert(base.variant.to_owned(), base);
-                        }
-                    }
                 }
+                None => println!("no bam for pileups"),
             }
-        }
-        None => println!("no bam for pileups"),
-    }
 
-    bam_generated.finish();
+            // bam_generated.finish();
 
-    debug!(
-        "retrieving genome id with contig {:?} from {} for sample {}",
-        str::from_utf8(&target_names[0]),
-        &reference,
-        &stoit_name
-    );
-
-    let reference_length = match bio::io::fasta::Index::with_fasta_file(&Path::new(&reference)) {
-        Ok(index) => index.sequences().iter().fold(0, |acc, seq| acc + seq.len),
-        Err(_e) => {
-            generate_faidx(&reference);
-            bio::io::fasta::Index::with_fasta_file(&Path::new(&reference))
-                .unwrap()
-                .sequences()
-                .iter()
-                .fold(0, |acc, seq| acc + seq.len)
-        }
-    };
-
-    // Get VCF file from BAM using freebayes of SVIM
-    let mut vcf_reader = get_vcf(
-        &stoit_name,
-        &m,
-        split_threads,
-        longread,
-        reference_length,
-        &reference,
-        &bam_path,
-    );
-
-    match vcf_reader {
-        Ok(ref mut reader) => {
-            reader
-                .set_threads(split_threads)
-                .expect("Unable to set threads on VCF reader");
-
-            let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
-
-            let mut total_records = 0;
-            reader.records().into_iter().for_each(|vcf_record| {
-                let mut vcf_record = vcf_record.unwrap();
-                let vcf_header = vcf_record.header();
-                let variant_rid = vcf_record.rid().unwrap();
-                // Check bam header names and vcf header names are in same order
-                // Sanity check
-                total_records += 1;
-                if target_names[variant_rid as usize]
-                    == vcf_header.rid2name(variant_rid).unwrap() {
-                    let base_option =
-                        Base::from_vcf_record(
-                            &mut vcf_record,
-                            sample_count,
-                            *per_ref_sample_idx as usize,
-                            longread,
-                            min_qual,
-                        );
-                    match base_option {
-                        Some(bases) => {
-                            for base in bases {
-                                let variant_con = variant_map
-                                    .entry(variant_rid as i32).or_insert(HashMap::new());
-                                let variant_pos = variant_con
-                                    .entry(base.pos).or_insert(HashMap::new());
-
-                                // Overwrite any existing variants called by mpileup
-                                variant_pos.insert(base.variant.to_owned(), base);
-                            }
-                        },
-                        None => {},
-                    }
-                } else {
-                    panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
-                }
-            });
-            info!(
-                "Collected {} variant positions for sample {}",
-                total_records, // remove tmp file name from sample id
-                match &stoit_name[..4] {
-                    ".tmp" => &stoit_name[15..],
-                    _ => &stoit_name,
-                },
+            // Get VCF file from BAM using freebayes of SVIM
+            let mut vcf_reader = get_vcf(
+                &stoit_name,
+                &m,
+                split_threads,
+                longread,
+                target_len,
+                &concatenated_genomes.as_ref().unwrap().path().to_str().unwrap(),
+                &bam_path,
+                &target_name,
             );
-            if longread {
-                variant_matrix.add_sample(
-                    stoit_name.to_string(),
-                    (short_sample_count as i32 + *per_ref_sample_idx) as usize,
-                    &mut variant_map,
-                    &header,
-                    &genomes_and_contigs,
-                );
-            } else {
-                variant_matrix.add_sample(
-                    stoit_name.to_string(),
-                    *per_ref_sample_idx as usize,
-                    &mut variant_map,
-                    &header,
-                    &genomes_and_contigs,
-                );
-            }
-        }
-        Err(_) => {
-            info!("No VCF records found for sample {}", &stoit_name);
-            if longread {
-                variant_matrix.add_sample(
-                    stoit_name.to_string(),
-                    (short_sample_count as i32 + *per_ref_sample_idx) as usize,
-                    &mut variant_map,
-                    &header,
-                    &genomes_and_contigs,
-                );
-            } else {
-                variant_matrix.add_sample(
-                    stoit_name.to_string(),
-                    *per_ref_sample_idx as usize,
-                    &mut variant_map,
-                    &header,
-                    &genomes_and_contigs,
-                );
+
+            match vcf_reader {
+                Ok(ref mut reader) => {
+                    reader
+                        .set_threads(split_threads)
+                        .expect("Unable to set threads on VCF reader");
+
+                    let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
+
+                    reader.records().into_iter().for_each(|vcf_record| {
+                        let mut vcf_record = vcf_record.unwrap();
+                        let vcf_header = vcf_record.header();
+                        let variant_rid = vcf_record.rid().unwrap();
+                        // Check bam header names and vcf header names are in same order
+                        // Sanity check
+                        total_records += 1;
+                        if target_names[variant_rid as usize]
+                            == vcf_header.rid2name(variant_rid).unwrap() {
+                            let base_option =
+                                Base::from_vcf_record(
+                                    &mut vcf_record,
+                                    sample_count,
+                                    *per_ref_sample_idx as usize,
+                                    longread,
+                                    min_qual,
+                                );
+                            match base_option {
+                                Some(bases) => {
+                                    for base in bases {
+                                        let variant_con = variant_map
+                                            .entry(variant_rid as i32).or_insert(HashMap::new());
+                                        let variant_pos = variant_con
+                                            .entry(base.pos).or_insert(HashMap::new());
+
+                                        // Overwrite any existing variants called by mpileup
+                                        variant_pos.insert(base.variant.to_owned(), base);
+                                    }
+                                },
+                                None => {},
+                            }
+                        } else {
+                            panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+                        }
+                    });
+
+                    if longread {
+                        variant_matrix.add_reference_contig(
+                            stoit_name.to_string(),
+                            (short_sample_count as i32 + *per_ref_sample_idx) as usize,
+                            &mut variant_map,
+                            tid,
+                            target_name.as_bytes().to_vec(),
+                            ref_idx,
+                            target_len,
+                        );
+                    } else {
+                        variant_matrix.add_reference_contig(
+                            stoit_name.to_string(),
+                            *per_ref_sample_idx as usize,
+                            &mut variant_map,
+                            tid,
+                            target_name.as_bytes().to_vec(),
+                            ref_idx,
+                            target_len,
+                        );
+                    }
+                }
+                Err(_) => {
+                    info!("No VCF records found for sample {}", &stoit_name);
+                    if longread {
+                        variant_matrix.add_reference_contig(
+                            stoit_name.to_string(),
+                            (short_sample_count as i32 + *per_ref_sample_idx) as usize,
+                            &mut variant_map,
+                            tid,
+                            target_name.as_bytes().to_vec(),
+                            ref_idx,
+                            target_len,
+                        );
+                    } else {
+                        variant_matrix.add_reference_contig(
+                            stoit_name.to_string(),
+                            *per_ref_sample_idx as usize,
+                            &mut variant_map,
+                            tid,
+                            target_name.as_bytes().to_vec(),
+                            ref_idx,
+                            target_len,
+                        );
+                    }
+                }
             }
         }
     }
+
+    info!(
+        "Reference {}: Collected {} variant positions for sample {}",
+        reference,
+        total_records, // remove tmp file name from sample id
+        match &stoit_name[..4] {
+            ".tmp" => &stoit_name[15..],
+            _ => &stoit_name,
+        },
+    );
 }
 
 /// Get or generate vcf file
@@ -337,9 +289,10 @@ pub fn get_vcf(
     m: &clap::ArgMatches,
     threads: usize,
     longread: bool,
-    reference_length: u64,
-    reference: &String,
+    target_length: u64,
+    reference: &str,
     bam_path: &str,
+    target_name: &str,
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
@@ -356,11 +309,11 @@ pub fn get_vcf(
             if longread {
                 // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
+                return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
             } else {
                 // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
+                return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
             }
         } else {
             let vcf_path = vcf_path[0];
@@ -370,18 +323,18 @@ pub fn get_vcf(
     } else if longread && m.is_present("longread-bam-files") {
         // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
+        return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
     } else if m.is_present("bam-files") {
         // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, reference_length, reference);
+        return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
         // let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
         //
         // let bam_path = cache + &(stoit_name.to_string() + ".bam");
 
-        return generate_vcf(&bam_path, m, threads, longread, reference_length, reference);
+        return generate_vcf(&bam_path, m, threads, longread, target_length, reference, target_name);
     }
 }
 
@@ -392,12 +345,23 @@ pub fn generate_vcf(
     m: &clap::ArgMatches,
     threads: usize,
     longread: bool,
-    reference_length: u64,
-    reference: &String,
+    target_length: u64,
+    reference: &str,
+    target_name: &str,
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
     let fifo_path = tmp_dir.path().join("foo.pipe");
+
+    let tmp_bam_path1 = Builder::new()
+        .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
+        .suffix(".bam")
+        .tempfile().unwrap();
+
+    let tmp_bam_path2 = Builder::new()
+        .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
+        .suffix(".bam")
+        .tempfile().unwrap();
 
     // create new fifo and give read, write and execute rights to the owner.
     // This is required because we cannot open a Rust stream as a BAM file with
@@ -416,28 +380,26 @@ pub fn generate_vcf(
         // let region_size = reference_length / threads as u64;
         // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
         let region_size = 10000;
-        let index_path = reference.clone() + ".fai";
+        let index_path = format!("{}.fai", reference);
 
         let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
         let vcf_path_prenormalization =
             &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
-        //        let freebayes_path = &("freebayes.vcf");
-        let tmp_bam_path1 = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp1.bam");
-        let tmp_bam_path2 = &(tmp_dir.path().to_str().unwrap().to_string() + "/tmp2.bam");
-
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "samtools sort -@ {} {} > {} && \
+            "samtools view -bh -@ {} {} {} | samtools sort -@ {} - > {} && \
             gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N && \
             samtools index -@ {} {}",
             threads - 1,
             bam_path,
-            tmp_bam_path1,
-            tmp_bam_path1,
-            tmp_bam_path2,
+            &target_name,
             threads - 1,
-            tmp_bam_path2,
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            tmp_bam_path2.path().to_str().unwrap().to_string(),
+            threads - 1,
+            tmp_bam_path2.path().to_str().unwrap().to_string(),
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
@@ -459,7 +421,7 @@ pub fn generate_vcf(
             --heterozygosity {} --indel-heterozygosity {} \
             --pcr-indel-model CONSERVATIVE \
             --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles false",
-            tmp_bam_path2,
+            tmp_bam_path2.path().to_str().unwrap().to_string(),
             &reference,
             &vcf_path_prenormalization,
             threads,
@@ -516,10 +478,18 @@ pub fn generate_vcf(
         }
 
         let cmd_string = format!(
-            "set -e -o pipefail; svim alignment --read_names --skip_genotyping \
+            "set -e -o pipefail; samtools view -bh -@ {} {} {} > {} && \
+            svim alignment --read_names --skip_genotyping \
             --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
             --min_mapq {} --sequence_alleles {} {} {}",
-            mapq_thresh, &svim_path, &bam_path, &reference
+            threads - 1,
+            bam_path,
+            &target_name,
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            mapq_thresh,
+            &svim_path,
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            &reference
         );
         debug!("Queuing cmd_string: {}", cmd_string);
         command::finish_command_safely(
