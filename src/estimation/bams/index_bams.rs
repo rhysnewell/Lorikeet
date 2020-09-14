@@ -1,27 +1,66 @@
+use bird_tool_utils::command;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use external_command_checker;
 use glob::glob;
+use rust_htslib::{bam, bam::record::Aux};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use rust_htslib::bam;
 
 pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
 ) {
+    external_command_checker::check_for_gatk();
     let mut record: bam::record::Record = bam::Record::new();
     for bam_generator in bams {
         let mut bam = bam_generator.start();
         bam.set_threads(n_threads);
+
+        let path = bam.path().to_string();
+
+        // let add_flags_cmd = format!(
+        //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
+        //
+        // );
+        // let sm = Aux::Integer(1);
+        // let sub = Aux::Char(8);
 
         while bam
             .read(&mut record)
             .expect("Error while reading BAM record")
             == true
         {
+            // // push aux flags
+            // record.push_aux("SM".as_bytes(), &sm);
+            // record.push_aux("LB".as_bytes(), &sub);
+            // record.push_aux("PL".as_bytes(), &sub);
+            // record.push_aux("PU".as_bytes(), &sub);
             // do nothing
         }
         bam.finish();
+
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+
+        let groups_command = format!(
+            "set -e -o pipefail; gatk AddOrReplaceReadGroups -I {} -O {:?} -SM 1 -LB N -PL N -PU N && \
+                cp {:?} {}",
+            path,
+            tmp.path(),
+            tmp.path(),
+            path,
+        );
+
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&groups_command)
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "gatk",
+        );
     }
 }
 

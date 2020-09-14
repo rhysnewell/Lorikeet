@@ -1,5 +1,5 @@
 use bird_tool_utils::command;
-use rust_htslib::{bam, bcf, bcf::Read};
+use rust_htslib::{bam, bam::record::Aux, bcf, bcf::Read};
 use std;
 use std::collections::{HashMap, HashSet};
 
@@ -16,8 +16,8 @@ use nix::unistd;
 use std::path::Path;
 use std::str;
 use tempdir::TempDir;
-use tempfile::NamedTempFile;
 use tempfile::Builder;
+use tempfile::NamedTempFile;
 
 #[allow(unused)]
 pub fn process_vcf<R: IndexedNamedBamReader>(
@@ -49,7 +49,6 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = retrieve_reference(concatenated_genomes);
 
-
     bam_generated.set_threads(split_threads);
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
@@ -74,7 +73,8 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     for (tid, target) in target_names.iter().enumerate() {
         let target_name = String::from_utf8(target.to_vec()).unwrap();
         if target_name.contains(reference) {
-            let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> = HashMap::new();
+            let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> =
+                HashMap::new();
             // use pileups to call SNPs for low quality variants
             // That are usually skipped by GATK
             let target_len = header.target_len(tid as u32).unwrap();
@@ -105,7 +105,11 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                                     ref_idx as usize,
                                 );
                                 ref_seq = Vec::new();
-                                read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
+                                read_sequence_to_vec(
+                                    &mut ref_seq,
+                                    &mut reference_file,
+                                    &contig_name,
+                                );
                                 last_tid = tid;
                             }
 
@@ -116,6 +120,7 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
 
                             for alignment in pileup.alignments() {
                                 let record = alignment.record();
+
                                 if record.mapq() >= mapq_thresh {
                                     if !alignment.is_del() && !alignment.is_refskip() {
                                         // query position in read
@@ -124,8 +129,9 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                                         if record_qual >= bq {
                                             let read_base = alignment.record().seq()[qpos];
                                             if read_base != refr_base {
-                                                let mut base =
-                                                    base_dict.entry(read_base).or_insert(Base::new(
+                                                let mut base = base_dict
+                                                    .entry(read_base)
+                                                    .or_insert(Base::new(
                                                         tid as u32,
                                                         pos as i64,
                                                         sample_count,
@@ -147,11 +153,13 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
 
                             for (var_char, base) in base_dict {
                                 if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
-                                    && base.quals[*per_ref_sample_idx as usize] >= min_variant_quality
+                                    && base.quals[*per_ref_sample_idx as usize]
+                                        >= min_variant_quality
                                 {
                                     let variant_con =
                                         variant_map.entry(tid as i32).or_insert(HashMap::new());
-                                    let variant_pos = variant_con.entry(base.pos).or_insert(HashMap::new());
+                                    let variant_pos =
+                                        variant_con.entry(base.pos).or_insert(HashMap::new());
 
                                     // Overwrite any existing variants called by mpileup
                                     variant_pos.insert(base.variant.to_owned(), base);
@@ -172,7 +180,12 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                 split_threads,
                 longread,
                 target_len,
-                &concatenated_genomes.as_ref().unwrap().path().to_str().unwrap(),
+                &concatenated_genomes
+                    .as_ref()
+                    .unwrap()
+                    .path()
+                    .to_str()
+                    .unwrap(),
                 &bam_path,
                 &target_name,
             );
@@ -309,11 +322,27 @@ pub fn get_vcf(
             if longread {
                 // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
+                return generate_vcf(
+                    bam_path,
+                    m,
+                    threads,
+                    longread,
+                    target_length,
+                    reference,
+                    target_name,
+                );
             } else {
                 // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
                 //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-                return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
+                return generate_vcf(
+                    bam_path,
+                    m,
+                    threads,
+                    longread,
+                    target_length,
+                    reference,
+                    target_name,
+                );
             }
         } else {
             let vcf_path = vcf_path[0];
@@ -323,18 +352,42 @@ pub fn get_vcf(
     } else if longread && m.is_present("longread-bam-files") {
         // let bam_path: &str = *m.values_of("longread-bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
+        return generate_vcf(
+            bam_path,
+            m,
+            threads,
+            longread,
+            target_length,
+            reference,
+            target_name,
+        );
     } else if m.is_present("bam-files") {
         // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
         //     .iter().filter(|bam| bam.contains(&stoit_name)).collect::<Vec<&&str>>()[0];
-        return generate_vcf(bam_path, m, threads, longread, target_length, reference, target_name);
+        return generate_vcf(
+            bam_path,
+            m,
+            threads,
+            longread,
+            target_length,
+            reference,
+            target_name,
+        );
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
         // let cache = m.value_of("bam-file-cache-directory").unwrap().to_string() + "/";
         //
         // let bam_path = cache + &(stoit_name.to_string() + ".bam");
 
-        return generate_vcf(&bam_path, m, threads, longread, target_length, reference, target_name);
+        return generate_vcf(
+            &bam_path,
+            m,
+            threads,
+            longread,
+            target_length,
+            reference,
+            target_name,
+        );
     }
 }
 
@@ -356,12 +409,14 @@ pub fn generate_vcf(
     let tmp_bam_path1 = Builder::new()
         .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
         .suffix(".bam")
-        .tempfile().unwrap();
+        .tempfile()
+        .unwrap();
 
     let tmp_bam_path2 = Builder::new()
         .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
         .suffix(".bam")
-        .tempfile().unwrap();
+        .tempfile()
+        .unwrap();
 
     // create new fifo and give read, write and execute rights to the owner.
     // This is required because we cannot open a Rust stream as a BAM file with
@@ -388,18 +443,15 @@ pub fn generate_vcf(
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "samtools view -bh -@ {} {} {} | samtools sort -@ {} - > {} && \
-            gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N && \
+            "set -e -o pipefail; samtools view -bh -@ {} {} {} | samtools sort -@ {} - > {} && \
             samtools index -@ {} {}",
             threads - 1,
             bam_path,
             &target_name,
             threads - 1,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
-            tmp_bam_path2.path().to_str().unwrap().to_string(),
             threads - 1,
-            tmp_bam_path2.path().to_str().unwrap().to_string(),
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
         command::finish_command_safely(
@@ -421,7 +473,7 @@ pub fn generate_vcf(
             --heterozygosity {} --indel-heterozygosity {} \
             --pcr-indel-model CONSERVATIVE \
             --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles false",
-            tmp_bam_path2.path().to_str().unwrap().to_string(),
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
             &reference,
             &vcf_path_prenormalization,
             threads,
