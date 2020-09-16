@@ -3,7 +3,7 @@ use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use external_command_checker;
 use glob::glob;
-use rust_htslib::{bam, bam::record::Aux};
+use rust_htslib::bam;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
@@ -18,6 +18,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         bam.set_threads(n_threads);
 
         let path = bam.path().to_string();
+        let stoit_name = bam.name().to_string().replace("/", ".");
 
         // let add_flags_cmd = format!(
         //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
@@ -38,6 +39,14 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             // record.push_aux("PU".as_bytes(), &sub);
             // do nothing
         }
+
+        info!(
+            "Finished Mapping Sample {}",
+            match &stoit_name[..4] {
+                ".tmp" => &stoit_name[15..],
+                _ => &stoit_name,
+            }
+        );
         bam.finish();
 
         let tmp = tempfile::NamedTempFile::new().unwrap();
