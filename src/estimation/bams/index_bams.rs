@@ -1,4 +1,3 @@
-use bird_tool_utils::command;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use external_command_checker;
@@ -20,24 +19,53 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let path = bam.path().to_string();
         let stoit_name = bam.name().to_string().replace("/", ".");
 
-        // let add_flags_cmd = format!(
-        //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
-        //
-        // );
-        // let sm = Aux::Integer(1);
-        // let sub = Aux::Char(8);
+        let header = bam.header();
 
-        while bam
-            .read(&mut record)
-            .expect("Error while reading BAM record")
-            == true
+        // Setup tmp bam writer
+        let tmp_bam = tempfile::NamedTempFile::new().unwrap();
+        // Scope for the bam writer
         {
-            // // push aux flags
-            // record.push_aux("SM".as_bytes(), &sm);
-            // record.push_aux("LB".as_bytes(), &sub);
-            // record.push_aux("PL".as_bytes(), &sub);
-            // record.push_aux("PU".as_bytes(), &sub);
-            // do nothing
+            let mut tmp_header = bam::header::Header::from_template(&header);
+
+            let mut tmp_header_record = bam::header::HeaderRecord::new("RG".as_bytes());
+            // Push tags
+            tmp_header_record.push_tag("ID".as_bytes(), &1);
+            tmp_header_record.push_tag("SM".as_bytes(), &1);
+            tmp_header_record.push_tag("LB".as_bytes(), &"N");
+            tmp_header_record.push_tag("PL".as_bytes(), &"N");
+            tmp_header_record.push_tag("PU".as_bytes(), &"N");
+
+            tmp_header.push_record(&tmp_header_record);
+
+            let mut bam_writer =
+                bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::BAM)
+                    .expect("Unable to create bam");
+
+            bam_writer
+                .set_threads(n_threads)
+                .expect("Unable to set threads for BAM writer");
+            bam_writer
+                .set_compression_level(bam::CompressionLevel::Uncompressed)
+                .expect("Unexpected compression level");
+
+            // let add_flags_cmd = format!(
+            //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
+            //
+            // );
+            let rg = bam::record::Aux::String("1".as_bytes());
+            // let sub = bam::record::Aux::String("Z:1".as_bytes());
+
+            while bam
+                .read(&mut record)
+                .expect("Error while reading BAM record")
+                == true
+            {
+                // push aux flags
+                record.push_aux("RG".as_bytes(), &rg);
+
+                // Write to bam
+                bam_writer.write(&record).expect("Unable to write to BAM");
+            }
         }
 
         info!(
@@ -49,27 +77,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         );
         bam.finish();
 
-        let tmp = tempfile::NamedTempFile::new().unwrap();
-
-        let groups_command = format!(
-            "set -e -o pipefail; gatk AddOrReplaceReadGroups -I {} -O {:?} -SM 1 -LB N -PL N -PU N && \
-                cp {:?} {}",
-            path,
-            tmp.path(),
-            tmp.path(),
-            path,
-        );
-
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&groups_command)
-                .stderr(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "gatk",
-        );
+        std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
     }
 }
 
