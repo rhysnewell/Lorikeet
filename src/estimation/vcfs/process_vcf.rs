@@ -1,5 +1,5 @@
 use bird_tool_utils::command;
-use rust_htslib::{bam, bam::record::Aux, bcf, bcf::Read};
+use rust_htslib::{bam, bcf, bcf::Read};
 use std;
 use std::collections::{HashMap, HashSet};
 
@@ -46,6 +46,8 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
         group.insert(stoit_name.clone());
     }
 
+    // TODO: This needs to work when given BAM files again
+    //        Currently it breaks because the concatenated reference does not have same contig names
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = retrieve_reference(concatenated_genomes);
 
@@ -72,7 +74,12 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     for (tid, target) in target_names.iter().enumerate() {
         let target_name = String::from_utf8(target.to_vec()).unwrap();
-        if target_name.contains(reference) {
+        if target_name.contains(reference)
+            || match genomes_and_contigs.contig_to_genome.get(&target_name) {
+                Some(ref_id) => *ref_id == ref_idx,
+                None => false,
+            }
+        {
             let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> =
                 HashMap::new();
             // use pileups to call SNPs for low quality variants
