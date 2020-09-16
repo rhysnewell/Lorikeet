@@ -450,12 +450,11 @@ pub fn generate_vcf(
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "set -e -o pipefail; samtools view -bh -@ {} {} {} | samtools sort -@ {} - > {} && \
+            "set -e -o pipefail; samtools view -bh -@ {} {} {} > {} && \
             samtools index -@ {} {}",
             threads - 1,
             bam_path,
             &target_name,
-            threads - 1,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
             threads - 1,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
