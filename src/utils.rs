@@ -32,11 +32,13 @@ pub fn get_streamed_bam_readers<'a>(
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
         if longread {
+            setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
             setup_bam_cache_directory(&format!(
                 "{}/long/",
                 m.value_of("bam-file-cache-directory").unwrap()
             ));
         } else {
+            setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
             setup_bam_cache_directory(&format!(
                 "{}/short/",
                 m.value_of("bam-file-cache-directory").unwrap()

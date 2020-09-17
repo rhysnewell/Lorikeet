@@ -75,9 +75,12 @@ pub fn pileup_variants<
     };
 
     // Finish each BAM source
+    // if m.is_present("longreads") {
     finish_bams(longreads, n_threads);
+    // }
+    // if !m.is_present("bam-files") {
     finish_bams(bam_readers, n_threads);
-
+    // }
     // Generate the .dict files for GATK
     match concatenated_genomes {
         Some(ref concat) => {
