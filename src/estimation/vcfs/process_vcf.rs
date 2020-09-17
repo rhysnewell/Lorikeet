@@ -125,6 +125,9 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
 
                             let mut base_dict = HashMap::new();
 
+                            let mut refr_depth = 0;
+                            let mut refr_qual = 0.;
+
                             for alignment in pileup.alignments() {
                                 let record = alignment.record();
 
@@ -153,23 +156,43 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                                                 base.quals[*per_ref_sample_idx as usize] +=
                                                     record_qual as f32;
                                             }
+                                        } else {
+                                            refr_depth += 1;
+                                            refr_qual += record_qual as f32;
                                         }
                                     }
                                 }
                             }
 
-                            for (var_char, base) in base_dict {
-                                if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
-                                    && base.quals[*per_ref_sample_idx as usize]
-                                        >= min_variant_quality
-                                {
-                                    let variant_con =
-                                        variant_map.entry(tid as i32).or_insert(HashMap::new());
-                                    let variant_pos =
-                                        variant_con.entry(base.pos).or_insert(HashMap::new());
+                            // Collect refr base information
+                            {
+                                let mut base = base_dict.entry(refr_base).or_insert(Base::new(
+                                    tid as u32,
+                                    pos as i64,
+                                    sample_count,
+                                    vec![refr_base],
+                                ));
 
-                                    // Overwrite any existing variants called by mpileup
-                                    variant_pos.insert(base.variant.to_owned(), base);
+                                base.depth[*per_ref_sample_idx as usize] = refr_depth;
+                                base.quals[*per_ref_sample_idx as usize] = refr_qual;
+                            }
+
+                            // If more than one variant at location (including reference)
+                            // Collect the variants
+                            if base_dict.keys().len() > 1 {
+                                for (var_char, base) in base_dict {
+                                    if base.depth[*per_ref_sample_idx as usize] >= min_variant_depth
+                                        && base.quals[*per_ref_sample_idx as usize]
+                                            >= min_variant_quality
+                                    {
+                                        let variant_con =
+                                            variant_map.entry(tid as i32).or_insert(HashMap::new());
+                                        let variant_pos =
+                                            variant_con.entry(base.pos).or_insert(HashMap::new());
+
+                                        // Overwrite any existing variants called by mpileup
+                                        variant_pos.insert(base.variant.to_owned(), base);
+                                    }
                                 }
                             }
                         }

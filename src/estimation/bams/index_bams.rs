@@ -20,64 +20,86 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let stoit_name = bam.name().to_string().replace("/", ".");
 
         let header = bam.header();
+        let mut tmp_header = bam::header::Header::from_template(&header);
 
-        // Setup tmp bam writer
-        let tmp_bam = tempfile::NamedTempFile::new().unwrap();
         // Scope for the bam writer
-        {
-            let mut tmp_header = bam::header::Header::from_template(&header);
+        if !tmp_header.to_hashmap().contains_key("RG") {
+            let tmp_bam = tempfile::NamedTempFile::new().unwrap();
+            {
+                // Setup tmp bam writer
+                let mut tmp_header_record = bam::header::HeaderRecord::new("RG".as_bytes());
+                // Push tags
+                tmp_header_record.push_tag("ID".as_bytes(), &1);
+                tmp_header_record.push_tag("SM".as_bytes(), &1);
+                tmp_header_record.push_tag("LB".as_bytes(), &"N");
+                tmp_header_record.push_tag("PL".as_bytes(), &"N");
+                tmp_header_record.push_tag("PU".as_bytes(), &"N");
 
-            let mut tmp_header_record = bam::header::HeaderRecord::new("RG".as_bytes());
-            // Push tags
-            tmp_header_record.push_tag("ID".as_bytes(), &1);
-            tmp_header_record.push_tag("SM".as_bytes(), &1);
-            tmp_header_record.push_tag("LB".as_bytes(), &"N");
-            tmp_header_record.push_tag("PL".as_bytes(), &"N");
-            tmp_header_record.push_tag("PU".as_bytes(), &"N");
+                tmp_header.push_record(&tmp_header_record);
 
-            tmp_header.push_record(&tmp_header_record);
+                let mut bam_writer =
+                    bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::BAM)
+                        .expect("Unable to create bam");
 
-            let mut bam_writer =
-                bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::BAM)
-                    .expect("Unable to create bam");
+                bam_writer
+                    .set_threads(n_threads)
+                    .expect("Unable to set threads for BAM writer");
+                bam_writer
+                    .set_compression_level(bam::CompressionLevel::Uncompressed)
+                    .expect("Unexpected compression level");
 
-            bam_writer
-                .set_threads(n_threads)
-                .expect("Unable to set threads for BAM writer");
-            bam_writer
-                .set_compression_level(bam::CompressionLevel::Uncompressed)
-                .expect("Unexpected compression level");
+                // let add_flags_cmd = format!(
+                //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
+                //
+                // );
+                let rg = bam::record::Aux::String("1".as_bytes());
+                // let sub = bam::record::Aux::String("Z:1".as_bytes());
 
-            // let add_flags_cmd = format!(
-            //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
-            //
-            // );
-            let rg = bam::record::Aux::String("1".as_bytes());
-            // let sub = bam::record::Aux::String("Z:1".as_bytes());
+                while bam
+                    .read(&mut record)
+                    .expect("Error while reading BAM record")
+                    == true
+                {
+                    // push aux flags
+                    record.push_aux("RG".as_bytes(), &rg);
 
+                    // Write to bam
+                    bam_writer.write(&record).expect("Unable to write to BAM");
+                }
+            }
+
+            info!(
+                "Finished Mapping Sample {}",
+                match &stoit_name[..4] {
+                    ".tmp" => &stoit_name[15..],
+                    _ => &stoit_name,
+                }
+            );
+            bam.finish();
+
+            std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
+
+            // index the bam file
+            bam::index::build(&path, None, bam::index::Type::BAI, n_threads as u32)
+                .expect("Unable to index BAM");
+        } else {
             while bam
                 .read(&mut record)
                 .expect("Error while reading BAM record")
                 == true
             {
-                // push aux flags
-                record.push_aux("RG".as_bytes(), &rg);
-
-                // Write to bam
-                bam_writer.write(&record).expect("Unable to write to BAM");
+                // do nothing
             }
+
+            info!(
+                "Finished Mapping Sample {}",
+                match &stoit_name[..4] {
+                    ".tmp" => &stoit_name[15..],
+                    _ => &stoit_name,
+                }
+            );
+            bam.finish();
         }
-
-        info!(
-            "Finished Mapping Sample {}",
-            match &stoit_name[..4] {
-                ".tmp" => &stoit_name[15..],
-                _ => &stoit_name,
-            }
-        );
-        bam.finish();
-
-        std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
     }
 }
 
