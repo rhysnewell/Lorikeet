@@ -32,7 +32,7 @@ conda activate lorikeet
 #### Option 2: Cargo
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-gatk4 prodigal samtools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+gatk4 prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 cargo install lorikeet-genome
@@ -43,7 +43,7 @@ You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LI
 paths in the your conda environment if they can't properly be found on your system.
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-gatk4 prodigal samtools vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+gatk4 prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 git clone https://github.com/rhysnewell/Lorikeet/git && \ 
@@ -63,12 +63,12 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
     genotype    *Experimental* Resolve strain-level genotypes of MAGs from microbial communities
-    polymorph   Calculate variants along contig positions
+    polish      Creates consensus genomes for each input reference and for each sample
     summarize   Summarizes contig stats from multiple samples
-    evolve  Calculate dN/dS values for genes from read mappings
+    evolve      Calculate dN/dS values for genes from read mappings
 
 Less used utility subcommands:
-    kmer    Calculate kmer frequencies within contigs
+    kmer      Calculate kmer frequencies within contigs
     filter    Remove (or only keep) alignments with insufficient identity
 
 Other options:
@@ -79,7 +79,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
 
 Genotype from bam:
 
-`lorikeet genotype -b input.bam -r input_genome.fna --e-min 0.1 --e-max 0.5 --pts-min 0.1 --pts-max 0.5`
+`lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+     --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --plot`
 
 Genotype from short reads and longread bam:
 
@@ -93,14 +94,38 @@ Genotype from short reads and longread bam:
 ## Output
 
 #### Genotype 
-Genotype will produce multiple .fna files representative of the expected strain level genotypes
-
-#### Polymorph
-Polymorph produces a tab delimited file containing possible variants and their positions within the reference
+Genotype will produce:
+- Variants that clustered into representations of the expected strain level genotypes
+- Sample adjacency matrix displaying the number of shared variants seen between samples.
+- VCF file detailing all observed variants
+- Expected coverage values for each of the produced genotypes in each sample
+- Per reference and per sample summary statistics displaying the mean SNPs and structural
+  variations per provided base pair window
+*optional*
+- SNP density plot. Can take a long time to generate
+#### Polish
+Polish produces:
+- Consensus genomes for each input reference across each sample.
+- Sample adjacency matrix displaying the number of shared variants seen between samples.
+- VCF file detailing all observed variants
+- Per reference and per sample summary statistics displaying the mean SNPs and structural
+  variations per provided base pair window
+*optional*
+- SNP density plot. Can take a long time to generate
 
 #### Evolve
-Evolve will produce dN/dS values within coding regions based on the possible variants found along the reference.
-These dN/dS values only take single nucleotide polymorphisms into account but INDELs can still be reported.
+Evolve will produce:
+- GFF file for each input reference with dN/dS values within coding regions based on the possible variants 
+  found along the reference
+    - These dN/dS values only take single nucleotide polymorphisms into account but INDELs can still be reported.
+- VCF file detailing all observed variants
+- Per reference and per sample summary statistics displaying the mean SNPs and structural
+  variations per provided base pair window
+*optional*
+- SNP density plot. Can take a long time to generate
 
 #### Summarize
-Produce a SNP summary report for each contig in the provided MAG
+- Per reference and per sample summary statistics displaying the mean SNPs and structural
+  variations per provided base pair window
+*optional*
+- SNP density plot. Can take a long time to generate
