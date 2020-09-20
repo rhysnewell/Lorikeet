@@ -1801,9 +1801,9 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .help(POLISH_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
                 .arg(
-                    Arg::with_name("bam-file")
+                    Arg::with_name("bam-files")
                         .short("b")
-                        .long("bam-file")
+                        .long("bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
@@ -1823,13 +1823,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .takes_value(true)
                         .requires("read2")
                         .required_unless_one(&[
-                            "bam-file",
+                            "bam-files",
                             "coupled",
                             "interleaved",
                             "single",
                             "full-help",
                         ])
-                        .conflicts_with("bam-file"),
+                        .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("read2")
@@ -1838,13 +1838,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .takes_value(true)
                         .requires("read1")
                         .required_unless_one(&[
-                            "bam-file",
+                            "bam-files",
                             "coupled",
                             "interleaved",
                             "single",
                             "full-help",
                         ])
-                        .conflicts_with("bam-file"),
+                        .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("coupled")
@@ -1853,13 +1853,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
-                            "bam-file",
+                            "bam-files",
                             "read1",
                             "interleaved",
                             "single",
                             "full-help",
                         ])
-                        .conflicts_with("bam-file"),
+                        .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("longreads")
@@ -1883,13 +1883,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
-                            "bam-file",
+                            "bam-files",
                             "read1",
                             "coupled",
                             "single",
                             "full-help",
                         ])
-                        .conflicts_with("bam-file"),
+                        .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("single")
@@ -1897,13 +1897,13 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .multiple(true)
                         .takes_value(true)
                         .required_unless_one(&[
-                            "bam-file",
+                            "bam-files",
                             "read1",
                             "coupled",
                             "interleaved",
                             "full-help",
                         ])
-                        .conflicts_with("bam-file"),
+                        .conflicts_with("bam-files"),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-files")
@@ -2096,6 +2096,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .required(false),
                 )
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(
+                    Arg::with_name("window-size")
+                        .long("window-size")
+                        .short("w")
+                        .default_value("1"),
+                )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         );

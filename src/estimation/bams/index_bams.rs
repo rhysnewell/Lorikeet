@@ -22,7 +22,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let header = bam.header();
         let mut tmp_header = bam::header::Header::from_template(&header);
 
-        // Scope for the bam writer
+        // Check if bam already has read group, if it doesn't then add one by writing to a new bam
         if !tmp_header.to_hashmap().contains_key("RG") {
             let tmp_bam = tempfile::NamedTempFile::new().unwrap();
             {
@@ -48,12 +48,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     .set_compression_level(bam::CompressionLevel::Uncompressed)
                     .expect("Unexpected compression level");
 
-                // let add_flags_cmd = format!(
-                //     "gatk AddOrReplaceReadGroups -I {} -O {} -SM 1 -LB N -PL N -PU N",
-                //
-                // );
                 let rg = bam::record::Aux::String("1".as_bytes());
-                // let sub = bam::record::Aux::String("Z:1".as_bytes());
 
                 while bam
                     .read(&mut record)
