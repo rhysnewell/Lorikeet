@@ -282,86 +282,81 @@ pub fn pileup_variants<
 
         let mut prev_ref_idx = -1;
         let mut per_ref_sample_idx = 0;
-        indexed_bam_readers
-            .into_iter()
-            .enumerate()
-            .for_each(|(sample_idx, bam_generator)| {
-                // Get the appropriate sample index based on how many references we are using
-                if sample_idx < short_sample_count {
-                    process_vcf(
-                        bam_generator,
-                        n_threads,
-                        *ref_idx,
-                        &mut per_ref_sample_idx,
-                        per_reference_samples,
-                        &mut variant_matrix,
-                        false,
-                        m,
-                        &mut sample_groups,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        per_reference_short_samples,
-                        &concatenated_genomes,
-                    );
-                } else if m.is_present("include-longread-svs")
-                    && (m.is_present("longreads") | m.is_present("longread-bam-files"))
-                {
-                    info!("Running structural variant detection...");
-                    // Get the appropriate sample index based on how many references we are using by tracking
-                    // changes in references
+        for (sample_idx, bam_generator) in indexed_bam_readers.into_iter().enumerate() {
+            // Get the appropriate sample index based on how many references we are using
+            if sample_idx < short_sample_count {
+                process_vcf(
+                    bam_generator,
+                    n_threads,
+                    *ref_idx,
+                    &mut per_ref_sample_idx,
+                    per_reference_samples,
+                    &mut variant_matrix,
+                    false,
+                    m,
+                    &mut sample_groups,
+                    &genomes_and_contigs,
+                    &reference_map,
+                    per_reference_short_samples,
+                    &concatenated_genomes,
+                );
+            } else if m.is_present("include-longread-svs")
+                && (m.is_present("longreads") | m.is_present("longread-bam-files"))
+            {
+                info!("Running structural variant detection...");
+                // Get the appropriate sample index based on how many references we are using by tracking
+                // changes in references
 
-                    process_vcf(
-                        bam_generator,
-                        n_threads,
-                        *ref_idx,
-                        &mut per_ref_sample_idx,
-                        per_reference_samples,
-                        &mut variant_matrix,
-                        true,
-                        m,
-                        &mut sample_groups,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        per_reference_short_samples,
-                        &concatenated_genomes,
-                    );
-                } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
-                    // We need update the variant matrix anyway
-                    let bam_generated = bam_generator.start();
-                    let header = bam_generated.header().clone(); // bam header
-                    let target_names = header.target_names(); // contig names
-                    let reference = &genomes_and_contigs.genomes[*ref_idx];
+                process_vcf(
+                    bam_generator,
+                    n_threads,
+                    *ref_idx,
+                    &mut per_ref_sample_idx,
+                    per_reference_samples,
+                    &mut variant_matrix,
+                    true,
+                    m,
+                    &mut sample_groups,
+                    &genomes_and_contigs,
+                    &reference_map,
+                    per_reference_short_samples,
+                    &concatenated_genomes,
+                );
+            } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
+                // We need update the variant matrix anyway
+                let bam_generated = bam_generator.start();
+                let header = bam_generated.header().clone(); // bam header
+                let target_names = header.target_names(); // contig names
+                let reference = &genomes_and_contigs.genomes[*ref_idx];
 
-                    let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
-                    debug!("Stoit_name {:?}", &stoit_name);
+                let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
+                debug!("Stoit_name {:?}", &stoit_name);
 
-                    let group = sample_groups.entry("long").or_insert(HashSet::new());
-                    group.insert(stoit_name.clone());
-                    // for each genomic position, only has hashmap when variants are present. Includes read ids
-                    for (tid, target) in target_names.iter().enumerate() {
-                        let target_name = String::from_utf8(target.to_vec()).unwrap();
-                        if target_name.contains(reference) {
-                            let mut variant_map: HashMap<
-                                i32,
-                                HashMap<i64, HashMap<Variant, Base>>,
-                            > = HashMap::new();
-                            let target_len = header.target_len(tid as u32).unwrap();
-                            let mut variant_matrix = variant_matrix.lock().unwrap();
+                let group = sample_groups.entry("long").or_insert(HashSet::new());
+                group.insert(stoit_name.clone());
+                // for each genomic position, only has hashmap when variants are present. Includes read ids
+                for (tid, target) in target_names.iter().enumerate() {
+                    let target_name = String::from_utf8(target.to_vec()).unwrap();
+                    if target_name.contains(reference) {
+                        let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> =
+                            HashMap::new();
+                        let target_len = header.target_len(tid as u32).unwrap();
+                        let mut variant_matrix = variant_matrix.lock().unwrap();
 
-                            variant_matrix.add_reference_contig(
-                                stoit_name.clone(),
-                                (per_reference_short_samples as i32 + per_ref_sample_idx) as usize,
-                                &mut variant_map,
-                                tid,
-                                target_name.as_bytes().to_vec(),
-                                *ref_idx,
-                                target_len,
-                            );
-                        }
+                        variant_matrix.add_reference_contig(
+                            stoit_name.clone(),
+                            (per_reference_short_samples as i32 + per_ref_sample_idx) as usize,
+                            &mut variant_map,
+                            tid,
+                            target_name.as_bytes().to_vec(),
+                            *ref_idx,
+                            target_len,
+                        );
                     }
                 }
-                per_ref_sample_idx += 1;
-            });
+            }
+            per_ref_sample_idx += 1;
+        }
 
         // // Read BAMs back in as indexed
         let mut indexed_bam_readers = recover_bams(
