@@ -15,6 +15,7 @@ use nix::sys::stat;
 use nix::unistd;
 use std::path::Path;
 use std::str;
+use std::sync::Mutex;
 use tempdir::TempDir;
 use tempfile::Builder;
 use tempfile::NamedTempFile;
@@ -26,7 +27,7 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     ref_idx: usize,
     mut per_ref_sample_idx: &mut i32,
     mut sample_count: usize,
-    variant_matrix: &mut VariantMatrix,
+    variant_matrix: &mut Mutex<VariantMatrix>,
     longread: bool,
     m: &clap::ArgMatches,
     sample_groups: &mut HashMap<&str, HashSet<String>>,
@@ -75,10 +76,10 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
     let min_variant_depth: i32 = m.value_of("min-variant-depth").unwrap().parse().unwrap();
     let min_variant_quality: f32 = m.value_of("min-variant-quality").unwrap().parse().unwrap();
 
-    let mut total_records = 0;
+    let mut total_records = Mutex::new(0);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
-    for (tid, target) in target_names.iter().enumerate() {
+    target_names.iter().enumerate().for_each(|(tid, target)|{
         let target_name = String::from_utf8(target.to_vec()).unwrap();
         if target_name.contains(reference)
             || match genomes_and_contigs.contig_to_genome.get(&target_name) {
@@ -233,7 +234,8 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                         let variant_rid = vcf_record.rid().unwrap();
                         // Check bam header names and vcf header names are in same order
                         // Sanity check
-                        total_records += 1;
+                        let mut total_records = total_records.lock().unwrap();
+                        *total_records += 1;
                         if target_names[variant_rid as usize]
                             == vcf_header.rid2name(variant_rid).unwrap() {
                             let base_option =
@@ -264,6 +266,7 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                     });
 
                     // Colelct the variants into the matrix
+                    let mut variant_matrix = variant_matrix.lock().unwrap();
                     variant_matrix.add_reference_contig(
                         stoit_name.to_string(),
                         sample_idx,
@@ -276,6 +279,7 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                 }
                 Err(_) => {
                     info!("No VCF records found for sample {}", &stoit_name);
+                    let mut variant_matrix = variant_matrix.lock().unwrap();
                     variant_matrix.add_reference_contig(
                         stoit_name.to_string(),
                         sample_idx,
@@ -288,8 +292,8 @@ pub fn process_vcf<R: IndexedNamedBamReader>(
                 }
             }
         }
-    }
-
+    });
+    let mut total_records = total_records.lock().unwrap();
     info!(
         "Reference {}: Collected {} variant positions for sample {}",
         reference,

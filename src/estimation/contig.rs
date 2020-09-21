@@ -9,6 +9,7 @@ use estimation::variant_matrix::*;
 use estimation::vcfs::process_vcf::*;
 use external_command_checker;
 use model::variants::{Base, Variant};
+use std::sync::Mutex;
 use utils::*;
 
 use crate::*;
@@ -165,7 +166,7 @@ pub fn pileup_variants<
                     &per_reference_samples
                 );
 
-                VariantMatrix::new_matrix(per_reference_samples)
+                Mutex::new(VariantMatrix::new_matrix(per_reference_samples))
             }
             None => {
                 per_reference_samples = (short_sample_count + long_sample_count) / references.len();
@@ -174,7 +175,7 @@ pub fn pileup_variants<
                     "Per reference samples not concatenated {}",
                     &per_reference_samples
                 );
-                VariantMatrix::new_matrix(per_reference_samples)
+                Mutex::new(VariantMatrix::new_matrix(per_reference_samples))
             }
         };
 
@@ -345,6 +346,7 @@ pub fn pileup_variants<
                                 HashMap<i64, HashMap<Variant, Base>>,
                             > = HashMap::new();
                             let target_len = header.target_len(tid as u32).unwrap();
+                            let mut variant_matrix = variant_matrix.lock().unwrap();
 
                             variant_matrix.add_reference_contig(
                                 stoit_name.clone(),
@@ -372,6 +374,7 @@ pub fn pileup_variants<
             &tmp_bam_file_cache,
         );
         debug!("Performing guided variant calling...");
+        let mut variant_matrix = variant_matrix.lock().unwrap();
         indexed_bam_readers
             .into_iter()
             .enumerate()
