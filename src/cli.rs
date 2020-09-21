@@ -180,6 +180,9 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
+   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                         based on the quality scores and accounting for the
+                                         presence in all available samples.
    --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
                                          probability that a locus is non-reference. A value of
                                          0.01 implies on average a SNP should be detected
@@ -279,6 +282,9 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
+   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                         based on the quality scores and accounting for the
+                                         presence in all available samples.
    --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
                                          probability that a locus is non-reference. A value of
                                          0.01 implies on average a SNP should be detected
@@ -368,6 +374,9 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
+   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                         based on the quality scores and accounting for the
+                                         presence in all available samples.
    --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
                                          probability that a locus is non-reference. A value of
                                          0.01 implies on average a SNP should be detected
@@ -467,6 +476,9 @@ Other arguments (optional):
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
+   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                         based on the quality scores and accounting for the
+                                         presence in all available samples.
    --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
                                          probability that a locus is non-reference. A value of
                                          0.01 implies on average a SNP should be detected
@@ -968,6 +980,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("13"),
                 )
                 .arg(
+                    Arg::with_name("fdr-threshold")
+                        .long("fdr-threshold")
+                        .default_value("0.05"),
+                )
+                .arg(
                     Arg::with_name("heterozygosity")
                         .long("heterozygosity")
                         .default_value("0.01"),
@@ -1303,6 +1320,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("base-quality-threshold")
                         .short("q")
                         .default_value("13"),
+                )
+                .arg(
+                    Arg::with_name("fdr-threshold")
+                        .long("fdr-threshold")
+                        .default_value("0.05"),
                 )
                 .arg(
                     Arg::with_name("heterozygosity")
@@ -1655,6 +1677,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("base-quality-threshold")
                         .short("q")
                         .default_value("13"),
+                )
+                .arg(
+                    Arg::with_name("fdr-threshold")
+                        .long("fdr-threshold")
+                        .default_value("0.05"),
                 )
                 .arg(
                     Arg::with_name("heterozygosity")
@@ -2058,6 +2085,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("base-quality-threshold")
                         .short("q")
                         .default_value("13"),
+                )
+                .arg(
+                    Arg::with_name("fdr-threshold")
+                        .long("fdr-threshold")
+                        .default_value("0.05"),
                 )
                 .arg(
                     Arg::with_name("heterozygosity")
