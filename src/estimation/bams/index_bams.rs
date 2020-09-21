@@ -64,7 +64,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             }
 
             info!(
-                "Finished Mapping Sample {}",
+                "Finished mapping sample {}",
                 match &stoit_name[..4] {
                     ".tmp" => &stoit_name[15..],
                     _ => &stoit_name,
@@ -78,22 +78,22 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             bam::index::build(&path, None, bam::index::Type::BAI, n_threads as u32)
                 .expect("Unable to index BAM");
         } else {
-            while bam
-                .read(&mut record)
-                .expect("Error while reading BAM record")
-                == true
-            {
-                // do nothing
-            }
+            // while bam
+            //     .read(&mut record)
+            //     .expect("Error while reading BAM record")
+            //     == true
+            // {
+            //     do nothing
+            // }
 
             info!(
-                "Finished Mapping Sample {}",
+                "Read groups already present for sample {}",
                 match &stoit_name[..4] {
-                    ".tmp" => &stoit_name[15..],
+                    "lori" => &stoit_name[16..],
                     _ => &stoit_name,
                 }
             );
-            bam.finish();
+            // bam.finish();
         }
     }
 }
