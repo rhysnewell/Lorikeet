@@ -3,6 +3,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use external_command_checker;
 use glob::glob;
 use rust_htslib::bam;
+use std::path::Path;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
@@ -98,7 +99,16 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     _ => &stoit_name,
                 }
             );
-            // bam.finish();
+
+            if !Path::new(&format!("{}.bai", path)).exists() {
+                bam::index::build(
+                    &path,
+                    Some(&format!("{}.bai", path)),
+                    bam::index::Type::BAI,
+                    n_threads as u32,
+                )
+                .expect(&format!("Unable to index bam at {}", &path));
+            }
         }
     }
 }

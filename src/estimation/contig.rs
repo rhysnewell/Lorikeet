@@ -9,7 +9,6 @@ use estimation::variant_matrix::*;
 use estimation::vcfs::process_vcf::*;
 use external_command_checker;
 use model::variants::{Base, Variant};
-use rayon::prelude::*;
 use utils::*;
 
 use crate::*;
