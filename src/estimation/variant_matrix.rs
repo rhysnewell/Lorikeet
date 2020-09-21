@@ -1,4 +1,8 @@
 use bio::io::gff;
+use bio::stats::{
+    bayesian,
+    probs::{LogProb, PHREDProb},
+};
 use bird_tool_utils::command;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use dbscan::fuzzy;
@@ -10,6 +14,7 @@ use estimation::linkage::*;
 use itertools::izip;
 use itertools::Itertools;
 use model::variants::*;
+use ordered_float::NotNan;
 use rayon::current_num_threads;
 use rayon::prelude::*;
 use rust_htslib::bcf::{self};
@@ -91,6 +96,9 @@ pub trait VariantMatrixFunctions {
         ref_idx: usize,
         target_len: u64,
     );
+
+    /// Per sample FDR calculation
+    fn remove_false_discoveries(&mut self, alpha: f64);
 
     /// Returns the alleles at the current position
     /// as a mutable reference
@@ -273,6 +281,114 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .or_insert(base_info.clone());
                         sample_map.combine_sample(base_info, sample_idx, 0);
                     }
+                }
+            }
+        }
+    }
+
+    fn remove_false_discoveries(&mut self, alpha: f64) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut sample_names,
+                ref mut all_variants,
+                ref mut target_names,
+                ref mut target_lengths,
+                ..
+            } => {
+                // collect variant probabilities e.g. PHRED Sums
+                let mut prob_dist = Vec::new();
+                for (ref_idx, contig_map) in all_variants.iter() {
+                    for (tid, position_map) in contig_map.iter() {
+                        position_map.iter().for_each(|(pos, alleles)| {
+                            for (variant, allele) in alleles.iter() {
+                                if allele.variant != Variant::None {
+                                    let allele_prob: f32 = allele.quals.par_iter().sum();
+                                    prob_dist.push(
+                                        NotNan::new(allele_prob as f64)
+                                            .expect("Unable to convert to NotNan"),
+                                    );
+                                }
+                            }
+                        });
+                    }
+                }
+                // sort prob_dist
+                prob_dist.par_sort();
+                // turn into logprob values
+                let prob_dist = prob_dist
+                    .into_iter()
+                    .rev()
+                    .map(|p| LogProb::from(PHREDProb(*p)))
+                    .collect_vec();
+                // turn prob dist into posterior exact probabilities
+                debug!("Calculating PEP dist...");
+                let pep_dist = prob_dist
+                    .iter()
+                    .map(|p| p.ln_one_minus_exp())
+                    .collect::<Vec<LogProb>>();
+
+                // calculate fdr values
+                let fdrs = bayesian::expected_fdr(&pep_dist);
+
+                // Set alpha to arbitrary value
+                let alpha = LogProb(alpha.ln());
+                let mut threshold = None;
+                if fdrs.is_empty() {
+                    threshold = None;
+                } else if fdrs[0] > alpha {
+                    threshold = Some(LogProb::ln_one());
+                } else {
+                    // find the largest pep for which fdr <= alpha
+                    // do not let peps with the same value cross the boundary
+                    for i in (0..fdrs.len()).rev() {
+                        if fdrs[i] <= alpha && (i == 0 || pep_dist[i] != pep_dist[i - 1]) {
+                            let prob = prob_dist[i];
+                            threshold = Some(prob);
+                            break;
+                        }
+                    }
+                }
+                match threshold {
+                    Some(prob) => {
+                        for (ref_idx, contig_map) in all_variants.iter_mut() {
+                            for (tid, position_map) in contig_map.iter_mut() {
+                                let mut positions_to_remove = Vec::new();
+                                for (pos, alleles) in position_map.iter_mut() {
+                                    let mut to_remove = Vec::new();
+                                    let mut variant_alleles = 0;
+                                    for (variant, allele) in alleles.iter_mut() {
+                                        if allele.variant != Variant::None {
+                                            if LogProb(allele.quals.par_iter().sum::<f32>() as f64)
+                                                < prob
+                                            {
+                                                to_remove.push(variant.clone());
+                                            }
+                                            variant_alleles += 1;
+                                        }
+                                    }
+                                    if to_remove.len() > 1 {
+                                        if to_remove.len() == variant_alleles {
+                                            positions_to_remove.push(*pos);
+                                        } else {
+                                            for removing in to_remove.iter() {
+                                                alleles
+                                                    .remove_entry(removing)
+                                                    .expect("Unable to remove variant entry");
+                                            }
+                                        }
+                                    }
+                                }
+                                if positions_to_remove.len() > 0 {
+                                    for position in positions_to_remove.iter() {
+                                        position_map
+                                            .remove_entry(position)
+                                            .expect("Unable to remove position");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None => {}
                 }
             }
         }

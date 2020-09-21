@@ -73,6 +73,8 @@ pub fn pileup_variants<
         None => vec![],
     };
 
+    let alpha: f64 = m.value_of("fdr-threshold").unwrap().parse().unwrap();
+
     // Finish each BAM source
     // if m.is_present("longreads") {
     finish_bams(longreads, n_threads);
@@ -358,6 +360,11 @@ pub fn pileup_variants<
                 }
                 per_ref_sample_idx += 1;
             });
+
+        // Collects info about variants across samples to check whether they are genuine or not
+        // using FDR
+        variant_matrix.remove_false_discoveries(alpha);
+
         // // Read BAMs back in as indexed
         let mut indexed_bam_readers = recover_bams(
             m,
