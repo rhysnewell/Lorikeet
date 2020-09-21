@@ -165,8 +165,10 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 let mut mnv_pos = 0;
                                 let mut mnv = vec![];
                                 let mut mnv_cursor = 0;
+                                let mut mnv_qual = 0.;
                                 for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                                     // See if read is match MNV
+                                    let qual_pos = quals[qpos] as f32;
                                     if potential_mnv && (mnv_pos < mnv.len()) {
                                         let read_char = record.seq()[qpos];
                                         debug!(
@@ -175,6 +177,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                         );
                                         if mnv[mnv_pos] == read_char {
                                             mnv_pos += 1;
+                                            mnv_qual += qual_pos;
                                             debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                             if mnv_pos == mnv.len() {
                                                 match variant_matrix
@@ -193,6 +196,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                             record.qname().to_vec(),
                                                                         );
                                                                         base.truedepth[sample_idx] += 1;
+                                                                        base.quals[sample_idx] += mnv_qual;
                                                                     }
                                                                 }
                                                                 _ => {
@@ -205,6 +209,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         mnv = vec![];
                                                         mnv_pos = 0;
                                                         potential_mnv = false;
+                                                        mnv_qual = 0.;
                                                     }
                                                     None => {
                                                         debug!(
@@ -213,18 +218,21 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         );
                                                         mnv = vec![];
                                                         mnv_pos = 0;
-                                                        potential_mnv = false
+                                                        potential_mnv = false;
+                                                        mnv_qual = 0.;
                                                     }
                                                 };
                                                 mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false;
+                                                mnv_qual = 0.;
                                             }
                                         } else {
                                             debug!("Read did not contain correct MNV");
                                             mnv = vec![];
                                             mnv_pos = 0;
-                                            potential_mnv = false
+                                            potential_mnv = false;
+                                            mnv_qual = 0.;
                                         }
                                     }
                                     match variant_matrix.variants(ref_idx, tid, cursor as i64) {
@@ -236,6 +244,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if *alt == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
+                                                            base.quals[sample_idx] += qual_pos;
                                                         }
                                                     },
                                                     // We need to check every position of the MNV
@@ -248,14 +257,17 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 mnv_pos += 1;
                                                                 potential_mnv = true;
                                                                 mnv_cursor = cursor as i64;
+                                                                mnv_qual += qual_pos;
 
                                                                 // Then it is automatically assigned
                                                                 if mnv_pos == mnv.len() {
                                                                     base.assign_read(record.qname().to_vec());
                                                                     base.truedepth[sample_idx] += 1;
+                                                                    base.quals[sample_idx] += mnv_qual;
                                                                     mnv = vec!();
                                                                     mnv_pos = 0;
                                                                     potential_mnv = false;
+                                                                    mnv_qual = 0.;
                                                                 }
                                                             }
                                                         }
@@ -264,6 +276,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if base.refr[0] == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
+                                                            base.quals[sample_idx] += qual_pos;
                                                             // info!(
                                                             //     "Reference ref {} tid {} pos {} coverages {:?}",
                                                             //     &ref_idx,
@@ -274,7 +287,8 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         } else {
                                                             mnv = vec!();
                                                             mnv_pos = 0;
-                                                            potential_mnv = false
+                                                            potential_mnv = false;
+                                                            mnv_qual = 0.;
                                                         }
                                                     },
                                                     _ => {}
@@ -290,6 +304,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 mnv = vec![];
                                 mnv_pos = 0;
                                 potential_mnv = false;
+                                mnv_qual = 0.;
 
                                 if final_pos < ups_and_downs.len() {
                                     // True unless the read hits the contig end.
@@ -310,6 +325,8 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 record.qname().to_vec(),
                                                             );
                                                             base.truedepth[sample_idx] += 1;
+                                                            base.quals[sample_idx] +=
+                                                                quals[read_cursor] as f32;
                                                         }
                                                     }
                                                     _ => {}
@@ -351,6 +368,12 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 record.qname().to_vec(),
                                                             );
                                                             base.truedepth[sample_idx] += 1;
+                                                            let qual_sum = quals[read_cursor
+                                                                ..read_cursor + cig.len() as usize]
+                                                                .par_iter()
+                                                                .sum::<u8>()
+                                                                as f32;
+                                                            base.quals[sample_idx] += qual_sum;
                                                         }
                                                     }
                                                     _ => {}
@@ -390,6 +413,12 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 record.qname().to_vec(),
                                                             );
                                                             base.truedepth[sample_idx] += 1;
+                                                            let qual_sum = quals[read_cursor
+                                                                ..read_cursor + cig.len() as usize]
+                                                                .par_iter()
+                                                                .sum::<u8>()
+                                                                as f32;
+                                                            base.quals[sample_idx] += qual_sum;
                                                         }
                                                     }
                                                     _ => {}
