@@ -361,10 +361,6 @@ pub fn pileup_variants<
                 per_ref_sample_idx += 1;
             });
 
-        // Collects info about variants across samples to check whether they are genuine or not
-        // using FDR
-        variant_matrix.remove_false_discoveries(alpha);
-
         // // Read BAMs back in as indexed
         let mut indexed_bam_readers = recover_bams(
             m,
@@ -408,6 +404,10 @@ pub fn pileup_variants<
                     &concatenated_genomes,
                 )
             });
+
+        // Collects info about variants across samples to check whether they are genuine or not
+        // using FDR
+        variant_matrix.remove_false_discoveries(alpha);
 
         if mode == "genotype" {
             let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
