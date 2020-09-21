@@ -75,8 +75,13 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
 
             // index the bam file
-            bam::index::build(&path, None, bam::index::Type::BAI, n_threads as u32)
-                .expect("Unable to index BAM");
+            bam::index::build(
+                &path,
+                Some(&format!("{}.bai", path)),
+                bam::index::Type::BAI,
+                n_threads as u32,
+            )
+            .expect("Unable to index BAM");
         } else {
             // while bam
             //     .read(&mut record)
