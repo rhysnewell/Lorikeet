@@ -457,13 +457,11 @@ pub fn generate_vcf(
 
         // Generate uncompressed filtered SAM file
         let sam_cmd_string = format!(
-            "set -e -o pipefail; samtools view -bh -@ {} {} {} > {} && \
-            samtools index -@ {} {}",
-            threads - 1,
+            "set -e -o pipefail; samtools view -bh {} {} > {} && \
+            samtools index {}",
             bam_path,
             &target_name,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
-            threads - 1,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
         );
         debug!("Queuing cmd_string: {}", sam_cmd_string);
@@ -481,7 +479,7 @@ pub fn generate_vcf(
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            gatk HaplotypeCaller -I {} -R {} -O {} --native-pair-hmm-threads {} --sample-ploidy {} -mbq {} \
+            gatk HaplotypeCaller -I {} -R {} -O {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
             --heterozygosity {} --indel-heterozygosity {} \
             --pcr-indel-model CONSERVATIVE \
@@ -489,7 +487,6 @@ pub fn generate_vcf(
             tmp_bam_path1.path().to_str().unwrap().to_string(),
             &reference,
             &vcf_path_prenormalization,
-            threads,
             m.value_of("ploidy").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             mapq_thresh,
@@ -543,11 +540,10 @@ pub fn generate_vcf(
         }
 
         let cmd_string = format!(
-            "set -e -o pipefail; samtools view -bh -@ {} {} {} > {} && \
+            "set -e -o pipefail; samtools view -bh {} {} > {} && \
             svim alignment --read_names --skip_genotyping \
             --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
             --min_mapq {} --sequence_alleles {} {} {}",
-            threads - 1,
             bam_path,
             &target_name,
             tmp_bam_path1.path().to_str().unwrap().to_string(),
