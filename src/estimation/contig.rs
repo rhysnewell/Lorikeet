@@ -284,7 +284,7 @@ pub fn pileup_variants<
         // let mut prev_ref_idx = -1;
         // let mut per_ref_sample_idx = 0;
         indexed_bam_readers
-            .into_par_iter()
+            .into_iter()
             .enumerate()
             .for_each(|(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using

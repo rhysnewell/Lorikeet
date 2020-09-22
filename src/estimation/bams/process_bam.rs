@@ -57,7 +57,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     let stoit_name = bam_generated.name().to_string().replace("/", ".");
     // adjust sample index for longread bams
 
-    bam_generated.set_threads(split_threads);
+    // bam_generated.set_threads(split_threads);
     debug!("Managed to set threads.");
 
     let header = bam_generated.header().clone(); // bam header
