@@ -1,7 +1,7 @@
 use bio::io::gff;
 use bio::stats::{
     bayesian,
-    probs::{LogProb, PHREDProb},
+    probs::{LogProb, Prob},
 };
 use bird_tool_utils::command;
 use coverm::genomes_and_contigs::GenomesAndContigs;
@@ -28,6 +28,8 @@ use std::sync::{Arc, Mutex};
 use tempfile;
 use tempfile::NamedTempFile;
 use utils::generate_faidx;
+
+pub(crate) const NUMERICAL_EPSILON: f64 = 1e-3;
 
 #[derive(Debug)]
 /// Container for all variants within a genome and associated clusters
@@ -98,7 +100,7 @@ pub trait VariantMatrixFunctions {
     );
 
     /// Per sample FDR calculation
-    fn remove_false_discoveries(&mut self, alpha: f64);
+    fn remove_false_discoveries(&mut self, alpha: f64, reference: &str);
 
     /// Returns the alleles at the current position
     /// as a mutable reference
@@ -286,7 +288,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn remove_false_discoveries(&mut self, alpha: f64) {
+    fn remove_false_discoveries(&mut self, alpha: f64, reference: &str) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
@@ -302,10 +304,33 @@ impl VariantMatrixFunctions for VariantMatrix {
                         position_map.iter().for_each(|(pos, alleles)| {
                             for (variant, allele) in alleles.iter() {
                                 if allele.variant != Variant::None {
-                                    let allele_prob: f32 = allele.quals.par_iter().sum();
+                                    // let mut allele_probs = allele
+                                    //     .quals
+                                    //     .par_iter()
+                                    //     .map(|p| {
+                                    //         NotNan::new(*p).unwrap()
+                                    //     })
+                                    //     .collect::<Vec<NotNan<f64>>>();
+                                    // allele_probs.par_sort();
+                                    //
+                                    // let mut allele_probs = allele_probs
+                                    //     .iter()
+                                    //     .map(|p| {
+                                    //         LogProb::from(PHREDProb(**p as f64))
+                                    //     })
+                                    //     .collect_vec();
+
+                                    info!(
+                                        "allele probs {:?} ln_one {:?}",
+                                        &allele.quals,
+                                        LogProb::ln_one()
+                                    );
                                     prob_dist.push(
-                                        NotNan::new(allele_prob as f64)
-                                            .expect("Unable to convert to NotNan"),
+                                        NotNan::new(
+                                            *LogProb::ln_sum_exp(&allele.quals)
+                                                .cap_numerical_overshoot(NUMERICAL_EPSILON),
+                                        )
+                                        .expect("Unable to convert to NotNan"),
                                     );
                                 }
                             }
@@ -318,8 +343,11 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let prob_dist = prob_dist
                     .into_iter()
                     .rev()
-                    .map(|p| LogProb::from(PHREDProb(*p)))
+                    .map(|p| LogProb(*p))
                     .collect_vec();
+
+                info!("Prob {:?}", &prob_dist);
+
                 // turn prob dist into posterior exact probabilities
                 debug!("Calculating PEP dist...");
                 let pep_dist = prob_dist
@@ -327,15 +355,24 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .map(|p| p.ln_one_minus_exp())
                     .collect::<Vec<LogProb>>();
 
+                info!("PEP {:?}", &pep_dist);
+
                 // calculate fdr values
                 let fdrs = bayesian::expected_fdr(&pep_dist);
+                info!("FDRs {:?}", &fdrs);
 
-                // Set alpha to arbitrary value
-                let alpha = LogProb(alpha.ln());
+                let alpha = LogProb::from(Prob(alpha));
                 let mut threshold = None;
                 if fdrs.is_empty() {
+                    warn!("Genome {}: FDR calculation are empty...", reference);
                     threshold = None;
                 } else if fdrs[0] > alpha {
+                    info!(
+                        "Genome {}: FDR threshold for alpha of {:?} calculated as {:?}",
+                        reference,
+                        alpha,
+                        LogProb::ln_one()
+                    );
                     threshold = Some(LogProb::ln_one());
                 } else {
                     // find the largest pep for which fdr <= alpha
@@ -343,6 +380,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                     for i in (0..fdrs.len()).rev() {
                         if fdrs[i] <= alpha && (i == 0 || pep_dist[i] != pep_dist[i - 1]) {
                             let prob = prob_dist[i];
+                            info!(
+                                "Genome {}: FDR threshold for alpha of {:?} calculated as {:?}",
+                                reference, alpha, &prob
+                            );
                             threshold = Some(prob);
                             break;
                         }
@@ -350,6 +391,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                 }
                 match threshold {
                     Some(prob) => {
+                        let mut total_removed = 0;
+                        let mut total_kept = 0;
                         for (ref_idx, contig_map) in all_variants.iter_mut() {
                             for (tid, position_map) in contig_map.iter_mut() {
                                 let mut positions_to_remove = Vec::new();
@@ -358,10 +401,17 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     let mut variant_alleles = 0;
                                     for (variant, allele) in alleles.iter_mut() {
                                         if allele.variant != Variant::None {
-                                            if LogProb(allele.quals.par_iter().sum::<f32>() as f64)
-                                                < prob
-                                            {
+                                            // let allele_probs = allele
+                                            //     .quals
+                                            //     .iter()
+                                            //     .map(|p| LogProb::from(PHREDProb(*p as f64)))
+                                            //     .collect_vec();
+                                            let sum_prob = LogProb::ln_sum_exp(&allele.quals);
+                                            if sum_prob > prob {
                                                 to_remove.push(variant.clone());
+                                                total_removed += 1;
+                                            } else {
+                                                total_kept += 1;
                                             }
                                             variant_alleles += 1;
                                         }
@@ -387,6 +437,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                             }
                         }
+                        info!("Genome {}: {} variants passed FDR threshold, {} did not pass FDR threshold", reference, total_kept, total_removed);
                     }
                     None => {}
                 }
@@ -2190,8 +2241,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     record.set_pos(*pos);
 
                                     // Sum the quality scores across samples
-                                    let qual_sum = base.quals.iter().sum();
-                                    record.set_qual(qual_sum);
+                                    let qual_sum = LogProb::ln_sum_exp(&base.quals);
+                                    record.set_qual(*qual_sum as f32);
 
                                     // Collect strain information
                                     let mut strains =
@@ -2213,7 +2264,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     record.push_format_integer(b"DP", &base.totaldepth[..]);
                                     record.push_format_integer(b"AD", &base.truedepth[..]);
                                     record.push_format_integer(b"RD", &base.referencedepth[..]);
-                                    record.push_format_float(b"QA", &base.quals[..]);
+                                    record.push_format_float(
+                                        b"QA",
+                                        &base.quals.iter().map(|p| **p as f32).collect_vec()[..],
+                                    );
 
                                     let refr = &base.refr[..];
 
@@ -2326,7 +2380,7 @@ mod tests {
             truedepth: vec![0, 5],
             totaldepth: vec![5, 5],
             genotypes: HashSet::new(),
-            quals: vec![0.; sample_count],
+            quals: vec![LogProb::ln_one(); sample_count],
             referencedepth: vec![5, 0],
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],

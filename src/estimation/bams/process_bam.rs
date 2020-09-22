@@ -1,12 +1,14 @@
 use rust_htslib::bam::{self, record::Cigar};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+use bio::stats::{LogProb, PHREDProb};
 use coverm::bam_generator::*;
 use estimation::codon_structs::*;
 use estimation::contig_variants::*;
 use estimation::variant_matrix::*;
 use model::variants::*;
 use rayon::prelude::*;
+use std::sync::Mutex;
 use utils::*;
 
 use coverm::genomes_and_contigs::*;
@@ -19,9 +21,10 @@ use tempfile::NamedTempFile;
 #[allow(unused)]
 pub fn process_bam<R: IndexedNamedBamReader>(
     mut bam_generated: R,
+    sample_idx: usize,
     sample_count: usize,
-    coverage_estimators: &mut Vec<CoverageEstimator>,
-    variant_matrix: &mut VariantMatrix,
+    coverage_estimators: &Mutex<Vec<CoverageEstimator>>,
+    variant_matrix: &Mutex<VariantMatrix>,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -38,7 +41,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     flag_filters: &FlagFilter,
     mapq_threshold: u8,
     method: &str,
-    sample_groups: &HashMap<&str, HashSet<String>>,
+    longread: bool,
     genomes_and_contigs: &GenomesAndContigs,
     reference_map: &HashMap<usize, String>,
     concatenated_genomes: &Option<NamedTempFile>,
@@ -77,29 +80,29 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
 
-    let sample_idx = match variant_matrix {
-        VariantMatrix::VariantContigMatrix { sample_names, .. } => {
-            debug!(
-                "sample names {:?} and stoit_name {:?}",
-                &sample_names, &stoit_name
-            );
-            sample_names
-                .iter()
-                .position(|p| p.contains(&stoit_name.replace("lorikeet-genome", "")))
-                .unwrap()
-        }
-    };
+    // let sample_idx = match variant_matrix.lock().unwrap() {
+    //     VariantMatrix::VariantContigMatrix { sample_names, .. } => {
+    //         debug!(
+    //             "sample names {:?} and stoit_name {:?}",
+    //             &sample_names, &stoit_name
+    //         );
+    //         sample_names
+    //             .iter()
+    //             .position(|p| p.contains(&stoit_name.replace("lorikeet-genome", "")))
+    //             .unwrap()
+    //     }
+    // };
 
-    debug!("sample groups {:?}", sample_groups);
-    if sample_groups.contains_key("long") {
-        for longread_name in sample_groups["long"].iter() {
-            if stoit_name.contains(longread_name) {
-                longread = true;
-                debug!("Longread {} {}", stoit_name, sample_idx);
-                break;
-            }
-        }
-    }
+    // debug!("sample groups {:?}", sample_groups);
+    // if sample_groups.contains_key("long") {
+    //     for longread_name in sample_groups["long"].iter() {
+    //         if stoit_name.contains(longread_name) {
+    //             longread = true;
+    //             debug!("Longread {} {}", stoit_name, sample_idx);
+    //             break;
+    //         }
+    //     }
+    // }
 
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = retrieve_reference(concatenated_genomes);
@@ -165,10 +168,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 let mut mnv_pos = 0;
                                 let mut mnv = vec![];
                                 let mut mnv_cursor = 0;
-                                let mut mnv_qual = 0.;
+                                let mut mnv_qual = LogProb::ln_one();
                                 for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                                     // See if read is match MNV
-                                    let qual_pos = quals[qpos] as f32;
+                                    let qual_pos =
+                                        LogProb::from(PHREDProb(record.qual()[qpos] as f64));
                                     if potential_mnv && (mnv_pos < mnv.len()) {
                                         let read_char = record.seq()[qpos];
                                         debug!(
@@ -177,10 +181,12 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                         );
                                         if mnv[mnv_pos] == read_char {
                                             mnv_pos += 1;
-                                            mnv_qual += qual_pos;
+                                            mnv_qual = mnv_qual.ln_add_exp(qual_pos);
                                             debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                             if mnv_pos == mnv.len() {
                                                 match variant_matrix
+                                                    .lock()
+                                                    .unwrap()
                                                     .variants(ref_idx, tid, mnv_cursor)
                                                 {
                                                     Some(current_variants) => {
@@ -196,7 +202,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                             record.qname().to_vec(),
                                                                         );
                                                                         base.truedepth[sample_idx] += 1;
-                                                                        base.quals[sample_idx] += mnv_qual;
+                                                                        base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
                                                                     }
                                                                 }
                                                                 _ => {
@@ -209,7 +215,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         mnv = vec![];
                                                         mnv_pos = 0;
                                                         potential_mnv = false;
-                                                        mnv_qual = 0.;
+                                                        mnv_qual = LogProb::ln_one();
                                                     }
                                                     None => {
                                                         debug!(
@@ -219,23 +225,27 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         mnv = vec![];
                                                         mnv_pos = 0;
                                                         potential_mnv = false;
-                                                        mnv_qual = 0.;
+                                                        mnv_qual = LogProb::ln_one();
                                                     }
                                                 };
                                                 mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false;
-                                                mnv_qual = 0.;
+                                                mnv_qual = LogProb::ln_one();
                                             }
                                         } else {
                                             debug!("Read did not contain correct MNV");
                                             mnv = vec![];
                                             mnv_pos = 0;
                                             potential_mnv = false;
-                                            mnv_qual = 0.;
+                                            mnv_qual = LogProb::ln_one();
                                         }
                                     }
-                                    match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                    match variant_matrix.lock().unwrap().variants(
+                                        ref_idx,
+                                        tid,
+                                        cursor as i64,
+                                    ) {
                                         Some(current_variants) => {
                                             let read_char = record.seq()[qpos];
                                             current_variants.iter_mut().for_each(|(variant, base)| {
@@ -244,7 +254,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if *alt == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] += qual_pos;
+                                                            base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
                                                         }
                                                     },
                                                     // We need to check every position of the MNV
@@ -257,17 +267,17 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 mnv_pos += 1;
                                                                 potential_mnv = true;
                                                                 mnv_cursor = cursor as i64;
-                                                                mnv_qual += qual_pos;
+                                                                mnv_qual = mnv_qual.ln_add_exp(qual_pos);
 
                                                                 // Then it is automatically assigned
                                                                 if mnv_pos == mnv.len() {
                                                                     base.assign_read(record.qname().to_vec());
                                                                     base.truedepth[sample_idx] += 1;
-                                                                    base.quals[sample_idx] += mnv_qual;
+                                                                    base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
                                                                     mnv = vec!();
                                                                     mnv_pos = 0;
                                                                     potential_mnv = false;
-                                                                    mnv_qual = 0.;
+                                                                    mnv_qual = LogProb::ln_one();
                                                                 }
                                                             }
                                                         }
@@ -276,7 +286,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if base.refr[0] == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] += qual_pos;
+                                                            base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
                                                             // info!(
                                                             //     "Reference ref {} tid {} pos {} coverages {:?}",
                                                             //     &ref_idx,
@@ -288,7 +298,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             mnv = vec!();
                                                             mnv_pos = 0;
                                                             potential_mnv = false;
-                                                            mnv_qual = 0.;
+                                                            mnv_qual = LogProb::ln_one();
                                                         }
                                                     },
                                                     _ => {}
@@ -304,7 +314,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 mnv = vec![];
                                 mnv_pos = 0;
                                 potential_mnv = false;
-                                mnv_qual = 0.;
+                                mnv_qual = LogProb::ln_one();
 
                                 if final_pos < ups_and_downs.len() {
                                     // True unless the read hits the contig end.
@@ -313,7 +323,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 read_cursor += cig.len() as usize;
                             }
                             Cigar::Del(del) => {
-                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                match variant_matrix.lock().unwrap().variants(
+                                    ref_idx,
+                                    tid,
+                                    cursor as i64,
+                                ) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -325,8 +339,13 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 record.qname().to_vec(),
                                                             );
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] +=
-                                                                quals[read_cursor] as f32;
+                                                            base.quals[sample_idx] =
+                                                                base.quals[sample_idx].ln_add_exp(
+                                                                    LogProb::from(PHREDProb(
+                                                                        record.qual()[read_cursor]
+                                                                            as f64,
+                                                                    )),
+                                                                );
                                                         }
                                                     }
                                                     _ => {}
@@ -346,7 +365,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                             Cigar::Ins(ins) => {
                                 let insertion = &record.seq().as_bytes()
                                     [read_cursor..read_cursor + cig.len() as usize];
-                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                match variant_matrix.lock().unwrap().variants(
+                                    ref_idx,
+                                    tid,
+                                    cursor as i64,
+                                ) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -371,9 +394,17 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             let qual_sum = quals[read_cursor
                                                                 ..read_cursor + cig.len() as usize]
                                                                 .par_iter()
-                                                                .sum::<u8>()
-                                                                as f32;
-                                                            base.quals[sample_idx] += qual_sum;
+                                                                .map(|p| {
+                                                                    LogProb::from(PHREDProb(
+                                                                        *p as f64,
+                                                                    ))
+                                                                })
+                                                                .collect::<Vec<LogProb>>();
+                                                            let prob_sum =
+                                                                LogProb::ln_sum_exp(&qual_sum);
+                                                            base.quals[sample_idx] = base.quals
+                                                                [sample_idx]
+                                                                .ln_add_exp(prob_sum);
                                                         }
                                                     }
                                                     _ => {}
@@ -391,7 +422,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 // not sure if this correct protocol or not
                                 let insertion = &record.seq().as_bytes()
                                     [read_cursor..read_cursor + cig.len() as usize];
-                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                match variant_matrix.lock().unwrap().variants(
+                                    ref_idx,
+                                    tid,
+                                    cursor as i64,
+                                ) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -416,9 +451,17 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             let qual_sum = quals[read_cursor
                                                                 ..read_cursor + cig.len() as usize]
                                                                 .par_iter()
-                                                                .sum::<u8>()
-                                                                as f32;
-                                                            base.quals[sample_idx] += qual_sum;
+                                                                .map(|p| {
+                                                                    LogProb::from(PHREDProb(
+                                                                        *p as f64,
+                                                                    ))
+                                                                })
+                                                                .collect::<Vec<LogProb>>();
+                                                            let prob_sum =
+                                                                LogProb::ln_sum_exp(&qual_sum);
+                                                            base.quals[sample_idx] = base.quals
+                                                                [sample_idx]
+                                                                .ln_add_exp(prob_sum);
                                                         }
                                                     }
                                                     _ => {}
@@ -470,7 +513,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                 ref_idx,
                 tid as i32,
                 ups_and_downs,
-                coverage_estimators,
+                &coverage_estimators,
                 min,
                 max,
                 total_indels_in_current_contig as usize,
@@ -478,7 +521,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                 target_len as usize,
                 contig_name,
                 &genomes_and_contigs,
-                variant_matrix,
+                &variant_matrix,
                 ref_seq,
                 sample_idx,
                 method,
@@ -529,7 +572,7 @@ pub fn process_previous_contigs_var(
     ref_idx: usize,
     last_tid: i32,
     ups_and_downs: Vec<i32>,
-    coverage_estimators: &mut Vec<CoverageEstimator>,
+    coverage_estimators: &Mutex<Vec<CoverageEstimator>>,
     min: f32,
     max: f32,
     total_indels_in_current_contig: usize,
@@ -537,7 +580,7 @@ pub fn process_previous_contigs_var(
     contig_len: usize,
     contig_name: Vec<u8>,
     genomes_and_contigs: &GenomesAndContigs,
-    variant_matrix: &mut VariantMatrix,
+    variant_matrix: &Mutex<VariantMatrix>,
     ref_sequence: Vec<u8>,
     sample_idx: usize,
     method: &str,
@@ -549,6 +592,7 @@ pub fn process_previous_contigs_var(
     stoit_name: &str,
 ) {
     if last_tid != -2 {
+        let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators
             .par_iter_mut()
             .for_each(|estimator| estimator.setup());
@@ -571,7 +615,10 @@ pub fn process_previous_contigs_var(
 
         // adds contig info to variant struct
         variant_struct.add_contig(
-            variant_matrix.variants_of_contig(ref_idx, last_tid),
+            variant_matrix
+                .lock()
+                .unwrap()
+                .variants_of_contig(ref_idx, last_tid),
             last_tid.clone(),
             total_indels_in_current_contig,
             contig_name.clone(),
@@ -593,6 +640,7 @@ pub fn process_previous_contigs_var(
             "summarize" | "genotype" | "evolve" | "polish" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
+                let mut variant_matrix = variant_matrix.lock().unwrap();
                 variant_matrix.add_contig(variant_struct, sample_count, sample_idx, ref_idx);
             }
             // "polish" => {
