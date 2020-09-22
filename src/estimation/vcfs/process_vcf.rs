@@ -88,7 +88,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let bam_generated = Mutex::new(bam_generated);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
-    target_names.par_iter().enumerate().for_each(|(tid, target_name)|{
+    target_names.iter().enumerate().for_each(|(tid, target_name)|{
         // let target_name = String::from_utf8(target.to_vec()).unwrap();
         if target_name.contains(reference)
             || match genomes_and_contigs.contig_to_genome.get(target_name) {
@@ -480,11 +480,13 @@ pub fn generate_vcf(
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            gatk HaplotypeCaller -I {} -R {} -O {} --sample-ploidy {} -mbq {} \
+            gatk HaplotypeCaller \
+            -I {} -R {} -O {} --sample-ploidy {} -mbq {} \
             --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
             --heterozygosity {} --indel-heterozygosity {} \
             --pcr-indel-model CONSERVATIVE \
-            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 --force-call-filtered-alleles false",
+            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 \
+            --force-call-filtered-alleles false --native-pair-hmm-threads 1",
             tmp_bam_path1.path().to_str().unwrap().to_string(),
             &reference,
             &vcf_path_prenormalization,
