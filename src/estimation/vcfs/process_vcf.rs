@@ -1,7 +1,8 @@
+use bio::stats::{LogProb, PHREDProb};
 use bird_tool_utils::command;
 use rust_htslib::{bam, bcf, bcf::Read};
 use std;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use coverm::bam_generator::*;
 use estimation::variant_matrix::*;
@@ -26,12 +27,12 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     bam_generator: G,
     split_threads: usize,
     ref_idx: usize,
-    mut per_ref_sample_idx: &mut i32,
+    sample_idx: usize,
     mut sample_count: usize,
-    variant_matrix: &mut Mutex<VariantMatrix>,
+    variant_matrix: &Mutex<VariantMatrix>,
     longread: bool,
     m: &clap::ArgMatches,
-    sample_groups: &mut HashMap<&str, HashSet<String>>,
+    // sample_groups: &mut HashMap<&str, HashSet<String>>,
     genomes_and_contigs: &GenomesAndContigs,
     reference_map: &HashMap<usize, String>,
     mut short_sample_count: usize,
@@ -40,19 +41,13 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let mut bam_generated = bam_generator.start();
     let mut stoit_name = bam_generated.name().to_string();
 
-    if longread {
-        let group = sample_groups.entry("long").or_insert(HashSet::new());
-        group.insert(stoit_name.clone());
-    } else {
-        let group = sample_groups.entry("short").or_insert(HashSet::new());
-        group.insert(stoit_name.clone());
-    }
-
-    let sample_idx = if longread {
-        (short_sample_count as i32 + *per_ref_sample_idx) as usize
-    } else {
-        *per_ref_sample_idx as usize
-    };
+    // if longread {
+    //     let group = sample_groups.entry("long").or_insert(HashSet::new());
+    //     group.insert(stoit_name.clone());
+    // } else {
+    //     let group = sample_groups.entry("short").or_insert(HashSet::new());
+    //     group.insert(stoit_name.clone());
+    // }
 
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = Mutex::new(retrieve_reference(concatenated_genomes));
@@ -72,16 +67,22 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let bam_path = bam_generated.path().to_string();
 
     // minimum PHRED base quality
-    let bq = m
-        .value_of("base-quality-threshold")
-        .unwrap()
-        .parse()
-        .unwrap();
+    let bq = LogProb::from(PHREDProb(
+        m.value_of("base-quality-threshold")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
+    ));
     // Minimum MAPQ value
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
     // Minimum count for a SNP to be considered
     let min_variant_depth: i32 = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-    let min_variant_quality: f32 = m.value_of("min-variant-quality").unwrap().parse().unwrap();
+    let min_variant_quality = LogProb::from(PHREDProb(
+        m.value_of("min-variant-quality")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
+    ));
 
     let mut total_records = Mutex::new(0);
     let bam_generated = Mutex::new(bam_generated);
@@ -132,7 +133,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             let mut base_dict = HashMap::new();
 
                             let mut refr_depth = 0;
-                            let mut refr_qual = 0.;
+                            let mut refr_qual = LogProb::ln_one();
 
                             for alignment in pileup.alignments() {
                                 let record = alignment.record();
@@ -141,7 +142,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                     if !alignment.is_del() && !alignment.is_refskip() {
                                         // query position in read
                                         let qpos = alignment.qpos().unwrap();
-                                        let record_qual = record.qual()[qpos];
+                                        let record_qual = LogProb::from(PHREDProb(record.qual()[qpos] as f64));
                                         if record_qual >= bq {
                                             let read_base = alignment.record().seq()[qpos];
                                             if read_base != refr_base {
@@ -158,11 +159,11 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                                 }
 
                                                 base.depth[sample_idx] += 1;
-                                                base.quals[sample_idx] += record_qual as f32;
+                                                base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(record_qual);
                                             }
                                         } else {
                                             refr_depth += 1;
-                                            refr_qual += record_qual as f32;
+                                            refr_qual = refr_qual.ln_add_exp(record_qual);
                                         }
                                     }
                                 }
@@ -185,8 +186,8 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             // Collect the variants
                             if base_dict.keys().len() > 1 {
                                 for (var_char, base) in base_dict {
-                                    if base.depth[sample_idx] >= min_variant_depth
-                                        && base.quals[sample_idx] >= min_variant_quality
+                                    if base.depth[sample_idx] >= min_variant_depth &&
+                                        base.quals[sample_idx] <= min_variant_quality
                                     {
                                         let variant_con =
                                             variant_map.entry(tid as i32).or_insert(HashMap::new());
