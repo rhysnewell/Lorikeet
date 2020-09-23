@@ -84,30 +84,6 @@ pub fn pileup_variants<
     // if !m.is_present("bam-files") {
     finish_bams(bam_readers, n_threads);
     // }
-    // Generate the .dict files for GATK
-    match concatenated_genomes {
-        Some(ref concat) => {
-            external_command_checker::check_for_gatk();
-
-            let gen_ref_dict_cmd = format!(
-                "set -eou pipefail; gatk CreateSequenceDictionary -R {}",
-                &concat.path().to_str().unwrap(),
-            );
-
-            debug!("Queuing cmd_string: {}", gen_ref_dict_cmd);
-            command::finish_command_safely(
-                std::process::Command::new("bash")
-                    .arg("-c")
-                    .arg(&gen_ref_dict_cmd)
-                    .stderr(std::process::Stdio::piped())
-                    .stdout(std::process::Stdio::piped())
-                    .spawn()
-                    .expect("Unable to execute bash"),
-                "gatk",
-            );
-        }
-        None => {}
-    }
 
     // Put reference index in the variant map and initialize matrix
     let mut reference_map = HashMap::new();
