@@ -51,7 +51,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = Mutex::new(retrieve_reference(concatenated_genomes));
 
-    bam_generated.set_threads(split_threads);
+    // bam_generated.set_threads(split_threads);
     let header = bam_generated.header().clone(); // bam header
     let target_lens: Vec<u64> = (0..header.target_count())
         .into_iter()

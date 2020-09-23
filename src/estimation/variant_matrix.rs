@@ -350,7 +350,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let alpha = LogProb::from(Prob(alpha));
                 let mut threshold = None;
                 if fdrs.is_empty() {
-                    warn!("Genome {}: FDR calculation are empty...", reference);
+                    warn!("Genome {}: FDR calculations are empty...", reference);
                     threshold = None;
                 } else if fdrs[0] > alpha {
                     info!(
