@@ -32,7 +32,7 @@ conda activate lorikeet
 #### Option 2: Cargo
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-gatk4 prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+freebayes prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 cargo install lorikeet-genome
@@ -43,7 +43,7 @@ You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LI
 paths in the your conda environment if they can't properly be found on your system.
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel pysam=0.16 svim \ 
-gatk4 prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+freebayes prodigal samtools vt=2015.11.10=he941832_3 rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
 git clone https://github.com/rhysnewell/Lorikeet/git && \ 

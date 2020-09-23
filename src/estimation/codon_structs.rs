@@ -365,7 +365,7 @@ mod tests {
             truedepth: vec![5; sample_count],
             totaldepth: vec![5; sample_count],
             genotypes: HashSet::new(),
-            quals: vec![LogProb::ln_one(); sample_count],
+            quals: vec![0.; sample_count],
             referencedepth: vec![0; sample_count],
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],

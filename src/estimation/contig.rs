@@ -284,7 +284,7 @@ pub fn pileup_variants<
         // let mut prev_ref_idx = -1;
         // let mut per_ref_sample_idx = 0;
         indexed_bam_readers
-            .into_iter()
+            .into_par_iter()
             .enumerate()
             .for_each(|(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using
@@ -440,7 +440,10 @@ pub fn pileup_variants<
         // Collects info about variants across samples to check whether they are genuine or not
         // using FDR
         let mut variant_matrix = variant_matrix.lock().unwrap();
-        // variant_matrix.remove_false_discoveries(alpha, &genomes_and_contigs.genomes[*ref_idx]);
+
+        // TODO: Get this function working. Currently summing PHRED quality scores results in probs
+        //       above 1.0, which is impossible. Need a better method.
+        variant_matrix.remove_false_discoveries(alpha, &genomes_and_contigs.genomes[*ref_idx]);
 
         if mode == "genotype" {
             let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();

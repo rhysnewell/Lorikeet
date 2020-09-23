@@ -1,7 +1,7 @@
 use rust_htslib::bam::{self, record::Cigar};
 use std::collections::HashMap;
 
-use bio::stats::{LogProb, PHREDProb};
+// use bio::stats::{LogProb, PHREDProb};
 use coverm::bam_generator::*;
 use estimation::codon_structs::*;
 use estimation::contig_variants::*;
@@ -168,11 +168,10 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 let mut mnv_pos = 0;
                                 let mut mnv = vec![];
                                 let mut mnv_cursor = 0;
-                                let mut mnv_qual = LogProb::ln_one();
+                                let mut mnv_qual = 0.;
                                 for qpos in read_cursor..(read_cursor + cig.len() as usize) {
                                     // See if read is match MNV
-                                    let qual_pos =
-                                        LogProb::from(PHREDProb(record.qual()[qpos] as f64));
+                                    let qual_pos = record.qual()[qpos] as f64;
                                     if potential_mnv && (mnv_pos < mnv.len()) {
                                         let read_char = record.seq()[qpos];
                                         debug!(
@@ -181,7 +180,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                         );
                                         if mnv[mnv_pos] == read_char {
                                             mnv_pos += 1;
-                                            mnv_qual = mnv_qual.ln_add_exp(qual_pos);
+                                            mnv_qual += qual_pos;
                                             debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                             if mnv_pos == mnv.len() {
                                                 match variant_matrix
@@ -202,7 +201,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                             record.qname().to_vec(),
                                                                         );
                                                                         base.truedepth[sample_idx] += 1;
-                                                                        base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
+                                                                        base.quals[sample_idx] += qual_pos;
                                                                     }
                                                                 }
                                                                 _ => {
@@ -215,7 +214,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         mnv = vec![];
                                                         mnv_pos = 0;
                                                         potential_mnv = false;
-                                                        mnv_qual = LogProb::ln_one();
+                                                        mnv_qual = 0.;
                                                     }
                                                     None => {
                                                         debug!(
@@ -225,20 +224,20 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         mnv = vec![];
                                                         mnv_pos = 0;
                                                         potential_mnv = false;
-                                                        mnv_qual = LogProb::ln_one();
+                                                        mnv_qual = 0.;
                                                     }
                                                 };
                                                 mnv = vec![];
                                                 mnv_pos = 0;
                                                 potential_mnv = false;
-                                                mnv_qual = LogProb::ln_one();
+                                                mnv_qual = 0.;
                                             }
                                         } else {
                                             debug!("Read did not contain correct MNV");
                                             mnv = vec![];
                                             mnv_pos = 0;
                                             potential_mnv = false;
-                                            mnv_qual = LogProb::ln_one();
+                                            mnv_qual = 0.;
                                         }
                                     }
                                     match variant_matrix.lock().unwrap().variants(
@@ -254,7 +253,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if *alt == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
+                                                            base.quals[sample_idx] += qual_pos;
                                                         }
                                                     },
                                                     // We need to check every position of the MNV
@@ -267,17 +266,17 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 mnv_pos += 1;
                                                                 potential_mnv = true;
                                                                 mnv_cursor = cursor as i64;
-                                                                mnv_qual = mnv_qual.ln_add_exp(qual_pos);
+                                                                mnv_qual = 0.;
 
                                                                 // Then it is automatically assigned
                                                                 if mnv_pos == mnv.len() {
                                                                     base.assign_read(record.qname().to_vec());
                                                                     base.truedepth[sample_idx] += 1;
-                                                                    base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
+                                                                    base.quals[sample_idx] += qual_pos;
                                                                     mnv = vec!();
                                                                     mnv_pos = 0;
                                                                     potential_mnv = false;
-                                                                    mnv_qual = LogProb::ln_one();
+                                                                    mnv_qual = 0.;
                                                                 }
                                                             }
                                                         }
@@ -286,7 +285,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                         if base.refr[0] == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(qual_pos);
+                                                            base.quals[sample_idx] += qual_pos;
                                                             // info!(
                                                             //     "Reference ref {} tid {} pos {} coverages {:?}",
                                                             //     &ref_idx,
@@ -298,7 +297,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             mnv = vec!();
                                                             mnv_pos = 0;
                                                             potential_mnv = false;
-                                                            mnv_qual = LogProb::ln_one();
+                                                            mnv_qual = 0.;
                                                         }
                                                     },
                                                     _ => {}
@@ -314,7 +313,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 mnv = vec![];
                                 mnv_pos = 0;
                                 potential_mnv = false;
-                                mnv_qual = LogProb::ln_one();
+                                mnv_qual = 0.;
 
                                 if final_pos < ups_and_downs.len() {
                                     // True unless the read hits the contig end.
@@ -339,13 +338,8 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                                 record.qname().to_vec(),
                                                             );
                                                             base.truedepth[sample_idx] += 1;
-                                                            base.quals[sample_idx] =
-                                                                base.quals[sample_idx].ln_add_exp(
-                                                                    LogProb::from(PHREDProb(
-                                                                        record.qual()[read_cursor]
-                                                                            as f64,
-                                                                    )),
-                                                                );
+                                                            base.quals[sample_idx] +=
+                                                                record.qual()[read_cursor] as f64
                                                         }
                                                     }
                                                     _ => {}
@@ -394,17 +388,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             let qual_sum = quals[read_cursor
                                                                 ..read_cursor + cig.len() as usize]
                                                                 .par_iter()
-                                                                .map(|p| {
-                                                                    LogProb::from(PHREDProb(
-                                                                        *p as f64,
-                                                                    ))
-                                                                })
-                                                                .collect::<Vec<LogProb>>();
-                                                            let prob_sum =
-                                                                LogProb::ln_sum_exp(&qual_sum);
-                                                            base.quals[sample_idx] = base.quals
-                                                                [sample_idx]
-                                                                .ln_add_exp(prob_sum);
+                                                                .map(|q| *q as f64)
+                                                                .sum::<f64>()
+                                                                as f64;
+
+                                                            base.quals[sample_idx] += qual_sum;
                                                         }
                                                     }
                                                     _ => {}
@@ -451,17 +439,11 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             let qual_sum = quals[read_cursor
                                                                 ..read_cursor + cig.len() as usize]
                                                                 .par_iter()
-                                                                .map(|p| {
-                                                                    LogProb::from(PHREDProb(
-                                                                        *p as f64,
-                                                                    ))
-                                                                })
-                                                                .collect::<Vec<LogProb>>();
-                                                            let prob_sum =
-                                                                LogProb::ln_sum_exp(&qual_sum);
-                                                            base.quals[sample_idx] = base.quals
-                                                                [sample_idx]
-                                                                .ln_add_exp(prob_sum);
+                                                                .map(|q| *q as f64)
+                                                                .sum::<f64>()
+                                                                as f64;
+
+                                                            base.quals[sample_idx] += qual_sum;
                                                         }
                                                     }
                                                     _ => {}
