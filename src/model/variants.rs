@@ -1,11 +1,10 @@
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::ops::Range;
-
-use bio::stats::{LogProb, PHREDProb};
+use bio::stats::LogProb;
 use itertools::Itertools;
 use ordered_float::NotNan;
 use rust_htslib::{bcf, bcf::record::Numeric};
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 
 use rayon::prelude::*;
@@ -243,7 +242,7 @@ pub struct Base {
     // Alternate allele Variant enum
     pub variant: Variant,
     // The QUAL values across samples
-    pub quals: Vec<LogProb>,
+    pub quals: Vec<f64>,
     // Depth of this variant as decided by variant caller. Only includes good quality reads
     // This values tends to be inconsistent so opt to use lorikeets depth value
     pub depth: Vec<i32>,
@@ -310,7 +309,7 @@ impl Base {
             pos,
             refr,
             variant: Variant::None,
-            quals: vec![LogProb::ln_one(); sample_count],
+            quals: vec![0.; sample_count],
             depth: vec![0; sample_count],
             truedepth: vec![0; sample_count],
             totaldepth: vec![0; sample_count],
@@ -353,7 +352,7 @@ impl Base {
                         sample_count,
                         record.alleles()[0].to_vec(),
                     );
-                    base.quals[sample_idx] = LogProb::from(PHREDProb(record.qual() as f64));
+                    base.quals[sample_idx] = record.qual() as f64;
 
                     // Populate Base struct with known info tags
                     if longread {

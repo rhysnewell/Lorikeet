@@ -1,4 +1,3 @@
-use bio::stats::{LogProb, PHREDProb};
 use bird_tool_utils::command;
 use rust_htslib::{bam, bcf, bcf::Read};
 use std;
@@ -67,28 +66,26 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let bam_path = bam_generated.path().to_string();
 
     // minimum PHRED base quality
-    let bq = LogProb::from(PHREDProb(
-        m.value_of("base-quality-threshold")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap(),
-    ));
+    let bq = m
+        .value_of("base-quality-threshold")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap();
     // Minimum MAPQ value
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
     // Minimum count for a SNP to be considered
     let min_variant_depth: i32 = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-    let min_variant_quality = LogProb::from(PHREDProb(
-        m.value_of("min-variant-quality")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap(),
-    ));
+    let min_variant_quality = m
+        .value_of("min-variant-quality")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap();
 
     let mut total_records = Mutex::new(0);
     let bam_generated = Mutex::new(bam_generated);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
-    target_names.iter().enumerate().for_each(|(tid, target_name)|{
+    target_names.par_iter().enumerate().for_each(|(tid, target_name)|{
         // let target_name = String::from_utf8(target.to_vec()).unwrap();
         if target_name.contains(reference)
             || match genomes_and_contigs.contig_to_genome.get(target_name) {
@@ -120,6 +117,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                         ref_seq = Vec::new();
                         read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
 
+
                         for p in pileups {
                             // if {
                             let pileup = p.unwrap();
@@ -129,20 +127,20 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
                             let refr_base = ref_seq[pos];
                             // let mut base = Base::new(tid, pos, );
+                            // info!("Base dict {:?} {}", &pos_dict, pos);
 
                             let mut base_dict = HashMap::new();
 
                             let mut refr_depth = 0;
-                            let mut refr_qual = LogProb::ln_one();
+                            let mut refr_qual = 0.;
 
                             for alignment in pileup.alignments() {
                                 let record = alignment.record();
-
                                 if record.mapq() >= mapq_thresh {
                                     if !alignment.is_del() && !alignment.is_refskip() {
                                         // query position in read
                                         let qpos = alignment.qpos().unwrap();
-                                        let record_qual = LogProb::from(PHREDProb(record.qual()[qpos] as f64));
+                                        let record_qual = record.qual()[qpos] as f64;
                                         if record_qual >= bq {
                                             let read_base = alignment.record().seq()[qpos];
                                             if read_base != refr_base {
@@ -154,16 +152,15 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                                         vec![refr_base],
                                                     ));
 
+                                                base.depth[sample_idx] += 1;
+                                                base.quals[sample_idx] += record_qual;
                                                 if base.variant == Variant::None {
                                                     base.variant = Variant::SNV(read_base);
                                                 }
-
-                                                base.depth[sample_idx] += 1;
-                                                base.quals[sample_idx] = base.quals[sample_idx].ln_add_exp(record_qual);
                                             }
                                         } else {
                                             refr_depth += 1;
-                                            refr_qual = refr_qual.ln_add_exp(record_qual);
+                                            refr_qual += record_qual;
                                         }
                                     }
                                 }
@@ -185,19 +182,40 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             // If more than one variant at location (including reference)
                             // Collect the variants
                             if base_dict.keys().len() > 1 {
-                                for (var_char, base) in base_dict {
+                                let mut variant_found = false;
+                                let mut refr_base = 0;
+                                for (var_char, base) in base_dict.iter() {
                                     if base.depth[sample_idx] >= min_variant_depth &&
-                                        base.quals[sample_idx] <= min_variant_quality
+                                        // base.quals[sample_idx] >= min_variant_quality &&
+                                        base.variant != Variant::None
                                     {
+                                        variant_found = true;
+                                        refr_base = base.refr[0];
                                         let variant_con =
                                             variant_map.entry(tid as i32).or_insert(HashMap::new());
                                         let variant_pos =
                                             variant_con.entry(base.pos).or_insert(HashMap::new());
 
                                         // Overwrite any existing variants called by mpileup
-                                        variant_pos.insert(base.variant.to_owned(), base);
+                                        variant_pos.insert(base.variant.to_owned(), base.clone());
                                     }
                                 }
+                                // Add reference
+                                match base_dict.get(&refr_base) {
+                                    Some(base) => {
+                                        let variant_con =
+                                            variant_map.entry(tid as i32).or_insert(HashMap::new());
+                                        let variant_pos =
+                                            variant_con.entry(base.pos).or_insert(HashMap::new());
+
+                                        // Overwrite any existing variants called by mpileup
+                                        variant_pos.insert(base.variant.to_owned(), base.clone());
+                                    },
+                                    None => {
+
+                                    }
+                                }
+
                             }
                         }
                         // }
@@ -296,6 +314,17 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                     );
                 }
             }
+            // Collect the variants into the matrix
+            // let mut variant_matrix = variant_matrix.lock().unwrap();
+            // variant_matrix.add_reference_contig(
+            //     stoit_name.to_string(),
+            //     sample_idx,
+            //     &mut variant_map,
+            //     tid,
+            //     target_name.as_bytes().to_vec(),
+            //     ref_idx,
+            //     target_len,
+            // );
         }
     });
     let mut total_records = total_records.lock().unwrap();
@@ -442,7 +471,7 @@ pub fn generate_vcf(
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
     if !longread {
-        external_command_checker::check_for_gatk();
+        external_command_checker::check_for_freebayes();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
 
@@ -480,26 +509,21 @@ pub fn generate_vcf(
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            gatk HaplotypeCaller \
-            -I {} -R {} -O {} --sample-ploidy {} -mbq {} \
-            --annotation AlleleFraction --annotation DepthPerAlleleBySample --minimum-mapping-quality {} \
-            --heterozygosity {} --indel-heterozygosity {} \
-            --pcr-indel-model CONSERVATIVE \
-            --base-quality-score-threshold 6 --max-reads-per-alignment-start 0 \
-            --force-call-filtered-alleles false --native-pair-hmm-threads 1",
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            freebayes -f {} -C {} -q {} \
+            -p {} --strict-vcf -m {} {} > {}",
             &reference,
-            &vcf_path_prenormalization,
-            m.value_of("ploidy").unwrap(),
+            m.value_of("min-variant-depth").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
+            // m.value_of("min-repeat-entropy").unwrap(),
+            m.value_of("ploidy").unwrap(),
             mapq_thresh,
-            m.value_of("heterozygosity").unwrap(),
-            m.value_of("indel-heterozygosity").unwrap(),
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            &vcf_path_prenormalization,
         );
-        let vt_cmd_string = format!(
-            "vt normalize -n -r {} {} > {}",
-            &reference, &vcf_path_prenormalization, vcf_path,
-        );
+        // let vt_cmd_string = format!(
+        //     "vt normalize -n -r {} {} > {}",
+        //     &reference, &vcf_path_prenormalization, vcf_path,
+        // );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
@@ -511,19 +535,19 @@ pub fn generate_vcf(
                 .expect("Unable to execute bash"),
             "gatk",
         );
-        debug!("Queuing cmd_string: {}", vt_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&vt_cmd_string)
-                .stderr(std::process::Stdio::piped())
-                // .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "vt",
-        );
+        // debug!("Queuing cmd_string: {}", vt_cmd_string);
+        // command::finish_command_safely(
+        //     std::process::Command::new("bash")
+        //         .arg("-c")
+        //         .arg(&vt_cmd_string)
+        //         .stderr(std::process::Stdio::piped())
+        //         // .stdout(std::process::Stdio::piped())
+        //         .spawn()
+        //         .expect("Unable to execute bash"),
+        //     "vt",
+        // );
         debug!("VCF Path {:?}", vcf_path);
-        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
+        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path_prenormalization));
 
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader;
