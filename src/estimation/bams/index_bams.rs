@@ -15,7 +15,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     let mut record: bam::record::Record = bam::Record::new();
     for bam_generator in bams {
         let mut bam = bam_generator.start();
-        bam.set_threads(n_threads);
+        bam.set_threads(n_threads / 2);
 
         let path = bam.path().to_string();
         let stoit_name = bam.name().to_string().replace("/", ".");
@@ -43,7 +43,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                         .expect("Unable to create bam");
 
                 bam_writer
-                    .set_threads(n_threads)
+                    .set_threads(n_threads / 2)
                     .expect("Unable to set threads for BAM writer");
                 bam_writer
                     .set_compression_level(bam::CompressionLevel::Uncompressed)

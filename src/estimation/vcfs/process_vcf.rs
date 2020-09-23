@@ -100,6 +100,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
             let target_len = target_lens[tid];
             {
                 let mut bam_generated = bam_generated.lock().unwrap();
+                bam_generated.set_threads(std::cmp::max(split_threads as i32 - 1, 1) as usize);
                 bam_generated.fetch(tid as u32, 0, target_len);
                 match bam_generated.pileup() {
                     Some(pileups) => {
