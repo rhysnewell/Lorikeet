@@ -152,6 +152,8 @@ pub fn pileup_variants<
         multi.join().unwrap();
     });
 
+    pb1.tick();
+
     reference_map.iter().for_each(|(ref_idx, reference_stem)| {
         pb2.reset();
         pb3.reset();
