@@ -91,7 +91,7 @@ pub fn get_streamed_bam_readers<'a>(
                         naming_readset,
                         longread,
                     );
-                    info!("Caching BAM file to {}", bam_file_cache_path);
+                    debug!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
                 }
             }
@@ -299,7 +299,7 @@ pub fn setup_bam_cache_directory(cache_directory: &str) {
                 cache_directory
             );
         } else {
-            info!(
+            debug!(
                 "Writing BAM files to already existing directory {}",
                 cache_directory
             )

@@ -11,8 +11,6 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use nix::sys::stat;
-use nix::unistd;
 use rayon::prelude::*;
 use std::path::Path;
 use std::str;
@@ -356,16 +354,16 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 //     ref_idx,
                 //     target_len,
                 // );
-                let mut total_records = total_records.lock().unwrap();
-                info!(
-                    "Reference {}: Collected {} variant positions for sample {}",
-                    reference,
-                    total_records, // remove tmp file name from sample id
-                    match &stoit_name[..4] {
-                        ".tmp" => &stoit_name[15..],
-                        _ => &stoit_name,
-                    },
-                );
+                // let mut total_records = total_records.lock().unwrap();
+                // info!(
+                //     "Reference {}: Collected {} variant positions for sample {}",
+                //     reference,
+                //     total_records, // remove tmp file name from sample id
+                //     match &stoit_name[..4] {
+                //         ".tmp" => &stoit_name[15..],
+                //         _ => &stoit_name,
+                //     },
+                // );
             }
 
         });
@@ -480,25 +478,12 @@ pub fn generate_vcf(
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
-    let fifo_path = tmp_dir.path().join("foo.pipe");
 
     let tmp_bam_path1 = Builder::new()
         .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
         .suffix(".bam")
         .tempfile()
         .unwrap();
-
-    let tmp_bam_path2 = Builder::new()
-        .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
-        .suffix(".bam")
-        .tempfile()
-        .unwrap();
-
-    // create new fifo and give read, write and execute rights to the owner.
-    // This is required because we cannot open a Rust stream as a BAM file with
-    // rust-htslib.
-    unistd::mkfifo(&fifo_path, stat::Mode::S_IRWXU)
-        .expect(&format!("Error creating named pipe {:?}", fifo_path));
 
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
@@ -518,44 +503,41 @@ pub fn generate_vcf(
             &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
         // Generate uncompressed filtered SAM file
-        let sam_cmd_string = format!(
-            "set -e -o pipefail; samtools view -bh {} {} > {} && \
-            samtools index {}",
-            bam_path,
-            &target_name,
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
-        );
-        debug!("Queuing cmd_string: {}", sam_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&sam_cmd_string)
-                .stderr(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "samtools",
-        );
+        // let sam_cmd_string = format!(
+        //     "set -e -o pipefail; samtools faidx {}",
+        //     &reference,
+        // );
+        // debug!("Queuing cmd_string: {}", sam_cmd_string);
+        // command::finish_command_safely(
+        //     std::process::Command::new("bash")
+        //         .arg("-c")
+        //         .arg(&sam_cmd_string)
+        //         .stderr(std::process::Stdio::piped())
+        //         .stdout(std::process::Stdio::piped())
+        //         .spawn()
+        //         .expect("Unable to execute bash"),
+        //     "samtools",
+        // );
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            freebayes -f {} -C {} -q {} \
+            freebayes -f {} -r {} -C {} -q {} \
             -p {} --strict-vcf -m {} {} > {}",
             &reference,
+            &target_name,
             m.value_of("min-variant-depth").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             // m.value_of("min-repeat-entropy").unwrap(),
             m.value_of("ploidy").unwrap(),
             mapq_thresh,
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            &bam_path,
             &vcf_path_prenormalization,
         );
-        // let vt_cmd_string = format!(
-        //     "vt normalize -n -r {} {} > {}",
-        //     &reference, &vcf_path_prenormalization, vcf_path,
-        // );
+        let vt_cmd_string = format!(
+            "vt normalize {} -n -r {} -o {}",
+            &vcf_path_prenormalization, &reference, vcf_path,
+        );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
             std::process::Command::new("bash")
@@ -565,21 +547,21 @@ pub fn generate_vcf(
                 // .stdout(std::process::Stdio::piped())
                 .spawn()
                 .expect("Unable to execute bash"),
-            "gatk",
+            "freebayes",
         );
-        // debug!("Queuing cmd_string: {}", vt_cmd_string);
-        // command::finish_command_safely(
-        //     std::process::Command::new("bash")
-        //         .arg("-c")
-        //         .arg(&vt_cmd_string)
-        //         .stderr(std::process::Stdio::piped())
-        //         // .stdout(std::process::Stdio::piped())
-        //         .spawn()
-        //         .expect("Unable to execute bash"),
-        //     "vt",
-        // );
+        debug!("Queuing cmd_string: {}", vt_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&vt_cmd_string)
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "vt",
+        );
         debug!("VCF Path {:?}", vcf_path);
-        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path_prenormalization));
+        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
 
         tmp_dir.close().expect("Failed to close temp directory");
         return vcf_reader;
