@@ -110,22 +110,20 @@ impl MetricSpace for Var {
                 // reciprocal concordance correlation coeffecient between 0 and 2
                 let concordance = -2. * covar / (row_var + col_var) + 1.;
 
-                //                // Read ids of first variant
-                //                let set1 = &self.reads;
-                //
-                //                // Read ids of second variant
-                //                let set2 = &other.reads;
-                //
-                //                // Add the jaccard's similarity to the hashmap for the two clusters
-                //                let intersection: HashSet<_> = set1
-                //                    .intersection(&set2).collect();
-                //                let jaccard = intersection.len() as f64 /
-                //                    (set1.len() + set2.len() + 1) as f64;
+                // Read ids of first variant
+                let set1 = &self.reads;
+
+                // Read ids of second variant
+                let set2 = &other.reads;
+
+                // Add the jaccard's similarity to the hashmap for the two clusters
+                let intersection: HashSet<_> = set1.intersection(&set2).collect();
+                let jaccard = intersection.len() as f64 / (set1.len() + set2.len() + 1) as f64;
 
                 debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
                        phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
 
-                return phi_dist;
+                return (phi_dist * (1. - jaccard));
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {

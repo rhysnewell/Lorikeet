@@ -842,13 +842,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                         };
 
                         // Perform read phasing clustering and return initial clusters
-                        let links = linkage_clustering_of_variants(
-                            &variant_info_vec,
-                            anchor_size,
-                            anchor_similarity,
-                            minimum_reads_in_link,
-                        );
-                        // let links = Vec::new();
+                        // let links = linkage_clustering_of_variants(
+                        //     &variant_info_vec,
+                        //     anchor_size,
+                        //     anchor_similarity,
+                        //     minimum_reads_in_link,
+                        // );
+                        let links = Vec::new();
                         // run fuzzy DBSCAN
                         let reference_path = Path::new(
                             reference_map
@@ -876,7 +876,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                         // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
                         // keep hashmaps updated using channel()
                         let prediction_variants =
-                        Arc::new(
+                            Arc::new(
                             Mutex::new(
                                 HashMap::new()));
 
