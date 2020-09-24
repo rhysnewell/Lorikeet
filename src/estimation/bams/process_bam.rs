@@ -525,7 +525,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
         _ => &stoit_name,
     };
 
-    info!(
+    debug!(
         "Reference {}: In sample '{}', found {} reads mapped out of {} total ({:.*}%)", // and filtered {}",
         &reference,
         stoit_name,

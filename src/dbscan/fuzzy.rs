@@ -334,7 +334,7 @@ impl FuzzyDBSCAN {
             }
         }
         if !noise_cluster.is_empty() {
-            info!(
+            debug!(
                 "{} Variants Clustered as noise during Fuzzy DBSCAN",
                 noise_cluster.len()
             );
@@ -370,7 +370,7 @@ impl FuzzyDBSCAN {
             small_similarity == 1
         });
 
-        info!(
+        debug!(
             "Genome {}: {} possible strains... ",
             ref_name,
             clusters.len()

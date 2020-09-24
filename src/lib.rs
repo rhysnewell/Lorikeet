@@ -40,6 +40,7 @@ extern crate strum;
 #[macro_use]
 extern crate log;
 extern crate derive_builder;
+extern crate indicatif;
 extern crate strum_macros;
 #[macro_use]
 extern crate serde_derive;

@@ -17,6 +17,7 @@ use bio::io::gff;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use std::path::Path;
 use std::process::Stdio;
@@ -117,7 +118,39 @@ pub fn pileup_variants<
         reference_count
     );
 
+    // Set up multi progress bars
+    let multi = MultiProgress::new();
+    let sty = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+        .progress_chars("##-");
+
+    let pb1 = multi.insert(0, ProgressBar::new(reference_map.keys().len() as u64));
+    pb1.set_style(sty.clone());
+
+    let pb2 = multi.insert(
+        1,
+        ProgressBar::new((short_sample_count + long_sample_count) as u64),
+    );
+    pb2.set_style(sty.clone());
+
+    let pb3 = multi.insert(
+        2,
+        ProgressBar::new((short_sample_count + long_sample_count) as u64),
+    );
+    pb3.set_style(sty.clone());
+
+    let _ = std::thread::spawn(move || {
+        multi.join().unwrap();
+    });
+
     reference_map.iter().for_each(|(ref_idx, reference_stem)| {
+        pb2.reset();
+        pb3.reset();
+        pb1.set_message(&format!(
+            "Working on genome: {}",
+            &genomes_and_contigs.genomes[*ref_idx],
+        ));
+        // multi.join().unwrap();
         let mut coverage_estimators = Mutex::new(coverage_estimators.clone());
 
         let mut codon_table = CodonTable::setup();
@@ -182,7 +215,7 @@ pub fn pileup_variants<
                             Path::new(&reference).file_stem().unwrap().to_str().unwrap(),
                             &reference
                         );
-                        info!("Queuing cmd_string: {}", cmd_string);
+                        debug!("Queuing cmd_string: {}", cmd_string);
                         command::finish_command_safely(
                             std::process::Command::new("bash")
                                 .arg("-c")
@@ -259,6 +292,7 @@ pub fn pileup_variants<
 
         // let mut prev_ref_idx = -1;
         // let mut per_ref_sample_idx = 0;
+
         indexed_bam_readers
             .into_par_iter()
             .enumerate()
@@ -283,7 +317,7 @@ pub fn pileup_variants<
                 } else if m.is_present("include-longread-svs")
                     && (m.is_present("longreads") | m.is_present("longread-bam-files"))
                 {
-                    info!("Running structural variant detection...");
+                    debug!("Running structural variant detection...");
                     // Get the appropriate sample index based on how many references we are using by tracking
                     // changes in references
                     process_vcf(
@@ -336,7 +370,15 @@ pub fn pileup_variants<
                         }
                     }
                 }
+                {
+                    pb2.set_message(&format!(
+                        "Variant calling on sample: {}",
+                        variant_matrix.lock().unwrap().get_sample_name(sample_idx),
+                    ));
+                    pb2.inc(1);
+                }
             });
+        pb2.finish_with_message(&format!("Initial variant calling complete..."));
 
         // // Read BAMs back in as indexed
         let mut indexed_bam_readers = recover_bams(
@@ -348,7 +390,8 @@ pub fn pileup_variants<
             n_threads as u32,
             &tmp_bam_file_cache,
         );
-        debug!("Performing guided variant calling...");
+
+        // pb3.println("Performing guided variant calling...");
         // let mut variant_matrix = variant_matrix.lock().unwrap();
         indexed_bam_readers
             .into_par_iter()
@@ -411,14 +454,22 @@ pub fn pileup_variants<
                         &concatenated_genomes,
                     )
                 }
+
+                {
+                    pb3.set_message(&format!(
+                        "Guided variant calling on sample: {}",
+                        variant_matrix.lock().unwrap().get_sample_name(sample_idx),
+                    ));
+                    pb3.inc(1);
+                }
             });
+        pb3.finish_with_message(&format!("Guided variant calling complete..."));
 
         // Collects info about variants across samples to check whether they are genuine or not
         // using FDR
         let mut variant_matrix = variant_matrix.lock().unwrap();
 
-        // TODO: Get this function working. Currently summing PHRED quality scores results in probs
-        //       above 1.0, which is impossible. Need a better method.
+        // TODO: Make sure that this is fixed. It seems to work appropriately now
         variant_matrix.remove_false_discoveries(alpha, &genomes_and_contigs.genomes[*ref_idx]);
 
         if mode == "genotype" {
@@ -490,7 +541,6 @@ pub fn pileup_variants<
                     &genomes_and_contigs,
                 );
             }
-            info!("Genotype analysis finished!");
         } else if mode == "summarize" {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
 
@@ -504,7 +554,6 @@ pub fn pileup_variants<
             );
 
             variant_matrix.print_variant_stats(window_size, &output_prefix, &genomes_and_contigs);
-            info!("Sumamrize analysis finished!");
         } else if mode == "evolve" {
             variant_matrix.calc_gene_mutation(
                 &mut gff_map,
@@ -514,7 +563,6 @@ pub fn pileup_variants<
                 &output_prefix,
                 &concatenated_genomes,
             );
-            info!("Evolve analysis finished!");
         } else if mode == "polish" {
             variant_matrix.polish_genomes(
                 &output_prefix,
@@ -537,9 +585,11 @@ pub fn pileup_variants<
                     &genomes_and_contigs,
                 );
             }
-            info!("Finished polishing input genomes!");
         }
+        pb1.inc(1);
     });
+    pb1.finish_with_message(&format!("{} mode finished", &mode));
+    // multi.join_and_clear().unwrap();
 }
 
 #[cfg(test)]

@@ -85,6 +85,9 @@ impl VariantMatrix {
 pub trait VariantMatrixFunctions {
     fn setup(&mut self);
 
+    /// returns sample name by index
+    fn get_sample_name(&self, sample_idx: usize) -> &str;
+
     /// Adds the variant information retrieved from VCF records on a per reference basis
     fn add_reference_contig(
         &mut self,
@@ -223,6 +226,17 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
+    fn get_sample_name(&self, sample_idx: usize) -> &str {
+        match self {
+            VariantMatrix::VariantContigMatrix { sample_names, .. } => {
+                match &sample_names[sample_idx][..4] {
+                    ".tmp" => &sample_names[sample_idx][15..],
+                    _ => &sample_names[sample_idx],
+                }
+            }
+        }
+    }
+
     fn add_reference_contig(
         &mut self,
         sample_name: String,
@@ -350,10 +364,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                 let alpha = LogProb::from(Prob(alpha));
                 let mut threshold = None;
                 if fdrs.is_empty() {
-                    warn!("Genome {}: FDR calculations are empty...", reference);
+                    debug!("Genome {}: FDR calculations are empty...", reference);
                     threshold = None;
                 } else if fdrs[0] > alpha {
-                    info!(
+                    debug!(
                         "Genome {}: FDR threshold for alpha of {:?} calculated as {:?}",
                         reference,
                         alpha,
@@ -366,7 +380,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     for i in (0..fdrs.len()).rev() {
                         if fdrs[i] <= alpha && (i == 0 || pep_dist[i] != pep_dist[i - 1]) {
                             let prob = prob_dist[i];
-                            info!(
+                            debug!(
                                 "Genome {}: FDR threshold for alpha of {:?} calculated as {:?}",
                                 reference, alpha, &prob
                             );
@@ -419,7 +433,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 }
                             }
                         }
-                        info!("Genome {}: {} variants passed FDR threshold, {} did not pass FDR threshold", reference, total_kept, total_removed);
+                        debug!("Genome {}: {} variants passed FDR threshold, {} did not pass FDR threshold", reference, total_kept, total_removed);
                         *all_variants = all_variants.clone();
                     }
                     None => {}
@@ -815,13 +829,13 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 .expect("reference index not found"),
                         );
                         if links.len() > 0 {
-                            info!(
+                            debug!(
                                 "Genome {}: Running Seeded fuzzyDBSCAN with {} initial clusters",
                                 reference_path.file_stem().unwrap().to_str().unwrap(),
                                 links.len(),
                             );
                         } else {
-                            warn!(
+                            debug!(
                                 "Genome {}: No initial clusters formed, running fuzzyDBSCAN with no seeds.",
                                 reference_path.file_stem().unwrap().to_str().unwrap(),
                             )
@@ -1150,14 +1164,14 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 total_reference_alleles += ref_alleles;
                             }
                             if overclustered {
-                                warn!(
+                                debug!(
                                     "Genome {}: Cluster {} contains {} multi-variant sites. It may be overclustered.",
                                     &genomes_and_contigs.genomes[*ref_index],
                                     strain_index,
                                     multivariant_sites,
                                 )
                             }
-                            info!(
+                            debug!(
                                 "Genome {}: Cluster {} contains {} variant alleles and {} reference alleles",
                                 &genomes_and_contigs.genomes[*ref_index],
                                 strain_index,
@@ -1190,7 +1204,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .for_each(|(ref_index, ref_variants)| {
                         match pred_variants.get(&ref_index) {
                             Some(genotype_map) => {
-                                info!(
+                                debug!(
                                     "Calculating genotype abundances for reference: {}",
                                     reference_map[&ref_index],
                                 );
@@ -1567,7 +1581,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     }
 
                     if snps > 1 {
-                        info!("Creating SNP density plot for {}...", &reference_stem);
+                        debug!("Creating SNP density plot for {}...", &reference_stem);
                         let plot_command = format!(
                             "set -eou pipefail; snp_density_plots.R {} {} && \
                                      mv SNP-Density*.pdf {}_snp_density_plot.pdf",
@@ -1722,7 +1736,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 .get(ref_index)
                                 .expect("reference index not found"));
 
-                        info!("{:?}", reference_path);
 
                         let mut reference = match concatenated_genomes {
                             Some(temp_file) => {
@@ -1930,7 +1943,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .par_iter()
                     .for_each(|(ref_index, ref_variants)| {
                         if ref_variants.len() > 0 {
-                            info!(
+                            debug!(
                                 "Generating variant adjacency matrix for {}",
                                 reference_map[&ref_index],
                             );

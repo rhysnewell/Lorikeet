@@ -2,6 +2,7 @@ use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use external_command_checker;
 use glob::glob;
+use indicatif::{ProgressBar, ProgressStyle};
 use rust_htslib::bam;
 use std::path::Path;
 use tempdir::TempDir;
@@ -13,6 +14,13 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 ) {
     external_command_checker::check_for_gatk();
     let mut record: bam::record::Record = bam::Record::new();
+
+    // progress bar
+    let sty = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+        .progress_chars("##-");
+    let pb1 = ProgressBar::new(bams.len() as u64);
+    pb1.set_style(sty.clone());
     for bam_generator in bams {
         let mut bam = bam_generator.start();
         bam.set_threads(n_threads / 2);
@@ -64,7 +72,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 }
             }
 
-            info!(
+            debug!(
                 "Finished mapping sample {}",
                 match &stoit_name[..4] {
                     ".tmp" => &stoit_name[15..],
@@ -92,7 +100,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             //     do nothing
             // }
 
-            info!(
+            debug!(
                 "Read groups already present for sample {}",
                 match &stoit_name[..4] {
                     "lori" => &stoit_name[16..],
@@ -110,7 +118,16 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 .expect(&format!("Unable to index bam at {}", &path));
             }
         }
+        pb1.set_message(&format!(
+            "Sample Processed: {}",
+            match &stoit_name[..4] {
+                ".tmp" => &stoit_name[15..],
+                _ => &stoit_name,
+            },
+        ));
+        pb1.inc(1);
     }
+    pb1.finish_with_message(&format!("Reads and BAM files processed..."));
 }
 
 pub fn recover_bams(
@@ -221,7 +238,7 @@ pub fn recover_bams(
         bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
             bam_paths, n_threads,
         ));
-    } else if m.is_present("longread") {
+    } else if m.is_present("longreads") {
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
