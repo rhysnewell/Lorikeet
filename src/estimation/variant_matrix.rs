@@ -11,6 +11,7 @@ use estimation::codon_structs::*;
 use estimation::contig_variants::*;
 use estimation::genotype_abundances;
 use estimation::linkage::*;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::izip;
 use itertools::Itertools;
 use model::variants::*;
@@ -584,6 +585,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             Arc::new(Mutex::new(vec![1. as f64; sample_count as usize]));
 
                         // get basic variant info and store as fuzzy::Var
+
                         ref_variants
                             .par_iter_mut()
                             .for_each(|(tid, variant_abundances)| {
@@ -1339,6 +1341,20 @@ impl VariantMatrixFunctions for VariantMatrix {
                                 );
 
                                 debug!("Calculating abundances...");
+                                // Set up multi progress bars
+                                let multi = MultiProgress::new();
+                                let sty = ProgressStyle::default_bar()
+                                    .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+                                    .progress_chars("##-");
+
+
+                                let pb1 = multi.insert(0, ProgressBar::new(genotype_vectors.len() as u64));
+                                pb1.set_style(sty.clone());
+                                pb1.set_message("Calculating genotype abundances...");
+
+                                let _ = std::thread::spawn(move || {
+                                    multi.join_and_clear().unwrap();
+                                });
                                 genotype_vectors.par_iter_mut().enumerate().for_each(
                                     |(idx, sample_genotypes)| {
                                         debug!(
@@ -1350,8 +1366,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             "Genotype Vector after EM {} {:?}",
                                             idx, sample_genotypes
                                         );
+                                        pb1.inc(1);
                                     },
                                 );
+                                pb1.finish_with_message("Done!");
 
                                 let reference_stem = &genomes_and_contigs.genomes[*ref_index];
                                 debug!("Printing strain coverages {}", &reference_stem);
@@ -1696,12 +1714,29 @@ impl VariantMatrixFunctions for VariantMatrix {
                             None => &placeholder_map,
                         };
 
+                        // Set up multi progress bars
+                        let multi = MultiProgress::new();
+                        let sty = ProgressStyle::default_bar()
+                            .template(
+                                "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
+                            )
+                            .progress_chars("##-");
+
+                        let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
+                        pb1.set_style(sty.clone());
+                        pb1.set_message("Calculating dN/dS for each ORF...");
+
+                        let _ = std::thread::spawn(move || {
+                            multi.join_and_clear().unwrap();
+                        });
+
                         gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
                             let dnds = codon_table.find_mutations(gene, variants, &ref_sequence);
                             gene.attributes_mut()
                                 .insert(format!("dNdS"), format!("{}", dnds));
                             debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
                             gff_writer.write(gene);
+                            pb1.inc(1);
                         });
                     }
                 }
