@@ -89,6 +89,9 @@ pub trait VariantMatrixFunctions {
     /// returns sample name by index
     fn get_sample_name(&self, sample_idx: usize) -> &str;
 
+    /// Returns the total amount of variant alleles
+    fn get_variant_count(&self, ref_idx: usize) -> i64;
+
     /// Adds the variant information retrieved from VCF records on a per reference basis
     fn add_reference_contig(
         &mut self,
@@ -227,6 +230,23 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
+    fn get_variant_count(&self, ref_idx: usize) -> i64 {
+        match self {
+            VariantMatrix::VariantContigMatrix { variant_counts, .. } => {
+                match variant_counts.get(&ref_idx) {
+                    Some(contigs_map) => {
+                        let mut total = 0;
+                        for (_, count) in contigs_map {
+                            total += count;
+                        }
+                        total as i64
+                    }
+                    None => 0,
+                }
+            }
+        }
+    }
+
     fn get_sample_name(&self, sample_idx: usize) -> &str {
         match self {
             VariantMatrix::VariantContigMatrix { sample_names, .. } => {
@@ -254,6 +274,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref mut all_variants,
                 ref mut target_names,
                 ref mut target_lengths,
+                ref mut variant_counts,
                 ..
             } => {
                 debug!("adding sample {} at index {}", &sample_name, &sample_idx);
@@ -284,6 +305,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                     Some(map) => map,
                     _ => placeholder,
                 };
+
+                let mut ref_var_counts = variant_counts.entry(ref_idx).or_insert(HashMap::new());
+                let mut con_var_counts = ref_var_counts.entry(tid as i32).or_insert(0);
                 // Apppend the sample index to each variant abundance
                 // Initialize the variant position index
                 // Also turns out to be the total number of variant positions
@@ -295,6 +319,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             .entry(variant.clone())
                             .or_insert(base_info.clone());
                         sample_map.combine_sample(base_info, sample_idx, 0);
+                        *con_var_counts += 1
                     }
                 }
             }
@@ -1342,19 +1367,19 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                                 debug!("Calculating abundances...");
                                 // Set up multi progress bars
-                                let multi = MultiProgress::new();
-                                let sty = ProgressStyle::default_bar()
-                                    .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
-                                    .progress_chars("##-");
-
-
-                                let pb1 = multi.insert(0, ProgressBar::new(genotype_vectors.len() as u64));
-                                pb1.set_style(sty.clone());
-                                pb1.set_message("Calculating genotype abundances...");
-
-                                let _ = std::thread::spawn(move || {
-                                    multi.join_and_clear().unwrap();
-                                });
+                                // let multi = MultiProgress::new();
+                                // let sty = ProgressStyle::default_bar()
+                                //     .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+                                //     .progress_chars("##-");
+                                //
+                                //
+                                // let pb1 = multi.insert(0, ProgressBar::new(genotype_vectors.len() as u64));
+                                // pb1.set_style(sty.clone());
+                                // pb1.set_message("Calculating genotype abundances...");
+                                //
+                                // let _ = std::thread::spawn(move || {
+                                //     multi.join_and_clear().unwrap();
+                                // });
                                 genotype_vectors.par_iter_mut().enumerate().for_each(
                                     |(idx, sample_genotypes)| {
                                         debug!(
@@ -1366,10 +1391,10 @@ impl VariantMatrixFunctions for VariantMatrix {
                                             "Genotype Vector after EM {} {:?}",
                                             idx, sample_genotypes
                                         );
-                                        pb1.inc(1);
+                                        // pb1.inc(1);
                                     },
                                 );
-                                pb1.finish_with_message("Done!");
+                                // pb1.finish_with_message("Done!");
 
                                 let reference_stem = &genomes_and_contigs.genomes[*ref_index];
                                 debug!("Printing strain coverages {}", &reference_stem);

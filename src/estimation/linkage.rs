@@ -1,5 +1,4 @@
 use dbscan::fuzzy;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use kodama::{linkage, Method};
 use model::variants::*;
@@ -276,18 +275,18 @@ pub fn linkage_clustering_of_variants(
             .combinations(2)
             .collect::<Vec<Vec<usize>>>();
         // Set up multi progress bars
-        let multi = MultiProgress::new();
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
-            .progress_chars("##-");
-
-        let pb1 = multi.insert(0, ProgressBar::new(var_combinations.len() as u64));
-        pb1.set_style(sty.clone());
-        pb1.set_message("Phasing variants...");
-
-        let _ = std::thread::spawn(move || {
-            multi.join_and_clear().unwrap();
-        });
+        // let multi = MultiProgress::new();
+        // let sty = ProgressStyle::default_bar()
+        //     .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+        //     .progress_chars("##-");
+        //
+        // let pb1 = multi.insert(0, ProgressBar::new(var_combinations.len() as u64));
+        // pb1.set_style(sty.clone());
+        // pb1.set_message("Phasing variants...");
+        //
+        // let _ = std::thread::spawn(move || {
+        //     multi.join_and_clear().unwrap();
+        // });
 
         // Loop through each permutation of 2 clusters and observe shared variants in reads
 
@@ -339,9 +338,9 @@ pub fn linkage_clustering_of_variants(
                     links_out.insert(indices[0]);
                 }
             }
-            pb1.inc(1);
+            // pb1.inc(1);
         });
-        pb1.finish_with_message("Initial variant networks formed...");
+        // pb1.finish_with_message("Initial variant networks formed...");
         // TODO: Make sure SNPs at same location don't get put together
 
         let links = links.lock().unwrap();
@@ -350,18 +349,18 @@ pub fn linkage_clustering_of_variants(
         let (condensed_links_s, condensed_links_r) = channel();
 
         // Set up multi progress bars
-        let multi = MultiProgress::new();
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
-            .progress_chars("##-");
-
-        let pb1 = multi.insert(0, ProgressBar::new(links.keys().len() as u64));
-        pb1.set_style(sty.clone());
-        pb1.set_message("Extending link networks...");
-
-        let _ = std::thread::spawn(move || {
-            multi.join_and_clear().unwrap();
-        });
+        // let multi = MultiProgress::new();
+        // let sty = ProgressStyle::default_bar()
+        //     .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+        //     .progress_chars("##-");
+        //
+        // let pb1 = multi.insert(0, ProgressBar::new(links.keys().len() as u64));
+        // pb1.set_style(sty.clone());
+        // pb1.set_message("Extending link networks...");
+        //
+        // let _ = std::thread::spawn(move || {
+        //     multi.join_and_clear().unwrap();
+        // });
 
         // extend the links for each anchor point by the union of all the indices
         links
@@ -403,9 +402,9 @@ pub fn linkage_clustering_of_variants(
                 if anchors.len() > anchor_size {
                     s.send(anchors).unwrap();
                 }
-                pb1.inc(1);
+                // pb1.inc(1);
             });
-        pb1.finish_with_message("Read networks established...");
+        // pb1.finish_with_message("Read networks established...");
 
         // Collect receiver into vec and sort by length
         let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
