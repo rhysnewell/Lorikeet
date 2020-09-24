@@ -118,6 +118,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 .expect(&format!("Unable to index bam at {}", &path));
             }
         }
+        pb1.inc(1);
         pb1.set_message(&format!(
             "Sample Processed: {}",
             match &stoit_name[..4] {
@@ -125,7 +126,6 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 _ => &stoit_name,
             },
         ));
-        pb1.inc(1);
     }
     pb1.finish_with_message(&format!("Reads and BAM files processed..."));
 }

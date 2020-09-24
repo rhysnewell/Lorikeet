@@ -206,7 +206,7 @@ pub fn pileup_variants<
                     for reference in references.iter() {
                         let cmd_string = format!(
                             "set -e -o pipefail; \
-                     prodigal -o {}/{}.gff -i {} -f gff",
+                     prodigal -o {}/{}.gff -i {} -f gff -p meta",
                             // prodigal
                             gff_dir
                                 .path()
@@ -589,6 +589,7 @@ pub fn pileup_variants<
         pb1.inc(1);
     });
     pb1.finish_with_message(&format!("{} mode finished", &mode));
+    info!("Analysis finished!");
     // multi.join_and_clear().unwrap();
 }
 

@@ -1,3 +1,4 @@
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use model::variants::*;
 use rayon::prelude::*;
@@ -265,6 +266,20 @@ impl FuzzyDBSCAN {
         for initial in initial_clusters.iter() {
             // Work out which point in our initial clusters has the highest density to other
             // points
+            // Set up multi progress bars
+            let multi = MultiProgress::new();
+            let sty = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
+                .progress_chars("##-");
+
+            let pb1 = multi.insert(0, ProgressBar::new(initial.len() as u64));
+            pb1.set_style(sty.clone());
+
+            let _ = std::thread::spawn(move || {
+                multi.join_and_clear().unwrap();
+            });
+            pb1.set_message("Running fuzzy DBSCAN on read networks...");
+
             let mut point_label_max = 0.;
             let mut point_index = 0;
             let mut point_neighbours = HashSet::new();
@@ -283,7 +298,9 @@ impl FuzzyDBSCAN {
                     point_index = core_point.index;
                     point_neighbours = neighbour_indices;
                 }
+                pb1.inc(1);
             }
+            pb1.finish_with_message("Done!");
             // Extend neighbour indices with known connections
             let mut initial = initial
                 .par_iter()
@@ -308,6 +325,18 @@ impl FuzzyDBSCAN {
                 .par_iter()
                 .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
         {
+            let multi = MultiProgress::new();
+            let sty = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
+                .progress_chars("##-");
+
+            let pb1 = multi.insert(0, ProgressBar::new(points.len() as u64));
+            pb1.set_style(sty.clone());
+
+            let _ = std::thread::spawn(move || {
+                multi.join_and_clear().unwrap();
+            });
+            pb1.set_message("Clustering unvisited points...");
             for point_index in 0..points.len() {
                 if visited[point_index] {
                     continue;
@@ -331,7 +360,9 @@ impl FuzzyDBSCAN {
                         &mut visited,
                     ));
                 }
+                pb1.inc(1);
             }
+            pb1.finish_with_message("All points visited...");
         }
         if !noise_cluster.is_empty() {
             debug!(

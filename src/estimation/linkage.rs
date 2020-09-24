@@ -1,4 +1,5 @@
 use dbscan::fuzzy;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use kodama::{linkage, Method};
 use model::variants::*;
@@ -270,67 +271,97 @@ pub fn linkage_clustering_of_variants(
     if variant_info.len() > 1 {
         // Initiate the hashmap linking each variant to the variants it shares reads with
         let links = Mutex::new(HashMap::new());
-        // Loop through each permutation of 2 clusters and observe shared variants in reads
-        (0..variant_info.len())
+        let var_combinations = (0..variant_info.len())
             .into_iter()
             .combinations(2)
-            .collect::<Vec<Vec<usize>>>()
-            .into_par_iter()
-            .for_each(|indices| {
-                // Get variants by index
-                let var1 = &variant_info[indices[0]];
-                let var2 = &variant_info[indices[1]];
+            .collect::<Vec<Vec<usize>>>();
+        // Set up multi progress bars
+        let multi = MultiProgress::new();
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-");
 
-                // Skipping over reference variants
-                if !(var1.tid == var2.tid && var1.pos == var2.pos)
-                    && !(var1.var == Variant::None || var2.var == Variant::None)
-                {
-                    // Read ids of first variant
-                    let set1 = &var1.reads;
+        let pb1 = multi.insert(0, ProgressBar::new(var_combinations.len() as u64));
+        pb1.set_style(sty.clone());
+        pb1.set_message("Phasing variants...");
 
-                    // Read ids of second variant
-                    let set2 = &var2.reads;
-                    // debug!("set 1 {:?}", &set1);
-                    // debug!("set 2 {:?}", &set2);
+        let _ = std::thread::spawn(move || {
+            multi.join_and_clear().unwrap();
+        });
 
-                    // Add the jaccard's similarity to the hashmap for the two clusters
-                    let intersection: HashSet<_> = set1.intersection(&set2).collect();
+        // Loop through each permutation of 2 clusters and observe shared variants in reads
 
-                    let union: HashSet<_> = set1.union(&set2).collect();
+        var_combinations.into_par_iter().for_each(|indices| {
+            // Get variants by index
+            let var1 = &variant_info[indices[0]];
+            let var2 = &variant_info[indices[1]];
 
-                    // Scaled Jaccard Similarity Based on Minimum Set size
-                    //            let jaccard = intersection.len() as f64 /
-                    //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
-                    //             Normal Jaccard's Similarity
-                    if intersection.len() >= minimum_reads_in_link {
-                        // get relative frequencies of each Haplotype
-                        let pool_size = union.len() as f64;
-                        let x_11 = intersection.len() as f64 / pool_size;
-                        let p1 = set1.len() as f64 / pool_size;
-                        let q1 = set2.len() as f64 / pool_size;
+            // Skipping over reference variants
+            if !(var1.tid == var2.tid && var1.pos == var2.pos)
+                && !(var1.var == Variant::None || var2.var == Variant::None)
+            {
+                // Read ids of first variant
+                let set1 = &var1.reads;
 
-                        // Calculate Linkage D
-                        let dis = x_11 - p1 * q1;
+                // Read ids of second variant
+                let set2 = &var2.reads;
+                // debug!("set 1 {:?}", &set1);
+                // debug!("set 2 {:?}", &set2);
 
-                        let mut links = links.lock().unwrap();
-                        // Intialize links for each indices including itself
-                        let links_out = links
-                            .entry(indices[0])
-                            .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
-                        links_out.insert(indices[1]);
-                        let links_out = links
-                            .entry(indices[1])
-                            .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
-                        links_out.insert(indices[0]);
-                    }
+                // Add the jaccard's similarity to the hashmap for the two clusters
+                let intersection: HashSet<_> = set1.intersection(&set2).collect();
+
+                let union: HashSet<_> = set1.union(&set2).collect();
+
+                // Scaled Jaccard Similarity Based on Minimum Set size
+                //            let jaccard = intersection.len() as f64 /
+                //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
+                //             Normal Jaccard's Similarity
+                if intersection.len() >= minimum_reads_in_link {
+                    // get relative frequencies of each Haplotype
+                    let pool_size = union.len() as f64;
+                    let x_11 = intersection.len() as f64 / pool_size;
+                    let p1 = set1.len() as f64 / pool_size;
+                    let q1 = set2.len() as f64 / pool_size;
+
+                    // Calculate Linkage D
+                    let dis = x_11 - p1 * q1;
+
+                    let mut links = links.lock().unwrap();
+                    // Intialize links for each indices including itself
+                    let links_out = links
+                        .entry(indices[0])
+                        .or_insert([indices[0]].iter().cloned().collect::<BTreeSet<usize>>());
+                    links_out.insert(indices[1]);
+                    let links_out = links
+                        .entry(indices[1])
+                        .or_insert([indices[1]].iter().cloned().collect::<BTreeSet<usize>>());
+                    links_out.insert(indices[0]);
                 }
-            });
+            }
+            pb1.inc(1);
+        });
+        pb1.finish_with_message("Initial variant networks formed...");
         // TODO: Make sure SNPs at same location don't get put together
 
         let links = links.lock().unwrap();
 
         // Create condensed links sender and receiver, avoiding use of mutex
         let (condensed_links_s, condensed_links_r) = channel();
+
+        // Set up multi progress bars
+        let multi = MultiProgress::new();
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-");
+
+        let pb1 = multi.insert(0, ProgressBar::new(links.keys().len() as u64));
+        pb1.set_style(sty.clone());
+        pb1.set_message("Extending link networks...");
+
+        let _ = std::thread::spawn(move || {
+            multi.join_and_clear().unwrap();
+        });
 
         // extend the links for each anchor point by the union of all the indices
         links
@@ -372,7 +403,9 @@ pub fn linkage_clustering_of_variants(
                 if anchors.len() > anchor_size {
                     s.send(anchors).unwrap();
                 }
+                pb1.inc(1);
             });
+        pb1.finish_with_message("Read networks established...");
 
         // Collect receiver into vec and sort by length
         let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
@@ -385,6 +418,15 @@ pub fn linkage_clustering_of_variants(
             let jaccard = intersection.len() as f64 / union.len() as f64;
             jaccard > anchor_similarity
         });
+
+        if condensed_links.len() > 5 {
+            debug!(
+                "Found more than 5 dereplicated clusters: {}  Taking the best 5...",
+                condensed_links.len()
+            );
+            condensed_links =
+                condensed_links[condensed_links.len() - 5..condensed_links.len()].to_vec();
+        }
 
         debug!("post filtering condensed links {:?}", &condensed_links);
         let (initial_clusters_s, initial_clusters_r) = channel();
@@ -406,7 +448,7 @@ pub fn linkage_clustering_of_variants(
         let mut initial_clusters: Vec<_> = initial_clusters_r.iter().collect();
 
         if initial_clusters.len() > 5 {
-            info!(
+            debug!(
                 "Found more than 5 initial clusters: {}  Taking the best 5...",
                 initial_clusters.len()
             );
