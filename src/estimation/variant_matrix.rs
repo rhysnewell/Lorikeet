@@ -818,7 +818,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                 target_lengths,
                 ..
             } => {
-                let prediction_variants_all = Mutex::new(HashMap::new());
+                let prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
 
                 let all_variants_genotyped = Arc::new(Mutex::new(all_variants.clone()));
                 // For each reference genome we will perform the DBSCAN clustering
@@ -876,15 +876,16 @@ impl VariantMatrixFunctions for VariantMatrix {
                         // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
                         // keep hashmaps updated using channel()
                         let prediction_variants =
+                        Arc::new(
                             Mutex::new(
-                                HashMap::new());
+                                HashMap::new()));
 
                         // Organize clusters into genotypes by recollecting full variant information
                         clusters.par_iter().enumerate().for_each(|(rank, cluster)| {
                             // Sets for each cluster keeping track of which variant types are present in
                             // a cluster
-                            let prediction_set = Mutex::new(
-                                HashSet::new());
+                            let prediction_set = Arc::new(Mutex::new(
+                                HashSet::new()));
                             cluster.par_iter().for_each(|assignment| {
                                 let variant: &fuzzy::Var = &variant_info_vec[assignment.index];
 
@@ -1523,7 +1524,8 @@ impl VariantMatrixFunctions for VariantMatrix {
                                         // Set up channels that receive a vector of values
                                         // for each sample
                                         let mut snps_cnt_vec = vec![0; sample_names.len()];
-                                        let svs_cnt_vec = Mutex::new(vec![0; sample_names.len()]);
+                                        let svs_cnt_vec =
+                                            Arc::new(Mutex::new(vec![0; sample_names.len()]));
 
                                         let window = contig_len / window_size;
                                         variants_in_contig.iter().enumerate()
@@ -1999,9 +2001,12 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                             // The initialization of adjacency matrix n*n n=samples
                             let adjacency_matrix =
-                                Mutex::new(vec![vec![0; number_of_samples]; number_of_samples]);
+                                Arc::new(Mutex::new(vec![
+                                    vec![0; number_of_samples];
+                                    number_of_samples
+                                ]));
 
-                            let sample_totals = Mutex::new(vec![0; number_of_samples]);
+                            let sample_totals = Arc::new(Mutex::new(vec![0; number_of_samples]));
 
                             debug!("Collecting variants...");
 

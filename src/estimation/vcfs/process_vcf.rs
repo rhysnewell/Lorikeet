@@ -84,7 +84,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
-        .par_iter()
+        .iter()
         .enumerate()
         .for_each(|(tid, target_name)| {
             // let target_name = String::from_utf8(target.to_vec()).unwrap();
@@ -100,13 +100,13 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
                 {
-                    let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
-                        vec![&bam_path],
-                        split_threads as u32,
-                    )
-                    .into_iter()
-                    .next()
-                    .unwrap();
+                    // let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
+                    //     vec![&bam_path],
+                    //     split_threads as u32,
+                    // )
+                    // .into_iter()
+                    // .next()
+                    // .unwrap();
                     // let mut bam_generated = bam_generated.lock().unwrap();
                     // bam_generated.set_threads(std::cmp::max(split_threads as i32 - 1, 1) as usize);
                     bam_generated.fetch(tid as u32, 0, target_len);
