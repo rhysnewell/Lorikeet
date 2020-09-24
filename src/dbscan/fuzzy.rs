@@ -425,6 +425,20 @@ impl FuzzyDBSCAN {
         }];
         let mut border_points = Vec::new();
         let mut neighbour_visited = vec![false; points.len()];
+        let multi = MultiProgress::new();
+        let pb4 = multi.insert(0, ProgressBar::new_spinner());
+        pb4.set_style(
+            ProgressStyle::default_spinner()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+                .template("{prefix:.bold.dim} {spinner} {wide_msg}"),
+        );
+
+        let _ = std::thread::spawn(move || {
+            multi.join_and_clear().unwrap();
+        });
+
+        pb4.set_message(&format!("Expanding cluster...",));
+
         while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
@@ -449,7 +463,9 @@ impl FuzzyDBSCAN {
                     label: f64::MAX,
                 });
             }
+            pb4.inc(1);
         }
+        pb4.finish();
         border_points.par_iter_mut().for_each(|border_point| {
             for cluster_point in &cluster {
                 let mu_distance =

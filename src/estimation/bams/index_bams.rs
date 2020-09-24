@@ -28,6 +28,14 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let path = bam.path().to_string();
         let stoit_name = bam.name().to_string().replace("/", ".");
 
+        pb1.set_message(&format!(
+            "Processing sample: {}",
+            match &stoit_name[..4] {
+                ".tmp" => &stoit_name[15..],
+                _ => &stoit_name,
+            },
+        ));
+
         let header = bam.header();
         let mut tmp_header = bam::header::Header::from_template(&header);
 
@@ -119,13 +127,6 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             }
         }
         pb1.inc(1);
-        pb1.set_message(&format!(
-            "Sample Processed: {}",
-            match &stoit_name[..4] {
-                ".tmp" => &stoit_name[15..],
-                _ => &stoit_name,
-            },
-        ));
     }
     pb1.finish_with_message(&format!("Reads and BAM files processed..."));
 }

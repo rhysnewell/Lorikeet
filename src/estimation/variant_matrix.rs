@@ -938,17 +938,6 @@ impl VariantMatrixFunctions for VariantMatrix {
                                     None => {},
                                 };
                             });
-                            let mut prediction_set = prediction_set.lock().unwrap();
-                            // if prediction_set.len() == 1 && prediction_set.contains(&Variant::None) {
-                            //
-                            //     debug!("Removing cluster {}", rank + 1);
-                            //     let mut prediction_variants = prediction_variants
-                            //         .lock()
-                            //         .unwrap();
-                            //
-                            //     prediction_variants
-                            //         .remove_entry(&(rank + 1)).expect("Unable to remove cluster");
-                            // }
                         });
                         let prediction_variants = prediction_variants.lock().unwrap().clone();
                         let mut prediction_variants_all = prediction_variants_all.lock().unwrap();

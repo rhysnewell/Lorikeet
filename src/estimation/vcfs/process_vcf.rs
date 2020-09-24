@@ -80,7 +80,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         .unwrap();
 
     let mut total_records = Mutex::new(0);
-    let bam_generated = Mutex::new(bam_generated);
+    // let bam_generated = Mutex::new(bam_generated);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
@@ -100,7 +100,14 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
                 {
-                    let mut bam_generated = bam_generated.lock().unwrap();
+                    let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
+                        vec![&bam_path],
+                        split_threads as u32,
+                    )
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                    // let mut bam_generated = bam_generated.lock().unwrap();
                     // bam_generated.set_threads(std::cmp::max(split_threads as i32 - 1, 1) as usize);
                     bam_generated.fetch(tid as u32, 0, target_len);
                     match bam_generated.pileup() {
@@ -343,29 +350,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                         );
                     }
                 }
-                // Collect the variants into the matrix
-                // let mut variant_matrix = variant_matrix.lock().unwrap();
-                // variant_matrix.add_reference_contig(
-                //     stoit_name.to_string(),
-                //     sample_idx,
-                //     &mut variant_map,
-                //     tid,
-                //     target_name.as_bytes().to_vec(),
-                //     ref_idx,
-                //     target_len,
-                // );
-                // let mut total_records = total_records.lock().unwrap();
-                // info!(
-                //     "Reference {}: Collected {} variant positions for sample {}",
-                //     reference,
-                //     total_records, // remove tmp file name from sample id
-                //     match &stoit_name[..4] {
-                //         ".tmp" => &stoit_name[15..],
-                //         _ => &stoit_name,
-                //     },
-                // );
             }
-
         });
 }
 

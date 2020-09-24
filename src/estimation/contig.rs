@@ -155,6 +155,7 @@ pub fn pileup_variants<
     reference_map.iter().for_each(|(ref_idx, reference_stem)| {
         pb2.reset();
         pb3.reset();
+        pb3.set_message("Waiting for variant matrix...");
         pb4.reset();
         pb1.set_message(&format!(
             "Working on genome: {}",
@@ -628,7 +629,7 @@ pub fn pileup_variants<
             }
         }
         pb1.inc(1);
-        pb4.finish_with_message("All steps completed!");
+        pb4.finish_with_message(&format!("{}: All steps completed!", &reference));
     });
     pb1.finish_with_message(&format!("{} mode finished", &mode));
     info!("Analysis finished!");
