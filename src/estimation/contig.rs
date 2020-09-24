@@ -79,10 +79,12 @@ pub fn pileup_variants<
     let alpha: f64 = m.value_of("fdr-threshold").unwrap().parse().unwrap();
 
     // Finish each BAM source
-    // if m.is_present("longreads") {
-    finish_bams(longreads, n_threads);
-    // }
+    if m.is_present("longreads") || m.is_present("longread-bam-files") {
+        info!("Processing long reads...");
+        finish_bams(longreads, n_threads);
+    }
     // if !m.is_present("bam-files") {
+    info!("Processing short reads...");
     finish_bams(bam_readers, n_threads);
     // }
 
@@ -139,6 +141,13 @@ pub fn pileup_variants<
     );
     pb3.set_style(sty.clone());
 
+    let pb4 = multi.insert(3, ProgressBar::new_spinner());
+    pb4.set_style(
+        ProgressStyle::default_spinner()
+            .tick_chars("|/-\\|/-\\| ")
+            .template("{prefix:.bold.dim} {spinner} {wide_msg}"),
+    );
+
     let _ = std::thread::spawn(move || {
         multi.join().unwrap();
     });
@@ -146,10 +155,14 @@ pub fn pileup_variants<
     reference_map.iter().for_each(|(ref_idx, reference_stem)| {
         pb2.reset();
         pb3.reset();
+        pb4.reset();
         pb1.set_message(&format!(
             "Working on genome: {}",
             &genomes_and_contigs.genomes[*ref_idx],
         ));
+        let reference = &genomes_and_contigs.genomes[*ref_idx];
+        pb4.set_message(&format!("{}: Preparing variants...", &reference,));
+        pb4.inc(1);
         // multi.join().unwrap();
         let mut coverage_estimators = Mutex::new(coverage_estimators.clone());
 
@@ -376,6 +389,7 @@ pub fn pileup_variants<
                         variant_matrix.lock().unwrap().get_sample_name(sample_idx),
                     ));
                     pb2.inc(1);
+                    pb4.inc(1);
                 }
             });
         pb2.finish_with_message(&format!("Initial variant calling complete..."));
@@ -393,76 +407,78 @@ pub fn pileup_variants<
 
         // pb3.println("Performing guided variant calling...");
         // let mut variant_matrix = variant_matrix.lock().unwrap();
-        indexed_bam_readers
-            .into_par_iter()
-            .enumerate()
-            .for_each(|(sample_idx, bam_generator)| {
-                if sample_idx < short_sample_count {
-                    process_bam(
-                        bam_generator,
-                        sample_idx,
-                        per_reference_samples,
-                        &coverage_estimators,
-                        &variant_matrix,
-                        n_threads,
-                        m,
-                        output_prefix,
-                        coverage_fold,
-                        &codon_table,
-                        min_var_depth,
-                        contig_end_exclusion,
-                        min,
-                        max,
-                        *ref_idx,
-                        mode,
-                        include_soft_clipping,
-                        include_indels,
-                        &flag_filters,
-                        mapq_threshold,
-                        method,
-                        false,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        &concatenated_genomes,
-                    )
-                } else {
-                    process_bam(
-                        bam_generator,
-                        sample_idx,
-                        per_reference_samples,
-                        &coverage_estimators,
-                        &variant_matrix,
-                        n_threads,
-                        m,
-                        output_prefix,
-                        coverage_fold,
-                        &codon_table,
-                        min_var_depth,
-                        contig_end_exclusion,
-                        min,
-                        max,
-                        *ref_idx,
-                        mode,
-                        include_soft_clipping,
-                        include_indels,
-                        &flag_filters,
-                        mapq_threshold,
-                        method,
-                        true,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        &concatenated_genomes,
-                    )
-                }
+        if variant_matrix.lock().unwrap().get_variant_count(*ref_idx) > 0 {
+            indexed_bam_readers.into_par_iter().enumerate().for_each(
+                |(sample_idx, bam_generator)| {
+                    if sample_idx < short_sample_count {
+                        process_bam(
+                            bam_generator,
+                            sample_idx,
+                            per_reference_samples,
+                            &coverage_estimators,
+                            &variant_matrix,
+                            n_threads,
+                            m,
+                            output_prefix,
+                            coverage_fold,
+                            &codon_table,
+                            min_var_depth,
+                            contig_end_exclusion,
+                            min,
+                            max,
+                            *ref_idx,
+                            mode,
+                            include_soft_clipping,
+                            include_indels,
+                            &flag_filters,
+                            mapq_threshold,
+                            method,
+                            false,
+                            &genomes_and_contigs,
+                            &reference_map,
+                            &concatenated_genomes,
+                        )
+                    } else {
+                        process_bam(
+                            bam_generator,
+                            sample_idx,
+                            per_reference_samples,
+                            &coverage_estimators,
+                            &variant_matrix,
+                            n_threads,
+                            m,
+                            output_prefix,
+                            coverage_fold,
+                            &codon_table,
+                            min_var_depth,
+                            contig_end_exclusion,
+                            min,
+                            max,
+                            *ref_idx,
+                            mode,
+                            include_soft_clipping,
+                            include_indels,
+                            &flag_filters,
+                            mapq_threshold,
+                            method,
+                            true,
+                            &genomes_and_contigs,
+                            &reference_map,
+                            &concatenated_genomes,
+                        )
+                    }
 
-                {
-                    pb3.set_message(&format!(
-                        "Guided variant calling on sample: {}",
-                        variant_matrix.lock().unwrap().get_sample_name(sample_idx),
-                    ));
-                    pb3.inc(1);
-                }
-            });
+                    {
+                        pb3.set_message(&format!(
+                            "Guided variant calling on sample: {}",
+                            variant_matrix.lock().unwrap().get_sample_name(sample_idx),
+                        ));
+                        pb3.inc(1);
+                        pb4.inc(1);
+                    }
+                },
+            );
+        }
         pb3.finish_with_message(&format!("Guided variant calling complete..."));
 
         // Collects info about variants across samples to check whether they are genuine or not
@@ -470,6 +486,7 @@ pub fn pileup_variants<
         let mut variant_matrix = variant_matrix.lock().unwrap();
 
         // TODO: Make sure that this is fixed. It seems to work appropriately now
+        pb4.set_message("Setting FDR threshold...");
         variant_matrix.remove_false_discoveries(alpha, &genomes_and_contigs.genomes[*ref_idx]);
 
         if mode == "genotype" {
@@ -491,10 +508,14 @@ pub fn pileup_variants<
                 .unwrap();
 
             // Calculate the geometric mean values and CLR for each variant, reference specific
+            pb4.set_message(&format!("{}: Generating variant distances...", &reference,));
+            pb4.inc(1);
             variant_matrix.generate_distances();
 
             // Generate initial read linked clusters
             // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
+            pb4.set_message(&format!("{}: Running seeded fuzzy DBSCAN...", &reference,));
+            pb4.inc(1);
             variant_matrix.run_fuzzy_scan(
                 e_min,
                 e_max,
@@ -508,6 +529,8 @@ pub fn pileup_variants<
             );
 
             // Write genotypes to disk, reference specific
+            pb4.set_message(&format!("{}: Generating genotypes...", &reference,));
+            pb4.inc(1);
             variant_matrix.generate_genotypes(
                 &output_prefix,
                 &reference_map,
@@ -516,9 +539,16 @@ pub fn pileup_variants<
             );
 
             // Write variants in VCF format, reference specific
+            pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+            pb4.inc(1);
             variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
             // Get strain abundances
+            pb4.set_message(&format!(
+                "{}: Calculating genotype abundances...",
+                &reference,
+            ));
+            pb4.inc(1);
             variant_matrix.calculate_strain_abundances(
                 &output_prefix,
                 &reference_map,
@@ -526,6 +556,8 @@ pub fn pileup_variants<
             );
 
             // Get sample distances
+            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -543,10 +575,13 @@ pub fn pileup_variants<
             }
         } else if mode == "summarize" {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-
+            pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+            pb4.inc(1);
             variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
             // Get sample distances
+            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -555,6 +590,8 @@ pub fn pileup_variants<
 
             variant_matrix.print_variant_stats(window_size, &output_prefix, &genomes_and_contigs);
         } else if mode == "evolve" {
+            pb4.set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+            pb4.inc(1);
             variant_matrix.calc_gene_mutation(
                 &mut gff_map,
                 &genomes_and_contigs,
@@ -564,6 +601,8 @@ pub fn pileup_variants<
                 &concatenated_genomes,
             );
         } else if mode == "polish" {
+            pb4.set_message(&format!("{}: Generating consensus genomes...", &reference,));
+            pb4.inc(1);
             variant_matrix.polish_genomes(
                 &output_prefix,
                 &reference_map,
@@ -571,6 +610,8 @@ pub fn pileup_variants<
                 &concatenated_genomes,
             );
             // Get sample distances
+            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -587,6 +628,7 @@ pub fn pileup_variants<
             }
         }
         pb1.inc(1);
+        pb4.finish_with_message("All steps completed!");
     });
     pb1.finish_with_message(&format!("{} mode finished", &mode));
     info!("Analysis finished!");
