@@ -1,5 +1,6 @@
 use dbscan::fuzzy;
 use dbscan::fuzzy::Cluster;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use model::variants::*;
 use rayon::prelude::*;
@@ -38,6 +39,21 @@ pub fn linkage_clustering_of_variants(
     if variant_info.len() > 1 {
         // Initiate the hashmap linking each variant to the variants it shares reads with
         let links = Mutex::new(HashMap::new());
+
+        // Set up multi progress bars
+        let multi = MultiProgress::new();
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-");
+
+        let pb1 = multi.insert(0, ProgressBar::new(clusters.len() as u64));
+        pb1.set_style(sty.clone());
+
+        pb1.set_message("Phasing variants within clusters...");
+
+        let _ = std::thread::spawn(move || {
+            multi.join().unwrap();
+        });
 
         clusters.into_par_iter().for_each(|cluster| {
             let indices = cluster
@@ -116,13 +132,28 @@ pub fn linkage_clustering_of_variants(
                         }
                     });
             });
+            pb1.inc(1);
         });
-        // pb1.finish_with_message("Initial variant networks formed...");
+        pb1.finish_with_message("Initial variant networks formed...");
 
         let links = links.lock().unwrap();
 
         // Create condensed links sender and receiver, avoiding use of mutex
         let (condensed_links_s, condensed_links_r) = channel();
+        // Set up multi progress bars
+        let multi = MultiProgress::new();
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-");
+
+        let pb1 = multi.insert(0, ProgressBar::new(links.len() as u64));
+        pb1.set_style(sty.clone());
+
+        pb1.set_message("Extending clusters based on read links...");
+
+        let _ = std::thread::spawn(move || {
+            multi.join().unwrap();
+        });
 
         // extend the links for each anchor point by the union of all the indices
         links
@@ -163,9 +194,9 @@ pub fn linkage_clustering_of_variants(
                 // if anchors.len() > anchor_size {
                 s.send(anchors).unwrap();
                 // }
-                // pb1.inc(1);
+                pb1.inc(1);
             });
-        // pb1.finish_with_message("Read networks established...");
+        pb1.set_message("Read networks established...");
 
         // Collect receiver into vec and sort by length
         let mut condensed_links: Vec<_> = condensed_links_r.iter().collect();
@@ -178,6 +209,8 @@ pub fn linkage_clustering_of_variants(
             let jaccard = intersection.len() as f64 / union.len() as f64;
             jaccard > anchor_similarity
         });
+
+        pb1.set_message(&format!("{} distinct clusters...", condensed_links.len()));
 
         debug!("post filtering condensed links {:?}", &condensed_links);
 
@@ -198,6 +231,7 @@ pub fn linkage_clustering_of_variants(
                 .unwrap()
             });
         let mut initial_clusters: Vec<fuzzy::Cluster> = initial_clusters_r.iter().collect();
+        pb1.finish_with_message("Done!");
 
         return initial_clusters;
     } else {
