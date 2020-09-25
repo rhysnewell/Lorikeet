@@ -1,7 +1,5 @@
 use dbscan::fuzzy;
-use dbscan::fuzzy::Cluster;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use itertools::Itertools;
 use model::variants::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -261,6 +259,7 @@ pub fn get_variant_set(
 }
 
 /// helper function to get the index of condensed matrix from it square form
+#[allow(unused)]
 fn get_condensed_index(i: usize, j: usize, n: usize) -> Option<usize> {
     if i == j {
         return None;
