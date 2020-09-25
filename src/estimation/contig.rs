@@ -145,7 +145,7 @@ pub fn pileup_variants<
     pb4.set_style(
         ProgressStyle::default_spinner()
             .tick_chars("|/-\\|/-\\| ")
-            .template("{prefix:.bold.dim} {spinner} {wide_msg}"),
+            .template("[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}"),
     );
 
     let _ = std::thread::spawn(move || {

@@ -284,6 +284,7 @@ impl FuzzyDBSCAN {
 
             for core_point in initial.iter() {
                 if visited[core_point.index] {
+                    pb1.inc(1);
                     continue;
                 }
                 visited[core_point.index] = true;
@@ -337,6 +338,7 @@ impl FuzzyDBSCAN {
             pb1.set_message("Clustering unvisited points...");
             for point_index in 0..points.len() {
                 if visited[point_index] {
+                    pb1.inc(1);
                     continue;
                 }
                 visited[point_index] = true;
@@ -428,7 +430,7 @@ impl FuzzyDBSCAN {
         pb4.set_style(
             ProgressStyle::default_spinner()
                 .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-                .template("{prefix:.bold.dim} {spinner} {wide_msg}"),
+                .template("[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}"),
         );
 
         let _ = std::thread::spawn(move || {
