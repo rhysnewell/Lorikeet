@@ -6,6 +6,7 @@ use bio::stats::{
 use bird_tool_utils::command;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use dbscan::fuzzy;
+use dbscan::fuzzy::Cluster;
 use estimation::codon_structs::CodonTable;
 use estimation::codon_structs::*;
 use estimation::contig_variants::*;
@@ -841,13 +842,7 @@ impl VariantMatrixFunctions for VariantMatrix {
                             geom_frq: geom_mean_frq[ref_idx].to_owned(),
                         };
 
-                        // Perform read phasing clustering and return initial clusters
-                        // let links = linkage_clustering_of_variants(
-                        //     &variant_info_vec,
-                        //     anchor_size,
-                        //     anchor_similarity,
-                        //     minimum_reads_in_link,
-                        // );
+
                         let links = Vec::new();
                         // run fuzzy DBSCAN
                         let reference_path = Path::new(
@@ -871,6 +866,15 @@ impl VariantMatrixFunctions for VariantMatrix {
                             &variant_info_vec[..],
                             links,
                             reference_path.file_stem().unwrap().to_str().unwrap(),
+                        );
+
+                        // Perform read phasing clustering and return expanded clusters
+                        let clusters: Vec<Vec<fuzzy::Assignment>> = linkage_clustering_of_variants(
+                            clusters,
+                            &variant_info_vec,
+                            anchor_size,
+                            anchor_similarity,
+                            minimum_reads_in_link,
                         );
 
                         // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
