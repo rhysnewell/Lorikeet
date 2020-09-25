@@ -271,7 +271,7 @@ impl FuzzyDBSCAN {
         let _ = std::thread::spawn(move || {
             multi.join_and_clear().unwrap();
         });
-        pb1.set_message("Running fuzzy DBSCAN on read networks...");
+        pb1.set_message("Running fuzzy DBSCAN...");
 
         for initial in initial_clusters.iter() {
             // Work out which point in our initial clusters has the highest density to other
