@@ -52,7 +52,7 @@ pub fn linkage_clustering_of_variants(
         pb1.set_message("Phasing variants within clusters...");
 
         let _ = std::thread::spawn(move || {
-            multi.join().unwrap();
+            multi.join_and_clear().unwrap();
         });
 
         clusters.into_par_iter().for_each(|cluster| {
@@ -64,14 +64,6 @@ pub fn linkage_clustering_of_variants(
             // Loop through each variant in cluster and expand based on shared read content
 
             cluster.into_par_iter().for_each(|assigned_variant| {
-                {
-                    // preserve DBSCAN clusters
-                    let mut links = links.lock().unwrap();
-                    // Intialize links for each indices including itself
-                    links
-                        .entry(assigned_variant.index)
-                        .or_insert(indices.clone());
-                }
                 // Get variants by index
                 let var1 = &variant_info[assigned_variant.index];
 
@@ -119,12 +111,9 @@ pub fn linkage_clustering_of_variants(
 
                                     let mut links = links.lock().unwrap();
                                     // Intialize links for each indices including itself
-                                    let links_out = links.entry(assigned_variant.index).or_insert(
-                                        [assigned_variant.index]
-                                            .iter()
-                                            .cloned()
-                                            .collect::<BTreeSet<usize>>(),
-                                    );
+                                    let links_out = links
+                                        .entry(assigned_variant.index)
+                                        .or_insert(indices.clone());
                                     links_out.insert(index);
                                 }
                             }
@@ -152,7 +141,7 @@ pub fn linkage_clustering_of_variants(
         pb1.set_message("Extending clusters based on read links...");
 
         let _ = std::thread::spawn(move || {
-            multi.join().unwrap();
+            multi.join_and_clear().unwrap();
         });
 
         // extend the links for each anchor point by the union of all the indices
