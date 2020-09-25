@@ -536,6 +536,10 @@ pub fn collect_variants(
         alt_allele == b"<INV>" || (ref_allele.len() == alt_allele.len())
     };
 
+    let is_valid_mnv = |ref_allele: &[u8], alt_allele: &[u8]| {
+        alt_allele == b"<MNV>" || (ref_allele.len() == alt_allele.len())
+    };
+
     let variants = if let Some(svtype) = svtype {
         vec![if omit_indels {
             Variant::None
@@ -659,7 +663,10 @@ pub fn collect_variants(
                         (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
                     // TODO fix position if variant is like this: cttt -> ct
 
-                    if omit_indels || !is_valid_len(indel_len) {
+                    if (omit_indels || !is_valid_len(indel_len))
+                        && is_valid_mnv(ref_allele, alt_allele)
+                    {
+                        // println!("MNV 1 {:?} {:?}", ref_allele, alt_allele);
                         variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                     } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
                         variant_vec.push(Variant::Deletion(
@@ -669,7 +676,8 @@ pub fn collect_variants(
                         variant_vec.push(Variant::Insertion(
                             alt_allele[ref_allele.len()..].to_owned(),
                         ))
-                    } else {
+                    } else if is_valid_mnv(ref_allele, alt_allele) {
+                        // println!("MNV 2 {:?} {:?}", ref_allele, alt_allele);
                         variant_vec.push(Variant::MNV(alt_allele.to_vec()))
                     }
                 }

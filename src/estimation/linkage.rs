@@ -43,11 +43,19 @@ pub fn linkage_clustering_of_variants(
             let indices = cluster
                 .par_iter()
                 .map(|assignment| assignment.index)
-                .collect::<HashSet<usize>>();
+                .collect::<BTreeSet<usize>>();
 
             // Loop through each variant in cluster and expand based on shared read content
 
             cluster.into_par_iter().for_each(|assigned_variant| {
+                {
+                    // preserve DBSCAN clusters
+                    let mut links = links.lock().unwrap();
+                    // Intialize links for each indices including itself
+                    links
+                        .entry(assigned_variant.index)
+                        .or_insert(indices.clone());
+                }
                 // Get variants by index
                 let var1 = &variant_info[assigned_variant.index];
 
@@ -56,7 +64,17 @@ pub fn linkage_clustering_of_variants(
                     .enumerate()
                     .for_each(|(index, var2)| {
                         if indices.contains(&index) {
-                            // do nothing as cluster already contains variant
+                            if assigned_variant.index == index {
+                                // do nothing as cluster already contains variant
+                            } else {
+                                // check for position conflict
+                                // if (var1.tid == var2.tid && var1.pos == var2.pos)
+                                // {
+                                //     if var1.variant == Variant::MNV {
+                                //
+                                //     }
+                                // }
+                            }
                         } else {
                             // Skipping over reference variants
                             if !(var1.tid == var2.tid && var1.pos == var2.pos)
@@ -67,18 +85,12 @@ pub fn linkage_clustering_of_variants(
 
                                 // Read ids of second variant
                                 let set2 = &var2.reads;
-                                // debug!("set 1 {:?}", &set1);
-                                // debug!("set 2 {:?}", &set2);
 
                                 // Add the jaccard's similarity to the hashmap for the two clusters
                                 let intersection: HashSet<_> = set1.intersection(&set2).collect();
 
                                 let union: HashSet<_> = set1.union(&set2).collect();
 
-                                // Scaled Jaccard Similarity Based on Minimum Set size
-                                //            let jaccard = intersection.len() as f64 /
-                                //                std::cmp::min(set1.len() + 1, set2.len() + 1) as f64;
-                                //             Normal Jaccard's Similarity
                                 if intersection.len() >= minimum_reads_in_link {
                                     // get relative frequencies of each Haplotype
                                     let pool_size = union.len() as f64;
@@ -98,10 +110,6 @@ pub fn linkage_clustering_of_variants(
                                             .collect::<BTreeSet<usize>>(),
                                     );
                                     links_out.insert(index);
-                                    let links_out = links.entry(index).or_insert(
-                                        [index].iter().cloned().collect::<BTreeSet<usize>>(),
-                                    );
-                                    links_out.insert(assigned_variant.index);
                                 }
                             }
                             // pb1.inc(1);
@@ -152,9 +160,9 @@ pub fn linkage_clustering_of_variants(
                 });
 
                 // Filter out final links that aren't of size n
-                if anchors.len() > anchor_size {
-                    s.send(anchors).unwrap();
-                }
+                // if anchors.len() > anchor_size {
+                s.send(anchors).unwrap();
+                // }
                 // pb1.inc(1);
             });
         // pb1.finish_with_message("Read networks established...");
@@ -172,6 +180,7 @@ pub fn linkage_clustering_of_variants(
         });
 
         debug!("post filtering condensed links {:?}", &condensed_links);
+
         let (initial_clusters_s, initial_clusters_r) = channel();
         condensed_links
             .par_iter()
