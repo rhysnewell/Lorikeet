@@ -12,6 +12,7 @@ use utils::*;
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use rayon::prelude::*;
+use std::io::Write;
 use std::path::Path;
 use std::str;
 use std::sync::Mutex;
@@ -251,7 +252,9 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 );
             }
         });
-    target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
+
+    // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
+    target_names.iter().enumerate().for_each(|(tid, target_name)| {
             if target_name.contains(reference)
                 || match genomes_and_contigs.contig_to_genome.get(target_name) {
                 Some(ref_id) => *ref_id == ref_idx,
@@ -488,28 +491,48 @@ pub fn generate_vcf(
         let vcf_path_prenormalization =
             &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
-        // Generate uncompressed filtered SAM file
-        // let sam_cmd_string = format!(
-        //     "set -e -o pipefail; samtools faidx {}",
-        //     &reference,
-        // );
-        // debug!("Queuing cmd_string: {}", sam_cmd_string);
-        // command::finish_command_safely(
-        //     std::process::Command::new("bash")
-        //         .arg("-c")
-        //         .arg(&sam_cmd_string)
-        //         .stderr(std::process::Stdio::piped())
-        //         .stdout(std::process::Stdio::piped())
-        //         .spawn()
-        //         .expect("Unable to execute bash"),
-        //     "samtools",
-        // );
+        let mut region_tmp_file = Builder::new()
+            .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
+            .suffix(".txt")
+            .tempfile()
+            .unwrap();
+        let mut total_region_covered = 0;
+        let total_region_chunks = target_length / region_size
+            + if target_length % region_size != 0 {
+                1
+            } else {
+                0
+            };
+        for idx in (0..total_region_chunks).into_iter() {
+            total_region_covered += region_size;
+            if total_region_covered > target_length {
+                writeln!(
+                    region_tmp_file,
+                    "{}:{}-{}",
+                    &target_name,
+                    total_region_covered - region_size,
+                    target_length,
+                )
+                .unwrap();
+            } else {
+                writeln!(
+                    region_tmp_file,
+                    "{}:{}-{}",
+                    &target_name,
+                    total_region_covered - region_size,
+                    total_region_covered,
+                )
+                .unwrap();
+            }
+        }
 
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            freebayes -f {} -r {} -C {} -q {} \
+            freebayes-parallel {:?} {} -f {} -r {} -C {} -q {} \
             -p {} --strict-vcf -m {} {} > {}",
+            region_tmp_file.path(),
+            threads,
             &reference,
             &target_name,
             m.value_of("min-variant-depth").unwrap(),
