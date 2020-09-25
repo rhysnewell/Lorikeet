@@ -260,23 +260,23 @@ impl FuzzyDBSCAN {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
+        let multi = MultiProgress::new();
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
+            .progress_chars("##-");
+
+        let pb1 = multi.insert(0, ProgressBar::new(points.len() as u64));
+        pb1.set_style(sty.clone());
+
+        let _ = std::thread::spawn(move || {
+            multi.join_and_clear().unwrap();
+        });
+        pb1.set_message("Running fuzzy DBSCAN on read networks...");
 
         for initial in initial_clusters.iter() {
             // Work out which point in our initial clusters has the highest density to other
             // points
             // Set up multi progress bars
-            let multi = MultiProgress::new();
-            let sty = ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
-                .progress_chars("##-");
-
-            let pb1 = multi.insert(0, ProgressBar::new(initial.len() as u64));
-            pb1.set_style(sty.clone());
-
-            let _ = std::thread::spawn(move || {
-                multi.join_and_clear().unwrap();
-            });
-            pb1.set_message("Running fuzzy DBSCAN on read networks...");
 
             let mut point_label_max = 0.;
             let mut point_index = 0;
@@ -284,7 +284,6 @@ impl FuzzyDBSCAN {
 
             for core_point in initial.iter() {
                 if visited[core_point.index] {
-                    pb1.inc(1);
                     continue;
                 }
                 visited[core_point.index] = true;
@@ -299,7 +298,6 @@ impl FuzzyDBSCAN {
                 }
                 pb1.inc(1);
             }
-            pb1.finish_with_message("Done!");
             // Extend neighbour indices with known connections
             let mut initial = initial
                 .par_iter()
@@ -324,18 +322,6 @@ impl FuzzyDBSCAN {
                 .par_iter()
                 .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
         {
-            let multi = MultiProgress::new();
-            let sty = ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
-                .progress_chars("##-");
-
-            let pb1 = multi.insert(0, ProgressBar::new(points.len() as u64));
-            pb1.set_style(sty.clone());
-
-            let _ = std::thread::spawn(move || {
-                multi.join_and_clear().unwrap();
-            });
-            pb1.set_message("Clustering unvisited points...");
             for point_index in 0..points.len() {
                 if visited[point_index] {
                     pb1.inc(1);
@@ -362,7 +348,6 @@ impl FuzzyDBSCAN {
                 }
                 pb1.inc(1);
             }
-            pb1.finish_with_message("All points visited...");
         }
         if !noise_cluster.is_empty() {
             debug!(
@@ -376,6 +361,10 @@ impl FuzzyDBSCAN {
         clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
 
         debug!("Clusters {:?}", clusters.len());
+        pb1.set_message(&format!(
+            "All points visited... {} initial clusters",
+            clusters.len()
+        ));
 
         // Deduplicate clusters by sorted indices
         clusters.dedup_by(|cluster1, cluster2| {
@@ -401,11 +390,11 @@ impl FuzzyDBSCAN {
             small_similarity == 1
         });
 
-        debug!(
+        pb1.finish_with_message(&format!(
             "Genome {}: {} possible strains... ",
             ref_name,
             clusters.len()
-        );
+        ));
 
         clusters
     }
