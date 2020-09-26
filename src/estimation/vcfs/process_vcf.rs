@@ -11,7 +11,6 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use rayon::prelude::*;
 use scoped_threadpool::Pool;
 use std::io::Write;
 use std::path::Path;
@@ -83,6 +82,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         .unwrap();
 
     let mut total_records = 0;
+    variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
@@ -96,11 +96,10 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                     None => false,
                 }
             {
-                let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> =
-                    HashMap::new();
                 // use pileups to call SNPs for low quality variants
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
+                variant_matrix.add_info(ref_idx, tid, target_name.as_bytes().to_vec(), target_len);
                 {
                     bam_generated.fetch(tid as u32, 0, target_len);
                     match bam_generated.pileup() {
@@ -193,31 +192,23 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                             total_records += 1;
                                             variant_found = true;
                                             refr_base = base.refr[0];
-                                            let variant_con = variant_map
-                                                .entry(tid as i32)
-                                                .or_insert(HashMap::new());
-                                            let variant_pos = variant_con
-                                                .entry(base.pos)
-                                                .or_insert(HashMap::new());
-
-                                            // Overwrite any existing variants called by mpileup
-                                            variant_pos
-                                                .insert(base.variant.to_owned(), base.clone());
+                                            variant_matrix.add_variant_to_matrix(
+                                                sample_idx,
+                                                base,
+                                                tid as usize,
+                                                ref_idx,
+                                            );
                                         }
                                     }
                                     // Add reference
                                     match base_dict.get(&refr_base) {
                                         Some(base) => {
-                                            let variant_con = variant_map
-                                                .entry(tid as i32)
-                                                .or_insert(HashMap::new());
-                                            let variant_pos = variant_con
-                                                .entry(base.pos)
-                                                .or_insert(HashMap::new());
-
-                                            // Overwrite any existing variants called by mpileup
-                                            variant_pos
-                                                .insert(base.variant.to_owned(), base.clone());
+                                            variant_matrix.add_variant_to_matrix(
+                                                sample_idx,
+                                                base,
+                                                tid as usize,
+                                                ref_idx,
+                                            );
                                         }
                                         None => {}
                                     }
@@ -229,18 +220,6 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                     };
                     // bam_generated.set_threads(1);
                 };
-
-                // Collect the variants into the matrix
-                // let mut variant_matrix = variant_matrix.lock().unwrap();
-                variant_matrix.add_reference_contig(
-                    stoit_name.to_string(),
-                    sample_idx,
-                    &mut variant_map,
-                    tid,
-                    target_name.as_bytes().to_vec(),
-                    ref_idx,
-                    target_len,
-                );
             }
         });
 
@@ -254,11 +233,12 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 None => false,
             }
             {
-                let mut variant_map: Arc<Mutex<HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>>> =
-                    Arc::new(Mutex::new(HashMap::new()));
+
                 // use pileups to call SNPs for low quality variants
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
+
+                let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
                 // Get VCF file from BAM using freebayes of SVIM
                 let mut vcf_reader = get_vcf(
                     &stoit_name,
@@ -309,17 +289,13 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                         match base_option {
                                             Some(bases) => {
                                                 for base in bases {
-                                                    let mut variant_map = variant_map.lock().unwrap();
-                                                    let variant_con = variant_map
-                                                        .entry(variant_rid as i32).or_insert(HashMap::new());
-                                                    let variant_pos = variant_con
-                                                        .entry(base.pos).or_insert(HashMap::new());
-
-                                                    // Overwrite any existing variants called by mpileup
-                                                    if variant_pos.contains_key(&base.variant) {
-                                                        // total_records -= 1
-                                                    }
-                                                    variant_pos.insert(base.variant.to_owned(), base);
+                                                    let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
+                                                    variant_matrix_sync.add_variant_to_matrix(
+                                                        sample_idx,
+                                                        &base,
+                                                        tid as usize,
+                                                        ref_idx,
+                                                    );
                                                 }
                                             },
                                             None => {},
@@ -331,33 +307,13 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             };
                         });
 
-
-                        // Colelct the variants into the matrix
-                        let mut variant_map = variant_map.lock().unwrap().clone();
-                        variant_matrix.add_reference_contig(
-                            stoit_name.to_string(),
-                            sample_idx,
-                            &mut variant_map,
-                            tid,
-                            target_name.as_bytes().to_vec(),
-                            ref_idx,
-                            target_len,
-                        );
                     }
                     Err(_) => {
                         info!("No VCF records found for sample {}", &stoit_name);
-                        let mut variant_map = variant_map.lock().unwrap().clone();
-                        variant_matrix.add_reference_contig(
-                            stoit_name.to_string(),
-                            sample_idx,
-                            &mut variant_map,
-                            tid,
-                            target_name.as_bytes().to_vec(),
-                            ref_idx,
-                            target_len,
-                        );
                     }
                 }
+                *variant_matrix = variant_matrix_sync.lock().unwrap().clone();
+
             }
         });
 }
