@@ -159,13 +159,14 @@ pub fn pileup_variants<
         pb3.reset();
         pb3.set_message("Waiting for variant matrix...");
         pb4.reset();
+        pb1.inc(1);
         pb1.set_message(&format!(
             "Working on genome: {}",
             &genomes_and_contigs.genomes[*ref_idx],
         ));
         let reference = &genomes_and_contigs.genomes[*ref_idx];
+        pb4.enable_steady_tick(1000);
         pb4.set_message(&format!("{}: Preparing variants...", &reference,));
-        pb4.inc(1);
         // multi.join().unwrap();
         let mut coverage_estimators = coverage_estimators.clone();
 
@@ -393,7 +394,6 @@ pub fn pileup_variants<
                         variant_matrix.get_sample_name(sample_idx),
                     ));
                     pb2.inc(1);
-                    pb4.inc(1);
                 }
             });
         pb2.finish_with_message(&format!("Initial variant calling complete..."));
@@ -480,7 +480,6 @@ pub fn pileup_variants<
                             variant_matrix.get_sample_name(sample_idx),
                         ));
                         pb3.inc(1);
-                        pb4.inc(1);
                     }
                 });
         }
@@ -513,13 +512,11 @@ pub fn pileup_variants<
 
             // Calculate the geometric mean values and CLR for each variant, reference specific
             pb4.set_message(&format!("{}: Generating variant distances...", &reference,));
-            pb4.inc(1);
             variant_matrix.generate_distances();
 
             // Generate initial read linked clusters
             // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
             pb4.set_message(&format!("{}: Running seeded fuzzy DBSCAN...", &reference,));
-            pb4.inc(1);
             variant_matrix.run_fuzzy_scan(
                 e_min,
                 e_max,
@@ -534,7 +531,6 @@ pub fn pileup_variants<
 
             // Write genotypes to disk, reference specific
             pb4.set_message(&format!("{}: Generating genotypes...", &reference,));
-            pb4.inc(1);
             variant_matrix.generate_genotypes(
                 &output_prefix,
                 &reference_map,
@@ -544,7 +540,6 @@ pub fn pileup_variants<
 
             // Write variants in VCF format, reference specific
             pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
-            pb4.inc(1);
             variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
             // Get strain abundances
@@ -552,7 +547,6 @@ pub fn pileup_variants<
                 "{}: Calculating genotype abundances...",
                 &reference,
             ));
-            pb4.inc(1);
             variant_matrix.calculate_strain_abundances(
                 &output_prefix,
                 &reference_map,
@@ -561,7 +555,6 @@ pub fn pileup_variants<
 
             // Get sample distances
             pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -580,12 +573,10 @@ pub fn pileup_variants<
         } else if mode == "summarize" {
             let window_size = m.value_of("window-size").unwrap().parse().unwrap();
             pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
-            pb4.inc(1);
             variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
             // Get sample distances
             pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -595,7 +586,6 @@ pub fn pileup_variants<
             variant_matrix.print_variant_stats(window_size, &output_prefix, &genomes_and_contigs);
         } else if mode == "evolve" {
             pb4.set_message(&format!("{}: Calculating dN/dS values...", &reference,));
-            pb4.inc(1);
             variant_matrix.calc_gene_mutation(
                 &mut gff_map,
                 &genomes_and_contigs,
@@ -606,7 +596,6 @@ pub fn pileup_variants<
             );
         } else if mode == "polish" {
             pb4.set_message(&format!("{}: Generating consensus genomes...", &reference,));
-            pb4.inc(1);
             variant_matrix.polish_genomes(
                 &output_prefix,
                 &reference_map,
@@ -615,7 +604,6 @@ pub fn pileup_variants<
             );
             // Get sample distances
             pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            pb4.inc(1);
             variant_matrix.calculate_sample_distances(
                 &output_prefix,
                 &reference_map,
@@ -631,7 +619,6 @@ pub fn pileup_variants<
                 );
             }
         }
-        pb1.inc(1);
         pb4.finish_with_message(&format!("{}: All steps completed!", &reference));
     });
     pb1.finish_with_message(&format!("{} mode finished", &mode));
