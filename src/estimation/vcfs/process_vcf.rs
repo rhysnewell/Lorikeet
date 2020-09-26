@@ -226,8 +226,8 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
     bam_generated.finish();
     let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
-
-    let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
+    let mut thread_locker = Mutex::new(true);
+    let freebayes_threads = std::cmp::max(split_threads, 1);
     target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
             if target_name.contains(reference)
                 || match genomes_and_contigs.contig_to_genome.get(target_name) {
@@ -241,6 +241,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 let target_len = target_lens[tid];
 
                 // Get VCF file from BAM using freebayes of SVIM
+                thread_locker.lock().unwrap();
                 let mut vcf_reader = get_vcf(
                     &stoit_name,
                     &m,
