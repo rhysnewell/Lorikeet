@@ -241,22 +241,40 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 let target_len = target_lens[tid];
 
                 // Get VCF file from BAM using freebayes of SVIM
-                thread_locker.lock().unwrap();
-                let mut vcf_reader = get_vcf(
-                    &stoit_name,
-                    &m,
-                    freebayes_threads,
-                    longread,
-                    target_len,
-                    &concatenated_genomes
-                        .as_ref()
-                        .unwrap()
-                        .path()
-                        .to_str()
-                        .unwrap(),
-                    &bam_path,
-                    &target_name,
-                );
+                let mut vcf_reader = if target_len > 10000 {
+                    thread_locker.lock().unwrap();
+                    get_vcf(
+                        &stoit_name,
+                        &m,
+                        freebayes_threads,
+                        longread,
+                        target_len,
+                        &concatenated_genomes
+                            .as_ref()
+                            .unwrap()
+                            .path()
+                            .to_str()
+                            .unwrap(),
+                        &bam_path,
+                        &target_name,
+                    )
+                } else {
+                    get_vcf(
+                        &stoit_name,
+                        &m,
+                        1,
+                        longread,
+                        target_len,
+                        &concatenated_genomes
+                            .as_ref()
+                            .unwrap()
+                            .path()
+                            .to_str()
+                            .unwrap(),
+                        &bam_path,
+                        &target_name,
+                    )
+                };
 
                 match vcf_reader {
                     Ok(ref mut reader) => {
