@@ -4,7 +4,7 @@ use model::variants::*;
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::mpsc::channel;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Connects fuzzy DBSCAN clusters based on shared read information
 #[allow(unused)]
@@ -54,10 +54,11 @@ pub fn linkage_clustering_of_variants(
         });
 
         clusters.into_par_iter().for_each(|cluster| {
-            let indices = cluster
+            let indices: BTreeSet<usize> = cluster
                 .par_iter()
                 .map(|assignment| assignment.index)
                 .collect::<BTreeSet<usize>>();
+            let extended = Arc::new(Mutex::new(false));
 
             // Loop through each variant in cluster and expand based on shared read content
 
@@ -113,12 +114,22 @@ pub fn linkage_clustering_of_variants(
                                         .entry(assigned_variant.index)
                                         .or_insert(indices.clone());
                                     links_out.insert(index);
+
+                                    let mut extended = extended.lock().unwrap();
+                                    *extended = true;
                                 }
                             }
                             // pb1.inc(1);
                         }
                     });
             });
+            if !*extended.lock().unwrap() {
+                let mut links = links.lock().unwrap();
+                // Intialize links for each indices including itself
+                let links_out = links
+                    .entry(*indices.iter().next().unwrap())
+                    .or_insert(indices.clone());
+            }
             pb1.inc(1);
         });
         pb1.finish_with_message("Initial variant networks formed...");
@@ -141,6 +152,7 @@ pub fn linkage_clustering_of_variants(
         let _ = std::thread::spawn(move || {
             multi.join_and_clear().unwrap();
         });
+        debug!("pre filtering condensed links {:?}", &links);
 
         // extend the links for each anchor point by the union of all the indices
         links
