@@ -30,7 +30,7 @@ use tempfile;
 use tempfile::NamedTempFile;
 use utils::generate_faidx;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Container for all variants within a genome and associated clusters
 pub enum VariantMatrix {
     VariantContigMatrix {
@@ -92,17 +92,12 @@ pub trait VariantMatrixFunctions {
     /// Returns the total amount of variant alleles
     fn get_variant_count(&self, ref_idx: usize) -> i64;
 
+    fn add_sample_name(&mut self, sample_name: String, sample_idx: usize);
+
+    fn add_info(&mut self, ref_idx: usize, tid: usize, target_name: Vec<u8>, target_len: u64);
+
     /// Adds the variant information retrieved from VCF records on a per reference basis
-    fn add_reference_contig(
-        &mut self,
-        sample_name: String,
-        sample_idx: usize,
-        variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        tid: usize,
-        target_name: Vec<u8>,
-        ref_idx: usize,
-        target_len: u64,
-    );
+    fn add_variant_to_matrix(&mut self, sample_idx: usize, base: &Base, tid: usize, ref_idx: usize);
 
     /// Per sample FDR calculation
     fn remove_false_discoveries(&mut self, alpha: f64, reference: &str);
@@ -258,28 +253,26 @@ impl VariantMatrixFunctions for VariantMatrix {
         }
     }
 
-    fn add_reference_contig(
-        &mut self,
-        sample_name: String,
-        sample_idx: usize,
-        variant_records: &mut HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>,
-        tid: usize,
-        target_name: Vec<u8>,
-        ref_idx: usize,
-        target_len: u64,
-    ) {
+    fn add_sample_name(&mut self, sample_name: String, sample_idx: usize) {
         match self {
             VariantMatrix::VariantContigMatrix {
                 ref mut sample_names,
-                ref mut all_variants,
-                ref mut target_names,
-                ref mut target_lengths,
-                ref mut variant_counts,
                 ..
             } => {
                 debug!("adding sample {} at index {}", &sample_name, &sample_idx);
                 sample_names[sample_idx] = sample_name;
+            }
+        }
+    }
 
+    fn add_info(&mut self, ref_idx: usize, tid: usize, target_name: Vec<u8>, target_len: u64) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut sample_names,
+                ref mut target_names,
+                ref mut target_lengths,
+                ..
+            } => {
                 let ref_target_names = target_names.entry(ref_idx).or_insert(BTreeMap::new());
 
                 ref_target_names
@@ -292,7 +285,26 @@ impl VariantMatrixFunctions for VariantMatrix {
                 ref_target_lengths
                     .entry(tid as i32)
                     .or_insert(target_len as f64);
+            }
+        }
+    }
 
+    fn add_variant_to_matrix(
+        &mut self,
+        sample_idx: usize,
+        base: &Base,
+        tid: usize,
+        ref_idx: usize,
+    ) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut sample_names,
+                ref mut all_variants,
+                ref mut target_names,
+                ref mut target_lengths,
+                ref mut variant_counts,
+                ..
+            } => {
                 // Initialize contig id in variant hashmap
                 let reference_variants = all_variants.entry(ref_idx).or_insert(HashMap::new());
 
@@ -300,28 +312,28 @@ impl VariantMatrixFunctions for VariantMatrix {
                     .entry(tid as i32)
                     .or_insert(HashMap::new());
 
-                let placeholder = HashMap::new();
-                let mut variants = match variant_records.remove(&(tid as i32)) {
-                    Some(map) => map,
-                    _ => placeholder,
-                };
-
                 let mut ref_var_counts = variant_counts.entry(ref_idx).or_insert(HashMap::new());
                 let mut con_var_counts = ref_var_counts.entry(tid as i32).or_insert(0);
                 // Apppend the sample index to each variant abundance
                 // Initialize the variant position index
                 // Also turns out to be the total number of variant positions
-                for (pos, abundance_map) in variants.iter() {
-                    let position_variants =
-                        contig_variants.entry(*pos as i64).or_insert(HashMap::new());
-                    for (variant, base_info) in abundance_map.iter() {
-                        let sample_map = position_variants
-                            .entry(variant.clone())
-                            .or_insert(base_info.clone());
-                        sample_map.combine_sample(base_info, sample_idx, 0);
-                        *con_var_counts += 1
-                    }
-                }
+                let position_variants = contig_variants.entry(base.pos).or_insert(HashMap::new());
+                let allele = position_variants
+                    .entry(base.variant.clone())
+                    .or_insert(base.clone());
+                let allele = position_variants
+                    .entry(base.variant.clone())
+                    .or_insert(base.clone());
+                allele.combine_sample(base, sample_idx, 0);
+                *con_var_counts += 1;
+
+                // if position_variants.contains_key(&base.variant) {
+                //     let allele = position_variants.entry(base.variant.clone()).or_insert(base.clone());
+                //     allele.combine_sample(base, sample_idx, 0);
+                // } else {
+                //     let allele = position_variants.entry(base.variant.clone()).or_insert(base.clone());
+                //     *con_var_counts += 1;
+                // }
             }
         }
     }

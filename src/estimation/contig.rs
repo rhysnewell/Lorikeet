@@ -8,8 +8,6 @@ use estimation::codon_structs::*;
 use estimation::variant_matrix::*;
 use estimation::vcfs::process_vcf::*;
 use external_command_checker;
-use model::variants::{Base, Variant};
-use std::sync::Mutex;
 use utils::*;
 
 use crate::*;
@@ -18,7 +16,6 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 use std::path::Path;
 use std::process::Stdio;
 use std::str;
@@ -363,6 +360,7 @@ pub fn pileup_variants<
 
                     let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
                     debug!("Stoit_name {:?}", &stoit_name);
+                    variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
 
                     // let group = sample_groups.entry("long").or_insert(HashSet::new());
                     // group.insert(stoit_name.clone());
@@ -370,19 +368,11 @@ pub fn pileup_variants<
                     for (tid, target) in target_names.iter().enumerate() {
                         let target_name = String::from_utf8(target.to_vec()).unwrap();
                         if target_name.contains(reference) {
-                            let mut variant_map: HashMap<
-                                i32,
-                                HashMap<i64, HashMap<Variant, Base>>,
-                            > = HashMap::new();
                             let target_len = header.target_len(tid as u32).unwrap();
-
-                            variant_matrix.add_reference_contig(
-                                stoit_name.clone(),
-                                sample_idx,
-                                &mut variant_map,
+                            variant_matrix.add_info(
+                                *ref_idx,
                                 tid,
                                 target_name.as_bytes().to_vec(),
-                                *ref_idx,
                                 target_len,
                             );
                         }
