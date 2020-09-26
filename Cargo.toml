@@ -56,7 +56,7 @@ statrs = "0.11"
 tempdir = "0.3"
 tempfile = "3.0"
 indicatif = {version = "*", features = ["rayon"]}
-
+scoped_threadpool = "*"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
