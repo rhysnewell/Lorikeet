@@ -47,7 +47,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     // }
 
     let reference = &genomes_and_contigs.genomes[ref_idx];
-    let mut reference_file = Mutex::new(retrieve_reference(concatenated_genomes));
+    let mut reference_file = retrieve_reference(concatenated_genomes);
 
     bam_generated.set_threads(split_threads);
 
@@ -81,7 +81,6 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         .unwrap();
 
     let mut total_records = 0;
-    // let bam_generated = Mutex::new(bam_generated);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
@@ -101,15 +100,6 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
                 {
-                    // let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
-                    // vec![&bam_path],
-                    // split_threads as u32,
-                    // )
-                    // .into_iter()
-                    // .next()
-                    // .unwrap();
-                    // let mut bam_generated = bam_generated.lock().unwrap();
-                    // bam_generated.set_threads(std::cmp::max(split_threads as i32 - 1, 1) as usize);
                     bam_generated.fetch(tid as u32, 0, target_len);
                     match bam_generated.pileup() {
                         Some(pileups) => {
@@ -117,7 +107,6 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             let mut ref_seq = Vec::new();
                             // Update all contig information
                             contig_name = target_name.as_bytes().to_vec();
-                            let mut reference_file = reference_file.lock().unwrap();
                             fetch_contig_from_reference(
                                 &mut reference_file,
                                 &contig_name,
@@ -253,7 +242,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
             }
         });
 
-    bam_generated.finish();
+    // bam_generated.finish();
 
     // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
     target_names.iter().enumerate().for_each(|(tid, target_name)| {
