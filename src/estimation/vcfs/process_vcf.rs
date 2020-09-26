@@ -11,6 +11,7 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use rayon::prelude::*;
 use scoped_threadpool::Pool;
 use std::io::Write;
 use std::path::Path;
@@ -224,9 +225,10 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         });
 
     bam_generated.finish();
+    let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
 
-    // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
-    target_names.iter().enumerate().for_each(|(tid, target_name)| {
+    let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
+    target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
             if target_name.contains(reference)
                 || match genomes_and_contigs.contig_to_genome.get(target_name) {
                 Some(ref_id) => *ref_id == ref_idx,
@@ -238,12 +240,11 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
 
-                let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
                 // Get VCF file from BAM using freebayes of SVIM
                 let mut vcf_reader = get_vcf(
                     &stoit_name,
                     &m,
-                    split_threads,
+                    freebayes_threads,
                     longread,
                     target_len,
                     &concatenated_genomes
@@ -264,7 +265,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
                         let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
 
-                        let mut pool = Pool::new(split_threads as u32);
+                        let mut pool = Pool::new(freebayes_threads as u32);
                         // let total_records = Arc::new(Mutex::new(total_records));
 
                         pool.scoped(|scope| {
@@ -312,10 +313,10 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                         info!("No VCF records found for sample {}", &stoit_name);
                     }
                 }
-                *variant_matrix = variant_matrix_sync.lock().unwrap().clone();
 
             }
         });
+    *variant_matrix = variant_matrix_sync.lock().unwrap().clone();
 }
 
 /// Get or generate vcf file
