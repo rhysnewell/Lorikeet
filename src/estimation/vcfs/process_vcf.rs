@@ -253,8 +253,8 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
             }
         });
 
-    // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
-    target_names.iter().enumerate().for_each(|(tid, target_name)| {
+    let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
+    target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
             if target_name.contains(reference)
                 || match genomes_and_contigs.contig_to_genome.get(target_name) {
                 Some(ref_id) => *ref_id == ref_idx,
