@@ -11,10 +11,12 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use rayon::prelude::*;
+use scoped_threadpool::Pool;
 use std::io::Write;
 use std::path::Path;
 use std::str;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::Builder;
 use tempfile::NamedTempFile;
@@ -252,8 +254,8 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 None => false,
             }
             {
-                let mut variant_map: HashMap<i32, HashMap<i64, HashMap<Variant, Base>>> =
-                    HashMap::new();
+                let mut variant_map: Arc<Mutex<HashMap<i32, HashMap<i64, HashMap<Variant, Base>>>>> =
+                    Arc::new(Mutex::new(HashMap::new()));
                 // use pileups to call SNPs for low quality variants
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
@@ -276,53 +278,62 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
                 match vcf_reader {
                     Ok(ref mut reader) => {
-                        reader
-                            .set_threads(split_threads)
-                            .expect("Unable to set threads on VCF reader");
+                        // reader
+                        //     .set_threads(split_threads)
+                        //     .expect("Unable to set threads on VCF reader");
 
                         let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
 
-                        reader.records().into_iter().for_each(|vcf_record| {
-                            let mut vcf_record = vcf_record.unwrap();
-                            let vcf_header = vcf_record.header();
-                            let variant_rid = vcf_record.rid().unwrap();
-                            // Check bam header names and vcf header names are in same order
-                            // Sanity check
-                            total_records += 1;
-                            if target_name.as_bytes()
-                                == vcf_header.rid2name(variant_rid).unwrap() {
-                                let base_option =
-                                    Base::from_vcf_record(
-                                        &mut vcf_record,
-                                        sample_count,
-                                        sample_idx,
-                                        longread,
-                                        min_qual,
-                                    );
-                                match base_option {
-                                    Some(bases) => {
-                                        for base in bases {
-                                            let variant_con = variant_map
-                                                .entry(variant_rid as i32).or_insert(HashMap::new());
-                                            let variant_pos = variant_con
-                                                .entry(base.pos).or_insert(HashMap::new());
+                        let mut pool = Pool::new(split_threads as u32);
+                        // let total_records = Arc::new(Mutex::new(total_records));
 
-                                            // Overwrite any existing variants called by mpileup
-                                            if variant_pos.contains_key(&base.variant) {
-                                                total_records -= 1
-                                            }
-                                            variant_pos.insert(base.variant.to_owned(), base);
+                        pool.scoped(|scope| {
+                            for vcf_record in reader.records().into_iter() {
+                                scope.execute( || {
+                                    let mut vcf_record = vcf_record.unwrap();
+                                    let vcf_header = vcf_record.header();
+                                    let variant_rid = vcf_record.rid().unwrap();
+                                    // Check bam header names and vcf header names are in same order
+                                    // Sanity check
+                                    // total_records += 1;
+                                    if target_name.as_bytes()
+                                        == vcf_header.rid2name(variant_rid).unwrap() {
+                                        let base_option =
+                                            Base::from_vcf_record(
+                                                &mut vcf_record,
+                                                sample_count,
+                                                sample_idx,
+                                                longread,
+                                                min_qual,
+                                            );
+                                        match base_option {
+                                            Some(bases) => {
+                                                for base in bases {
+                                                    let mut variant_map = variant_map.lock().unwrap();
+                                                    let variant_con = variant_map
+                                                        .entry(variant_rid as i32).or_insert(HashMap::new());
+                                                    let variant_pos = variant_con
+                                                        .entry(base.pos).or_insert(HashMap::new());
+
+                                                    // Overwrite any existing variants called by mpileup
+                                                    if variant_pos.contains_key(&base.variant) {
+                                                        // total_records -= 1
+                                                    }
+                                                    variant_pos.insert(base.variant.to_owned(), base);
+                                                }
+                                            },
+                                            None => {},
                                         }
-                                    },
-                                    None => {},
-                                }
-                            } else {
-                                panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
-                            }
+                                    } else {
+                                        panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+                                    }
+                                });
+                            };
                         });
 
+
                         // Colelct the variants into the matrix
-                        // let mut variant_matrix = variant_matrix.lock().unwrap();
+                        let mut variant_map = variant_map.lock().unwrap().clone();
                         variant_matrix.add_reference_contig(
                             stoit_name.to_string(),
                             sample_idx,
@@ -335,7 +346,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                     }
                     Err(_) => {
                         info!("No VCF records found for sample {}", &stoit_name);
-                        // let mut variant_matrix = variant_matrix.lock().unwrap();
+                        let mut variant_map = variant_map.lock().unwrap().clone();
                         variant_matrix.add_reference_contig(
                             stoit_name.to_string(),
                             sample_idx,

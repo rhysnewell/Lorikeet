@@ -31,6 +31,7 @@ extern crate nix;
 extern crate ordered_float;
 extern crate rand;
 extern crate rayon;
+extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
 
