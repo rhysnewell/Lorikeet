@@ -241,7 +241,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 let target_len = target_lens[tid];
 
                 // Get VCF file from BAM using freebayes of SVIM
-                let mut vcf_reader = if target_len > 10000 {
+                let mut vcf_reader = if target_len > 100000 {
                     thread_locker.lock().unwrap();
                     get_vcf(
                         &stoit_name,
@@ -465,12 +465,16 @@ pub fn generate_vcf(
         // Old way of calulating region size, not a good method
         // let region_size = reference_length / threads as u64;
         // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
-        let region_size = target_length / threads as u64
+        let mut region_size = target_length / threads as u64
             + if target_length % threads as u64 != 0 {
                 1
             } else {
                 0
             };
+        if target_length <= 100000 {
+            region_size = 100000
+        }
+
         let index_path = format!("{}.fai", reference);
 
         let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
