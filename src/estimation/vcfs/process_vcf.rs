@@ -27,7 +27,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     ref_idx: usize,
     sample_idx: usize,
     mut sample_count: usize,
-    variant_matrix: &Mutex<VariantMatrix>,
+    variant_matrix: &mut VariantMatrix,
     longread: bool,
     m: &clap::ArgMatches,
     // sample_groups: &mut HashMap<&str, HashSet<String>>,
@@ -50,7 +50,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = Mutex::new(retrieve_reference(concatenated_genomes));
 
-    // bam_generated.set_threads(split_threads);
+    bam_generated.set_threads(split_threads);
 
     let header = bam_generated.header().clone(); // bam header
     let target_lens: Vec<u64> = (0..header.target_count())
@@ -86,7 +86,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
-        .par_iter()
+        .iter()
         .enumerate()
         .for_each(|(tid, target_name)| {
             // let target_name = String::from_utf8(target.to_vec()).unwrap();
@@ -102,13 +102,13 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 // That are usually skipped by GATK
                 let target_len = target_lens[tid];
                 {
-                    let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
-                        vec![&bam_path],
-                        split_threads as u32,
-                    )
-                    .into_iter()
-                    .next()
-                    .unwrap();
+                    // let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
+                    // vec![&bam_path],
+                    // split_threads as u32,
+                    // )
+                    // .into_iter()
+                    // .next()
+                    // .unwrap();
                     // let mut bam_generated = bam_generated.lock().unwrap();
                     // bam_generated.set_threads(std::cmp::max(split_threads as i32 - 1, 1) as usize);
                     bam_generated.fetch(tid as u32, 0, target_len);
@@ -240,7 +240,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                 };
 
                 // Collect the variants into the matrix
-                let mut variant_matrix = variant_matrix.lock().unwrap();
+                // let mut variant_matrix = variant_matrix.lock().unwrap();
                 variant_matrix.add_reference_contig(
                     stoit_name.to_string(),
                     sample_idx,
@@ -253,8 +253,10 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
             }
         });
 
-    let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
-    target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
+    bam_generated.finish();
+
+    // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
+    target_names.iter().enumerate().for_each(|(tid, target_name)| {
             if target_name.contains(reference)
                 || match genomes_and_contigs.contig_to_genome.get(target_name) {
                 Some(ref_id) => *ref_id == ref_idx,
@@ -329,7 +331,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                         });
 
                         // Colelct the variants into the matrix
-                        let mut variant_matrix = variant_matrix.lock().unwrap();
+                        // let mut variant_matrix = variant_matrix.lock().unwrap();
                         variant_matrix.add_reference_contig(
                             stoit_name.to_string(),
                             sample_idx,
@@ -342,7 +344,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                     }
                     Err(_) => {
                         info!("No VCF records found for sample {}", &stoit_name);
-                        let mut variant_matrix = variant_matrix.lock().unwrap();
+                        // let mut variant_matrix = variant_matrix.lock().unwrap();
                         variant_matrix.add_reference_contig(
                             stoit_name.to_string(),
                             sample_idx,
@@ -484,7 +486,12 @@ pub fn generate_vcf(
         // Old way of calulating region size, not a good method
         // let region_size = reference_length / threads as u64;
         // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
-        let region_size = 10000;
+        let region_size = target_length / threads as u64
+            + if target_length % threads as u64 != 0 {
+                1
+            } else {
+                0
+            };
         let index_path = format!("{}.fai", reference);
 
         let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
