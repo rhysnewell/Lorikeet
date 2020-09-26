@@ -167,7 +167,7 @@ pub fn pileup_variants<
         pb4.set_message(&format!("{}: Preparing variants...", &reference,));
         pb4.inc(1);
         // multi.join().unwrap();
-        let mut coverage_estimators = Mutex::new(coverage_estimators.clone());
+        let mut coverage_estimators = coverage_estimators.clone();
 
         let mut codon_table = CodonTable::setup();
 
@@ -410,17 +410,19 @@ pub fn pileup_variants<
         );
 
         // pb3.println("Performing guided variant calling...");
-        let mut variant_matrix = Mutex::new(variant_matrix);
-        if variant_matrix.lock().unwrap().get_variant_count(*ref_idx) > 0 {
-            indexed_bam_readers.into_par_iter().enumerate().for_each(
-                |(sample_idx, bam_generator)| {
+        // let mut variant_matrix = Mutex::new(variant_matrix);
+        if variant_matrix.get_variant_count(*ref_idx) > 0 {
+            indexed_bam_readers
+                .into_iter()
+                .enumerate()
+                .for_each(|(sample_idx, bam_generator)| {
                     if sample_idx < short_sample_count {
                         process_bam(
                             bam_generator,
                             sample_idx,
                             per_reference_samples,
-                            &coverage_estimators,
-                            &variant_matrix,
+                            &mut coverage_estimators,
+                            &mut variant_matrix,
                             n_threads,
                             m,
                             output_prefix,
@@ -447,8 +449,8 @@ pub fn pileup_variants<
                             bam_generator,
                             sample_idx,
                             per_reference_samples,
-                            &coverage_estimators,
-                            &variant_matrix,
+                            &mut coverage_estimators,
+                            &mut variant_matrix,
                             n_threads,
                             m,
                             output_prefix,
@@ -475,17 +477,14 @@ pub fn pileup_variants<
                     {
                         pb3.set_message(&format!(
                             "Guided variant calling on sample: {}",
-                            variant_matrix.lock().unwrap().get_sample_name(sample_idx),
+                            variant_matrix.get_sample_name(sample_idx),
                         ));
                         pb3.inc(1);
                         pb4.inc(1);
                     }
-                },
-            );
+                });
         }
         pb3.finish_with_message(&format!("Guided variant calling complete..."));
-
-        let mut variant_matrix = variant_matrix.lock().unwrap();
 
         // Collects info about variants across samples to check whether they are genuine or not
         // using FDR

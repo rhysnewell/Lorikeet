@@ -6,7 +6,6 @@ use bio::stats::{
 use bird_tool_utils::command;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use dbscan::fuzzy;
-use dbscan::fuzzy::Cluster;
 use estimation::codon_structs::CodonTable;
 use estimation::codon_structs::*;
 use estimation::contig_variants::*;
