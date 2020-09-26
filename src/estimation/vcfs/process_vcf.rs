@@ -11,7 +11,6 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use rayon::prelude::*;
 use std::io::Write;
 use std::path::Path;
 use std::str;
@@ -81,7 +80,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         .parse::<f64>()
         .unwrap();
 
-    let mut total_records = Mutex::new(0);
+    let mut total_records = 0;
     // let bam_generated = Mutex::new(bam_generated);
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
@@ -200,6 +199,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                         // base.quals[sample_idx] >= min_variant_quality &&
                                         base.variant != Variant::None
                                         {
+                                            total_records += 1;
                                             variant_found = true;
                                             refr_base = base.refr[0];
                                             let variant_con = variant_map
@@ -299,8 +299,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                             let variant_rid = vcf_record.rid().unwrap();
                             // Check bam header names and vcf header names are in same order
                             // Sanity check
-                            let mut total_records = total_records.lock().unwrap();
-                            *total_records += 1;
+                            total_records += 1;
                             if target_name.as_bytes()
                                 == vcf_header.rid2name(variant_rid).unwrap() {
                                 let base_option =
@@ -320,6 +319,9 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
                                                 .entry(base.pos).or_insert(HashMap::new());
 
                                             // Overwrite any existing variants called by mpileup
+                                            if variant_pos.contains_key(&base.variant) {
+                                                total_records -= 1
+                                            }
                                             variant_pos.insert(base.variant.to_owned(), base);
                                         }
                                     },
@@ -480,6 +482,7 @@ pub fn generate_vcf(
 
     if !longread {
         external_command_checker::check_for_freebayes();
+        external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_samtools();
         external_command_checker::check_for_vt();
 

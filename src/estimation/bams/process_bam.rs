@@ -8,7 +8,6 @@ use estimation::contig_variants::*;
 use estimation::variant_matrix::*;
 use model::variants::*;
 use rayon::prelude::*;
-use std::sync::Mutex;
 use utils::*;
 
 use coverm::genomes_and_contigs::*;
@@ -23,8 +22,8 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     mut bam_generated: R,
     sample_idx: usize,
     sample_count: usize,
-    coverage_estimators: &Mutex<Vec<CoverageEstimator>>,
-    variant_matrix: &Mutex<VariantMatrix>,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
+    variant_matrix: &mut VariantMatrix,
     split_threads: usize,
     m: &clap::ArgMatches,
     output_prefix: &str,
@@ -79,30 +78,6 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
-
-    // let sample_idx = match variant_matrix.lock().unwrap() {
-    //     VariantMatrix::VariantContigMatrix { sample_names, .. } => {
-    //         debug!(
-    //             "sample names {:?} and stoit_name {:?}",
-    //             &sample_names, &stoit_name
-    //         );
-    //         sample_names
-    //             .iter()
-    //             .position(|p| p.contains(&stoit_name.replace("lorikeet-genome", "")))
-    //             .unwrap()
-    //     }
-    // };
-
-    // debug!("sample groups {:?}", sample_groups);
-    // if sample_groups.contains_key("long") {
-    //     for longread_name in sample_groups["long"].iter() {
-    //         if stoit_name.contains(longread_name) {
-    //             longread = true;
-    //             debug!("Longread {} {}", stoit_name, sample_idx);
-    //             break;
-    //         }
-    //     }
-    // }
 
     let reference = &genomes_and_contigs.genomes[ref_idx];
     let mut reference_file = retrieve_reference(concatenated_genomes);
@@ -184,8 +159,6 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                             debug!("pos {} length {}", &mnv_pos, &mnv.len());
                                             if mnv_pos == mnv.len() {
                                                 match variant_matrix
-                                                    .lock()
-                                                    .unwrap()
                                                     .variants(ref_idx, tid, mnv_cursor)
                                                 {
                                                     Some(current_variants) => {
@@ -240,11 +213,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                             mnv_qual = 0.;
                                         }
                                     }
-                                    match variant_matrix.lock().unwrap().variants(
-                                        ref_idx,
-                                        tid,
-                                        cursor as i64,
-                                    ) {
+                                    match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                                         Some(current_variants) => {
                                             let read_char = record.seq()[qpos];
                                             current_variants.iter_mut().for_each(|(variant, base)| {
@@ -286,13 +255,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
                                                             base.quals[sample_idx] += qual_pos;
-                                                            // info!(
-                                                            //     "Reference ref {} tid {} pos {} coverages {:?}",
-                                                            //     &ref_idx,
-                                                            //     &tid,
-                                                            //     &cursor,
-                                                            //     &base.truedepth,
-                                                            // )
+
                                                         } else {
                                                             mnv = vec!();
                                                             mnv_pos = 0;
@@ -322,11 +285,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 read_cursor += cig.len() as usize;
                             }
                             Cigar::Del(del) => {
-                                match variant_matrix.lock().unwrap().variants(
-                                    ref_idx,
-                                    tid,
-                                    cursor as i64,
-                                ) {
+                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -359,11 +318,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                             Cigar::Ins(ins) => {
                                 let insertion = &record.seq().as_bytes()
                                     [read_cursor..read_cursor + cig.len() as usize];
-                                match variant_matrix.lock().unwrap().variants(
-                                    ref_idx,
-                                    tid,
-                                    cursor as i64,
-                                ) {
+                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -410,11 +365,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                                 // not sure if this correct protocol or not
                                 let insertion = &record.seq().as_bytes()
                                     [read_cursor..read_cursor + cig.len() as usize];
-                                match variant_matrix.lock().unwrap().variants(
-                                    ref_idx,
-                                    tid,
-                                    cursor as i64,
-                                ) {
+                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
                                     Some(current_variants) => {
                                         current_variants.par_iter_mut().for_each(
                                             |(variant, base)| {
@@ -495,7 +446,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                 ref_idx,
                 tid as i32,
                 ups_and_downs,
-                &coverage_estimators,
+                coverage_estimators,
                 min,
                 max,
                 total_indels_in_current_contig as usize,
@@ -503,7 +454,7 @@ pub fn process_bam<R: IndexedNamedBamReader>(
                 target_len as usize,
                 contig_name,
                 &genomes_and_contigs,
-                &variant_matrix,
+                variant_matrix,
                 ref_seq,
                 sample_idx,
                 method,
@@ -554,7 +505,7 @@ pub fn process_previous_contigs_var(
     ref_idx: usize,
     last_tid: i32,
     ups_and_downs: Vec<i32>,
-    coverage_estimators: &Mutex<Vec<CoverageEstimator>>,
+    coverage_estimators: &mut Vec<CoverageEstimator>,
     min: f32,
     max: f32,
     total_indels_in_current_contig: usize,
@@ -562,7 +513,7 @@ pub fn process_previous_contigs_var(
     contig_len: usize,
     contig_name: Vec<u8>,
     genomes_and_contigs: &GenomesAndContigs,
-    variant_matrix: &Mutex<VariantMatrix>,
+    variant_matrix: &mut VariantMatrix,
     ref_sequence: Vec<u8>,
     sample_idx: usize,
     method: &str,
@@ -574,7 +525,6 @@ pub fn process_previous_contigs_var(
     stoit_name: &str,
 ) {
     if last_tid != -2 {
-        let mut coverage_estimators = coverage_estimators.lock().unwrap();
         coverage_estimators
             .par_iter_mut()
             .for_each(|estimator| estimator.setup());
@@ -597,10 +547,7 @@ pub fn process_previous_contigs_var(
 
         // adds contig info to variant struct
         variant_struct.add_contig(
-            variant_matrix
-                .lock()
-                .unwrap()
-                .variants_of_contig(ref_idx, last_tid),
+            variant_matrix.variants_of_contig(ref_idx, last_tid),
             last_tid.clone(),
             total_indels_in_current_contig,
             contig_name.clone(),
@@ -622,7 +569,6 @@ pub fn process_previous_contigs_var(
             "summarize" | "genotype" | "evolve" | "polish" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
-                let mut variant_matrix = variant_matrix.lock().unwrap();
                 variant_matrix.add_contig(variant_struct, sample_count, sample_idx, ref_idx);
             }
             // "polish" => {
