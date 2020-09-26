@@ -192,7 +192,7 @@ pub fn pileup_variants<
                     &per_reference_samples
                 );
 
-                Mutex::new(VariantMatrix::new_matrix(per_reference_samples))
+                VariantMatrix::new_matrix(per_reference_samples)
             }
             None => {
                 per_reference_samples = (short_sample_count + long_sample_count) / references.len();
@@ -201,7 +201,7 @@ pub fn pileup_variants<
                     "Per reference samples not concatenated {}",
                     &per_reference_samples
                 );
-                Mutex::new(VariantMatrix::new_matrix(per_reference_samples))
+                VariantMatrix::new_matrix(per_reference_samples)
             }
         };
 
@@ -309,21 +309,21 @@ pub fn pileup_variants<
         // let mut prev_ref_idx = -1;
         // let mut per_ref_sample_idx = 0;
 
-        let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
+        // let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
 
         indexed_bam_readers
-            .into_par_iter()
+            .into_iter()
             .enumerate()
             .for_each(|(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using
                 if sample_idx < short_sample_count {
                     process_vcf(
                         bam_generator,
-                        threads,
+                        n_threads,
                         *ref_idx,
                         sample_idx,
                         per_reference_samples,
-                        &variant_matrix,
+                        &mut variant_matrix,
                         false,
                         m,
                         // &mut sample_groups,
@@ -340,11 +340,11 @@ pub fn pileup_variants<
                     // changes in references
                     process_vcf(
                         bam_generator,
-                        threads,
+                        n_threads,
                         *ref_idx,
                         sample_idx,
                         per_reference_samples,
-                        &variant_matrix,
+                        &mut variant_matrix,
                         true,
                         m,
                         // &mut sample_groups,
@@ -374,7 +374,6 @@ pub fn pileup_variants<
                                 HashMap<i64, HashMap<Variant, Base>>,
                             > = HashMap::new();
                             let target_len = header.target_len(tid as u32).unwrap();
-                            let mut variant_matrix = variant_matrix.lock().unwrap();
 
                             variant_matrix.add_reference_contig(
                                 stoit_name.clone(),
@@ -391,7 +390,7 @@ pub fn pileup_variants<
                 {
                     pb2.set_message(&format!(
                         "Variant calling on sample: {}",
-                        variant_matrix.lock().unwrap().get_sample_name(sample_idx),
+                        variant_matrix.get_sample_name(sample_idx),
                     ));
                     pb2.inc(1);
                     pb4.inc(1);
@@ -411,7 +410,7 @@ pub fn pileup_variants<
         );
 
         // pb3.println("Performing guided variant calling...");
-        // let mut variant_matrix = variant_matrix.lock().unwrap();
+        let mut variant_matrix = Mutex::new(variant_matrix);
         if variant_matrix.lock().unwrap().get_variant_count(*ref_idx) > 0 {
             indexed_bam_readers.into_par_iter().enumerate().for_each(
                 |(sample_idx, bam_generator)| {
@@ -422,7 +421,7 @@ pub fn pileup_variants<
                             per_reference_samples,
                             &coverage_estimators,
                             &variant_matrix,
-                            std::cmp::max(n_threads / (short_sample_count + long_sample_count), 2),
+                            n_threads,
                             m,
                             output_prefix,
                             coverage_fold,
@@ -450,7 +449,7 @@ pub fn pileup_variants<
                             per_reference_samples,
                             &coverage_estimators,
                             &variant_matrix,
-                            std::cmp::max(n_threads / (short_sample_count + long_sample_count), 2),
+                            n_threads,
                             m,
                             output_prefix,
                             coverage_fold,
@@ -486,9 +485,10 @@ pub fn pileup_variants<
         }
         pb3.finish_with_message(&format!("Guided variant calling complete..."));
 
+        let mut variant_matrix = variant_matrix.lock().unwrap();
+
         // Collects info about variants across samples to check whether they are genuine or not
         // using FDR
-        let mut variant_matrix = variant_matrix.lock().unwrap();
 
         // TODO: Make sure that this is fixed. It seems to work appropriately now
         pb4.set_message("Setting FDR threshold...");
