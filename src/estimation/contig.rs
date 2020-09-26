@@ -309,6 +309,8 @@ pub fn pileup_variants<
         // let mut prev_ref_idx = -1;
         // let mut per_ref_sample_idx = 0;
 
+        let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
+
         indexed_bam_readers
             .into_par_iter()
             .enumerate()
@@ -317,7 +319,7 @@ pub fn pileup_variants<
                 if sample_idx < short_sample_count {
                     process_vcf(
                         bam_generator,
-                        n_threads,
+                        threads,
                         *ref_idx,
                         sample_idx,
                         per_reference_samples,
@@ -338,7 +340,7 @@ pub fn pileup_variants<
                     // changes in references
                     process_vcf(
                         bam_generator,
-                        n_threads,
+                        threads,
                         *ref_idx,
                         sample_idx,
                         per_reference_samples,
