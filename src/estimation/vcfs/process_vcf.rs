@@ -242,7 +242,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
             }
         });
 
-    // bam_generated.finish();
+    bam_generated.finish();
 
     // let freebayes_threads = std::cmp::max(split_threads / target_names.len(), 1);
     target_names.iter().enumerate().for_each(|(tid, target_name)| {
@@ -528,12 +528,11 @@ pub fn generate_vcf(
         // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
         let vcf_cmd_string = format!(
             "set -e -o pipefail;  \
-            freebayes-parallel {:?} {} -f {} -r {} -C {} -q {} \
+            freebayes-parallel {:?} {} -f {} -C {} -q {} \
             -p {} --strict-vcf -m {} {} > {}",
             region_tmp_file.path(),
             threads,
             &reference,
-            &target_name,
             m.value_of("min-variant-depth").unwrap(),
             m.value_of("base-quality-threshold").unwrap(),
             // m.value_of("min-repeat-entropy").unwrap(),
