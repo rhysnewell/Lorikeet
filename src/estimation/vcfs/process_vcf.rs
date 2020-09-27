@@ -11,7 +11,6 @@ use utils::*;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use rayon::prelude::*;
 use scoped_threadpool::Pool;
 use std::io::Write;
 use std::path::Path;
@@ -58,11 +57,10 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         .into_iter()
         .map(|tid| header.target_len(tid).unwrap())
         .collect();
-    let target_names: Vec<String> = header
-        .target_names()
-        .into_iter()
-        .map(|target| String::from_utf8(target.to_vec()).unwrap())
-        .collect(); // contig names
+    let target_names = header.target_names();
+    //     .into_iter()
+    //     .map(|target| String::from_utf8(target.to_vec()).unwrap())
+    //     .collect(); // contig names
 
     let bam_path = bam_generated.path().to_string();
 
@@ -84,39 +82,45 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
     let mut total_records = 0;
     variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
+    let mut ref_target_names = Vec::new();
+    let mut ref_target_lengths = Vec::new();
 
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
         .iter()
         .enumerate()
-        .for_each(|(tid, target_name)| {
-            // let target_name = String::from_utf8(target.to_vec()).unwrap();
+        .for_each(|(tid, contig_name)| {
+            let target_name = String::from_utf8(contig_name.to_vec()).unwrap();
             if target_name.contains(reference)
-                || match genomes_and_contigs.contig_to_genome.get(target_name) {
+                || match genomes_and_contigs.contig_to_genome.get(&target_name) {
                     Some(ref_id) => *ref_id == ref_idx,
                     None => false,
                 }
             {
                 // use pileups to call SNPs for low quality variants
                 // That are usually skipped by GATK
+                ref_target_names.push(target_name.clone());
                 let target_len = target_lens[tid];
+                ref_target_lengths.push(target_len);
                 variant_matrix.add_info(ref_idx, tid, target_name.as_bytes().to_vec(), target_len);
                 {
                     bam_generated.fetch(tid as u32, 0, target_len);
                     match bam_generated.pileup() {
                         Some(pileups) => {
-                            let mut contig_name = Vec::new();
                             let mut ref_seq = Vec::new();
                             // Update all contig information
-                            contig_name = target_name.as_bytes().to_vec();
                             fetch_contig_from_reference(
                                 &mut reference_file,
-                                &contig_name,
+                                &contig_name.to_vec(),
                                 genomes_and_contigs,
                                 ref_idx as usize,
                             );
                             ref_seq = Vec::new();
-                            read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
+                            read_sequence_to_vec(
+                                &mut ref_seq,
+                                &mut reference_file,
+                                &contig_name.to_vec(),
+                            );
 
                             for p in pileups {
                                 // if {
@@ -226,115 +230,100 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
 
     bam_generated.finish();
     let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
-    let mut thread_locker = Mutex::new(true);
+    // let mut thread_locker = Mutex::new(true);
     let freebayes_threads = std::cmp::max(split_threads, 1);
-    target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
-            if target_name.contains(reference)
-                || match genomes_and_contigs.contig_to_genome.get(target_name) {
-                Some(ref_id) => *ref_id == ref_idx,
-                None => false,
-            }
-            {
+    // target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
+    //         if target_name.contains(reference)
+    //             || match genomes_and_contigs.contig_to_genome.get(target_name) {
+    //             Some(ref_id) => *ref_id == ref_idx,
+    //             None => false,
+    //         }
+    //         {
 
-                // use pileups to call SNPs for low quality variants
-                // That are usually skipped by GATK
-                let target_len = target_lens[tid];
+    // use pileups to call SNPs for low quality variants
+    // That are usually skipped by GATK
+    // let target_len = target_lens[tid];
 
-                // Get VCF file from BAM using freebayes of SVIM
-                let mut vcf_reader = if target_len > 100000 {
-                    thread_locker.lock().unwrap();
-                    get_vcf(
-                        &stoit_name,
-                        &m,
-                        freebayes_threads,
-                        longread,
-                        target_len,
-                        &concatenated_genomes
-                            .as_ref()
-                            .unwrap()
-                            .path()
-                            .to_str()
-                            .unwrap(),
-                        &bam_path,
-                        &target_name,
-                    )
-                } else {
-                    get_vcf(
-                        &stoit_name,
-                        &m,
-                        1,
-                        longread,
-                        target_len,
-                        &concatenated_genomes
-                            .as_ref()
-                            .unwrap()
-                            .path()
-                            .to_str()
-                            .unwrap(),
-                        &bam_path,
-                        &target_name,
-                    )
-                };
+    // Get VCF file from BAM using freebayes of SVIM
+    let mut vcf_reader = get_vcf(
+        &stoit_name,
+        &m,
+        freebayes_threads,
+        longread,
+        ref_target_lengths,
+        &concatenated_genomes
+            .as_ref()
+            .unwrap()
+            .path()
+            .to_str()
+            .unwrap(),
+        &bam_path,
+        &ref_target_names,
+    );
 
-                match vcf_reader {
-                    Ok(ref mut reader) => {
-                        // reader
-                        //     .set_threads(split_threads)
-                        //     .expect("Unable to set threads on VCF reader");
+    match vcf_reader {
+        Ok(ref mut reader) => {
+            // let vcf_header = reader.header();
+            // let vcf_target_names: Vec<String> = vcf_header.samples()
+            //     .into_iter()
+            //     .map(|target| String::from_utf8(target.to_vec()).unwrap())
+            //     .collect();
+            // println!("{:?} {:?}", &vcf_target_names, &target_names);
 
-                        let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
+            let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
 
-                        let mut pool = Pool::new(freebayes_threads as u32);
-                        // let total_records = Arc::new(Mutex::new(total_records));
+            let mut pool = Pool::new(freebayes_threads as u32);
+            // let total_records = Arc::new(Mutex::new(total_records));
 
-                        pool.scoped(|scope| {
-                            for vcf_record in reader.records().into_iter() {
-                                scope.execute( || {
-                                    let mut vcf_record = vcf_record.unwrap();
-                                    let vcf_header = vcf_record.header();
-                                    let variant_rid = vcf_record.rid().unwrap();
-                                    // Check bam header names and vcf header names are in same order
-                                    // Sanity check
-                                    // total_records += 1;
-                                    if target_name.as_bytes()
-                                        == vcf_header.rid2name(variant_rid).unwrap() {
-                                        let base_option =
-                                            Base::from_vcf_record(
-                                                &mut vcf_record,
-                                                sample_count,
-                                                sample_idx,
-                                                longread,
-                                                min_qual,
-                                            );
-                                        match base_option {
-                                            Some(bases) => {
-                                                for base in bases {
-                                                    let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
-                                                    variant_matrix_sync.add_variant_to_matrix(
-                                                        sample_idx,
-                                                        &base,
-                                                        tid as usize,
-                                                        ref_idx,
-                                                    );
-                                                }
-                                            },
-                                            None => {},
-                                        }
-                                    } else {
-                                        panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
-                                    }
-                                });
-                            };
-                        });
-
-                    }
-                    Err(_) => {
-                        info!("No VCF records found for sample {}", &stoit_name);
-                    }
+            pool.scoped(|scope| {
+                for vcf_record in reader.records().into_iter() {
+                    scope.execute(|| {
+                        let mut vcf_record = vcf_record.unwrap();
+                        // let vcf_header = vcf_record.header();
+                        let variant_rid = vcf_record.rid().unwrap();
+                        // let vcf_target = String::from_utf8(vcf_header.rid2name(variant_rid).unwrap().to_vec()).unwrap();
+                        // let variant_rid: &usize = &target_names.iter().position(|t| t==&vcf_target).unwrap();
+                        // Check bam header names and vcf header names are in same order
+                        // Sanity check
+                        // total_records += 1;
+                        // if target_name.as_bytes()
+                        //     == vcf_header.rid2name(variant_rid).unwrap() {
+                        let base_option = Base::from_vcf_record(
+                            &mut vcf_record,
+                            sample_count,
+                            sample_idx,
+                            longread,
+                            min_qual,
+                        );
+                        match base_option {
+                            Some(bases) => {
+                                for base in bases {
+                                    let mut variant_matrix_sync =
+                                        variant_matrix_sync.lock().unwrap();
+                                    variant_matrix_sync.add_variant_to_matrix(
+                                        sample_idx,
+                                        &base,
+                                        variant_rid as usize,
+                                        ref_idx,
+                                    );
+                                }
+                            }
+                            None => {}
+                        }
+                        // } else {
+                        //     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+                        // }
+                    });
                 }
+            });
+        }
+        Err(_) => {
+            info!("No VCF records found for sample {}", &stoit_name);
+        }
+    }
 
-            }
-        });
+    //     }
+    // });
     *variant_matrix = variant_matrix_sync.lock().unwrap().clone();
 }
 
@@ -345,10 +334,10 @@ pub fn get_vcf(
     m: &clap::ArgMatches,
     threads: usize,
     longread: bool,
-    target_length: u64,
+    target_lengths: Vec<u64>,
     reference: &str,
     bam_path: &str,
-    target_name: &str,
+    target_names: &Vec<String>,
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // if vcfs are already provided find correct one first
     if m.is_present("vcfs") {
@@ -370,9 +359,9 @@ pub fn get_vcf(
                     m,
                     threads,
                     longread,
-                    target_length,
+                    target_lengths,
                     reference,
-                    target_name,
+                    target_names,
                 );
             } else {
                 // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
@@ -382,9 +371,9 @@ pub fn get_vcf(
                     m,
                     threads,
                     longread,
-                    target_length,
+                    target_lengths,
                     reference,
-                    target_name,
+                    target_names,
                 );
             }
         } else {
@@ -400,9 +389,9 @@ pub fn get_vcf(
             m,
             threads,
             longread,
-            target_length,
+            target_lengths,
             reference,
-            target_name,
+            target_names,
         );
     } else if m.is_present("bam-files") {
         // let bam_path: &str = *m.values_of("bam-files").unwrap().collect::<Vec<&str>>()
@@ -412,9 +401,9 @@ pub fn get_vcf(
             m,
             threads,
             longread,
-            target_length,
+            target_lengths,
             reference,
-            target_name,
+            target_names,
         );
     } else {
         // We are streaming a generated bam file, so we have had to cache the bam for this to work
@@ -427,9 +416,9 @@ pub fn get_vcf(
             m,
             threads,
             longread,
-            target_length,
+            target_lengths,
             reference,
-            target_name,
+            target_names,
         );
     }
 }
@@ -441,9 +430,9 @@ pub fn generate_vcf(
     m: &clap::ArgMatches,
     threads: usize,
     longread: bool,
-    target_length: u64,
+    target_lengths: Vec<u64>,
     reference: &str,
-    target_name: &str,
+    target_names: &Vec<String>,
 ) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
@@ -456,36 +445,40 @@ pub fn generate_vcf(
 
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
-    if !longread {
-        external_command_checker::check_for_freebayes();
-        external_command_checker::check_for_freebayes_parallel();
-        external_command_checker::check_for_samtools();
-        external_command_checker::check_for_vt();
+    // if !longread {
+    external_command_checker::check_for_freebayes();
+    external_command_checker::check_for_freebayes_parallel();
+    external_command_checker::check_for_samtools();
+    external_command_checker::check_for_vt();
 
-        // Old way of calulating region size, not a good method
-        // let region_size = reference_length / threads as u64;
-        // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
-        let mut region_size = target_length / threads as u64
-            + if target_length % threads as u64 != 0 {
-                1
-            } else {
-                0
-            };
-        if target_length <= 100000 {
-            region_size = 100000
-        }
+    // Old way of calulating region size, not a good method
+    // let region_size = reference_length / threads as u64;
+    // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
+    // let mut region_size = target_length / threads as u64
+    //     + if target_length % threads as u64 != 0 {
+    //         1
+    //     } else {
+    //         0
+    //     };
+    // if target_length <= 100000 {
+    //     region_size = 100000
+    // }
 
-        let index_path = format!("{}.fai", reference);
+    let region_size = 100000;
 
-        let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
-        let vcf_path_prenormalization =
-            &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
+    let index_path = format!("{}.fai", reference);
 
-        let mut region_tmp_file = Builder::new()
-            .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
-            .suffix(".txt")
-            .tempfile()
-            .unwrap();
+    let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
+    let vcf_path_prenormalization =
+        &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
+
+    let mut region_tmp_file = Builder::new()
+        .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
+        .suffix(".txt")
+        .tempfile()
+        .unwrap();
+
+    for (target_name, target_length) in target_names.iter().zip(target_lengths) {
         let mut total_region_covered = 0;
         let total_region_chunks = target_length / region_size
             + if target_length % region_size != 0 {
@@ -515,98 +508,99 @@ pub fn generate_vcf(
                 .unwrap();
             }
         }
+    }
 
-        // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
-        let vcf_cmd_string = format!(
-            "set -e -o pipefail;  \
+    // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
+    let vcf_cmd_string = format!(
+        "set -e -o pipefail;  \
             freebayes-parallel {:?} {} -f {} -C {} -q {} \
             -p {} --strict-vcf -m {} {} > {}",
-            region_tmp_file.path(),
-            threads,
-            &reference,
-            m.value_of("min-variant-depth").unwrap(),
-            m.value_of("base-quality-threshold").unwrap(),
-            // m.value_of("min-repeat-entropy").unwrap(),
-            m.value_of("ploidy").unwrap(),
-            mapq_thresh,
-            &bam_path,
-            &vcf_path_prenormalization,
-        );
-        let vt_cmd_string = format!(
-            "vt normalize {} -n -r {} -o {}",
-            &vcf_path_prenormalization, &reference, vcf_path,
-        );
-        debug!("Queuing cmd_string: {}", vcf_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&vcf_cmd_string)
-                .stderr(std::process::Stdio::piped())
-                // .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "freebayes",
-        );
-        debug!("Queuing cmd_string: {}", vt_cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&vt_cmd_string)
-                .stderr(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "vt",
-        );
-        debug!("VCF Path {:?}", vcf_path);
-        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
+        region_tmp_file.path(),
+        threads,
+        &reference,
+        m.value_of("min-variant-depth").unwrap(),
+        m.value_of("base-quality-threshold").unwrap(),
+        // m.value_of("min-repeat-entropy").unwrap(),
+        m.value_of("ploidy").unwrap(),
+        mapq_thresh,
+        &bam_path,
+        &vcf_path_prenormalization,
+    );
+    let vt_cmd_string = format!(
+        "vt normalize {} -n -r {} -o {}",
+        &vcf_path_prenormalization, &reference, vcf_path,
+    );
+    debug!("Queuing cmd_string: {}", vcf_cmd_string);
+    command::finish_command_safely(
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&vcf_cmd_string)
+            .stderr(std::process::Stdio::piped())
+            // .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("Unable to execute bash"),
+        "freebayes",
+    );
+    debug!("Queuing cmd_string: {}", vt_cmd_string);
+    command::finish_command_safely(
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&vt_cmd_string)
+            .stderr(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("Unable to execute bash"),
+        "vt",
+    );
+    debug!("VCF Path {:?}", vcf_path);
+    let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
 
-        tmp_dir.close().expect("Failed to close temp directory");
-        return vcf_reader;
-    } else {
-        external_command_checker::check_for_svim();
-        let svim_path = tmp_dir.path().to_str().unwrap().to_string();
-
-        // check and build bam index if it doesn't exist
-        if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
-            bam::index::build(
-                bam_path,
-                Some(&(bam_path.to_string() + ".bai")),
-                bam::index::Type::BAI,
-                threads as u32,
-            )
-            .expect(&format!("Unable to index bam at {}", &bam_path));
-        }
-
-        let cmd_string = format!(
-            "set -e -o pipefail; samtools view -bh {} {} > {} && \
-            svim alignment --read_names --skip_genotyping \
-            --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
-            --min_mapq {} --sequence_alleles {} {} {}",
-            bam_path,
-            &target_name,
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
-            mapq_thresh,
-            &svim_path,
-            tmp_bam_path1.path().to_str().unwrap().to_string(),
-            &reference
-        );
-        debug!("Queuing cmd_string: {}", cmd_string);
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd_string)
-                .stderr(std::process::Stdio::piped())
-                //                .stdout(std::process::Stdio::null())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "svim",
-        );
-        let vcf_path = &(svim_path + "/variants.vcf");
-        debug!("VCF Path {:?}", vcf_path);
-        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
-
-        tmp_dir.close().expect("Failed to close temp directory");
-        return vcf_reader;
-    }
+    tmp_dir.close().expect("Failed to close temp directory");
+    return vcf_reader;
+    // } else {
+    //     external_command_checker::check_for_svim();
+    // let svim_path = tmp_dir.path().to_str().unwrap().to_string();
+    //
+    // // check and build bam index if it doesn't exist
+    // if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
+    //     bam::index::build(
+    //         bam_path,
+    //         Some(&(bam_path.to_string() + ".bai")),
+    //         bam::index::Type::BAI,
+    //         threads as u32,
+    //     )
+    //     .expect(&format!("Unable to index bam at {}", &bam_path));
+    // }
+    //
+    // let cmd_string = format!(
+    //     "set -e -o pipefail; samtools view -bh {} {} > {} && \
+    //     svim alignment --read_names --skip_genotyping \
+    //     --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
+    //     --min_mapq {} --sequence_alleles {} {} {}",
+    //     bam_path,
+    //     &target_name,
+    //     tmp_bam_path1.path().to_str().unwrap().to_string(),
+    //     mapq_thresh,
+    //     &svim_path,
+    //     tmp_bam_path1.path().to_str().unwrap().to_string(),
+    //     &reference
+    // );
+    // debug!("Queuing cmd_string: {}", cmd_string);
+    // command::finish_command_safely(
+    //     std::process::Command::new("bash")
+    //         .arg("-c")
+    //         .arg(&cmd_string)
+    //         .stderr(std::process::Stdio::piped())
+    //         //                .stdout(std::process::Stdio::null())
+    //         .spawn()
+    //         .expect("Unable to execute bash"),
+    //     "svim",
+    // );
+    // let vcf_path = &(svim_path + "/variants.vcf");
+    // debug!("VCF Path {:?}", vcf_path);
+    // let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
+    //
+    // tmp_dir.close().expect("Failed to close temp directory");
+    // return vcf_reader;
+    // }
 }
