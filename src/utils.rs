@@ -974,14 +974,12 @@ pub fn generate_filtered_named_bam_readers_from_reads(
     };
 }
 
-pub fn retrieve_reference(concatenated_genomes: &Option<NamedTempFile>) -> IndexedReader<File> {
+pub fn retrieve_reference(concatenated_genomes: &Option<String>) -> IndexedReader<File> {
     let reference = match concatenated_genomes {
-        Some(reference_path) => {
-            match bio::io::fasta::IndexedReader::from_file(&reference_path.path()) {
-                Ok(reader) => reader,
-                Err(_e) => generate_faidx(&reference_path.path().to_str().unwrap()),
-            }
-        }
+        Some(reference_path) => match bio::io::fasta::IndexedReader::from_file(&reference_path) {
+            Ok(reader) => reader,
+            Err(_e) => generate_faidx(&reference_path),
+        },
         None => panic!("Concatenated reference file does not exist"),
     };
 
