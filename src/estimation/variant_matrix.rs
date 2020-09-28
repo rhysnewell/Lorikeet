@@ -27,12 +27,11 @@ use std::process::Stdio;
 use std::str;
 use std::sync::{Arc, Mutex};
 use tempfile;
-use tempfile::NamedTempFile;
 use utils::generate_faidx;
 
 #[derive(Debug, Clone)]
 /// Container for all variants within a genome and associated clusters
-pub enum VariantMatrix {
+pub enum VariantMatrix<'b> {
     VariantContigMatrix {
         coverages: HashMap<i32, Vec<f64>>,
         average_genotypes: HashMap<i32, Vec<f64>>,
@@ -56,12 +55,13 @@ pub enum VariantMatrix {
             usize,
             HashMap<usize, HashMap<i32, HashMap<i64, HashMap<fuzzy::Category, HashSet<Variant>>>>>,
         >,
+        _m: std::marker::PhantomData<&'b ()>,
         //        pred_variants_all: HashMap<usize, HashMap<i32, HashMap<i32, HashSet<String>>>>,
     },
 }
 
-impl VariantMatrix {
-    pub fn new_matrix(sample_count: usize) -> VariantMatrix {
+impl<'b> VariantMatrix<'b> {
+    pub fn new_matrix(sample_count: usize) -> VariantMatrix<'b> {
         VariantMatrix::VariantContigMatrix {
             coverages: HashMap::new(),
             variances: HashMap::new(),
@@ -79,6 +79,7 @@ impl VariantMatrix {
             geom_mean_dep: HashMap::new(),
             geom_mean_frq: HashMap::new(),
             pred_variants: HashMap::new(),
+            _m: std::marker::PhantomData::default(),
         }
     }
 }
@@ -151,7 +152,7 @@ pub trait VariantMatrixFunctions {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     );
 
     /// EM Algorithm for caclulating the abundances of each genotype in each sample
@@ -179,7 +180,7 @@ pub trait VariantMatrixFunctions {
         reference_map: &HashMap<usize, String>,
         codon_table: &CodonTable,
         output_prefix: &str,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     );
 
     fn polish_genomes(
@@ -187,7 +188,7 @@ pub trait VariantMatrixFunctions {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     );
 
     fn calculate_sample_distances(
@@ -201,7 +202,7 @@ pub trait VariantMatrixFunctions {
 }
 
 #[allow(unused)]
-impl VariantMatrixFunctions for VariantMatrix {
+impl VariantMatrixFunctions for VariantMatrix<'_> {
     fn setup(&mut self) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -977,7 +978,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -999,9 +1000,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                             let mut reference = match concatenated_genomes {
                                 Some(temp_file) => {
-                                    match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                                    match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                         Ok(reader) => reader,
-                                        Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                                        Err(_e) => generate_faidx(&temp_file),
                                     }
                                 },
                                 None => {
@@ -1663,7 +1664,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         reference_map: &HashMap<usize, String>,
         codon_table: &CodonTable,
         output_prefix: &str,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     ) {
         // Calculates parse the per reference information to functions in codon_structs
         // Writes the resulting gff records
@@ -1682,9 +1683,9 @@ impl VariantMatrixFunctions for VariantMatrix {
                     );
                     let mut reference = match concatenated_genomes {
                         Some(temp_file) => {
-                            match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                            match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                 Ok(reader) => reader,
-                                Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                                Err(_e) => generate_faidx(&temp_file),
                             }
                         }
                         None => match bio::io::fasta::IndexedReader::from_file(&reference_path) {
@@ -1780,7 +1781,7 @@ impl VariantMatrixFunctions for VariantMatrix {
         output_prefix: &str,
         reference_map: &HashMap<usize, String>,
         genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<NamedTempFile>,
+        concatenated_genomes: &Option<String>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -1805,9 +1806,9 @@ impl VariantMatrixFunctions for VariantMatrix {
 
                         let mut reference = match concatenated_genomes {
                             Some(temp_file) => {
-                                match bio::io::fasta::IndexedReader::from_file(&temp_file.path()) {
+                                match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                     Ok(reader) => reader,
-                                    Err(_e) => generate_faidx(&temp_file.path().to_str().unwrap()),
+                                    Err(_e) => generate_faidx(&temp_file),
                                 }
                             },
                             None => {

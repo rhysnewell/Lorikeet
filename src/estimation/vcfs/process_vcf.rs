@@ -1,5 +1,5 @@
 use bird_tool_utils::command;
-use rust_htslib::{bam, bcf, bcf::Read};
+use rust_htslib::{bcf, bcf::Read};
 use std;
 use std::collections::HashMap;
 
@@ -18,23 +18,22 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::Builder;
-use tempfile::NamedTempFile;
 
 #[allow(unused)]
-pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R> + Send>(
+pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R> + Send>(
     bam_generator: G,
     split_threads: usize,
     ref_idx: usize,
     sample_idx: usize,
     mut sample_count: usize,
-    variant_matrix: &mut VariantMatrix,
+    variant_matrix: &'b mut VariantMatrix,
     longread: bool,
-    m: &clap::ArgMatches,
+    m: &'b clap::ArgMatches,
     // sample_groups: &mut HashMap<&str, HashSet<String>>,
-    genomes_and_contigs: &GenomesAndContigs,
-    reference_map: &HashMap<usize, String>,
+    genomes_and_contigs: &'b GenomesAndContigs,
+    reference_map: &'b HashMap<usize, String>,
     mut short_sample_count: usize,
-    concatenated_genomes: &Option<NamedTempFile>,
+    concatenated_genomes: &'b Option<String>,
 ) {
     let mut bam_generated = bam_generator.start();
     let mut stoit_name = bam_generated.name().to_string();
@@ -251,12 +250,7 @@ pub fn process_vcf<R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R
         freebayes_threads,
         longread,
         ref_target_lengths,
-        &concatenated_genomes
-            .as_ref()
-            .unwrap()
-            .path()
-            .to_str()
-            .unwrap(),
+        &concatenated_genomes.as_ref().unwrap(),
         &bam_path,
         &ref_target_names,
     );

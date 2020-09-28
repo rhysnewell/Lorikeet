@@ -16,6 +16,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use scoped_threadpool::Pool;
 use std::path::Path;
 use std::process::Stdio;
 use std::str;
@@ -24,6 +25,7 @@ use tempfile::NamedTempFile;
 
 #[allow(unused)]
 pub fn pileup_variants<
+    'a,
     R: NamedBamReader,
     G: NamedBamReaderGenerator<R>,
     S: NamedBamReader,
@@ -55,7 +57,15 @@ pub fn pileup_variants<
     let references = parse_references(&m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
-    retrieve_reference(&concatenated_genomes);
+    retrieve_reference(&Some(
+        concatenated_genomes
+            .as_ref()
+            .unwrap()
+            .path()
+            .to_str()
+            .unwrap()
+            .to_string(),
+    ));
     // let tmp_dir = TempDir::new("lorikeet_references").expect("Unable to create temporary directory");
 
     // All different counts of samples I need. Changes depends on when using concatenated genomes or not
@@ -126,19 +136,7 @@ pub fn pileup_variants<
     let pb1 = multi.insert(0, ProgressBar::new(reference_map.keys().len() as u64));
     pb1.set_style(sty.clone());
 
-    let pb2 = multi.insert(
-        1,
-        ProgressBar::new((short_sample_count + long_sample_count) as u64),
-    );
-    pb2.set_style(sty.clone());
-
-    let pb3 = multi.insert(
-        2,
-        ProgressBar::new((short_sample_count + long_sample_count) as u64),
-    );
-    pb3.set_style(sty.clone());
-
-    let pb4 = multi.insert(3, ProgressBar::new_spinner());
+    let pb4 = multi.insert(1, ProgressBar::new_spinner());
     pb4.set_style(
         ProgressStyle::default_spinner()
             .tick_chars("|/-\\|/-\\| ")
@@ -148,470 +146,551 @@ pub fn pileup_variants<
     let _ = std::thread::spawn(move || {
         multi.join().unwrap();
     });
-
+    pb4.set_message("Performing analysis...");
+    pb4.enable_steady_tick(1000);
     pb1.tick();
 
-    reference_map.iter().for_each(|(ref_idx, reference_stem)| {
-        pb2.reset();
-        pb3.reset();
-        pb3.set_message("Waiting for variant matrix...");
-        pb4.reset();
-        pb1.inc(1);
-        pb1.set_message(&format!(
-            "Working on genome: {}",
-            &genomes_and_contigs.genomes[*ref_idx],
-        ));
-        let reference = &genomes_and_contigs.genomes[*ref_idx];
-        pb4.enable_steady_tick(1000);
-        pb4.set_message(&format!("{}: Preparing variants...", &reference,));
-        // multi.join().unwrap();
-        let mut coverage_estimators = coverage_estimators.clone();
+    let mut pool = Pool::new(8);
+    let n_threads = std::cmp::max(n_threads / 8, 2);
 
-        let mut codon_table = CodonTable::setup();
+    pool.scoped(|scope| {
+        for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
+            // let ref_idx = Arc::new(ref_idx);
+            //
+            pb1.inc(1);
+            pb1.set_message(&format!(
+                "Working on genome: {}",
+                &genomes_and_contigs.genomes[ref_idx],
+            ));
 
-        // Read BAMs back in as indexed
-        let mut indexed_bam_readers = recover_bams(
-            m,
-            &concatenated_genomes,
-            short_sample_count,
-            long_sample_count,
-            &genomes_and_contigs,
-            n_threads as u32,
-            &tmp_bam_file_cache,
-        );
-        let mut per_reference_samples = 0;
-        let mut per_reference_short_samples = 0;
-        let mut variant_matrix = match concatenated_genomes {
-            Some(ref concat) => {
-                per_reference_samples = short_sample_count + long_sample_count;
-                per_reference_short_samples = short_sample_count;
-                debug!(
-                    "Per reference samples concatenated {}",
-                    &per_reference_samples
+            // let ref_idx = Arc::new(ref_idx);
+            let flag_filters = flag_filters.clone();
+            let reference_map = reference_map.clone();
+            let references = references.clone();
+            let tmp_bam_file_cache = match tmp_bam_file_cache.as_ref() {
+                Some(cache) => Some(cache.path().to_str().unwrap().to_string()),
+                None => None,
+            };
+            let concatenated_genomes = match concatenated_genomes.as_ref() {
+                Some(file) => Some(file.path().to_str().unwrap().to_string()),
+                None => None,
+            };
+            let mut coverage_estimators = coverage_estimators.clone();
+            let genomes_and_contigs = GenomesAndContigs {
+                genomes: genomes_and_contigs.genomes.clone(),
+                contig_to_genome: genomes_and_contigs.contig_to_genome.clone(),
+            };
+
+            let output_prefix = format!(
+                "{}/{:?}",
+                &output_prefix,
+                Path::new(&reference_stem).file_stem().unwrap()
+            );
+
+            scope.execute(move || {
+                // let multi_inner = MultiProgress::new();
+                // let sty = ProgressStyle::default_bar()
+                //     .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                //     .progress_chars("##-");
+                // let pb2 = multi_inner.insert(
+                //     0,
+                //     ProgressBar::new((short_sample_count + long_sample_count) as u64),
+                // );
+                // pb2.set_style(sty.clone());
+                //
+                // let pb3 = multi_inner.insert(
+                //     1,
+                //     ProgressBar::new((short_sample_count + long_sample_count) as u64),
+                // );
+                // pb3.set_style(sty.clone());
+                //
+                //
+                //
+                // let _ = std::thread::spawn(move || {
+                //     multi_inner.join_and_clear().unwrap();
+                // });
+
+                let reference = &genomes_and_contigs.genomes[ref_idx];
+                // pb4.set_message(&format!("{}: Preparing variants...", &reference,));
+                // multi.join().unwrap();
+
+                let mut codon_table = CodonTable::setup();
+
+                // Read BAMs back in as indexed
+                let mut indexed_bam_readers = recover_bams(
+                    m,
+                    &concatenated_genomes,
+                    short_sample_count,
+                    long_sample_count,
+                    &genomes_and_contigs,
+                    n_threads as u32,
+                    &tmp_bam_file_cache,
                 );
-
-                VariantMatrix::new_matrix(per_reference_samples)
-            }
-            None => {
-                per_reference_samples = (short_sample_count + long_sample_count) / references.len();
-                per_reference_short_samples = short_sample_count / references.len();
-                debug!(
-                    "Per reference samples not concatenated {}",
-                    &per_reference_samples
-                );
-                VariantMatrix::new_matrix(per_reference_samples)
-            }
-        };
-
-        // Gff map lists coding regions
-        let mut gff_map = HashMap::new();
-        match mode {
-            "evolve" => {
-                codon_table.get_codon_table(11);
-                // ani = 0.;
-
-                let mut gff_reader;
-                if m.is_present("gff") || !m.is_present("gff") {
-                    external_command_checker::check_for_prodigal();
-
-                    // create new fifo and give read, write and execute rights to the owner.
-                    let gff_dir =
-                        TempDir::new("lorikeet-prokka").expect("unable to create prokka directory");
-                    for reference in references.iter() {
-                        let cmd_string = format!(
-                            "set -e -o pipefail; \
-                     prodigal -o {}/{}.gff -i {} -f gff -p meta",
-                            // prodigal
-                            gff_dir
-                                .path()
-                                .to_str()
-                                .expect("Failed to convert tempfile path to str"),
-                            Path::new(&reference).file_stem().unwrap().to_str().unwrap(),
-                            &reference
-                        );
-                        debug!("Queuing cmd_string: {}", cmd_string);
-                        command::finish_command_safely(
-                            std::process::Command::new("bash")
-                                .arg("-c")
-                                .arg(&cmd_string)
-                                .stdout(Stdio::piped())
-                                .stderr(Stdio::piped())
-                                .spawn()
-                                .expect("Unable to execute bash"),
-                            "prodigal",
+                let mut per_reference_samples = 0;
+                let mut per_reference_short_samples = 0;
+                let mut variant_matrix = match concatenated_genomes {
+                    Some(ref concat) => {
+                        per_reference_samples = short_sample_count + long_sample_count;
+                        per_reference_short_samples = short_sample_count;
+                        debug!(
+                            "Per reference samples concatenated {}",
+                            &per_reference_samples
                         );
 
-                        // Read in newly created gff
-                        gff_reader = gff::Reader::from_file(
-                            format!(
-                                "{}/{}.gff",
-                                gff_dir
-                                    .path()
-                                    .to_str()
-                                    .expect("Failed to convert tempfile path to str"),
-                                Path::new(&reference).file_stem().unwrap().to_str().unwrap()
-                            ),
-                            bio::io::gff::GffType::GFF3,
-                        )
-                        .expect("Failed to read GFF file");
-
-                        // Map to reference id
-                        gff_reader.records().into_iter().for_each(|record| {
-                            match record {
-                                Ok(rec) => {
-                                    let gff_ref = gff_map
-                                        .entry(
-                                            genomes_and_contigs
-                                                .genome_index(
-                                                    &Path::new(reference)
-                                                        .file_stem()
-                                                        .expect("problem determining file stem")
-                                                        .to_str()
-                                                        .unwrap()
-                                                        .to_string(),
-                                                )
-                                                .unwrap(),
-                                        )
-                                        .or_insert(HashMap::new());
-                                    let contig_genes = gff_ref
-                                        .entry(rec.seqname().to_owned())
-                                        .or_insert(Vec::new());
-                                    contig_genes.push(rec);
-                                }
-                                _ => {}
-                            };
-                        });
+                        VariantMatrix::new_matrix(per_reference_samples)
                     }
+                    None => {
+                        per_reference_samples =
+                            (short_sample_count + long_sample_count) / references.len();
+                        per_reference_short_samples = short_sample_count / references.len();
+                        debug!(
+                            "Per reference samples not concatenated {}",
+                            &per_reference_samples
+                        );
+                        VariantMatrix::new_matrix(per_reference_samples)
+                    }
+                };
 
-                    gff_dir.close().expect("Failed to close temp directory");
-                }
-            }
-            "genotype" | "summarize" => {
-                // if m.is_present("strain-ani") {
-                //     ani = parse_percentage(m, "strain-ani");
-                // }
-            }
-            _ => {
-                //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
-                //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
-            }
-        }
+                // Gff map lists coding regions
+                let mut gff_map = HashMap::new();
+                match mode {
+                    "evolve" => {
+                        codon_table.get_codon_table(11);
+                        // ani = 0.;
 
-        // let mut sample_groups = HashMap::new();
+                        let mut gff_reader;
+                        if m.is_present("gff") || !m.is_present("gff") {
+                            external_command_checker::check_for_prodigal();
 
-        debug!(
-            "Running SNP calling on {} shortread samples",
-            indexed_bam_readers.len()
-        );
+                            // create new fifo and give read, write and execute rights to the owner.
+                            let gff_dir = TempDir::new("lorikeet-prokka")
+                                .expect("unable to create prokka directory");
+                            for reference in references.iter() {
+                                let cmd_string = format!(
+                                    "set -e -o pipefail; \
+                     prodigal -o {}/{}.gff -i {} -f gff -p meta",
+                                    // prodigal
+                                    gff_dir
+                                        .path()
+                                        .to_str()
+                                        .expect("Failed to convert tempfile path to str"),
+                                    Path::new(&reference).file_stem().unwrap().to_str().unwrap(),
+                                    &reference
+                                );
+                                debug!("Queuing cmd_string: {}", cmd_string);
+                                command::finish_command_safely(
+                                    std::process::Command::new("bash")
+                                        .arg("-c")
+                                        .arg(&cmd_string)
+                                        .stdout(Stdio::piped())
+                                        .stderr(Stdio::piped())
+                                        .spawn()
+                                        .expect("Unable to execute bash"),
+                                    "prodigal",
+                                );
 
-        // let mut prev_ref_idx = -1;
-        // let mut per_ref_sample_idx = 0;
+                                // Read in newly created gff
+                                gff_reader = gff::Reader::from_file(
+                                    format!(
+                                        "{}/{}.gff",
+                                        gff_dir
+                                            .path()
+                                            .to_str()
+                                            .expect("Failed to convert tempfile path to str"),
+                                        Path::new(&reference)
+                                            .file_stem()
+                                            .unwrap()
+                                            .to_str()
+                                            .unwrap()
+                                    ),
+                                    bio::io::gff::GffType::GFF3,
+                                )
+                                .expect("Failed to read GFF file");
 
-        // let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
+                                // Map to reference id
+                                gff_reader.records().into_iter().for_each(|record| {
+                                    match record {
+                                        Ok(rec) => {
+                                            let gff_ref = gff_map
+                                                .entry(
+                                                    genomes_and_contigs
+                                                        .genome_index(
+                                                            &Path::new(reference)
+                                                                .file_stem()
+                                                                .expect(
+                                                                    "problem determining file stem",
+                                                                )
+                                                                .to_str()
+                                                                .unwrap()
+                                                                .to_string(),
+                                                        )
+                                                        .unwrap(),
+                                                )
+                                                .or_insert(HashMap::new());
+                                            let contig_genes = gff_ref
+                                                .entry(rec.seqname().to_owned())
+                                                .or_insert(Vec::new());
+                                            contig_genes.push(rec);
+                                        }
+                                        _ => {}
+                                    };
+                                });
+                            }
 
-        indexed_bam_readers
-            .into_iter()
-            .enumerate()
-            .for_each(|(sample_idx, bam_generator)| {
-                // Get the appropriate sample index based on how many references we are using
-                if sample_idx < short_sample_count {
-                    process_vcf(
-                        bam_generator,
-                        n_threads,
-                        *ref_idx,
-                        sample_idx,
-                        per_reference_samples,
-                        &mut variant_matrix,
-                        false,
-                        m,
-                        // &mut sample_groups,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        per_reference_short_samples,
-                        &concatenated_genomes,
-                    );
-                } else if m.is_present("include-longread-svs")
-                    && (m.is_present("longreads") | m.is_present("longread-bam-files"))
-                {
-                    debug!("Running structural variant detection...");
-                    // Get the appropriate sample index based on how many references we are using by tracking
-                    // changes in references
-                    process_vcf(
-                        bam_generator,
-                        n_threads,
-                        *ref_idx,
-                        sample_idx,
-                        per_reference_samples,
-                        &mut variant_matrix,
-                        true,
-                        m,
-                        // &mut sample_groups,
-                        &genomes_and_contigs,
-                        &reference_map,
-                        per_reference_short_samples,
-                        &concatenated_genomes,
-                    );
-                } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
-                    // We need update the variant matrix anyway
-                    let bam_generated = bam_generator.start();
-                    let header = bam_generated.header().clone(); // bam header
-                    let target_names = header.target_names(); // contig names
-                    let reference = &genomes_and_contigs.genomes[*ref_idx];
-
-                    let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
-                    debug!("Stoit_name {:?}", &stoit_name);
-                    variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
-
-                    // let group = sample_groups.entry("long").or_insert(HashSet::new());
-                    // group.insert(stoit_name.clone());
-                    // for each genomic position, only has hashmap when variants are present. Includes read ids
-                    for (tid, target) in target_names.iter().enumerate() {
-                        let target_name = String::from_utf8(target.to_vec()).unwrap();
-                        if target_name.contains(reference) {
-                            let target_len = header.target_len(tid as u32).unwrap();
-                            variant_matrix.add_info(
-                                *ref_idx,
-                                tid,
-                                target_name.as_bytes().to_vec(),
-                                target_len,
-                            );
+                            gff_dir.close().expect("Failed to close temp directory");
                         }
                     }
+                    "genotype" | "summarize" => {
+                        // if m.is_present("strain-ani") {
+                        //     ani = parse_percentage(m, "strain-ani");
+                        // }
+                    }
+                    _ => {
+                        //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
+                        //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
+                    }
                 }
-                {
-                    pb2.set_message(&format!(
-                        "Variant calling on sample: {}",
-                        variant_matrix.get_sample_name(sample_idx),
-                    ));
-                    pb2.inc(1);
+
+                // let mut sample_groups = HashMap::new();
+
+                debug!(
+                    "Running SNP calling on {} shortread samples",
+                    indexed_bam_readers.len()
+                );
+
+                // let mut prev_ref_idx = -1;
+                // let mut per_ref_sample_idx = 0;
+
+                // let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
+
+                indexed_bam_readers.into_iter().enumerate().for_each(
+                    |(sample_idx, bam_generator)| {
+                        // Get the appropriate sample index based on how many references we are using
+                        if sample_idx < short_sample_count {
+                            process_vcf(
+                                bam_generator,
+                                n_threads,
+                                ref_idx,
+                                sample_idx,
+                                per_reference_samples,
+                                &mut variant_matrix,
+                                false,
+                                m,
+                                // &mut sample_groups,
+                                &genomes_and_contigs,
+                                &reference_map,
+                                per_reference_short_samples,
+                                &concatenated_genomes,
+                            );
+                        } else if m.is_present("include-longread-svs")
+                            && (m.is_present("longreads") | m.is_present("longread-bam-files"))
+                        {
+                            debug!("Running structural variant detection...");
+                            // Get the appropriate sample index based on how many references we are using by tracking
+                            // changes in references
+                            process_vcf(
+                                bam_generator,
+                                n_threads,
+                                ref_idx,
+                                sample_idx,
+                                per_reference_samples,
+                                &mut variant_matrix,
+                                true,
+                                m,
+                                // &mut sample_groups,
+                                &genomes_and_contigs,
+                                &reference_map,
+                                per_reference_short_samples,
+                                &concatenated_genomes,
+                            );
+                        } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
+                            // We need update the variant matrix anyway
+                            let bam_generated = bam_generator.start();
+                            let header = bam_generated.header().clone(); // bam header
+                            let target_names = header.target_names(); // contig names
+                            let reference = &genomes_and_contigs.genomes[ref_idx];
+
+                            let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
+                            debug!("Stoit_name {:?}", &stoit_name);
+                            variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
+
+                            // let group = sample_groups.entry("long").or_insert(HashSet::new());
+                            // group.insert(stoit_name.clone());
+                            // for each genomic position, only has hashmap when variants are present. Includes read ids
+                            for (tid, target) in target_names.iter().enumerate() {
+                                let target_name = String::from_utf8(target.to_vec()).unwrap();
+                                if target_name.contains(reference) {
+                                    let target_len = header.target_len(tid as u32).unwrap();
+                                    variant_matrix.add_info(
+                                        ref_idx,
+                                        tid,
+                                        target_name.as_bytes().to_vec(),
+                                        target_len,
+                                    );
+                                }
+                            }
+                        }
+                        // {
+                        // pb2.set_message(&format!(
+                        //     "Variant calling on sample: {}",
+                        //     variant_matrix.get_sample_name(sample_idx),
+                        // ));
+                        // pb2.inc(1);
+                        // }
+                    },
+                );
+                // pb2.finish_with_message(&format!("Initial variant calling complete..."));
+
+                // // Read BAMs back in as indexed
+                let mut indexed_bam_readers = recover_bams(
+                    m,
+                    &concatenated_genomes,
+                    short_sample_count,
+                    long_sample_count,
+                    &genomes_and_contigs,
+                    n_threads as u32,
+                    &tmp_bam_file_cache,
+                );
+
+                // pb3.println("Performing guided variant calling...");
+                // let mut variant_matrix = Mutex::new(variant_matrix);
+                if variant_matrix.get_variant_count(ref_idx) > 0 {
+                    // if there are variants, perform guided variant calling
+                    std::fs::create_dir_all(&output_prefix).unwrap();
+
+                    indexed_bam_readers.into_iter().enumerate().for_each(
+                        |(sample_idx, bam_generator)| {
+                            if sample_idx < short_sample_count {
+                                process_bam(
+                                    bam_generator,
+                                    sample_idx,
+                                    per_reference_samples,
+                                    &mut coverage_estimators,
+                                    &mut variant_matrix,
+                                    n_threads,
+                                    m,
+                                    &output_prefix,
+                                    coverage_fold,
+                                    &codon_table,
+                                    min_var_depth,
+                                    contig_end_exclusion,
+                                    min,
+                                    max,
+                                    ref_idx,
+                                    mode,
+                                    include_soft_clipping,
+                                    include_indels,
+                                    &flag_filters,
+                                    mapq_threshold,
+                                    method,
+                                    false,
+                                    &genomes_and_contigs,
+                                    &reference_map,
+                                    &concatenated_genomes,
+                                )
+                            } else {
+                                process_bam(
+                                    bam_generator,
+                                    sample_idx,
+                                    per_reference_samples,
+                                    &mut coverage_estimators,
+                                    &mut variant_matrix,
+                                    n_threads,
+                                    m,
+                                    &output_prefix,
+                                    coverage_fold,
+                                    &codon_table,
+                                    min_var_depth,
+                                    contig_end_exclusion,
+                                    min,
+                                    max,
+                                    ref_idx,
+                                    mode,
+                                    include_soft_clipping,
+                                    include_indels,
+                                    &flag_filters,
+                                    mapq_threshold,
+                                    method,
+                                    true,
+                                    &genomes_and_contigs,
+                                    &reference_map,
+                                    &concatenated_genomes,
+                                )
+                            }
+
+                            // {
+                            //     pb3.set_message(&format!(
+                            //         "Guided variant calling on sample: {}",
+                            //         variant_matrix.get_sample_name(sample_idx),
+                            //     ));
+                            //     pb3.inc(1);
+                            // }
+                        },
+                    );
                 }
+                // pb3.finish_with_message(&format!("Guided variant calling complete..."));
+
+                // Collects info about variants across samples to check whether they are genuine or not
+                // using FDR
+
+                // TODO: Make sure that this is fixed. It seems to work appropriately now
+                // pb4.set_message("Setting FDR threshold...");
+                variant_matrix
+                    .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
+
+                if mode == "genotype" {
+                    let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
+                    let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
+                    let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
+                    let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
+                    let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
+                    let anchor_size: usize =
+                        m.value_of("minimum-seed-size").unwrap().parse().unwrap();
+                    let anchor_similarity: f64 = m
+                        .value_of("maximum-seed-similarity")
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    let minimum_reads_in_link: usize = m
+                        .value_of("minimum-reads-in-link")
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+
+                    // Calculate the geometric mean values and CLR for each variant, reference specific
+                    // pb4.set_message(&format!("{}: Generating variant distances...", &reference,));
+                    variant_matrix.generate_distances();
+
+                    // Generate initial read linked clusters
+                    // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
+                    // pb4.set_message(&format!("{}: Running seeded fuzzy DBSCAN...", &reference,));
+                    variant_matrix.run_fuzzy_scan(
+                        e_min,
+                        e_max,
+                        pts_min,
+                        pts_max,
+                        phi,
+                        anchor_size,
+                        anchor_similarity,
+                        minimum_reads_in_link,
+                        &reference_map,
+                    );
+
+                    // Write genotypes to disk, reference specific
+                    // pb4.set_message(&format!("{}: Generating genotypes...", &reference,));
+                    variant_matrix.generate_genotypes(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                        &concatenated_genomes,
+                    );
+
+                    // Write variants in VCF format, reference specific
+                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+
+                    // Get strain abundances
+                    // pb4.set_message(&format!(
+                    //     "{}: Calculating genotype abundances...",
+                    //     &reference,
+                    // ));
+                    variant_matrix.calculate_strain_abundances(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                    );
+
+                    // Get sample distances
+                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    variant_matrix.calculate_sample_distances(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                    );
+
+                    // If flagged, then create plots using CMplot
+                    if m.is_present("plot") {
+                        let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                        variant_matrix.print_variant_stats(
+                            window_size,
+                            &output_prefix,
+                            &genomes_and_contigs,
+                        );
+                    }
+                } else if mode == "summarize" {
+                    let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+
+                    // Get sample distances
+                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    variant_matrix.calculate_sample_distances(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                    );
+
+                    variant_matrix.print_variant_stats(
+                        window_size,
+                        &output_prefix,
+                        &genomes_and_contigs,
+                    );
+                } else if mode == "evolve" {
+                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+
+                    // pb4.set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+                    variant_matrix.calc_gene_mutation(
+                        &mut gff_map,
+                        &genomes_and_contigs,
+                        &reference_map,
+                        &codon_table,
+                        &output_prefix,
+                        &concatenated_genomes,
+                    );
+                } else if mode == "polish" {
+                    // pb4.set_message(&format!("{}: Generating consensus genomes...", &reference,));
+                    variant_matrix.polish_genomes(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                        &concatenated_genomes,
+                    );
+
+                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+
+                    // Get sample distances
+                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    variant_matrix.calculate_sample_distances(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                    );
+                    // If flagged, then create plots using CMplot
+                    if m.is_present("plot") {
+                        let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                        variant_matrix.print_variant_stats(
+                            window_size,
+                            &output_prefix,
+                            &genomes_and_contigs,
+                        );
+                    }
+                }
+                // pb4.set_message(&format!("{}: All steps completed!", &reference));
+                // pb4.finish();
             });
-        pb2.finish_with_message(&format!("Initial variant calling complete..."));
-
-        // // Read BAMs back in as indexed
-        let mut indexed_bam_readers = recover_bams(
-            m,
-            &concatenated_genomes,
-            short_sample_count,
-            long_sample_count,
-            &genomes_and_contigs,
-            n_threads as u32,
-            &tmp_bam_file_cache,
-        );
-
-        // pb3.println("Performing guided variant calling...");
-        // let mut variant_matrix = Mutex::new(variant_matrix);
-        if variant_matrix.get_variant_count(*ref_idx) > 0 {
-            indexed_bam_readers
-                .into_iter()
-                .enumerate()
-                .for_each(|(sample_idx, bam_generator)| {
-                    if sample_idx < short_sample_count {
-                        process_bam(
-                            bam_generator,
-                            sample_idx,
-                            per_reference_samples,
-                            &mut coverage_estimators,
-                            &mut variant_matrix,
-                            n_threads,
-                            m,
-                            output_prefix,
-                            coverage_fold,
-                            &codon_table,
-                            min_var_depth,
-                            contig_end_exclusion,
-                            min,
-                            max,
-                            *ref_idx,
-                            mode,
-                            include_soft_clipping,
-                            include_indels,
-                            &flag_filters,
-                            mapq_threshold,
-                            method,
-                            false,
-                            &genomes_and_contigs,
-                            &reference_map,
-                            &concatenated_genomes,
-                        )
-                    } else {
-                        process_bam(
-                            bam_generator,
-                            sample_idx,
-                            per_reference_samples,
-                            &mut coverage_estimators,
-                            &mut variant_matrix,
-                            n_threads,
-                            m,
-                            output_prefix,
-                            coverage_fold,
-                            &codon_table,
-                            min_var_depth,
-                            contig_end_exclusion,
-                            min,
-                            max,
-                            *ref_idx,
-                            mode,
-                            include_soft_clipping,
-                            include_indels,
-                            &flag_filters,
-                            mapq_threshold,
-                            method,
-                            true,
-                            &genomes_and_contigs,
-                            &reference_map,
-                            &concatenated_genomes,
-                        )
-                    }
-
-                    {
-                        pb3.set_message(&format!(
-                            "Guided variant calling on sample: {}",
-                            variant_matrix.get_sample_name(sample_idx),
-                        ));
-                        pb3.inc(1);
-                    }
-                });
         }
-        pb3.finish_with_message(&format!("Guided variant calling complete..."));
-
-        // Collects info about variants across samples to check whether they are genuine or not
-        // using FDR
-
-        // TODO: Make sure that this is fixed. It seems to work appropriately now
-        pb4.set_message("Setting FDR threshold...");
-        variant_matrix.remove_false_discoveries(alpha, &genomes_and_contigs.genomes[*ref_idx]);
-
-        if mode == "genotype" {
-            let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
-            let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-            let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
-            let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-            let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
-            let anchor_size: usize = m.value_of("minimum-seed-size").unwrap().parse().unwrap();
-            let anchor_similarity: f64 = m
-                .value_of("maximum-seed-similarity")
-                .unwrap()
-                .parse()
-                .unwrap();
-            let minimum_reads_in_link: usize = m
-                .value_of("minimum-reads-in-link")
-                .unwrap()
-                .parse()
-                .unwrap();
-
-            // Calculate the geometric mean values and CLR for each variant, reference specific
-            pb4.set_message(&format!("{}: Generating variant distances...", &reference,));
-            variant_matrix.generate_distances();
-
-            // Generate initial read linked clusters
-            // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
-            pb4.set_message(&format!("{}: Running seeded fuzzy DBSCAN...", &reference,));
-            variant_matrix.run_fuzzy_scan(
-                e_min,
-                e_max,
-                pts_min,
-                pts_max,
-                phi,
-                anchor_size,
-                anchor_similarity,
-                minimum_reads_in_link,
-                &reference_map,
-            );
-
-            // Write genotypes to disk, reference specific
-            pb4.set_message(&format!("{}: Generating genotypes...", &reference,));
-            variant_matrix.generate_genotypes(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-                &concatenated_genomes,
-            );
-
-            // Write variants in VCF format, reference specific
-            pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
-            variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
-
-            // Get strain abundances
-            pb4.set_message(&format!(
-                "{}: Calculating genotype abundances...",
-                &reference,
-            ));
-            variant_matrix.calculate_strain_abundances(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-            );
-
-            // Get sample distances
-            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            variant_matrix.calculate_sample_distances(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-            );
-
-            // If flagged, then create plots using CMplot
-            if m.is_present("plot") {
-                let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                variant_matrix.print_variant_stats(
-                    window_size,
-                    &output_prefix,
-                    &genomes_and_contigs,
-                );
-            }
-        } else if mode == "summarize" {
-            let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-            pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
-            variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
-
-            // Get sample distances
-            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            variant_matrix.calculate_sample_distances(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-            );
-
-            variant_matrix.print_variant_stats(window_size, &output_prefix, &genomes_and_contigs);
-        } else if mode == "evolve" {
-            pb4.set_message(&format!("{}: Calculating dN/dS values...", &reference,));
-            variant_matrix.calc_gene_mutation(
-                &mut gff_map,
-                &genomes_and_contigs,
-                &reference_map,
-                &codon_table,
-                &output_prefix,
-                &concatenated_genomes,
-            );
-        } else if mode == "polish" {
-            pb4.set_message(&format!("{}: Generating consensus genomes...", &reference,));
-            variant_matrix.polish_genomes(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-                &concatenated_genomes,
-            );
-            // Get sample distances
-            pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
-            variant_matrix.calculate_sample_distances(
-                &output_prefix,
-                &reference_map,
-                &genomes_and_contigs,
-            );
-            // If flagged, then create plots using CMplot
-            if m.is_present("plot") {
-                let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                variant_matrix.print_variant_stats(
-                    window_size,
-                    &output_prefix,
-                    &genomes_and_contigs,
-                );
-            }
-        }
-        pb4.finish_with_message(&format!("{}: All steps completed!", &reference));
     });
+    // reference_map.iter().for_each(|(ref_idx, reference_stem)| {
+    //     pb2.reset();
+    //     pb3.reset();
+    //     pb3.set_message("Waiting for variant matrix...");
+    //     pb4.reset();
+    //
+    // });
     pb1.finish_with_message(&format!("{} mode finished", &mode));
+    pb4.finish();
     info!("Analysis finished!");
     // multi.join_and_clear().unwrap();
 }

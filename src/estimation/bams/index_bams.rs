@@ -5,8 +5,6 @@ use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_htslib::bam;
 use std::path::Path;
-use tempdir::TempDir;
-use tempfile::NamedTempFile;
 
 pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
@@ -133,12 +131,12 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
 pub fn recover_bams(
     m: &clap::ArgMatches,
-    concatenated_genomes: &Option<NamedTempFile>,
+    concatenated_genomes: &Option<String>,
     short_sample_count: usize,
     long_sample_count: usize,
     genomes_and_contigs: &GenomesAndContigs,
     n_threads: u32,
-    tmp_bam_file_cache: &Option<TempDir>,
+    tmp_bam_file_cache: &Option<String>,
 ) -> Vec<IndexedBamFileNamedReader> {
     // Annoyingly read in bam file again
     let mut bam_readers = vec![];
@@ -162,12 +160,7 @@ pub fn recover_bams(
                     "{}/short/*.bam",
                     match m.is_present("bam-file-cache-directory") {
                         false => {
-                            tmp_bam_file_cache
-                                .as_ref()
-                                .unwrap()
-                                .path()
-                                .to_str()
-                                .unwrap()
+                            tmp_bam_file_cache.as_ref().unwrap()
                         }
                         true => {
                             m.value_of("bam-file-cache-directory").unwrap()
@@ -191,12 +184,7 @@ pub fn recover_bams(
                         "{}/short/{}*.bam",
                         match m.is_present("bam-file-cache-directory") {
                             false => {
-                                tmp_bam_file_cache
-                                    .as_ref()
-                                    .unwrap()
-                                    .path()
-                                    .to_str()
-                                    .unwrap()
+                                tmp_bam_file_cache.as_ref().unwrap()
                             }
                             true => {
                                 m.value_of("bam-file-cache-directory").unwrap()
@@ -248,12 +236,7 @@ pub fn recover_bams(
                     "{}/long/*.bam",
                     match m.is_present("bam-file-cache-directory") {
                         false => {
-                            tmp_bam_file_cache
-                                .as_ref()
-                                .unwrap()
-                                .path()
-                                .to_str()
-                                .unwrap()
+                            tmp_bam_file_cache.as_ref().unwrap()
                         }
                         true => {
                             m.value_of("bam-file-cache-directory").unwrap()
@@ -277,12 +260,7 @@ pub fn recover_bams(
                         "{}/long/{}*.bam",
                         match m.is_present("bam-file-cache-directory") {
                             false => {
-                                tmp_bam_file_cache
-                                    .as_ref()
-                                    .unwrap()
-                                    .path()
-                                    .to_str()
-                                    .unwrap()
+                                tmp_bam_file_cache.as_ref().unwrap()
                             }
                             true => {
                                 m.value_of("bam-file-cache-directory").unwrap()

@@ -14,18 +14,17 @@ use coverm::genomes_and_contigs::*;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use std::str;
-use tempfile::NamedTempFile;
 
 /// Process all reads in a BAM file
 #[allow(unused)]
-pub fn process_bam<R: IndexedNamedBamReader>(
+pub fn process_bam<'b, R: IndexedNamedBamReader>(
     mut bam_generated: R,
     sample_idx: usize,
     sample_count: usize,
-    coverage_estimators: &mut Vec<CoverageEstimator>,
-    variant_matrix: &mut VariantMatrix,
+    coverage_estimators: &'b mut Vec<CoverageEstimator>,
+    variant_matrix: &'b mut VariantMatrix,
     split_threads: usize,
-    m: &clap::ArgMatches,
+    m: &'b clap::ArgMatches,
     output_prefix: &str,
     coverage_fold: f32,
     codon_table: &CodonTable,
@@ -34,16 +33,16 @@ pub fn process_bam<R: IndexedNamedBamReader>(
     min: f32,
     max: f32,
     ref_idx: usize,
-    mode: &str,
+    mode: &'b str,
     include_soft_clipping: bool,
     include_indels: bool,
-    flag_filters: &FlagFilter,
+    flag_filters: &'b FlagFilter,
     mapq_threshold: u8,
-    method: &str,
+    method: &'b str,
     longread: bool,
-    genomes_and_contigs: &GenomesAndContigs,
-    reference_map: &HashMap<usize, String>,
-    concatenated_genomes: &Option<NamedTempFile>,
+    genomes_and_contigs: &'b GenomesAndContigs,
+    reference_map: &'b HashMap<usize, String>,
+    concatenated_genomes: &'b Option<String>,
 ) {
     // let mut bam_generated = bam_generator.start();
 
