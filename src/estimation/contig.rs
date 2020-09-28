@@ -146,12 +146,14 @@ pub fn pileup_variants<
     let _ = std::thread::spawn(move || {
         multi.join().unwrap();
     });
-    pb4.set_message("Performing analysis...");
-    pb4.enable_steady_tick(1000);
     pb1.tick();
 
-    let mut pool = Pool::new(8);
-    let n_threads = std::cmp::max(n_threads / 8, 2);
+    pb4.set_message("Performing analysis...");
+    pb4.enable_steady_tick(1000);
+
+    let parallel_genomes = m.value_of("parallel-genomes").unwrap().parse().unwrap();
+    let mut pool = Pool::new(parallel_genomes);
+    let n_threads = std::cmp::max(n_threads / parallel_genomes as usize, 2);
 
     pool.scoped(|scope| {
         for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
@@ -188,27 +190,25 @@ pub fn pileup_variants<
             );
 
             scope.execute(move || {
-                // let multi_inner = MultiProgress::new();
-                // let sty = ProgressStyle::default_bar()
-                //     .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-                //     .progress_chars("##-");
-                // let pb2 = multi_inner.insert(
-                //     0,
-                //     ProgressBar::new((short_sample_count + long_sample_count) as u64),
-                // );
-                // pb2.set_style(sty.clone());
-                //
-                // let pb3 = multi_inner.insert(
-                //     1,
-                //     ProgressBar::new((short_sample_count + long_sample_count) as u64),
-                // );
-                // pb3.set_style(sty.clone());
-                //
-                //
-                //
-                // let _ = std::thread::spawn(move || {
-                //     multi_inner.join_and_clear().unwrap();
-                // });
+                let multi_inner = MultiProgress::new();
+                let sty = ProgressStyle::default_bar()
+                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+                    .progress_chars("##-");
+                let pb2 = multi_inner.insert(
+                    2,
+                    ProgressBar::new((short_sample_count + long_sample_count) as u64),
+                );
+                pb2.set_style(sty.clone());
+
+                let pb3 = multi_inner.insert(
+                    2,
+                    ProgressBar::new((short_sample_count + long_sample_count) as u64),
+                );
+                pb3.set_style(sty.clone());
+
+                let _ = std::thread::spawn(move || {
+                    multi_inner.join_and_clear().unwrap();
+                });
 
                 let reference = &genomes_and_contigs.genomes[ref_idx];
                 // pb4.set_message(&format!("{}: Preparing variants...", &reference,));
@@ -366,6 +366,13 @@ pub fn pileup_variants<
                 indexed_bam_readers.into_iter().enumerate().for_each(
                     |(sample_idx, bam_generator)| {
                         // Get the appropriate sample index based on how many references we are using
+                        let mut bam_generator = generate_indexed_named_bam_readers_from_bam_files(
+                            vec![&bam_generator],
+                            n_threads as u32,
+                        )
+                        .into_iter()
+                        .next()
+                        .unwrap();
                         if sample_idx < short_sample_count {
                             process_vcf(
                                 bam_generator,
@@ -430,16 +437,16 @@ pub fn pileup_variants<
                                 }
                             }
                         }
-                        // {
-                        // pb2.set_message(&format!(
-                        //     "Variant calling on sample: {}",
-                        //     variant_matrix.get_sample_name(sample_idx),
-                        // ));
-                        // pb2.inc(1);
-                        // }
+                        {
+                            pb2.set_message(&format!(
+                                "Variant calling on sample: {}",
+                                variant_matrix.get_sample_name(sample_idx),
+                            ));
+                            pb2.inc(1);
+                        }
                     },
                 );
-                // pb2.finish_with_message(&format!("Initial variant calling complete..."));
+                pb2.finish_with_message(&format!("Initial variant calling complete..."));
 
                 // // Read BAMs back in as indexed
                 let mut indexed_bam_readers = recover_bams(
@@ -460,6 +467,14 @@ pub fn pileup_variants<
 
                     indexed_bam_readers.into_iter().enumerate().for_each(
                         |(sample_idx, bam_generator)| {
+                            let mut bam_generator =
+                                generate_indexed_named_bam_readers_from_bam_files(
+                                    vec![&bam_generator],
+                                    n_threads as u32,
+                                )
+                                .into_iter()
+                                .next()
+                                .unwrap();
                             if sample_idx < short_sample_count {
                                 process_bam(
                                     bam_generator,
@@ -518,17 +533,17 @@ pub fn pileup_variants<
                                 )
                             }
 
-                            // {
-                            //     pb3.set_message(&format!(
-                            //         "Guided variant calling on sample: {}",
-                            //         variant_matrix.get_sample_name(sample_idx),
-                            //     ));
-                            //     pb3.inc(1);
-                            // }
+                            {
+                                pb3.set_message(&format!(
+                                    "Guided variant calling on sample: {}",
+                                    variant_matrix.get_sample_name(sample_idx),
+                                ));
+                                pb3.inc(1);
+                            }
                         },
                     );
                 }
-                // pb3.finish_with_message(&format!("Guided variant calling complete..."));
+                pb3.finish_with_message(&format!("Guided variant calling complete..."));
 
                 // Collects info about variants across samples to check whether they are genuine or not
                 // using FDR

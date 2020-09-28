@@ -135,18 +135,20 @@ pub fn recover_bams(
     short_sample_count: usize,
     long_sample_count: usize,
     genomes_and_contigs: &GenomesAndContigs,
-    n_threads: u32,
+    _n_threads: u32,
     tmp_bam_file_cache: &Option<String>,
-) -> Vec<IndexedBamFileNamedReader> {
+) -> Vec<String> {
     // Annoyingly read in bam file again
     let mut bam_readers = vec![];
 
     // This is going to catch cached longread bam files from mapping
     if m.is_present("bam-files") {
-        let bam_paths = m.values_of("bam-files").unwrap().collect::<Vec<&str>>();
-        bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
-            bam_paths, n_threads,
-        ));
+        let bam_paths = m
+            .values_of("bam-files")
+            .unwrap()
+            .map(|b| b.to_string())
+            .collect::<Vec<String>>();
+        bam_readers.extend(bam_paths);
     } else if m.is_present("read1")
         | m.is_present("single")
         | m.is_present("coupled")
@@ -207,26 +209,18 @@ pub fn recover_bams(
         }
 
         debug!("Rereading in {}", all_bam_paths.len());
-        let all_bam_paths = all_bam_paths
-            .iter()
-            .map(|p| p.as_str())
-            .collect::<Vec<&str>>();
 
         let _bam_cnts = all_bam_paths.len();
-        bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
-            all_bam_paths,
-            n_threads,
-        ));
+        bam_readers.extend(all_bam_paths);
     }
 
     if m.is_present("longread-bam-files") {
         let bam_paths = m
             .values_of("longread-bam-files")
             .unwrap()
-            .collect::<Vec<&str>>();
-        bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
-            bam_paths, n_threads,
-        ));
+            .map(|b| b.to_string())
+            .collect::<Vec<String>>();
+        bam_readers.extend(bam_paths);
     } else if m.is_present("longreads") {
         let mut all_bam_paths = vec![];
 
@@ -283,16 +277,9 @@ pub fn recover_bams(
         }
 
         debug!("Rereading in {}", all_bam_paths.len());
-        let all_bam_paths = all_bam_paths
-            .iter()
-            .map(|p| p.as_str())
-            .collect::<Vec<&str>>();
 
         let _bam_cnts = all_bam_paths.len();
-        bam_readers.extend(generate_indexed_named_bam_readers_from_bam_files(
-            all_bam_paths,
-            n_threads,
-        ));
+        bam_readers.extend(all_bam_paths);
     }
 
     if bam_readers.len() == (short_sample_count + long_sample_count) {
@@ -305,5 +292,6 @@ pub fn recover_bams(
             bam_readers.len(),
         ))
     }
+    let bam_readers = bam_readers.into_iter().map(|b| b.to_string()).collect();
     return bam_readers;
 }

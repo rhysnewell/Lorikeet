@@ -61,6 +61,10 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
    -t, --threads <INT>                   Number of threads for mapping / sorting
+                                         [default 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
+                                         [default 1]
    -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
    -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
    -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse
@@ -106,6 +110,9 @@ Thresholds:
 
 Other:
    -t, --threads <INT>                   Number of threads for output compression
+                                         [default 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
                                          [default 1]
    --inverse                             Only keep reads which are unmapped or
                                          align below thresholds. Note that output
@@ -213,6 +220,9 @@ Other arguments (optional):
    -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
                                          SV density.
    -t, --threads                         Number of threads used. [default: 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
+                                         [default 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
 
@@ -315,6 +325,9 @@ Other arguments (optional):
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
    -t, --threads                         Number of threads used. [default: 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
+                                         [default 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
@@ -407,6 +420,9 @@ Other arguments (optional):
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
    -t, --threads                         Number of threads used. [default: 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
+                                         [default 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
@@ -526,6 +542,9 @@ Other arguments (optional):
    -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
                                          SV density.
    -t, --threads                         Number of threads used. [default: 1]
+   --parallel-genomes                    Number of genomes to run in parallel.
+                                         Increases memory usage linearly.
+                                         [default 1]
    --no-zeros                            Omit printing of genomes that have zero
                                          coverage
 
@@ -868,6 +887,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .takes_value(true),
                 )
                 .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
                     Arg::with_name("mapper")
                         .short("p")
                         .long("mapper")
@@ -1187,6 +1212,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("threads")
                         .short("-t")
                         .long("threads")
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
                         .default_value("1")
                         .takes_value(true),
                 )
@@ -1531,6 +1562,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .takes_value(true),
                 )
                 .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
                     Arg::with_name("mapper")
                         .short("p")
                         .long("mapper")
@@ -1812,7 +1849,14 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("threads")
                         .long("threads")
                         .short("t")
-                        .default_value("1"),
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
+                        .default_value("1")
+                        .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("verbose")
@@ -1970,6 +2014,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("threads")
                         .short("-t")
                         .long("threads")
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
                         .default_value("1")
                         .takes_value(true),
                 )
