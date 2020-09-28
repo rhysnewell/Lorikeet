@@ -15,8 +15,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
     // progress bar
     let sty = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-        .progress_chars("##-");
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}");
     let pb1 = ProgressBar::new(bams.len() as u64);
     pb1.set_style(sty.clone());
     for bam_generator in bams {

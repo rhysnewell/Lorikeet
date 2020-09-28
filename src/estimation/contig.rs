@@ -16,12 +16,21 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use scoped_threadpool::Pool;
 use std::path::Path;
 use std::process::Stdio;
 use std::str;
+use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+
+#[derive(Clone, Debug)]
+struct Elem {
+    key: String,
+    index: usize,
+    progress_bar: ProgressBar,
+}
 
 #[allow(unused)]
 pub fn pileup_variants<
@@ -96,12 +105,22 @@ pub fn pileup_variants<
     // }
 
     // Put reference index in the variant map and initialize matrix
+    let mut progress_bars = vec![
+        Elem {
+            key: "Genomes complete".to_string(),
+            index: 0,
+            progress_bar: ProgressBar::new(references.len() as u64),
+        };
+        references.len() + 1
+    ];
+
     let mut reference_map = HashMap::new();
     for reference in references.iter() {
         debug!(
             "Genomes {:?} contigs {:?}",
             &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome,
         );
+
         let ref_idx = genomes_and_contigs
             .genome_index(
                 &Path::new(reference)
@@ -113,6 +132,11 @@ pub fn pileup_variants<
             )
             .unwrap();
 
+        progress_bars[ref_idx + 1] = Elem {
+            key: genomes_and_contigs.genomes[ref_idx].clone(),
+            index: ref_idx,
+            progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64),
+        };
         debug!("Reference {}", reference,);
         reference_map
             .entry(ref_idx)
@@ -127,47 +151,49 @@ pub fn pileup_variants<
         reference_count
     );
 
-    // Set up multi progress bars
-    let multi = MultiProgress::new();
-    let sty = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-        .progress_chars("##-");
-
-    let pb1 = multi.insert(0, ProgressBar::new(reference_map.keys().len() as u64));
-    pb1.set_style(sty.clone());
-
-    let pb4 = multi.insert(1, ProgressBar::new_spinner());
-    pb4.set_style(
-        ProgressStyle::default_spinner()
-            .tick_chars("|/-\\|/-\\| ")
-            .template("[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}"),
-    );
-
-    let _ = std::thread::spawn(move || {
-        multi.join().unwrap();
-    });
-    pb1.tick();
-
-    pb4.set_message("Performing analysis...");
-    pb4.enable_steady_tick(1000);
-
     let parallel_genomes = m.value_of("parallel-genomes").unwrap().parse().unwrap();
     let mut pool = Pool::new(parallel_genomes);
     let n_threads = std::cmp::max(n_threads / parallel_genomes as usize, 2);
+    // Set up multi progress bars
+    let multi = Arc::new(MultiProgress::new());
+    let sty = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}");
+
+    let sty_aux = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
+    progress_bars
+        .par_iter()
+        .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
+
+    let pb_main = multi.add(ProgressBar::new(reference_map.keys().len() as u64));
+    pb_main.set_style(sty.clone());
+
+    let tree: Arc<Mutex<Vec<&Elem>>> =
+        Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
+    {
+        let mut tree = tree.lock().unwrap();
+        for pb in progress_bars.iter() {
+            tree.push(pb)
+        }
+    }
+    // let tree2 = Arc::clone(&tree);
+
+    let multi_inner = Arc::clone(&multi);
 
     pool.scoped(|scope| {
         for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
-            // let ref_idx = Arc::new(ref_idx);
-            //
-            pb1.inc(1);
-            pb1.set_message(&format!(
-                "Working on genome: {}",
-                &genomes_and_contigs.genomes[ref_idx],
-            ));
+            // let _ = std::thread::spawn(move || {
+            //     multi.join().unwrap();
+            // });
 
             // let ref_idx = Arc::new(ref_idx);
-            let flag_filters = flag_filters.clone();
-            let reference_map = reference_map.clone();
+
+            // let ref_idx = Arc::new(ref_idx);
+            let multi_inner = &multi_inner;
+            let tree = &tree;
+            let progress_bars = &progress_bars;
+            let flag_filters = &flag_filters;
+            let reference_map = &reference_map;
             let references = references.clone();
             let tmp_bam_file_cache = match tmp_bam_file_cache.as_ref() {
                 Some(cache) => Some(cache.path().to_str().unwrap().to_string()),
@@ -178,42 +204,44 @@ pub fn pileup_variants<
                 None => None,
             };
             let mut coverage_estimators = coverage_estimators.clone();
-            let genomes_and_contigs = GenomesAndContigs {
-                genomes: genomes_and_contigs.genomes.clone(),
-                contig_to_genome: genomes_and_contigs.contig_to_genome.clone(),
-            };
+            let genomes_and_contigs = &genomes_and_contigs;
 
             let output_prefix = format!(
                 "{}/{:?}",
                 &output_prefix,
                 Path::new(&reference_stem).file_stem().unwrap()
             );
+            pb_main.tick();
 
+            pb_main.inc(1);
+            pb_main.set_message(&format!(
+                "Staging reference: {}",
+                &genomes_and_contigs.genomes[ref_idx],
+            ));
+
+            {
+                // completed genomes progress bar
+                let elem = &progress_bars[0];
+                let pb = multi_inner.insert(1, elem.progress_bar.clone());
+
+                pb.enable_steady_tick(500);
+
+                pb.set_message(&format!("{}...", &elem.key,));
+            }
             scope.execute(move || {
-                let multi_inner = MultiProgress::new();
-                let sty = ProgressStyle::default_bar()
-                    .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-                    .progress_chars("##-");
-                let pb2 = multi_inner.insert(
-                    2,
-                    ProgressBar::new((short_sample_count + long_sample_count) as u64),
-                );
-                pb2.set_style(sty.clone());
-
-                let pb3 = multi_inner.insert(
-                    2,
-                    ProgressBar::new((short_sample_count + long_sample_count) as u64),
-                );
-                pb3.set_style(sty.clone());
-
-                let _ = std::thread::spawn(move || {
-                    multi_inner.join_and_clear().unwrap();
-                });
-
                 let reference = &genomes_and_contigs.genomes[ref_idx];
-                // pb4.set_message(&format!("{}: Preparing variants...", &reference,));
-                // multi.join().unwrap();
 
+                {
+                    let elem = &progress_bars[ref_idx + 1];
+                    let pb = multi_inner.insert(ref_idx + 1, elem.progress_bar.clone());
+
+                    pb.enable_steady_tick(500);
+
+                    pb.set_message(&format!("{}: Preparing variants...", &elem.key,));
+                    // multi.join().unwrap();
+
+                    // tree.lock().unwrap().insert(elem.index, &elem);
+                }
                 let mut codon_table = CodonTable::setup();
 
                 // Read BAMs back in as indexed
@@ -438,16 +466,22 @@ pub fn pileup_variants<
                             }
                         }
                         {
-                            pb2.set_message(&format!(
-                                "Variant calling on sample: {}",
+                            let pb = &tree.lock().unwrap()[ref_idx + 1];
+
+                            pb.progress_bar.set_message(&format!(
+                                "{}: Variant calling on sample: {}",
+                                pb.key,
                                 variant_matrix.get_sample_name(sample_idx),
                             ));
-                            pb2.inc(1);
+                            pb.progress_bar.inc(1);
                         }
                     },
                 );
-                pb2.finish_with_message(&format!("Initial variant calling complete..."));
-
+                {
+                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    pb.progress_bar
+                        .set_message(&format!("{}: Initial variant calling complete...", pb.key));
+                }
                 // // Read BAMs back in as indexed
                 let mut indexed_bam_readers = recover_bams(
                     m,
@@ -459,7 +493,13 @@ pub fn pileup_variants<
                     &tmp_bam_file_cache,
                 );
 
-                // pb3.println("Performing guided variant calling...");
+                {
+                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    pb.progress_bar.reset();
+                    pb.progress_bar.enable_steady_tick(1000);
+                    pb.progress_bar
+                        .set_message(&format!("{}: Performing guided variant calling...", pb.key));
+                }
                 // let mut variant_matrix = Mutex::new(variant_matrix);
                 if variant_matrix.get_variant_count(ref_idx) > 0 {
                     // if there are variants, perform guided variant calling
@@ -534,22 +574,32 @@ pub fn pileup_variants<
                             }
 
                             {
-                                pb3.set_message(&format!(
-                                    "Guided variant calling on sample: {}",
+                                let pb = &tree.lock().unwrap()[ref_idx + 1];
+                                pb.progress_bar.set_message(&format!(
+                                    "{}: Guided variant calling on sample: {}",
+                                    pb.key,
                                     variant_matrix.get_sample_name(sample_idx),
                                 ));
-                                pb3.inc(1);
+                                pb.progress_bar.inc(1);
                             }
                         },
                     );
                 }
-                pb3.finish_with_message(&format!("Guided variant calling complete..."));
+                {
+                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    pb.progress_bar
+                        .set_message(&format!("{}: Guided variant calling complete...", pb.key));
+                }
 
                 // Collects info about variants across samples to check whether they are genuine or not
                 // using FDR
 
                 // TODO: Make sure that this is fixed. It seems to work appropriately now
-                // pb4.set_message("Setting FDR threshold...");
+                {
+                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    pb.progress_bar
+                        .set_message(&format!("{}: Setting FDR threshold...", pb.key));
+                }
                 variant_matrix
                     .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
 
@@ -573,12 +623,24 @@ pub fn pileup_variants<
                         .unwrap();
 
                     // Calculate the geometric mean values and CLR for each variant, reference specific
-                    // pb4.set_message(&format!("{}: Generating variant distances...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Generating variant distances...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.generate_distances();
 
                     // Generate initial read linked clusters
                     // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
-                    // pb4.set_message(&format!("{}: Running seeded fuzzy DBSCAN...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Running seeded fuzzy DBSCAN...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.run_fuzzy_scan(
                         e_min,
                         e_max,
@@ -592,7 +654,11 @@ pub fn pileup_variants<
                     );
 
                     // Write genotypes to disk, reference specific
-                    // pb4.set_message(&format!("{}: Generating genotypes...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating genotypes...", &reference,));
+                    }
                     variant_matrix.generate_genotypes(
                         &output_prefix,
                         &reference_map,
@@ -601,14 +667,21 @@ pub fn pileup_variants<
                     );
 
                     // Write variants in VCF format, reference specific
-                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
+                    }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
                     // Get strain abundances
-                    // pb4.set_message(&format!(
-                    //     "{}: Calculating genotype abundances...",
-                    //     &reference,
-                    // ));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Calculating genotype abundances...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.calculate_strain_abundances(
                         &output_prefix,
                         &reference_map,
@@ -616,7 +689,13 @@ pub fn pileup_variants<
                     );
 
                     // Get sample distances
-                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Generating adjacency matrix...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.calculate_sample_distances(
                         &output_prefix,
                         &reference_map,
@@ -634,11 +713,21 @@ pub fn pileup_variants<
                     }
                 } else if mode == "summarize" {
                     let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
+                    }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
                     // Get sample distances
-                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Generating adjacency matrix...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.calculate_sample_distances(
                         &output_prefix,
                         &reference_map,
@@ -651,10 +740,18 @@ pub fn pileup_variants<
                         &genomes_and_contigs,
                     );
                 } else if mode == "evolve" {
-                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
+                    }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
-                    // pb4.set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+                    }
                     variant_matrix.calc_gene_mutation(
                         &mut gff_map,
                         &genomes_and_contigs,
@@ -664,7 +761,13 @@ pub fn pileup_variants<
                         &concatenated_genomes,
                     );
                 } else if mode == "polish" {
-                    // pb4.set_message(&format!("{}: Generating consensus genomes...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Generating consensus genomes...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.polish_genomes(
                         &output_prefix,
                         &reference_map,
@@ -672,11 +775,21 @@ pub fn pileup_variants<
                         &concatenated_genomes,
                     );
 
-                    // pb4.set_message(&format!("{}: Generating VCF file...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
+                    }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
                     // Get sample distances
-                    // pb4.set_message(&format!("{}: Generating adjacency matrix...", &reference,));
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        pb.progress_bar.set_message(&format!(
+                            "{}: Generating adjacency matrix...",
+                            &reference,
+                        ));
+                    }
                     variant_matrix.calculate_sample_distances(
                         &output_prefix,
                         &reference_map,
@@ -691,11 +804,27 @@ pub fn pileup_variants<
                             &genomes_and_contigs,
                         );
                     }
+                };
+                {
+                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    pb.progress_bar
+                        .finish_with_message(&format!("{}: All steps completed!", &reference));
                 }
-                // pb4.set_message(&format!("{}: All steps completed!", &reference));
-                // pb4.finish();
+                {
+                    let pb = &tree.lock().unwrap()[0];
+                    pb.progress_bar.inc(1);
+                    let pos = pb.progress_bar.position();
+                    let len = pb.progress_bar.length();
+                    if pos >= len {
+                        pb.progress_bar
+                            .finish_with_message(&format!("All genomes analyzed {}", "✔",));
+                    }
+                }
             });
         }
+
+        pb_main.finish_with_message("All genomes staged...");
+        multi.join().unwrap();
     });
     // reference_map.iter().for_each(|(ref_idx, reference_stem)| {
     //     pb2.reset();
@@ -704,8 +833,7 @@ pub fn pileup_variants<
     //     pb4.reset();
     //
     // });
-    pb1.finish_with_message(&format!("{} mode finished", &mode));
-    pb4.finish();
+
     info!("Analysis finished!");
     // multi.join_and_clear().unwrap();
 }
