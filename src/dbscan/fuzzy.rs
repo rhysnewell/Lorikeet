@@ -265,7 +265,7 @@ impl FuzzyDBSCAN {
             .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
             .progress_chars("##-");
 
-        let pb1 = multi.insert(0, ProgressBar::new(points.len() as u64));
+        let pb1 = multi.insert(2, ProgressBar::new(points.len() as u64));
         pb1.set_style(sty.clone());
 
         let _ = std::thread::spawn(move || {
@@ -418,7 +418,7 @@ impl FuzzyDBSCAN {
         let mut border_points = Vec::new();
         let mut neighbour_visited = vec![false; points.len()];
         let multi = MultiProgress::new();
-        let pb4 = multi.insert(0, ProgressBar::new_spinner());
+        let pb4 = multi.insert(2, ProgressBar::new_spinner());
         pb4.set_style(
             ProgressStyle::default_spinner()
                 .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
