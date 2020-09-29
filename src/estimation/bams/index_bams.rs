@@ -10,7 +10,6 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
 ) {
-    external_command_checker::check_for_gatk();
     let mut record: bam::record::Record = bam::Record::new();
 
     // progress bar
