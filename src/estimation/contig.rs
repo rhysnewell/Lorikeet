@@ -108,10 +108,10 @@ pub fn pileup_variants<
     let mut progress_bars = vec![
         Elem {
             key: "Genomes complete".to_string(),
-            index: 0,
+            index: 1,
             progress_bar: ProgressBar::new(references.len() as u64),
         };
-        references.len() + 1
+        references.len() + 2
     ];
 
     let mut reference_map = HashMap::new();
@@ -132,7 +132,7 @@ pub fn pileup_variants<
             )
             .unwrap();
 
-        progress_bars[ref_idx + 1] = Elem {
+        progress_bars[ref_idx + 2] = Elem {
             key: genomes_and_contigs.genomes[ref_idx].clone(),
             index: ref_idx,
             progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64),
@@ -142,6 +142,14 @@ pub fn pileup_variants<
             .entry(ref_idx)
             .or_insert(reference.to_string());
     }
+
+    progress_bars[0] = Elem {
+        key: "Total steps complete".to_string(),
+        index: 0,
+        progress_bar: ProgressBar::new(
+            ((references.len() * (short_sample_count + long_sample_count)) * 2) as u64,
+        ),
+    };
 
     info!(
         "{} Longread BAM files and {} Shortread BAM files {} Total BAMs over {} genome(s)",
@@ -156,17 +164,18 @@ pub fn pileup_variants<
     let n_threads = std::cmp::max(n_threads / parallel_genomes as usize, 2);
     // Set up multi progress bars
     let multi = Arc::new(MultiProgress::new());
-    let sty = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}");
+    let sty_eta = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} [{eta_precise}]");
 
     let sty_aux = ProgressStyle::default_bar()
         .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
     progress_bars
         .par_iter()
         .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
+    progress_bars[0].progress_bar.set_style(sty_eta.clone());
 
-    let pb_main = multi.add(ProgressBar::new(reference_map.keys().len() as u64));
-    pb_main.set_style(sty.clone());
+    // let pb_main = multi.add(ProgressBar::new(reference_map.keys().len() as u64));
+    // pb_main.set_style(sty_eta.clone());
 
     let tree: Arc<Mutex<Vec<&Elem>>> =
         Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
@@ -215,17 +224,26 @@ pub fn pileup_variants<
                     .to_str()
                     .unwrap(),
             );
-            pb_main.tick();
-
-            pb_main.inc(1);
-            pb_main.set_message(&format!(
-                "Staging reference: {}",
-                &genomes_and_contigs.genomes[ref_idx],
-            ));
+            // pb_main.tick();
+            //
+            // pb_main.inc(1);
+            // pb_main.set_message(&format!(
+            //     "Staging reference: {}",
+            //     &genomes_and_contigs.genomes[ref_idx],
+            // ));
 
             {
-                // completed genomes progress bar
+                // Total steps eta progress bar
                 let elem = &progress_bars[0];
+                let pb = multi_inner.insert(0, elem.progress_bar.clone());
+
+                pb.enable_steady_tick(500);
+
+                pb.set_message(&format!("{}...", &elem.key,));
+            }
+            {
+                // completed genomes progress bar
+                let elem = &progress_bars[1];
                 let pb = multi_inner.insert(1, elem.progress_bar.clone());
 
                 pb.enable_steady_tick(500);
@@ -236,8 +254,8 @@ pub fn pileup_variants<
                 let reference = &genomes_and_contigs.genomes[ref_idx];
 
                 {
-                    let elem = &progress_bars[ref_idx + 1];
-                    let pb = multi_inner.insert(ref_idx + 1, elem.progress_bar.clone());
+                    let elem = &progress_bars[ref_idx + 2];
+                    let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
 
                     pb.enable_steady_tick(500);
 
@@ -470,7 +488,7 @@ pub fn pileup_variants<
                             }
                         }
                         {
-                            let pb = &tree.lock().unwrap()[ref_idx + 1];
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
 
                             pb.progress_bar.set_message(&format!(
                                 "{}: Variant calling on sample: {}",
@@ -479,10 +497,14 @@ pub fn pileup_variants<
                             ));
                             pb.progress_bar.inc(1);
                         }
+                        {
+                            let pb = &tree.lock().unwrap()[0];
+                            pb.progress_bar.inc(1);
+                        }
                     },
                 );
                 {
-                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar
                         .set_message(&format!("{}: Initial variant calling complete...", pb.key));
                 }
@@ -498,7 +520,7 @@ pub fn pileup_variants<
                 );
 
                 {
-                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar.reset();
                     pb.progress_bar.enable_steady_tick(1000);
                     pb.progress_bar
@@ -578,7 +600,7 @@ pub fn pileup_variants<
                             }
 
                             {
-                                let pb = &tree.lock().unwrap()[ref_idx + 1];
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar.set_message(&format!(
                                     "{}: Guided variant calling on sample: {}",
                                     pb.key,
@@ -586,11 +608,18 @@ pub fn pileup_variants<
                                 ));
                                 pb.progress_bar.inc(1);
                             }
+                            {
+                                let pb = &tree.lock().unwrap()[0];
+                                pb.progress_bar.inc(1);
+                            }
                         },
                     );
+                } else {
+                    let pb = &tree.lock().unwrap()[0];
+                    pb.progress_bar.inc(indexed_bam_readers.len() as u64);
                 }
                 {
-                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar
                         .set_message(&format!("{}: Guided variant calling complete...", pb.key));
                 }
@@ -600,7 +629,7 @@ pub fn pileup_variants<
 
                 // TODO: Make sure that this is fixed. It seems to work appropriately now
                 {
-                    let pb = &tree.lock().unwrap()[ref_idx + 1];
+                    let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar
                         .set_message(&format!("{}: Setting FDR threshold...", pb.key));
                 }
@@ -628,7 +657,7 @@ pub fn pileup_variants<
 
                     // Calculate the geometric mean values and CLR for each variant, reference specific
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Generating variant distances...",
                             &reference,
@@ -639,7 +668,7 @@ pub fn pileup_variants<
                     // Generate initial read linked clusters
                     // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Running seeded fuzzy DBSCAN...",
                             &reference,
@@ -659,7 +688,7 @@ pub fn pileup_variants<
 
                     // Write genotypes to disk, reference specific
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating genotypes...", &reference,));
                     }
@@ -672,7 +701,7 @@ pub fn pileup_variants<
 
                     // Write variants in VCF format, reference specific
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
@@ -680,7 +709,7 @@ pub fn pileup_variants<
 
                     // Get strain abundances
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Calculating genotype abundances...",
                             &reference,
@@ -694,7 +723,7 @@ pub fn pileup_variants<
 
                     // Get sample distances
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Generating adjacency matrix...",
                             &reference,
@@ -718,7 +747,7 @@ pub fn pileup_variants<
                 } else if mode == "summarize" {
                     let window_size = m.value_of("window-size").unwrap().parse().unwrap();
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
@@ -726,7 +755,7 @@ pub fn pileup_variants<
 
                     // Get sample distances
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Generating adjacency matrix...",
                             &reference,
@@ -745,14 +774,14 @@ pub fn pileup_variants<
                     );
                 } else if mode == "evolve" {
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Calculating dN/dS values...", &reference,));
                     }
@@ -766,7 +795,7 @@ pub fn pileup_variants<
                     );
                 } else if mode == "polish" {
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Generating consensus genomes...",
                             &reference,
@@ -780,7 +809,7 @@ pub fn pileup_variants<
                     );
 
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
@@ -788,7 +817,7 @@ pub fn pileup_variants<
 
                     // Get sample distances
                     {
-                        let pb = &tree.lock().unwrap()[ref_idx + 1];
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(&format!(
                             "{}: Generating adjacency matrix...",
                             &reference,
@@ -810,24 +839,35 @@ pub fn pileup_variants<
                     }
                 };
                 {
-                    let pb = &tree.lock().unwrap()[ref_idx + 1];
-                    pb.progress_bar
-                        .finish_with_message(&format!("{}: All steps completed!", &reference));
+                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                    pb.progress_bar.finish_with_message(&format!(
+                        "{}: All steps completed {}",
+                        &reference, "🦜",
+                    ));
                 }
                 {
-                    let pb = &tree.lock().unwrap()[0];
+                    let pb = &tree.lock().unwrap()[1];
                     pb.progress_bar.inc(1);
                     let pos = pb.progress_bar.position();
                     let len = pb.progress_bar.length();
                     if pos >= len {
                         pb.progress_bar
-                            .finish_with_message(&format!("All genomes analyzed {}", "✔",));
+                            .finish_with_message(&format!("All genomes analyzed {}", "🦜",));
+                    }
+                }
+                {
+                    let pb = &tree.lock().unwrap()[0];
+                    let pos = pb.progress_bar.position();
+                    let len = pb.progress_bar.length();
+                    if pos >= len {
+                        pb.progress_bar
+                            .finish_with_message(&format!("All steps completed {}", "🦜",));
                     }
                 }
             });
         }
 
-        pb_main.finish_with_message("All genomes staged...");
+        // pb_main.finish_with_message("All genomes staged...");
         multi.join().unwrap();
     });
     // reference_map.iter().for_each(|(ref_idx, reference_stem)| {
