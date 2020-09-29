@@ -839,7 +839,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 // For each reference genome we will perform the DBSCAN clustering
                 variant_info.par_iter().for_each(|(ref_idx, variant_info_vec)| {
                     if variant_info_vec.len() > 1 {
-                        let fuzzy_scanner = fuzzy::FuzzyDBSCAN {
+                        let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
                             eps_min: e_min,
                             eps_max: e_max,
                             pts_min: match pts_min {

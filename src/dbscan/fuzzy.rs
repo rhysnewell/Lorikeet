@@ -243,7 +243,7 @@ pub struct FuzzyDBSCAN {
 impl FuzzyDBSCAN {
     /// Clusters a list of `points`.
     pub fn cluster<P: MetricSpace>(
-        &self,
+        &mut self,
         points: &[P],
         initial_clusters: Vec<Cluster>,
         ref_name: &str,
@@ -256,206 +256,190 @@ impl FuzzyDBSCAN {
 
 impl FuzzyDBSCAN {
     fn fuzzy_dbscan<P: MetricSpace>(
-        &self,
+        &mut self,
         points: &[P],
         initial_clusters: Vec<Cluster>,
         ref_name: &str,
         multi: &Arc<MultiProgress>,
         ref_idx: usize,
     ) -> Vec<Cluster> {
+        let mut acceptable_distribution = false;
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
-        let mut visited = vec![false; points.len()];
-        // let multi = Arc::new(MultiProgress::new());
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
+        while !acceptable_distribution {
+            let mut visited = vec![false; points.len()];
+            // let multi = Arc::new(MultiProgress::new());
+            let sty = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
 
-        let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(points.len() as u64));
-        pb1.set_style(sty.clone());
+            let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(points.len() as u64));
+            pb1.set_style(sty.clone());
 
-        let multi_inner = Arc::clone(&multi);
+            let multi_inner = Arc::clone(&multi);
 
-        pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
+            pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
 
-        for initial in initial_clusters.iter() {
-            // Work out which point in our initial clusters has the highest density to other
-            // points
-            // Set up multi progress bars
+            for initial in initial_clusters.iter() {
+                // Work out which point in our initial clusters has the highest density to other
+                // points
+                // Set up multi progress bars
 
-            let mut point_label_max = 0.;
-            let mut point_index = 0;
-            let mut point_neighbours = HashSet::new();
+                let mut point_label_max = 0.;
+                let mut point_index = 0;
+                let mut point_neighbours = HashSet::new();
 
-            for core_point in initial.iter() {
-                if visited[core_point.index] {
-                    continue;
-                }
-                visited[core_point.index] = true;
-                let neighbour_indices = self.region_query(points, core_point.index);
-                let point_label =
-                    self.mu_min_p(self.density(core_point.index, &neighbour_indices, points));
-                // check if new label is better than max
-                if point_label > point_label_max {
-                    point_label_max = point_label;
-                    point_index = core_point.index;
-                    point_neighbours = neighbour_indices;
-                }
-                pb1.inc(1);
-            }
-            // Extend neighbour indices with known connections
-            let mut initial = initial
-                .par_iter()
-                .map(|link| link.index)
-                .collect::<HashSet<usize>>();
-            initial.remove(&point_index);
-            point_neighbours.par_extend(initial.par_iter());
-
-            // Cluster based on that core point
-            clusters.push(self.expand_cluster_fuzzy(
-                point_label_max,
-                point_index,
-                point_neighbours,
-                points,
-                &mut visited,
-                &multi_inner,
-                &pb1,
-                ref_idx,
-            ));
-        }
-
-        // Cluster any unvisited points
-        if initial_clusters.len() == 0
-            || visited
-                .par_iter()
-                .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
-        {
-            for point_index in 0..points.len() {
-                if visited[point_index] {
+                for core_point in initial.iter() {
+                    if visited[core_point.index] {
+                        continue;
+                    }
+                    visited[core_point.index] = true;
+                    let neighbour_indices = self.region_query(points, core_point.index);
+                    let point_label =
+                        self.mu_min_p(self.density(core_point.index, &neighbour_indices, points));
+                    // check if new label is better than max
+                    if point_label > point_label_max {
+                        point_label_max = point_label;
+                        point_index = core_point.index;
+                        point_neighbours = neighbour_indices;
+                    }
                     pb1.inc(1);
-                    continue;
                 }
-                visited[point_index] = true;
-                let neighbour_indices = self.region_query(points, point_index);
-                let point_label =
-                    self.mu_min_p(self.density(point_index, &neighbour_indices, points));
-                if point_label == 0.0 {
-                    noise_cluster.push(Assignment {
-                        index: point_index,
-                        category: Category::Noise,
-                        label: 1.0,
-                    });
-                } else {
-                    clusters.push(self.expand_cluster_fuzzy(
-                        point_label,
-                        point_index,
-                        neighbour_indices,
-                        points,
-                        &mut visited,
-                        &multi_inner,
-                        &pb1,
-                        ref_idx,
-                    ));
-                }
-                pb1.inc(1);
+                // Extend neighbour indices with known connections
+                let mut initial = initial
+                    .par_iter()
+                    .map(|link| link.index)
+                    .collect::<HashSet<usize>>();
+                initial.remove(&point_index);
+                point_neighbours.par_extend(initial.par_iter());
+
+                // Cluster based on that core point
+                clusters.push(self.expand_cluster_fuzzy(
+                    point_label_max,
+                    point_index,
+                    point_neighbours,
+                    points,
+                    &mut visited,
+                    &multi_inner,
+                    &pb1,
+                    ref_idx,
+                ));
             }
+
+            // Cluster any unvisited points
+            if initial_clusters.len() == 0
+                || visited
+                    .par_iter()
+                    .any(|has_this_point_been_seen| has_this_point_been_seen == &false)
+            {
+                for point_index in 0..points.len() {
+                    if visited[point_index] {
+                        pb1.inc(1);
+                        continue;
+                    }
+                    visited[point_index] = true;
+                    let neighbour_indices = self.region_query(points, point_index);
+                    let point_label =
+                        self.mu_min_p(self.density(point_index, &neighbour_indices, points));
+                    if point_label == 0.0 {
+                        noise_cluster.push(Assignment {
+                            index: point_index,
+                            category: Category::Noise,
+                            label: 1.0,
+                        });
+                    } else {
+                        clusters.push(self.expand_cluster_fuzzy(
+                            point_label,
+                            point_index,
+                            neighbour_indices,
+                            points,
+                            &mut visited,
+                            &multi_inner,
+                            &pb1,
+                            ref_idx,
+                        ));
+                    }
+                    pb1.inc(1);
+                }
+            }
+            if !noise_cluster.is_empty() {
+                debug!(
+                    "{} Variants Clustered as noise during Fuzzy DBSCAN",
+                    noise_cluster.len()
+                );
+                // clusters.push(noise_cluster);
+            }
+
+            // Sort the clusters by smallest to largest
+            clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
+
+            debug!("Clusters {:?}", clusters.len());
+            pb1.set_message(&format!(
+                "{}: All points visited... {} initial clusters",
+                ref_name,
+                clusters.len()
+            ));
+
+            // Deduplicate clusters by sorted indices
+            clusters.dedup_by(|cluster1, cluster2| {
+                // Remove clusters that are completely contained within another cluster
+                let dedup_key_1 = cluster1
+                    .par_iter()
+                    .map(|var| var.index)
+                    .collect::<HashSet<usize>>();
+
+                let dedup_key_2 = cluster2
+                    .par_iter()
+                    .map(|var| var.index)
+                    .collect::<HashSet<usize>>();
+
+                let intersection: HashSet<_> = dedup_key_1.intersection(&dedup_key_2).collect();
+
+                let small_similarity = intersection.len() / dedup_key_1.len();
+
+                debug!(
+                    "dedup_key_1 {:?} dedup_key_2 {:?} Similarity {}",
+                    dedup_key_1, dedup_key_2, small_similarity,
+                );
+                small_similarity == 1
+            });
+            pb1.finish_and_clear();
+
+            // We use RNG here so we don't end up with a situation where it recursively goes back
+            // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
+            if clusters.len() == 0 {
+                // Cluster params to strict, loosen them up
+                let mut rng = rand::thread_rng();
+                let scaler = rng.gen_range(1.5, 2.0);
+                self.eps_min = self.eps_min * scaler;
+                self.eps_max = self.eps_max * scaler;
+                clusters = Vec::new();
+                noise_cluster = Vec::new();
+            // clusters =
+            //     fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
+            } else if clusters.len() == 1 {
+                // Cluster parameters were to slack, tighten them up
+                let mut rng = rand::thread_rng();
+                let scaler = rng.gen_range(0.5, 0.7);
+                self.eps_min = self.eps_min * scaler;
+                self.eps_max = self.eps_max * scaler;
+                clusters = Vec::new();
+                noise_cluster = Vec::new();
+            } else if clusters.len() == points.len() && points.len() > 10 {
+                // Each point likely formed it's own cluster, have to be careful when there are
+                // only a few variants though
+                let mut rng = rand::thread_rng();
+                // let scaler_eps = rng.gen_range(1.2, 1.5);
+                let scaler = rng.gen_range(1.5, 2.0);
+                self.eps_min = self.eps_min * scaler;
+                self.eps_max = self.eps_max * scaler;
+                self.pts_min = self.pts_min * scaler;
+                self.pts_max = self.pts_max * scaler;
+                clusters = Vec::new();
+                noise_cluster = Vec::new();
+            } else {
+                acceptable_distribution = true;
+            } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
         }
-        if !noise_cluster.is_empty() {
-            debug!(
-                "{} Variants Clustered as noise during Fuzzy DBSCAN",
-                noise_cluster.len()
-            );
-            // clusters.push(noise_cluster);
-        }
-
-        // Sort the clusters by smallest to largest
-        clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
-
-        debug!("Clusters {:?}", clusters.len());
-        pb1.set_message(&format!(
-            "{}: All points visited... {} initial clusters",
-            ref_name,
-            clusters.len()
-        ));
-
-        // Deduplicate clusters by sorted indices
-        clusters.dedup_by(|cluster1, cluster2| {
-            // Remove clusters that are completely contained within another cluster
-            let dedup_key_1 = cluster1
-                .par_iter()
-                .map(|var| var.index)
-                .collect::<HashSet<usize>>();
-
-            let dedup_key_2 = cluster2
-                .par_iter()
-                .map(|var| var.index)
-                .collect::<HashSet<usize>>();
-
-            let intersection: HashSet<_> = dedup_key_1.intersection(&dedup_key_2).collect();
-
-            let small_similarity = intersection.len() / dedup_key_1.len();
-
-            debug!(
-                "dedup_key_1 {:?} dedup_key_2 {:?} Similarity {}",
-                dedup_key_1, dedup_key_2, small_similarity,
-            );
-            small_similarity == 1
-        });
-
-        // We use RNG here so we don't end up with a situation where it recursively goes back
-        // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
-        if clusters.len() == 0 {
-            // Cluster params to strict, loosen them up
-            let mut rng = rand::thread_rng();
-            let scaler = rng.gen_range(1.5, 2.0);
-            let fuzzy_scanner = FuzzyDBSCAN {
-                eps_min: self.eps_min * scaler,
-                eps_max: self.eps_max * scaler,
-                pts_min: self.pts_min,
-                pts_max: self.pts_max,
-                phi: self.phi,
-                geom_var: self.geom_var.clone(),
-                geom_dep: self.geom_dep.clone(),
-                geom_frq: self.geom_frq.clone(),
-            };
-            clusters =
-                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
-        } else if clusters.len() == 1 {
-            // Cluster parameters were to slack, tighten them up
-            let mut rng = rand::thread_rng();
-            let scaler = rng.gen_range(0.5, 0.7);
-            let fuzzy_scanner = FuzzyDBSCAN {
-                eps_min: self.eps_min * scaler,
-                eps_max: self.eps_max * scaler,
-                pts_min: self.pts_min,
-                pts_max: self.pts_max,
-                phi: self.phi,
-                geom_var: self.geom_var.clone(),
-                geom_dep: self.geom_dep.clone(),
-                geom_frq: self.geom_frq.clone(),
-            };
-            clusters =
-                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
-        } else if clusters.len() == points.len() && points.len() > 10 {
-            // Each point likely formed it's own cluster, have to be careful when there are
-            // only a few variants though
-            let mut rng = rand::thread_rng();
-            // let scaler_eps = rng.gen_range(1.2, 1.5);
-            let scaler = rng.gen_range(1.5, 2.0);
-            let fuzzy_scanner = FuzzyDBSCAN {
-                eps_min: self.eps_min * scaler,
-                eps_max: self.eps_max * scaler,
-                pts_min: self.pts_min * scaler,
-                pts_max: self.pts_max * scaler,
-                phi: self.phi,
-                geom_var: self.geom_var.clone(),
-                geom_dep: self.geom_dep.clone(),
-                geom_frq: self.geom_frq.clone(),
-            };
-            clusters =
-                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
-        } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
-
-        pb1.finish_and_clear();
 
         clusters
     }
@@ -480,8 +464,7 @@ impl FuzzyDBSCAN {
         let mut neighbour_visited = vec![false; points.len()];
         let pb4 = multi.insert(ref_idx + 4, ProgressBar::new_spinner());
         pb4.set_style(
-            ProgressStyle::default_spinner()
-                .template("[{elapsed_precise}] {spinner:.red} {msg} {pos:>4}/{len:4}"),
+            ProgressStyle::default_spinner().template("[{elapsed_precise}] {spinner:.red} {msg}"),
         );
 
         pb4.set_message(&format!("Expanding cluster...",));
