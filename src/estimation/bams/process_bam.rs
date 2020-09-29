@@ -255,11 +255,6 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
                                                             base.truedepth[sample_idx] += 1;
                                                             base.quals[sample_idx] += qual_pos;
 
-                                                        } else {
-                                                            mnv = vec!();
-                                                            mnv_pos = 0;
-                                                            potential_mnv = false;
-                                                            mnv_qual = 0.;
                                                         }
                                                     },
                                                     _ => {}
