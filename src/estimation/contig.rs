@@ -207,9 +207,13 @@ pub fn pileup_variants<
             let genomes_and_contigs = &genomes_and_contigs;
 
             let output_prefix = format!(
-                "{}/{:?}",
+                "{}/{}",
                 &output_prefix,
-                Path::new(&reference_stem).file_stem().unwrap()
+                Path::new(&reference_stem)
+                    .file_stem()
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
             );
             pb_main.tick();
 
