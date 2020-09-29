@@ -144,6 +144,7 @@ pub trait VariantMatrixFunctions {
         anchor_similarity: f64,
         minimum_reads_in_link: usize,
         reference_map: &HashMap<usize, String>,
+        multi: &Arc<MultiProgress>,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -819,6 +820,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
         anchor_similarity: f64,
         minimum_reads_in_link: usize,
         reference_map: &HashMap<usize, String>,
+        multi: &Arc<MultiProgress>,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -878,6 +880,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             &variant_info_vec[..],
                             links,
                             reference_path.file_stem().unwrap().to_str().unwrap(),
+                            multi,
+                            *ref_idx,
                         );
 
                         // Perform read phasing clustering and return expanded clusters
@@ -887,6 +891,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             anchor_size,
                             anchor_similarity,
                             minimum_reads_in_link,
+                            multi,
+                            *ref_idx,
                         );
 
                         // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
@@ -2524,6 +2530,7 @@ mod tests {
         var_mat.generate_distances();
         let mut ref_map = HashMap::new();
         ref_map.insert(0, "test".to_string());
-        var_mat.run_fuzzy_scan(0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map)
+        let multi = Arc::new(MultiProgress::new());
+        var_mat.run_fuzzy_scan(0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi)
     }
 }

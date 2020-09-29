@@ -20,7 +20,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     pb1.set_style(sty.clone());
     for bam_generator in bams {
         let mut bam = bam_generator.start();
-        bam.set_threads(n_threads / 2);
+        bam.set_threads(std::cmp::max(n_threads / 2, 1));
 
         let path = bam.path().to_string();
         let stoit_name = bam.name().to_string().replace("/", ".");
@@ -56,7 +56,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                         .expect("Unable to create bam");
 
                 bam_writer
-                    .set_threads(n_threads / 2)
+                    .set_threads(std::cmp::max(n_threads / 2, 1))
                     .expect("Unable to set threads for BAM writer");
                 bam_writer
                     .set_compression_level(bam::CompressionLevel::Uncompressed)
