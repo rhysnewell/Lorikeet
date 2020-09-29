@@ -144,10 +144,11 @@ pub fn pileup_variants<
     }
 
     progress_bars[0] = Elem {
-        key: "Total steps complete".to_string(),
+        key: "Estimated time to completion".to_string(),
         index: 0,
         progress_bar: ProgressBar::new(
-            ((references.len() * (short_sample_count + long_sample_count)) * 2) as u64,
+            ((references.len() * (short_sample_count + long_sample_count)) * 2 + references.len())
+                as u64,
         ),
     };
 
@@ -617,6 +618,7 @@ pub fn pileup_variants<
                 } else {
                     let pb = &tree.lock().unwrap()[0];
                     pb.progress_bar.inc(indexed_bam_readers.len() as u64);
+                    pb.progress_bar.reset_eta();
                 }
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -857,6 +859,7 @@ pub fn pileup_variants<
                 }
                 {
                     let pb = &tree.lock().unwrap()[0];
+                    pb.progress_bar.inc(1);
                     let pos = pb.progress_bar.position();
                     let len = pb.progress_bar.length();
                     if pos >= len {
