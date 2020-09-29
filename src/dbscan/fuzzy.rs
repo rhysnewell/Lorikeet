@@ -247,8 +247,10 @@ impl FuzzyDBSCAN {
         points: &[P],
         initial_clusters: Vec<Cluster>,
         ref_name: &str,
+        multi: &Arc<MultiProgress>,
+        ref_idx: usize,
     ) -> Vec<Cluster> {
-        self.fuzzy_dbscan(points, initial_clusters, ref_name)
+        self.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx)
     }
 }
 
@@ -258,24 +260,22 @@ impl FuzzyDBSCAN {
         points: &[P],
         initial_clusters: Vec<Cluster>,
         ref_name: &str,
+        multi: &Arc<MultiProgress>,
+        ref_idx: usize,
     ) -> Vec<Cluster> {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
-        let multi = Arc::new(MultiProgress::new());
+        // let multi = Arc::new(MultiProgress::new());
         let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
-            .progress_chars("##-");
+            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
 
-        let pb1 = multi.add(ProgressBar::new(points.len() as u64));
+        let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(points.len() as u64));
         pb1.set_style(sty.clone());
 
         let multi_inner = Arc::clone(&multi);
 
-        let _ = std::thread::spawn(move || {
-            multi.join_and_clear().unwrap();
-        });
-        pb1.set_message("Running fuzzy DBSCAN...");
+        pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
 
         for initial in initial_clusters.iter() {
             // Work out which point in our initial clusters has the highest density to other
@@ -319,6 +319,7 @@ impl FuzzyDBSCAN {
                 &mut visited,
                 &multi_inner,
                 &pb1,
+                ref_idx,
             ));
         }
 
@@ -352,6 +353,7 @@ impl FuzzyDBSCAN {
                         &mut visited,
                         &multi_inner,
                         &pb1,
+                        ref_idx,
                     ));
                 }
                 pb1.inc(1);
@@ -370,7 +372,8 @@ impl FuzzyDBSCAN {
 
         debug!("Clusters {:?}", clusters.len());
         pb1.set_message(&format!(
-            "All points visited... {} initial clusters",
+            "{}: All points visited... {} initial clusters",
+            ref_name,
             clusters.len()
         ));
 
@@ -403,7 +406,7 @@ impl FuzzyDBSCAN {
         if clusters.len() == 0 {
             // Cluster params to strict, loosen them up
             let mut rng = rand::thread_rng();
-            let scaler = rng.gen_range(1.01, 1.11);
+            let scaler = rng.gen_range(1.5, 2.0);
             let fuzzy_scanner = FuzzyDBSCAN {
                 eps_min: self.eps_min * scaler,
                 eps_max: self.eps_max * scaler,
@@ -414,11 +417,12 @@ impl FuzzyDBSCAN {
                 geom_dep: self.geom_dep.clone(),
                 geom_frq: self.geom_frq.clone(),
             };
-            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+            clusters =
+                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
         } else if clusters.len() == 1 {
             // Cluster parameters were to slack, tighten them up
             let mut rng = rand::thread_rng();
-            let scaler = rng.gen_range(0.9, 0.95001);
+            let scaler = rng.gen_range(0.5, 0.7);
             let fuzzy_scanner = FuzzyDBSCAN {
                 eps_min: self.eps_min * scaler,
                 eps_max: self.eps_max * scaler,
@@ -429,12 +433,14 @@ impl FuzzyDBSCAN {
                 geom_dep: self.geom_dep.clone(),
                 geom_frq: self.geom_frq.clone(),
             };
-            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+            clusters =
+                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
         } else if clusters.len() == points.len() && points.len() > 10 {
             // Each point likely formed it's own cluster, have to be careful when there are
             // only a few variants though
             let mut rng = rand::thread_rng();
-            let scaler = rng.gen_range(1.01, 1.11);
+            // let scaler_eps = rng.gen_range(1.2, 1.5);
+            let scaler = rng.gen_range(1.5, 2.0);
             let fuzzy_scanner = FuzzyDBSCAN {
                 eps_min: self.eps_min * scaler,
                 eps_max: self.eps_max * scaler,
@@ -445,14 +451,11 @@ impl FuzzyDBSCAN {
                 geom_dep: self.geom_dep.clone(),
                 geom_frq: self.geom_frq.clone(),
             };
-            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+            clusters =
+                fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
         } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
 
-        pb1.finish_with_message(&format!(
-            "Genome {}: {} possible strains... ",
-            ref_name,
-            clusters.len()
-        ));
+        pb1.finish_and_clear();
 
         clusters
     }
@@ -466,6 +469,7 @@ impl FuzzyDBSCAN {
         visited: &mut [bool],
         multi: &MultiProgress,
         progress: &ProgressBar,
+        ref_idx: usize,
     ) -> Vec<Assignment> {
         let mut cluster = vec![Assignment {
             index: point_index,
@@ -474,10 +478,10 @@ impl FuzzyDBSCAN {
         }];
         let mut border_points = Vec::new();
         let mut neighbour_visited = vec![false; points.len()];
-        let pb4 = multi.add(ProgressBar::new_spinner());
+        let pb4 = multi.insert(ref_idx + 4, ProgressBar::new_spinner());
         pb4.set_style(
             ProgressStyle::default_spinner()
-                .template("[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}"),
+                .template("[{elapsed_precise}] {spinner:.red} {msg} {pos:>4}/{len:4}"),
         );
 
         pb4.set_message(&format!("Expanding cluster...",));
@@ -509,7 +513,7 @@ impl FuzzyDBSCAN {
             }
             pb4.inc(1);
         }
-        pb4.finish();
+        pb4.finish_and_clear();
         border_points.par_iter_mut().for_each(|border_point| {
             for cluster_point in &cluster {
                 let mu_distance =

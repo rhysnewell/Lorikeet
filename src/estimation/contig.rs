@@ -686,6 +686,7 @@ pub fn pileup_variants<
                         anchor_similarity,
                         minimum_reads_in_link,
                         &reference_map,
+                        &multi_inner,
                     );
 
                     // Write genotypes to disk, reference specific
