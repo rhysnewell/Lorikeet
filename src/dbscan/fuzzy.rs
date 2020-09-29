@@ -1,6 +1,7 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use model::variants::*;
+use rand::Rng;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::f64;
@@ -391,6 +392,56 @@ impl FuzzyDBSCAN {
             );
             small_similarity == 1
         });
+
+        // We use RNG here so we don't end up with a situation where it recursively goes back
+        // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
+        if clusters.len() == 0 {
+            // Cluster params to strict, loosen them up
+            let mut rng = rand::thread_rng();
+            let scaler = rng.gen_range(1.01, 1.11);
+            let fuzzy_scanner = FuzzyDBSCAN {
+                eps_min: self.eps_min * scaler,
+                eps_max: self.eps_max * scaler,
+                pts_min: self.pts_min,
+                pts_max: self.pts_max,
+                phi: self.phi,
+                geom_var: self.geom_var.clone(),
+                geom_dep: self.geom_dep.clone(),
+                geom_frq: self.geom_frq.clone(),
+            };
+            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+        } else if clusters.len() == 1 {
+            // Cluster parameters were to slack, tighten them up
+            let mut rng = rand::thread_rng();
+            let scaler = rng.gen_range(0.9, 0.95001);
+            let fuzzy_scanner = FuzzyDBSCAN {
+                eps_min: self.eps_min * scaler,
+                eps_max: self.eps_max * scaler,
+                pts_min: self.pts_min,
+                pts_max: self.pts_max,
+                phi: self.phi,
+                geom_var: self.geom_var.clone(),
+                geom_dep: self.geom_dep.clone(),
+                geom_frq: self.geom_frq.clone(),
+            };
+            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+        } else if clusters.len() == points.len() && points.len() > 10 {
+            // Each point likely formed it's own cluster, have to be careful when there are
+            // only a few variants though
+            let mut rng = rand::thread_rng();
+            let scaler = rng.gen_range(1.01, 1.11);
+            let fuzzy_scanner = FuzzyDBSCAN {
+                eps_min: self.eps_min * scaler,
+                eps_max: self.eps_max * scaler,
+                pts_min: self.pts_min * scaler,
+                pts_max: self.pts_max * scaler,
+                phi: self.phi,
+                geom_var: self.geom_var.clone(),
+                geom_dep: self.geom_dep.clone(),
+                geom_frq: self.geom_frq.clone(),
+            };
+            clusters = fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name);
+        } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
 
         pb1.finish_with_message(&format!(
             "Genome {}: {} possible strains... ",
