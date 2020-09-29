@@ -6,6 +6,7 @@ use rayon::prelude::*;
 use std::collections::HashSet;
 use std::f64;
 use std::hash::Hash;
+use std::sync::Arc;
 
 #[allow(unused)]
 fn take_arbitrary<T: Hash + Eq + Copy>(set: &mut HashSet<T>) -> Option<T> {
@@ -261,13 +262,15 @@ impl FuzzyDBSCAN {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
         let mut visited = vec![false; points.len()];
-        let multi = MultiProgress::new();
+        let multi = Arc::new(MultiProgress::new());
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}")
             .progress_chars("##-");
 
-        let pb1 = multi.insert(2, ProgressBar::new(points.len() as u64));
+        let pb1 = multi.add(ProgressBar::new(points.len() as u64));
         pb1.set_style(sty.clone());
+
+        let multi_inner = Arc::clone(&multi);
 
         let _ = std::thread::spawn(move || {
             multi.join_and_clear().unwrap();
@@ -314,6 +317,7 @@ impl FuzzyDBSCAN {
                 point_neighbours,
                 points,
                 &mut visited,
+                &multi_inner,
                 &pb1,
             ));
         }
@@ -346,6 +350,7 @@ impl FuzzyDBSCAN {
                         neighbour_indices,
                         points,
                         &mut visited,
+                        &multi_inner,
                         &pb1,
                     ));
                 }
@@ -459,6 +464,7 @@ impl FuzzyDBSCAN {
         mut neighbour_indices: HashSet<usize>,
         points: &[P],
         visited: &mut [bool],
+        multi: &MultiProgress,
         progress: &ProgressBar,
     ) -> Vec<Assignment> {
         let mut cluster = vec![Assignment {
@@ -468,17 +474,11 @@ impl FuzzyDBSCAN {
         }];
         let mut border_points = Vec::new();
         let mut neighbour_visited = vec![false; points.len()];
-        let multi = MultiProgress::new();
-        let pb4 = multi.insert(2, ProgressBar::new_spinner());
+        let pb4 = multi.add(ProgressBar::new_spinner());
         pb4.set_style(
             ProgressStyle::default_spinner()
-                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
                 .template("[{elapsed_precise}] {prefix:.bold.dim} {spinner} {wide_msg}"),
         );
-
-        let _ = std::thread::spawn(move || {
-            multi.join_and_clear().unwrap();
-        });
 
         pb4.set_message(&format!("Expanding cluster...",));
 
