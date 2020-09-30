@@ -1061,6 +1061,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
@@ -1394,6 +1395,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("nanopore").long("nanopore"))
@@ -1771,6 +1773,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
@@ -1858,6 +1861,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .takes_value(true),
                 )
+                .arg(Arg::with_name("force").long("force"))
                 .arg(
                     Arg::with_name("verbose")
                         // .short("v") // Do not use since could be confused with
@@ -2177,6 +2181,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(
                     Arg::with_name("window-size")
