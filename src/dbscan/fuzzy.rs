@@ -57,9 +57,7 @@ impl MetricSpace for Var {
         geom_frq: &Vec<f64>,
     ) -> f64 {
         if self.vars.len() > 1 {
-            if self.pos == other.pos && self.tid == other.tid {
-                return 40.;
-            } else {
+            {
                 let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
                     let output = input
                         .par_iter()
@@ -123,11 +121,19 @@ impl MetricSpace for Var {
                 // Add the jaccard's similarity to the hashmap for the two clusters
                 let intersection: HashSet<_> = set1.intersection(&set2).collect();
                 let jaccard = intersection.len() as f64 / (set1.len() + set2.len() + 1) as f64;
+                // if self.pos == 3439
+                //     || self.pos == 948
+                //     || self.pos == 8107
+                //     || self.pos == 7660
+                //     || other.pos == 3440
+                //     || other.pos == 949
+                //     || other.pos == 8108
+                //     || other.pos == 7661 {
+                //     println!("{}: {:?} {}: {:?} Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
+                //            self.pos, self.var, other.pos, other.var, phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
+                // }
 
-                debug!("Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
-                       phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
-
-                return (phi_dist * (1. - jaccard));
+                return (phi * (1. - jaccard));
             }
         } else {
             return if self.pos == other.pos && self.tid == other.tid {
@@ -304,7 +310,6 @@ impl FuzzyDBSCAN {
         let mut acceptable_distribution = false;
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
-        let mut visited = vec![false; points.len()];
 
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
@@ -318,6 +323,8 @@ impl FuzzyDBSCAN {
 
         pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
         'outer: while !acceptable_distribution && niter <= max_iter {
+            let mut visited = vec![false; points.len()];
+
             {
                 for point_index in 0..points.len() {
                     if visited[point_index] {
@@ -362,9 +369,10 @@ impl FuzzyDBSCAN {
                                     break 'expand;
                                 }
                                 None => {
-                                    // Cluster parameters were to slack, tighten them up
-                                    let mut rng = rand::thread_rng();
-                                    let scaler = rng.gen_range(0.8, 0.9);
+                                    // Cluster parameters were too slack, tighten them up
+                                    // let mut rng = rand::thread_rng();
+                                    // let scaler = rng.gen_range(0.5, 0.6);
+                                    let scaler = 0.95;
                                     self.eps_min = self.eps_min * scaler;
                                     self.eps_max = self.eps_max * scaler;
                                     visited = original_visited.clone();
@@ -376,14 +384,22 @@ impl FuzzyDBSCAN {
                                             points,
                                         ));
                                         if point_label == 0.0 {
-                                            let mut rng = rand::thread_rng();
-                                            let scaler = rng.gen_range(1.05, 1.1);
+                                            // let mut rng = rand::thread_rng();
+                                            // let scaler = rng.gen_range(1.05, 1.1);
+                                            let scaler = 1.05;
                                             self.eps_min = self.eps_min * scaler;
                                             self.eps_max = self.eps_max * scaler;
                                             pb1.set_message(&format!(
                                                 "{}: Finding appropriate density parameters...",
                                                 ref_name,
                                             ));
+                                            if self.eps_min >= eps_min_original {
+                                                pb1.set_message(&format!(
+                                                    "{}: Failed to find appropriate density parameters...",
+                                                    ref_name,
+                                                ));
+                                                break 'expand;
+                                            }
                                             continue 'density;
                                         } else {
                                             break 'density;
@@ -398,7 +414,7 @@ impl FuzzyDBSCAN {
                                     // noise_cluster = Vec::new();
                                     // niter += 1;
                                     inner_iter += 1;
-                                    continue 'outer;
+                                    // continue 'expand;
                                 }
                             }
                         }
@@ -454,8 +470,9 @@ impl FuzzyDBSCAN {
             // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
             if clusters.len() == 0 {
                 // Cluster params to strict, loosen them up
-                let mut rng = rand::thread_rng();
-                let scaler = rng.gen_range(2.5, 5.0);
+                // let mut rng = rand::thread_rng();
+                // let scaler = rng.gen_range(2.5, 5.0);
+                let scaler = 1.3;
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
                 pb1.set_message(&format!(
@@ -464,7 +481,6 @@ impl FuzzyDBSCAN {
                 ));
                 pb1.reset();
                 niter += 1;
-                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -473,8 +489,9 @@ impl FuzzyDBSCAN {
             //     fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
             } else if clusters.len() == 1 {
                 // Cluster parameters were to slack, tighten them up
-                let mut rng = rand::thread_rng();
-                let scaler = rng.gen_range(0.5, 0.7);
+                // let mut rng = rand::thread_rng();
+                // let scaler = rng.gen_range(0.5, 0.7);
+                let scaler = 0.8;
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
                 pb1.set_message(&format!(
@@ -483,7 +500,6 @@ impl FuzzyDBSCAN {
                 ));
                 pb1.reset();
                 niter += 1;
-                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -491,20 +507,20 @@ impl FuzzyDBSCAN {
             } else if clusters.len() >= (points.len() / 2) && points.len() > 10 {
                 // Each point likely formed it's own cluster, have to be careful when there are
                 // only a few variants though
-                let mut rng = rand::thread_rng();
+                // let mut rng = rand::thread_rng();
                 // let scaler_eps = rng.gen_range(1.2, 1.5);
-                let scaler = rng.gen_range(1.5, 2.0);
+                // let scaler = rng.gen_range(1.5, 2.0);
+                let scaler = 1.25;
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
-                self.pts_min = self.pts_min * scaler;
-                self.pts_max = self.pts_max * scaler;
+                // self.pts_min = self.pts_min;
+                // self.pts_max = self.pts_max;
                 pb1.set_message(&format!(
                     "{}: Too many clusters. Adjusting parameters...",
                     ref_name,
                 ));
                 pb1.reset();
                 niter += 1;
-                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -526,7 +542,7 @@ impl FuzzyDBSCAN {
         points: &[P],
         visited: &mut [bool],
         multi: &MultiProgress,
-        progress: &ProgressBar,
+        _progress: &ProgressBar,
         ref_idx: usize,
     ) -> Option<Vec<Assignment>> {
         let mut cluster = vec![Assignment {
@@ -546,7 +562,6 @@ impl FuzzyDBSCAN {
         while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
-            progress.inc(1);
             let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
             let neighbour_label =
                 self.mu_min_p(self.density(neighbour_index, &neighbour_neighbour_indices, points));
@@ -556,18 +571,19 @@ impl FuzzyDBSCAN {
                         neighbour_indices.insert(neighbour_neighbour_index);
                     }
                 }
-                if self.check_for_clash(points, &cluster, neighbour_index) {
-                    // This suggests the cluster is too lenient. Bringing in opposing variants
-                    // return none and then try again with update parameters.
-                    pb4.finish_and_clear();
-                    return None;
-                } else {
-                    cluster.push(Assignment {
-                        index: neighbour_index,
-                        category: Category::Core,
-                        label: neighbour_label,
-                    });
-                }
+                // if self.check_for_clash(points, &cluster, neighbour_index) {
+                // This suggests the cluster is too lenient. Bringing in opposing variants
+                // return none and then try again with update parameters.
+                // visited[neighbour_index] = false;
+                // pb4.finish_and_clear();
+                // return None;
+                // } else {
+                cluster.push(Assignment {
+                    index: neighbour_index,
+                    category: Category::Core,
+                    label: neighbour_label,
+                });
+            // }
             } else {
                 border_points.push(Assignment {
                     index: neighbour_index,
@@ -582,21 +598,21 @@ impl FuzzyDBSCAN {
             for cluster_point in &cluster {
                 let border = &points[border_point.index];
                 let core = &points[cluster_point.index];
-                // if !border.clash(&core) {
-                let mu_distance = self.mu_distance(border, core);
-                if mu_distance > 0.0 {
-                    border_point.label =
-                        cluster_point.label.min(mu_distance).min(border_point.label);
+                if !border.clash(&core) {
+                    let mu_distance = self.mu_distance(border, core);
+                    if mu_distance > 0.0 {
+                        border_point.label =
+                            cluster_point.label.min(mu_distance).min(border_point.label);
+                    }
                 }
-                // }
             }
         });
         cluster.append(&mut border_points);
-        if cluster.len() > points.len() / 2 + 1 {
-            None
-        } else {
-            Some(cluster)
-        }
+        // if cluster.len() > points.len() / 2 + 1 {
+        //     None
+        // } else {
+        Some(cluster)
+        // }
     }
 
     fn check_for_clash<P: MetricSpace>(
