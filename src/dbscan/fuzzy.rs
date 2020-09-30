@@ -304,6 +304,8 @@ impl FuzzyDBSCAN {
         let mut acceptable_distribution = false;
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
+        let mut visited = vec![false; points.len()];
+
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
 
@@ -316,17 +318,15 @@ impl FuzzyDBSCAN {
 
         pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
         'outer: while !acceptable_distribution && niter <= max_iter {
-            let mut visited = vec![false; points.len()];
-
             {
                 for point_index in 0..points.len() {
                     if visited[point_index] {
-                        pb1.inc(1);
+                        // pb1.inc(1);
                         continue;
                     }
                     visited[point_index] = true;
-                    let neighbour_indices = self.region_query(points, point_index);
-                    let point_label =
+                    let mut neighbour_indices = self.region_query(points, point_index);
+                    let mut point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
                     if point_label == 0.0 {
                         noise_cluster.push(Assignment {
@@ -335,31 +335,75 @@ impl FuzzyDBSCAN {
                             label: 1.0,
                         });
                     } else {
-                        let expansion = self.expand_cluster_fuzzy(
-                            point_label,
-                            point_index,
-                            neighbour_indices,
-                            points,
-                            &mut visited,
-                            &multi_inner,
-                            &pb1,
-                            ref_idx,
-                        );
-                        match expansion {
-                            Some(expanded) => clusters.push(expanded),
-                            None => {
-                                // Cluster parameters were to slack, tighten them up
-                                let mut rng = rand::thread_rng();
-                                let scaler = rng.gen_range(0.5, 0.7);
-                                self.eps_min = self.eps_min * scaler;
-                                self.eps_max = self.eps_max * scaler;
-                                clusters = Vec::new();
-                                noise_cluster = Vec::new();
-                                pb1.reset();
-                                niter += 1;
-                                continue 'outer;
+                        let eps_min_original = self.eps_min;
+                        let eps_max_original = self.eps_max;
+                        let original_visited = visited.clone();
+                        let mut inner_iter = 0;
+                        'expand: while inner_iter <= 1000 {
+                            pb1.set_message(&format!("{}: Expanding cluster...", ref_name,));
+                            let expansion = self.expand_cluster_fuzzy(
+                                point_label,
+                                point_index,
+                                &mut neighbour_indices,
+                                points,
+                                &mut visited,
+                                &multi_inner,
+                                &pb1,
+                                ref_idx,
+                            );
+
+                            match expansion {
+                                Some(expanded) => {
+                                    clusters.push(expanded);
+                                    pb1.set_message(&format!(
+                                        "{}: Cluster pushed. Resetting parameters...",
+                                        ref_name,
+                                    ));
+                                    break 'expand;
+                                }
+                                None => {
+                                    // Cluster parameters were to slack, tighten them up
+                                    let mut rng = rand::thread_rng();
+                                    let scaler = rng.gen_range(0.8, 0.9);
+                                    self.eps_min = self.eps_min * scaler;
+                                    self.eps_max = self.eps_max * scaler;
+                                    visited = original_visited.clone();
+                                    'density: loop {
+                                        neighbour_indices = self.region_query(points, point_index);
+                                        point_label = self.mu_min_p(self.density(
+                                            point_index,
+                                            &neighbour_indices,
+                                            points,
+                                        ));
+                                        if point_label == 0.0 {
+                                            let mut rng = rand::thread_rng();
+                                            let scaler = rng.gen_range(1.05, 1.1);
+                                            self.eps_min = self.eps_min * scaler;
+                                            self.eps_max = self.eps_max * scaler;
+                                            pb1.set_message(&format!(
+                                                "{}: Finding appropriate density parameters...",
+                                                ref_name,
+                                            ));
+                                            continue 'density;
+                                        } else {
+                                            break 'density;
+                                        }
+                                    }
+                                    pb1.set_message(&format!(
+                                        "{}: Clash in points in cluster. Adjusting parameters...",
+                                        ref_name,
+                                    ));
+                                    // pb1.reset();
+                                    // clusters.remove(clusters.len() - 1);
+                                    // noise_cluster = Vec::new();
+                                    // niter += 1;
+                                    inner_iter += 1;
+                                    continue 'outer;
+                                }
                             }
                         }
+                        self.eps_min = eps_min_original;
+                        self.eps_max = eps_max_original;
                     }
                     pb1.inc(1);
                 }
@@ -405,17 +449,22 @@ impl FuzzyDBSCAN {
                 );
                 small_similarity == 1
             });
-            pb1.finish_and_clear();
 
             // We use RNG here so we don't end up with a situation where it recursively goes back
             // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
             if clusters.len() == 0 {
                 // Cluster params to strict, loosen them up
                 let mut rng = rand::thread_rng();
-                let scaler = rng.gen_range(1.5, 2.0);
+                let scaler = rng.gen_range(2.5, 5.0);
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
+                pb1.set_message(&format!(
+                    "{}: No viable clusters. Adjusting parameters...",
+                    ref_name,
+                ));
+                pb1.reset();
                 niter += 1;
+                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -428,7 +477,13 @@ impl FuzzyDBSCAN {
                 let scaler = rng.gen_range(0.5, 0.7);
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
+                pb1.set_message(&format!(
+                    "{}: Clustering too lenient. Adjusting parameters...",
+                    ref_name,
+                ));
+                pb1.reset();
                 niter += 1;
+                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -443,7 +498,13 @@ impl FuzzyDBSCAN {
                 self.eps_max = self.eps_max * scaler;
                 self.pts_min = self.pts_min * scaler;
                 self.pts_max = self.pts_max * scaler;
+                pb1.set_message(&format!(
+                    "{}: Too many clusters. Adjusting parameters...",
+                    ref_name,
+                ));
+                pb1.reset();
                 niter += 1;
+                visited = vec![false; points.len()];
                 if niter < max_iter {
                     clusters = Vec::new();
                     noise_cluster = Vec::new();
@@ -452,6 +513,7 @@ impl FuzzyDBSCAN {
                 acceptable_distribution = true;
             } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
         }
+        pb1.finish_and_clear();
 
         clusters
     }
@@ -460,7 +522,7 @@ impl FuzzyDBSCAN {
         &self,
         point_label: f64,
         point_index: usize,
-        mut neighbour_indices: HashSet<usize>,
+        mut neighbour_indices: &mut HashSet<usize>,
         points: &[P],
         visited: &mut [bool],
         multi: &MultiProgress,
@@ -495,6 +557,9 @@ impl FuzzyDBSCAN {
                     }
                 }
                 if self.check_for_clash(points, &cluster, neighbour_index) {
+                    // This suggests the cluster is too lenient. Bringing in opposing variants
+                    // return none and then try again with update parameters.
+                    pb4.finish_and_clear();
                     return None;
                 } else {
                     cluster.push(Assignment {
@@ -517,17 +582,21 @@ impl FuzzyDBSCAN {
             for cluster_point in &cluster {
                 let border = &points[border_point.index];
                 let core = &points[cluster_point.index];
-                if !border.clash(&core) {
-                    let mu_distance = self.mu_distance(border, core);
-                    if mu_distance > 0.0 {
-                        border_point.label =
-                            cluster_point.label.min(mu_distance).min(border_point.label);
-                    }
+                // if !border.clash(&core) {
+                let mu_distance = self.mu_distance(border, core);
+                if mu_distance > 0.0 {
+                    border_point.label =
+                        cluster_point.label.min(mu_distance).min(border_point.label);
                 }
+                // }
             }
         });
         cluster.append(&mut border_points);
-        Some(cluster)
+        if cluster.len() > points.len() / 2 + 1 {
+            None
+        } else {
+            Some(cluster)
+        }
     }
 
     fn check_for_clash<P: MetricSpace>(

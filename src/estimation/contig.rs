@@ -843,10 +843,9 @@ pub fn pileup_variants<
                 };
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
-                    pb.progress_bar.finish_with_message(&format!(
-                        "{}: All steps completed {}",
-                        &reference, "🦜",
-                    ));
+                    pb.progress_bar
+                        .set_message(&format!("{}: All steps completed {}", &reference, "✔",));
+                    pb.progress_bar.finish_and_clear();
                 }
                 {
                     let pb = &tree.lock().unwrap()[1];
@@ -855,7 +854,7 @@ pub fn pileup_variants<
                     let len = pb.progress_bar.length();
                     if pos >= len {
                         pb.progress_bar
-                            .finish_with_message(&format!("All genomes analyzed {}", "🦜",));
+                            .finish_with_message(&format!("All genomes analyzed {}", "✔",));
                     }
                 }
                 {
@@ -865,7 +864,7 @@ pub fn pileup_variants<
                     let len = pb.progress_bar.length();
                     if pos >= len {
                         pb.progress_bar
-                            .finish_with_message(&format!("All steps completed {}", "🦜",));
+                            .finish_with_message(&format!("All steps completed {}", "✔",));
                     }
                 }
             });
