@@ -311,8 +311,9 @@ impl FuzzyDBSCAN {
         let mut clusters = Vec::new();
         let mut noise_cluster = Vec::new();
 
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
+        let sty = ProgressStyle::default_bar().template(
+            "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
+        );
 
         let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(points.len() as u64));
         pb1.set_style(sty.clone());
@@ -542,7 +543,7 @@ impl FuzzyDBSCAN {
         points: &[P],
         visited: &mut [bool],
         multi: &MultiProgress,
-        _progress: &ProgressBar,
+        progress: &ProgressBar,
         ref_idx: usize,
     ) -> Option<Vec<Assignment>> {
         let mut cluster = vec![Assignment {
@@ -562,6 +563,7 @@ impl FuzzyDBSCAN {
         while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
+            progress.inc(1);
             let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
             let neighbour_label =
                 self.mu_min_p(self.density(neighbour_index, &neighbour_neighbour_indices, points));

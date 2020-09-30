@@ -145,7 +145,7 @@ pub fn pileup_variants<
     }
 
     progress_bars[0] = Elem {
-        key: "Estimated time to completion".to_string(),
+        key: "Operations remaining...".to_string(),
         index: 0,
         progress_bar: ProgressBar::new(
             ((references.len() * (short_sample_count + long_sample_count)) * 2 + references.len())
@@ -167,7 +167,7 @@ pub fn pileup_variants<
     // Set up multi progress bars
     let multi = Arc::new(MultiProgress::new());
     let sty_eta = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} [{eta_precise}]");
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
 
     let sty_aux = ProgressStyle::default_bar()
         .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
@@ -263,7 +263,10 @@ pub fn pileup_variants<
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
 
-                        pb.progress_bar.finish_and_clear();
+                        pb.progress_bar.finish_with_message(&format!(
+                            "{}: Output already present. Run with --force to overwrite",
+                            &genomes_and_contigs.genomes[ref_idx]
+                        ));
                     }
                     {
                         let pb = &tree.lock().unwrap()[1];
