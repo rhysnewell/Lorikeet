@@ -1,6 +1,5 @@
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use external_command_checker;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_htslib::bam;
