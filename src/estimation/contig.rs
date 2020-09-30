@@ -15,6 +15,7 @@ use bio::io::gff;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
+use glob::glob;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use scoped_threadpool::Pool;
@@ -191,6 +192,24 @@ pub fn pileup_variants<
     let multi_inner = Arc::clone(&multi);
 
     pool.scoped(|scope| {
+        {
+            // Total steps eta progress bar
+            let elem = &progress_bars[0];
+            let pb = multi_inner.insert(0, elem.progress_bar.clone());
+
+            pb.enable_steady_tick(500);
+
+            pb.set_message(&format!("{}...", &elem.key,));
+        }
+        {
+            // completed genomes progress bar
+            let elem = &progress_bars[1];
+            let pb = multi_inner.insert(1, elem.progress_bar.clone());
+
+            pb.enable_steady_tick(500);
+
+            pb.set_message(&format!("{}...", &elem.key,));
+        }
         for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
             // let _ = std::thread::spawn(move || {
             //     multi.join().unwrap();
@@ -225,6 +244,51 @@ pub fn pileup_variants<
                     .to_str()
                     .unwrap(),
             );
+
+            if Path::new(&output_prefix).exists() && !m.is_present("force") {
+                let cache = glob(&format!("{}/*.vcf", &output_prefix))
+                    .expect("failed to interpret glob")
+                    .map(|p| {
+                        p.expect("Failed to read cached bam path")
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    })
+                    .collect::<Vec<String>>();
+                if cache.len() > 0 {
+                    {
+                        let elem = &progress_bars[ref_idx + 2];
+                        let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
+                    }
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+
+                        pb.progress_bar.finish_and_clear();
+                    }
+                    {
+                        let pb = &tree.lock().unwrap()[1];
+                        pb.progress_bar.inc(1);
+                        let pos = pb.progress_bar.position();
+                        let len = pb.progress_bar.length();
+                        if pos >= len {
+                            pb.progress_bar
+                                .finish_with_message(&format!("All genomes analyzed {}", "✔",));
+                        }
+                    }
+                    {
+                        let pb = &tree.lock().unwrap()[0];
+                        pb.progress_bar
+                            .inc(((short_sample_count + long_sample_count) as u64) * 2 + 1);
+                        let pos = pb.progress_bar.position();
+                        let len = pb.progress_bar.length();
+                        if pos >= len {
+                            pb.progress_bar
+                                .finish_with_message(&format!("All steps completed {}", "✔",));
+                        }
+                    }
+                    continue;
+                }
+            }
             // pb_main.tick();
             //
             // pb_main.inc(1);
@@ -233,24 +297,6 @@ pub fn pileup_variants<
             //     &genomes_and_contigs.genomes[ref_idx],
             // ));
 
-            {
-                // Total steps eta progress bar
-                let elem = &progress_bars[0];
-                let pb = multi_inner.insert(0, elem.progress_bar.clone());
-
-                pb.enable_steady_tick(500);
-
-                pb.set_message(&format!("{}...", &elem.key,));
-            }
-            {
-                // completed genomes progress bar
-                let elem = &progress_bars[1];
-                let pb = multi_inner.insert(1, elem.progress_bar.clone());
-
-                pb.enable_steady_tick(500);
-
-                pb.set_message(&format!("{}...", &elem.key,));
-            }
             scope.execute(move || {
                 let reference = &genomes_and_contigs.genomes[ref_idx];
 
@@ -702,14 +748,6 @@ pub fn pileup_variants<
                         &concatenated_genomes,
                     );
 
-                    // Write variants in VCF format, reference specific
-                    {
-                        let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(&format!("{}: Generating VCF file...", &reference,));
-                    }
-                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
-
                     // Get strain abundances
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -746,15 +784,19 @@ pub fn pileup_variants<
                             &output_prefix,
                             &genomes_and_contigs,
                         );
-                    }
-                } else if mode == "summarize" {
-                    let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                    };
+
+                    // Write variants in VCF format, reference specific
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                } else if mode == "summarize" {
+                    variant_matrix.generate_distances();
+
+                    let window_size = m.value_of("window-size").unwrap().parse().unwrap();
 
                     // Get sample distances
                     {
@@ -775,13 +817,15 @@ pub fn pileup_variants<
                         &output_prefix,
                         &genomes_and_contigs,
                     );
-                } else if mode == "evolve" {
+
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
                             .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
                     variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                } else if mode == "evolve" {
+                    variant_matrix.generate_distances();
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -796,6 +840,13 @@ pub fn pileup_variants<
                         &output_prefix,
                         &concatenated_genomes,
                     );
+
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
+                    }
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                 } else if mode == "polish" {
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -804,19 +855,13 @@ pub fn pileup_variants<
                             &reference,
                         ));
                     }
+                    variant_matrix.generate_distances();
                     variant_matrix.polish_genomes(
                         &output_prefix,
                         &reference_map,
                         &genomes_and_contigs,
                         &concatenated_genomes,
                     );
-
-                    {
-                        let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(&format!("{}: Generating VCF file...", &reference,));
-                    }
-                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
 
                     // Get sample distances
                     {
@@ -839,7 +884,14 @@ pub fn pileup_variants<
                             &output_prefix,
                             &genomes_and_contigs,
                         );
+                    };
+
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating VCF file...", &reference,));
                     }
+                    variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                 };
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
