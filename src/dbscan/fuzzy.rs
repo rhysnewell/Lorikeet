@@ -327,12 +327,14 @@ impl FuzzyDBSCAN {
             let mut visited = vec![false; points.len()];
 
             {
-                for point_index in 0..points.len() {
+                'points: for point_index in 0..points.len() {
                     if visited[point_index] {
                         // pb1.inc(1);
                         continue;
                     }
                     visited[point_index] = true;
+                    pb1.inc(1);
+
                     let mut neighbour_indices = self.region_query(points, point_index);
                     let mut point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
@@ -373,56 +375,32 @@ impl FuzzyDBSCAN {
                                     // Cluster parameters were too slack, tighten them up
                                     // let mut rng = rand::thread_rng();
                                     // let scaler = rng.gen_range(0.5, 0.6);
-                                    let scaler = 0.95;
+                                    let scaler = 0.8;
                                     self.eps_min = self.eps_min * scaler;
                                     self.eps_max = self.eps_max * scaler;
-                                    visited = original_visited.clone();
-                                    'density: loop {
-                                        neighbour_indices = self.region_query(points, point_index);
-                                        point_label = self.mu_min_p(self.density(
-                                            point_index,
-                                            &neighbour_indices,
-                                            points,
-                                        ));
-                                        if point_label == 0.0 {
-                                            // let mut rng = rand::thread_rng();
-                                            // let scaler = rng.gen_range(1.05, 1.1);
-                                            let scaler = 1.05;
-                                            self.eps_min = self.eps_min * scaler;
-                                            self.eps_max = self.eps_max * scaler;
-                                            pb1.set_message(&format!(
-                                                "{}: Finding appropriate density parameters...",
-                                                ref_name,
-                                            ));
-                                            if self.eps_min >= eps_min_original {
-                                                pb1.set_message(&format!(
-                                                    "{}: Failed to find appropriate density parameters...",
-                                                    ref_name,
-                                                ));
-                                                break 'expand;
-                                            }
-                                            continue 'density;
-                                        } else {
-                                            break 'density;
-                                        }
+
+                                    pb1.reset();
+                                    niter += 1;
+                                    if niter < max_iter {
+                                        clusters = Vec::new();
+                                        noise_cluster = Vec::new();
                                     }
                                     pb1.set_message(&format!(
-                                        "{}: Clash in points in cluster. Adjusting parameters...",
+                                        "{}: Clash in points in cluster. Trying next core point...",
                                         ref_name,
                                     ));
+                                    continue 'outer;
                                     // pb1.reset();
                                     // clusters.remove(clusters.len() - 1);
                                     // noise_cluster = Vec::new();
                                     // niter += 1;
-                                    inner_iter += 1;
                                     // continue 'expand;
                                 }
                             }
                         }
-                        self.eps_min = eps_min_original;
-                        self.eps_max = eps_max_original;
+                        // self.eps_min = eps_min_original;
+                        // self.eps_max = eps_max_original;
                     }
-                    pb1.inc(1);
                 }
             }
             if !noise_cluster.is_empty() {
@@ -573,19 +551,19 @@ impl FuzzyDBSCAN {
                         neighbour_indices.insert(neighbour_neighbour_index);
                     }
                 }
-                // if self.check_for_clash(points, &cluster, neighbour_index) {
-                // This suggests the cluster is too lenient. Bringing in opposing variants
-                // return none and then try again with update parameters.
-                // visited[neighbour_index] = false;
-                // pb4.finish_and_clear();
-                // return None;
-                // } else {
-                cluster.push(Assignment {
-                    index: neighbour_index,
-                    category: Category::Core,
-                    label: neighbour_label,
-                });
-            // }
+                if self.check_for_clash(points, &cluster, neighbour_index) {
+                    // This suggests the cluster is too lenient. Bringing in opposing variants
+                    // return none and then try again with update parameters.
+                    visited[neighbour_index] = false;
+                    pb4.finish_and_clear();
+                    return None;
+                } else {
+                    cluster.push(Assignment {
+                        index: neighbour_index,
+                        category: Category::Core,
+                        label: neighbour_label,
+                    });
+                }
             } else {
                 border_points.push(Assignment {
                     index: neighbour_index,
@@ -610,7 +588,7 @@ impl FuzzyDBSCAN {
             }
         });
         cluster.append(&mut border_points);
-        // if cluster.len() > points.len() / 2 + 1 {
+        // if cluster.len() > points.len() / 2 {
         //     None
         // } else {
         Some(cluster)
