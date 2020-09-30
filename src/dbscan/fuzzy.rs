@@ -327,7 +327,7 @@ impl FuzzyDBSCAN {
             let mut visited = vec![false; points.len()];
 
             {
-                'points: for point_index in 0..points.len() {
+                for point_index in 0..points.len() {
                     if visited[point_index] {
                         // pb1.inc(1);
                         continue;
@@ -336,7 +336,7 @@ impl FuzzyDBSCAN {
                     pb1.inc(1);
 
                     let mut neighbour_indices = self.region_query(points, point_index);
-                    let mut point_label =
+                    let point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
                     if point_label == 0.0 {
                         noise_cluster.push(Assignment {
@@ -345,11 +345,7 @@ impl FuzzyDBSCAN {
                             label: 1.0,
                         });
                     } else {
-                        let eps_min_original = self.eps_min;
-                        let eps_max_original = self.eps_max;
-                        let original_visited = visited.clone();
-                        let mut inner_iter = 0;
-                        'expand: while inner_iter <= 1000 {
+                        'expand: loop {
                             pb1.set_message(&format!("{}: Expanding cluster...", ref_name,));
                             let expansion = self.expand_cluster_fuzzy(
                                 point_label,
@@ -365,17 +361,14 @@ impl FuzzyDBSCAN {
                             match expansion {
                                 Some(expanded) => {
                                     clusters.push(expanded);
-                                    pb1.set_message(&format!(
-                                        "{}: Cluster pushed. Resetting parameters...",
-                                        ref_name,
-                                    ));
+                                    pb1.set_message(&format!("{}: Cluster pushed.", ref_name,));
                                     break 'expand;
                                 }
                                 None => {
                                     // Cluster parameters were too slack, tighten them up
                                     // let mut rng = rand::thread_rng();
                                     // let scaler = rng.gen_range(0.5, 0.6);
-                                    let scaler = 0.8;
+                                    let scaler = 0.5;
                                     self.eps_min = self.eps_min * scaler;
                                     self.eps_max = self.eps_max * scaler;
 
@@ -390,16 +383,9 @@ impl FuzzyDBSCAN {
                                         ref_name,
                                     ));
                                     continue 'outer;
-                                    // pb1.reset();
-                                    // clusters.remove(clusters.len() - 1);
-                                    // noise_cluster = Vec::new();
-                                    // niter += 1;
-                                    // continue 'expand;
                                 }
                             }
                         }
-                        // self.eps_min = eps_min_original;
-                        // self.eps_max = eps_max_original;
                     }
                 }
             }
@@ -538,7 +524,7 @@ impl FuzzyDBSCAN {
 
         pb4.set_message(&format!("Expanding cluster...",));
 
-        while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
+        'expand: while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
             progress.inc(1);
@@ -555,8 +541,9 @@ impl FuzzyDBSCAN {
                     // This suggests the cluster is too lenient. Bringing in opposing variants
                     // return none and then try again with update parameters.
                     visited[neighbour_index] = false;
-                    pb4.finish_and_clear();
-                    return None;
+                    // pb4.finish_and_clear();
+                    // return None;
+                    continue 'expand;
                 } else {
                     cluster.push(Assignment {
                         index: neighbour_index,
@@ -565,25 +552,32 @@ impl FuzzyDBSCAN {
                     });
                 }
             } else {
-                border_points.push(Assignment {
-                    index: neighbour_index,
-                    category: Category::Border,
-                    label: f64::MAX,
-                });
+                if self.check_for_clash(points, &cluster, neighbour_index) {
+                    // This suggests the cluster is too lenient. Bringing in opposing variants
+                    // return none and then try again with update parameters.
+                    visited[neighbour_index] = false;
+                    // pb4.finish_and_clear();
+                    // return None;
+                    continue 'expand;
+                } else {
+                    border_points.push(Assignment {
+                        index: neighbour_index,
+                        category: Category::Border,
+                        label: f64::MAX,
+                    });
+                }
             }
             pb4.inc(1);
         }
         pb4.finish_and_clear();
         border_points.par_iter_mut().for_each(|border_point| {
+            let border = &points[border_point.index];
             for cluster_point in &cluster {
-                let border = &points[border_point.index];
                 let core = &points[cluster_point.index];
-                if !border.clash(&core) {
-                    let mu_distance = self.mu_distance(border, core);
-                    if mu_distance > 0.0 {
-                        border_point.label =
-                            cluster_point.label.min(mu_distance).min(border_point.label);
-                    }
+                let mu_distance = self.mu_distance(border, core);
+                if mu_distance > 0.0 {
+                    border_point.label =
+                        cluster_point.label.min(mu_distance).min(border_point.label);
                 }
             }
         });
