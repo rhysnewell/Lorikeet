@@ -536,37 +536,37 @@ impl FuzzyDBSCAN {
                         neighbour_indices.insert(neighbour_neighbour_index);
                     }
                 }
-                if self.check_for_clash(points, &cluster, neighbour_index) {
-                    // This suggests the cluster is too lenient. Bringing in opposing variants
-                    // return none and then try again with update parameters.
-                    // visited[neighbour_index] = false;
-                    // pb4.finish_and_clear();
-                    return None;
+                // if self.check_for_clash(points, &cluster, neighbour_index) {
+                // This suggests the cluster is too lenient. Bringing in opposing variants
+                // return none and then try again with update parameters.
+                // visited[neighbour_index] = false;
+                // pb4.finish_and_clear();
+                // return None;
                 // continue 'expand;
-                } else {
-                    progress.inc(1);
-                    cluster.push(Assignment {
-                        index: neighbour_index,
-                        category: Category::Core,
-                        label: neighbour_label,
-                    });
-                }
+                // } else {
+                progress.inc(1);
+                cluster.push(Assignment {
+                    index: neighbour_index,
+                    category: Category::Core,
+                    label: neighbour_label,
+                });
+            // }
             } else {
-                if self.check_for_clash(points, &cluster, neighbour_index) {
-                    // This suggests the cluster is too lenient. Bringing in opposing variants
-                    // return none and then try again with update parameters.
-                    // visited[neighbour_index] = false;
-                    // pb4.finish_and_clear();
-                    return None;
+                // if self.check_for_clash(points, &cluster, neighbour_index) {
+                // This suggests the cluster is too lenient. Bringing in opposing variants
+                // return none and then try again with update parameters.
+                // visited[neighbour_index] = false;
+                // pb4.finish_and_clear();
+                // return None;
                 // continue 'expand;
-                } else {
-                    progress.inc(1);
-                    border_points.push(Assignment {
-                        index: neighbour_index,
-                        category: Category::Border,
-                        label: f64::MAX,
-                    });
-                }
+                // } else {
+                progress.inc(1);
+                border_points.push(Assignment {
+                    index: neighbour_index,
+                    category: Category::Border,
+                    label: f64::MAX,
+                });
+                // }
             }
             pb4.inc(1);
         }
