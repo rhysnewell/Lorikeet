@@ -333,7 +333,6 @@ impl FuzzyDBSCAN {
                         continue;
                     }
                     visited[point_index] = true;
-                    pb1.inc(1);
 
                     let mut neighbour_indices = self.region_query(points, point_index);
                     let point_label =
@@ -362,6 +361,7 @@ impl FuzzyDBSCAN {
                                 Some(expanded) => {
                                     clusters.push(expanded);
                                     pb1.set_message(&format!("{}: Cluster pushed.", ref_name,));
+                                    pb1.inc(1);
                                     break 'expand;
                                 }
                                 None => {
@@ -527,7 +527,6 @@ impl FuzzyDBSCAN {
         'expand: while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
-            progress.inc(1);
             let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
             let neighbour_label =
                 self.mu_min_p(self.density(neighbour_index, &neighbour_neighbour_indices, points));
@@ -540,11 +539,12 @@ impl FuzzyDBSCAN {
                 if self.check_for_clash(points, &cluster, neighbour_index) {
                     // This suggests the cluster is too lenient. Bringing in opposing variants
                     // return none and then try again with update parameters.
-                    visited[neighbour_index] = false;
+                    // visited[neighbour_index] = false;
                     // pb4.finish_and_clear();
-                    // return None;
-                    continue 'expand;
+                    return None;
+                // continue 'expand;
                 } else {
+                    progress.inc(1);
                     cluster.push(Assignment {
                         index: neighbour_index,
                         category: Category::Core,
@@ -555,11 +555,12 @@ impl FuzzyDBSCAN {
                 if self.check_for_clash(points, &cluster, neighbour_index) {
                     // This suggests the cluster is too lenient. Bringing in opposing variants
                     // return none and then try again with update parameters.
-                    visited[neighbour_index] = false;
+                    // visited[neighbour_index] = false;
                     // pb4.finish_and_clear();
-                    // return None;
-                    continue 'expand;
+                    return None;
+                // continue 'expand;
                 } else {
+                    progress.inc(1);
                     border_points.push(Assignment {
                         index: neighbour_index,
                         category: Category::Border,
