@@ -38,7 +38,7 @@ conda activate lorikeet && \
 cargo install lorikeet-genome
 ```
 
-#### Option 3: Build manually
+#### Option 3: Install manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
@@ -46,9 +46,9 @@ conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y parallel p
 freebayes prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
 fastani dashing r-base && \ 
 conda activate lorikeet && \ 
-git clone https://github.com/rhysnewell/Lorikeet/git && \ 
+git clone https://github.com/rhysnewell/Lorikeet.git && \ 
 cd Lorikeet && \ 
-bash build.sh
+bash install.sh # or e.g. `cargo run -- genotype`
 ```
 
 
