@@ -40,6 +40,30 @@ const MAPPER_HELP: &'static str =
                                          that usage of this parameter has security
                                          implications if untrusted input is specified.\n";
 
+const VARIANT_CALLING_HELP: &'static str =
+    "        --mapq-threshold <INT>                Mapping quality threshold used to verify
+                                              a variant. [default: 10]\n
+        -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
+                                              considered in the variant calling process.\n
+        --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                              based on the quality scores and accounting for the
+                                              presence in all available samples.\n
+        --ploidy <INT>                        Sets the default ploidy for the analysis to N.  [default: 1]\n
+        --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                              entropy > N bits per bp. Set to 0 to turn off. [default: 1.3]\n
+        -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
+        -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
+                                              for it to be considered. [default: 10]\n
+        --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                              analysis. [default: 10]\n
+        --include-longread-svs                Include structural variants produced by SVIM in genotyping
+                                              analysis. Can often overestimate number of variants present.\n
+        --ulimit                              Sets the ulimit stack size to help prevent segmentation faults
+                                              in freebayes recursive calls. Lower this on smaller systems.
+                                              Increase this if your bam files contain thousands of contigs and
+                                              freebayes is segfaulting. [default: 81920]\n
+        --force                               Forcefully overwrite previous runs.\n";
+
 const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
   Either define BAM:
    -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
@@ -133,8 +157,9 @@ Rhys J.P. Newell <r.newell near uq.edu.au>"
 pub fn polish_full_help() -> &'static str {
     lazy_static! {
         static ref POLISH_HELP: String = format!(
-    "lorikeet polish: Produce consensus genomes for input genomes per sample
+            "lorikeet polish: Produce consensus genomes for input genomes per sample
 
+{}
 {}
 {}
 
@@ -183,29 +208,6 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
                                          table. [default: 4]
-   mapq-threshold <INT>                  Mapping quality threshold used to verify
-                                         a variant. [default: 10]
-   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
-                                         considered in the variant calling process.
-   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                         based on the quality scores and accounting for the
-                                         presence in all available samples.
-   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.01 implies on average a SNP should be detected
-                                         every 1 in 100 bp [default: 0.01]
-   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.001 implies on average an INDEL should be detected
-                                         every 1 in 1000 bp [default: 0.001]
-   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
-   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                         for it to be considered. [default: 10]
-   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                         analysis. [default: 10]
-   --include-longread-svs                Include structural variants produced by SVIM in genotyping
-                                         analysis. Can often overestimate number of variants present.
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -231,7 +233,9 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>",
+            ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP
+        );
     }
     &POLISH_HELP
 }
@@ -241,6 +245,7 @@ pub fn evolve_full_help() -> &'static str {
         static ref EVOLVE_HELP: String = format!(
     "lorikeet evolve: Calculate dN/dS values in coding regions based on variants found in read mappings
 
+{}
 {}
 {}
 
@@ -335,7 +340,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &EVOLVE_HELP
 }
@@ -345,6 +350,7 @@ pub fn summarize_full_help() -> &'static str {
         static ref SUMMARIZE_HELP: String = format!(
     "lorikeet summarize: Provides per contig variant statistics for a metagenome
 
+{}
 {}
 {}
 
@@ -430,7 +436,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &SUMMARIZE_HELP
 }
@@ -440,6 +446,7 @@ pub fn genotype_full_help() -> &'static str {
         static ref GENOTYPE_HELP: String = format!(
     "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
 
+{}
 {}
 {}
 
@@ -553,7 +560,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP);
+Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &GENOTYPE_HELP
 }
@@ -1061,9 +1068,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(
+                    Arg::with_name("min-repeat-entropy")
+                        .long("min-repeat-entropy")
+                        .default_value("1.3")
+                        .required(false),
+                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet")),
+                .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(
+                    Arg::with_name("ulimit")
+                        .long("ulimit")
+                        .default_value("81920"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("summarize")
@@ -1395,6 +1413,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(
+                    Arg::with_name("min-repeat-entropy")
+                        .long("min-repeat-entropy")
+                        .default_value("1.3")
+                        .required(false),
+                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
@@ -1403,7 +1427,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet")),
+                .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(
+                    Arg::with_name("ulimit")
+                        .long("ulimit")
+                        .default_value("81920"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("genotype")
@@ -1773,9 +1802,20 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(
+                    Arg::with_name("min-repeat-entropy")
+                        .long("min-repeat-entropy")
+                        .default_value("1.3")
+                        .required(false),
+                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet")),
+                .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(
+                    Arg::with_name("ulimit")
+                        .long("ulimit")
+                        .default_value("81920"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("kmer")
@@ -2181,6 +2221,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(
+                    Arg::with_name("min-repeat-entropy")
+                        .long("min-repeat-entropy")
+                        .default_value("1.3")
+                        .required(false),
+                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(
@@ -2190,6 +2236,11 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("1"),
                 )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet")),
+                .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(
+                    Arg::with_name("ulimit")
+                        .long("ulimit")
+                        .default_value("81920"),
+                ),
         );
 }

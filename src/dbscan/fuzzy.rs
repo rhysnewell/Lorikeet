@@ -374,12 +374,14 @@ impl FuzzyDBSCAN {
                     let mut neighbour_indices = self.region_query(points, point_index);
                     let point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
-                    if point_label == 0.0 && points[point_index].var() == &Variant::None {
-                        noise_cluster.push(Assignment {
-                            index: point_index,
-                            category: Category::Noise,
-                            label: 1.0,
-                        });
+                    if point_label == 0.0 {
+                        if points[point_index].var() == &Variant::None {
+                            noise_cluster.push(Assignment {
+                                index: point_index,
+                                category: Category::Noise,
+                                label: 1.0,
+                            });
+                        }
                     } else {
                         'expand: loop {
                             pb1.set_message(&format!("{}: Expanding cluster...", ref_name,));
@@ -586,7 +588,7 @@ impl FuzzyDBSCAN {
                 // return None;
                 // continue 'expand;
                 // } else {
-                progress.inc(1);
+                // progress.inc(1);
                 cluster.push(Assignment {
                     index: neighbour_index,
                     category: Category::Core,
@@ -602,7 +604,7 @@ impl FuzzyDBSCAN {
                 // return None;
                 // continue 'expand;
                 // } else {
-                progress.inc(1);
+                // progress.inc(1);
                 border_points.push(Assignment {
                     index: neighbour_index,
                     category: Category::Border,
