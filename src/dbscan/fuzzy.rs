@@ -374,12 +374,12 @@ impl FuzzyDBSCAN {
                     let mut neighbour_indices = self.region_query(points, point_index);
                     let point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
-                    if point_label == 0.0 {
-                        // noise_cluster.push(Assignment {
-                        //     index: point_index,
-                        //     category: Category::Noise,
-                        //     label: 1.0,
-                        // });
+                    if point_label == 0.0 && points[point_index].var() == &Variant::None {
+                        noise_cluster.push(Assignment {
+                            index: point_index,
+                            category: Category::Noise,
+                            label: 1.0,
+                        });
                     } else {
                         'expand: loop {
                             pb1.set_message(&format!("{}: Expanding cluster...", ref_name,));
@@ -493,7 +493,6 @@ impl FuzzyDBSCAN {
                 niter += 1;
                 if niter < max_iter {
                     clusters = Vec::new();
-                    noise_cluster = Vec::new();
                 }
             // clusters =
             //     fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
@@ -512,7 +511,6 @@ impl FuzzyDBSCAN {
                 niter += 1;
                 if niter < max_iter {
                     clusters = Vec::new();
-                    noise_cluster = Vec::new();
                 }
             } else if clusters.len() >= (points.len() / 2) && points.len() > 10 {
                 // Each point likely formed it's own cluster, have to be careful when there are
@@ -533,7 +531,6 @@ impl FuzzyDBSCAN {
                 niter += 1;
                 if niter < max_iter {
                     clusters = Vec::new();
-                    noise_cluster = Vec::new();
                 }
             } else {
                 acceptable_distribution = true;
