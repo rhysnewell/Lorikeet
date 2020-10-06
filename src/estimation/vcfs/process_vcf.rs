@@ -507,14 +507,15 @@ pub fn generate_vcf(
     // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
     let vcf_cmd_string = format!(
         "set -e -o pipefail;  \
-            freebayes-parallel {:?} {} -f {} -C {} -q {} \
-            -p {} --strict-vcf -m {} {} > {}",
+            ulimit -s {} && freebayes-parallel {:?} {} -f {} -C {} -q {} \
+            --min-repeat-entropy {} -p {} --strict-vcf -m {} {} > {}",
+        m.value_of("ulimit").unwrap(),
         region_tmp_file.path(),
         threads,
         &reference,
         m.value_of("min-variant-depth").unwrap(),
         m.value_of("base-quality-threshold").unwrap(),
-        // m.value_of("min-repeat-entropy").unwrap(),
+        m.value_of("min-repeat-entropy").unwrap(),
         m.value_of("ploidy").unwrap(),
         mapq_thresh,
         &bam_path,
