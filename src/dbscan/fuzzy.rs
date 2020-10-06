@@ -34,6 +34,8 @@ pub trait MetricSpace: Sized + Send + Sync {
     ) -> f64;
 
     fn clash(&self, other: &Self) -> bool;
+
+    fn var(&self) -> &Variant;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -226,6 +228,10 @@ impl MetricSpace for Var {
             false
         }
     }
+
+    fn var(&self) -> &Variant {
+        &self.var
+    }
 }
 
 /// A high-level classification, as defined by the FuzzyDBSCAN algorithm.
@@ -340,7 +346,6 @@ impl FuzzyDBSCAN {
     ) -> Vec<Cluster> {
         let mut acceptable_distribution = false;
         let mut clusters = Vec::new();
-        let mut noise_cluster = Vec::new();
 
         let sty = ProgressStyle::default_bar().template(
             "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]",
@@ -350,12 +355,13 @@ impl FuzzyDBSCAN {
         pb1.set_style(sty.clone());
 
         let multi_inner = Arc::clone(&multi);
-        let max_iter = 100;
+        let max_iter = 10;
         let mut niter = 0;
 
         pb1.set_message(&format!("{}: Running fuzzy DBSCAN...", ref_name));
-        'outer: while !acceptable_distribution && niter <= max_iter {
+        'outer: while !acceptable_distribution && niter < max_iter {
             let mut visited = vec![false; points.len()];
+            let mut noise_cluster = Vec::new();
 
             {
                 for point_index in 0..points.len() {
@@ -369,11 +375,11 @@ impl FuzzyDBSCAN {
                     let point_label =
                         self.mu_min_p(self.density(point_index, &neighbour_indices, points));
                     if point_label == 0.0 {
-                        noise_cluster.push(Assignment {
-                            index: point_index,
-                            category: Category::Noise,
-                            label: 1.0,
-                        });
+                        // noise_cluster.push(Assignment {
+                        //     index: point_index,
+                        //     category: Category::Noise,
+                        //     label: 1.0,
+                        // });
                     } else {
                         'expand: loop {
                             pb1.set_message(&format!("{}: Expanding cluster...", ref_name,));
@@ -390,7 +396,15 @@ impl FuzzyDBSCAN {
 
                             match expansion {
                                 Some(expanded) => {
-                                    clusters.push(expanded);
+                                    let vars: HashSet<&Variant> = expanded
+                                        .par_iter()
+                                        .map(|p| points[p.index].var())
+                                        .collect();
+                                    if vars.len() == 1 && vars.contains(&Variant::None) {
+                                        noise_cluster.par_extend(expanded);
+                                    } else {
+                                        clusters.push(expanded);
+                                    }
                                     pb1.set_message(&format!("{}: Cluster pushed.", ref_name,));
                                     pb1.inc(1);
                                     break 'expand;
@@ -425,7 +439,7 @@ impl FuzzyDBSCAN {
                     "{} Variants Clustered as noise during Fuzzy DBSCAN",
                     noise_cluster.len()
                 );
-                // clusters.push(noise_cluster);
+                clusters.push(noise_cluster);
             }
 
             // Sort the clusters by smallest to largest
@@ -483,7 +497,7 @@ impl FuzzyDBSCAN {
                 }
             // clusters =
             //     fuzzy_scanner.fuzzy_dbscan(points, initial_clusters, ref_name, multi, ref_idx);
-            } else if clusters.len() == 1 {
+            } else if clusters.len() == 1 && clusters[0].len() == points.len() {
                 // Cluster parameters were to slack, tighten them up
                 // let mut rng = rand::thread_rng();
                 // let scaler = rng.gen_range(0.5, 0.7);
