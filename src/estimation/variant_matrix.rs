@@ -642,108 +642,124 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                         let mut rel_abund =
                                                             vec![0.0; sample_count as usize];
 
-                                                        // Get the mean abundance across samples
-                                                        for index in (0..sample_count).into_iter() {
-                                                            let mut geom_mean_v =
-                                                                geom_mean_v.lock().unwrap();
-                                                            let mut geom_mean_d =
-                                                                geom_mean_d.lock().unwrap();
-                                                            let mut geom_mean_f =
-                                                                geom_mean_f.lock().unwrap();
+                                                        let depth_sum: i32 =
+                                                            base_info.totaldepth.iter().sum();
+                                                        if depth_sum > 0 {
+                                                            // Get the mean abundance across samples
+                                                            for index in
+                                                                (0..sample_count).into_iter()
+                                                            {
+                                                                let mut geom_mean_v =
+                                                                    geom_mean_v.lock().unwrap();
+                                                                let mut geom_mean_d =
+                                                                    geom_mean_d.lock().unwrap();
+                                                                let mut geom_mean_f =
+                                                                    geom_mean_f.lock().unwrap();
 
-                                                            let mut var_depth =
-                                                                base_info.truedepth[index] as f64;
+                                                                let mut var_depth = base_info
+                                                                    .truedepth[index]
+                                                                    as f64;
 
-                                                            let total_depth =
-                                                                base_info.totaldepth[index] as f64;
-                                                            //                                                println!("var_depth {} tot {}", var_depth, total_depth);
-                                                            //                                                base_info.freq[index] = ;
-                                                            if total_depth <= 0. {
-                                                                rel_abund[index] = var_depth / 1.;
-                                                            } else {
-                                                                rel_abund[index] =
-                                                                    var_depth / total_depth;
+                                                                let total_depth = base_info
+                                                                    .totaldepth[index]
+                                                                    as f64;
+                                                                //                                                println!("var_depth {} tot {}", var_depth, total_depth);
+                                                                //                                                base_info.freq[index] = ;
+                                                                if total_depth <= 0. {
+                                                                    rel_abund[index] =
+                                                                        var_depth / 1.;
+                                                                } else {
+                                                                    rel_abund[index] =
+                                                                        var_depth / total_depth;
+                                                                }
+
+                                                                geom_mean_v[index] +=
+                                                                    (var_depth + 1.).ln();
+                                                                geom_mean_d[index] +=
+                                                                    (total_depth + 1.).ln();
+                                                                geom_mean_f[index] += ((var_depth
+                                                                    + 1.)
+                                                                    / (total_depth + 1.))
+                                                                    .ln();
                                                             }
 
-                                                            geom_mean_v[index] +=
-                                                                (var_depth + 1.).ln();
-                                                            geom_mean_d[index] +=
-                                                                (total_depth + 1.).ln();
-                                                            geom_mean_f[index] += ((var_depth
-                                                                + 1.)
-                                                                / (total_depth + 1.))
-                                                                .ln();
+                                                            let mut variant_info_ref =
+                                                                variant_info_ref.lock().unwrap();
+                                                            //                                            base_info.rel_abunds = rel_abund;
+                                                            let point = fuzzy::Var {
+                                                                pos: *position,
+                                                                var: variant.clone(),
+                                                                deps: base_info.totaldepth.clone(),
+                                                                vars: base_info.truedepth.clone(),
+                                                                //                                                rel_abunds: rel_abund,
+                                                                tid: *tid,
+                                                                reads: base_info.reads.clone(),
+                                                            };
+                                                            variant_info_ref.push(point);
                                                         }
-
-                                                        let mut variant_info_ref =
-                                                            variant_info_ref.lock().unwrap();
-                                                        //                                            base_info.rel_abunds = rel_abund;
-                                                        let point = fuzzy::Var {
-                                                            pos: *position,
-                                                            var: variant.clone(),
-                                                            deps: base_info.totaldepth.clone(),
-                                                            vars: base_info.depth.clone(),
-                                                            //                                                rel_abunds: rel_abund,
-                                                            tid: *tid,
-                                                            reads: base_info.reads.clone(),
-                                                        };
-                                                        variant_info_ref.push(point);
                                                     }
                                                     _ => {
                                                         let mut rel_abund =
                                                             vec![0.0; sample_count as usize];
+                                                        let depth_sum: i32 =
+                                                            base_info.totaldepth.iter().sum();
+                                                        if depth_sum > 0 {
+                                                            // Get the mean abundance across samples
+                                                            for index in
+                                                                (0..sample_count).into_iter()
+                                                            {
+                                                                let mut geom_mean_v =
+                                                                    geom_mean_v.lock().unwrap();
+                                                                let mut geom_mean_d =
+                                                                    geom_mean_d.lock().unwrap();
+                                                                let mut geom_mean_f =
+                                                                    geom_mean_f.lock().unwrap();
 
-                                                        // Get the mean abundance across samples
-                                                        for index in (0..sample_count).into_iter() {
-                                                            let mut geom_mean_v =
-                                                                geom_mean_v.lock().unwrap();
-                                                            let mut geom_mean_d =
-                                                                geom_mean_d.lock().unwrap();
-                                                            let mut geom_mean_f =
-                                                                geom_mean_f.lock().unwrap();
-
-                                                            let mut var_depth =
-                                                                base_info.depth[index] as f64;
-                                                            if var_depth <= 0. {
-                                                                var_depth = base_info.truedepth
-                                                                    [index]
+                                                                let mut var_depth =
+                                                                    base_info.depth[index] as f64;
+                                                                if var_depth <= 0. {
+                                                                    var_depth = base_info.truedepth
+                                                                        [index]
+                                                                        as f64;
+                                                                    base_info.depth[index] =
+                                                                        base_info.truedepth[index];
+                                                                }
+                                                                let total_depth = base_info
+                                                                    .totaldepth[index]
                                                                     as f64;
-                                                                base_info.depth[index] =
-                                                                    base_info.truedepth[index];
-                                                            }
-                                                            let total_depth =
-                                                                base_info.totaldepth[index] as f64;
-                                                            //                                                base_info.freq[index] = ;
-                                                            if total_depth <= 0. {
-                                                                rel_abund[index] = var_depth / (1.);
-                                                            } else {
-                                                                rel_abund[index] =
-                                                                    var_depth / total_depth;
+                                                                //                                                base_info.freq[index] = ;
+                                                                if total_depth <= 0. {
+                                                                    rel_abund[index] =
+                                                                        var_depth / (1.);
+                                                                } else {
+                                                                    rel_abund[index] =
+                                                                        var_depth / total_depth;
+                                                                }
+
+                                                                geom_mean_v[index] +=
+                                                                    (var_depth + 1.).ln();
+                                                                geom_mean_d[index] +=
+                                                                    (total_depth + 1.).ln();
+                                                                geom_mean_f[index] += ((var_depth
+                                                                    + 1.)
+                                                                    / (total_depth + 1.))
+                                                                    .ln();
                                                             }
 
-                                                            geom_mean_v[index] +=
-                                                                (var_depth + 1.).ln();
-                                                            geom_mean_d[index] +=
-                                                                (total_depth + 1.).ln();
-                                                            geom_mean_f[index] += ((var_depth
-                                                                + 1.)
-                                                                / (total_depth + 1.))
-                                                                .ln();
+                                                            let mut variant_info_ref =
+                                                                variant_info_ref.lock().unwrap();
+                                                            //                                            base_info.rel_abunds = rel_abund;
+                                                            let point = fuzzy::Var {
+                                                                pos: *position,
+                                                                var: variant.clone(),
+                                                                deps: base_info.totaldepth.clone(),
+                                                                vars: base_info.truedepth.clone(),
+                                                                //                                                rel_abunds: rel_abund,
+                                                                tid: *tid,
+                                                                reads: base_info.reads.clone(),
+                                                            };
+                                                            variant_info_ref.push(point);
                                                         }
-
-                                                        let mut variant_info_ref =
-                                                            variant_info_ref.lock().unwrap();
-                                                        //                                            base_info.rel_abunds = rel_abund;
-                                                        let point = fuzzy::Var {
-                                                            pos: *position,
-                                                            var: variant.clone(),
-                                                            deps: base_info.totaldepth.clone(),
-                                                            vars: base_info.depth.clone(),
-                                                            //                                                rel_abunds: rel_abund,
-                                                            tid: *tid,
-                                                            reads: base_info.reads.clone(),
-                                                        };
-                                                        variant_info_ref.push(point);
                                                     }
                                                 }
                                             }
