@@ -58,26 +58,54 @@ impl MetricSpace for Var {
     ) -> f64 {
         if self.vars.len() > 1 {
             {
-                let clr = |input: &Vec<f64>, geom_means: &Vec<f64>| -> Vec<f64> {
-                    let output = input
-                        .par_iter()
-                        .enumerate()
-                        .map(|(i, v)| ((v + 1.) / geom_means[i]).ln())
-                        .collect();
-                    return output;
+                let clr = |input: &Vec<f64>,
+                           geom_means: &Vec<f64>,
+                           indices: &HashSet<usize>|
+                 -> Vec<f64> {
+                    let mut output_clr = Vec::with_capacity(indices.len());
+
+                    for (i, v) in input.iter().enumerate() {
+                        if indices.contains(&i) {
+                            let new_v = ((v + 1.) / geom_means[i]).ln();
+                            output_clr.push(new_v);
+                        }
+                    }
+                    return output_clr;
                 };
 
-                //                debug!("row values {:?} geom_var {:?} geom_frq {:?}", &self.vars, &geom_var, &geom_frq);
-                let row_vals: Vec<f64> =
-                    clr(&self.vars.iter().map(|v| *v as f64).collect(), geom_var);
+                let get_indices = |row_vals: &Vec<i32>, col_vals: &Vec<i32>| -> HashSet<usize> {
+                    let mut to_return = HashSet::new();
+                    let mut found_one_zero = false;
+                    for (index, (val_one, val_two)) in row_vals.iter().zip(col_vals).enumerate() {
+                        if val_one > &0 || val_two > &0 {
+                            to_return.insert(index);
+                        } else if val_one == &0 && val_two == &0 && !found_one_zero {
+                            to_return.insert(index);
+                            found_one_zero = true;
+                        }
+                        // to_return.insert(index);
+                    }
 
-                let col_vals: Vec<f64> =
-                    clr(&other.vars.iter().map(|v| *v as f64).collect(), geom_var);
+                    return to_return;
+                };
+                let indices = get_indices(&self.vars, &other.vars);
+                // println!("indices {:?} row_vals {:?} col vals {:?}", &indices, &self.vars, &other.vars,);
+                let row_vals: Vec<f64> = clr(
+                    &self.vars.iter().map(|v| *v as f64).collect(),
+                    geom_var,
+                    &indices,
+                );
+
+                let col_vals: Vec<f64> = clr(
+                    &other.vars.iter().map(|v| *v as f64).collect(),
+                    geom_var,
+                    &indices,
+                );
                 //                debug!("row values {:?} col values {:?}", &row_vals, &col_vals);
 
-                let mean_row = get_mean(&row_vals);
+                let mean_row = get_mean(&row_vals, &indices);
 
-                let mean_col = get_mean(&col_vals);
+                let mean_col = get_mean(&col_vals, &indices);
 
                 // lovell et al. Phi and Phi distance: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004075
                 // Rho: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/
@@ -87,14 +115,15 @@ impl MetricSpace for Var {
                 let mut col_var = 0.;
                 let mut covar = 0.;
 
-                row_vals
-                    .iter()
-                    .zip(col_vals.iter())
-                    .for_each(|(r_freq, c_freq)| {
-                        row_var += (r_freq - mean_row).powf(2.);
-                        col_var += (c_freq - mean_col).powf(2.);
-                        covar += (r_freq - mean_row) * (c_freq - mean_col)
-                    });
+                row_vals.iter().zip(col_vals.iter()).enumerate().for_each(
+                    |(index, (r_freq, c_freq))| {
+                        if indices.contains(&index) {
+                            row_var += (r_freq - mean_row).powf(2.);
+                            col_var += (c_freq - mean_col).powf(2.);
+                            covar += (r_freq - mean_row) * (c_freq - mean_col)
+                        }
+                    },
+                );
 
                 row_var = row_var / (row_vals.len() as f64 - 1.);
                 col_var = col_var / (col_vals.len() as f64 - 1.);
@@ -129,8 +158,10 @@ impl MetricSpace for Var {
                 //     || other.pos == 949
                 //     || other.pos == 8108
                 //     || other.pos == 7661 {
-                //     println!("{}: {:?} {}: {:?} Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {}",
-                //            self.pos, self.var, other.pos, other.var, phi, phi_dist, concordance, rho, 1.-rho, row_var, col_var, covar);
+                // if self.var == Variant::None && other.var == Variant::None {
+                //     println!("{}: {:?} {}: {:?} Phi {}, Phi-D {}, concordance {}, Rho {}, Rho-M {}, row_var {} col_var {} covar {} indices {:?} deps: {:?} {:?}",
+                //              self.pos, self.var, other.pos, other.var, phi, phi_dist, concordance, rho, 1. - rho, row_var, col_var, covar, &indices, self.vars, other.vars);
+                //     }
                 // }
 
                 return (phi * (1. - jaccard));
@@ -661,16 +692,16 @@ impl FuzzyDBSCAN {
     }
 }
 
-fn get_mean(input: &Vec<f64>) -> f64 {
+fn get_mean(input: &Vec<f64>, indices: &HashSet<usize>) -> f64 {
     let sum = input.par_iter().sum::<f64>();
-    sum / input.len() as f64
+    sum / indices.len() as f64
 }
 
 #[allow(unused)]
-fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>) {
-    let mean_row = get_mean(&row_vals);
+fn propd(row_vals: Vec<f64>, col_vals: Vec<f64>, indices: &HashSet<usize>) {
+    let mean_row = get_mean(&row_vals, indices);
 
-    let mean_col = get_mean(&col_vals);
+    let mean_col = get_mean(&col_vals, indices);
 
     // lovell et al. Phi and Phi distance: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004075
     // Rho: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4870310/
