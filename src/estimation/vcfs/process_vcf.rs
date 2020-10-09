@@ -439,163 +439,165 @@ pub fn generate_vcf(
 
     let mapq_thresh = std::cmp::max(1, m.value_of("mapq-threshold").unwrap().parse().unwrap());
 
-    // if !longread {
-    external_command_checker::check_for_freebayes();
-    external_command_checker::check_for_freebayes_parallel();
-    external_command_checker::check_for_samtools();
-    external_command_checker::check_for_vt();
+    if !longread {
+        external_command_checker::check_for_freebayes();
+        external_command_checker::check_for_freebayes_parallel();
+        external_command_checker::check_for_samtools();
+        external_command_checker::check_for_vt();
 
-    // Old way of calulating region size, not a good method
-    // let region_size = reference_length / threads as u64;
-    // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
-    // let mut region_size = target_length / threads as u64
-    //     + if target_length % threads as u64 != 0 {
-    //         1
-    //     } else {
-    //         0
-    //     };
-    // if target_length <= 100000 {
-    //     region_size = 100000
-    // }
+        // Old way of calulating region size, not a good method
+        // let region_size = reference_length / threads as u64;
+        // Now we just set it to be 100000, doesn't seem necessary to make this user defined?
+        // let mut region_size = target_length / threads as u64
+        //     + if target_length % threads as u64 != 0 {
+        //         1
+        //     } else {
+        //         0
+        //     };
+        // if target_length <= 100000 {
+        //     region_size = 100000
+        // }
 
-    let region_size = 100000;
+        let region_size = 100000;
 
-    let index_path = format!("{}.fai", reference);
+        let index_path = format!("{}.fai", reference);
 
-    let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
-    let vcf_path_prenormalization =
-        &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
+        let vcf_path = &(tmp_dir.path().to_str().unwrap().to_string() + "/output.vcf");
+        let vcf_path_prenormalization =
+            &(tmp_dir.path().to_str().unwrap().to_string() + "/output_prenormalization.vcf");
 
-    let mut region_tmp_file = Builder::new()
-        .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
-        .suffix(".txt")
-        .tempfile()
-        .unwrap();
+        let mut region_tmp_file = Builder::new()
+            .prefix(&(tmp_dir.path().to_str().unwrap().to_string() + "/"))
+            .suffix(".txt")
+            .tempfile()
+            .unwrap();
 
-    for (target_name, target_length) in target_names.iter().zip(target_lengths) {
-        let mut total_region_covered = 0;
-        let total_region_chunks = target_length / region_size
-            + if target_length % region_size != 0 {
-                1
-            } else {
-                0
-            };
-        for idx in (0..total_region_chunks).into_iter() {
-            total_region_covered += region_size;
-            if total_region_covered > target_length {
-                writeln!(
-                    region_tmp_file,
-                    "{}:{}-{}",
-                    &target_name,
-                    total_region_covered - region_size,
-                    target_length,
-                )
-                .unwrap();
-            } else {
-                writeln!(
-                    region_tmp_file,
-                    "{}:{}-{}",
-                    &target_name,
-                    total_region_covered - region_size,
-                    total_region_covered,
-                )
-                .unwrap();
+        for (target_name, target_length) in target_names.iter().zip(target_lengths) {
+            let mut total_region_covered = 0;
+            let total_region_chunks = target_length / region_size
+                + if target_length % region_size != 0 {
+                    1
+                } else {
+                    0
+                };
+            for idx in (0..total_region_chunks).into_iter() {
+                total_region_covered += region_size;
+                if total_region_covered > target_length {
+                    writeln!(
+                        region_tmp_file,
+                        "{}:{}-{}",
+                        &target_name,
+                        total_region_covered - region_size,
+                        target_length,
+                    )
+                    .unwrap();
+                } else {
+                    writeln!(
+                        region_tmp_file,
+                        "{}:{}-{}",
+                        &target_name,
+                        total_region_covered - region_size,
+                        total_region_covered,
+                    )
+                    .unwrap();
+                }
             }
         }
-    }
 
-    // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
-    let vcf_cmd_string = format!(
-        "set -e -o pipefail;  \
+        // Variant calling pipeline adapted from Snippy but without all of the rewriting of BAM files
+        let vcf_cmd_string = format!(
+            "set -e -o pipefail;  \
             ulimit -s {} && freebayes-parallel {:?} {} -f {} -C {} -q {} \
             --min-repeat-entropy {} -p {} --strict-vcf -m {} {} > {}",
-        m.value_of("ulimit").unwrap(),
-        region_tmp_file.path(),
-        threads,
-        &reference,
-        m.value_of("min-variant-depth").unwrap(),
-        m.value_of("base-quality-threshold").unwrap(),
-        m.value_of("min-repeat-entropy").unwrap(),
-        m.value_of("ploidy").unwrap(),
-        mapq_thresh,
-        &bam_path,
-        &vcf_path_prenormalization,
-    );
-    let vt_cmd_string = format!(
-        "vt normalize {} -n -r {} -o {}",
-        &vcf_path_prenormalization, &reference, vcf_path,
-    );
-    debug!("Queuing cmd_string: {}", vcf_cmd_string);
-    command::finish_command_safely(
-        std::process::Command::new("bash")
-            .arg("-c")
-            .arg(&vcf_cmd_string)
-            .stderr(std::process::Stdio::piped())
-            // .stdout(std::process::Stdio::piped())
-            .spawn()
-            .expect("Unable to execute bash"),
-        "freebayes",
-    );
-    debug!("Queuing cmd_string: {}", vt_cmd_string);
-    command::finish_command_safely(
-        std::process::Command::new("bash")
-            .arg("-c")
-            .arg(&vt_cmd_string)
-            .stderr(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .spawn()
-            .expect("Unable to execute bash"),
-        "vt",
-    );
-    debug!("VCF Path {:?}", vcf_path);
-    let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
+            m.value_of("ulimit").unwrap(),
+            region_tmp_file.path(),
+            threads,
+            &reference,
+            m.value_of("min-variant-depth").unwrap(),
+            m.value_of("base-quality-threshold").unwrap(),
+            m.value_of("min-repeat-entropy").unwrap(),
+            m.value_of("ploidy").unwrap(),
+            mapq_thresh,
+            &bam_path,
+            &vcf_path_prenormalization,
+        );
+        let vt_cmd_string = format!(
+            "vt normalize {} -n -r {} -o {}",
+            &vcf_path_prenormalization, &reference, vcf_path,
+        );
+        debug!("Queuing cmd_string: {}", vcf_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&vcf_cmd_string)
+                .stderr(std::process::Stdio::piped())
+                // .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "freebayes",
+        );
+        debug!("Queuing cmd_string: {}", vt_cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&vt_cmd_string)
+                .stderr(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "vt",
+        );
+        debug!("VCF Path {:?}", vcf_path);
+        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
 
-    tmp_dir.close().expect("Failed to close temp directory");
-    return vcf_reader;
-    // } else {
-    //     external_command_checker::check_for_svim();
-    // let svim_path = tmp_dir.path().to_str().unwrap().to_string();
-    //
-    // // check and build bam index if it doesn't exist
-    // if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
-    //     bam::index::build(
-    //         bam_path,
-    //         Some(&(bam_path.to_string() + ".bai")),
-    //         bam::index::Type::BAI,
-    //         threads as u32,
-    //     )
-    //     .expect(&format!("Unable to index bam at {}", &bam_path));
-    // }
-    //
-    // let cmd_string = format!(
-    //     "set -e -o pipefail; samtools view -bh {} {} > {} && \
-    //     svim alignment --read_names --skip_genotyping \
-    //     --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
-    //     --min_mapq {} --sequence_alleles {} {} {}",
-    //     bam_path,
-    //     &target_name,
-    //     tmp_bam_path1.path().to_str().unwrap().to_string(),
-    //     mapq_thresh,
-    //     &svim_path,
-    //     tmp_bam_path1.path().to_str().unwrap().to_string(),
-    //     &reference
-    // );
-    // debug!("Queuing cmd_string: {}", cmd_string);
-    // command::finish_command_safely(
-    //     std::process::Command::new("bash")
-    //         .arg("-c")
-    //         .arg(&cmd_string)
-    //         .stderr(std::process::Stdio::piped())
-    //         //                .stdout(std::process::Stdio::null())
-    //         .spawn()
-    //         .expect("Unable to execute bash"),
-    //     "svim",
-    // );
-    // let vcf_path = &(svim_path + "/variants.vcf");
-    // debug!("VCF Path {:?}", vcf_path);
-    // let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
-    //
-    // tmp_dir.close().expect("Failed to close temp directory");
-    // return vcf_reader;
-    // }
+        tmp_dir.close().expect("Failed to close temp directory");
+        return vcf_reader;
+    } else {
+        external_command_checker::check_for_svim();
+        let svim_path = tmp_dir.path().to_str().unwrap().to_string();
+
+        // // check and build bam index if it doesn't exist
+        // if !Path::new(&(bam_path.to_string() + ".bai")).exists() {
+        //     bam::index::build(
+        //         bam_path,
+        //         Some(&(bam_path.to_string() + ".bai")),
+        //         bam::index::Type::BAI,
+        //         threads as u32,
+        //     )
+        //     .expect(&format!("Unable to index bam at {}", &bam_path));
+        // }
+
+        let cmd_string = format!(
+            "set -e -o pipefail; samtools view -bh {} {} > {} && \
+        svim alignment --read_names --skip_genotyping \
+        --tandem_duplications_as_insertions --interspersed_duplications_as_insertions \
+        --min_mapq {} --sequence_alleles {} {} {}",
+            bam_path,
+            &target_names
+                .iter()
+                .fold(String::new(), |acc, arg| acc + &arg),
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            mapq_thresh,
+            &svim_path,
+            tmp_bam_path1.path().to_str().unwrap().to_string(),
+            &reference
+        );
+        debug!("Queuing cmd_string: {}", cmd_string);
+        command::finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&cmd_string)
+                .stderr(std::process::Stdio::piped())
+                //                .stdout(std::process::Stdio::null())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "svim",
+        );
+        let vcf_path = &(svim_path + "/variants.vcf");
+        debug!("VCF Path {:?}", vcf_path);
+        let vcf_reader = bcf::Reader::from_path(&Path::new(vcf_path));
+
+        tmp_dir.close().expect("Failed to close temp directory");
+        return vcf_reader;
+    }
 }

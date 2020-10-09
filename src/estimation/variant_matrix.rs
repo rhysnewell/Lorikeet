@@ -2058,7 +2058,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                 | Variant::SV(_)
                                                 | Variant::Insertion(_)
                                                 | Variant::Inversion(_)
-                                                | Variant::Deletion(_) => {
+                                                | Variant::Deletion(_)
+                                                | Variant::None => {
                                                     // Update adjacency matrix for each variant
                                                     // Evaluate each sample pairwise
                                                     (0..number_of_samples)
@@ -2099,7 +2100,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                             }
                                                         });
                                                 }
-                                                Variant::None => {
+                                                _ => {
                                                     // do nothing
                                                 }
                                             }
