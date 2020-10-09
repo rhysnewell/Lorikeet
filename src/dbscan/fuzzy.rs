@@ -1,7 +1,7 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use model::variants::*;
-use rand::Rng;
+// use rand::Rng;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::f64;
@@ -335,6 +335,7 @@ impl FuzzyDBSCAN {
     }
 }
 
+#[allow(unused)]
 impl FuzzyDBSCAN {
     fn fuzzy_dbscan<P: MetricSpace>(
         &mut self,
@@ -366,7 +367,7 @@ impl FuzzyDBSCAN {
             {
                 for point_index in 0..points.len() {
                     if visited[point_index] {
-                        // pb1.inc(1);
+                        pb1.inc(1);
                         continue;
                     }
                     visited[point_index] = true;
@@ -423,7 +424,6 @@ impl FuzzyDBSCAN {
                                     niter += 1;
                                     if niter < max_iter {
                                         clusters = Vec::new();
-                                        noise_cluster = Vec::new();
                                     }
                                     pb1.set_message(&format!(
                                         "{}: Clash in points in cluster. Trying next core point...",
@@ -551,7 +551,7 @@ impl FuzzyDBSCAN {
         points: &[P],
         visited: &mut [bool],
         multi: &MultiProgress,
-        progress: &ProgressBar,
+        _progress: &ProgressBar,
         ref_idx: usize,
     ) -> Option<Vec<Assignment>> {
         let mut cluster = vec![Assignment {
@@ -568,7 +568,7 @@ impl FuzzyDBSCAN {
 
         pb4.set_message(&format!("Expanding cluster...",));
 
-        'expand: while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
+        while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
             visited[neighbour_index] = true;
             let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
