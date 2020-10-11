@@ -263,10 +263,11 @@ pub fn pileup_variants<
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
 
-                        pb.progress_bar.finish_with_message(&format!(
+                        pb.progress_bar.set_message(&format!(
                             "{}: Output already present. Run with --force to overwrite",
                             &genomes_and_contigs.genomes[ref_idx]
                         ));
+                        pb.progress_bar.finish_and_clear();
                     }
                     {
                         let pb = &tree.lock().unwrap()[1];
@@ -368,7 +369,7 @@ pub fn pileup_variants<
                             for reference in references.iter() {
                                 let cmd_string = format!(
                                     "set -e -o pipefail; \
-                     prodigal -o {}/{}.gff -i {} -f gff -p meta",
+                                    prodigal -o {}/{}.gff -i {} -f gff -p meta",
                                     // prodigal
                                     gff_dir
                                         .path()
