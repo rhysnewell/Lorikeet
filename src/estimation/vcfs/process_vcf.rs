@@ -12,6 +12,7 @@ use utils::*;
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use scoped_threadpool::Pool;
+use statrs::statistics::Variance;
 use std::io::Write;
 use std::path::Path;
 use std::str;
@@ -83,7 +84,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
     let mut ref_target_names = Vec::new();
     let mut ref_target_lengths = Vec::new();
-
+    let mut contig_stats: HashMap<usize, Vec<f64>> = HashMap::new();
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
         .iter()
@@ -100,6 +101,8 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                 // That are usually skipped by GATK
                 ref_target_names.push(target_name.clone());
                 let target_len = target_lens[tid];
+                let mut coverage = Vec::with_capacity(target_len as usize);
+                let mut depth_sum = 0;
                 ref_target_lengths.push(target_len);
                 variant_matrix.add_info(ref_idx, tid, target_name.as_bytes().to_vec(), target_len);
                 {
@@ -127,6 +130,8 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                                 let tid = pileup.tid() as i32;
                                 let pos = pileup.pos() as usize;
                                 let depth = pileup.depth();
+                                coverage.push(depth as f64);
+                                depth_sum += depth;
 
                                 let refr_base = ref_seq[pos];
                                 // let mut base = Base::new(tid, pos, );
@@ -224,6 +229,10 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                     };
                     // bam_generated.set_threads(1);
                 };
+                // Get coverage mean and standard dev
+                let contig_cov = depth_sum as f64 / target_len as f64;
+                let std_dev = coverage.std_dev();
+                contig_stats.entry(tid).or_insert(vec![contig_cov, std_dev]);
             }
         });
 
@@ -316,9 +325,12 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
         }
     }
 
+    let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
+    variant_matrix_sync.remove_variants(ref_idx, sample_idx, contig_stats);
+
     //     }
     // });
-    *variant_matrix = variant_matrix_sync.lock().unwrap().clone();
+    *variant_matrix = variant_matrix_sync.clone();
 }
 
 /// Get or generate vcf file

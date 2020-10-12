@@ -100,6 +100,14 @@ pub trait VariantMatrixFunctions {
     /// Adds the variant information retrieved from VCF records on a per reference basis
     fn add_variant_to_matrix(&mut self, sample_idx: usize, base: &Base, tid: usize, ref_idx: usize);
 
+    /// Remove variants that were detected outside of suitable coverage values
+    fn remove_variants(
+        &mut self,
+        ref_idx: usize,
+        sample_idx: usize,
+        contig_info: HashMap<usize, Vec<f64>>,
+    );
+
     /// Per sample FDR calculation
     fn remove_false_discoveries(&mut self, alpha: f64, reference: &str);
 
@@ -336,6 +344,59 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 //     let allele = position_variants.entry(base.variant.clone()).or_insert(base.clone());
                 //     *con_var_counts += 1;
                 // }
+            }
+        }
+    }
+
+    fn remove_variants(
+        &mut self,
+        ref_idx: usize,
+        sample_idx: usize,
+        contig_info: HashMap<usize, Vec<f64>>,
+    ) {
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                ref mut all_variants,
+                ..
+            } => {
+                match all_variants.get_mut(&ref_idx) {
+                    Some(ref_variants) => {
+                        for (tid, stats) in contig_info.iter() {
+                            let upper_limit = stats[0] + stats[1];
+                            let lower_limit = stats[0] - stats[1];
+                            match ref_variants.get_mut(&(*tid as i32)) {
+                                Some(contig_variants) => {
+                                    let (to_remove_s, to_remove_r) = std::sync::mpsc::channel();
+
+                                    contig_variants.par_iter().for_each_with(
+                                        to_remove_s,
+                                        |s, (position, variants)| {
+                                            let mut total_depth = 0;
+                                            for (_, base) in variants {
+                                                total_depth += base.depth[sample_idx];
+                                            }
+                                            let total_depth = total_depth as f64;
+                                            if total_depth < lower_limit
+                                                || total_depth > upper_limit
+                                            {
+                                                s.send(*position);
+                                            }
+                                        },
+                                    );
+                                    let to_remove: Vec<i64> = to_remove_r.iter().collect();
+
+                                    for position in to_remove.iter() {
+                                        contig_variants.remove_entry(position).unwrap();
+                                    }
+                                }
+                                None => {
+                                    // do nothing
+                                }
+                            }
+                        }
+                    }
+                    None => {} // do nothing
+                }
             }
         }
     }
