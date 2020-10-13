@@ -85,7 +85,7 @@ impl MetricSpace for Var {
                             to_return.insert(index);
                             found_one_zero = true;
                         }
-                        // to_return.insert(index);
+                        to_return.insert(index);
                     }
 
                     return to_return;
