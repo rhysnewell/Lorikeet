@@ -455,6 +455,7 @@ pub fn generate_vcf(
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_samtools();
+        external_command_checker::check_for_bcftools();
         external_command_checker::check_for_vt();
 
         // Old way of calulating region size, not a good method
@@ -534,8 +535,11 @@ pub fn generate_vcf(
             &vcf_path_prenormalization,
         );
         let vt_cmd_string = format!(
-            "vt normalize {} -n -r {} -o {}",
-            &vcf_path_prenormalization, &reference, vcf_path,
+            "vt normalize {} -n -r {} > {}",
+            &vcf_path_prenormalization,
+            &reference,
+            &vcf_path,
+            // &vcf_path,
         );
         debug!("Queuing cmd_string: {}", vcf_cmd_string);
         command::finish_command_safely(
