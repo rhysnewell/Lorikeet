@@ -2520,18 +2520,29 @@ mod tests {
     use model::variants;
     use std::collections::HashSet;
 
-    fn create_base(ref_sequence: &Vec<u8>, var_char: u8, pos: i64, sample_count: usize) -> Base {
+    fn create_base(
+        ref_sequence: &Vec<u8>,
+        var_char: u8,
+        pos: i64,
+        sample_count: usize,
+        depth: Vec<i32>,
+        reference: Vec<i32>,
+    ) -> Base {
+        let mut total_depth = Vec::with_capacity(depth.len());
+        for (v, r) in depth.iter().zip(reference.iter()) {
+            total_depth.push(*v + *r);
+        }
         Base {
             tid: 0,
             pos,
             refr: ref_sequence[pos as usize..(pos as usize + 1)].to_vec(),
             variant: Variant::SNV(var_char),
-            depth: vec![0, 5],
-            truedepth: vec![0, 5],
-            totaldepth: vec![5, 5],
+            depth: depth.clone(),
+            truedepth: depth,
+            totaldepth: total_depth,
             genotypes: HashSet::new(),
             quals: vec![0.; sample_count],
-            referencedepth: vec![5, 0],
+            referencedepth: reference,
             freq: vec![0.; sample_count],
             rel_abunds: vec![0.; sample_count],
             reads: HashSet::new(),
@@ -2549,10 +2560,38 @@ mod tests {
         let mut var_mat = VariantMatrix::new_matrix(2);
 
         // Create fake variants
-        let var_1 = create_base(&ref_sequence, "G".bytes().nth(0).unwrap(), 7, 2);
-        let var_2 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 11, 2);
-        let var_3 = create_base(&ref_sequence, "A".bytes().nth(0).unwrap(), 13, 2);
-        let var_4 = create_base(&ref_sequence, "C".bytes().nth(0).unwrap(), 14, 2);
+        let var_1 = create_base(
+            &ref_sequence,
+            "G".bytes().nth(0).unwrap(),
+            7,
+            2,
+            vec![0, 5],
+            vec![5, 0],
+        );
+        let var_2 = create_base(
+            &ref_sequence,
+            "C".bytes().nth(0).unwrap(),
+            11,
+            2,
+            vec![0, 5],
+            vec![5, 0],
+        );
+        let var_3 = create_base(
+            &ref_sequence,
+            "A".bytes().nth(0).unwrap(),
+            13,
+            2,
+            vec![0, 5],
+            vec![5, 0],
+        );
+        let var_4 = create_base(
+            &ref_sequence,
+            "C".bytes().nth(0).unwrap(),
+            14,
+            2,
+            vec![0, 5],
+            vec![5, 0],
+        );
 
         let mut ups_and_downs = vec![0; ref_sequence.len()];
         ups_and_downs[0] = 5;
@@ -2610,5 +2649,73 @@ mod tests {
         ref_map.insert(0, "test".to_string());
         let multi = Arc::new(MultiProgress::new());
         var_mat.run_fuzzy_scan(0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi)
+    }
+
+    #[test]
+    fn test_variant_removal() {
+        let ref_sequence = "ATGAAACCCGGGTTTTAA".as_bytes().to_vec();
+
+        // Setup variant matrix
+        let mut var_mat = VariantMatrix::new_matrix(1);
+        var_mat.add_info(0, 0, "o".as_bytes().to_vec(), 20);
+        // Create fake variants
+        let var_1 = create_base(
+            &ref_sequence,
+            "G".bytes().nth(0).unwrap(),
+            7,
+            2,
+            vec![5],
+            vec![5],
+        );
+        let var_2 = create_base(
+            &ref_sequence,
+            "C".bytes().nth(0).unwrap(),
+            11,
+            2,
+            vec![5],
+            vec![5],
+        );
+        let var_3 = create_base(
+            &ref_sequence,
+            "A".bytes().nth(0).unwrap(),
+            13,
+            2,
+            vec![5],
+            vec![5],
+        );
+        let var_4 = create_base(
+            &ref_sequence,
+            "C".bytes().nth(0).unwrap(),
+            14,
+            2,
+            vec![30],
+            vec![30],
+        );
+
+        {
+            // Add variants in
+            var_mat.add_variant_to_matrix(0, &var_1, 0, 0);
+
+            var_mat.add_variant_to_matrix(0, &var_2, 0, 0);
+
+            var_mat.add_variant_to_matrix(0, &var_3, 0, 0);
+
+            var_mat.add_variant_to_matrix(0, &var_4, 0, 0);
+        }
+        let mut stats = HashMap::new();
+        stats.insert(0, vec![30., 30.]);
+        var_mat.remove_variants(0, 0, stats);
+
+        // retrieve variants
+        let variants = var_mat.variants_of_contig(0, 0).unwrap();
+        assert_eq!(variants.len(), 4);
+
+        let mut stats = HashMap::new();
+        stats.insert(0, vec![5., 5.]);
+        var_mat.remove_variants(0, 0, stats);
+
+        // retrieve variants
+        let variants = var_mat.variants_of_contig(0, 0).unwrap();
+        assert_eq!(variants.len(), 3);
     }
 }
