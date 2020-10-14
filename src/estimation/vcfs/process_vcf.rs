@@ -231,8 +231,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                 };
                 // Get coverage mean and standard dev
                 let contig_cov = depth_sum as f64 / target_len as f64;
-                let std_dev = 3. * coverage.std_dev();
-                println!("stats: {} {} {}", contig_cov, std_dev, std_dev / 6.);
+                let std_dev = 2. * coverage.std_dev();
                 contig_stats.entry(tid).or_insert(vec![contig_cov, std_dev]);
             }
         });
