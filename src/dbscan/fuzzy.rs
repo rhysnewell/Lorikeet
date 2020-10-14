@@ -367,10 +367,10 @@ impl FuzzyDBSCAN {
             {
                 for point_index in 0..points.len() {
                     if visited[point_index] {
-                        pb1.inc(1);
                         continue;
                     }
                     visited[point_index] = true;
+                    pb1.inc(1);
 
                     let mut neighbour_indices = self.region_query(points, point_index);
                     let point_label =
@@ -551,7 +551,7 @@ impl FuzzyDBSCAN {
         points: &[P],
         visited: &mut [bool],
         multi: &MultiProgress,
-        _progress: &ProgressBar,
+        progress: &ProgressBar,
         ref_idx: usize,
     ) -> Option<Vec<Assignment>> {
         let mut cluster = vec![Assignment {
@@ -570,7 +570,11 @@ impl FuzzyDBSCAN {
 
         while let Some(neighbour_index) = take_arbitrary(&mut neighbour_indices) {
             neighbour_visited[neighbour_index] = true;
-            visited[neighbour_index] = true;
+            let mut visited_point = &mut visited[neighbour_index];
+            if visited_point == &mut false {
+                progress.inc(1);
+                *visited_point = true;
+            }
             let neighbour_neighbour_indices = self.region_query(points, neighbour_index);
             let neighbour_label =
                 self.mu_min_p(self.density(neighbour_index, &neighbour_neighbour_indices, points));
