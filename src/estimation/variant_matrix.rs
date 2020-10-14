@@ -380,10 +380,6 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                 || total_depth > upper_limit)
                                                 && total_depth > 0.
                                             {
-                                                println!(
-                                                    "Variant: {} {}",
-                                                    total_depth, lower_limit
-                                                );
                                                 s.send(*position);
                                             }
                                         },
