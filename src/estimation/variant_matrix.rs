@@ -376,9 +376,14 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                 total_depth += base.depth[sample_idx];
                                             }
                                             let total_depth = total_depth as f64;
-                                            if total_depth < lower_limit
-                                                || total_depth > upper_limit
+                                            if (total_depth < lower_limit
+                                                || total_depth > upper_limit)
+                                                && total_depth > 0.
                                             {
+                                                println!(
+                                                    "Variant: {} {}",
+                                                    total_depth, lower_limit
+                                                );
                                                 s.send(*position);
                                             }
                                         },
