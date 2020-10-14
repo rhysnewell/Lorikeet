@@ -145,7 +145,7 @@ pub fn pileup_variants<
     }
 
     progress_bars[0] = Elem {
-        key: "Operations remaining...".to_string(),
+        key: "Operations remaining".to_string(),
         index: 0,
         progress_bar: ProgressBar::new(
             ((references.len() * (short_sample_count + long_sample_count)) * 2 + references.len())
