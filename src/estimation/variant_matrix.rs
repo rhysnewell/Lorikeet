@@ -451,16 +451,16 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 // info!("Prob {:?}", &prob_dist);
 
                 // turn prob dist into posterior exact probabilities
-                // debug!("Calculating PEP dist...");
-                // let pep_dist = prob_dist
-                //     .iter()
-                //     .map(|p| p.ln_one_minus_exp())
-                //     .collect::<Vec<LogProb>>();
+                debug!("Calculating PEP dist...");
+                let pep_dist = prob_dist
+                    .iter()
+                    .map(|p| p.ln_one_minus_exp())
+                    .collect::<Vec<LogProb>>();
 
                 // info!("PEP {:?}", &pep_dist);
 
                 // calculate fdr values
-                let fdrs = bayesian::expected_fdr(&prob_dist);
+                let fdrs = bayesian::expected_fdr(&pep_dist);
                 // info!("FDRs {:?}", &fdrs);
 
                 let alpha = LogProb::from(Prob(alpha));
@@ -480,7 +480,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                     // find the largest pep for which fdr <= alpha
                     // do not let peps with the same value cross the boundary
                     for i in (0..fdrs.len()).rev() {
-                        if fdrs[i] <= alpha && (i == 0 || prob_dist[i] != prob_dist[i - 1]) {
+                        if fdrs[i] <= alpha && (i == 0 || pep_dist[i] != pep_dist[i - 1]) {
                             let prob = prob_dist[i];
                             debug!(
                                 "Genome {}: FDR threshold for alpha of {:?} calculated as {:?}",
