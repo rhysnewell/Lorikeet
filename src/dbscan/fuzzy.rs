@@ -516,8 +516,8 @@ impl FuzzyDBSCAN {
                 let scaler = 1.25;
                 self.eps_min = self.eps_min * scaler;
                 self.eps_max = self.eps_max * scaler;
-                // self.pts_min = self.pts_min;
-                // self.pts_max = self.pts_max;
+                self.pts_min = self.pts_min * scaler;
+                self.pts_max = self.pts_max * scaler;
                 pb1.set_message(&format!(
                     "{}: Too many clusters. Adjusting parameters...",
                     ref_name,

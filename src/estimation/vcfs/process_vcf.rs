@@ -1,7 +1,7 @@
 use bird_tool_utils::command;
 use rust_htslib::{bcf, bcf::Read};
 use std;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use coverm::bam_generator::*;
 use estimation::variant_matrix::*;
@@ -85,6 +85,14 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     let mut ref_target_names = Vec::new();
     let mut ref_target_lengths = Vec::new();
     let mut contig_stats: HashMap<usize, Vec<f64>> = HashMap::new();
+    let valid_chars: HashSet<u8> = vec![
+        "A".as_bytes()[0],
+        "T".as_bytes()[0],
+        "C".as_bytes()[0],
+        "G".as_bytes()[0],
+    ]
+    .into_iter()
+    .collect::<HashSet<u8>>();
     // for each genomic position, only has hashmap when variants are present. Includes read ids
     target_names
         .iter()
@@ -132,98 +140,102 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                                 let depth = pileup.depth();
                                 coverage.push(depth as f64);
                                 depth_sum += depth;
-
                                 let refr_base = ref_seq[pos];
-                                // let mut base = Base::new(tid, pos, );
-                                // info!("Base dict {:?} {}", &pos_dict, pos);
 
-                                let mut base_dict = HashMap::new();
+                                if target_len >= 5000 && refr_base != "N".as_bytes()[0] {
+                                    // let mut base = Base::new(tid, pos, );
+                                    // info!("Base dict {:?} {}", &pos_dict, pos);
 
-                                let mut refr_depth = 0;
-                                let mut refr_qual = 0.;
+                                    let mut base_dict = HashMap::new();
 
-                                for alignment in pileup.alignments() {
-                                    let record = alignment.record();
-                                    if record.mapq() >= mapq_thresh {
-                                        if !alignment.is_del() && !alignment.is_refskip() {
-                                            // query position in read
-                                            let qpos = alignment.qpos().unwrap();
-                                            let record_qual = record.qual()[qpos] as f64;
-                                            if record_qual >= bq {
-                                                let read_base = alignment.record().seq()[qpos];
-                                                if read_base != refr_base {
-                                                    let mut base = base_dict
-                                                        .entry(read_base)
-                                                        .or_insert(Base::new(
-                                                            tid as u32,
-                                                            pos as i64,
-                                                            sample_count,
-                                                            vec![refr_base],
-                                                        ));
+                                    let mut refr_depth = 0;
+                                    let mut refr_qual = 0.;
 
-                                                    base.depth[sample_idx] += 1;
-                                                    base.quals[sample_idx] += record_qual;
-                                                    if base.variant == Variant::None {
-                                                        base.variant = Variant::SNV(read_base);
+                                    for alignment in pileup.alignments() {
+                                        let record = alignment.record();
+                                        if record.mapq() >= mapq_thresh {
+                                            if !alignment.is_del() && !alignment.is_refskip() {
+                                                // query position in read
+                                                let qpos = alignment.qpos().unwrap();
+                                                let record_qual = record.qual()[qpos] as f64;
+                                                if record_qual >= bq {
+                                                    let read_base = alignment.record().seq()[qpos];
+                                                    if read_base != refr_base
+                                                        && valid_chars.contains(&read_base)
+                                                    {
+                                                        let mut base = base_dict
+                                                            .entry(read_base)
+                                                            .or_insert(Base::new(
+                                                                tid as u32,
+                                                                pos as i64,
+                                                                sample_count,
+                                                                vec![refr_base],
+                                                            ));
+
+                                                        base.depth[sample_idx] += 1;
+                                                        base.quals[sample_idx] += record_qual;
+                                                        if base.variant == Variant::None {
+                                                            base.variant = Variant::SNV(read_base);
+                                                        }
                                                     }
+                                                } else {
+                                                    refr_depth += 1;
+                                                    refr_qual += record_qual;
                                                 }
-                                            } else {
-                                                refr_depth += 1;
-                                                refr_qual += record_qual;
                                             }
                                         }
                                     }
-                                }
 
-                                // Collect refr base information
-                                {
-                                    let mut base = base_dict.entry(refr_base).or_insert(Base::new(
-                                        tid as u32,
-                                        pos as i64,
-                                        sample_count,
-                                        vec![refr_base],
-                                    ));
+                                    // Collect refr base information
+                                    {
+                                        let mut base =
+                                            base_dict.entry(refr_base).or_insert(Base::new(
+                                                tid as u32,
+                                                pos as i64,
+                                                sample_count,
+                                                vec![refr_base],
+                                            ));
 
-                                    base.depth[sample_idx] = refr_depth;
-                                    base.quals[sample_idx] = refr_qual;
-                                }
-
-                                // If more than one variant at location (including reference)
-                                // Collect the variants
-                                if base_dict.keys().len() > 1 {
-                                    let mut variant_found = false;
-                                    let mut refr_base = 0;
-                                    for (var_char, base) in base_dict.iter() {
-                                        if base.depth[sample_idx] >= min_variant_depth &&
-                                        // base.quals[sample_idx] >= min_variant_quality &&
-                                        base.variant != Variant::None
-                                        {
-                                            total_records += 1;
-                                            variant_found = true;
-                                            refr_base = base.refr[0];
-                                            variant_matrix.add_variant_to_matrix(
-                                                sample_idx,
-                                                base,
-                                                tid as usize,
-                                                ref_idx,
-                                            );
-                                        }
+                                        base.depth[sample_idx] = refr_depth;
+                                        base.quals[sample_idx] = refr_qual;
                                     }
-                                    // Add reference
-                                    match base_dict.get(&refr_base) {
-                                        Some(base) => {
-                                            variant_matrix.add_variant_to_matrix(
-                                                sample_idx,
-                                                base,
-                                                tid as usize,
-                                                ref_idx,
-                                            );
+
+                                    // If more than one variant at location (including reference)
+                                    // Collect the variants
+                                    if base_dict.keys().len() > 1 {
+                                        let mut variant_found = false;
+                                        let mut refr_base = 0;
+                                        for (var_char, base) in base_dict.iter() {
+                                            if base.depth[sample_idx] >= min_variant_depth &&
+                                                // base.quals[sample_idx] >= min_variant_quality &&
+                                                base.variant != Variant::None
+                                            {
+                                                total_records += 1;
+                                                variant_found = true;
+                                                refr_base = base.refr[0];
+                                                variant_matrix.add_variant_to_matrix(
+                                                    sample_idx,
+                                                    base,
+                                                    tid as usize,
+                                                    ref_idx,
+                                                );
+                                            }
                                         }
-                                        None => {}
+                                        // Add reference
+                                        match base_dict.get(&refr_base) {
+                                            Some(base) => {
+                                                variant_matrix.add_variant_to_matrix(
+                                                    sample_idx,
+                                                    base,
+                                                    tid as usize,
+                                                    ref_idx,
+                                                );
+                                            }
+                                            None => {}
+                                        }
                                     }
                                 }
                             }
-                            // }
                         }
                         None => println!("no bam for pileups"),
                     };
