@@ -436,13 +436,6 @@ impl FuzzyDBSCAN {
                     }
                 }
             }
-            if !noise_cluster.is_empty() {
-                debug!(
-                    "{} Variants Clustered as noise during Fuzzy DBSCAN",
-                    noise_cluster.len()
-                );
-                clusters.push(noise_cluster);
-            }
 
             // Sort the clusters by smallest to largest
             clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
@@ -535,6 +528,13 @@ impl FuzzyDBSCAN {
                     clusters = Vec::new();
                 }
             } else {
+                if !noise_cluster.is_empty() {
+                    debug!(
+                        "{} Variants Clustered as noise during Fuzzy DBSCAN",
+                        noise_cluster.len()
+                    );
+                    clusters.push(noise_cluster);
+                }
                 acceptable_distribution = true;
             } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
         }
