@@ -470,7 +470,13 @@ impl FuzzyDBSCAN {
                 );
                 small_similarity == 1
             });
-
+            if !noise_cluster.is_empty() {
+                    debug!(
+                        "{} Variants Clustered as noise during Fuzzy DBSCAN",
+                        noise_cluster.len()
+                    );
+                    clusters.push(noise_cluster);
+             }
             // We use RNG here so we don't end up with a situation where it recursively goes back
             // and forth between two cluster states (no clusters, 1 cluster), which is theoretically possible
             if clusters.len() == 0 {
@@ -507,7 +513,7 @@ impl FuzzyDBSCAN {
                 if niter < max_iter {
                     clusters = Vec::new();
                 }
-            } else if clusters.len() >= (points.len() / 2) && points.len() > 10 {
+            } else if clusters.len() >= (points.len() / 2) {
                 // Each point likely formed it's own cluster, have to be careful when there are
                 // only a few variants though
                 // let mut rng = rand::thread_rng();
@@ -528,13 +534,7 @@ impl FuzzyDBSCAN {
                     clusters = Vec::new();
                 }
             } else {
-                if !noise_cluster.is_empty() {
-                    debug!(
-                        "{} Variants Clustered as noise during Fuzzy DBSCAN",
-                        noise_cluster.len()
-                    );
-                    clusters.push(noise_cluster);
-                }
+                
                 acceptable_distribution = true;
             } // What about when there is far too many clusters? Maybe this is fixed by the read phasing
         }

@@ -142,7 +142,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                                 depth_sum += depth;
                                 let refr_base = ref_seq[pos];
 
-                                if target_len >= 5000 && refr_base != "N".as_bytes()[0] {
+                                if refr_base != "N".as_bytes()[0] {
                                     // let mut base = Base::new(tid, pos, );
                                     // info!("Base dict {:?} {}", &pos_dict, pos);
 

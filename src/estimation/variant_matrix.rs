@@ -954,7 +954,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 reference_path.file_stem().unwrap().to_str().unwrap(),
                             )
                         }
-                        let clusters = fuzzy_scanner.cluster(
+                        let mut clusters = fuzzy_scanner.cluster(
                             &variant_info_vec[..],
                             links,
                             reference_path.file_stem().unwrap().to_str().unwrap(),
@@ -963,15 +963,17 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         );
 
                         // Perform read phasing clustering and return expanded clusters
-                        let clusters: Vec<Vec<fuzzy::Assignment>> = linkage_clustering_of_variants(
-                            clusters,
-                            &variant_info_vec,
-                            anchor_size,
-                            anchor_similarity,
-                            minimum_reads_in_link,
-                            multi,
-                            *ref_idx,
-                        );
+                        if clusters.len() > 1 {
+	                        clusters = linkage_clustering_of_variants(
+	                            clusters,
+	                            &variant_info_vec,
+	                            anchor_size,
+	                            anchor_similarity,
+	                            minimum_reads_in_link,
+	                            multi,
+	                            *ref_idx,
+	                        );
+                        }
 
                         // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
                         // keep hashmaps updated using channel()
