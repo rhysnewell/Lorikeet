@@ -53,7 +53,7 @@ pub fn linkage_clustering_of_variants(
         //     multi.join_and_clear().unwrap();
         // });
 
-        clusters.into_par_iter().for_each(|cluster| {
+        clusters.into_par_iter().skip(1).for_each(|cluster| {
             let indices: BTreeSet<usize> = cluster
                 .par_iter()
                 .map(|assignment| assignment.index)
