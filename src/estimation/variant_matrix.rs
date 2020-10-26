@@ -15,6 +15,8 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::izip;
 use itertools::Itertools;
 use model::variants::*;
+use ndarray::prelude::*;
+use ndarray_npy::{read_npy, write_npy};
 use ordered_float::NotNan;
 use rayon::current_num_threads;
 use rayon::prelude::*;
@@ -153,6 +155,7 @@ pub trait VariantMatrixFunctions {
         minimum_reads_in_link: usize,
         reference_map: &HashMap<usize, String>,
         multi: &Arc<MultiProgress>,
+        output_prefic: &str,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -899,6 +902,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
         minimum_reads_in_link: usize,
         reference_map: &HashMap<usize, String>,
         multi: &Arc<MultiProgress>,
+        output_prefix: &str,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -909,144 +913,189 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 ref mut pred_variants,
                 ref mut all_variants,
                 target_lengths,
+                sample_names,
                 ..
             } => {
                 let prediction_variants_all = Arc::new(Mutex::new(HashMap::new()));
 
                 let all_variants_genotyped = Arc::new(Mutex::new(all_variants.clone()));
                 // For each reference genome we will perform the DBSCAN clustering
-                variant_info.par_iter().for_each(|(ref_idx, variant_info_vec)| {
-                    if variant_info_vec.len() > 1 {
-                        let mut fuzzy_scanner = fuzzy::FuzzyDBSCAN {
-                            eps_min: e_min,
-                            eps_max: e_max,
-                            pts_min: match pts_min {
-                                _ if pts_min > 1. => pts_min,
-                                _ => pts_min * variant_info_vec.len() as f64,
-                            },
-                            pts_max: match pts_max {
-                                _ if pts_max > 1. => pts_max,
-                                _ => pts_max * variant_info_vec.len() as f64,
-                            },
-                            phi,
-                            geom_var: geom_mean_var[ref_idx].to_owned(),
-                            geom_dep: geom_mean_dep[ref_idx].to_owned(),
-                            geom_frq: geom_mean_frq[ref_idx].to_owned(),
-                        };
-
-
-                        let links = Vec::new();
-                        // run fuzzy DBSCAN
-                        let reference_path = Path::new(
-                            reference_map
-                                .get(ref_idx)
-                                .expect("reference index not found"),
-                        );
-                        if links.len() > 0 {
-                            debug!(
-                                "Genome {}: Running Seeded fuzzyDBSCAN with {} initial clusters",
-                                reference_path.file_stem().unwrap().to_str().unwrap(),
-                                links.len(),
+                variant_info
+                    .par_iter()
+                    .for_each(|(ref_idx, variant_info_vec)| {
+                        if variant_info_vec.len() > 1 {
+                            let reference_path = Path::new(
+                                reference_map
+                                    .get(ref_idx)
+                                    .expect("reference index not found"),
                             );
-                        } else {
-                            debug!(
-                                "Genome {}: No initial clusters formed, running fuzzyDBSCAN with no seeds.",
+
+                            let file_name = format!(
+                                "{}/{}",
+                                output_prefix.to_string(),
                                 reference_path.file_stem().unwrap().to_str().unwrap(),
-                            )
+                            );
+
+                            let mut var_depth_array: Array2<i32> =
+                                Array::from_elem((variant_info_vec.len(), 5), 0);
+
+                            for (row_id, var) in variant_info_vec.iter().enumerate() {
+                                for (col_id, val) in var.vars.iter().enumerate() {
+                                    var_depth_array[[row_id, col_id]] = *val
+                                }
+                            }
+
+                            write_npy(format!("{}.npy", file_name), &var_depth_array)
+                                .expect("Unable to create npy file");
+
+                            let cmd_string = format!(
+                                "cluster.py fit --depths {}.npy && rm {}.npy",
+                                &file_name, &file_name,
+                            );
+
+                            command::finish_command_safely(
+                                std::process::Command::new("bash")
+                                    .arg("-c")
+                                    .arg(&cmd_string)
+                                    .stderr(std::process::Stdio::piped())
+                                    // .stdout(std::process::Stdio::piped())
+                                    .spawn()
+                                    .expect("Unable to execute bash"),
+                                "hdbscan",
+                            );
+
+                            let labels: Array1<i8> = read_npy(format!("{}_labels.npy", file_name))
+                                .expect("Unable to read npy");
+                            let labels_set = labels.iter().collect::<HashSet<&i8>>();
+
+                            let mut clusters: Vec<Vec<fuzzy::Assignment>>;
+                            if labels_set.contains(&-1) {
+                                clusters = vec![Vec::new(); labels_set.len() - 1];
+                                labels.iter().enumerate().for_each(|(index, label)| {
+                                    if label > &-1 {
+                                        let assignment = fuzzy::Assignment {
+                                            index: index,
+                                            label: 1.,
+                                            category: fuzzy::Category::Core,
+                                        };
+                                        clusters[*label as usize].push(assignment);
+                                    }
+                                });
+                            } else {
+                                clusters = vec![Vec::new(); labels_set.len()];
+                                labels.iter().enumerate().for_each(|(index, label)| {
+                                    let assignment = fuzzy::Assignment {
+                                        index: index,
+                                        label: 1.,
+                                        category: fuzzy::Category::Core,
+                                    };
+                                    clusters[*label as usize].push(assignment);
+                                });
+                            }
+                            let mut new_clusters = Vec::new();
+                            let mut noise_cluster = Vec::new();
+                            for cluster in clusters.into_iter() {
+                                let vars: HashSet<&Variant> = cluster
+                                    .par_iter()
+                                    .map(|p| &variant_info_vec[p.index].var)
+                                    .collect();
+                                if vars.len() == 1 && vars.contains(&Variant::None) {
+                                    noise_cluster.par_extend(cluster);
+                                } else {
+                                    new_clusters.push(cluster);
+                                }
+                            }
+                            new_clusters.push(noise_cluster);
+                            // let mut clusters = fuzzy_scanner.cluster(
+                            //     &variant_info_vec[..],
+                            //     links,
+                            //     reference_path.file_stem().unwrap().to_str().unwrap(),
+                            //     multi,
+                            //     *ref_idx,
+                            // );
+
+                            // Perform read phasing clustering and return expanded clusters
+                            if new_clusters.len() > 1 {
+                                new_clusters = linkage_clustering_of_variants(
+                                    new_clusters,
+                                    &variant_info_vec,
+                                    anchor_size,
+                                    anchor_similarity,
+                                    minimum_reads_in_link,
+                                    multi,
+                                    *ref_idx,
+                                );
+                            }
+
+                            // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
+                            // keep hashmaps updated using channel()
+                            let prediction_variants = Arc::new(Mutex::new(HashMap::new()));
+
+                            // Organize clusters into genotypes by recollecting full variant information
+                            new_clusters
+                                .par_iter()
+                                .enumerate()
+                                .for_each(|(rank, cluster)| {
+                                    // Sets for each cluster keeping track of which variant types are present in
+                                    // a cluster
+                                    let prediction_set = Arc::new(Mutex::new(HashSet::new()));
+                                    cluster.par_iter().for_each(|assignment| {
+                                        let variant: &fuzzy::Var =
+                                            &variant_info_vec[assignment.index];
+
+                                        let mut prediction_set = prediction_set.lock().unwrap();
+                                        prediction_set.insert(variant.var.to_owned());
+
+                                        let mut prediction_variants =
+                                            prediction_variants.lock().unwrap();
+
+                                        let variant_tid = prediction_variants
+                                            .entry(rank + 1)
+                                            .or_insert(HashMap::new());
+
+                                        let variant_pos = variant_tid
+                                            .entry(variant.tid)
+                                            .or_insert(HashMap::new());
+
+                                        let variant_cat = variant_pos
+                                            .entry(variant.pos)
+                                            .or_insert(HashMap::new());
+
+                                        let variant_set = variant_cat
+                                            .entry(assignment.category)
+                                            .or_insert(HashSet::new());
+
+                                        variant_set.insert(variant.var.to_owned());
+
+                                        // Add genotypes to base
+                                        let mut all_variants_genotyped =
+                                            all_variants_genotyped.lock().unwrap();
+
+                                        let ref_variants = all_variants_genotyped
+                                            .entry(*ref_idx)
+                                            .or_insert(HashMap::new());
+
+                                        let base_tid = ref_variants
+                                            .entry(variant.tid)
+                                            .or_insert(HashMap::new());
+
+                                        let base_pos =
+                                            base_tid.entry(variant.pos).or_insert(HashMap::new());
+
+                                        match base_pos.get_mut(&variant.var) {
+                                            Some(base_base) => {
+                                                base_base.genotypes.insert(rank as i32 + 1);
+                                            }
+                                            None => {}
+                                        };
+                                    });
+                                });
+                            let prediction_variants = prediction_variants.lock().unwrap().clone();
+                            let mut prediction_variants_all =
+                                prediction_variants_all.lock().unwrap();
+                            prediction_variants_all.insert(*ref_idx, prediction_variants);
                         }
-                        let mut clusters = fuzzy_scanner.cluster(
-                            &variant_info_vec[..],
-                            links,
-                            reference_path.file_stem().unwrap().to_str().unwrap(),
-                            multi,
-                            *ref_idx,
-                        );
-
-                        // Perform read phasing clustering and return expanded clusters
-                        if clusters.len() > 1 {
-	                        clusters = linkage_clustering_of_variants(
-	                            clusters,
-	                            &variant_info_vec,
-	                            anchor_size,
-	                            anchor_similarity,
-	                            minimum_reads_in_link,
-	                            multi,
-	                            *ref_idx,
-	                        );
-                        }
-
-                        // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
-                        // keep hashmaps updated using channel()
-                        let prediction_variants =
-                            Arc::new(
-                            Mutex::new(
-                                HashMap::new()));
-
-                        // Organize clusters into genotypes by recollecting full variant information
-                        clusters.par_iter().enumerate().for_each(|(rank, cluster)| {
-                            // Sets for each cluster keeping track of which variant types are present in
-                            // a cluster
-                            let prediction_set = Arc::new(Mutex::new(
-                                HashSet::new()));
-                            cluster.par_iter().for_each(|assignment| {
-                                let variant: &fuzzy::Var = &variant_info_vec[assignment.index];
-
-                                let mut prediction_set = prediction_set.lock().unwrap();
-                                prediction_set.insert(variant.var.to_owned());
-
-                                let mut prediction_variants = prediction_variants
-                                    .lock()
-                                    .unwrap();
-
-                                let variant_tid = prediction_variants
-                                    .entry(rank + 1)
-                                    .or_insert(HashMap::new());
-
-                                let variant_pos = variant_tid
-                                    .entry(variant.tid)
-                                    .or_insert(HashMap::new());
-
-                                let variant_cat = variant_pos
-                                    .entry(variant.pos)
-                                    .or_insert(HashMap::new());
-
-                                let variant_set = variant_cat
-                                    .entry(assignment.category)
-                                    .or_insert(HashSet::new());
-
-                                variant_set.insert(variant.var.to_owned());
-
-                                // Add genotypes to base
-                                let mut all_variants_genotyped =
-                                    all_variants_genotyped.lock().unwrap();
-
-                                let ref_variants =
-                                    all_variants_genotyped
-                                        .entry(*ref_idx)
-                                        .or_insert(HashMap::new());
-
-                                let base_tid =
-                                    ref_variants
-                                        .entry(variant.tid)
-                                        .or_insert(HashMap::new());
-
-                                let base_pos = base_tid
-                                    .entry(variant.pos)
-                                    .or_insert(HashMap::new());
-
-                                match base_pos.get_mut(&variant.var) {
-                                    Some(base_base) => {
-                                        base_base.genotypes.insert(rank as i32 + 1);
-                                    },
-                                    None => {},
-                                };
-                            });
-                        });
-                        let prediction_variants = prediction_variants.lock().unwrap().clone();
-                        let mut prediction_variants_all = prediction_variants_all.lock().unwrap();
-                        prediction_variants_all.insert(*ref_idx, prediction_variants);
-                    }
-                });
+                    });
 
                 let all_variants_genotyped = all_variants_genotyped.lock().unwrap();
 
@@ -2651,7 +2700,9 @@ mod tests {
         let mut ref_map = HashMap::new();
         ref_map.insert(0, "test".to_string());
         let multi = Arc::new(MultiProgress::new());
-        var_mat.run_fuzzy_scan(0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi)
+        var_mat.run_fuzzy_scan(
+            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test",
+        )
     }
 
     #[test]

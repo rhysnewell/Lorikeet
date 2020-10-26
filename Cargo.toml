@@ -55,8 +55,10 @@ serde_yaml = "0.8"
 statrs = "0.13"
 tempdir = "0.3"
 tempfile = "3.0"
-indicatif = {version = "*", features = ["rayon"]}
+indicatif = {version = "*"}
 scoped_threadpool = "*"
+ndarray-npy = "0.6.0"
+ndarray = "*"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
