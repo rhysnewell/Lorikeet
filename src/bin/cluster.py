@@ -111,7 +111,7 @@ class Cluster():
         count_path,
         output_prefix,
         scaler="minmax",
-        n_neighbors=100,
+        n_neighbors=20,
         min_dist=0,
         n_components=5,
         random_state=42,
