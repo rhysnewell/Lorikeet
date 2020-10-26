@@ -737,6 +737,7 @@ pub fn pileup_variants<
                         minimum_reads_in_link,
                         &reference_map,
                         &multi_inner,
+                        &output_prefix,
                     );
 
                     // Write genotypes to disk, reference specific

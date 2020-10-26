@@ -15,5 +15,6 @@ LIBRARY_PATH=$PREFIX/lib \
 LIBCLANG_PATH=$PREFIX/lib/libclang.so \
 cargo install --force --root $PREFIX
 
-# move Rscript
-cp src/snp_density_plots.R $CONDA_PREFIX/bin/
+# move Rscript and python
+cp src/bin/snp_density_plots.R $CONDA_PREFIX/bin/
+cp src/bin/cluster.py $CONDA_PREFIX/bin/

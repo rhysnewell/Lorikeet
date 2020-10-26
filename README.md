@@ -32,8 +32,8 @@ conda activate lorikeet
 #### Option 2: Cargo
 ```
 conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y python=3.7 parallel pysam=0.16 svim \ 
-freebayes prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing r-base && \ 
+prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
+fastani dashing umap-learn scikit-learn scikit-bio numpy seaborn matplotlib && \ 
 conda activate lorikeet && \ 
 cargo install lorikeet-genome
 ```
