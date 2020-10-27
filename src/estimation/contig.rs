@@ -721,10 +721,8 @@ pub fn pileup_variants<
                     // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar.set_message(&format!(
-                            "{}: Running seeded fuzzy DBSCAN...",
-                            &reference,
-                        ));
+                        pb.progress_bar
+                            .set_message(&format!("{}: Running UMAP and HDBSCAN...", &reference,));
                     }
                     variant_matrix.run_fuzzy_scan(
                         e_min,

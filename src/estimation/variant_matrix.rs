@@ -949,8 +949,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "cluster.py fit --depths {}.npy && rm {}.npy",
-                                &file_name, &file_name,
+                                "cluster.py fit --depths {}.npy --n_neighbors 20 --min_cluster_size {} \
+                                && rm {}.npy",
+                                &file_name,
+                                (pts_min * variant_info_vec.len() as f64) as i32,
+                                &file_name,
                             );
 
                             command::finish_command_safely(
@@ -992,6 +995,21 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     clusters[*label as usize].push(assignment);
                                 });
                             }
+
+                            // Perform read phasing clustering and return expanded clusters
+                            if clusters.len() > 1 {
+                                clusters = linkage_clustering_of_clusters(
+                                    clusters,
+                                    &variant_info_vec,
+                                    anchor_size,
+                                    anchor_similarity,
+                                    minimum_reads_in_link,
+                                    multi,
+                                    *ref_idx,
+                                );
+                            }
+
+                            // Remove multiple reference strains
                             let mut new_clusters = Vec::new();
                             let mut noise_cluster = Vec::new();
                             for cluster in clusters.into_iter() {
@@ -1001,31 +1019,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     .collect();
                                 if vars.len() == 1 && vars.contains(&Variant::None) {
                                     noise_cluster.par_extend(cluster);
-                                } else {
+                                } else if cluster.len() as f64 >= (variant_info_vec.len() as f64) * pts_max{
                                     new_clusters.push(cluster);
                                 }
                             }
                             new_clusters.push(noise_cluster);
-                            // let mut clusters = fuzzy_scanner.cluster(
-                            //     &variant_info_vec[..],
-                            //     links,
-                            //     reference_path.file_stem().unwrap().to_str().unwrap(),
-                            //     multi,
-                            //     *ref_idx,
-                            // );
-
-                            // Perform read phasing clustering and return expanded clusters
-                            if new_clusters.len() > 1 {
-                                new_clusters = linkage_clustering_of_variants(
-                                    new_clusters,
-                                    &variant_info_vec,
-                                    anchor_size,
-                                    anchor_similarity,
-                                    minimum_reads_in_link,
-                                    multi,
-                                    *ref_idx,
-                                );
-                            }
 
                             // Since these are hashmaps, I'm using Arc and Mutex here since not sure how
                             // keep hashmaps updated using channel()
@@ -1312,11 +1310,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 writeln!(
                                     file_open,
                                     // ">{}_strain_{}_alt_alleles_{}_ref_alleles_{}",
-                                    ">{}_strain_{}",
+                                    ">{}_strain_{}_{}_{}",
                                     target_names[ref_index][&tid],
                                     strain_index,
-                                    // variations,
-                                    // ref_alleles
+                                    variations,
+                                    ref_alleles
                                 )
                                     .expect("Unable to write to file");
 

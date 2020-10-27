@@ -112,11 +112,11 @@ class Cluster():
         output_prefix,
         scaler="minmax",
         n_neighbors=20,
-        min_dist=0,
-        n_components=5,
+        min_dist=0.1,
+        n_components=2,
         random_state=42,
         min_cluster_size=100,
-        min_samples=100,
+        min_samples=1,
         prediction_data=True,
         cluster_selection_method="eom"
         ):
@@ -212,15 +212,27 @@ How to use fit:
 cluster.py fit --depths depths.npy
 
 ''')
-    input_options.add_argument('--depths', help='.npy file contain depths of variants for each sample', dest="depths")
+    input_options.add_argument('--depths',
+                               help='.npy file contain depths of variants for each sample',
+                               dest="depths",
+                               required=True)
 
-    input_options.add_argument('--n_neighbors', help='Number of neighbors considered in UMAP', dest="n_neighbors")
+    input_options.add_argument('--n_neighbors',
+                               help='Number of neighbors considered in UMAP',
+                               dest="n_neighbors",
+                               default=20)
 
-    ###########################################################################
+    input_options.add_argument('--min_cluster_size',
+                               help='Minimum cluster size for HDBSCAN',
+                               dest="min_cluster_size",
+                               default=5)
+
+
+###########################################################################
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Parsing input ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
-    if(len(sys.argv) == 2 or sys.argv[1] == '-h' or sys.argv[1] == '--help'):
+    if(len(sys.argv) == 2 or len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv[1] == '--help'):
         phelp()
     else:
         args = main_parser.parse_args()
@@ -241,7 +253,7 @@ cluster.py fit --depths depths.npy
         logging.info("Time - %s" % (time))
         logging.info("Command - %s" % ' '.join(sys.argv))
         prefix = args.depths.replace(".npy", "")
-        clusterer = Cluster(args.depths, prefix)
+        clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size))
         clusterer.fit_transform()
         clusterer.cluster()
         clusterer.plot()
