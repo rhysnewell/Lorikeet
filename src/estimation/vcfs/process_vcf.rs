@@ -338,7 +338,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     // }
 
     let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
-    variant_matrix_sync.remove_variants(ref_idx, sample_idx, contig_stats);
+    // variant_matrix_sync.remove_variants(ref_idx, sample_idx, contig_stats);
 
     //     }
     // });
