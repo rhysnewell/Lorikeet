@@ -33,9 +33,16 @@ pub fn linkage_clustering_of_clusters(
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}");
 
-        let pb1 = multi.insert(ref_idx + 3, ProgressBar::new((0..clusters.len())
-            .into_iter()
-            .permutations(2).collect::<Vec<Vec<usize>>>().len() as u64));
+        let pb1 = multi.insert(
+            ref_idx + 3,
+            ProgressBar::new(
+                (0..clusters.len())
+                    .into_iter()
+                    .permutations(2)
+                    .collect::<Vec<Vec<usize>>>()
+                    .len() as u64,
+            ),
+        );
         pb1.set_style(sty.clone());
 
         pb1.set_message("Phasing variants within clusters...");
@@ -74,8 +81,7 @@ pub fn linkage_clustering_of_clusters(
                     // Get variants by index
                     let var1 = &variant_info[assigned_variant1.index];
                     {
-                        depth_1 +=
-                            var1.vars.par_iter().sum::<i32>();
+                        depth_1 += var1.vars.par_iter().sum::<i32>();
                     }
                     cluster2.iter().for_each(|assigned_variant2| {
                         let var2 = &variant_info[assigned_variant2.index];
@@ -100,20 +106,19 @@ pub fn linkage_clustering_of_clusters(
                                     }
                                 }
 
-                                depth_2 +=
-                                    var2.vars.par_iter().sum::<i32>();
-                                // let union: HashSet<_> = set1.union(&set2).collect();
-                                //
-                                // if intersection.len() >= minimum_reads_in_link {
-                                //     // get relative frequencies of each Haplotype
-                                //     let pool_size = union.len() as f64;
-                                //     let x_11 = intersection.len() as f64 / pool_size;
-                                //     let p1 = set1.len() as f64 / pool_size;
-                                //     let q1 = set2.len() as f64 / pool_size;
-                                //
-                                //     // Calculate Linkage D
-                                //     let dis = x_11 - p1 * q1;
-                                // }
+                                depth_2 += var2.vars.par_iter().sum::<i32>();
+                            // let union: HashSet<_> = set1.union(&set2).collect();
+                            //
+                            // if intersection.len() >= minimum_reads_in_link {
+                            //     // get relative frequencies of each Haplotype
+                            //     let pool_size = union.len() as f64;
+                            //     let x_11 = intersection.len() as f64 / pool_size;
+                            //     let p1 = set1.len() as f64 / pool_size;
+                            //     let q1 = set2.len() as f64 / pool_size;
+                            //
+                            //     // Calculate Linkage D
+                            //     let dis = x_11 - p1 * q1;
+                            // }
                             } else {
                                 // Send to the clash pile
                                 clash.insert(assigned_variant2.index);
@@ -133,7 +138,9 @@ pub fn linkage_clustering_of_clusters(
                     if !fully_contained.contains(cluster1_id) {
                         let mut links_out = links.entry(*cluster1_id).or_insert(indices.clone());
                         *links_out = links_out.union(&extend).cloned().collect();
-                        original_clusters.entry(*cluster1_id).or_insert(indices.clone());
+                        original_clusters
+                            .entry(*cluster1_id)
+                            .or_insert(indices.clone());
                     } else if links.contains_key(cluster1_id) {
                         links.remove(cluster1_id).unwrap();
                     }
@@ -144,7 +151,7 @@ pub fn linkage_clustering_of_clusters(
 
                     // If cluster1 has higher coverage, then it likely can appear again later
                     // Either by itself or with another.
-                    if coverage_1 >= coverage_2*1.25 && cluster2.len() < cluster1.len() {
+                    if coverage_1 >= coverage_2 * 1.25 && cluster2.len() < cluster1.len() {
                         if original_clusters.contains_key(cluster2_id) {
                             // Remove the cluster since it seems like it can't appear by itself
                             original_clusters.remove(cluster2_id).unwrap();
@@ -164,7 +171,7 @@ pub fn linkage_clustering_of_clusters(
                     // Intialize links for each indices including itself
                     if !fully_contained.contains(cluster1_id) {
                         let mut links_out = links.entry(*cluster1_id).or_insert(indices.clone());
-                        // original_clusters.entry(*cluster1_id).or_insert(indices.clone());
+                    // original_clusters.entry(*cluster1_id).or_insert(indices.clone());
                     } else if links.contains_key(cluster1_id) {
                         links.remove(cluster1_id).unwrap();
                     }

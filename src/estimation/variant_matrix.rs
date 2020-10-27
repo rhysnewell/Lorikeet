@@ -937,7 +937,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             );
 
                             let mut var_depth_array: Array2<i32> =
-                                Array::from_elem((variant_info_vec.len(), 5), 0);
+                                Array::from_elem((variant_info_vec.len(), sample_names.len()), 0);
 
                             for (row_id, var) in variant_info_vec.iter().enumerate() {
                                 for (col_id, val) in var.vars.iter().enumerate() {
