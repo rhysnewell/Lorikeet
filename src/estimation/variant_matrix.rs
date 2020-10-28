@@ -949,7 +949,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "cluster.py fit --depths {}.npy --n_neighbors 20 --min_cluster_size {} \
+                                "pipefail -eou; cluster.py fit --depths {}.npy --n_neighbors 20 --min_cluster_size {} \
                                 && rm {}.npy",
                                 &file_name,
                                 (pts_min * variant_info_vec.len() as f64) as i32,

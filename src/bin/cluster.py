@@ -42,6 +42,8 @@ import numpy as np
 import hdbscan
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib
+matplotlib.use('pdf')
 import matplotlib.pyplot as plt
 import skbio.stats.composition
 import umap
