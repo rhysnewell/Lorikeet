@@ -120,8 +120,10 @@ class Cluster():
         min_cluster_size=100,
         min_samples=1,
         prediction_data=True,
-        cluster_selection_method="eom"
-        ):
+        cluster_selection_method="eom",
+        precomputed=False,
+        metric = "euclidean",
+    ):
 
         ## Set up clusterer and UMAP
         self.path = output_prefix
@@ -149,15 +151,19 @@ class Cluster():
             spread=1,
         )
         if min_cluster_size > self.depths.shape[0]*0.1:
-            min_cluster_size = int(self.depths.shape[0]*0.1)
+            min_cluster_size = max(int(self.depths.shape[0]*0.1), 2)
             min_samples = min_cluster_size
 
+        if precomputed:
+            metric = "precomputed"
+            prediction_data = False
 
         self.clusterer = hdbscan.HDBSCAN(
                             min_cluster_size=min_cluster_size,
                             min_samples=min_samples,
                             prediction_data=prediction_data,
                             cluster_selection_method=cluster_selection_method,
+                            metric=metric,
                             )
 
     def fit_transform(self):
@@ -168,6 +174,10 @@ class Cluster():
         ## Cluster on the UMAP embeddings and return soft clusters
         self.clusterer.fit(self.embeddings)
         self.soft_clusters = hdbscan.all_points_membership_vectors(self.clusterer)
+
+    def cluster_distances(self):
+        ## Cluster on the UMAP embeddings and return soft clusters
+        self.clusterer.fit(self.depths)
 
     def plot(self):
         color_palette = sns.color_palette('Paired', 200)
@@ -180,9 +190,24 @@ class Cluster():
             self.embeddings[:, 1], s=5, linewidth=0, c=cluster_member_colors, alpha=0.5)
         plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
 
+    def plot_distances(self):
+        self.clusterer.condensed_tree_.plot(select_clusters=True,
+                                       selection_palette=sns.color_palette('deep', 8))
+        plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
+
     def labels(self):
         return self.clusterer.labels_.astype('int8')
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == '__main__':
 
@@ -229,6 +254,13 @@ cluster.py fit --depths depths.npy
                                dest="min_cluster_size",
                                default=5)
 
+    input_options.add_argument('--precomputed',
+                               help='Minimum cluster size for HDBSCAN',
+                               dest="precomputed",
+                               type=str2bool, nargs='?',
+                               const=True,
+                               default=False,)
+
 
 ###########################################################################
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ #
@@ -255,8 +287,14 @@ cluster.py fit --depths depths.npy
         logging.info("Time - %s" % (time))
         logging.info("Command - %s" % ' '.join(sys.argv))
         prefix = args.depths.replace(".npy", "")
-        clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size))
-        clusterer.fit_transform()
-        clusterer.cluster()
-        clusterer.plot()
-        np.save(prefix + '_labels.npy', clusterer.labels())
+        if not args.precomputed:
+            clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size))
+            clusterer.fit_transform()
+            clusterer.cluster()
+            clusterer.plot()
+            np.save(prefix + '_labels.npy', clusterer.labels())
+        else:
+            clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), scaler="none", precomputed=args.precomputed)
+            clusterer.cluster_distances()
+            clusterer.plot_distances()
+            np.save(prefix + '_labels.npy', clusterer.labels())
