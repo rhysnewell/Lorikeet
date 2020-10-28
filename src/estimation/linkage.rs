@@ -58,18 +58,18 @@ pub fn linkage_clustering_of_clusters(
             let cluster2 = &clusters[*cluster2_id];
 
             // Reads in cluster 1 and 2 which do not clash with any variants
-            let mut read_set1: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
-            let mut read_set2: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let mut read_set1: HashSet<Vec<u8>> = HashSet::new();
+            let mut read_set2: HashSet<Vec<u8>> = HashSet::new();
 
             // The reads that were found to clash in these clusters
-            let mut clash: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let mut clash: HashSet<Vec<u8>> = HashSet::new();
 
             // The unique reads found to connect these clusters
             // let mut intersection_set = BTreeSet::new();
             // let mut depth_1 = 0;
             // let mut depth_2 = 0;
 
-            cluster1.par_iter().for_each(|assigned_variant1| {
+            cluster1.iter().for_each(|assigned_variant1| {
                 // Get variants by index
                 let var1 = &variant_info[assigned_variant1.index];
                 let set1 = &var1.reads;
@@ -86,26 +86,20 @@ pub fn linkage_clustering_of_clusters(
                         if !(var1.tid == var2.tid && var1.pos == var2.pos)
                         // && !(var2.var == Variant::None || var1.var == Variant::None)
                         {
-                            let mut read_set1 = read_set1.lock().unwrap();
-                            let mut read_set2 = read_set2.lock().unwrap();
-                            *read_set1 = read_set1.union(&set1).cloned().collect();
-                            *read_set2 = read_set2.union(&set2).cloned().collect();
+                            read_set1.par_extend(set1.clone());
+                            read_set2.par_extend(set2.clone());
 
                         // depth_2 += var2.vars.par_iter().sum::<i32>();
                         } else {
                             // Send to the clash pile
-                            let mut clash = clash.lock().unwrap();
-                            *clash = clash.union(&set1).cloned().collect();
+                            clash.par_extend(set1.clone());
 
-                            *clash = clash.union(&set2).cloned().collect();
+                            clash.par_extend(set2.clone());
                         }
                         // pb1.inc(1);
                     }
                 });
             });
-            let mut read_set1 = read_set1.lock().unwrap();
-            let mut read_set2 = read_set2.lock().unwrap();
-            let mut clash = clash.lock().unwrap();
 
             let intersection: HashSet<_> = read_set1.intersection(&read_set2).collect();
             let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
