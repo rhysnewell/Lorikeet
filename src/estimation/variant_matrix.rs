@@ -952,7 +952,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 "pipefail -eou; cluster.py fit --depths {}.npy --n_neighbors 20 --min_cluster_size {} \
                                 && rm {}.npy",
                                 &file_name,
-                                (pts_min * variant_info_vec.len() as f64) as i32,
+                                std::cmp::max((pts_min * variant_info_vec.len() as f64) as i32, 2),
                                 &file_name,
                             );
 
@@ -1006,6 +1006,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     minimum_reads_in_link,
                                     multi,
                                     *ref_idx,
+                                    file_name,
                                 );
                             }
 
