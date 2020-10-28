@@ -949,7 +949,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "pipefail -eou; cluster.py fit --depths {}.npy --n_neighbors 20 --min_cluster_size {} \
+                                "pipefail -eou; cluster.py fit --input {}.npy --n_neighbors 20 --min_cluster_size {} --min_dist 0 \
                                 && rm {}.npy",
                                 &file_name,
                                 std::cmp::max((pts_min * variant_info_vec.len() as f64) as i32, 2),
@@ -1007,6 +1007,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     multi,
                                     *ref_idx,
                                     file_name,
+                                    pts_max,
                                 );
                             }
 

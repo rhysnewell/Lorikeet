@@ -249,7 +249,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
         });
 
     bam_generated.finish();
-    let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
+    // let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
     // let mut thread_locker = Mutex::new(true);
     // let freebayes_threads = std::cmp::max(split_threads, 1);
     // target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
@@ -337,12 +337,12 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     //     }
     // }
 
-    let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
-    // variant_matrix_sync.remove_variants(ref_idx, sample_idx, contig_stats);
+    // let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
+    variant_matrix.remove_variants(ref_idx, sample_idx, contig_stats);
 
     //     }
     // });
-    *variant_matrix = variant_matrix_sync.clone();
+    // *variant_matrix = variant_matrix_sync.clone();
 }
 
 /// Get or generate vcf file

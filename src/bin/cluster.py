@@ -138,7 +138,7 @@ class Cluster():
             pass
 
         if n_neighbors > self.depths.shape[0]*0.2:
-            n_neighbors = int(self.depths.shape[0]*0.2)
+            n_neighbors = max(int(self.depths.shape[0]*0.2), 2)
 
         if n_components > self.depths.shape[1]:
             n_components = self.depths.shape[1]
@@ -160,7 +160,7 @@ class Cluster():
 
         self.clusterer = hdbscan.HDBSCAN(
                             min_cluster_size=min_cluster_size,
-                            min_samples=min_samples,
+                            # min_samples=min_samples,
                             prediction_data=prediction_data,
                             cluster_selection_method=cluster_selection_method,
                             metric=metric,
@@ -239,15 +239,22 @@ How to use fit:
 cluster.py fit --depths depths.npy
 
 ''')
-    input_options.add_argument('--depths',
+    ## Main input array. Depths or Distances
+    input_options.add_argument('--input',
                                help='.npy file contain depths of variants for each sample',
-                               dest="depths",
+                               dest="input",
                                required=True)
 
+    ## UMAP parameters
     input_options.add_argument('--n_neighbors',
                                help='Number of neighbors considered in UMAP',
                                dest="n_neighbors",
                                default=20)
+
+    input_options.add_argument('--min_dist',
+                               help='Minimum distance used by UMAP during construction of high dimensional graph',
+                               dest="min_dist",
+                               default=0)
 
     input_options.add_argument('--min_cluster_size',
                                help='Minimum cluster size for HDBSCAN',
@@ -286,15 +293,15 @@ cluster.py fit --depths depths.npy
 
         logging.info("Time - %s" % (time))
         logging.info("Command - %s" % ' '.join(sys.argv))
-        prefix = args.depths.replace(".npy", "")
+        prefix = args.input.replace(".npy", "")
         if not args.precomputed:
-            clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size))
+            clusterer = Cluster(args.input, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), min_dist=float(args.min_dist))
             clusterer.fit_transform()
             clusterer.cluster()
             clusterer.plot()
             np.save(prefix + '_labels.npy', clusterer.labels())
         else:
-            clusterer = Cluster(args.depths, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), scaler="none", precomputed=args.precomputed)
+            clusterer = Cluster(args.input, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), scaler="none", precomputed=args.precomputed)
             clusterer.cluster_distances()
             clusterer.plot_distances()
             np.save(prefix + '_labels.npy', clusterer.labels())
