@@ -24,7 +24,7 @@ pub fn linkage_clustering_of_clusters(
     pts_max: f64,
 ) -> Vec<fuzzy::Cluster> {
     clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
-    if clusters.len() > 1 {
+    if clusters.len() > 2 {
         // Set up multi progress bars
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.red/blue} {pos:>7}/{len:7} {msg}");
@@ -32,13 +32,7 @@ pub fn linkage_clustering_of_clusters(
             .into_iter()
             .combinations(2)
             .collect::<Vec<Vec<usize>>>();
-        let pb1 = multi.insert(
-            ref_idx + 3,
-            ProgressBar::new(
-                combinations
-                    .len() as u64,
-            ),
-        );
+        let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(combinations.len() as u64));
         pb1.set_style(sty.clone());
 
         pb1.set_message("Phasing variants within clusters...");
@@ -47,88 +41,89 @@ pub fn linkage_clustering_of_clusters(
         //     multi.join_and_clear().unwrap();
         // });
 
-        let mut distances: Arc<Mutex<Array2<f64>>> = Arc::new(Mutex::new(Array::from_elem((clusters.len(), clusters.len()), 0.)));
+        let mut distances: Arc<Mutex<Array2<f64>>> = Arc::new(Mutex::new(Array::from_elem(
+            (clusters.len(), clusters.len()),
+            0.,
+        )));
 
-        combinations
-            .into_par_iter()
-            .for_each(|cluster_indices| {
-                let cluster1_id = &cluster_indices[0];
-                let cluster2_id = &cluster_indices[1];
+        combinations.into_par_iter().for_each(|cluster_indices| {
+            let cluster1_id = &cluster_indices[0];
+            let cluster2_id = &cluster_indices[1];
 
-                // boolean stating whether there is enough information to combine these clusters
-                let mut extended = false;
+            // boolean stating whether there is enough information to combine these clusters
+            let mut extended = false;
 
-                // Loop through each variant in cluster and expand based on shared read content
-                let cluster1 = &clusters[*cluster1_id];
-                let cluster2 = &clusters[*cluster2_id];
+            // Loop through each variant in cluster and expand based on shared read content
+            let cluster1 = &clusters[*cluster1_id];
+            let cluster2 = &clusters[*cluster2_id];
 
-                // Reads in cluster 1 and 2 which do not clash with any variants
-                let mut read_set1: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
-                let mut read_set2: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+            // Reads in cluster 1 and 2 which do not clash with any variants
+            let mut read_set1: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+            let mut read_set2: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
 
-                // The reads that were found to clash in these clusters
-                let mut clash: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
+            // The reads that were found to clash in these clusters
+            let mut clash: Arc<Mutex<HashSet<Vec<u8>>>> = Arc::new(Mutex::new(HashSet::new()));
 
-                // The unique reads found to connect these clusters
-                // let mut intersection_set = BTreeSet::new();
-                // let mut depth_1 = 0;
-                // let mut depth_2 = 0;
+            // The unique reads found to connect these clusters
+            // let mut intersection_set = BTreeSet::new();
+            // let mut depth_1 = 0;
+            // let mut depth_2 = 0;
 
-                cluster1.par_iter().for_each(|assigned_variant1| {
-                    // Get variants by index
-                    let var1 = &variant_info[assigned_variant1.index];
-                    let set1 = &var1.reads;
-                    // {
-                    //     depth_1 += var1.vars.par_iter().sum::<i32>();
-                    // }
-                    cluster2.iter().for_each(|assigned_variant2| {
-                        let var2 = &variant_info[assigned_variant2.index];
+            cluster1.par_iter().for_each(|assigned_variant1| {
+                // Get variants by index
+                let var1 = &variant_info[assigned_variant1.index];
+                let set1 = &var1.reads;
+                // {
+                //     depth_1 += var1.vars.par_iter().sum::<i32>();
+                // }
+                cluster2.iter().for_each(|assigned_variant2| {
+                    let var2 = &variant_info[assigned_variant2.index];
+                    {
+                        // Read ids of first variant
+
+                        // Read ids of second variant
+                        let set2 = &var2.reads;
+                        if !(var1.tid == var2.tid && var1.pos == var2.pos)
+                        // && !(var2.var == Variant::None || var1.var == Variant::None)
                         {
-                            // Read ids of first variant
+                            let mut read_set1 = read_set1.lock().unwrap();
+                            let mut read_set2 = read_set2.lock().unwrap();
+                            *read_set1 = read_set1.union(&set1).cloned().collect();
+                            *read_set2 = read_set2.union(&set2).cloned().collect();
 
-                            // Read ids of second variant
-                            let set2 = &var2.reads;
-                            if !(var1.tid == var2.tid && var1.pos == var2.pos)
-                            // && !(var2.var == Variant::None || var1.var == Variant::None)
-                            {
-                                let mut read_set1 = read_set1.lock().unwrap();
-                                let mut read_set2 = read_set2.lock().unwrap();
-                                *read_set1 = read_set1.union(&set1).cloned().collect();
-                                *read_set2 = read_set2.union(&set2).cloned().collect();
+                        // depth_2 += var2.vars.par_iter().sum::<i32>();
+                        } else {
+                            // Send to the clash pile
+                            let mut clash = clash.lock().unwrap();
+                            *clash = clash.union(&set1).cloned().collect();
 
-                            // depth_2 += var2.vars.par_iter().sum::<i32>();
-                            } else {
-                                // Send to the clash pile
-                                let mut clash = clash.lock().unwrap();
-                                *clash = clash.union(&set1).cloned().collect();
-
-                                *clash = clash.union(&set2).cloned().collect();
-                            }
-                            // pb1.inc(1);
+                            *clash = clash.union(&set2).cloned().collect();
                         }
-                    });
+                        // pb1.inc(1);
+                    }
                 });
-                let mut read_set1 = read_set1.lock().unwrap();
-                let mut read_set2 = read_set2.lock().unwrap();
-                let mut clash = clash.lock().unwrap();
-
-                let intersection: HashSet<_> = read_set1.intersection(&read_set2).collect();
-                let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
-                let union: HashSet<_> = union.union(&clash).collect();
-
-                let jaccard = intersection.len() as f64 / union.len() as f64;
-                let jaccard_d = 1. - jaccard;
-                let mut distances = distances.lock().unwrap();
-                if intersection.len() > anchor_size {
-                    distances[[*cluster1_id, *cluster2_id]] = 0.;
-                    distances[[*cluster2_id, *cluster1_id]] = 0.;
-                } else {
-                    distances[[*cluster1_id, *cluster2_id]] = 1.;
-                    distances[[*cluster2_id, *cluster1_id]] = 1.;
-                }
-
-                pb1.inc(1);
             });
+            let mut read_set1 = read_set1.lock().unwrap();
+            let mut read_set2 = read_set2.lock().unwrap();
+            let mut clash = clash.lock().unwrap();
+
+            let intersection: HashSet<_> = read_set1.intersection(&read_set2).collect();
+            let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
+            let union: HashSet<_> = union.union(&clash).collect();
+
+            let jaccard = intersection.len() as f64 / union.len() as f64;
+            let jaccard_d = 1. - jaccard;
+            let mut distances = distances.lock().unwrap();
+            if intersection.len() > anchor_size {
+                distances[[*cluster1_id, *cluster2_id]] = 0.;
+                distances[[*cluster2_id, *cluster1_id]] = 0.;
+            } else {
+                distances[[*cluster1_id, *cluster2_id]] = 1.;
+                distances[[*cluster2_id, *cluster1_id]] = 1.;
+            }
+
+            pb1.inc(1);
+        });
         pb1.finish_and_clear();
         let mut distances = distances.lock().unwrap();
 
