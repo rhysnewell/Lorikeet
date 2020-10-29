@@ -46,6 +46,9 @@ pub fn linkage_clustering_of_clusters(
             0.,
         )));
 
+        // The average total allele depth of the variants within a cluster
+        let mut depths: Arc<Mutex<HashMap<usize, f64>>> = Arc::new(Mutex::new(HashMap::new()));
+
         combinations.into_par_iter().for_each(|cluster_indices| {
             let cluster1_id = &cluster_indices[0];
             let cluster2_id = &cluster_indices[1];
@@ -62,64 +65,86 @@ pub fn linkage_clustering_of_clusters(
             let mut read_set2: HashSet<Vec<u8>> = HashSet::new();
 
             // The reads that were found to clash in these clusters
-            let mut clash: HashSet<Vec<u8>> = HashSet::new();
+            // let mut clash: HashSet<Vec<u8>> = HashSet::new();
 
             // The unique reads found to connect these clusters
             // let mut intersection_set = BTreeSet::new();
-            // let mut depth_1 = 0;
-            // let mut depth_2 = 0;
+            let mut depth_1 = 0;
+            let mut depth_2 = 0;
 
             cluster1.iter().for_each(|assigned_variant1| {
                 // Get variants by index
                 let var1 = &variant_info[assigned_variant1.index];
                 let set1 = &var1.reads;
+                read_set1.par_extend(set1.clone());
                 // {
-                //     depth_1 += var1.vars.par_iter().sum::<i32>();
+                depth_1 += var1.vars.par_iter().sum::<i32>();
                 // }
-                cluster2.iter().for_each(|assigned_variant2| {
-                    let var2 = &variant_info[assigned_variant2.index];
-                    {
-                        // Read ids of first variant
+            });
 
-                        // Read ids of second variant
-                        let set2 = &var2.reads;
-                        if !(var1.tid == var2.tid && var1.pos == var2.pos)
-                        // && !(var2.var == Variant::None || var1.var == Variant::None)
-                        {
-                            read_set1.par_extend(set1.clone());
-                            read_set2.par_extend(set2.clone());
+            cluster2.iter().for_each(|assigned_variant2| {
+                let var2 = &variant_info[assigned_variant2.index];
+                {
+                    // Read ids of first variant
 
-                        // depth_2 += var2.vars.par_iter().sum::<i32>();
-                        } else {
-                            // Send to the clash pile
-                            clash.par_extend(set1.clone());
+                    // Read ids of second variant
+                    let set2 = &var2.reads;
+                    // if !(var1.tid == var2.tid && var1.pos == var2.pos)
+                    // && !(var2.var == Variant::None || var1.var == Variant::None)
+                    // {
+                    read_set2.par_extend(set2.clone());
 
-                            clash.par_extend(set2.clone());
-                        }
-                        // pb1.inc(1);
-                    }
-                });
+                    depth_2 += var2.vars.par_iter().sum::<i32>();
+                    // } else {
+                    // Send to the clash pile
+                    // clash.par_extend(set1.clone());
+
+                    // clash.par_extend(set2.clone());
+                    // }
+                    // pb1.inc(1);
+                }
             });
 
             let intersection: HashSet<_> = read_set1.intersection(&read_set2).collect();
             let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
-            let union: HashSet<_> = union.union(&clash).collect();
+            // let union: HashSet<_> = union.union(&clash).collect();
+            let cov_1 = depth_1 as f64 / cluster1.len() as f64;
+            let cov_2 = depth_2 as f64 / cluster2.len() as f64;
 
             let jaccard = intersection.len() as f64 / union.len() as f64;
             let jaccard_d = 1. - jaccard;
             let mut distances = distances.lock().unwrap();
-            if intersection.len() > anchor_size {
-                distances[[*cluster1_id, *cluster2_id]] = 0.;
-                distances[[*cluster2_id, *cluster1_id]] = 0.;
+            // if intersection.len() > anchor_size {
+            //     distances[[*cluster1_id, *cluster2_id]] = 0.;
+            //     distances[[*cluster2_id, *cluster1_id]] = 0.;
+            // } else {
+            // use coverage information. If a cluster has higher coverage than another cluster
+            // Then it is more likely to split across many clusters. The likelihood of two clusters
+            // being put together is based on the ratio of their coverage
+            if cov_1 < cov_2 {
+                distances[[*cluster1_id, *cluster2_id]] = (cov_1 / cov_2) * jaccard_d;
+                distances[[*cluster2_id, *cluster1_id]] = (cov_1 / cov_2) * jaccard_d;
             } else {
-                distances[[*cluster1_id, *cluster2_id]] = 1.;
-                distances[[*cluster2_id, *cluster1_id]] = 1.;
+                distances[[*cluster1_id, *cluster2_id]] = (cov_2 / cov_1) * jaccard_d;
+                distances[[*cluster2_id, *cluster1_id]] = (cov_2 / cov_1) * jaccard_d;
+            }
+            // }
+
+            let mut depths = depths.lock().unwrap();
+            if !depths.contains_key(&cluster1_id) {
+                depths.entry(*cluster1_id).or_insert(cov_1);
+            }
+
+            if !depths.contains_key(&cluster2_id) {
+                depths.entry(*cluster2_id).or_insert(cov_2);
             }
 
             pb1.inc(1);
         });
         pb1.finish_and_clear();
         let mut distances = distances.lock().unwrap();
+        let mut depths = depths.lock().unwrap();
+        let mut total_cov = depths.values().sum::<f64>() / depths.len() as f64;
 
         write_npy(
             format!("{}_cluster_distances.npy", output_prefix),
@@ -128,7 +153,7 @@ pub fn linkage_clustering_of_clusters(
         .expect("Unable to create npy file");
 
         let cmd_string = format!(
-            "pipefail -eou; cluster.py fit --input {}_cluster_distances.npy --min_cluster_size 2 --min_dist 0 --n_neighbors 5",
+            "cluster.py fit --input {}_cluster_distances.npy --min_cluster_size 2 --min_dist 0 --n_neighbors 5 --precomputed True",
             &output_prefix,
             // &output_prefix,
         );
@@ -151,26 +176,132 @@ pub fn linkage_clustering_of_clusters(
 
         let mut new_clusters: Vec<Vec<fuzzy::Assignment>>;
         let mut solo_clusters: Vec<Vec<fuzzy::Assignment>> = Vec::new();
-        if labels_set.contains(&-1) {
+        if labels_set.contains(&-1) && labels_set.len() > 1 {
             new_clusters = vec![Vec::new(); labels_set.len() - 1];
             labels.iter().enumerate().for_each(|(index, label)| {
                 if label > &-1 {
                     new_clusters[*label as usize].par_extend(clusters[index].clone());
-                    if clusters[index].len() as f64 >= variant_info.len() as f64 * pts_max {
+                    if clusters[index].len() as f64 >= variant_info.len() as f64 * pts_max
+                        && depths[&index] >= total_cov
+                    {
                         solo_clusters.push(clusters[index].clone())
                     }
                 } else {
                     solo_clusters.push(clusters[index].clone())
                 }
             });
-        } else {
+        } else if !labels_set.contains(&-1) {
             new_clusters = vec![Vec::new(); labels_set.len()];
             labels.iter().enumerate().for_each(|(index, label)| {
                 new_clusters[*label as usize].par_extend(clusters[index].clone());
-                if clusters[index].len() as f64 >= variant_info.len() as f64 * pts_max {
+                if clusters[index].len() as f64 >= variant_info.len() as f64 * pts_max
+                    && depths[&index] >= total_cov
+                {
                     solo_clusters.push(clusters[index].clone())
                 }
             });
+        } else {
+            // all noise apparently
+            // We will just check to see if certain clusters contain at least twice the cov
+            // of another cluster
+            // set of indices for clusters to verify that they have been checked previously
+
+            let combinations = (0..clusters.len())
+                .into_iter()
+                .combinations(2)
+                .collect::<Vec<Vec<usize>>>();
+
+            new_clusters = Vec::new();
+            let mut checked_couple = HashSet::new();
+            let mut checked_single = HashSet::new();
+            combinations.iter().for_each(|indices| {
+                let cluster1_id = indices[0];
+                let cluster2_id = indices[1];
+                if !checked_couple.contains(&vec![cluster1_id, cluster2_id]) {
+                    let cov_1 = depths.get(&cluster1_id).unwrap();
+                    let cov_2 = depths.get(&cluster2_id).unwrap();
+
+                    if *cov_1 / *cov_2 <= 0.75 {
+                        let cluster1 = &clusters[cluster1_id];
+                        let cluster2 = &clusters[cluster2_id];
+                        let mut clash = false;
+                        for ass1 in cluster1.iter() {
+                            if clash {
+                                break;
+                            }
+                            let var1 = &variant_info[ass1.index];
+
+                            for ass2 in cluster2.iter() {
+                                let var2 = &variant_info[ass2.index];
+                                if var1.tid == var2.tid && var1.pos == var2.pos {
+                                    clash = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !clash {
+                            let mut combined = clusters[cluster1_id].clone();
+                            combined.par_extend(clusters[cluster2_id].clone());
+                            new_clusters.push(combined);
+                        }
+                    } else if *cov_2 / *cov_1 <= 0.75 {
+                        let cluster1 = &clusters[cluster1_id];
+                        let cluster2 = &clusters[cluster2_id];
+                        let mut clash = false;
+                        for ass1 in cluster1.iter() {
+                            if clash {
+                                break;
+                            }
+                            let var1 = &variant_info[ass1.index];
+
+                            for ass2 in cluster2.iter() {
+                                let var2 = &variant_info[ass2.index];
+                                if var1.tid == var2.tid && var1.pos == var2.pos {
+                                    clash = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !clash {
+                            let mut combined = clusters[cluster1_id].clone();
+                            combined.par_extend(clusters[cluster2_id].clone());
+                            new_clusters.push(combined);
+                        }
+                    }
+                    if !checked_single.contains(&cluster1_id) {
+                        if clusters[cluster1_id].len() as f64 >= variant_info.len() as f64 * pts_max
+                            && depths[&cluster1_id] >= total_cov
+                        {
+                            solo_clusters.push(clusters[cluster1_id].clone())
+                        }
+                        checked_single.insert(cluster1_id);
+                    }
+                    if !checked_single.contains(&cluster2_id) {
+                        if clusters[cluster2_id].len() as f64 >= variant_info.len() as f64 * pts_max
+                            && depths[&cluster2_id] >= total_cov
+                        {
+                            solo_clusters.push(clusters[cluster2_id].clone())
+                        }
+                        checked_single.insert(cluster2_id);
+                    }
+                    checked_couple.insert(vec![
+                        std::cmp::min(cluster1_id, cluster2_id),
+                        std::cmp::max(cluster1_id, cluster2_id),
+                    ]);
+                };
+            });
+            println!(
+                "singles {:?} doubles {:?} clusters {:?} solo {:?}",
+                checked_single,
+                checked_couple,
+                &new_clusters.iter().map(|v| v.len()).collect::<Vec<usize>>(),
+                &solo_clusters
+                    .iter()
+                    .map(|v| v.len())
+                    .collect::<Vec<usize>>()
+            );
         }
 
         new_clusters.par_extend(solo_clusters);

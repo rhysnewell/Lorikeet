@@ -301,7 +301,7 @@ cluster.py fit --depths depths.npy
             clusterer.plot()
             np.save(prefix + '_labels.npy', clusterer.labels())
         else:
-            clusterer = Cluster(args.input, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), scaler="none", precomputed=args.precomputed)
+            clusterer = Cluster(args.input, prefix, n_neighbors=int(args.n_neighbors), min_cluster_size=int(args.min_cluster_size), scaler="minmax", precomputed=args.precomputed)
             clusterer.cluster_distances()
             clusterer.plot_distances()
             np.save(prefix + '_labels.npy', clusterer.labels())
