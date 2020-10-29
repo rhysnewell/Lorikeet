@@ -156,6 +156,7 @@ pub trait VariantMatrixFunctions {
         reference_map: &HashMap<usize, String>,
         multi: &Arc<MultiProgress>,
         output_prefic: &str,
+        n_neighbors: usize,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -903,6 +904,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
         reference_map: &HashMap<usize, String>,
         multi: &Arc<MultiProgress>,
         output_prefix: &str,
+        n_neighbors: usize,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -949,11 +951,16 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "pipefail -eou; cluster.py fit --input {}.npy --n_neighbors 20 --min_cluster_size {} --min_dist 0 \
-                                && rm {}.npy",
+                                "cluster.py fit --input {}.npy --n_neighbors 30 \
+                                --min_cluster_size {} --min_samples {} --min_dist 0 ",
+                                // && rm {}.npy",
                                 &file_name,
                                 std::cmp::max((pts_min * variant_info_vec.len() as f64) as i32, 2),
-                                &file_name,
+                                std::cmp::max(
+                                    ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
+                                    2
+                                ),
+                                // &file_name,
                             );
 
                             command::finish_command_safely(
@@ -1021,7 +1028,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     .collect();
                                 if vars.len() == 1 && vars.contains(&Variant::None) {
                                     noise_cluster.par_extend(cluster);
-                                } else if cluster.len() as f64 >= (variant_info_vec.len() as f64) * pts_max{
+                                } else if cluster.len() as f64
+                                    >= (variant_info_vec.len() as f64) * pts_max
+                                {
                                     new_clusters.push(cluster);
                                 }
                             }

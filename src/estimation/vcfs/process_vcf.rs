@@ -249,100 +249,90 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
         });
 
     bam_generated.finish();
-    // let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
-    // let mut thread_locker = Mutex::new(true);
-    // let freebayes_threads = std::cmp::max(split_threads, 1);
-    // target_names.par_iter().enumerate().for_each(|(tid, target_name)| {
-    //         if target_name.contains(reference)
-    //             || match genomes_and_contigs.contig_to_genome.get(target_name) {
-    //             Some(ref_id) => *ref_id == ref_idx,
-    //             None => false,
-    //         }
-    //         {
+    let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
+    let freebayes_threads = std::cmp::max(split_threads, 1);
 
-    // use pileups to call SNPs for low quality variants
-    // That are usually skipped by GATK
-    // let target_len = target_lens[tid];
+    if longread {
+        // Get VCF file from BAM using freebayes of SVIM
+        let mut vcf_reader = get_vcf(
+            &stoit_name,
+            &m,
+            freebayes_threads,
+            longread,
+            ref_target_lengths,
+            &concatenated_genomes.as_ref().unwrap(),
+            &bam_path,
+            &ref_target_names,
+        );
 
-    // Get VCF file from BAM using freebayes of SVIM
-    // let mut vcf_reader = get_vcf(
-    //     &stoit_name,
-    //     &m,
-    //     freebayes_threads,
-    //     longread,
-    //     ref_target_lengths,
-    //     &concatenated_genomes.as_ref().unwrap(),
-    //     &bam_path,
-    //     &ref_target_names,
-    // );
-    //
-    // match vcf_reader {
-    //     Ok(ref mut reader) => {
-    //         // let vcf_header = reader.header();
-    //         // let vcf_target_names: Vec<String> = vcf_header.samples()
-    //         //     .into_iter()
-    //         //     .map(|target| String::from_utf8(target.to_vec()).unwrap())
-    //         //     .collect();
-    //         // println!("{:?} {:?}", &vcf_target_names, &target_names);
-    //
-    //         let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
-    //
-    //         let mut pool = Pool::new(freebayes_threads as u32);
-    //         // let total_records = Arc::new(Mutex::new(total_records));
-    //
-    //         pool.scoped(|scope| {
-    //             for vcf_record in reader.records().into_iter() {
-    //                 scope.execute(|| {
-    //                     let mut vcf_record = vcf_record.unwrap();
-    //                     // let vcf_header = vcf_record.header();
-    //                     let variant_rid = vcf_record.rid().unwrap();
-    //                     // let vcf_target = String::from_utf8(vcf_header.rid2name(variant_rid).unwrap().to_vec()).unwrap();
-    //                     // let variant_rid: &usize = &target_names.iter().position(|t| t==&vcf_target).unwrap();
-    //                     // Check bam header names and vcf header names are in same order
-    //                     // Sanity check
-    //                     // total_records += 1;
-    //                     // if target_name.as_bytes()
-    //                     //     == vcf_header.rid2name(variant_rid).unwrap() {
-    //                     let base_option = Base::from_vcf_record(
-    //                         &mut vcf_record,
-    //                         sample_count,
-    //                         sample_idx,
-    //                         longread,
-    //                         min_qual,
-    //                     );
-    //                     match base_option {
-    //                         Some(bases) => {
-    //                             for base in bases {
-    //                                 let mut variant_matrix_sync =
-    //                                     variant_matrix_sync.lock().unwrap();
-    //                                 variant_matrix_sync.add_variant_to_matrix(
-    //                                     sample_idx,
-    //                                     &base,
-    //                                     variant_rid as usize,
-    //                                     ref_idx,
-    //                                 );
-    //                             }
-    //                         }
-    //                         None => {}
-    //                     }
-    //                     // } else {
-    //                     //     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
-    //                     // }
-    //                 });
-    //             }
-    //         });
-    //     }
-    //     Err(_) => {
-    //         info!("No VCF records found for sample {}", &stoit_name);
-    //     }
-    // }
+        match vcf_reader {
+            Ok(ref mut reader) => {
+                // let vcf_header = reader.header();
+                // let vcf_target_names: Vec<String> = vcf_header.samples()
+                //     .into_iter()
+                //     .map(|target| String::from_utf8(target.to_vec()).unwrap())
+                //     .collect();
+                // println!("{:?} {:?}", &vcf_target_names, &target_names);
 
-    // let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
+                let min_qual = m.value_of("min-variant-quality").unwrap().parse().unwrap();
+
+                let mut pool = Pool::new(freebayes_threads as u32);
+                // let total_records = Arc::new(Mutex::new(total_records));
+
+                pool.scoped(|scope| {
+                    for vcf_record in reader.records().into_iter() {
+                        scope.execute(|| {
+                            let mut vcf_record = vcf_record.unwrap();
+                            // let vcf_header = vcf_record.header();
+                            let variant_rid = vcf_record.rid().unwrap();
+                            // let vcf_target = String::from_utf8(vcf_header.rid2name(variant_rid).unwrap().to_vec()).unwrap();
+                            // let variant_rid: &usize = &target_names.iter().position(|t| t==&vcf_target).unwrap();
+                            // Check bam header names and vcf header names are in same order
+                            // Sanity check
+                            // total_records += 1;
+                            // if target_name.as_bytes()
+                            //     == vcf_header.rid2name(variant_rid).unwrap() {
+                            let base_option = Base::from_vcf_record(
+                                &mut vcf_record,
+                                sample_count,
+                                sample_idx,
+                                longread,
+                                min_qual,
+                            );
+                            match base_option {
+                                Some(bases) => {
+                                    for base in bases {
+                                        let mut variant_matrix_sync =
+                                            variant_matrix_sync.lock().unwrap();
+                                        variant_matrix_sync.add_variant_to_matrix(
+                                            sample_idx,
+                                            &base,
+                                            variant_rid as usize,
+                                            ref_idx,
+                                        );
+                                    }
+                                }
+                                None => {}
+                            }
+                            // } else {
+                            //     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+                            // }
+                        });
+                    }
+                });
+            }
+            Err(_) => {
+                info!("No VCF records found for sample {}", &stoit_name);
+            }
+        }
+    }
+
+    let mut variant_matrix_sync = variant_matrix_sync.lock().unwrap();
     variant_matrix.remove_variants(ref_idx, sample_idx, contig_stats);
 
     //     }
     // });
-    // *variant_matrix = variant_matrix_sync.clone();
+    *variant_matrix = variant_matrix_sync.clone();
 }
 
 /// Get or generate vcf file
