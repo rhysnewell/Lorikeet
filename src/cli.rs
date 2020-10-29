@@ -526,8 +526,7 @@ Other arguments (optional):
    --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
                                          The fraction of points needed to be within e-max
                                          to begin border clustering.
-   -n, --minimum-seed-size <INT>         Minimum seed size for initiating fuzzy DBSCAN with. Corresponds
-                                         to the number of variants within the seed. [default: 20]
+   -n, --n_neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
    -s, --maximum-seed-similarity <FLOAT> The maximum Jaccard's similarity value allowed between two
                                          seeds before they get concatenated into one seed. Prevents
                                          overclustering. [default: 0.97]
@@ -1724,8 +1723,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("10"),
                 )
                 .arg(
-                    Arg::with_name("minimum-seed-size")
-                        .long("minimum-seed-size")
+                    Arg::with_name("n-neighbors")
+                        .long("n-neighbors")
                         .short("n")
                         .default_value("20"),
                 )

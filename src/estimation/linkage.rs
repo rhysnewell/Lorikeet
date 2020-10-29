@@ -153,7 +153,7 @@ pub fn linkage_clustering_of_clusters(
         .expect("Unable to create npy file");
 
         let cmd_string = format!(
-            "cluster.py fit --input {}_cluster_distances.npy --min_cluster_size 2 --min_dist 0 --n_neighbors 5 --precomputed True",
+            "cluster.py fit --input {}_cluster_distances.npy --min_cluster_size 2 --min_samples 2 --min_dist 0 --n_neighbors 5 --precomputed True",
             &output_prefix,
             // &output_prefix,
         );
@@ -292,16 +292,6 @@ pub fn linkage_clustering_of_clusters(
                     ]);
                 };
             });
-            println!(
-                "singles {:?} doubles {:?} clusters {:?} solo {:?}",
-                checked_single,
-                checked_couple,
-                &new_clusters.iter().map(|v| v.len()).collect::<Vec<usize>>(),
-                &solo_clusters
-                    .iter()
-                    .map(|v| v.len())
-                    .collect::<Vec<usize>>()
-            );
         }
 
         new_clusters.par_extend(solo_clusters);
