@@ -265,29 +265,14 @@ pub struct Base {
 #[allow(unused)]
 impl Base {
     /// Update depth as calculated by lorikeet and the reference depth
-    pub fn add_depth(&mut self, sample_idx: usize, d: i32) {
+    pub fn add_depth(&mut self, sample_idx: usize, d: i32, refr_depth: i32) {
         if self.totaldepth[sample_idx] == 0 {
             self.totaldepth[sample_idx] = d;
             match self.variant {
-                Variant::SNV(_) => {
-                    let mut refr_depth = d - self.truedepth[sample_idx];
-                    if refr_depth < 0 {
-                        refr_depth = 0;
-                    }
-                    self.referencedepth[sample_idx] = refr_depth;
-                }
                 _ => {
-                    // self.truedepth[sample_idx] = self.depth[sample_idx];
-                    let mut refr_depth = d - self.truedepth[sample_idx];
-                    if refr_depth < 0 {
-                        refr_depth = 0;
-                    }
                     self.referencedepth[sample_idx] = refr_depth;
                 }
             }
-            //            if self.variant == Variant::None {
-            //                self.depth[sample_idx] = d;
-            //            }
         }
     }
 
