@@ -253,6 +253,7 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
                                                         if base.refr[0] == read_char {
                                                             base.assign_read(record.qname().to_vec());
                                                             base.truedepth[sample_idx] += 1;
+                                                            base.referencedepth[sample_idx] += 1;
                                                             base.quals[sample_idx] += qual_pos;
 
                                                         }

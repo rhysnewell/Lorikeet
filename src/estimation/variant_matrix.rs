@@ -335,9 +335,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 let allele = position_variants
                     .entry(base.variant.clone())
                     .or_insert(base.clone());
-                let allele = position_variants
-                    .entry(base.variant.clone())
-                    .or_insert(base.clone());
+
                 allele.combine_sample(base, sample_idx, 0);
                 *con_var_counts += 1;
 
@@ -634,8 +632,12 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         for (pos, d) in depth.iter().enumerate() {
                             let position_variants =
                                 contig_variants.entry(pos as i64).or_insert(HashMap::new());
-                            for (_variant, base_info) in position_variants.iter_mut() {
-                                base_info.add_depth(sample_idx, *d);
+                            let ref_depth = match position_variants.get(&Variant::None) {
+                                Some(base) => base.truedepth[sample_idx],
+                                None => 0,
+                            };
+                            for (variant, base_info) in position_variants.iter_mut() {
+                                base_info.add_depth(sample_idx, *d, ref_depth);
                             }
                         }
                         depths.entry(tid).or_insert(depth);
