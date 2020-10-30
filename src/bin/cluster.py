@@ -132,7 +132,7 @@ class Cluster():
         self,
         count_path,
         output_prefix,
-        scaler="minmax",
+        scaler="clr",
         n_neighbors=20,
         min_dist=0.1,
         n_components=2,
@@ -153,7 +153,7 @@ class Cluster():
         if scaler.lower() == "minmax":
             self.depths = MinMaxScaler().fit_transform(self.depths)
         elif scaler.lower() == "clr":
-            self.depths = skbio.stats.composition.clr(self.depths)
+            self.depths = skbio.stats.composition.clr(self.depths + 1)
         elif scaler.lower() == "none":
             pass
 
