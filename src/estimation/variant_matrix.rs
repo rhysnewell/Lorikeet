@@ -377,10 +377,38 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                             for (_, base) in variants {
                                                 total_depth += base.depth[sample_idx];
                                             }
+                                            // Scan within 10bp of variant to see if there is
+                                            // >= 3 SNVs
+                                            let lower_pos = std::cmp::min(position - 10, 0);
+                                            let upper_pos = position + 10;
+                                            let (count_s, count_r) = std::sync::mpsc::channel();
+                                            (lower_pos..upper_pos).into_par_iter().for_each_with(
+                                                count_s,
+                                                |s_2, window| {
+                                                    if &window != position {
+                                                        if contig_variants.contains_key(&position) {
+                                                            let window_variants = contig_variants
+                                                                .get(&position)
+                                                                .unwrap();
+                                                            for (window_variant, _) in
+                                                                window_variants.iter()
+                                                            {
+                                                                match window_variant {
+                                                                    &Variant::SNV(_) => s_2.send(1),
+                                                                    _ => s_2.send(0),
+                                                                };
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            );
+                                            let count: i64 = count_r.iter().sum();
+
                                             let total_depth = total_depth as f64;
                                             if (total_depth < lower_limit
                                                 || total_depth > upper_limit)
                                                 && total_depth > 0.
+                                                || count >= 3
                                             {
                                                 s.send(*position);
                                             }
@@ -940,7 +968,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
 
                             let cmd_string = format!(
                                 "cluster.py fit --input {}.npy --n_neighbors {} \
-                                --min_cluster_size {} --min_samples {} --min_dist 0 ",
+                                --min_cluster_size {} --min_samples {} --min_dist 0 \
+                                --n_components {}",
                                 // && rm {}.npy",
                                 &file_name,
                                 n_neighbors,
@@ -949,6 +978,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
                                     2
                                 ),
+                                std::cmp::max((sample_names.len() as f64 * 0.3) as i32, 2),
                                 // &file_name,
                             );
 
