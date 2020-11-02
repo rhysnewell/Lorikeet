@@ -49,7 +49,7 @@ import skbio.stats.composition
 import umap
 
 # Set plotting style
-sns.set(style='white', context='notebook', rc={'figure.figsize':(14,10)})
+sns.set(style='white', context='notebook', rc={'figure.figsize': (14, 10)})
 
 # Debug
 debug = {
@@ -192,30 +192,56 @@ class Cluster():
 
     def cluster(self):
         ## Cluster on the UMAP embeddings and return soft clusters
-        self.clusterer.fit(self.embeddings)
-        self.soft_clusters = hdbscan.all_points_membership_vectors(
-            self.clusterer)
+        try:
+            self.clusterer.fit(self.embeddings)
+            self.soft_clusters = hdbscan.all_points_membership_vectors(
+                self.clusterer)
+        except:
+            ## Likely integer overflow in HDBSCAN
+            ## Try reduce min samples
+            self.clusterer = hdbscan.HDBSCAN(
+                min_cluster_size=max(int(self.depths.shape[0] * 0.01), 2),
+                min_samples=max(int(self.depths.shape[0] * 0.001), 2),
+                prediction_data=True,
+                cluster_selection_method="eom",
+            )
+            self.clusterer.fit(self.embeddings)
+            self.soft_clusters = hdbscan.all_points_membership_vectors(
+                self.clusterer)
 
     def cluster_distances(self):
         ## Cluster on the UMAP embeddings and return soft clusters
-        self.clusterer.fit(self.depths)
+        try:
+            self.clusterer.fit(self.depths)
+        except:
+            ## Likely integer overflow in HDBSCAN
+            ## Try reduce min samples
+            self.clusterer = hdbscan.HDBSCAN(
+                min_cluster_size=max(int(self.depths.shape[0] * 0.01), 2),
+                min_samples=max(int(self.depths.shape[0] * 0.001), 2),
+                prediction_data=True,
+                cluster_selection_method="precomputed",
+            )
+            self.clusterer.fit(self.depths)
 
     def plot(self):
         color_palette = sns.color_palette('Paired', 200)
         cluster_colors = [
-            color_palette[x] if x >= 0 else (0.5, 0.5, 0.5)
-            for x in self.clusterer.labels_
+            color_palette[x] if x >= 0 else (0.5, 0.5, 0.5) for x in self.clusterer.labels_
         ]
         cluster_member_colors = [
-            sns.desaturate(x, p)
-            for x, p in zip(cluster_colors, self.clusterer.probabilities_)
+            sns.desaturate(x, p) for x, p in zip(cluster_colors, self.clusterer.probabilities_)
         ]
-        plt.scatter(self.embeddings[:, 0],
-                    self.embeddings[:, 1],
-                    s=5,
-                    linewidth=0,
-                    c=cluster_member_colors,
-                    alpha=0.5)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.scatter(self.embeddings[:, 0],
+                   self.embeddings[:, 1],
+                   s=5,
+                   linewidth=0,
+                   c=cluster_member_colors,
+                   alpha=0.5)
+        # ax.add_artist(legend)
+        plt.gca().set_aspect('equal', 'datalim')
         plt.title('UMAP projection of variants', fontsize=24)
         plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
 
@@ -227,7 +253,7 @@ class Cluster():
         plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
 
     def labels(self):
-        return self.clusterer.labels_.astype('int8')
+        return self.soft_clusters.astype('int8')
 
 
 if __name__ == '__main__':
@@ -282,6 +308,11 @@ cluster.py fit --depths depths.npy
         'Minimum distance used by UMAP during construction of high dimensional graph',
         dest="min_dist",
         default=0)
+
+    input_options.add_argument('--n_components',
+                               help='Dimensions to use in UMAP projection',
+                               dest="n_components",
+                               default=3)
 
     ## HDBSCAN parameters
     input_options.add_argument('--min_cluster_size',
@@ -339,7 +370,8 @@ cluster.py fit --depths depths.npy
                                 n_neighbors=int(args.n_neighbors),
                                 min_cluster_size=int(args.min_cluster_size),
                                 min_samples=int(args.min_samples),
-                                min_dist=float(args.min_dist))
+                                min_dist=float(args.min_dist),
+                                n_components=int(args.n_components))
             clusterer.fit_transform()
             clusterer.cluster()
             clusterer.plot()
