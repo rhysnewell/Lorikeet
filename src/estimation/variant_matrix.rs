@@ -386,9 +386,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                 count_s,
                                                 |s_2, window| {
                                                     if &window != position {
-                                                        if contig_variants.contains_key(&position) {
+                                                        if contig_variants.contains_key(&window) {
                                                             let window_variants = contig_variants
-                                                                .get(&position)
+                                                                .get(&window)
                                                                 .unwrap();
                                                             for (window_variant, _) in
                                                                 window_variants.iter()
@@ -403,7 +403,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                 },
                                             );
                                             let count: i64 = count_r.iter().sum();
-
+                                            let count = 0;
                                             let total_depth = total_depth as f64;
                                             if (total_depth < lower_limit
                                                 || total_depth > upper_limit)
