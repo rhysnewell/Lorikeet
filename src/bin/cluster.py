@@ -196,6 +196,7 @@ class Cluster():
             self.clusterer.fit(self.embeddings)
             self.soft_clusters = hdbscan.all_points_membership_vectors(
                 self.clusterer)
+            self.soft_clusters = np.array([np.argmax(x) for x in self.soft_clusters])
         except:
             ## Likely integer overflow in HDBSCAN
             ## Try reduce min samples
@@ -208,6 +209,8 @@ class Cluster():
             self.clusterer.fit(self.embeddings)
             self.soft_clusters = hdbscan.all_points_membership_vectors(
                 self.clusterer)
+            self.soft_clusters = np.array([np.argmax(x) for x in self.soft_clusters])
+
 
     def cluster_distances(self):
         ## Cluster on the UMAP embeddings and return soft clusters
@@ -227,7 +230,7 @@ class Cluster():
     def plot(self):
         color_palette = sns.color_palette('Paired', 200)
         cluster_colors = [
-            color_palette[x] if x >= 0 else (0.5, 0.5, 0.5) for x in self.clusterer.labels_
+            color_palette[x] if x >= 0 else (0.5, 0.5, 0.5) for x in self.soft_clusters
         ]
         cluster_member_colors = [
             sns.desaturate(x, p) for x, p in zip(cluster_colors, self.clusterer.probabilities_)
@@ -253,8 +256,10 @@ class Cluster():
         plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
 
     def labels(self):
-        return self.soft_clusters.astype('int8')
-
+        try:
+            return self.soft_clusters.astype('int8')
+        except AttributeError:
+            return self.clusterer.labels_.astype('int8')
 
 if __name__ == '__main__':
 
