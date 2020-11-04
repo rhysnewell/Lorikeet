@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 /// Connects fuzzy DBSCAN clusters based on shared read information
 #[allow(unused)]
 pub fn linkage_clustering_of_clusters(
-    mut clusters: Vec<Vec<fuzzy::Assignment>>,
+    mut clusters: Vec<Vec<usize>>,
     variant_info: &Vec<fuzzy::Var>,
     anchor_size: usize,
     anchor_similarity: f64,
@@ -22,7 +22,7 @@ pub fn linkage_clustering_of_clusters(
     ref_idx: usize,
     output_prefix: String,
     pts_max: f64,
-) -> Vec<fuzzy::Cluster> {
+) -> Vec<Vec<usize>> {
     clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
     if clusters.len() > 2 {
         // Set up multi progress bars
@@ -74,7 +74,7 @@ pub fn linkage_clustering_of_clusters(
 
             cluster1.iter().for_each(|assigned_variant1| {
                 // Get variants by index
-                let var1 = &variant_info[assigned_variant1.index];
+                let var1 = &variant_info[*assigned_variant1];
                 let set1 = &var1.reads;
                 read_set1.par_extend(set1.clone());
                 // {
@@ -83,7 +83,7 @@ pub fn linkage_clustering_of_clusters(
             });
 
             cluster2.iter().for_each(|assigned_variant2| {
-                let var2 = &variant_info[assigned_variant2.index];
+                let var2 = &variant_info[*assigned_variant2];
                 {
                     // Read ids of first variant
 
@@ -174,8 +174,8 @@ pub fn linkage_clustering_of_clusters(
                 .expect("Unable to read npy");
         let labels_set = labels.iter().collect::<HashSet<&i8>>();
 
-        let mut new_clusters: Vec<Vec<fuzzy::Assignment>>;
-        let mut solo_clusters: Vec<Vec<fuzzy::Assignment>> = Vec::new();
+        let mut new_clusters: Vec<Vec<usize>>;
+        let mut solo_clusters: Vec<Vec<usize>> = Vec::new();
         if labels_set.contains(&-1) && labels_set.len() > 1 {
             new_clusters = vec![Vec::new(); labels_set.len() - 1];
             labels.iter().enumerate().for_each(|(index, label)| {
@@ -205,11 +205,17 @@ pub fn linkage_clustering_of_clusters(
             // We will just check to see if certain clusters contain at least twice the cov
             // of another cluster
             // set of indices for clusters to verify that they have been checked previously
-
             let combinations = (0..clusters.len())
                 .into_iter()
                 .combinations(2)
                 .collect::<Vec<Vec<usize>>>();
+            let sty = ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}");
+            let pb1 = multi.insert(ref_idx + 3, ProgressBar::new(combinations.len() as u64));
+            pb1.set_style(sty.clone());
+
+            pb1.set_message("Birb mode activated... SCRAW");
+
 
             new_clusters = Vec::new();
             let mut checked_couple = HashSet::new();
@@ -229,10 +235,10 @@ pub fn linkage_clustering_of_clusters(
                             if clash {
                                 break;
                             }
-                            let var1 = &variant_info[ass1.index];
+                            let var1 = &variant_info[*ass1];
 
                             for ass2 in cluster2.iter() {
-                                let var2 = &variant_info[ass2.index];
+                                let var2 = &variant_info[*ass2];
                                 if var1.tid == var2.tid && var1.pos == var2.pos {
                                     clash = true;
                                     break;
@@ -253,10 +259,10 @@ pub fn linkage_clustering_of_clusters(
                             if clash {
                                 break;
                             }
-                            let var1 = &variant_info[ass1.index];
+                            let var1 = &variant_info[*ass1];
 
                             for ass2 in cluster2.iter() {
-                                let var2 = &variant_info[ass2.index];
+                                let var2 = &variant_info[*ass2];
                                 if var1.tid == var2.tid && var1.pos == var2.pos {
                                     clash = true;
                                     break;
@@ -291,12 +297,53 @@ pub fn linkage_clustering_of_clusters(
                         std::cmp::max(cluster1_id, cluster2_id),
                     ]);
                 };
+                pb1.inc(1);
             });
+
+            pb1.finish_and_clear();
+
         }
 
+        // Sort and deduplicate clusters based on non-ref variant content
         new_clusters.par_extend(solo_clusters);
+        new_clusters.par_sort_by_key(|x| x.len());
+        new_clusters.par_iter_mut().for_each(|x| x.par_sort());
 
-        return new_clusters;
+        // deduplicated hashset of variants stored in BTreeSet
+        let mut dedup_clusters = BTreeSet::new();
+        // All reference components of each cluster. Ordered.
+        let mut reference = Vec::new();
+
+        for cluster in new_clusters.iter() {
+            let mut dedup = BTreeSet::new();
+            let mut all_ref = BTreeSet::new();
+            for ass in cluster.into_iter() {
+                if variant_info[*ass].var != Variant::None {
+                    dedup.insert(*ass);
+                } else {
+                    all_ref.insert(*ass);
+                }
+            }
+            if !dedup_clusters.contains(&dedup) {
+                dedup_clusters.insert(dedup);
+                reference.push(all_ref);
+            }
+        };
+
+        if dedup_clusters.len() == new_clusters.len() {
+            return new_clusters
+        } else {
+            // Reform the clusters, now deduplicated
+            let mut new_clusters = Vec::new();
+            for (variants, references) in dedup_clusters.iter().zip(reference.iter()) {
+                let mut combined = Vec::new();
+                combined.par_extend(variants);
+                combined.par_extend(references);
+                new_clusters.push(combined);
+            }
+
+            return new_clusters
+        }
     } else {
         // create placeholder jaccard hashmap when there is only one cluster to prevent nothing
         // from being returned

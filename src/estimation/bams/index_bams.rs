@@ -16,6 +16,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
     let pb1 = ProgressBar::new(bams.len() as u64);
     pb1.set_style(sty.clone());
+    pb1.enable_steady_tick(500);
     for bam_generator in bams {
         let mut bam = bam_generator.start();
         bam.set_threads(std::cmp::max(n_threads / 2, 1));

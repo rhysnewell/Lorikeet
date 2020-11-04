@@ -158,7 +158,7 @@ class Cluster():
             pass
 
         if n_neighbors >= int(self.depths.shape[0] * 0.2):
-            n_neighbors = max(int(self.depths.shape[0] * 0.2), 1)
+            n_neighbors = max(int(self.depths.shape[0] * 0.2), 20)
 
         if n_components > self.depths.shape[1]:
             n_components = self.depths.shape[1]
