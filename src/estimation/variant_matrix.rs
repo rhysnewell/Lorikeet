@@ -978,7 +978,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
                                     2
                                 ),
-                                std::cmp::max((sample_names.len() as f64 * 0.3) as i32, 2),
+                                std::cmp::max((sample_names.len() as f64 * (1./3.)) as i32, 2),
                                 // &file_name,
                             );
 
@@ -997,28 +997,28 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to read npy");
                             let labels_set = labels.iter().collect::<HashSet<&i8>>();
 
-                            let mut clusters: Vec<Vec<fuzzy::Assignment>>;
+                            let mut clusters: Vec<Vec<usize>>;
                             if labels_set.contains(&-1) {
                                 clusters = vec![Vec::new(); labels_set.len() - 1];
                                 labels.iter().enumerate().for_each(|(index, label)| {
                                     if label > &-1 {
-                                        let assignment = fuzzy::Assignment {
-                                            index: index,
-                                            label: 1.,
-                                            category: fuzzy::Category::Core,
-                                        };
-                                        clusters[*label as usize].push(assignment);
+                                        // let assignment = fuzzy::Assignment {
+                                        //     index: index,
+                                        //     label: 1.,
+                                        //     category: fuzzy::Category::Core,
+                                        // };
+                                        clusters[*label as usize].push(index);
                                     }
                                 });
                             } else {
                                 clusters = vec![Vec::new(); labels_set.len()];
                                 labels.iter().enumerate().for_each(|(index, label)| {
-                                    let assignment = fuzzy::Assignment {
-                                        index: index,
-                                        label: 1.,
-                                        category: fuzzy::Category::Core,
-                                    };
-                                    clusters[*label as usize].push(assignment);
+                                    // let assignment = fuzzy::Assignment {
+                                    //     index: index,
+                                    //     label: 1.,
+                                    //     category: fuzzy::Category::Core,
+                                    // };
+                                    clusters[*label as usize].push(index);
                                 });
                             }
 
@@ -1043,7 +1043,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             for cluster in clusters.into_iter() {
                                 let vars: HashSet<&Variant> = cluster
                                     .par_iter()
-                                    .map(|p| &variant_info_vec[p.index].var)
+                                    .map(|p| &variant_info_vec[*p].var)
                                     .collect();
                                 if vars.len() == 1 && vars.contains(&Variant::None) {
                                     noise_cluster.par_extend(cluster);
@@ -1067,9 +1067,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     // Sets for each cluster keeping track of which variant types are present in
                                     // a cluster
                                     let prediction_set = Arc::new(Mutex::new(HashSet::new()));
-                                    cluster.par_iter().for_each(|assignment| {
+                                    cluster.par_iter().for_each(|index| {
                                         let variant: &fuzzy::Var =
-                                            &variant_info_vec[assignment.index];
+                                            &variant_info_vec[*index];
 
                                         let mut prediction_set = prediction_set.lock().unwrap();
                                         prediction_set.insert(variant.var.to_owned());
@@ -1090,7 +1090,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                             .or_insert(HashMap::new());
 
                                         let variant_set = variant_cat
-                                            .entry(assignment.category)
+                                            .entry(fuzzy::Category::Core)
                                             .or_insert(HashSet::new());
 
                                         variant_set.insert(variant.var.to_owned());
