@@ -4,6 +4,7 @@ use std;
 use std::collections::{HashMap, HashSet};
 
 use coverm::bam_generator::*;
+use coverm::FlagFilter;
 use estimation::variant_matrix::*;
 use external_command_checker;
 use model::variants::*;
@@ -35,6 +36,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     reference_map: &'b HashMap<usize, String>,
     mut short_sample_count: usize,
     concatenated_genomes: &'b Option<String>,
+    flag_filters: &'b FlagFilter,
 ) {
     let mut bam_generated = bam_generator.start();
     let mut stoit_name = bam_generated.name().to_string();
@@ -153,6 +155,16 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
 
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
+                                        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread)
+                                            || (!flag_filters.include_secondary && record.is_secondary() && !longread)
+                                            || (!flag_filters.include_improper_pairs
+                                            && !record.is_proper_pair()
+                                            && !longread)
+                                        {
+                                            continue;
+                                        } else if !flag_filters.include_secondary && record.is_secondary() && longread {
+                                            continue;
+                                        }
                                         if record.mapq() >= mapq_thresh {
                                             if !alignment.is_del() && !alignment.is_refskip() {
                                                 // query position in read
