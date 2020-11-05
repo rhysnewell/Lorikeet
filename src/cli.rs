@@ -58,6 +58,10 @@ const VARIANT_CALLING_HELP: &'static str =
                                               analysis. [default: 10]\n
         --include-longread-svs                Include structural variants produced by SVIM in genotyping
                                               analysis. Can often overestimate number of variants present.\n
+        --freebayes                           Flag specifying whether to include freebayes in the variant
+                                              process. *WARNING* Freebayes may cause crashes if the number
+                                              of contigs in a MAG is too large. If so, increase the --ulimit value
+                                              If crashes persist then do not use this flag.
         --ulimit                              Sets the ulimit stack size to help prevent segmentation faults
                                               in freebayes recursive calls. Lower this on smaller systems.
                                               Increase this if your bam files contain thousands of contigs and
@@ -1076,6 +1080,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(Arg::with_name("freebayes").long("freebayes"))
                 .arg(
                     Arg::with_name("ulimit")
                         .long("ulimit")
@@ -1427,6 +1432,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(Arg::with_name("freebayes").long("freebayes"))
                 .arg(
                     Arg::with_name("ulimit")
                         .long("ulimit")
@@ -1810,6 +1816,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(Arg::with_name("freebayes").long("freebayes"))
                 .arg(
                     Arg::with_name("ulimit")
                         .long("ulimit")
@@ -2236,6 +2243,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet"))
+                .arg(Arg::with_name("freebayes").long("freebayes"))
                 .arg(
                     Arg::with_name("ulimit")
                         .long("ulimit")
