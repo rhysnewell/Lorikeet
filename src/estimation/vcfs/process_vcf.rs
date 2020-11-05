@@ -264,7 +264,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
     let freebayes_threads = std::cmp::max(split_threads, 1);
 
-    if longread || !longread {
+    if longread || (!longread && m.is_present("freebayes")) {
         //placeholder check
         // Get VCF file from BAM using freebayes of SVIM
         let mut vcf_reader = get_vcf(
