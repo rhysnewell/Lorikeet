@@ -941,7 +941,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 variant_info
                     .par_iter()
                     .for_each(|(ref_idx, variant_info_vec)| {
-                        if variant_info_vec.len() > 1 {
+                        if variant_info_vec.len() > 2 {
                             let reference_path = Path::new(
                                 reference_map
                                     .get(ref_idx)

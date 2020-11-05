@@ -252,7 +252,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     let mut variant_matrix_sync = Arc::new(Mutex::new(variant_matrix.clone()));
     let freebayes_threads = std::cmp::max(split_threads, 1);
 
-    if longread {
+    if longread || !longread {
         //placeholder check
         // Get VCF file from BAM using freebayes of SVIM
         let mut vcf_reader = get_vcf(
@@ -458,7 +458,6 @@ pub fn generate_vcf(
         external_command_checker::check_for_freebayes();
         external_command_checker::check_for_freebayes_parallel();
         external_command_checker::check_for_samtools();
-        external_command_checker::check_for_bcftools();
         external_command_checker::check_for_vt();
 
         // Old way of calulating region size, not a good method
