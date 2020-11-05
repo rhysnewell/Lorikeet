@@ -489,6 +489,7 @@ pub fn pileup_variants<
                                 &reference_map,
                                 per_reference_short_samples,
                                 &concatenated_genomes,
+                                &flag_filters,
                             );
                         } else if m.is_present("include-longread-svs")
                             && (m.is_present("longreads") | m.is_present("longread-bam-files"))
@@ -510,6 +511,7 @@ pub fn pileup_variants<
                                 &reference_map,
                                 per_reference_short_samples,
                                 &concatenated_genomes,
+                                &flag_filters,
                             );
                         } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
                             // We need update the variant matrix anyway
