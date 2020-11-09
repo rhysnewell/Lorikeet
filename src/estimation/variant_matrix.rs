@@ -1584,10 +1584,10 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
 
                                 // Snp density summary start
 
-                                write!(file_open, "Sample").unwrap();
+                                write!(file_open, "{: <20}", "Sample").unwrap();
                                 let mut printing_order = vec![];
                                 for (strain_id, _) in genotype_key.iter() {
-                                    write!(file_open, "\tstrain_{}", strain_id).unwrap();
+                                    write!(file_open, "\tstrain_{: <20}", strain_id).unwrap();
                                     printing_order.push(*strain_id);
                                 }
 
@@ -1600,13 +1600,13 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                         ".tmp" => &sample_name[15..],
                                         _ => &sample_name,
                                     };
-                                    write!(file_open, "{} Expected Coverage", &sample_name,)
+                                    write!(file_open, "{: <20}", &sample_name,)
                                         .unwrap();
                                     for strain_id in printing_order.iter() {
                                         let genotype_idx = genotype_key.get(strain_id).unwrap();
                                         write!(
                                             file_open,
-                                            "\t{}",
+                                            "\t{: <20}",
                                             genotype[*genotype_idx].abundance_weight
                                         )
                                         .unwrap();

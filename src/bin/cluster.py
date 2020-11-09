@@ -180,7 +180,7 @@ class Cluster():
 
         self.clusterer = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
-            min_samples=min_samples,
+            # min_samples=min_samples,
             prediction_data=prediction_data,
             cluster_selection_method=cluster_selection_method,
             metric=metric,
@@ -202,7 +202,7 @@ class Cluster():
             ## Try reduce min samples
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=max(int(self.depths.shape[0] * 0.01), 2),
-                min_samples=max(int(self.depths.shape[0] * 0.001), 2),
+                min_samples=max(int(self.depths.shape[0] * 0.005), 2),
                 prediction_data=True,
                 cluster_selection_method="eom",
             )
@@ -221,7 +221,7 @@ class Cluster():
             ## Try reduce min samples
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=max(int(self.depths.shape[0] * 0.01), 2),
-                min_samples=max(int(self.depths.shape[0] * 0.001), 2),
+                min_samples=max(int(self.depths.shape[0] * 0.005), 2),
                 prediction_data=True,
                 cluster_selection_method="precomputed",
             )
@@ -239,10 +239,10 @@ class Cluster():
         ax = fig.add_subplot(111)
         ax.scatter(self.embeddings[:, 0],
                    self.embeddings[:, 1],
-                   s=5,
+                   s=7,
                    linewidth=0,
                    c=cluster_member_colors,
-                   alpha=0.5)
+                   alpha=0.7)
         # ax.add_artist(legend)
         plt.gca().set_aspect('equal', 'datalim')
         plt.title('UMAP projection of variants', fontsize=24)
@@ -305,7 +305,7 @@ cluster.py fit --depths depths.npy
     input_options.add_argument('--n_neighbors',
                                help='Number of neighbors considered in UMAP',
                                dest="n_neighbors",
-                               default=20)
+                               default=100)
 
     input_options.add_argument(
         '--min_dist',
@@ -387,7 +387,7 @@ cluster.py fit --depths depths.npy
                                 n_neighbors=int(args.n_neighbors),
                                 min_cluster_size=int(args.min_cluster_size),
                                 min_samples=int(args.min_samples),
-                                scaler="minmax",
+                                scaler="none",
                                 precomputed=args.precomputed)
             clusterer.cluster_distances()
             clusterer.plot_distances()
