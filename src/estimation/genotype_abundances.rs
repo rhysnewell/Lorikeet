@@ -35,7 +35,7 @@ pub fn calculate_abundances(sample_genotypes: &mut Vec<Genotype>) {
     // the difference between theta curr and theta prev
     let mut omega = 1.;
     // The minimum value of omega before stopping
-    let eps = 0.001;
+    let eps = 0.00001;
 
     let mut theta_curr = vec![1.; sample_genotypes.len()];
     let mut n = 0;
@@ -59,13 +59,18 @@ pub fn calculate_abundances(sample_genotypes: &mut Vec<Genotype>) {
                         .par_iter()
                         .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
                         .sum::<f64>();
-                    w * (genotype.abundance_weight / pooled_weights)
+                    let w = w * (genotype.abundance_weight / pooled_weights);
+                    w
                 })
                 .collect();
 
             // Step 2: update abundance weight based on mean of variant weights
             genotype.abundance_weight = genotype.variant_weights.par_iter().sum::<f64>()
                 / genotype.variant_weights.len() as f64;
+
+            if genotype.abundance_weight <= eps || genotype.abundance_weight.is_nan() {
+                genotype.abundance_weight = 0.;
+            }
 
             // Update list of theta_curr
             theta_curr[index] = genotype.abundance_weight;
