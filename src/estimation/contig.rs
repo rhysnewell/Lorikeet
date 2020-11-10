@@ -412,26 +412,17 @@ pub fn pileup_variants<
                                 // Map to reference id
                                 let ref_stem = Path::new(reference)
                                     .file_stem()
-                                    .expect(
-                                        "problem determining file stem",
-                                    )
+                                    .expect("problem determining file stem")
                                     .to_str()
                                     .unwrap()
                                     .to_string();
 
-                                let ref_idx = genomes_and_contigs
-                                    .genome_index(
-                                        &ref_stem
-                                    )
-                                    .unwrap();
+                                let ref_idx = genomes_and_contigs.genome_index(&ref_stem).unwrap();
                                 gff_reader.records().into_iter().for_each(|record| {
                                     match record {
                                         Ok(rec) => {
-                                            let gff_ref = gff_map
-                                                .entry(
-                                                    ref_idx
-                                                )
-                                                .or_insert(HashMap::new());
+                                            let gff_ref =
+                                                gff_map.entry(ref_idx).or_insert(HashMap::new());
                                             let contig_genes = gff_ref
                                                 .entry(format!("{}~{}", &ref_stem, rec.seqname()))
                                                 .or_insert(Vec::new());
@@ -558,7 +549,6 @@ pub fn pileup_variants<
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(1);
                         }
-
                     },
                 );
                 {
@@ -659,8 +649,10 @@ pub fn pileup_variants<
 
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
-                                pb.progress_bar
-                                    .set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+                                pb.progress_bar.set_message(&format!(
+                                    "{}: Calculating dN/dS values...",
+                                    &reference,
+                                ));
                                 variant_matrix.add_gene_info(
                                     &mut gff_map,
                                     &genomes_and_contigs,

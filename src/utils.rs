@@ -1049,14 +1049,18 @@ pub fn mean(data: &[i32]) -> Option<f32> {
 pub fn std_deviation(data: &[i32]) -> Option<f32> {
     match (mean(data), data.len()) {
         (Some(data_mean), count) if count > 0 => {
-            let variance = data.par_iter().map(|value| {
-                let diff = data_mean - (*value as f32);
+            let variance = data
+                .par_iter()
+                .map(|value| {
+                    let diff = data_mean - (*value as f32);
 
-                diff * diff
-            }).sum::<f32>() / count as f32;
+                    diff * diff
+                })
+                .sum::<f32>()
+                / count as f32;
 
             Some(variance.sqrt())
-        },
-        _ => None
+        }
+        _ => None,
     }
 }

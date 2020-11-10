@@ -988,7 +988,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
                                     2
                                 ),
-                                std::cmp::max((sample_names.len() as f64 * (1./3.)) as i32, 2),
+                                std::cmp::max((sample_names.len() as f64 * (1. / 3.)) as i32, 2),
                                 // &file_name,
                             );
 
@@ -1078,8 +1078,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     // a cluster
                                     let prediction_set = Arc::new(Mutex::new(HashSet::new()));
                                     cluster.par_iter().for_each(|index| {
-                                        let variant: &fuzzy::Var =
-                                            &variant_info_vec[*index];
+                                        let variant: &fuzzy::Var = &variant_info_vec[*index];
 
                                         let mut prediction_set = prediction_set.lock().unwrap();
                                         prediction_set.insert(variant.var.to_owned());
@@ -1610,8 +1609,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                         ".tmp" => &sample_name[15..],
                                         _ => &sample_name,
                                     };
-                                    write!(file_open, "{: <20}", &sample_name,)
-                                        .unwrap();
+                                    write!(file_open, "{: <20}", &sample_name,).unwrap();
                                     for strain_id in printing_order.iter() {
                                         let genotype_idx = genotype_key.get(strain_id).unwrap();
                                         write!(
@@ -1863,56 +1861,53 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         reference_path
                     ));
 
-                        let file_name = format!(
-                            "{}/{}.gff",
-                            output_prefix.to_string(),
-                            reference_path.file_stem().unwrap().to_str().unwrap(),
+                    let file_name = format!(
+                        "{}/{}.gff",
+                        output_prefix.to_string(),
+                        reference_path.file_stem().unwrap().to_str().unwrap(),
+                    );
+
+                    let file_path = Path::new(&file_name);
+
+                    let mut gff_writer =
+                        gff::Writer::to_file(file_path, bio::io::gff::GffType::GFF3)
+                            .expect("unable to create GFF file");
+                    for (tid, contig_name) in target_names[ref_idx].iter() {
+                        let mut placeholder = Vec::new();
+                        let gff_records = match gff_ref.get_mut(contig_name) {
+                            Some(records) => records,
+                            None => &mut placeholder,
+                        };
+                        debug!(
+                            "Calculating population dN/dS from reads for {} genes on contig {}",
+                            gff_records.len(),
+                            contig_name
                         );
 
-                        let file_path = Path::new(&file_name);
+                        // Set up multi progress bars
+                        let multi = MultiProgress::new();
+                        let sty = ProgressStyle::default_bar().template(
+                            "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
+                        );
 
-                        let mut gff_writer =
-                            gff::Writer::to_file(file_path, bio::io::gff::GffType::GFF3)
-                                .expect("unable to create GFF file");
-                        for (tid, contig_name) in target_names[ref_idx].iter() {
+                        let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
+                        pb1.set_style(sty.clone());
+                        pb1.set_message("Calculating dN/dS for each ORF...");
 
-                            let mut placeholder = Vec::new();
-                            let gff_records = match gff_ref.get_mut(contig_name) {
-                                Some(records) => records,
-                                None => &mut placeholder,
-                            };
-                            debug!(
-                                "Calculating population dN/dS from reads for {} genes on contig {}",
-                                gff_records.len(),
-                                contig_name
-                            );
+                        let _ = std::thread::spawn(move || {
+                            multi.join_and_clear().unwrap();
+                        });
 
-                            // Set up multi progress bars
-                            let multi = MultiProgress::new();
-                            let sty = ProgressStyle::default_bar()
-                                .template(
-                                    "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
-                                );
-
-                            let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
-                            pb1.set_style(sty.clone());
-                            pb1.set_message("Calculating dN/dS for each ORF...");
-
-                            let _ = std::thread::spawn(move || {
-                                multi.join_and_clear().unwrap();
-                            });
-
-                            gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
-
-                                debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
-                                gff_writer.write(gene);
-                                pb1.inc(1);
-                            });
-                        }
+                        gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
+                            debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
+                            gff_writer.write(gene);
+                            pb1.inc(1);
+                        });
                     }
                 }
             }
         }
+    }
 
     fn add_gene_info(
         &self,
@@ -1998,10 +1993,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
 
                         // Set up multi progress bars
                         let multi = MultiProgress::new();
-                        let sty = ProgressStyle::default_bar()
-                            .template(
-                                "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
-                            );
+                        let sty = ProgressStyle::default_bar().template(
+                            "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
+                        );
 
                         let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
                         pb1.set_style(sty.clone());
@@ -2018,8 +2012,14 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         };
 
                         gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
-                            let dnds = codon_table.find_mutations(gene, variants, &ref_sequence, sample_idx);
-                            let (cov, std) = codon_table.calculate_gene_coverage(gene, contig_depth);
+                            let dnds = codon_table.find_mutations(
+                                gene,
+                                variants,
+                                &ref_sequence,
+                                sample_idx,
+                            );
+                            let (cov, std) =
+                                codon_table.calculate_gene_coverage(gene, contig_depth);
                             // Add info
                             gene.attributes_mut()
                                 .insert(format!("dNdS_{}", sample_idx), format!("{}", dnds));
@@ -2827,7 +2827,7 @@ mod tests {
         ref_map.insert(0, "test".to_string());
         let multi = Arc::new(MultiProgress::new());
         var_mat.run_fuzzy_scan(
-            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test",
+            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test", 3,
         )
     }
 
