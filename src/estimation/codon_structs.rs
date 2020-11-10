@@ -83,7 +83,7 @@ pub trait Translations {
     fn calculate_gene_coverage(
         &self,
         gene: &bio::io::gff::Record,
-        depth_of_contig: &Vec<i32>
+        depth_of_contig: &Vec<i32>,
     ) -> (f32, f32);
 }
 
@@ -345,7 +345,7 @@ impl Translations for CodonTable {
     fn calculate_gene_coverage(
         &self,
         gene: &bio::io::gff::Record,
-        depth_of_contig: &Vec<i32>
+        depth_of_contig: &Vec<i32>,
     ) -> (f32, f32) {
         let gene_start = *gene.start() as usize - 1;
         let gene_end = *gene.end() as usize - 1;
@@ -353,7 +353,7 @@ impl Translations for CodonTable {
         let mean_cov = mean(gene_depths).unwrap_or(0.);
         let std = std_deviation(gene_depths).unwrap_or(0.);
 
-        return (mean_cov, std)
+        return (mean_cov, std);
     }
 }
 
@@ -442,7 +442,8 @@ mod tests {
         for gene_record in gene_records.records() {
             let gene_record = gene_record.unwrap();
 
-            let dnds = codon_table.find_mutations(&gene_record, &variant_abundances, &ref_sequence);
+            let dnds =
+                codon_table.find_mutations(&gene_record, &variant_abundances, &ref_sequence, 0);
             assert_eq!(format!("{:.4}", dnds), format!("{}", 0.1247));
         }
     }

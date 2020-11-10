@@ -155,14 +155,21 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
 
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
-                                        if (!flag_filters.include_supplementary && record.is_supplementary() && !longread)
-                                            || (!flag_filters.include_secondary && record.is_secondary() && !longread)
-                                            || (!flag_filters.include_improper_pairs
-                                            && !record.is_proper_pair()
+                                        if (!flag_filters.include_supplementary
+                                            && record.is_supplementary()
                                             && !longread)
+                                            || (!flag_filters.include_secondary
+                                                && record.is_secondary()
+                                                && !longread)
+                                            || (!flag_filters.include_improper_pairs
+                                                && !record.is_proper_pair()
+                                                && !longread)
                                         {
                                             continue;
-                                        } else if !flag_filters.include_secondary && record.is_secondary() && longread {
+                                        } else if !flag_filters.include_secondary
+                                            && record.is_secondary()
+                                            && longread
+                                        {
                                             continue;
                                         }
                                         if record.mapq() >= mapq_thresh {
