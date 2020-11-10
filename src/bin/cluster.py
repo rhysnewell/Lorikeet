@@ -251,7 +251,7 @@ class Cluster():
     def plot_distances(self):
         self.clusterer.condensed_tree_.plot(
             select_clusters=True,
-            selection_palette=sns.color_palette('deep', 8))
+            selection_palette=sns.color_palette('deep', 20))
         plt.title('Hierarchical tree of clusters', fontsize=24)
         plt.savefig(self.path + '_UMAP_projection_with_clusters.png')
 

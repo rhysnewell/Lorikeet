@@ -3,6 +3,7 @@ use bio_types::strand;
 use itertools::{izip, Itertools};
 use model::variants::{Base, Variant};
 use std::collections::HashMap;
+use utils::{mean, std_deviation};
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -77,7 +78,13 @@ pub trait Translations {
         gene: &bio::io::gff::Record,
         variants: &HashMap<i64, HashMap<Variant, Base>>,
         ref_sequence: &Vec<u8>,
+        sample_idx: usize,
     ) -> f64;
+    fn calculate_gene_coverage(
+        &self,
+        gene: &bio::io::gff::Record,
+        depth_of_contig: &Vec<i32>
+    ) -> (f32, f32);
 }
 
 impl Translations for CodonTable {
@@ -133,6 +140,7 @@ impl Translations for CodonTable {
         gene: &bio::io::gff::Record,
         variants: &HashMap<i64, HashMap<Variant, Base>>,
         ref_sequence: &Vec<u8>,
+        sample_idx: usize,
     ) -> f64 {
         match gene.strand() {
             Some(strand) => {
@@ -268,22 +276,24 @@ impl Translations for CodonTable {
                         for (variant, base_info) in variant_set.iter() {
                             match variant {
                                 Variant::SNV(var) => {
-                                    if variant_count > 0 {
-                                        // Create a copy of codon up to this point
-                                        // Not sure if reusing previous variants is bad, but
-                                        // not doing so can cause randomness to dN/dS values
+                                    if base_info.truedepth[sample_idx] > 0 {
+                                        if variant_count > 0 {
+                                            // Create a copy of codon up to this point
+                                            // Not sure if reusing previous variants is bad, but
+                                            // not doing so can cause randomness to dN/dS values
 
-                                        new_codons.push(codon.clone());
+                                            new_codons.push(codon.clone());
 
-                                        new_codons[variant_count][codon_cursor] = *var;
+                                            new_codons[variant_count][codon_cursor] = *var;
 
-                                        debug!("multi variant codon {:?}", new_codons);
-                                    } else {
-                                        for var_idx in 0..new_codons.len() {
-                                            new_codons[var_idx][codon_cursor] = *var;
+                                            debug!("multi variant codon {:?}", new_codons);
+                                        } else {
+                                            for var_idx in 0..new_codons.len() {
+                                                new_codons[var_idx][codon_cursor] = *var;
+                                            }
                                         }
+                                        variant_count += 1;
                                     }
-                                    variant_count += 1;
                                 }
                                 _ => {
                                     // Frameshift mutations are not included in dN/dS calculations?
@@ -322,10 +332,28 @@ impl Translations for CodonTable {
                     dnds = 0.0
                 }
 
+                if dnds.is_nan() {
+                    dnds = 1.
+                }
+
                 return dnds;
             }
             _ => return 0.,
         }
+    }
+
+    fn calculate_gene_coverage(
+        &self,
+        gene: &bio::io::gff::Record,
+        depth_of_contig: &Vec<i32>
+    ) -> (f32, f32) {
+        let gene_start = *gene.start() as usize - 1;
+        let gene_end = *gene.end() as usize - 1;
+        let gene_depths = &depth_of_contig[gene_start..gene_end];
+        let mean_cov = mean(gene_depths).unwrap_or(0.);
+        let std = std_deviation(gene_depths).unwrap_or(0.);
+
+        return (mean_cov, std)
     }
 }
 

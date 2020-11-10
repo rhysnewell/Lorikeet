@@ -364,19 +364,20 @@ pub fn pileup_variants<
                             external_command_checker::check_for_prodigal();
 
                             // create new fifo and give read, write and execute rights to the owner.
-                            let gff_dir = TempDir::new("lorikeet-prokka")
-                                .expect("unable to create prokka directory");
+                            let gff_dir = TempDir::new("lorikeet-prodigal")
+                                .expect("unable to create prodigal directory");
                             for reference in references.iter() {
                                 let cmd_string = format!(
                                     "set -e -o pipefail; \
-                                    prodigal -o {}/{}.gff -i {} -f gff -p meta",
+                                    prodigal -o {}/{}.gff -i {} -f gff {}",
                                     // prodigal
                                     gff_dir
                                         .path()
                                         .to_str()
                                         .expect("Failed to convert tempfile path to str"),
                                     Path::new(&reference).file_stem().unwrap().to_str().unwrap(),
-                                    &reference
+                                    &reference,
+                                    m.value_of("prodigal-params").unwrap(),
                                 );
                                 debug!("Queuing cmd_string: {}", cmd_string);
                                 command::finish_command_safely(
@@ -409,27 +410,30 @@ pub fn pileup_variants<
                                 .expect("Failed to read GFF file");
 
                                 // Map to reference id
+                                let ref_stem = Path::new(reference)
+                                    .file_stem()
+                                    .expect(
+                                        "problem determining file stem",
+                                    )
+                                    .to_str()
+                                    .unwrap()
+                                    .to_string();
+
+                                let ref_idx = genomes_and_contigs
+                                    .genome_index(
+                                        &ref_stem
+                                    )
+                                    .unwrap();
                                 gff_reader.records().into_iter().for_each(|record| {
                                     match record {
                                         Ok(rec) => {
                                             let gff_ref = gff_map
                                                 .entry(
-                                                    genomes_and_contigs
-                                                        .genome_index(
-                                                            &Path::new(reference)
-                                                                .file_stem()
-                                                                .expect(
-                                                                    "problem determining file stem",
-                                                                )
-                                                                .to_str()
-                                                                .unwrap()
-                                                                .to_string(),
-                                                        )
-                                                        .unwrap(),
+                                                    ref_idx
                                                 )
                                                 .or_insert(HashMap::new());
                                             let contig_genes = gff_ref
-                                                .entry(rec.seqname().to_owned())
+                                                .entry(format!("{}~{}", &ref_stem, rec.seqname()))
                                                 .or_insert(Vec::new());
                                             contig_genes.push(rec);
                                         }
@@ -554,6 +558,7 @@ pub fn pileup_variants<
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(1);
                         }
+
                     },
                 );
                 {
@@ -650,6 +655,20 @@ pub fn pileup_variants<
                                     &reference_map,
                                     &concatenated_genomes,
                                 )
+                            }
+
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(&format!("{}: Calculating dN/dS values...", &reference,));
+                                variant_matrix.add_gene_info(
+                                    &mut gff_map,
+                                    &genomes_and_contigs,
+                                    &reference_map,
+                                    &codon_table,
+                                    &concatenated_genomes,
+                                    sample_idx,
+                                );
                             }
 
                             {
