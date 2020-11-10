@@ -561,9 +561,12 @@ pub fn process_previous_contigs_var(
                     //                    variant_struct.print_variants(&ref_sequence, stoit_name);
                 }
             }
-            "summarize" | "genotype" | "evolve" | "polish" => {
+            "summarize" | "genotype" | "polish" => {
                 // Add samples contig information to main struct
                 debug!("Adding in new info for contig...");
+                variant_matrix.add_contig(variant_struct, sample_count, sample_idx, ref_idx);
+            }
+            "evolve" => {
                 variant_matrix.add_contig(variant_struct, sample_count, sample_idx, ref_idx);
             }
             // "polish" => {

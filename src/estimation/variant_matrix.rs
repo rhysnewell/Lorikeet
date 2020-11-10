@@ -196,6 +196,16 @@ pub trait VariantMatrixFunctions {
         concatenated_genomes: &Option<String>,
     );
 
+    fn add_gene_info(
+        &self,
+        gff_map: &mut HashMap<usize, HashMap<String, Vec<bio::io::gff::Record>>>,
+        genomes_and_contigs: &GenomesAndContigs,
+        reference_map: &HashMap<usize, String>,
+        codon_table: &CodonTable,
+        concatenated_genomes: &Option<String>,
+        sample_idx: usize,
+    );
+
     fn polish_genomes(
         &self,
         output_prefix: &str,
@@ -668,7 +678,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 base_info.add_depth(sample_idx, *d, ref_depth);
                             }
                         }
-                        depths.entry(tid).or_insert(depth);
+                        depths.insert(tid, depth);
                     }
                 }
             }
@@ -1835,8 +1845,96 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
             VariantMatrix::VariantContigMatrix {
                 target_names,
                 all_variants,
+                depths,
+                sample_names,
                 ..
             } => {
+                for (ref_idx, ref_variants) in all_variants.iter() {
+                    // Retrieve path to reference
+                    let reference_path = Path::new(
+                        reference_map
+                            .get(ref_idx)
+                            .expect("reference index not found"),
+                    );
+
+                    // Reference specific GFF records
+                    let mut gff_ref = gff_map.get_mut(&ref_idx).expect(&format!(
+                        "No GFF records for reference {:?}",
+                        reference_path
+                    ));
+
+                        let file_name = format!(
+                            "{}/{}.gff",
+                            output_prefix.to_string(),
+                            reference_path.file_stem().unwrap().to_str().unwrap(),
+                        );
+
+                        let file_path = Path::new(&file_name);
+
+                        let mut gff_writer =
+                            gff::Writer::to_file(file_path, bio::io::gff::GffType::GFF3)
+                                .expect("unable to create GFF file");
+                        for (tid, contig_name) in target_names[ref_idx].iter() {
+
+                            let mut placeholder = Vec::new();
+                            let gff_records = match gff_ref.get_mut(contig_name) {
+                                Some(records) => records,
+                                None => &mut placeholder,
+                            };
+                            debug!(
+                                "Calculating population dN/dS from reads for {} genes on contig {}",
+                                gff_records.len(),
+                                contig_name
+                            );
+
+                            // Set up multi progress bars
+                            let multi = MultiProgress::new();
+                            let sty = ProgressStyle::default_bar()
+                                .template(
+                                    "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
+                                );
+
+                            let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
+                            pb1.set_style(sty.clone());
+                            pb1.set_message("Calculating dN/dS for each ORF...");
+
+                            let _ = std::thread::spawn(move || {
+                                multi.join_and_clear().unwrap();
+                            });
+
+                            gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
+
+                                debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
+                                gff_writer.write(gene);
+                                pb1.inc(1);
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+    fn add_gene_info(
+        &self,
+        gff_map: &mut HashMap<usize, HashMap<String, Vec<bio::io::gff::Record>>>,
+        genomes_and_contigs: &GenomesAndContigs,
+        reference_map: &HashMap<usize, String>,
+        codon_table: &CodonTable,
+        concatenated_genomes: &Option<String>,
+        sample_idx: usize,
+    ) {
+        // Calculates parse the per reference information to functions in codon_structs
+        // Writes the resulting gff records
+        match self {
+            VariantMatrix::VariantContigMatrix {
+                target_names,
+                all_variants,
+                depths,
+                sample_names,
+                ..
+            } => {
+                let sample_name = &sample_names[sample_idx];
+
                 for (ref_idx, ref_variants) in all_variants.iter() {
                     // Retrieve path to reference
                     let reference_path = Path::new(
@@ -1863,17 +1961,6 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         reference_path
                     ));
 
-                    let file_name = format!(
-                        "{}/{}_dnds_values.gff",
-                        output_prefix.to_string(),
-                        reference_path.file_stem().unwrap().to_str().unwrap(),
-                    );
-
-                    let file_path = Path::new(&file_name);
-
-                    let mut gff_writer =
-                        gff::Writer::to_file(file_path, bio::io::gff::GffType::GFF3)
-                            .expect("unable to create GFF file");
                     for (tid, contig_name) in target_names[ref_idx].iter() {
                         let mut ref_sequence = Vec::new();
                         match reference
@@ -1914,8 +2001,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         let sty = ProgressStyle::default_bar()
                             .template(
                                 "[{elapsed_precise}] {bar:40.green/blue} {pos:>7}/{len:7} {msg}",
-                            )
-                            .progress_chars("##-");
+                            );
 
                         let pb1 = multi.insert(0, ProgressBar::new(gff_records.len() as u64));
                         pb1.set_style(sty.clone());
@@ -1925,12 +2011,24 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             multi.join_and_clear().unwrap();
                         });
 
+                        let placeholder = vec![0];
+                        let contig_depth = match depths.get(tid) {
+                            Some(depth_vec) => depth_vec,
+                            None => &placeholder,
+                        };
+
                         gff_records.iter_mut().enumerate().for_each(|(_id, gene)| {
-                            let dnds = codon_table.find_mutations(gene, variants, &ref_sequence);
+                            let dnds = codon_table.find_mutations(gene, variants, &ref_sequence, sample_idx);
+                            let (cov, std) = codon_table.calculate_gene_coverage(gene, contig_depth);
+                            // Add info
                             gene.attributes_mut()
-                                .insert(format!("dNdS"), format!("{}", dnds));
+                                .insert(format!("dNdS_{}", sample_idx), format!("{}", dnds));
+                            gene.attributes_mut()
+                                .insert(format!("cov_{}", sample_idx), format!("{}", cov));
+                            gene.attributes_mut()
+                                .insert(format!("stdev_{}", sample_idx), format!("{}", std));
+
                             debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
-                            gff_writer.write(gene);
                             pb1.inc(1);
                         });
                     }

@@ -760,9 +760,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(Arg::with_name("gff").long("gff").takes_value(true))
                 .arg(
-                    Arg::with_name("prokka-params")
-                        .long("prokka-params")
+                    Arg::with_name("prodigal-params")
+                        .long("prodigal-params")
                         .takes_value(true)
+                        .default_value("-p meta")
                         .conflicts_with("gff"),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
