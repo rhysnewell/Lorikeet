@@ -647,7 +647,7 @@ pub fn pileup_variants<
                                 )
                             }
 
-                            {
+                            if mode == "evolve" || mode == "full" {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar.set_message(&format!(
                                     "{}: Calculating dN/dS values...",
