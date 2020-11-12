@@ -157,6 +157,7 @@ pub trait VariantMatrixFunctions {
         multi: &Arc<MultiProgress>,
         output_prefic: &str,
         n_neighbors: usize,
+        n_components: usize,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -931,6 +932,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
         multi: &Arc<MultiProgress>,
         output_prefix: &str,
         n_neighbors: usize,
+        n_components: usize,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -988,7 +990,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
                                     2
                                 ),
-                                std::cmp::max((sample_names.len() as f64 * (1. / 3.)) as i32, 2),
+                                std::cmp::max(n_components, 2),
                                 // &file_name,
                             );
 
@@ -1991,6 +1993,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             None => &placeholder_map,
                         };
 
+                        let sample_name = &sample_names[sample_idx].as_str()[15..];
+
                         // Set up multi progress bars
                         let multi = MultiProgress::new();
                         let sty = ProgressStyle::default_bar().template(
@@ -2022,11 +2026,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 codon_table.calculate_gene_coverage(gene, contig_depth);
                             // Add info
                             gene.attributes_mut()
-                                .insert(format!("dNdS_{}", sample_idx), format!("{}", dnds));
+                                .insert(format!("dNdS_{}", sample_name), format!("{}", dnds));
                             gene.attributes_mut()
-                                .insert(format!("cov_{}", sample_idx), format!("{}", cov));
+                                .insert(format!("cov_{}", sample_name), format!("{}", cov));
                             gene.attributes_mut()
-                                .insert(format!("stdev_{}", sample_idx), format!("{}", std));
+                                .insert(format!("stdev_{}", sample_name), format!("{}", std));
 
                             debug!("gene {:?} attributes {:?}", gene.seqname(), gene);
                             pb1.inc(1);
@@ -2827,7 +2831,7 @@ mod tests {
         ref_map.insert(0, "test".to_string());
         let multi = Arc::new(MultiProgress::new());
         var_mat.run_fuzzy_scan(
-            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test", 3,
+            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test", 3, 2,
         )
     }
 

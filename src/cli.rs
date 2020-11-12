@@ -297,22 +297,13 @@ Other arguments (optional):
                                          https://github.com/rhysnewell/lorikeet
    --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
                                          Not recommended if using nanopore long read data.
-   mapq-threshold <INT>                  Mapping quality threshold used to verify
+   --mapq-threshold <INT>                Mapping quality threshold used to verify
                                          a variant. [default: 10]
    -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
                                          considered in the variant calling process.
    --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
                                          based on the quality scores and accounting for the
                                          presence in all available samples.
-   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.01 implies on average a SNP should be detected
-                                         every 1 in 100 bp [default: 0.01]
-   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.001 implies on average an INDEL should be detected
-                                         every 1 in 1000 bp [default: 0.001]
-   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -321,11 +312,6 @@ Other arguments (optional):
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
-   --coverage-fold                       Percentage value of coverage to look above and below
-                                         when calculating variant locations. e.g. if coverage-fold
-                                         is equal to 0.1, only areas of coverage * (1.0 - 0.1) and
-                                         coverage * (1.0 + 0.1) will be considered.
-                                         [default: 0.5]
    --contig-end-exclusion                Exclude bases at the ends of reference
                                          sequences from calculation [default: 75]
    --trim-min FRACTION                   Remove this smallest fraction of positions
@@ -400,15 +386,6 @@ Other arguments (optional):
    --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
                                          based on the quality scores and accounting for the
                                          presence in all available samples.
-   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.01 implies on average a SNP should be detected
-                                         every 1 in 100 bp [default: 0.01]
-   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.001 implies on average an INDEL should be detected
-                                         every 1 in 1000 bp [default: 0.001]
-   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -506,15 +483,6 @@ Other arguments (optional):
    --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
                                          based on the quality scores and accounting for the
                                          presence in all available samples.
-   --heterozygosity <FLOAT>              The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.01 implies on average a SNP should be detected
-                                         every 1 in 100 bp [default: 0.01]
-   --indel-heterozygosity <FLOAT>        The expected heterozygosity value used to compute prior
-                                         probability that a locus is non-reference. A value of
-                                         0.001 implies on average an INDEL should be detected
-                                         every 1 in 1000 bp [default: 0.001]
-   --ploidy <INT>                        Sets the default ploidy for the analysis to N.  (default: 1)
    -o, --output-prefix <STRING>          Output prefix for files. [default: output]
    -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
                                          for it to be considered. [default: 10]
@@ -530,7 +498,8 @@ Other arguments (optional):
    --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
                                          The fraction of points needed to be within e-max
                                          to begin border clustering.
-   -n, --n_neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
+   --n-components <INT>                  Number of components for the UMAP algorithm to embed into. [default: 2]
+   -n, --n-neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
    -s, --maximum-seed-similarity <FLOAT> The maximum Jaccard's similarity value allowed between two
                                          seeds before they get concatenated into one seed. Prevents
                                          overclustering. [default: 0.97]
@@ -1732,6 +1701,12 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("n-neighbors")
                         .long("n-neighbors")
+                        .short("n")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("n-components")
+                        .long("n-components")
                         .short("n")
                         .default_value("20"),
                 )

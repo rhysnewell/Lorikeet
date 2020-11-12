@@ -718,6 +718,7 @@ pub fn pileup_variants<
                         .unwrap()
                         .parse()
                         .unwrap();
+                    let n_components: usize = m.value_of("n-components").unwrap().parse().unwrap();
 
                     // Calculate the geometric mean values and CLR for each variant, reference specific
                     {
@@ -749,6 +750,7 @@ pub fn pileup_variants<
                         &multi_inner,
                         &output_prefix,
                         anchor_size,
+                        n_components,
                     );
 
                     // Write genotypes to disk, reference specific
