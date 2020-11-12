@@ -1708,7 +1708,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("n-components")
                         .long("n-components")
                         .short("n")
-                        .default_value("20"),
+                        .default_value("2"),
                 )
                 .arg(
                     Arg::with_name("minimum-reads-in-link")
