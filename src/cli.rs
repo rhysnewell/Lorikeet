@@ -500,9 +500,8 @@ Other arguments (optional):
                                          to begin border clustering.
    --n-components <INT>                  Number of components for the UMAP algorithm to embed into. [default: 2]
    -n, --n-neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
-   -s, --maximum-seed-similarity <FLOAT> The maximum Jaccard's similarity value allowed between two
-                                         seeds before they get concatenated into one seed. Prevents
-                                         overclustering. [default: 0.97]
+   -s, --cluster-distance <FLOAT>        The cluster distance used to decide if two or more clusters
+                                         should be combined into a genotype. [default: 0.15]
    --minimum-reads-in-link <INT>         Minimum amount of reads required to be shared between two
                                          variants before they are counted as 'linked'. [default: 5]
    --include-longread-svs                Include structural variants produced by SVIM in genotyping
@@ -1716,10 +1715,10 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .default_value("5"),
                 )
                 .arg(
-                    Arg::with_name("maximum-seed-similarity")
-                        .long("maximum-seed-similarity")
+                    Arg::with_name("cluster-distance")
+                        .long("cluster-distance")
                         .short("s")
-                        .default_value("0.97"),
+                        .default_value("0.15"),
                 )
                 .arg(
                     Arg::with_name("base-quality-threshold")
