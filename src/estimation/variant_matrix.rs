@@ -986,10 +986,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 &file_name,
                                 n_neighbors,
                                 std::cmp::max((pts_min * variant_info_vec.len() as f64) as i32, 2),
-                                std::cmp::max(
-                                    ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
-                                    2
-                                ),
+                                // std::cmp::max(
+                                //     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
+                                //     2
+                                // ),
+                                1, // min samples 1 to try and cluster as much as possible
                                 std::cmp::max(n_components, 2),
                                 // &file_name,
                             );

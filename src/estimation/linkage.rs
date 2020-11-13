@@ -158,7 +158,7 @@ pub fn linkage_clustering_of_clusters(
 
         let cmd_string = format!(
             "cluster.py fit --input {}_cluster_distances.npy \
-            --min_cluster_size 2 --min_samples 2 \
+            --min_cluster_size 2 --min_samples 1 \
             --min_dist 0 --n_neighbors 5 --precomputed True",
             &output_prefix,
             // &output_prefix,
