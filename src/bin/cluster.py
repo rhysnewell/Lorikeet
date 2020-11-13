@@ -178,6 +178,7 @@ class Cluster():
             metric = "precomputed"
             prediction_data = False
 
+        self.min_samples = min_samples
         self.clusterer = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
             # min_samples=min_samples,
@@ -202,7 +203,7 @@ class Cluster():
             ## Try reduce min samples
             self.clusterer = hdbscan.HDBSCAN(
                 min_cluster_size=max(int(self.depths.shape[0] * 0.01), 2),
-                min_samples=max(int(self.depths.shape[0] * 0.005), 2),
+                min_samples=self.min_samples,
                 prediction_data=True,
                 cluster_selection_method="eom",
             )
@@ -328,7 +329,7 @@ cluster.py fit --depths depths.npy
     input_options.add_argument('--min_samples',
                                help='Minimum samples for HDBSCAN',
                                dest="min_samples",
-                               default=5)
+                               default=1)
 
     ## Genral parameters
     input_options.add_argument(
