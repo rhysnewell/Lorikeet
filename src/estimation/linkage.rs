@@ -179,8 +179,14 @@ pub fn linkage_clustering_of_clusters(
             read_npy(format!("{}_cluster_distances_labels.npy", output_prefix))
                 .expect("Unable to read npy");
         let labels_set = labels.iter().collect::<HashSet<&i8>>();
+        let mut n_clusters = 0;
+        if labels_set.contains(&-1) {
+            n_clusters = labels_set.len() - 1;
+        } else {
+            n_clusters = labels_set.len();
+        }
 
-        let mut new_clusters: Vec<Vec<usize>> = Vec::new();
+        let mut new_clusters: Vec<Vec<usize>> = vec![Vec::new(); n_clusters];
         let mut solo_clusters: Vec<Vec<usize>> = Vec::new();
         if labels_set.contains(&-1) && labels_set.len() > 1 {
             labels.iter().enumerate().for_each(|(index, label)| {
