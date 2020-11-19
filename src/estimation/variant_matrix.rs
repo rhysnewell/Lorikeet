@@ -745,7 +745,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                         vec![0.0; sample_count as usize];
 
                                                     let depth_sum: i32 =
-                                                        base_info.totaldepth.iter().sum();
+                                                        base_info.truedepth.iter().sum();
                                                     if depth_sum > 0 {
                                                         // Get the mean abundance across samples
                                                         for index in (0..sample_count).into_iter() {
@@ -799,7 +799,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                     let mut rel_abund =
                                                         vec![0.0; sample_count as usize];
                                                     let depth_sum: i32 =
-                                                        base_info.totaldepth.iter().sum();
+                                                        base_info.truedepth.iter().sum();
                                                     if depth_sum > 0 {
                                                         // Get the mean abundance across samples
                                                         for index in (0..sample_count).into_iter() {
