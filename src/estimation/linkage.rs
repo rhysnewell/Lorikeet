@@ -106,7 +106,7 @@ pub fn linkage_clustering_of_clusters(
             });
 
             let intersection: HashSet<_> = read_set1.intersection(&read_set2).collect();
-            let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
+            // let mut union: HashSet<_> = read_set1.union(&read_set2).cloned().collect();
             // let union: HashSet<_> = union.union(&clash).collect();
             let cov_1 = depth_1 as f64 / cluster1.len() as f64;
             let cov_2 = depth_2 as f64 / cluster2.len() as f64;
@@ -157,7 +157,7 @@ pub fn linkage_clustering_of_clusters(
         .expect("Unable to create npy file");
 
         let cmd_string = format!(
-            "cluster.py fit --input {}_cluster_distances.npy \
+            "rosella fit --input {}_cluster_distances.npy \
             --min_cluster_size 2 --min_samples 1 \
             --min_dist 0 --n_neighbors 5 --precomputed True",
             &output_prefix,

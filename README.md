@@ -16,7 +16,10 @@ information to help provide likely genotypes based on observed physical linkages
 
 ## Installation
 
-#### Option 1: Conda - Recommended
+#### Option 1: Conda
+
+*NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
+up to date version, follow the instruction in option 2. 
 
 Install into current conda environment:
 ```
@@ -29,28 +32,32 @@ conda create -n lorikeet -c bioconda lorikeet-genome && \
 conda activate lorikeet
 ```
 
-#### Option 2: Cargo
-```
-conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y python=3.7 parallel pysam=0.16 svim \ 
-prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing umap-learn scikit-learn scikit-bio numpy seaborn matplotlib && \ 
-conda activate lorikeet && \ 
-cargo install lorikeet-genome
-```
-
-#### Option 3: Install manually
+#### Option 2: Install manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y python=3.7 parallel pysam=0.16 svim \ 
-freebayes prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing r-base && \ 
-conda activate lorikeet && \ 
-git clone https://github.com/rhysnewell/Lorikeet.git && \ 
-cd Lorikeet && \ 
+git clone --recursivehttps://github.com/rhysnewell/Lorikeet.git \ 
+cd Lorikeet \
+conda env create -n lorikeet -f lorikeet.yml \ 
+conda activate lorikeet \ 
 bash install.sh # or e.g. `cargo run -- genotype`
 ```
 
+Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
+If you see something like this you may be behind a proxy that blocks access to standard git:// port (9418).
+
+```
+$ git clone --recursive git://github.com/rhysnewell/Lorikeet.git
+Cloning into 'Lorikeet'...
+fatal: Unable to look up github.com (port 9418) (Name or service not known)
+```
+
+Luckily, thanks to this handy tip from the developer of [Freebayes](https://github.com/ekg/freebayes) we can work around it.
+If you have access to https:// on port 443, then you can use this 'magic' command as a workaround to enable download of the submodules:
+
+```
+git config --global url.https://github.com/.insteadOf git://github.com/
+```
 
 ## Usage
 
