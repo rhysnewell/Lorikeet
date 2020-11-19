@@ -36,7 +36,7 @@ conda activate lorikeet
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
+git clone --recursive-submodules https://github.com/rhysnewell/Lorikeet.git \ 
 cd Lorikeet \
 conda env create -n lorikeet -f lorikeet.yml \ 
 conda activate lorikeet \ 
