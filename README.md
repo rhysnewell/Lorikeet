@@ -36,13 +36,28 @@ conda activate lorikeet
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-git clone --recursive-submodules https://github.com/rhysnewell/Lorikeet.git \ 
+git clone --recursivehttps://github.com/rhysnewell/Lorikeet.git \ 
 cd Lorikeet \
 conda env create -n lorikeet -f lorikeet.yml \ 
 conda activate lorikeet \ 
 bash install.sh # or e.g. `cargo run -- genotype`
 ```
 
+Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
+If you see something like this you may be behind a proxy that blocks access to standard git:// port (9418).
+
+```
+$ git clone --recursive git://github.com/rhysnewell/Lorikeet.git
+Cloning into 'Lorikeet'...
+fatal: Unable to look up github.com (port 9418) (Name or service not known)
+```
+
+Luckily, thanks to this handy tip from the developer of [Freebayes](https://github.com/ekg/freebayes) we can work around it.
+If you have access to https:// on port 443, then you can use this 'magic' command as a workaround to enable download of the submodules:
+
+```
+git config --global url.https://github.com/.insteadOf git://github.com/
+```
 
 ## Usage
 
