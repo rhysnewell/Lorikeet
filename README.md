@@ -16,7 +16,10 @@ information to help provide likely genotypes based on observed physical linkages
 
 ## Installation
 
-#### Option 1: Conda - Recommended
+#### Option 1: Conda
+
+*NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
+up to date version, follow the instruction in option 2. 
 
 Install into current conda environment:
 ```
@@ -29,25 +32,14 @@ conda create -n lorikeet -c bioconda lorikeet-genome && \
 conda activate lorikeet
 ```
 
-#### Option 2: Cargo
-```
-conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y python=3.7 parallel pysam=0.16 svim \ 
-prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing umap-learn scikit-learn scikit-bio numpy seaborn matplotlib && \ 
-conda activate lorikeet && \ 
-cargo install lorikeet-genome
-```
-
-#### Option 3: Install manually
+#### Option 2: Install manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-conda create -n lorikeet -y -c conda-forge -c bioconda -c defaults -y python=3.7 parallel pysam=0.16 svim \ 
-freebayes prodigal samtools=1.9 vt rust clangdev pkg-config zlib gsl starcode openblas bwa minimap2 \ 
-fastani dashing r-base && \ 
-conda activate lorikeet && \ 
-git clone https://github.com/rhysnewell/Lorikeet.git && \ 
-cd Lorikeet && \ 
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
+cd Lorikeet \
+conda env create -n lorikeet -f lorikeet.yml \ 
+conda activate lorikeet \ 
 bash install.sh # or e.g. `cargo run -- genotype`
 ```
 
