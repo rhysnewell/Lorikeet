@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.6
+  - umap-learn
+  - hdbscan
+  - matplotlib
+  - numpy
+  - seaborn
+  - scikit-learn
+  - scikit-bio
+  - numba
+  - biopython
