@@ -1701,7 +1701,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("n-neighbors")
                         .long("n-neighbors")
                         .short("n")
-                        .default_value("20"),
+                        .default_value("100"),
                 )
                 .arg(
                     Arg::with_name("n-components")
@@ -1718,7 +1718,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                     Arg::with_name("cluster-distance")
                         .long("cluster-distance")
                         .short("s")
-                        .default_value("0.15"),
+                        .default_value("0.35"),
                 )
                 .arg(
                     Arg::with_name("base-quality-threshold")
@@ -1729,7 +1729,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("fdr-threshold")
                         .long("fdr-threshold")
-                        .default_value("0.05"),
+                        .default_value("0.01"),
                 )
                 .arg(
                     Arg::with_name("heterozygosity")
