@@ -205,6 +205,11 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 .unwrap();
             std::fs::create_dir(format!("{}/short", &tmp_direct.as_ref().to_str().unwrap()))
                 .unwrap();
+            std::fs::create_dir(format!(
+                "{}/assembly",
+                &tmp_direct.as_ref().to_str().unwrap()
+            ))
+            .unwrap();
 
             Some(tmp_direct)
         }
@@ -233,51 +238,117 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    bam_readers,
-                    filter_params.flag_filters,
-                    Some(long_readers),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                }
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
-                external_command_checker::check_for_samtools();
-                let (concatenated_genomes, genomes_and_contigs_option) =
-                    setup_genome_fasta_files(&m);
-
-                let generator_sets = get_streamed_bam_readers(
-                    m,
-                    mapping_program,
+                let mut long_generators = long_generator_setup(
+                    &m,
                     &concatenated_genomes,
-                    true,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
-                let mut all_generators = vec![];
-                let mut indices = vec![]; // Prevent indices from being dropped
-                for set in generator_sets {
-                    indices.push(set.index);
-                    for g in set.generators {
-                        all_generators.push(g)
-                    }
+
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
                 }
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    bam_readers,
-                    filter_params.flag_filters,
-                    Some(all_generators),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
             } else {
                 run_pileup(
                     m,
@@ -285,6 +356,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
+                    None::<Vec<PlaceholderBamFileReader>>,
                     None::<Vec<PlaceholderBamFileReader>>,
                     genomes_and_contigs_option,
                     tmp_dir,
@@ -298,50 +370,117 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    bam_readers,
-                    filter_params.flag_filters,
-                    Some(long_readers),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                }
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
-                external_command_checker::check_for_samtools();
-                let (concatenated_genomes, genomes_and_contigs_option) =
-                    setup_genome_fasta_files(&m);
-                let generator_sets = get_streamed_bam_readers(
-                    m,
-                    mapping_program,
+                let mut long_generators = long_generator_setup(
+                    &m,
                     &concatenated_genomes,
-                    true,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
-                let mut all_generators = vec![];
-                let mut indices = vec![]; // Prevent indices from being dropped
-                for set in generator_sets {
-                    indices.push(set.index);
-                    for g in set.generators {
-                        all_generators.push(g)
-                    }
+
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        bam_readers,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
                 }
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    bam_readers,
-                    filter_params.flag_filters,
-                    Some(all_generators),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
             } else {
                 run_pileup(
                     m,
@@ -349,6 +488,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     &mut estimators,
                     bam_readers,
                     filter_params.flag_filters,
+                    None::<Vec<PlaceholderBamFileReader>>,
                     None::<Vec<PlaceholderBamFileReader>>,
                     genomes_and_contigs_option,
                     tmp_dir,
@@ -362,12 +502,13 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
 
         if filter_params.doing_filtering() {
             debug!("Filtering..");
+            let readtype = ReadType::Short;
             let generator_sets = get_streamed_filtered_bam_readers(
                 m,
                 mapping_program,
                 &concatenated_genomes,
                 &filter_params,
-                false,
+                &readtype,
                 &Some(references.clone()),
                 &tmp_dir,
             );
@@ -384,49 +525,117 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    all_generators,
-                    filter_params.flag_filters,
-                    Some(long_readers),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                }
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
-
-                external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(
-                    m,
-                    mapping_program,
+                let mut long_generators = long_generator_setup(
+                    &m,
                     &concatenated_genomes,
-                    true,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
-                let mut long_generators = vec![];
-                let mut indices = vec![]; // Prevent indices from being dropped
-                for set in generator_sets {
-                    indices.push(set.index);
-                    for g in set.generators {
-                        long_generators.push(g)
-                    }
+
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
                 }
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    all_generators,
-                    filter_params.flag_filters,
-                    Some(long_generators),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
             } else {
                 run_pileup(
                     m,
@@ -435,6 +644,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     all_generators,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
+                    None::<Vec<PlaceholderBamFileReader>>,
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
@@ -442,11 +652,12 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
             }
         } else {
             debug!("Not filtering..");
+            let readtype = ReadType::Short;
             let generator_sets = get_streamed_bam_readers(
                 m,
                 mapping_program,
                 &concatenated_genomes,
-                false,
+                &readtype,
                 &Some(references.clone()),
                 &tmp_dir,
             );
@@ -462,48 +673,117 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
                 let long_readers =
                     bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    all_generators,
-                    filter_params.flag_filters,
-                    Some(long_readers),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_readers),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                }
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
-                external_command_checker::check_for_samtools();
-                let generator_sets = get_streamed_bam_readers(
-                    m,
-                    mapping_program,
+                let mut long_generators = long_generator_setup(
+                    &m,
                     &concatenated_genomes,
-                    true,
                     &Some(references.clone()),
                     &tmp_dir,
                 );
-                let mut long_generators = vec![];
-                let mut indices = vec![]; // Prevent indices from being dropped
-                for set in generator_sets {
-                    indices.push(set.index);
-                    for g in set.generators {
-                        long_generators.push(g)
-                    }
+
+                if m.is_present("assembly-bam-files") {
+                    let assembly_bam_files = m.values_of("assembly-bam-files").unwrap().collect();
+                    let assembly_readers = bam_generator::generate_named_bam_readers_from_bam_files(
+                        assembly_bam_files,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_readers),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else if m.is_present("assembly") {
+                    // Perform mapping
+                    let mut assembly_generators = assembly_generator_setup(
+                        &m,
+                        &concatenated_genomes,
+                        &Some(references.clone()),
+                        &tmp_dir,
+                    );
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        Some(assembly_generators),
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
+                } else {
+                    run_pileup(
+                        m,
+                        mode,
+                        &mut estimators,
+                        all_generators,
+                        filter_params.flag_filters,
+                        Some(long_generators),
+                        None::<Vec<PlaceholderBamFileReader>>,
+                        genomes_and_contigs_option,
+                        tmp_dir,
+                        concatenated_genomes,
+                    )
                 }
-                run_pileup(
-                    m,
-                    mode,
-                    &mut estimators,
-                    all_generators,
-                    filter_params.flag_filters,
-                    Some(long_generators),
-                    genomes_and_contigs_option,
-                    tmp_dir,
-                    concatenated_genomes,
-                )
             } else {
                 run_pileup(
                     m,
@@ -512,6 +792,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     all_generators,
                     filter_params.flag_filters,
                     None::<Vec<PlaceholderBamFileReader>>,
+                    None::<Vec<PlaceholderBamFileReader>>,
                     genomes_and_contigs_option,
                     tmp_dir,
                     concatenated_genomes,
@@ -519,35 +800,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
             }
         }
     }
-}
-
-fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
-    let mapping_program = match mapper {
-        Some("bwa-mem") => MappingProgram::BWA_MEM,
-        Some("minimap2-sr") => MappingProgram::MINIMAP2_SR,
-        Some("minimap2-ont") => MappingProgram::MINIMAP2_ONT,
-        Some("minimap2-pb") => MappingProgram::MINIMAP2_PB,
-        Some("minimap2-no-preset") => MappingProgram::MINIMAP2_NO_PRESET,
-        Some("ngmlr-ont") => MappingProgram::NGMLR_ONT,
-        Some("ngmlr-pb") => MappingProgram::NGMLR_PB,
-        None => DEFAULT_MAPPING_SOFTWARE_ENUM,
-        _ => panic!("Unexpected definition for --mapper: {:?}", mapper),
-    };
-    match mapping_program {
-        MappingProgram::BWA_MEM => {
-            external_command_checker::check_for_bwa();
-        }
-        MappingProgram::MINIMAP2_SR
-        | MappingProgram::MINIMAP2_ONT
-        | MappingProgram::MINIMAP2_PB
-        | MappingProgram::MINIMAP2_NO_PRESET => {
-            external_command_checker::check_for_minimap2();
-        }
-        MappingProgram::NGMLR_ONT | MappingProgram::NGMLR_PB => {
-            external_command_checker::check_for_ngmlr();
-        }
-    }
-    return mapping_program;
 }
 
 struct EstimatorsAndTaker {
@@ -654,16 +906,19 @@ impl EstimatorsAndTaker {
 fn run_pileup<
     'a,
     R: NamedBamReader,
-    T: NamedBamReaderGenerator<R>,
-    S: NamedBamReader,
-    U: NamedBamReaderGenerator<S>,
+    S: NamedBamReaderGenerator<R>,
+    T: NamedBamReader,
+    U: NamedBamReaderGenerator<T>,
+    V: NamedBamReader,
+    W: NamedBamReaderGenerator<V>,
 >(
     m: &clap::ArgMatches,
     mode: &str,
     estimators: &mut EstimatorsAndTaker,
-    bam_readers: Vec<T>,
+    bam_readers: Vec<S>,
     flag_filters: FlagFilter,
     long_readers: Option<Vec<U>>,
+    assembly_readers: Option<Vec<W>>,
     genomes_and_contigs_option: Option<GenomesAndContigs>,
     tmp_bam_file_cache: Option<tempdir::TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
@@ -709,6 +964,7 @@ fn run_pileup<
                 m,
                 bam_readers,
                 long_readers,
+                assembly_readers,
                 mode,
                 &mut estimators.estimators,
                 flag_filters,
@@ -768,6 +1024,7 @@ fn run_pileup<
                 m,
                 bam_readers,
                 long_readers,
+                assembly_readers,
                 mode,
                 &mut estimators.estimators,
                 flag_filters,
@@ -827,6 +1084,7 @@ fn run_pileup<
                 m,
                 bam_readers,
                 long_readers,
+                assembly_readers,
                 mode,
                 &mut estimators.estimators,
                 flag_filters,
@@ -886,6 +1144,7 @@ fn run_pileup<
                 m,
                 bam_readers,
                 long_readers,
+                assembly_readers,
                 mode,
                 &mut estimators.estimators,
                 flag_filters,

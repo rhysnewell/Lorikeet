@@ -37,13 +37,16 @@ struct Elem {
 pub fn pileup_variants<
     'a,
     R: NamedBamReader,
-    G: NamedBamReaderGenerator<R>,
-    S: NamedBamReader,
-    U: NamedBamReaderGenerator<S>,
+    S: NamedBamReaderGenerator<R>,
+    T: NamedBamReader,
+    U: NamedBamReaderGenerator<T>,
+    V: NamedBamReader,
+    W: NamedBamReaderGenerator<V>,
 >(
     m: &clap::ArgMatches,
-    bam_readers: Vec<G>,
+    bam_readers: Vec<S>,
     longreads: Option<Vec<U>>,
+    assembly_readers: Option<Vec<W>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     flag_filters: FlagFilter,
@@ -81,6 +84,7 @@ pub fn pileup_variants<
     // All different counts of samples I need. Changes depends on when using concatenated genomes or not
     let mut short_sample_count = bam_readers.len();
     let mut long_sample_count = 0;
+    let mut assembly_sample_count = 0;
     let mut reference_count = references.len();
 
     let mut ani = 0.;
@@ -93,12 +97,25 @@ pub fn pileup_variants<
         None => vec![],
     };
 
+    let assembly = match assembly_readers {
+        Some(vec) => {
+            assembly_sample_count += vec.len();
+            vec
+        }
+        None => vec![],
+    };
+
     let alpha: f64 = m.value_of("fdr-threshold").unwrap().parse().unwrap();
 
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
         finish_bams(longreads, n_threads);
+    }
+
+    if m.is_present("assembly") || m.is_present("assembly-bam-files") {
+        info!("Processing assembly alignments...");
+        finish_bams(assembly, n_threads);
     }
     // if !m.is_present("bam-files") {
     info!("Processing short reads...");
@@ -136,7 +153,9 @@ pub fn pileup_variants<
         progress_bars[ref_idx + 2] = Elem {
             key: genomes_and_contigs.genomes[ref_idx].clone(),
             index: ref_idx,
-            progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64),
+            progress_bar: ProgressBar::new(
+                (short_sample_count + long_sample_count + assembly_sample_count) as u64,
+            ),
         };
         debug!("Reference {}", reference,);
         reference_map
@@ -148,15 +167,17 @@ pub fn pileup_variants<
         key: "Operations remaining".to_string(),
         index: 0,
         progress_bar: ProgressBar::new(
-            ((references.len() * (short_sample_count + long_sample_count)) * 2 + references.len())
-                as u64,
+            ((references.len() * (short_sample_count + long_sample_count + assembly_sample_count))
+                * 2
+                + references.len()) as u64,
         ),
     };
 
     info!(
-        "{} Longread BAM files and {} Shortread BAM files {} Total BAMs over {} genome(s)",
+        "{} Longread BAM files, {} Shortread BAM files and {} assembly alignment BAMs {} Total BAMs over {} genome(s)",
         long_sample_count,
         short_sample_count,
+        assembly_sample_count,
         (short_sample_count + long_sample_count),
         reference_count
     );
@@ -323,6 +344,7 @@ pub fn pileup_variants<
                     &concatenated_genomes,
                     short_sample_count,
                     long_sample_count,
+                    assembly_sample_count,
                     &genomes_and_contigs,
                     n_threads as u32,
                     &tmp_bam_file_cache,
@@ -436,11 +458,6 @@ pub fn pileup_variants<
                             gff_dir.close().expect("Failed to close temp directory");
                         }
                     }
-                    "genotype" | "summarize" => {
-                        // if m.is_present("strain-ani") {
-                        //     ani = parse_percentage(m, "strain-ani");
-                        // }
-                    }
                     _ => {
                         //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
                         //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
@@ -450,7 +467,7 @@ pub fn pileup_variants<
                 // let mut sample_groups = HashMap::new();
 
                 debug!(
-                    "Running SNP calling on {} shortread samples",
+                    "Running SNP calling on {} samples",
                     indexed_bam_readers.len()
                 );
 
@@ -477,7 +494,7 @@ pub fn pileup_variants<
                                 sample_idx,
                                 per_reference_samples,
                                 &mut variant_matrix,
-                                false,
+                                ReadType::Short,
                                 m,
                                 // &mut sample_groups,
                                 &genomes_and_contigs,
@@ -486,8 +503,9 @@ pub fn pileup_variants<
                                 &concatenated_genomes,
                                 &flag_filters,
                             );
-                        } else if m.is_present("include-longread-svs")
-                            && (m.is_present("longreads") | m.is_present("longread-bam-files"))
+                        } else if (m.is_present("longreads") | m.is_present("longread-bam-files"))
+                            && sample_idx >= short_sample_count
+                            && sample_idx < (short_sample_count + long_sample_count)
                         {
                             debug!("Running structural variant detection...");
                             // Get the appropriate sample index based on how many references we are using by tracking
@@ -499,7 +517,7 @@ pub fn pileup_variants<
                                 sample_idx,
                                 per_reference_samples,
                                 &mut variant_matrix,
-                                true,
+                                ReadType::Long,
                                 m,
                                 // &mut sample_groups,
                                 &genomes_and_contigs,
@@ -508,32 +526,25 @@ pub fn pileup_variants<
                                 &concatenated_genomes,
                                 &flag_filters,
                             );
-                        } else if m.is_present("longreads") | m.is_present("longread-bam-files") {
-                            // We need update the variant matrix anyway
-                            let bam_generated = bam_generator.start();
-                            let header = bam_generated.header().clone(); // bam header
-                            let target_names = header.target_names(); // contig names
-                            let reference = &genomes_and_contigs.genomes[ref_idx];
-
-                            let mut stoit_name = bam_generated.name().to_string().replace("/", ".");
-                            debug!("Stoit_name {:?}", &stoit_name);
-                            variant_matrix.add_sample_name(stoit_name.to_string(), sample_idx);
-
-                            // let group = sample_groups.entry("long").or_insert(HashSet::new());
-                            // group.insert(stoit_name.clone());
-                            // for each genomic position, only has hashmap when variants are present. Includes read ids
-                            for (tid, target) in target_names.iter().enumerate() {
-                                let target_name = String::from_utf8(target.to_vec()).unwrap();
-                                if target_name.contains(reference) {
-                                    let target_len = header.target_len(tid as u32).unwrap();
-                                    variant_matrix.add_info(
-                                        ref_idx,
-                                        tid,
-                                        target_name.as_bytes().to_vec(),
-                                        target_len,
-                                    );
-                                }
-                            }
+                        } else if (m.is_present("assembly") | m.is_present("assembly_bam_files"))
+                            && sample_idx >= (short_sample_count + long_sample_count)
+                        {
+                            process_vcf(
+                                bam_generator,
+                                n_threads,
+                                ref_idx,
+                                sample_idx,
+                                per_reference_samples,
+                                &mut variant_matrix,
+                                ReadType::Assembly,
+                                m,
+                                // &mut sample_groups,
+                                &genomes_and_contigs,
+                                &reference_map,
+                                per_reference_short_samples,
+                                &concatenated_genomes,
+                                &flag_filters,
+                            );
                         }
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -562,6 +573,7 @@ pub fn pileup_variants<
                     &concatenated_genomes,
                     short_sample_count,
                     long_sample_count,
+                    assembly_sample_count,
                     &genomes_and_contigs,
                     n_threads as u32,
                     &tmp_bam_file_cache,
@@ -612,12 +624,14 @@ pub fn pileup_variants<
                                     &flag_filters,
                                     mapq_threshold,
                                     method,
-                                    false,
+                                    ReadType::Short,
                                     &genomes_and_contigs,
                                     &reference_map,
                                     &concatenated_genomes,
                                 )
-                            } else {
+                            } else if sample_idx >= short_sample_count
+                                && sample_idx < (short_sample_count + long_sample_count)
+                            {
                                 process_bam(
                                     bam_generator,
                                     sample_idx,
@@ -640,7 +654,35 @@ pub fn pileup_variants<
                                     &flag_filters,
                                     mapq_threshold,
                                     method,
-                                    true,
+                                    ReadType::Long,
+                                    &genomes_and_contigs,
+                                    &reference_map,
+                                    &concatenated_genomes,
+                                )
+                            } else if sample_idx >= (short_sample_count + long_sample_count) {
+                                process_bam(
+                                    bam_generator,
+                                    sample_idx,
+                                    per_reference_samples,
+                                    &mut coverage_estimators,
+                                    &mut variant_matrix,
+                                    n_threads,
+                                    m,
+                                    &output_prefix,
+                                    coverage_fold,
+                                    &codon_table,
+                                    min_var_depth,
+                                    contig_end_exclusion,
+                                    min,
+                                    max,
+                                    ref_idx,
+                                    mode,
+                                    include_soft_clipping,
+                                    include_indels,
+                                    &flag_filters,
+                                    mapq_threshold,
+                                    method,
+                                    ReadType::Assembly,
                                     &genomes_and_contigs,
                                     &reference_map,
                                     &concatenated_genomes,
@@ -940,13 +982,6 @@ pub fn pileup_variants<
         // pb_main.finish_with_message("All genomes staged...");
         multi.join().unwrap();
     });
-    // reference_map.iter().for_each(|(ref_idx, reference_stem)| {
-    //     pb2.reset();
-    //     pb3.reset();
-    //     pb3.set_message("Waiting for variant matrix...");
-    //     pb4.reset();
-    //
-    // });
 
     info!("Analysis finished!");
     // multi.join_and_clear().unwrap();

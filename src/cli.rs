@@ -75,8 +75,10 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
                                          unless --sharded is specified, in which
                                          case they must be read name sorted (e.g.
                                          with samtools sort -n).
-  -l, --longread-bam-files <PATH> ..     Path to BAM files(s) generated from longreads.
+   -l, --longread-bam-files <PATH> ..    Path to BAM files(s) generated from longreads.
                                          Must be reference sorted.
+   --assembly-bam-files <PATH>       The results of mapping the metagenome assembly
+                                         back on to your MAGs.
 
   Or do mapping:
    -r, --reference <PATH> ..             FASTA file of contigs or BWA index stem
@@ -88,6 +90,9 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
    -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
+   -a, --assembly                        FASTA file containing the metagenome assembly
+                                         contigs or scaffolds for finding potential
+                                         structural variants in the provided MAGs
    -t, --threads <INT>                   Number of threads for mapping / sorting
                                          [default 1]
    --parallel-genomes                    Number of genomes to run in parallel.
@@ -726,6 +731,21 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                             "full-help",
                         ]),
                 )
+                .arg(
+                    Arg::with_name("assembly-bam-files")
+                        .long("assembly-bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly"]),
+                )
+                .arg(
+                    Arg::with_name("assembly")
+                        .short("a")
+                        .long("assembly")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly-bam-files"]),
+                )
                 .arg(Arg::with_name("gff").long("gff").takes_value(true))
                 .arg(
                     Arg::with_name("prodigal-params")
@@ -1075,6 +1095,21 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                             "single",
                             "full-help",
                         ]),
+                )
+                .arg(
+                    Arg::with_name("assembly-bam-files")
+                        .long("assembly-bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly"]),
+                )
+                .arg(
+                    Arg::with_name("assembly")
+                        .short("a")
+                        .long("assembly")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
@@ -1427,6 +1462,21 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                             "single",
                             "full-help",
                         ]),
+                )
+                .arg(
+                    Arg::with_name("assembly-bam-files")
+                        .long("assembly-bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly"]),
+                )
+                .arg(
+                    Arg::with_name("assembly")
+                        .short("a")
+                        .long("assembly")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
@@ -1910,6 +1960,21 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                             "single",
                             "full-help",
                         ]),
+                )
+                .arg(
+                    Arg::with_name("assembly-bam-files")
+                        .long("assembly-bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly"]),
+                )
+                .arg(
+                    Arg::with_name("assembly")
+                        .short("a")
+                        .long("assembly")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(

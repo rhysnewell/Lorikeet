@@ -979,7 +979,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "rosella fit --input {}.npy --n_neighbors {} \
+                                "flock fit --input {}.npy --n_neighbors {} \
                                 --min_cluster_size {} --min_samples {} --min_dist 0 \
                                 --n_components {}",
                                 // && rm {}.npy",
