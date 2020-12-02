@@ -270,9 +270,10 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
     fn get_sample_name(&self, sample_idx: usize) -> &str {
         match self {
             VariantMatrix::VariantContigMatrix { sample_names, .. } => {
-                match &sample_names[sample_idx][..4] {
-                    ".tmp" => &sample_names[sample_idx][15..],
-                    _ => &sample_names[sample_idx],
+                if sample_names[sample_idx].to_string().contains(".tmp") {
+                    return &sample_names[sample_idx][15..];
+                } else {
+                    return &sample_names[sample_idx];
                 }
             }
         }
@@ -1608,9 +1609,10 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 for (sample_idx, genotype) in genotype_vectors.iter().enumerate() {
                                     let mut sample_name = &sample_names[sample_idx];
                                     // remove tmp file name from sample id
-                                    let sample_name = match &sample_name[..4] {
-                                        ".tmp" => &sample_name[15..],
-                                        _ => &sample_name,
+                                    let sample_name = match sample_name.to_string().contains(".tmp")
+                                    {
+                                        true => &sample_name[15..],
+                                        false => &sample_name,
                                     };
                                     write!(file_open, "{: <20}", &sample_name,).unwrap();
                                     for strain_id in printing_order.iter() {
@@ -2092,10 +2094,10 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 sample_names.iter().enumerate().for_each(|(sample_idx, sample_name)| {
 
                                     // remove tmp file name from sample id
-                                    let sample_name = match &sample_name[..4] {
-                                        ".tmp" => &sample_name[15..],
-                                        _ => &sample_name,
-                                    };
+                                    let sample_name = match sample_name.to_string().contains(".tmp") {
+                                                                            true => &sample_name[15..],
+                                                                            false => &sample_name,
+                                                                        };
 
                                     let file_name =
                                         format!(
@@ -2377,9 +2379,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             write!(file_open, "{: <20}", "").unwrap();
                             for sample_name in sample_names.iter() {
                                 // remove tmp file name from sample id
-                                let sample_name = match &sample_name[..4] {
-                                    ".tmp" => &sample_name[15..],
-                                    _ => &sample_name,
+                                let sample_name = match sample_name.to_string().contains(".tmp") {
+                                    true => &sample_name[15..],
+                                    false => &sample_name,
                                 };
                                 write!(file_open, "\t{: <20}", sample_name).unwrap();
                             }
@@ -2390,9 +2392,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             {
                                 let mut sample_name = &sample_names[sample_idx_1];
                                 // remove tmp file name from sample id
-                                let sample_name = match &sample_name[..4] {
-                                    ".tmp" => &sample_name[15..],
-                                    _ => &sample_name,
+                                let sample_name = match sample_name.to_string().contains(".tmp") {
+                                    true => &sample_name[15..],
+                                    false => &sample_name,
                                 };
                                 write!(file_open, "{: <20}", &sample_name,).unwrap();
                                 for (sample_idx_2, count) in distance_vec.iter().enumerate() {
@@ -2451,9 +2453,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         debug!("samples {:?}", &sample_names);
                         for sample_name in sample_names.iter() {
                             // remove tmp file name from sample id
-                            let sample_name = match &sample_name[..4] {
-                                ".tmp" => &sample_name[15..],
-                                _ => &sample_name,
+                            let sample_name = match sample_name.to_string().contains(".tmp") {
+                                true => &sample_name[15..],
+                                false => &sample_name,
                             };
                             header.push_sample(&sample_name.to_string().into_bytes()[..]);
                         }

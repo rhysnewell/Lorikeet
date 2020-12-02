@@ -178,7 +178,7 @@ pub fn pileup_variants<
         long_sample_count,
         short_sample_count,
         assembly_sample_count,
-        (short_sample_count + long_sample_count),
+        (short_sample_count + long_sample_count + assembly_sample_count),
         reference_count
     );
 
@@ -302,8 +302,12 @@ pub fn pileup_variants<
                     }
                     {
                         let pb = &tree.lock().unwrap()[0];
-                        pb.progress_bar
-                            .inc(((short_sample_count + long_sample_count) as u64) * 2 + 1);
+                        pb.progress_bar.inc(
+                            ((short_sample_count + long_sample_count + assembly_sample_count)
+                                as u64)
+                                * 2
+                                + 1,
+                        );
                         let pos = pb.progress_bar.position();
                         let len = pb.progress_bar.length();
                         if pos >= len {
@@ -353,7 +357,8 @@ pub fn pileup_variants<
                 let mut per_reference_short_samples = 0;
                 let mut variant_matrix = match concatenated_genomes {
                     Some(ref concat) => {
-                        per_reference_samples = short_sample_count + long_sample_count;
+                        per_reference_samples =
+                            short_sample_count + long_sample_count + assembly_sample_count;
                         per_reference_short_samples = short_sample_count;
                         debug!(
                             "Per reference samples concatenated {}",
@@ -364,7 +369,8 @@ pub fn pileup_variants<
                     }
                     None => {
                         per_reference_samples =
-                            (short_sample_count + long_sample_count) / references.len();
+                            (short_sample_count + long_sample_count + assembly_sample_count)
+                                / references.len();
                         per_reference_short_samples = short_sample_count / references.len();
                         debug!(
                             "Per reference samples not concatenated {}",
