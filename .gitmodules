@@ -1,9 +1,10 @@
 [submodule "site/themes/hugo-whisper-theme"]
 	path = site/themes/hugo-whisper-theme
-	url = https://github.com/jugglerx/hugo-whisper-theme.gitZZ
-[submodule "spacegraphcats"]
-	path = spacegraphcats
-	url = https://github.com/spacegraphcats/spacegraphcats
+	url = https://github.com/jugglerx/hugo-whisper-theme.git
 [submodule "flock"]
 	path = flock
 	url = https://github.com/rhysnewell/flock
+[submodule "spacegraphcats"]
+    path = spacegraphcats
+	url = https://github.com/rhysnewell/spacegraphcats.git
+	branch = lorikeet_compatible
