@@ -173,7 +173,7 @@ pub fn pileup_variants<
         ),
     };
 
-    info!(
+    debug!(
         "{} Longread BAM files, {} Shortread BAM files and {} assembly alignment BAMs {} Total BAMs over {} genome(s)",
         long_sample_count,
         short_sample_count,
