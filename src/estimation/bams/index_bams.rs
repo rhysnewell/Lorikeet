@@ -132,6 +132,7 @@ pub fn recover_bams(
     concatenated_genomes: &Option<String>,
     short_sample_count: usize,
     long_sample_count: usize,
+    assembly_sample_count: usize,
     genomes_and_contigs: &GenomesAndContigs,
     _n_threads: u32,
     tmp_bam_file_cache: &Option<String>,
@@ -280,7 +281,75 @@ pub fn recover_bams(
         bam_readers.extend(all_bam_paths);
     }
 
-    if bam_readers.len() == (short_sample_count + long_sample_count) {
+    if m.is_present("assembly-bam-files") {
+        let bam_paths = m
+            .values_of("assembly-bam-files")
+            .unwrap()
+            .map(|b| b.to_string())
+            .collect::<Vec<String>>();
+        bam_readers.extend(bam_paths);
+    } else if m.is_present("assembly") {
+        let mut all_bam_paths = vec![];
+
+        match concatenated_genomes {
+            Some(ref _tmp_file) => {
+                let cache = format!(
+                    "{}/assembly/*.bam",
+                    match m.is_present("bam-file-cache-directory") {
+                        false => {
+                            tmp_bam_file_cache.as_ref().unwrap()
+                        }
+                        true => {
+                            m.value_of("bam-file-cache-directory").unwrap()
+                        }
+                    },
+                );
+                let bam_paths = glob(&cache)
+                    .expect("Failed to read cache")
+                    .map(|p| {
+                        p.expect("Failed to read cached bam path")
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    })
+                    .collect::<Vec<String>>();
+                all_bam_paths.extend(bam_paths);
+            }
+            None => {
+                for ref_name in genomes_and_contigs.genomes.iter() {
+                    let cache = format!(
+                        "{}/assembly/{}*.bam",
+                        match m.is_present("bam-file-cache-directory") {
+                            false => {
+                                tmp_bam_file_cache.as_ref().unwrap()
+                            }
+                            true => {
+                                m.value_of("bam-file-cache-directory").unwrap()
+                            }
+                        },
+                        ref_name
+                    );
+                    let bam_paths = glob(&cache)
+                        .expect("Failed to read cache")
+                        .map(|p| {
+                            p.expect("Failed to read cached bam path")
+                                .to_str()
+                                .unwrap()
+                                .to_string()
+                        })
+                        .collect::<Vec<String>>();
+                    all_bam_paths.extend(bam_paths);
+                }
+            }
+        }
+
+        debug!("Rereading in {}", all_bam_paths.len());
+
+        let _bam_cnts = all_bam_paths.len();
+        bam_readers.extend(all_bam_paths);
+    }
+
+    if bam_readers.len() == (short_sample_count + long_sample_count + assembly_sample_count) {
         debug!("Reread in correct bam count")
     } else {
         panic!(format!(

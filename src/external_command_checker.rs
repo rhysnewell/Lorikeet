@@ -41,6 +41,10 @@ pub fn check_for_svim() {
     self::check_for_external_command_presence("svim", "which svim");
 }
 
+pub fn check_for_svim_asm() {
+    self::check_for_external_command_presence("svim-asm", "which svim-asm");
+}
+
 pub fn check_for_sniffles() {
     self::check_for_external_command_presence("sniffles", "which sniffles");
 }

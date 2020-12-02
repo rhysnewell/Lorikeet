@@ -1,6 +1,9 @@
 [submodule "site/themes/hugo-whisper-theme"]
 	path = site/themes/hugo-whisper-theme
-	url = https://github.com/jugglerx/hugo-whisper-theme.git
-[submodule "rosella"]
-	path = rosella
-	url = https://github.com/rhysnewell/rosella
+	url = https://github.com/jugglerx/hugo-whisper-theme.gitZZ
+[submodule "spacegraphcats"]
+	path = spacegraphcats
+	url = https://github.com/spacegraphcats/spacegraphcats
+[submodule "flock"]
+	path = flock
+	url = https://github.com/rhysnewell/flock
