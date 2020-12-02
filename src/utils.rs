@@ -22,41 +22,68 @@ pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 pub const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMAP2_SR;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ReadType {
+    Short,
+    Long,
+    Assembly,
+}
+
 pub fn get_streamed_bam_readers<'a>(
     m: &'a clap::ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
-    longread: bool,
+    readtype: &ReadType,
     references: &'a Option<Vec<&'a str>>,
     tmp_bam_file_cache: &Option<TempDir>,
 ) -> Vec<BamGeneratorSet<StreamingNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
-        if longread {
-            setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
-            setup_bam_cache_directory(&format!(
-                "{}/long/",
-                m.value_of("bam-file-cache-directory").unwrap()
-            ));
-        } else {
-            setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
-            setup_bam_cache_directory(&format!(
-                "{}/short/",
-                m.value_of("bam-file-cache-directory").unwrap()
-            ));
+        match readtype {
+            &ReadType::Long => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/long/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
+            &ReadType::Short => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/short/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
+            &ReadType::Assembly => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/assembly/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
         }
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
-    let params = if !longread {
-        MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile, &references)
-    } else {
-        MappingParameters::generate_longread_from_clap(
+    let params = match readtype {
+        &ReadType::Short => MappingParameters::generate_from_clap(
             &m,
             mapping_program,
             &reference_tempfile,
             &references,
-        )
+        ),
+        &ReadType::Long => MappingParameters::generate_longread_from_clap(
+            &m,
+            mapping_program,
+            &reference_tempfile,
+            &references,
+        ),
+        &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
+            &m,
+            mapping_program,
+            &reference_tempfile,
+            &references,
+        ),
     };
     let mut generator_set = vec![];
     for reference_wise_params in params {
@@ -78,7 +105,7 @@ pub fn get_streamed_bam_readers<'a>(
                             .unwrap(),
                         reference,
                         naming_readset,
-                        longread,
+                        readtype,
                     );
                     Some(bam_file_cache_path)
                 }
@@ -90,7 +117,7 @@ pub fn get_streamed_bam_readers<'a>(
                             None => reference,
                         },
                         naming_readset,
-                        longread,
+                        readtype,
                     );
                     debug!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
@@ -131,40 +158,153 @@ pub fn get_streamed_bam_readers<'a>(
     return generator_set;
 }
 
+pub fn long_generator_setup(
+    m: &clap::ArgMatches,
+    reference_tempfile: &Option<NamedTempFile>,
+    references: &Option<Vec<&str>>,
+    tmp_bam_file_cache: &Option<TempDir>,
+) -> Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator> {
+    // Perform mapping
+    let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
+    let readtype = ReadType::Long;
+    external_command_checker::check_for_samtools();
+    let generator_sets = get_streamed_bam_readers(
+        m,
+        mapping_program,
+        reference_tempfile,
+        &readtype,
+        references,
+        tmp_bam_file_cache,
+    );
+    let mut long_generators = vec![];
+    let mut indices = vec![]; // Prevent indices from being dropped
+    for set in generator_sets {
+        indices.push(set.index);
+        for g in set.generators {
+            long_generators.push(g)
+        }
+    }
+
+    return long_generators;
+}
+
+pub fn assembly_generator_setup(
+    m: &clap::ArgMatches,
+    reference_tempfile: &Option<NamedTempFile>,
+    references: &Option<Vec<&str>>,
+    tmp_bam_file_cache: &Option<TempDir>,
+) -> Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator> {
+    // Perform mapping
+    let mapping_program = parse_mapping_program(Some("minimap2-assembly"));
+    let readtype = ReadType::Assembly;
+    external_command_checker::check_for_samtools();
+    let generator_sets = get_streamed_bam_readers(
+        m,
+        mapping_program,
+        reference_tempfile,
+        &readtype,
+        references,
+        tmp_bam_file_cache,
+    );
+    let mut long_generators = vec![];
+    let mut indices = vec![]; // Prevent indices from being dropped
+    for set in generator_sets {
+        indices.push(set.index);
+        for g in set.generators {
+            long_generators.push(g)
+        }
+    }
+
+    return long_generators;
+}
+
+pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
+    let mapping_program = match mapper {
+        Some("bwa-mem") => MappingProgram::BWA_MEM,
+        Some("minimap2-sr") => MappingProgram::MINIMAP2_SR,
+        Some("minimap2-ont") => MappingProgram::MINIMAP2_ONT,
+        Some("minimap2-pb") => MappingProgram::MINIMAP2_PB,
+        Some("minimap2-assembly") => MappingProgram::MINIMAP2_ASS,
+        Some("minimap2-no-preset") => MappingProgram::MINIMAP2_NO_PRESET,
+        Some("ngmlr-ont") => MappingProgram::NGMLR_ONT,
+        Some("ngmlr-pb") => MappingProgram::NGMLR_PB,
+        None => DEFAULT_MAPPING_SOFTWARE_ENUM,
+        _ => panic!("Unexpected definition for --mapper: {:?}", mapper),
+    };
+    match mapping_program {
+        MappingProgram::BWA_MEM => {
+            external_command_checker::check_for_bwa();
+        }
+        MappingProgram::MINIMAP2_SR
+        | MappingProgram::MINIMAP2_ONT
+        | MappingProgram::MINIMAP2_PB
+        | MappingProgram::MINIMAP2_ASS
+        | MappingProgram::MINIMAP2_NO_PRESET => {
+            external_command_checker::check_for_minimap2();
+        }
+        MappingProgram::NGMLR_ONT | MappingProgram::NGMLR_PB => {
+            external_command_checker::check_for_ngmlr();
+        }
+    }
+    return mapping_program;
+}
+
 pub fn get_streamed_filtered_bam_readers(
     m: &clap::ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &Option<NamedTempFile>,
     filter_params: &FilterParameters,
-    longread: bool,
+    readtype: &ReadType,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
 ) -> Vec<BamGeneratorSet<StreamingFilteredNamedBamReaderGenerator>> {
     // Check the output BAM directory actually exists and is writeable
     if m.is_present("bam-file-cache-directory") {
-        if longread {
-            setup_bam_cache_directory(&format!(
-                "{}/long/",
-                m.value_of("bam-file-cache-directory").unwrap()
-            ));
-        } else {
-            setup_bam_cache_directory(&format!(
-                "{}/short/",
-                m.value_of("bam-file-cache-directory").unwrap()
-            ));
+        match readtype {
+            &ReadType::Long => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/long/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
+            &ReadType::Short => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/short/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
+            &ReadType::Assembly => {
+                setup_bam_cache_directory(&m.value_of("bam-file-cache-directory").unwrap());
+                setup_bam_cache_directory(&format!(
+                    "{}/assembly/",
+                    m.value_of("bam-file-cache-directory").unwrap()
+                ));
+            }
         }
     }
     let discard_unmapped = m.is_present("discard-unmapped");
 
-    let params = if !longread {
-        MappingParameters::generate_from_clap(&m, mapping_program, &reference_tempfile, &references)
-    } else {
-        MappingParameters::generate_longread_from_clap(
+    let params = match readtype {
+        &ReadType::Short => MappingParameters::generate_from_clap(
             &m,
             mapping_program,
             &reference_tempfile,
             &references,
-        )
+        ),
+        &ReadType::Long => MappingParameters::generate_longread_from_clap(
+            &m,
+            mapping_program,
+            &reference_tempfile,
+            &references,
+        ),
+        &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
+            &m,
+            mapping_program,
+            &reference_tempfile,
+            &references,
+        ),
     };
     let mut generator_set = vec![];
     for reference_wise_params in params {
@@ -187,7 +327,7 @@ pub fn get_streamed_filtered_bam_readers(
                             .unwrap(),
                         reference,
                         naming_readset,
-                        longread,
+                        readtype,
                     );
                     Some(bam_file_cache_path)
                 }
@@ -199,7 +339,7 @@ pub fn get_streamed_filtered_bam_readers(
                             None => reference,
                         },
                         naming_readset,
-                        longread,
+                        readtype,
                     );
                     info!("Caching BAM file to {}", bam_file_cache_path);
                     Some(bam_file_cache_path)
@@ -258,6 +398,7 @@ pub fn setup_mapping_index(
         MappingProgram::MINIMAP2_SR
         | MappingProgram::MINIMAP2_ONT
         | MappingProgram::MINIMAP2_PB
+        | MappingProgram::MINIMAP2_ASS
         | MappingProgram::MINIMAP2_NO_PRESET => {
             if m.is_present("minimap2-reference-is-index") || reference_wise_params.len() == 1 {
                 info!("Not pre-generating minimap2 index");
@@ -364,52 +505,76 @@ pub fn generate_cached_bam_file_name(
     directory: &str,
     reference: &str,
     read1_path: &str,
-    longread: bool,
+    readtype: &ReadType,
 ) -> String {
     debug!(
         "Constructing BAM file cache name in directory {}, reference {}, read1_path {}",
         directory, reference, read1_path
     );
-    if longread {
-        std::path::Path::new(&format!("{}/long/", directory))
-            .to_str()
-            .expect("Unable to covert bam-file-cache-directory name into str")
-            .to_string()
-            + "/"
-            + &std::path::Path::new(reference)
-                .file_name()
-                .expect("Unable to convert reference to file name")
+    match readtype {
+        &ReadType::Long => {
+            std::path::Path::new(&format!("{}/long/", directory))
                 .to_str()
-                .expect("Unable to covert file name into str")
+                .expect("Unable to covert bam-file-cache-directory name into str")
                 .to_string()
-            + "."
-            + &std::path::Path::new(read1_path)
-                .file_name()
-                .expect("Unable to convert read1 name to file name")
+                + "/"
+                + &std::path::Path::new(reference)
+                    .file_name()
+                    .expect("Unable to convert reference to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + "."
+                + &std::path::Path::new(read1_path)
+                    .file_name()
+                    .expect("Unable to convert read1 name to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + ".bam"
+        }
+        &ReadType::Short => {
+            std::path::Path::new(&format!("{}/short/", directory))
                 .to_str()
-                .expect("Unable to covert file name into str")
+                .expect("Unable to covert bam-file-cache-directory name into str")
                 .to_string()
-            + ".bam"
-    } else {
-        std::path::Path::new(&format!("{}/short/", directory))
-            .to_str()
-            .expect("Unable to covert bam-file-cache-directory name into str")
-            .to_string()
-            + "/"
-            + &std::path::Path::new(reference)
-                .file_name()
-                .expect("Unable to convert reference to file name")
+                + "/"
+                + &std::path::Path::new(reference)
+                    .file_name()
+                    .expect("Unable to convert reference to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + "."
+                + &std::path::Path::new(read1_path)
+                    .file_name()
+                    .expect("Unable to convert read1 name to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + ".bam"
+        }
+        &ReadType::Assembly => {
+            std::path::Path::new(&format!("{}/assembly/", directory))
                 .to_str()
-                .expect("Unable to covert file name into str")
+                .expect("Unable to covert bam-file-cache-directory name into str")
                 .to_string()
-            + "."
-            + &std::path::Path::new(read1_path)
-                .file_name()
-                .expect("Unable to convert read1 name to file name")
-                .to_str()
-                .expect("Unable to covert file name into str")
-                .to_string()
-            + ".bam"
+                + "/"
+                + &std::path::Path::new(reference)
+                    .file_name()
+                    .expect("Unable to convert reference to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + "."
+                + &std::path::Path::new(read1_path)
+                    .file_name()
+                    .expect("Unable to convert read1 name to file name")
+                    .to_str()
+                    .expect("Unable to covert file name into str")
+                    .to_string()
+                + ".bam"
+        }
     }
 }
 

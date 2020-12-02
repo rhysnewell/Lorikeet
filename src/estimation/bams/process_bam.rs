@@ -39,25 +39,19 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
     flag_filters: &'b FlagFilter,
     mapq_threshold: u8,
     method: &'b str,
-    longread: bool,
+    readtype: ReadType,
     genomes_and_contigs: &'b GenomesAndContigs,
     reference_map: &'b HashMap<usize, String>,
     concatenated_genomes: &'b Option<String>,
 ) {
-    // let mut bam_generated = bam_generator.start();
-
-    // Adjust the sample index if the bam is from long reads
-    let mut longread = false;
-
-    //    let mut bam_properties =
-    //        AlignmentProperties::default(InsertSize::default());
-
+    // Sample name from bam file name
     let stoit_name = bam_generated.name().to_string().replace("/", ".");
-    // adjust sample index for longread bams
 
+    // Set bam reading threads
     bam_generated.set_threads(split_threads);
     debug!("Managed to set threads.");
 
+    // Retrieve bam header struct: Contains info about contigs and mappings
     let header = bam_generated.header().clone(); // bam header
     let target_names = header.target_names(); // contig names
 
@@ -65,51 +59,55 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
         debug!("Target name {:?}", &str::from_utf8(target_name));
     }
 
-    let mut record: bam::record::Record = bam::Record::new();
-    let mut ups_and_downs: Vec<i32> = Vec::new();
-    // Current contig name
-    let mut contig_name = Vec::new();
-    let mut contig_name_str = String::new();
-    let mut num_mapped_reads_total: u64 = 0;
-    let mut num_mapped_reads_in_current_contig: u64 = 0;
-    let mut total_edit_distance_in_current_contig: u64 = 0;
+    let mut record: bam::record::Record = bam::Record::new(); // Empty bam record
+    let mut ups_and_downs: Vec<i32> = Vec::new(); // Mosdepth coverage array
+    let mut contig_name = Vec::new(); // Current contig name
+    let mut contig_name_str = String::new(); // Human readable
+    let mut num_mapped_reads_total: u64 = 0; // Reads mapped for this sample
+    let mut num_mapped_reads_in_current_contig: u64 = 0; // Reads mapped in this sample for current contig
+    let mut total_edit_distance_in_current_contig: u64 = 0; // Edit distance calculated from CIGAR strings
 
     let mut ref_seq: Vec<u8> = Vec::new(); // container for reference contig
     let mut last_tid: i32 = -2; // no such tid in a real BAM file
     let mut total_indels_in_current_contig = 0;
 
-    let reference = &genomes_and_contigs.genomes[ref_idx];
-    let mut reference_file = retrieve_reference(concatenated_genomes);
+    let reference = &genomes_and_contigs.genomes[ref_idx]; // File stem of current reference
+    let mut reference_file = retrieve_reference(concatenated_genomes); // Indexed fasta reader of concatenated genome
 
-    // for record in records
-    let mut skipped_reads = 0;
+    let mut skipped_reads = 0; // for record in records
 
-    // for each genomic position, only has hashmap when variants are present. Includes read ids
+    // for each genomic position, retrive info for CoverM depth calculations.
+    // Check for variant at that location. Check if mapping supports that variant.
+    // Retrieve read ids for each variant
     for (tid, target) in target_names.iter().enumerate() {
         let target_name = String::from_utf8(target.to_vec()).unwrap();
         if target_name.contains(reference) {
-            let target_len = header.target_len(tid as u32).unwrap();
-            let mut ups_and_downs: Vec<i32> = vec![0; target_len as usize];
+            // Contig names have reference appended to start
+            let target_len = header.target_len(tid as u32).unwrap(); // contig length
+            let mut ups_and_downs: Vec<i32> = vec![0; target_len as usize]; // Populate mosdepth array to current contig length
 
-            bam_generated.fetch(tid as u32, 0, target_len);
+            bam_generated.fetch(tid as u32, 0, target_len); // Retrieve current contig from BAM
 
             while bam_generated
                 .read(&mut record)
                 .expect("Error while reading BAM record")
                 == true
+            // Read records into the empty recorde
             {
-                if (!flag_filters.include_supplementary && record.is_supplementary() && !longread)
-                    || (!flag_filters.include_secondary && record.is_secondary() && !longread)
+                if (!flag_filters.include_supplementary
+                    && record.is_supplementary()
+                    && readtype != ReadType::Long) // We want supp alignments for longreads
+                    || (!flag_filters.include_secondary
+                    && record.is_secondary())
                     || (!flag_filters.include_improper_pairs
-                        && !record.is_proper_pair()
-                        && !longread)
+                    && !record.is_proper_pair()
+                    && readtype != ReadType::Long)
+                // Check against filter flags and current sample type
                 {
                     skipped_reads += 1;
                     continue;
-                } else if !flag_filters.include_secondary && record.is_secondary() && longread {
-                    skipped_reads += 1;
-                    continue;
                 }
+
                 // if reference has changed, print the last record
                 let tid = record.tid();
                 if !record.is_unmapped() {
