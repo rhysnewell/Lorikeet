@@ -338,7 +338,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                 });
             }
             Err(_) => {
-                info!("No VCF records found for sample {}", &stoit_name);
+                debug!("No VCF records found for sample {}", &stoit_name);
             }
         }
     }

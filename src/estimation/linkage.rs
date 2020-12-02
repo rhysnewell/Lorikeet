@@ -157,7 +157,7 @@ pub fn linkage_clustering_of_clusters(
         .expect("Unable to create npy file");
 
         let cmd_string = format!(
-            "rosella fit --input {}_cluster_distances.npy \
+            "flock fit --input {}_cluster_distances.npy \
             --min_cluster_size 2 --min_samples 1 \
             --min_dist 0 --n_neighbors 5 --precomputed True",
             &output_prefix,
