@@ -22,5 +22,5 @@ cd flock/ && pip install . && cd ../
 cd spacegraphcats/ && pip install . && cd ../
 
 # move Rscript and python
-cp src/bin/snp_density_plots.R $CONDA_PREFIX/bin/
+# cp src/bin/snp_density_plots.R $CONDA_PREFIX/bin/
 #cp src/bin/cluster.py $CONDA_PREFIX/bin/
