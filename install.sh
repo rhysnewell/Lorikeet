@@ -15,8 +15,11 @@ LIBRARY_PATH=$PREFIX/lib \
 LIBCLANG_PATH=$PREFIX/lib/libclang.so \
 cargo install --force --root $PREFIX
 
-# Install rosella
-cd rosella/ && pip install . && cd ../
+# Install flock
+cd flock/ && pip install . && cd ../
+
+# Install spacegraphcats
+cd spacegraphcats/ && pip install . && cd ../
 
 # move Rscript and python
 cp src/bin/snp_density_plots.R $CONDA_PREFIX/bin/

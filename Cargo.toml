@@ -58,7 +58,7 @@ tempfile = "3.0"
 indicatif = {version = "*"}
 scoped_threadpool = "*"
 ndarray-npy = "0.6.0"
-ndarray = "*"
+ndarray = "0.13.1"
 
 [dev-dependencies]
 assert_cli = "0.6.*"
