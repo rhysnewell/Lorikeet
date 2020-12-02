@@ -7,12 +7,13 @@ dependencies:
   - parallel
   - pysam=0.16
   - svim
+  - svim-asm
   - freebayes
   - prodigal
   - samtools=1.9
   - vt
   - rust
-  - clagdev
+  - clangdev
   - pkg-config
   - zlib
   - gsl
@@ -24,10 +25,22 @@ dependencies:
   - dashing
   - umap-learn
   - hdbscan
-  - matplotlib
+  - matplotlib-base
   - numpy
   - seaborn
   - scikit-learn
   - scikit-bio
   - biopython
   - numba
+  - bcalm=2.2.3
+  - snakemake-minimal=5.20.1
+  - screed=1.0.1
+  - khmer=3.0.0a3
+  - pytest=5.3.2
+  - sortedcontainers=2.1.0
+  - click=7.1.2
+  - pyflakes
+  - bbhash>=0.5.4
+  - pip
+  - pip:
+      - https://github.com/dib-lab/sourmash/archive/latest.zip
