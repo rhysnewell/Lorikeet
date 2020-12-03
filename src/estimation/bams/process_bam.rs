@@ -304,8 +304,30 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
 
                                 cursor += cig.len() as usize;
                             }
-                            Cigar::RefSkip(_) => {
-                                // if D or N, move the cursor
+                            Cigar::RefSkip(del) => {
+                                match variant_matrix.variants(ref_idx, tid, cursor as i64) {
+                                    Some(current_variants) => {
+                                        current_variants.par_iter_mut().for_each(
+                                            |(variant, base)| {
+                                                match variant {
+                                                    // We need to check every position of the MNV
+                                                    Variant::Deletion(alt) => {
+                                                        if alt == del {
+                                                            base.assign_read(
+                                                                record.qname().to_vec(),
+                                                            );
+                                                            base.truedepth[sample_idx] += 1;
+                                                            base.quals[sample_idx] +=
+                                                                record.qual()[read_cursor] as f64
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            },
+                                        );
+                                    }
+                                    _ => {}
+                                }
                                 cursor += cig.len() as usize;
                             }
                             Cigar::Ins(ins) => {
@@ -364,7 +386,8 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
                                             |(variant, base)| {
                                                 match variant {
                                                     // We need to check every position of the MNV
-                                                    Variant::Insertion(alt) => {
+                                                    Variant::Insertion(alt)
+                                                    | Variant::Inversion(alt) => {
                                                         if String::from_utf8(alt.to_vec())
                                                             .expect("Unable to convert to string")
                                                             .contains(

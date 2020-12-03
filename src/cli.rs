@@ -736,7 +736,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly"]),
                 )
                 .arg(
                     Arg::with_name("assembly")
@@ -744,7 +745,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly-bam-files"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("gff").long("gff").takes_value(true))
                 .arg(
@@ -1101,7 +1103,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly"]),
                 )
                 .arg(
                     Arg::with_name("assembly")
@@ -1109,7 +1112,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly-bam-files"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
@@ -1468,7 +1472,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly"]),
                 )
                 .arg(
                     Arg::with_name("assembly")
@@ -1476,7 +1481,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly-bam-files"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
@@ -1966,7 +1972,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly"]),
                 )
                 .arg(
                     Arg::with_name("assembly")
@@ -1974,7 +1981,8 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("assembly")
                         .multiple(true)
                         .takes_value(true)
-                        .required_unless_one(&["assembly-bam-files"]),
+                        .required(false)
+                        .conflicts_with_all(&["assembly-bam-files"]),
                 )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
