@@ -4,9 +4,9 @@ PREFIX=$CONDA_PREFIX
 echo $PREFIX
 
 # Build statically linked binary with Rust
-C_INCLUDE_PATH=$PREFIX/include \
+C_INCLUDE_PATH=$CONDA_PREFIX/include \
 LIBRARY_PATH=$CONDA_PREFIX/lib \
-LIBCLANG_PATH=$PREFIX/lib/libclang.so \
+LIBCLANG_PATH=$CONDA_PREFIX/lib/libclang.so \
 cargo build --release
 
 # Install the binaries
