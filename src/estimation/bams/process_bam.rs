@@ -487,9 +487,9 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
     }
 
     // remove tmp file name from sample id
-    let stoit_name = match &stoit_name[..4] {
-        ".tmp" => &stoit_name[15..],
-        _ => &stoit_name,
+    let stoit_name = match stoit_name.to_string().contains(".tmp") {
+        true => &stoit_name[15..],
+        false => &stoit_name,
     };
 
     debug!(
