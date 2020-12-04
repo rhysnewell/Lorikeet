@@ -1,4 +1,5 @@
 use bird_tool_utils::command;
+use rust_htslib::errors::Error;
 use rust_htslib::{bcf, bcf::Read};
 use std;
 use std::collections::{HashMap, HashSet};
@@ -107,7 +108,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                         ref_target_lengths.push(target_len);
                         variant_matrix.add_info(ref_idx, tid, target_name.as_bytes().to_vec(), target_len);
                         {
-                            bam_generated.fetch(tid as u32, 0, target_len);
+                            bam_generated.fetch((tid as u32));
                             match bam_generated.pileup() {
                                 Some(pileups) => {
                                     let mut ref_seq = Vec::new();
@@ -362,7 +363,7 @@ pub fn get_vcf(
     reference: &str,
     bam_path: &str,
     target_names: &Vec<String>,
-) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+) -> std::result::Result<bcf::Reader, Error> {
     // if vcfs are already provided find correct one first
     // if m.is_present("vcfs") {
     //     let vcf_paths: Vec<&str> = m.values_of("vcfs").unwrap().collect();
@@ -466,7 +467,7 @@ pub fn generate_vcf(
     target_lengths: Vec<u64>,
     reference: &str,
     target_names: &Vec<String>,
-) -> std::result::Result<bcf::Reader, rust_htslib::bcf::Error> {
+) -> std::result::Result<bcf::Reader, Error> {
     // setup temp directory
     let tmp_dir = TempDir::new("lorikeet_fifo").expect("Unable to create temporary directory");
 
