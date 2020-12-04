@@ -88,7 +88,7 @@ fn main() {
                 );
 
                 let mut record = bam::record::Record::new();
-                while filtered.read(&mut record).is_ok() {
+                while filtered.read(&mut record) == true {
                     debug!("Writing.. {:?}", record.qname());
                     writer.write(&record).expect("Failed to write BAM record");
                 }

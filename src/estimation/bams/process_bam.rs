@@ -86,12 +86,9 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
             let target_len = header.target_len(tid as u32).unwrap(); // contig length
             let mut ups_and_downs: Vec<i32> = vec![0; target_len as usize]; // Populate mosdepth array to current contig length
 
-            bam_generated.fetch(tid as u32, 0, target_len); // Retrieve current contig from BAM
+            bam_generated.fetch((tid as u32)); // Retrieve current contig from BAM
 
-            while bam_generated
-                .read(&mut record)
-                .expect("Error while reading BAM record")
-                == true
+            while bam_generated.read(&mut record) == true
             // Read records into the empty recorde
             {
                 if (!flag_filters.include_supplementary

@@ -63,11 +63,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
                 let rg = bam::record::Aux::String("1".as_bytes());
 
-                while bam
-                    .read(&mut record)
-                    .expect("Error while reading BAM record")
-                    == true
-                {
+                while bam.read(&mut record) == true {
                     // push aux flags
                     record.push_aux("RG".as_bytes(), &rg);
 
@@ -76,13 +72,6 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 }
             }
 
-            debug!(
-                "Finished mapping sample {}",
-                match &stoit_name[..4] {
-                    ".tmp" => &stoit_name[15..],
-                    _ => &stoit_name,
-                }
-            );
             bam.finish();
 
             std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
