@@ -119,7 +119,6 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                                         genomes_and_contigs,
                                         ref_idx as usize,
                                     );
-                                    ref_seq = Vec::new();
                                     read_sequence_to_vec(
                                         &mut ref_seq,
                                         &mut reference_file,
