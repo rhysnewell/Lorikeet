@@ -22,6 +22,7 @@ pub fn linkage_clustering_of_clusters(
     ref_idx: usize,
     output_prefix: String,
     pts_max: f64,
+    threads: usize,
 ) -> Vec<Vec<usize>> {
     clusters.par_sort_by(|a, b| a.len().cmp(&b.len()));
     if clusters.len() > 2 {
@@ -159,8 +160,10 @@ pub fn linkage_clustering_of_clusters(
         let cmd_string = format!(
             "flock fit --input {}_cluster_distances.npy \
             --min_cluster_size 2 --min_samples 1 \
-            --min_dist 0 --n_neighbors 5 --precomputed True",
+            --min_dist 0 --n_neighbors 5 --precomputed True \
+            --cores {}",
             &output_prefix,
+            threads,
             // &output_prefix,
         );
 

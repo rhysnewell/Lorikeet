@@ -158,6 +158,7 @@ pub trait VariantMatrixFunctions {
         output_prefic: &str,
         n_neighbors: usize,
         n_components: usize,
+        threads: usize,
     );
 
     /// Takes clusters from DBSCAN and linkage method and writes variants to file as genotype
@@ -934,6 +935,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
         output_prefix: &str,
         n_neighbors: usize,
         n_components: usize,
+        threads: usize,
     ) {
         match self {
             VariantMatrix::VariantContigMatrix {
@@ -982,18 +984,14 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             let cmd_string = format!(
                                 "flock fit --input {}.npy --n_neighbors {} \
                                 --min_cluster_size {} --min_samples {} --min_dist 0 \
-                                --n_components {}",
+                                --n_components {} --cores {}",
                                 // && rm {}.npy",
                                 &file_name,
                                 n_neighbors,
                                 std::cmp::max((pts_min * variant_info_vec.len() as f64) as i32, 2),
-                                // std::cmp::max(
-                                //     ((pts_min * variant_info_vec.len() as f64) * 0.1) as i32,
-                                //     2
-                                // ),
                                 1, // min samples 1 to try and cluster as much as possible
                                 std::cmp::max(n_components, 2),
-                                // &file_name,
+                                threads,
                             );
 
                             command::finish_command_safely(
@@ -1004,7 +1002,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     // .stdout(std::process::Stdio::piped())
                                     .spawn()
                                     .expect("Unable to execute bash"),
-                                "hdbscan",
+                                "flock",
                             );
 
                             let labels: Array1<i8> = read_npy(format!("{}_labels.npy", file_name))
@@ -1048,6 +1046,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     *ref_idx,
                                     file_name,
                                     pts_max,
+                                    threads,
                                 );
                             }
 
@@ -2834,7 +2833,7 @@ mod tests {
         ref_map.insert(0, "test".to_string());
         let multi = Arc::new(MultiProgress::new());
         var_mat.run_fuzzy_scan(
-            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test", 3, 2,
+            0.01, 0.05, 0.01, 0.01, 0., 0, 0., 0, &ref_map, &multi, "test", 3, 2, 1,
         )
     }
 

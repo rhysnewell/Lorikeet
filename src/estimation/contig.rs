@@ -796,19 +796,7 @@ pub fn pileup_variants<
                         &output_prefix,
                         anchor_size,
                         n_components,
-                    );
-
-                    // Write genotypes to disk, reference specific
-                    {
-                        let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(&format!("{}: Generating genotypes...", &reference,));
-                    }
-                    variant_matrix.generate_genotypes(
-                        &output_prefix,
-                        &reference_map,
-                        &genomes_and_contigs,
-                        &concatenated_genomes,
+                        n_threads,
                     );
 
                     // Get strain abundances
@@ -823,6 +811,20 @@ pub fn pileup_variants<
                         &output_prefix,
                         &reference_map,
                         &genomes_and_contigs,
+                    );
+
+                    // Write genotypes to disk, reference specific
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                        pb.progress_bar
+                            .set_message(&format!("{}: Generating genotypes...", &reference,));
+                    }
+
+                    variant_matrix.generate_genotypes(
+                        &output_prefix,
+                        &reference_map,
+                        &genomes_and_contigs,
+                        &concatenated_genomes,
                     );
 
                     // Get sample distances
