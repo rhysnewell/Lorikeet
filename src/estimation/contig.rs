@@ -739,8 +739,6 @@ pub fn pileup_variants<
 
                 // Collects info about variants across samples to check whether they are genuine or not
                 // using FDR
-
-                // TODO: Make sure that this is fixed. It seems to work appropriately now
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar

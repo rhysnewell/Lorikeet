@@ -77,7 +77,7 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
                                          with samtools sort -n).
    -l, --longread-bam-files <PATH> ..    Path to BAM files(s) generated from longreads.
                                          Must be reference sorted.
-   --assembly-bam-files <PATH>       The results of mapping the metagenome assembly
+   --query-assembly-bam-files <PATH>     The results of mapping one or more metagenome assemblies
                                          back on to your MAGs.
 
   Or do mapping:
@@ -90,7 +90,7 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
    -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
-   -a, --assembly                        FASTA file containing the metagenome assembly
+   -a, --query-assembly                  FASTA file(s) containing metagenome assembly
                                          contigs or scaffolds for finding potential
                                          structural variants in the provided MAGs
    -t, --threads <INT>                   Number of threads for mapping / sorting
@@ -733,7 +733,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(
                     Arg::with_name("assembly-bam-files")
-                        .long("assembly-bam-files")
+                        .long("query-assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -742,7 +742,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("assembly")
                         .short("a")
-                        .long("assembly")
+                        .long("query-assembly")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1100,7 +1100,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(
                     Arg::with_name("assembly-bam-files")
-                        .long("assembly-bam-files")
+                        .long("query-assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1109,7 +1109,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("assembly")
                         .short("a")
-                        .long("assembly")
+                        .long("query-assembly")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1371,7 +1371,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                         .long("min-variant-quality")
                         .default_value("10"),
                 )
-                .arg(Arg::with_name("strain-ani").long("strain-ani").short("a"))
+                .arg(Arg::with_name("strain-ani").long("strain-ani"))
                 .arg(
                     Arg::with_name("mapq-threshold")
                         .long("mapq-threshold")
@@ -1469,7 +1469,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(
                     Arg::with_name("assembly-bam-files")
-                        .long("assembly-bam-files")
+                        .long("query-assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1478,7 +1478,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("assembly")
                         .short("a")
-                        .long("assembly")
+                        .long("query-assembly")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1745,7 +1745,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("strain-ani")
                         .long("strain-ani")
-                        .short("a")
                         .takes_value(true),
                 )
                 .arg(
@@ -1762,7 +1761,6 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("n-components")
                         .long("n-components")
-                        .short("n")
                         .default_value("2"),
                 )
                 .arg(
@@ -1969,7 +1967,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 )
                 .arg(
                     Arg::with_name("assembly-bam-files")
-                        .long("assembly-bam-files")
+                        .long("query-assembly-bam-files")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
@@ -1978,7 +1976,7 @@ Rhys J. P. Newell <r.newell near uq.edu.au>
                 .arg(
                     Arg::with_name("assembly")
                         .short("a")
-                        .long("assembly")
+                        .long("query-assembly")
                         .multiple(true)
                         .takes_value(true)
                         .required(false)
