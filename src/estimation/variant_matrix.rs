@@ -1004,9 +1004,13 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 "flock",
                             );
 
-                            let labels: Array1<i8> = read_npy(format!("{}_labels.npy", file_name))
+                            let labels: Array1<i8> = read_npy(format!("{}_labels.npy", &file_name))
                                 .expect("Unable to read npy");
                             let labels_set = labels.iter().collect::<HashSet<&i8>>();
+
+                            let cluster_separation: Array2<f64> =
+                                read_npy(format!("{}_separation.npy", &file_name))
+                                    .expect("Unable to read npy");
 
                             let mut clusters: Vec<Vec<usize>>;
                             if labels_set.contains(&-1) {
@@ -1037,6 +1041,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             if clusters.len() > 1 {
                                 clusters = linkage_clustering_of_clusters(
                                     clusters,
+                                    cluster_separation,
                                     &variant_info_vec,
                                     anchor_size,
                                     anchor_similarity,
@@ -1613,30 +1618,6 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 // If the counter reaches the same value as the number of samples
                                 // Then that genotype had an abundance weighting of 0 in
                                 // every sample and therefore does not exist so remove it.
-                                // let genotypes_to_remove = genotype_vectors
-                                //     .par_iter()
-                                //     .fold(|| vec![0; number_of_genotypes], |mut acc, sample_genotypes| {
-                                //         let counts: Vec<usize> = sample_genotypes.par_iter().fold(|| vec![0; number_of_genotypes], |mut counter, genotype| {
-                                //             if genotype.abundance_weight == 0.0 {
-                                //                 // genotype indices are one based so  minus 1 here
-                                //                 counter[*genotype_key.get(&genotype.index).unwrap()] += 1;
-                                //             }
-                                //             counter
-                                //         }).reduce(|| vec![0; number_of_genotypes], |mut counter, count| {
-                                //             count
-                                //         });
-                                //
-                                //         for (idx, count) in counts.iter().enumerate() {
-                                //             acc[idx] += count
-                                //         }
-                                //         acc
-                                //     }).reduce(|| vec![0; number_of_genotypes], |mut acc, counts|{
-                                //     for (idx, count) in counts.iter().enumerate() {
-                                //         acc[idx] += count
-                                //     }
-                                //     acc
-                                // });
-
                                 let mut genotypes_to_remove = vec![0; number_of_genotypes];
                                 for sample_genotypes in genotype_vectors.iter() {
                                     for genotype in sample_genotypes.iter() {
@@ -1684,33 +1665,36 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 }
                             };
 
-                            // Snp density summary start
+                            // rearrange the genotype vector for better printing
+                            // Just free genotype struct from memory but keep the abundance weight
+                            let mut printing_genotype: HashMap<usize, Vec<f64>> = HashMap::new();
+                            for (sample_idx, genotypes) in genotype_vectors.into_iter().enumerate()
+                            {
+                                for genotype in genotypes.into_iter() {
+                                    let genotype_info = printing_genotype
+                                        .entry(genotype.index)
+                                        .or_insert(vec![0.; sample_names.len()]);
+                                    genotype_info[sample_idx] = genotype.abundance_weight
+                                }
+                            }
 
-                            write!(file_open, "{: <20}", "Sample").unwrap();
-                            let mut printing_order = vec![];
-                            for (strain_id, _) in genotype_key.iter() {
-                                write!(file_open, "\tstrain_{: <20}", strain_id).unwrap();
-                                printing_order.push(*strain_id);
+                            write!(file_open, "{: <20}", "strainID").unwrap();
+                            for sample in sample_names.iter() {
+                                let sample = match sample.to_string().contains(".tmp") {
+                                    true => &sample[15..],
+                                    false => &sample,
+                                };
+                                write!(file_open, "\t{: <20}", sample).unwrap();
                             }
 
                             write!(file_open, "\n").unwrap();
 
-                            for (sample_idx, genotype) in genotype_vectors.iter().enumerate() {
-                                let mut sample_name = &sample_names[sample_idx];
+                            for (strain_id, abundances) in printing_genotype.iter() {
                                 // remove tmp file name from sample id
-                                let sample_name = match sample_name.to_string().contains(".tmp") {
-                                    true => &sample_name[15..],
-                                    false => &sample_name,
-                                };
-                                write!(file_open, "{: <20}", &sample_name,).unwrap();
-                                for strain_id in printing_order.iter() {
-                                    let genotype_idx = genotype_key.get(strain_id).unwrap();
-                                    write!(
-                                        file_open,
-                                        "\t{: <20}",
-                                        genotype[*genotype_idx].abundance_weight
-                                    )
-                                    .unwrap();
+                                write!(file_open, "strain_{: <20}", strain_id,).unwrap();
+
+                                for coverage in abundances.iter() {
+                                    write!(file_open, "\t{: <20}", coverage).unwrap();
                                 }
                                 write!(file_open, "\n").unwrap();
                             }

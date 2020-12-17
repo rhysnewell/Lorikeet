@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 #[allow(unused)]
 pub fn linkage_clustering_of_clusters(
     mut clusters: Vec<Vec<usize>>,
+    mut cluster_separation: Array2<f64>,
     variant_info: &Vec<fuzzy::Var>,
     anchor_size: usize,
     min_cluster_distance: f64,
@@ -151,57 +152,57 @@ pub fn linkage_clustering_of_clusters(
         let mut depths = depths.lock().unwrap();
         let mut total_cov = depths.values().sum::<f64>() / depths.len() as f64;
 
-        write_npy(
-            format!("{}_cluster_distances.npy", output_prefix),
-            &*distances,
-        )
-        .expect("Unable to create npy file");
-
-        let cmd_string = format!(
-            "flock fit --input {}_cluster_distances.npy \
-            --min_cluster_size 2 --min_samples 1 \
-            --min_dist 0 --n_neighbors 5 --precomputed True \
-            --cores {}",
-            &output_prefix,
-            threads,
-            // &output_prefix,
-        );
-
-        command::finish_command_safely(
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(&cmd_string)
-                .stderr(std::process::Stdio::piped())
-                // .stdout(std::process::Stdio::piped())
-                .spawn()
-                .expect("Unable to execute bash"),
-            "hdbscan",
-        );
-
-        let labels: Array1<i8> =
-            read_npy(format!("{}_cluster_distances_labels.npy", output_prefix))
-                .expect("Unable to read npy");
-        let labels_set = labels.iter().collect::<HashSet<&i8>>();
-        let mut n_clusters = 0;
-        if labels_set.contains(&-1) {
-            n_clusters = labels_set.len() - 1;
-        } else {
-            n_clusters = labels_set.len();
-        }
-
-        let mut new_clusters: Vec<Vec<usize>> = vec![Vec::new(); n_clusters];
+        // write_npy(
+        //     format!("{}_cluster_distances.npy", output_prefix),
+        //     &*distances,
+        // )
+        // .expect("Unable to create npy file");
+        //
+        // let cmd_string = format!(
+        //     "flock fit --input {}_cluster_distances.npy \
+        //     --min_cluster_size 2 --min_samples 1 \
+        //     --min_dist 0 --n_neighbors 5 --precomputed True \
+        //     --cores {}",
+        //     &output_prefix,
+        //     threads,
+        //     // &output_prefix,
+        // );
+        //
+        // command::finish_command_safely(
+        //     std::process::Command::new("bash")
+        //         .arg("-c")
+        //         .arg(&cmd_string)
+        //         .stderr(std::process::Stdio::piped())
+        //         // .stdout(std::process::Stdio::piped())
+        //         .spawn()
+        //         .expect("Unable to execute bash"),
+        //     "hdbscan",
+        // );
+        //
+        // let labels: Array1<i8> =
+        //     read_npy(format!("{}_cluster_distances_labels.npy", output_prefix))
+        //         .expect("Unable to read npy");
+        // let labels_set = labels.iter().collect::<HashSet<&i8>>();
+        // let mut n_clusters = 0;
+        // if labels_set.contains(&-1) {
+        //     n_clusters = labels_set.len() - 1;
+        // } else {
+        //     n_clusters = labels_set.len();
+        // }
+        //
+        let mut new_clusters: Vec<Vec<usize>> = Vec::new();
         let mut solo_clusters: Vec<Vec<usize>> = Vec::new();
-        if labels_set.contains(&-1) && labels_set.len() > 1 {
-            labels.iter().enumerate().for_each(|(index, label)| {
-                if label > &-1 {
-                    new_clusters[*label as usize].par_extend(clusters[index].clone());
-                }
-            });
-        } else if !labels_set.contains(&-1) {
-            labels.iter().enumerate().for_each(|(index, label)| {
-                new_clusters[*label as usize].par_extend(clusters[index].clone());
-            });
-        }
+        // if labels_set.contains(&-1) && labels_set.len() > 1 {
+        //     labels.iter().enumerate().for_each(|(index, label)| {
+        //         if label > &-1 {
+        //             new_clusters[*label as usize].par_extend(clusters[index].clone());
+        //         }
+        //     });
+        // } else if !labels_set.contains(&-1) {
+        //     labels.iter().enumerate().for_each(|(index, label)| {
+        //         new_clusters[*label as usize].par_extend(clusters[index].clone());
+        //     });
+        // }
         // else {
         // all noise apparently
         // We will just check to see if certain clusters contain at least twice the cov
@@ -230,8 +231,9 @@ pub fn linkage_clustering_of_clusters(
                 let cov_1 = depths.get(&cluster1_id).unwrap();
                 let cov_2 = depths.get(&cluster2_id).unwrap();
                 let distance = distances[[cluster1_id, cluster2_id]];
+                let separation = cluster_separation[[cluster1_id, cluster2_id]];
                 let mut combined_set = Vec::new();
-                if distance <= min_cluster_distance {
+                if distance <= min_cluster_distance || separation <= 0.5 {
                     let cluster1 = &clusters[cluster1_id];
                     let cluster2 = &clusters[cluster2_id];
 
@@ -281,32 +283,8 @@ pub fn linkage_clustering_of_clusters(
                             combined_sets.insert(combined_set);
                         }
                     }
-                } // else if *cov_2 / *cov_1 <= 0.75 {
-                  //     let cluster1 = &clusters[cluster1_id];
-                  //     let cluster2 = &clusters[cluster2_id];
-                  //     let mut clash = false;
-                  //     for ass1 in cluster1.iter() {
-                  //         if clash {
-                  //             break;
-                  //         }
-                  //         let var1 = &variant_info[*ass1];
-                  //
-                  //         for ass2 in cluster2.iter() {
-                  //             let var2 = &variant_info[*ass2];
-                  //             if var1.tid == var2.tid && var1.pos == var2.pos {
-                  //                 clash = true;
-                  //                 break;
-                  //             }
-                  //         }
-                  //     }
-                  //
-                  //     if !clash {
-                  //         let mut combined = clusters[cluster1_id].clone();
-                  //         combined.par_extend(clusters[cluster2_id].clone());
-                  //         new_clusters.push(combined);
-                  //     }
-                  // }
-                  // Check if a cluster should also be pushed by itself
+                }
+                // Check if a cluster should also be pushed by itself
                 if !checked_single.contains(&cluster1_id) {
                     if clusters[cluster1_id].len() as f64 >= variant_info.len() as f64 * pts_max {
                         solo_clusters.push(clusters[cluster1_id].clone())
