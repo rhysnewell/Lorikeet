@@ -56,7 +56,7 @@ pub fn pileup_variants<
     max: f32,
     contig_end_exclusion: u64,
     output_prefix: &str,
-    n_threads: usize,
+    threads: usize,
     method: &str,
     coverage_fold: f32,
     include_indels: bool,
@@ -110,16 +110,16 @@ pub fn pileup_variants<
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
-        finish_bams(longreads, n_threads);
+        finish_bams(longreads, threads);
     }
 
     if m.is_present("assembly") || m.is_present("assembly-bam-files") {
         info!("Processing assembly alignments...");
-        finish_bams(assembly, n_threads);
+        finish_bams(assembly, threads);
     }
     // if !m.is_present("bam-files") {
     info!("Processing short reads...");
-    finish_bams(bam_readers, n_threads);
+    finish_bams(bam_readers, threads);
     // }
 
     // Put reference index in the variant map and initialize matrix
@@ -184,7 +184,7 @@ pub fn pileup_variants<
 
     let parallel_genomes = m.value_of("parallel-genomes").unwrap().parse().unwrap();
     let mut pool = Pool::new(parallel_genomes);
-    let n_threads = std::cmp::max(n_threads / parallel_genomes as usize, 2);
+    let n_threads = std::cmp::max(threads / parallel_genomes as usize, 2);
     // Set up multi progress bars
     let multi = Arc::new(MultiProgress::new());
     let sty_eta = ProgressStyle::default_bar()
