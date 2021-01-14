@@ -981,7 +981,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 .expect("Unable to create npy file");
 
                             let cmd_string = format!(
-                                "flock fit --input {}.npy --n_neighbors {} \
+                                "flight fit --input {}.npy --n_neighbors {} \
                                 --min_cluster_size {} --min_samples {} --min_dist 0 \
                                 --n_components {} --cores {}",
                                 // && rm {}.npy",
@@ -1001,12 +1001,13 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     // .stdout(std::process::Stdio::piped())
                                     .spawn()
                                     .expect("Unable to execute bash"),
-                                "flock",
+                                "flight",
                             );
 
-                            let labels: Array1<i8> = read_npy(format!("{}_labels.npy", &file_name))
-                                .expect("Unable to read npy");
-                            let labels_set = labels.iter().collect::<HashSet<&i8>>();
+                            let labels: Array1<i32> =
+                                read_npy(format!("{}_labels.npy", &file_name))
+                                    .expect("Unable to read npy");
+                            let labels_set = labels.iter().collect::<HashSet<&i32>>();
 
                             let cluster_separation: Array2<f64> =
                                 read_npy(format!("{}_separation.npy", &file_name))
