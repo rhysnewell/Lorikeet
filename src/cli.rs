@@ -160,7 +160,7 @@ Example usage:
 
   lorikeet filter -b in.bam -o out.bam --min-read-aligned-length 75
 
-Rhys J.P. Newell <r.newell near uq.edu.au>"
+Rhys J.P. Newell <rhys.newell near hdr.qut.edu.au>"
 }
 
 pub fn polish_full_help() -> &'static str {
@@ -242,7 +242,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>",
+Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>",
             ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP
         );
     }
@@ -335,7 +335,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
+Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &EVOLVE_HELP
 }
@@ -422,7 +422,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
+Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &SUMMARIZE_HELP
 }
@@ -536,7 +536,7 @@ Other arguments (optional):
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
 
-Rhys J. P. Newell <r.newell near uq.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
+Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
     }
     &GENOTYPE_HELP
 }
@@ -683,7 +683,7 @@ See lorikeet filter --full-help for further options and further detail.
 
     return App::new("lorikeet")
         .version(crate_version!())
-        .author("Rhys J.P. Newell <r.newell near uq.edu.au>")
+        .author("Rhys J.P. Newell <rhys.newell near hdr.qut.edu.au>")
         .about("Variant analysis of metagenomic datasets")
         .args_from_usage(
             "-v, --verbose       'Print extra debug logging information'
@@ -707,7 +707,7 @@ Less used utility subcommands:
 Other options:
 \t-V, --version\tPrint version information
 
-Rhys J. P. Newell <r.newell near uq.edu.au>
+Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
 ",
         )
         .global_setting(AppSettings::ArgRequiredElseHelp)
