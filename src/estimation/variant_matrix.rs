@@ -983,7 +983,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             let cmd_string = format!(
                                 "flight fit --input {}.npy --n_neighbors {} \
                                 --min_cluster_size {} --min_samples {} --min_dist 0 \
-                                --n_components {} --cores {}",
+                                --n_components {} --cores {} --metric cosine",
                                 // && rm {}.npy",
                                 &file_name,
                                 n_neighbors,
