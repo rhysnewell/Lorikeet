@@ -39,10 +39,6 @@ pub fn linkage_clustering_of_clusters(
 
         pb1.set_message("Phasing variants within clusters...");
 
-        // let _ = std::thread::spawn(move || {
-        //     multi.join_and_clear().unwrap();
-        // });
-
         let mut distances: Arc<Mutex<Array2<f64>>> = Arc::new(Mutex::new(Array::from_elem(
             (clusters.len(), clusters.len()),
             0.,
@@ -91,18 +87,11 @@ pub fn linkage_clustering_of_clusters(
 
                     // Read ids of second variant
                     let set2 = &var2.reads;
-                    // if !(var1.tid == var2.tid && var1.pos == var2.pos)
-                    // && !(var2.var == Variant::None || var1.var == Variant::None)
-                    // {
+
                     read_set2.par_extend(set2.clone());
 
                     depth_2 += var2.vars.par_iter().sum::<i32>();
-                    // } else {
-                    // Send to the clash pile
-                    // clash.par_extend(set1.clone());
 
-                    // clash.par_extend(set2.clone());
-                    // }
                     // pb1.inc(1);
                 }
             });
@@ -125,10 +114,7 @@ pub fn linkage_clustering_of_clusters(
                 intersection.len() as f64 / std::cmp::min(read_set1.len(), read_set2.len()) as f64;
             let jaccard_d = 1. - jaccard;
             let mut distances = distances.lock().unwrap();
-            // if intersection.len() > anchor_size {
-            //     distances[[*cluster1_id, *cluster2_id]] = 0.;
-            //     distances[[*cluster2_id, *cluster1_id]] = 0.;
-            // } else {
+
             // use coverage information. If a cluster has higher coverage than another cluster
             // Then it is more likely to split across many clusters. The likelihood of two clusters
             // being put together is based on the ratio of their coverage
@@ -152,58 +138,9 @@ pub fn linkage_clustering_of_clusters(
         let mut depths = depths.lock().unwrap();
         let mut total_cov = depths.values().sum::<f64>() / depths.len() as f64;
 
-        // write_npy(
-        //     format!("{}_cluster_distances.npy", output_prefix),
-        //     &*distances,
-        // )
-        // .expect("Unable to create npy file");
-        //
-        // let cmd_string = format!(
-        //     "flock fit --input {}_cluster_distances.npy \
-        //     --min_cluster_size 2 --min_samples 1 \
-        //     --min_dist 0 --n_neighbors 5 --precomputed True \
-        //     --cores {}",
-        //     &output_prefix,
-        //     threads,
-        //     // &output_prefix,
-        // );
-        //
-        // command::finish_command_safely(
-        //     std::process::Command::new("bash")
-        //         .arg("-c")
-        //         .arg(&cmd_string)
-        //         .stderr(std::process::Stdio::piped())
-        //         // .stdout(std::process::Stdio::piped())
-        //         .spawn()
-        //         .expect("Unable to execute bash"),
-        //     "hdbscan",
-        // );
-        //
-        // let labels: Array1<i8> =
-        //     read_npy(format!("{}_cluster_distances_labels.npy", output_prefix))
-        //         .expect("Unable to read npy");
-        // let labels_set = labels.iter().collect::<HashSet<&i8>>();
-        // let mut n_clusters = 0;
-        // if labels_set.contains(&-1) {
-        //     n_clusters = labels_set.len() - 1;
-        // } else {
-        //     n_clusters = labels_set.len();
-        // }
-        //
         let mut new_clusters: Vec<Vec<usize>> = Vec::new();
         let mut solo_clusters: Vec<Vec<usize>> = Vec::new();
-        // if labels_set.contains(&-1) && labels_set.len() > 1 {
-        //     labels.iter().enumerate().for_each(|(index, label)| {
-        //         if label > &-1 {
-        //             new_clusters[*label as usize].par_extend(clusters[index].clone());
-        //         }
-        //     });
-        // } else if !labels_set.contains(&-1) {
-        //     labels.iter().enumerate().for_each(|(index, label)| {
-        //         new_clusters[*label as usize].par_extend(clusters[index].clone());
-        //     });
-        // }
-        // else {
+
         // all noise apparently
         // We will just check to see if certain clusters contain at least twice the cov
         // of another cluster

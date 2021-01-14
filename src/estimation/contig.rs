@@ -318,13 +318,6 @@ pub fn pileup_variants<
                     continue;
                 }
             }
-            // pb_main.tick();
-            //
-            // pb_main.inc(1);
-            // pb_main.set_message(&format!(
-            //     "Staging reference: {}",
-            //     &genomes_and_contigs.genomes[ref_idx],
-            // ));
 
             scope.execute(move || {
                 let reference = &genomes_and_contigs.genomes[ref_idx];
@@ -464,10 +457,7 @@ pub fn pileup_variants<
                             gff_dir.close().expect("Failed to close temp directory");
                         }
                     }
-                    _ => {
-                        //            min_cluster_size = m.value_of("min-cluster-size").unwrap().parse().unwrap();
-                        //            epsilon = m.value_of("epsilon").unwrap().parse().unwrap();
-                    }
+                    _ => {}
                 }
 
                 // let mut sample_groups = HashMap::new();
@@ -476,11 +466,6 @@ pub fn pileup_variants<
                     "Running SNP calling on {} samples",
                     indexed_bam_readers.len()
                 );
-
-                // let mut prev_ref_idx = -1;
-                // let mut per_ref_sample_idx = 0;
-
-                // let threads = std::cmp::max(n_threads / indexed_bam_readers.len(), 1);
 
                 indexed_bam_readers.into_iter().enumerate().for_each(
                     |(sample_idx, bam_generator)| {
