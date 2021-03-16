@@ -293,6 +293,7 @@ pub fn pileup_variants<
                     {
                         let pb = &tree.lock().unwrap()[1];
                         pb.progress_bar.inc(1);
+                        pb.progress_bar.reset_eta();
                         let pos = pb.progress_bar.position();
                         let len = pb.progress_bar.length();
                         if pos >= len {
@@ -308,6 +309,7 @@ pub fn pileup_variants<
                                 * 2
                                 + 1,
                         );
+                        pb.progress_bar.reset_eta();
                         let pos = pb.progress_bar.position();
                         let len = pb.progress_bar.length();
                         if pos >= len {
