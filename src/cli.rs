@@ -14,59 +14,59 @@ const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] =
     &["minimap2-ont", "minimap2-pb", "ngmlr-ont", "ngmlr-pb"];
 const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "minimap2-ont";
 
-const MAPPER_HELP: &'static str =
-    "    -p, --mapper <NAME>             Underlying mapping software used
-                                         (\"minimap2-sr\", \"bwa-mem\",
-                                         \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
-                                         \"minimap2-pb\", or \"minimap2-no-preset\").
-                                         minimap2 -sr, -ont, -pb, -no-preset specify
-                                         '-x' preset of minimap2 to be used
-                                         (with map-ont, map-pb for -ont, -pb).
-                                         [default: \"minimap2-sr\"] \n
-         --minimap2-params PARAMS        Extra parameters to provide to minimap2,
-                                         both indexing command (if used) and for
-                                         mapping. Note that usage of this parameter
-                                         has security implications if untrusted input
-                                         is specified. '-a' is always specified.
-                                         [default \"\"] \n
-         --minimap2-reference-is-index   Treat reference as a minimap2 database, not
-                                         as a FASTA file.\n
-         --bwa-params PARAMS             Extra parameters to provide to BWA. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.
-                                         [default \"\"]\n
-         --ngmlr-params PARAMS           Extra parameters to provide to NGMLR.
-                                         --bam-fix, -x ont, -t are already set. Note
-                                         that usage of this parameter has security
-                                         implications if untrusted input is specified.\n";
+const MAPPER_HELP: &'static str = "
+  -p, --mapper <NAME>             Underlying mapping software used
+                                  (\"minimap2-sr\", \"bwa-mem\",
+                                  \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
+                                  \"minimap2-pb\", or \"minimap2-no-preset\").
+                                  minimap2 -sr, -ont, -pb, -no-preset specify
+                                  '-x' preset of minimap2 to be used
+                                  (with map-ont, map-pb for -ont, -pb).
+                                  [default: \"minimap2-sr\"] \n
+  --minimap2-params PARAMS        Extra parameters to provide to minimap2,
+                                  both indexing command (if used) and for
+                                  mapping. Note that usage of this parameter
+                                  has security implications if untrusted input
+                                  is specified. '-a' is always specified.
+                                  [default \"\"] \n
+  --minimap2-reference-is-index   Treat reference as a minimap2 database, not
+                                  as a FASTA file.\n
+  --bwa-params PARAMS             Extra parameters to provide to BWA. Note
+                                  that usage of this parameter has security
+                                  implications if untrusted input is specified.
+                                  [default \"\"]\n
+  --ngmlr-params PARAMS           Extra parameters to provide to NGMLR.
+                                  --bam-fix, -x ont, -t are already set. Note
+                                  that usage of this parameter has security
+                                  implications if untrusted input is specified.\n";
 
-const VARIANT_CALLING_HELP: &'static str =
-    "        --mapq-threshold <INT>                Mapping quality threshold used to verify
-                                              a variant. [default: 10]\n
-        -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
-                                              considered in the variant calling process.\n
-        --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                              based on the quality scores and accounting for the
-                                              presence in all available samples.\n
-        --ploidy <INT>                        Sets the default ploidy for the analysis to N.  [default: 1]\n
-        --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                              entropy > N bits per bp. Set to 0 to turn off. [default: 1.3]\n
-        -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
-        -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                              for it to be considered. [default: 10]\n
-        --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                              analysis. [default: 10]\n
-        --include-longread-svs                Include structural variants produced by SVIM in genotyping
-                                              analysis. Can often overestimate number of variants present.\n
-        --freebayes                           Flag specifying whether to include freebayes in the variant
-                                              process. *WARNING* Freebayes may cause crashes if the number
-                                              of contigs in a MAG is too large. If so, increase the --ulimit value
-                                              If crashes persist then do not use this flag.
-        --ulimit                              Sets the ulimit stack size to help prevent segmentation faults
-                                              in freebayes recursive calls. Lower this on smaller systems.
-                                              Increase this if your bam files contain thousands of contigs and
-                                              freebayes is segfaulting. [default: 81920]\n
-        --force                               Forcefully overwrite previous runs.\n";
+const VARIANT_CALLING_HELP: &'static str = "
+  --mapq-threshold <INT>                Mapping quality threshold used to verify
+                                        a variant. [default: 10]\n
+  -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
+                                        considered in the variant calling process.\n
+  --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
+                                        based on the quality scores and accounting for the
+                                        presence in all available samples.\n
+  --ploidy <INT>                        Sets the default ploidy for the analysis to N.  [default: 1]\n
+  --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
+                                        entropy > N bits per bp. Set to 0 to turn off. [default: 1.3]\n
+  -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
+  -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
+                                        for it to be considered. [default: 10]\n
+  --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
+                                        analysis. [default: 10]\n
+  --include-longread-svs                Include structural variants produced by SVIM in genotyping
+                                        analysis. Can often overestimate number of variants present.\n
+  --freebayes                           Flag specifying whether to include freebayes in the variant
+                                        process. *WARNING* Freebayes may cause crashes if the number
+                                        of contigs in a MAG is too large. If so, increase the --ulimit value
+                                        If crashes persist then do not use this flag.
+  --ulimit                              Sets the ulimit stack size to help prevent segmentation faults
+                                        in freebayes recursive calls. Lower this on smaller systems.
+                                        Increase this if your bam files contain thousands of contigs and
+                                        freebayes is segfaulting. [default: 81920]\n
+  --force                               Forcefully overwrite previous runs.\n";
 
 const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
   Either define BAM:

@@ -983,7 +983,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             let cmd_string = format!(
                                 "flight fit --input {}.npy --n_neighbors {} \
                                 --min_cluster_size {} --min_samples {} --min_dist 0 \
-                                --n_components {} --cores {} --metric cosine",
+                                --n_components {} --cores {} --metric rho_variants",
                                 // && rm {}.npy",
                                 &file_name,
                                 n_neighbors,
@@ -1489,8 +1489,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                                 [sample_index]
                                                                 as f64;
                                                             // let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
-                                                            let weight = lorikeet_depth
-                                                                / base_info.genotypes.len() as f64;
+                                                            let weight = lorikeet_depth as f32
+                                                                / base_info.genotypes.len() as f32;
 
                                                             let mut genotypes_to_remove =
                                                                 HashSet::new();
@@ -1543,8 +1543,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                                                 [sample_index]
                                                                 as f64;
                                                             // let relative_abundance = lorikeet_depth / base_info.totaldepth[sample_index] as f64;
-                                                            let weight = lorikeet_depth
-                                                                / base_info.genotypes.len() as f64;
+                                                            let weight = lorikeet_depth as f32
+                                                                / base_info.genotypes.len() as f32;
 
                                                             let mut genotypes_to_remove =
                                                                 HashSet::new();
@@ -1668,7 +1668,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
 
                             // rearrange the genotype vector for better printing
                             // Just free genotype struct from memory but keep the abundance weight
-                            let mut printing_genotype: HashMap<usize, Vec<f64>> = HashMap::new();
+                            let mut printing_genotype: HashMap<usize, Vec<f32>> = HashMap::new();
                             for (sample_idx, genotypes) in genotype_vectors.into_iter().enumerate()
                             {
                                 for genotype in genotypes.into_iter() {
