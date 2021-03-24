@@ -1,10 +1,8 @@
-use bird_tool_utils::command;
 use dbscan::fuzzy;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use itertools::Itertools;
 use model::variants::*;
 use ndarray::prelude::*;
-use ndarray_npy::{read_npy, write_npy};
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::mpsc::channel;
@@ -170,7 +168,7 @@ pub fn linkage_clustering_of_clusters(
                 let distance = distances[[cluster1_id, cluster2_id]];
                 let separation = cluster_separation[[cluster1_id, cluster2_id]];
                 let mut combined_set = Vec::new();
-                if distance <= min_cluster_distance || separation <= 0.5 {
+                if distance <= min_cluster_distance || separation <= 0.25 {
                     let cluster1 = &clusters[cluster1_id];
                     let cluster2 = &clusters[cluster2_id];
 

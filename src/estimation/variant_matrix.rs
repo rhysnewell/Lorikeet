@@ -463,7 +463,9 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     // get the mean PHRED value
                                     // This is probably not the best method
                                     let mut allele_probs = allele.quals.par_iter().sum();
+                                    // let mut allele_probs = allele.quals.clone();
                                     // allele_probs.par_sort();
+                                    // allele_probs.iter().for_each(|p| prob_dist.push(NotNan::new(*p).unwrap()));
 
                                     // let mut allele_probs = allele_probs
                                     //     .iter()
@@ -471,7 +473,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     //         LogProb::from(Prob(10_f64.powf(-(**p as f64) / 10)))
                                     //     })
                                     //     .collect_vec();
-
+                                    //
                                     prob_dist.push(
                                         NotNan::new(allele_probs)
                                             .expect("Unable to convert to NotNan"),
@@ -483,6 +485,8 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                 }
                 // sort prob_dist
                 prob_dist.par_sort();
+                debug!("Prob {:?}", &prob_dist);
+
                 // turn into logprob values
                 let prob_dist = prob_dist
                     .into_iter()
@@ -490,7 +494,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                     .map(|p| LogProb::from(PHREDProb(*p)))
                     .collect_vec();
 
-                // info!("Prob {:?}", &prob_dist);
+                debug!("Prob {:?}", &prob_dist);
 
                 // turn prob dist into posterior exact probabilities
                 debug!("Calculating PEP dist...");
@@ -499,11 +503,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                     .map(|p| p.ln_one_minus_exp())
                     .collect::<Vec<LogProb>>();
 
-                // info!("PEP {:?}", &pep_dist);
+                debug!("PEP {:?}", &pep_dist);
 
                 // calculate fdr values
                 let fdrs = bayesian::expected_fdr(&pep_dist);
-                // info!("FDRs {:?}", &fdrs);
+                debug!("FDRs {:?}", &fdrs);
 
                 let alpha = LogProb::from(Prob(alpha));
                 let mut threshold = None;
@@ -577,7 +581,11 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 }
                             }
                         }
-                        debug!("Genome {}: {} variants passed FDR threshold, {} did not pass FDR threshold", reference, total_kept, total_removed);
+                        debug!(
+                            "Genome {}: {} variants passed FDR threshold, \
+                               {} did not pass FDR threshold {:?}",
+                            reference, total_kept, total_removed, alpha
+                        );
                         *all_variants = all_variants.clone();
                     }
                     None => {}
