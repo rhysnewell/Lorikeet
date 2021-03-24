@@ -493,16 +493,6 @@ Other arguments (optional):
                                          for it to be considered. [default: 10]
    --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
                                          analysis. [default: 10]
-   --e-min                               Minimum epsilon value used in fuzzyDBSCAN algorithm.
-                                         The minimum distance between two points required for clustering.
-   --e-max                               Maximum epsilon value used in fuzzyDBSCAN algorithm.
-                                         The maximum distance between two points for border clustering.
-   --pts-min                             Minimum points as percentage in fuzzyDBSCAN algorithm.
-                                         The fraction of points needed to be within e-max
-                                         to begin core clustering.
-   --pts-max                             Maximum points as percentage in fuzzyDBSCAN algorithm.
-                                         The fraction of points needed to be within e-max
-                                         to begin border clustering.
    --n-components <INT>                  Number of components for the UMAP algorithm to embed into. [default: 2]
    -n, --n-neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
    -s, --cluster-distance <FLOAT>        The cluster distance used to decide if two or more clusters
@@ -997,7 +987,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("mapq-threshold")
                         .long("mapq-threshold")
-                        .default_value("0"),
+                        .default_value("30"),
                 )
                 .arg(
                     Arg::with_name("base-quality-threshold")
