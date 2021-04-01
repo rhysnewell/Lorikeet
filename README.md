@@ -5,7 +5,7 @@
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
 
 
-![](docs/images/lorikeet_logo_crop_left.png)
+![](docs/images/lorikeet_logo.png)
 
 ## Introduction
 
