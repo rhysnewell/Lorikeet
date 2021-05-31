@@ -47,6 +47,10 @@ type Kmer1 = kmer::Kmer40;
 
 #[derive(Default)]
 struct PhasedReads {
+    // Vector containing HashSet<u32> read ids
+    // index 0 - Reads assigned to H1
+    // index 1 - Reads assigned to H2
+    // Index 2 - Unassigned reads
     read_counts: [HashSet<u32>; 3],
 }
 
@@ -73,10 +77,12 @@ impl Clone for PhasedReads {
 
 impl PhasedReads {
     pub fn new() -> PhasedReads {
+        // Initialize PhasedReads struct
         PhasedReads { read_counts: [HashSet::new(), HashSet::new(), HashSet::new()] }
     }
 
     pub fn add(&mut self, code: HapCode) {
+        // Insert read to associate HapCode
         self.read_counts
             .get_mut(code.hap() as usize)
             .unwrap()
@@ -84,6 +90,7 @@ impl PhasedReads {
     }
 
     pub fn reduce(mut self, other: &PhasedReads) -> PhasedReads {
+        // Combine two lists of phased reads
         for i in 0..3 {
             self.read_counts
                 .get_mut(i)
@@ -95,6 +102,8 @@ impl PhasedReads {
     }
 
     pub fn from_hap_codes<I: Iterator<Item = HapCode>>(iter: I) -> Self {
+        // When given an iterator containing hapcodes
+        // Create a new set of phased reads from these hapcode
         let mut pc = PhasedReads::new();
         for code in iter {
             pc.add(code);
@@ -125,9 +134,22 @@ pub struct HapCountSummarize {
 }
 
 impl KmerSummarizer<HapCode, PhasedReads> for HapCountSummarize {
+    ///The input items is an iterator over kmer observations.
+    /// Input observation is a tuple of (kmer, extensions, data).
+    /// The summarize function inspects the data and returns a tuple indicating:
+    ///     - whether this kmer passes the filtering criteria (e.g. is there a sufficient number of observation)
+    ///     - the accumulated Exts of the kmer
+    ///     - A {{PhasedReads}} data object.
+    ///
     fn summarize<K, F: Iterator<Item = (K, Exts, HapCode)>>(&self,
                                                             items: F)
                                                             -> (bool, Exts, PhasedReads) {
+
+        // Store single-base extensions for a DNA Debruijn graph.
+        // 8 bits, 4 higher order ones represent extensions to the right,
+        // 4 lower order ones represent extensions to the left. For each direction the bits
+        // (from lower order to higher order) represent whether there exists an extension with
+        // each of the letters A, C, G, T. So overall the bits are: right left T G C A T G C A
         let mut all_exts = Exts::empty();
 
         let mut nreads = 0;
@@ -149,6 +171,7 @@ fn get_sequences(bam: &mut IndexedReader,
                  locus: &Locus,
                  k: usize)
                  -> Vec<(DnaString, Exts, HapCode)> {
+    // TODO: Change this work with Base rather than Locus
     let tid = bam.header.tid(locus.chrom.as_bytes()).unwrap();
     let mut num_reads = 0;
 
