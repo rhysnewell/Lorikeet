@@ -22,7 +22,7 @@ default-run = "lorikeet"
 [dependencies]
 ansi_term = "0.12.1"
 bio = "0.32"
-bio-types = "0.10"
+bio-types = "0.11"
 bird_tool_utils = "0.1.0"
 clap = "2"
 coverm = {git = "https://github.com/rhysnewell/CoverM"}
@@ -30,6 +30,7 @@ galah = {git = "https://github.com/wwood/galah", rev = "64cb41a07d917c1af5d90a0b
 csv = "1"
 derive_builder = "0.9"
 derive-new = "0.5"
+debruijn = "0.3.2"
 env_logger = "0.6"
 glob = "0.3.*"
 itertools = "0.8"
