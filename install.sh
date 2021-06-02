@@ -15,7 +15,7 @@ LIBRARY_PATH=$PREFIX/lib \
 LIBCLANG_PATH=$PREFIX/lib/libclang.so \
 cargo install --path ./ --force --root $PREFIX
 
-# Install flock
+# Install flight
 cd flight/ && pip install . && cd ../
 
 # move Rscript and python
