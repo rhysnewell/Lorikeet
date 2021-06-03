@@ -4,6 +4,7 @@ pub mod estimation;
 pub mod external_command_checker;
 pub mod model;
 pub mod utils;
+pub mod haplotype;
 
 // HTS and bio files
 extern crate bio;
@@ -22,7 +23,6 @@ extern crate linregress;
 extern crate ndarray;
 extern crate ndarray_npy;
 extern crate statrs;
-extern crate libm;
 
 // Utilities
 extern crate clap;

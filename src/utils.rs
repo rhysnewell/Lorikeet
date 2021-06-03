@@ -17,6 +17,8 @@ use std::process::Stdio;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+use indicatif::ProgressBar;
+use std::path::Path;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -27,6 +29,73 @@ pub enum ReadType {
     Short,
     Long,
     Assembly,
+}
+
+#[derive(Clone, Debug)]
+pub struct Elem {
+    pub key: String,
+    pub index: usize,
+    pub progress_bar: ProgressBar,
+}
+
+pub fn setup_progress_bars(
+    references: &Vec<&str>,
+    reference_map: &HashMap<usize, String>,
+    genome_and_contigs: &GenomesAndContigs,
+    short_sample_count: usize,
+    long_sample_count: usize,
+) -> Vec<Elem> {
+    // Put reference index in the variant map and initialize matrix
+    let mut progress_bars = vec![
+        Elem {
+            key: "Genomes complete".to_string(),
+            index: 1,
+            progress_bar: ProgressBar::new(references.len() as u64),
+        };
+        references.len() + 2
+    ];
+
+    for reference in references.iter() {
+        debug!(
+            "Genomes {:?} contigs {:?}",
+            &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome,
+        );
+
+        let ref_idx = genomes_and_contigs
+            .genome_index(
+                &Path::new(reference)
+                    .file_stem()
+                    .expect("problem determining file stem")
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            )
+            .unwrap();
+
+        progress_bars[ref_idx + 2] = Elem {
+            key: genomes_and_contigs.genomes[ref_idx].clone(),
+            index: ref_idx,
+            progress_bar: ProgressBar::new(
+                (short_sample_count + long_sample_count) as u64,
+            ),
+        };
+        debug!("Reference {}", reference,);
+        reference_map
+            .entry(ref_idx)
+            .or_insert(reference.to_string());
+    }
+
+    progress_bars[0] = Elem {
+        key: "Operations remaining".to_string(),
+        index: 0,
+        progress_bar: ProgressBar::new(
+            ((references.len() * (short_sample_count + long_sample_count))
+                * 2
+                + references.len()) as u64,
+        ),
+    };
+
+    return progress_bars
 }
 
 pub fn get_streamed_bam_readers<'a>(
