@@ -22,6 +22,7 @@ extern crate linregress;
 extern crate ndarray;
 extern crate ndarray_npy;
 extern crate statrs;
+extern crate libm;
 
 // Utilities
 extern crate clap;
