@@ -8,7 +8,8 @@ use estimation::codon_structs::*;
 use estimation::variant_matrix::*;
 use estimation::vcfs::process_vcf::*;
 use external_command_checker;
-use utils::*;
+use utils::{*, Elem};
+use haplotype::active_regions;
 
 use crate::*;
 use bio::io::gff;
@@ -26,12 +27,6 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
-#[derive(Clone, Debug)]
-struct Elem {
-    key: String,
-    index: usize,
-    progress_bar: ProgressBar,
-}
 
 #[allow(unused)]
 pub fn pileup_variants<
@@ -40,13 +35,10 @@ pub fn pileup_variants<
     S: NamedBamReaderGenerator<R>,
     T: NamedBamReader,
     U: NamedBamReaderGenerator<T>,
-    V: NamedBamReader,
-    W: NamedBamReaderGenerator<V>,
 >(
     m: &clap::ArgMatches,
     bam_readers: Vec<S>,
     longreads: Option<Vec<U>>,
-    assembly_readers: Option<Vec<W>>,
     mode: &str,
     coverage_estimators: &mut Vec<CoverageEstimator>,
     flag_filters: FlagFilter,
@@ -67,6 +59,11 @@ pub fn pileup_variants<
     concatenated_genomes: Option<NamedTempFile>,
 ) {
     // TODO: We need to split up analyses per reference to help contain memory issues
+    let alpha: f64 = m.value_of("fdr-threshold").unwrap().parse().unwrap();
+    let parallel_genomes = m.value_of("parallel-genomes").unwrap().parse().unwrap();
+    let mut pool = Pool::new(parallel_genomes);
+    let n_threads = std::cmp::max(threads / parallel_genomes as usize, 2);
+
     let references = parse_references(&m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
@@ -79,15 +76,11 @@ pub fn pileup_variants<
             .unwrap()
             .to_string(),
     ));
-    // let tmp_dir = TempDir::new("lorikeet_references").expect("Unable to create temporary directory");
 
     // All different counts of samples I need. Changes depends on when using concatenated genomes or not
     let mut short_sample_count = bam_readers.len();
     let mut long_sample_count = 0;
-    let mut assembly_sample_count = 0;
     let mut reference_count = references.len();
-
-    let mut ani = 0.;
 
     let longreads = match longreads {
         Some(vec) => {
@@ -97,15 +90,7 @@ pub fn pileup_variants<
         None => vec![],
     };
 
-    let assembly = match assembly_readers {
-        Some(vec) => {
-            assembly_sample_count += vec.len();
-            vec
-        }
-        None => vec![],
-    };
 
-    let alpha: f64 = m.value_of("fdr-threshold").unwrap().parse().unwrap();
 
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
@@ -113,78 +98,30 @@ pub fn pileup_variants<
         finish_bams(longreads, threads);
     }
 
-    if m.is_present("assembly") || m.is_present("assembly-bam-files") {
-        info!("Processing assembly alignments...");
-        finish_bams(assembly, threads);
-    }
-    // if !m.is_present("bam-files") {
     info!("Processing short reads...");
     finish_bams(bam_readers, threads);
-    // }
 
-    // Put reference index in the variant map and initialize matrix
-    let mut progress_bars = vec![
-        Elem {
-            key: "Genomes complete".to_string(),
-            index: 1,
-            progress_bar: ProgressBar::new(references.len() as u64),
-        };
-        references.len() + 2
-    ];
 
     let mut reference_map = HashMap::new();
-    for reference in references.iter() {
-        debug!(
-            "Genomes {:?} contigs {:?}",
-            &genomes_and_contigs.genomes, &genomes_and_contigs.contig_to_genome,
-        );
 
-        let ref_idx = genomes_and_contigs
-            .genome_index(
-                &Path::new(reference)
-                    .file_stem()
-                    .expect("problem determining file stem")
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            )
-            .unwrap();
-
-        progress_bars[ref_idx + 2] = Elem {
-            key: genomes_and_contigs.genomes[ref_idx].clone(),
-            index: ref_idx,
-            progress_bar: ProgressBar::new(
-                (short_sample_count + long_sample_count + assembly_sample_count) as u64,
-            ),
-        };
-        debug!("Reference {}", reference,);
-        reference_map
-            .entry(ref_idx)
-            .or_insert(reference.to_string());
-    }
-
-    progress_bars[0] = Elem {
-        key: "Operations remaining".to_string(),
-        index: 0,
-        progress_bar: ProgressBar::new(
-            ((references.len() * (short_sample_count + long_sample_count + assembly_sample_count))
-                * 2
-                + references.len()) as u64,
-        ),
-    };
+    let mut progress_bars = utils::setup_progress_bars(
+        &references,
+        &mut reference_map,
+        &genomes_and_contigs,
+        short_samples_count,
+        long_sample_count,
+    );
 
     debug!(
-        "{} Longread BAM files, {} Shortread BAM files and {} assembly alignment BAMs {} Total BAMs over {} genome(s)",
+        "{} Longread BAM files, {} Shortread BAM files {} Total BAMs over {} genome(s)",
         long_sample_count,
         short_sample_count,
-        assembly_sample_count,
-        (short_sample_count + long_sample_count + assembly_sample_count),
+        (short_sample_count + long_sample_count),
         reference_count
     );
 
-    let parallel_genomes = m.value_of("parallel-genomes").unwrap().parse().unwrap();
-    let mut pool = Pool::new(parallel_genomes);
-    let n_threads = std::cmp::max(threads / parallel_genomes as usize, 2);
+
+
     // Set up multi progress bars
     let multi = Arc::new(MultiProgress::new());
     let sty_eta = ProgressStyle::default_bar()
@@ -304,7 +241,7 @@ pub fn pileup_variants<
                     {
                         let pb = &tree.lock().unwrap()[0];
                         pb.progress_bar.inc(
-                            ((short_sample_count + long_sample_count + assembly_sample_count)
+                            ((short_sample_count + long_sample_count)
                                 as u64)
                                 * 2
                                 + 1,
@@ -343,7 +280,6 @@ pub fn pileup_variants<
                     &concatenated_genomes,
                     short_sample_count,
                     long_sample_count,
-                    assembly_sample_count,
                     &genomes_and_contigs,
                     n_threads as u32,
                     &tmp_bam_file_cache,
@@ -353,7 +289,7 @@ pub fn pileup_variants<
                 let mut variant_matrix = match concatenated_genomes {
                     Some(ref concat) => {
                         per_reference_samples =
-                            short_sample_count + long_sample_count + assembly_sample_count;
+                            short_sample_count + long_sample_count;
                         per_reference_short_samples = short_sample_count;
                         debug!(
                             "Per reference samples concatenated {}",
@@ -364,7 +300,7 @@ pub fn pileup_variants<
                     }
                     None => {
                         per_reference_samples =
-                            (short_sample_count + long_sample_count + assembly_sample_count)
+                            (short_sample_count + long_sample_count)
                                 / references.len();
                         per_reference_short_samples = short_sample_count / references.len();
                         debug!(
@@ -469,6 +405,8 @@ pub fn pileup_variants<
                     indexed_bam_readers.len()
                 );
 
+                let mut genotype_likelihoods = Vec::new();
+
                 indexed_bam_readers.into_iter().enumerate().for_each(
                     |(sample_idx, bam_generator)| {
                         // Get the appropriate sample index based on how many references we are using
@@ -519,25 +457,6 @@ pub fn pileup_variants<
                                 &concatenated_genomes,
                                 &flag_filters,
                             );
-                        } else if (m.is_present("assembly") | m.is_present("assembly_bam_files"))
-                            && sample_idx >= (short_sample_count + long_sample_count)
-                        {
-                            process_vcf(
-                                bam_generator,
-                                n_threads,
-                                ref_idx,
-                                sample_idx,
-                                per_reference_samples,
-                                &mut variant_matrix,
-                                ReadType::Assembly,
-                                m,
-                                // &mut sample_groups,
-                                &genomes_and_contigs,
-                                &reference_map,
-                                per_reference_short_samples,
-                                &concatenated_genomes,
-                                &flag_filters,
-                            );
                         }
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -566,7 +485,6 @@ pub fn pileup_variants<
                     &concatenated_genomes,
                     short_sample_count,
                     long_sample_count,
-                    assembly_sample_count,
                     &genomes_and_contigs,
                     n_threads as u32,
                     &tmp_bam_file_cache,
@@ -648,34 +566,6 @@ pub fn pileup_variants<
                                     mapq_threshold,
                                     method,
                                     ReadType::Long,
-                                    &genomes_and_contigs,
-                                    &reference_map,
-                                    &concatenated_genomes,
-                                )
-                            } else if sample_idx >= (short_sample_count + long_sample_count) {
-                                process_bam(
-                                    bam_generator,
-                                    sample_idx,
-                                    per_reference_samples,
-                                    &mut coverage_estimators,
-                                    &mut variant_matrix,
-                                    n_threads,
-                                    m,
-                                    &output_prefix,
-                                    coverage_fold,
-                                    &codon_table,
-                                    min_var_depth,
-                                    contig_end_exclusion,
-                                    min,
-                                    max,
-                                    ref_idx,
-                                    mode,
-                                    include_soft_clipping,
-                                    include_indels,
-                                    &flag_filters,
-                                    mapq_threshold,
-                                    method,
-                                    ReadType::Assembly,
                                     &genomes_and_contigs,
                                     &reference_map,
                                     &concatenated_genomes,

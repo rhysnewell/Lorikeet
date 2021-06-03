@@ -6,13 +6,11 @@ use serde_json;
 use serde_json::Value;
 use std::cmp::{max, min};
 use std::fs::File;
-use std::path::Path;
 use ordered_float::OrderedFloat;
-use rust_htslib::bam::{self, record::Cigar, Read, IndexedReader};
+use rust_htslib::bam::{self, record::Cigar, Read, IndexedReader, Record};
 
 use bird_tool_utils::command;
 use rust_htslib::errors::Error;
-use rust_htslib::{bcf, bcf::Read};
 use bio::stats::{LogProb, PHREDProb};
 use std;
 use std::collections::{HashMap, HashSet};
@@ -27,12 +25,8 @@ use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use scoped_threadpool::Pool;
 use statrs::statistics::Variance;
-use std::io::Write;
 use std::path::Path;
 use std::str;
-use std::sync::{Arc, Mutex};
-use tempdir::TempDir;
-use tempfile::Builder;
 
 #[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Deserialize, Clone)]
 pub struct Locus {
@@ -66,21 +60,21 @@ pub struct RefVsAnyResult {
     /**
      * The genotype likelihoods for ref/ref ref/non-ref non-ref/non-ref
      */
-    pub genotypeLikelihoods: Vec<OrderedFloat<f32>>,
-    pub finalPhredScaledGenotypeLikelihoods: Vec<i32>,
-    pub refDepth: i32,
-    pub nonRefDepth: i32,
+    pub genotype_likelihoods: Vec<OrderedFloat<f32>>,
+    pub final_phred_scaled_genotype_likelihoods: Vec<i32>,
+    pub ref_depth: i32,
+    pub non_ref_depth: i32,
     pub soft_clips: i32,
     pub read_counts: i32,
 }
 
 impl RefVsAnyResult {
-    pub fn new(likelihoodCapacity: i32) -> RefVsAnyResult {
+    pub fn new(likelihood_capacity: usize) -> RefVsAnyResult {
         RefVsAnyResult {
-            genotypeLikelihoods: vec![0.0; likelihoodCapacity],
-            finalPhredScaledGenotypeLikelihoods: vec![0; likelihoodCapacity],
-            refDepth: 0,
-            nonRefDepth: 0,
+            genotype_likelihoods: vec![OrderedFloat(0.0); likelihood_capacity],
+            final_phred_scaled_genotype_likelihoods: vec![0; likelihood_capacity],
+            ref_depth: 0,
+            non_ref_depth: 0,
             soft_clips: 0,
             read_counts: 0,
         }
@@ -89,27 +83,27 @@ impl RefVsAnyResult {
     /**
      * @return Get the DP (sum of AD values)
      */
-    pub fn getDP(&self) -> &i32 {
-        return self.refDepth + self.nonRefDepth
+    pub fn get_dp(&self) -> i32 {
+        return self.ref_depth + self.non_ref_depth
     }
 
     /**
      * Return the AD fields. Returns a newly allocated array every time.
      */
-    pub fn getAD(&self) -> Vec<i32> {
-        return vec![*self.refDepth, *self.nonRefDepth]
+    pub fn get_ad(&self) -> Vec<i32> {
+        return vec![*self.ref_depth, *self.non_ref_depth]
     }
 
     /**
      * Creates a new ref-vs-alt result indicating the genotype likelihood vector capacity.
-     * @param likelihoodCapacity the required capacity of the likelihood array, should match the possible number of
+     * @param likelihood_capacity the required capacity of the likelihood array, should match the possible number of
      *                           genotypes given the number of alleles (always 2), ploidy (arbitrary) less the genotyping
      *                           model non-sense genotype count if applies.
-     * @throws IllegalArgumentException if {@code likelihoodCapacity} is negative.
+     * @throws IllegalArgumentException if {@code likelihood_capacity} is negative.
      */
-    pub fn RefVsAnyResult(&mut self, likelihoodCapacity: i32) {
-        self.genotypeLikelihoods = vec![OrderedFloat(0.0); likelihoodCapacity];
-        self.finalPhredScaledGenotypeLikelihoods = vec![0; likelihoodCapacity];
+    pub fn ref_vs_any_result(&mut self, likelihood_capacity: usize) {
+        self.genotype_likelihoods = vec![OrderedFloat(0.0); likelihood_capacity];
+        self.final_phred_scaled_genotype_likelihoods = vec![0; likelihood_capacity];
     }
 
     /**
@@ -117,11 +111,11 @@ impl RefVsAnyResult {
      * Caps the het and hom var likelihood values by the hom ref likelihood.
      * The capping is done on the fly.
      */
-    pub fn getGenotypeLikelihoodsCappedByHomRefLikelihood(&self) -> Vec<OrderedFloat<f32>> {
-        let mut output = vec![0.0; self.genotypeLikelihoods.len()];
+    pub fn get_genotype_likelihoods_capped_by_hom_ref_likelihood(&self) -> Vec<OrderedFloat<f32>> {
+        let mut output = vec![OrderedFloat(0.0); self.genotype_likelihoods.len()];
 
-        for i in 0..self.genotypeLikelihoods.len() {
-            output[i] = std::cmp::min(self.genotypeLikelihoods[i], self.genotypeLikelihoods[0])
+        for i in 0..self.genotype_likelihoods.len() {
+            output[i] = std::cmp::min(self.genotype_likelihoods[i], self.genotype_likelihoods[0])
         }
 
         return output
@@ -130,7 +124,9 @@ impl RefVsAnyResult {
 
 
 #[allow(unused)]
-pub fn retrieve_active_loci<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R> + Send>(
+pub fn update_activity_profile<'b,
+    R: IndexedNamedBamReader + Send,
+    G: NamedBamReaderGenerator<R> + Send>(
     bam_generator: G,
     split_threads: usize,
     ref_idx: usize,
@@ -185,8 +181,8 @@ pub fn retrieve_active_loci<'b, R: IndexedNamedBamReader + Send, G: NamedBamRead
     let min_soft_clip_qual = 29;
 
     let ploidy: f32 = m.value_of("ploidy").unwrap().parse().unwrap();
-    let likelihoodcount = (ploidy + 1.) as i32;
-    let log10Ploidy = OrderedFloat(likelihoodcount.log10());
+    let likelihoodcount = (ploidy + 1.) as usize;
+    let log10ploidy = OrderedFloat((likelihoodcount as f32).log10());
 
 
     let mut total_records = 0;
@@ -276,19 +272,18 @@ pub fn retrieve_active_loci<'b, R: IndexedNamedBamReader + Send, G: NamedBamRead
                                                 continue;
                                             } else {
                                                 alignment_context_creation(
-                                                    record,
-                                                    alignment,
+                                                    &alignment,
                                                     &mut result,
-                                                    log10Ploidy,
+                                                    log10ploidy,
                                                     likelihoodcount,
                                                     min_soft_clip_qual,
                                                 )
                                             }
                                         }
 
-                                        let mut denominator = OrderedFloat(result.read_counts as f32) * log10Ploidy;
+                                        let mut denominator = OrderedFloat(result.read_counts as f32) * log10ploidy;
                                         for i in 0..likelihoodcount {
-                                            result.genotypeLikelihoods[i] -= denominator
+                                            result.genotype_likelihoods[i] -= denominator
                                         }
 
                                         genotype_likelihoods.push(result)
@@ -318,25 +313,6 @@ pub fn retrieve_active_loci<'b, R: IndexedNamedBamReader + Send, G: NamedBamRead
     bam_generated.finish();
 }
 
-fn count_high_quality_soft_clips(
-    cig: &Cigar,
-    record: &Record,
-    result: &mut RefVsAnyResult,
-    cigar_cursor: &mut usize,
-) {
-    // https://gatk.broadinstitute.org/hc/en-us/articles/360036227652?id=4147
-    // If we have high quality soft clips then we want to
-    // track them
-    // get mean base quality
-    for rpos in cigar_cursor..(cigar_cursor + cig.len() as usize) {
-        let qual_pos = record.qual()[rpos] as f64;
-        if qual_pos >= std::cmp::min(29, 2 * bq) {
-            result.soft_clips += 1
-        }
-    }
-
-    cigar_cursor += cig.len() as usize;
-}
 
 /**
  * Calculate the posterior probability that a single biallelic genotype is non-ref
@@ -349,7 +325,8 @@ fn calculate_single_sample_biallelic_non_ref_posterior(
     return_zero_if_ref_is_max: Bool,
 ) -> f32 {
     if return_zero_if_ref_is_max
-        && log10_genotype_likelihoods.iter().enumerate().max_by(|&(_, item)| item) == 0
+        && log10_genotype_likelihoods.iter()
+        .position(|&item| item == *(log10_genotype_likelihoods.iter().max().unwrap())).unwrap() == 0
         && (log10_genotype_likelihoods[0] != OrderedFloat(0.5) && log10_genotype_likelihoods.len() == 2){
         return 0.
     }
@@ -361,15 +338,14 @@ fn calculate_single_sample_biallelic_non_ref_posterior(
 * Populates reference and non reference depth vectors
 */
 fn alignment_context_creation(
-    record: &mut bam::record::Record,
     alignment: &bam::pileup::Alignment,
     result: &mut RefVsAnyResult,
-    log10Ploidy: OrderedFloat<f32>,
-    likelihoodcount: i32,
+    log10ploidy: OrderedFloat<f32>,
+    likelihoodcount: usize,
     min_soft_clip_qual: i32,
 ) {
-    let mut ref_likelihood = 0.0;
-    let mut non_ref_likelihood = 0.0;
+    let mut ref_likelihood = OrderedFloat(0.0);
+    let mut non_ref_likelihood = OrderedFloat(0.0);
     let record = alignment.record();
 
     if !alignment.is_del() && !alignment.is_refskip() {
@@ -380,20 +356,20 @@ fn alignment_context_creation(
         if record_qual >= bq {
             let read_char = alignment.record().seq()[qpos];
             if refr_base != read_char {
-                let mut is_alt = true;
-                result.nonRefDepth += 1;
-                non_ref_likelihood = OrderedFloat(LogProb::from(PHREDProb(record_qual)));
-                ref_likelihood = OrderedFloat(LogProb::from(PHREDProb(record_qual)) + (-(3.0.log10())))
+                is_alt = true;
+                result.non_ref_depth += 1;
+                non_ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual))));
+                ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual))) + (-(3.0.log10())))
             } else {
-                result.refDepth += 1;
-                ref_likelihood = OrderedFloat(LogProb::from(PHREDProb(record_qual)));
-                non_ref_likelihood = OrderedFloat(LogProb::from(PHREDProb(record_qual)) + (-(3.0.log10())));
+                result.ref_depth += 1;
+                ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual))));
+                non_ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual))) + (-(3.0.log10())));
             }
 
             update_heterozygous_likelihood(
                 result,
                 likelihoodcount,
-                log10Ploidy,
+                log10ploidy,
                 ref_likelihood,
                 non_ref_likelihood
             );
@@ -410,8 +386,9 @@ fn alignment_context_creation(
                             count_high_quality_soft_clips(
                                 &cig,
                                 &record,
-                                &mut result,
-                                &mut cigar_cursor
+                                result,
+                                &mut cigar_cursor,
+                                min_soft_clip_qual
                             );
                         },
                         _ => {
@@ -424,9 +401,11 @@ fn alignment_context_creation(
                             count_high_quality_soft_clips(
                                 &cig,
                                 &record,
-                                &mut result,
-                                &mut cigar_cursor
+                                result,
+                                &mut cigar_cursor,
+                                min_soft_clip_qual
                             );
+
                         },
                         _ => {
                             // Not a soft clip
@@ -437,6 +416,17 @@ fn alignment_context_creation(
                     // the position
                     break
                 }
+                match cig {
+                    Cigar::Match(_)
+                    | Cigar::Diff(_)
+                    | Cigar::Equal(_)
+                    | Cigar::Ins(_)
+                    | Cigar::SoftClip(_) => {
+                        cigar_cursor += cig.len() as usize;
+                    }
+                    _ => {},
+                }
+
             }
         }
 
@@ -445,25 +435,45 @@ fn alignment_context_creation(
     result.read_counts += 1;
 }
 
+
+fn count_high_quality_soft_clips(
+    cig: &Cigar,
+    record: &Record,
+    result: &mut RefVsAnyResult,
+    cigar_cursor: &mut usize,
+    min_soft_clip_qual: i32
+) {
+    // https://gatk.broadinstitute.org/hc/en-us/articles/360036227652?id=4147
+    // If we have high quality soft clips then we want to
+    // track them
+    // get mean base quality
+    for rpos in cigar_cursor..(cigar_cursor + cig.len() as usize) {
+        let qual_pos = record.qual()[rpos];
+        if qual_pos >= min_soft_clip_qual {
+            result.soft_clips += 1
+        }
+    }
+}
+
 fn update_heterozygous_likelihood(
     result: &mut RefVsAnyResult,
-    likelihoodcount: i32,
-    log10Ploidy: OrderedFloat<f32>,
+    likelihoodcount: usize,
+    log10ploidy: OrderedFloat<f32>,
     ref_likelihood: OrderedFloat<f32>,
     non_ref_likelihood: OrderedFloat<f32>
 ) {
     // https://github.com/broadinstitute/gatk/blob/master/src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller/ReferenceConfidenceModel.java
     // applyPileupElementRefVsNonRefLikelihoodAndCount
     // Homozygous likelihoods don't need the logSum trick.
-    result.genotypeLikelihoods[0] += ref_likelihood + log10Ploidy;
-    result.genotypeLikelihoods[(likelihoodcount - 1) as usize] += non_ref_likelihood + log10Ploidy;
+    result.genotype_likelihoods[0] += ref_likelihood + log10ploidy;
+    result.genotype_likelihoods[(likelihoodcount - 1)] += non_ref_likelihood + log10ploidy;
     // Heterozygous likelihoods need the logSum trick:
     let mut i = 1;
     let mut j = likelihoodcount - 2;
     while i < (likelihoodcount - 1) {
-        result.genotypeLikelihoods[i] += (
-            ref_likelihood + j.log10(),
-            non_ref_likelihood + i.log10()
+        result.genotype_likelihoods[i] += (
+            ref_likelihood + OrderedFloat((j as f32).log10()),
+            non_ref_likelihood + OrderedFloat((i as f32).log10())
         );
         i += 1;
         j -= 1;
