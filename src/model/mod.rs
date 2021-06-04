@@ -1,2 +1,3 @@
 pub mod variants;
-pub mod call;
+pub mod variant_context;
+pub mod genotype_builder;
