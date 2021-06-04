@@ -9,7 +9,7 @@ use estimation::variant_matrix::*;
 use estimation::vcfs::process_vcf::*;
 use external_command_checker;
 use utils::{*, Elem};
-use haplotype::active_regions;
+use haplotype::active_regions::{update_activity_profile, collect_activity_profile};
 
 use crate::*;
 use bio::io::gff;
@@ -104,6 +104,11 @@ pub fn pileup_variants<
 
     let mut reference_map = HashMap::new();
 
+
+    // Set up multi progress bars
+    let multi = Arc::new(MultiProgress::new());
+
+    let multi_inner = Arc::clone(&multi);
     let mut progress_bars = utils::setup_progress_bars(
         &references,
         &mut reference_map,
@@ -111,6 +116,16 @@ pub fn pileup_variants<
         short_samples_count,
         long_sample_count,
     );
+
+    let tree: Arc<Mutex<Vec<&Elem>>> =
+        Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
+    {
+        let mut tree = tree.lock().unwrap();
+        for pb in progress_bars.iter() {
+            tree.push(pb)
+        }
+    }
+
 
     debug!(
         "{} Longread BAM files, {} Shortread BAM files {} Total BAMs over {} genome(s)",
@@ -122,60 +137,15 @@ pub fn pileup_variants<
 
 
 
-    // Set up multi progress bars
-    let multi = Arc::new(MultiProgress::new());
-    let sty_eta = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
 
-    let sty_aux = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
-    progress_bars
-        .par_iter()
-        .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
-    progress_bars[0].progress_bar.set_style(sty_eta.clone());
-
-    // let pb_main = multi.add(ProgressBar::new(reference_map.keys().len() as u64));
-    // pb_main.set_style(sty_eta.clone());
-
-    let tree: Arc<Mutex<Vec<&Elem>>> =
-        Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
-    {
-        let mut tree = tree.lock().unwrap();
-        for pb in progress_bars.iter() {
-            tree.push(pb)
-        }
-    }
-    // let tree2 = Arc::clone(&tree);
-
-    let multi_inner = Arc::clone(&multi);
 
     pool.scoped(|scope| {
-        {
-            // Total steps eta progress bar
-            let elem = &progress_bars[0];
-            let pb = multi_inner.insert(0, elem.progress_bar.clone());
 
-            pb.enable_steady_tick(500);
+        utils::begin_tick(0, &progress_bars);
+        utils::begin_tick(1, &progress_bars);
 
-            pb.set_message(&format!("{}...", &elem.key,));
-        }
-        {
-            // completed genomes progress bar
-            let elem = &progress_bars[1];
-            let pb = multi_inner.insert(1, elem.progress_bar.clone());
-
-            pb.enable_steady_tick(500);
-
-            pb.set_message(&format!("{}...", &elem.key,));
-        }
         for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
-            // let _ = std::thread::spawn(move || {
-            //     multi.join().unwrap();
-            // });
 
-            // let ref_idx = Arc::new(ref_idx);
-
-            // let ref_idx = Arc::new(ref_idx);
             let multi_inner = &multi_inner;
             let tree = &tree;
             let progress_bars = &progress_bars;
@@ -405,75 +375,24 @@ pub fn pileup_variants<
                     indexed_bam_readers.len()
                 );
 
-                let mut genotype_likelihoods = Vec::new();
-
-                indexed_bam_readers.into_iter().enumerate().for_each(
-                    |(sample_idx, bam_generator)| {
-                        // Get the appropriate sample index based on how many references we are using
-                        let mut bam_generator = generate_indexed_named_bam_readers_from_bam_files(
-                            vec![&bam_generator],
-                            n_threads as u32,
-                        )
-                        .into_iter()
-                        .next()
-                        .unwrap();
-                        if sample_idx < short_sample_count {
-                            process_vcf(
-                                bam_generator,
-                                n_threads,
-                                ref_idx,
-                                sample_idx,
-                                per_reference_samples,
-                                &mut variant_matrix,
-                                ReadType::Short,
-                                m,
-                                // &mut sample_groups,
-                                &genomes_and_contigs,
-                                &reference_map,
-                                per_reference_short_samples,
-                                &concatenated_genomes,
-                                &flag_filters,
-                            );
-                        } else if (m.is_present("longreads") | m.is_present("longread-bam-files"))
-                            && sample_idx >= short_sample_count
-                            && sample_idx < (short_sample_count + long_sample_count)
-                        {
-                            debug!("Running structural variant detection...");
-                            // Get the appropriate sample index based on how many references we are using by tracking
-                            // changes in references
-                            process_vcf(
-                                bam_generator,
-                                n_threads,
-                                ref_idx,
-                                sample_idx,
-                                per_reference_samples,
-                                &mut variant_matrix,
-                                ReadType::Long,
-                                m,
-                                // &mut sample_groups,
-                                &genomes_and_contigs,
-                                &reference_map,
-                                per_reference_short_samples,
-                                &concatenated_genomes,
-                                &flag_filters,
-                            );
-                        }
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-
-                            pb.progress_bar.set_message(&format!(
-                                "{}: Variant calling on sample: {}",
-                                pb.key,
-                                variant_matrix.get_sample_name(sample_idx),
-                            ));
-                            pb.progress_bar.inc(1);
-                        }
-                        {
-                            let pb = &tree.lock().unwrap()[0];
-                            pb.progress_bar.inc(1);
-                        }
-                    },
+                utils::collect_activity_profile(
+                    &indexed_bam_readers,
+                    n_threads,
+                    ref_idx,
+                    per_reference_samples,
+                    m,
+                    genomes_and_contigs,
+                    concatened_genomes,
+                    flag_filters,
+                    &tree
                 );
+
+                // if genotype_likelihoods.len() == 1 {
+                //     // Faster implementation for single sample analysis
+                // } else {
+                //
+                // }
+
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
                     pb.progress_bar

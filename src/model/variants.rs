@@ -1,6 +1,6 @@
 use bio::stats::LogProb;
 use itertools::Itertools;
-use ordered_float::NotNan;
+use ordered_float::{NotNan, OrderedFloat};
 use rust_htslib::{bcf, bcf::record::Numeric};
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -104,6 +104,26 @@ pub enum Variant {
     SV(SV),
     None,
 }
+
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
+pub struct Allele {
+    variant: Variant
+}
+
+impl Allele {
+    pub fn create_fake_alleles() -> Vec<Allele> {
+        let mut alleles = vec![Allele::fake(), 2];
+
+        return alleles
+    }
+
+    pub fn fake() -> Allele {
+        Allele {
+            variant: Variant::None
+        }
+    }
+}
+
 
 #[allow(unused)]
 impl Variant {
@@ -230,6 +250,7 @@ impl Filter {
         }
     }
 }
+
 
 /// Information about each base position
 #[derive(Clone, Debug, PartialEq)]

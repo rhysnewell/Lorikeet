@@ -17,7 +17,7 @@ use std::process::Stdio;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
@@ -40,7 +40,7 @@ pub struct Elem {
 
 pub fn setup_progress_bars(
     references: &Vec<&str>,
-    reference_map: &HashMap<usize, String>,
+    reference_map: &mut HashMap<usize, String>,
     genome_and_contigs: &GenomesAndContigs,
     short_sample_count: usize,
     long_sample_count: usize,
@@ -95,8 +95,36 @@ pub fn setup_progress_bars(
         ),
     };
 
+    let sty_eta = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+
+    let sty_aux = ProgressStyle::default_bar()
+        .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
+    progress_bars
+        .par_iter()
+        .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
+    progress_bars[0].progress_bar.set_style(sty_eta.clone());
+
     return progress_bars
 }
+
+pub fn begin_tick(
+    index: usize,
+    progress_bars: &Vec<Elem>,
+) {
+    let elem = &progress_bars[index];
+    let pb = multi_inner.insert(index, elem.progress_bar.clone());
+
+    pb.enable_steady_tick(500);
+
+    pb.set_message(&format!("{}...", &elem.key,));
+}
+
+// pub fn log10_binomial_coefficient(n: i64, k: i64) -> i64 {
+//
+// }
+
+// pub fn finish_and_clear()
 
 pub fn get_streamed_bam_readers<'a>(
     m: &'a clap::ArgMatches,
