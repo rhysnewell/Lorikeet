@@ -1,9 +1,11 @@
 use ordered_float::{NotNan, OrderedFloat};
 use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
+use model::genotype_allele_counts::GenotypeAlleleCounts;
+use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 
 pub struct Genotype {
-    ploidy: i32,
-    likelihoods: Vec<OrderedFloat<f32>>
+    pub ploidy: i32,
+    pub likelihoods: Vec<OrderedFloat<f32>>
 }
 
 impl Genotype {
@@ -38,19 +40,32 @@ impl Genotype {
     // fn calculate_genotype_counts_using_tables_and_validate()
 }
 
-struct GenotypeLikelihoodCalculator{
-    genotype_count: i32,
-    ploidy: i32,
-    allele_count: i32,
+pub struct GenotypeLikelihoodCalculators {
+    pub ploidy: i32,
+    pub allele_count: i32,
+    pub allele_first_genotype_offset_by_ploidy: Array2<i32>,
+    pub genotype_table_by_ploidy: Vec<Vec<GenotypeAlleleCounts>>
 }
 
-impl GenotypeLikelihoodCalculator {
-    pub fn get_instance(ploidy: i32, allele_count: i32) -> GenotypeLikelihoodCalculator {
-        let allele_first_offset_by_ploidy = GenotypeLikelihoodCalculator::calculate_genotype_counts_using_table_and_validate(ploidy, allele_count);
+impl GenotypeLikelihoodCalculators {
 
+    pub fn get_instance(ploidy: i32, allele_count: i32) -> GenotypeLikelihoodCalculator {
+        let allele_first_offset_by_ploidy =
+            GenotypeLikelihoodCalculator::calculate_genotype_counts_using_table_and_validate(ploidy, allele_count);
+        let genotype_table_by_ploidy = GenotypeLikelihoodCalculator::build_genotype_allele_counts_table(
+            ploidy,
+            allele_count,
+            &allele_first_offset_by_ploidy,
+        );
+        return GenotypeLikelihoodCalculator::new(
+            ploidy,
+            allele_count,
+            allele_first_offset_by_ploidy,
+            genotype_table_by_ploidy
+        )
     }
 
-    fn calculate_genotype_counts_using_table_and_validate(ploidy: i32, allele_count: i32) -> ArrayBase<OwnedRepr<i32>, (i32, i32)> {
+    fn calculate_genotype_counts_using_table_and_validate(ploidy: i32, allele_count: i32) -> Array2<i32> {
         GenotypeLikelihoodCalculator::check_ploidy_and_allele(ploidy, allele_count);
 
         let result = GenotypeLikelihoodCalculator::build_allele_first_genotype_offset_table(ploidy, allele_count);
@@ -74,8 +89,10 @@ impl GenotypeLikelihoodCalculator {
     }
 
     fn calculate_genotype_count_using_tables(ploidy: i32, allele_count: i32) -> Array2<i32> {
-        let result = GenotypeLikelihoodCalculator::build_allele_first_genotype_offset_table(ploidy, allele_count)
+        let result =
+            GenotypeLikelihoodCalculator::build_allele_first_genotype_offset_table(ploidy, allele_count);
 
+        return result
     }
 
 
@@ -156,11 +173,11 @@ impl GenotypeLikelihoodCalculator {
      */
     pub fn build_allele_first_genotype_offset_table(
         ploidy: i32, allele_count: i32
-    ) -> ArrayBase<OwnedRepr<i32>, (i32, i32)> {
+    ) -> Array2<i32> {
         let row_count = ploidy + 1;
         let col_count = allele_count + 1;
 
-        let mut result = Array::zeros((row_count, col_count));
+        let mut result = Array::zeros([row_count as usize, col_count as usize]);
 
         result[[0, 1..]].assign(1);
 
@@ -200,27 +217,65 @@ impl GenotypeLikelihoodCalculator {
      * @return never {@code null}.
      */
     fn build_genotype_allele_counts_table(
-        ploidy: i32, allele_count: i32, offset_table: &ArrayBase<OwnedRepr<i32>, (i32, i32)>
-    ) -> ArrayBase<OwnedRepr<i32>, (i32, i32)> {
+        ploidy: i32, allele_count: i32, offset_table: &Array2<i32>
+    ) -> Vec<Vec<GenotypeAlleleCounts>>{
 
         GenotypeLikelihoodCalculator::check_ploidy_and_allele(ploidy, allele_count);
 
         let row_count = ploidy + 1;
+        let mut result = vec![Vec::new(); row_count as usize]; // each row has a different number of columns.
         for p in 0..ploidy {
-            GenotypeLikelihoodCalculator::build_genotype_allele_counts_array(p, allele_count, offset_table);
+            result[p] = GenotypeLikelihoodCalculator::build_genotype_allele_counts_array(p, allele_count, offset_table);
         }
+
+        return result
 
     }
 
+    /**
+     * Builds a genotype-allele-counts array given the genotype ploidy and how many genotype you need.
+     * <p>
+     *     The result is guarantee to have exactly {@code length} positions and the elements are sorted
+     *     in agreement with the standard way to display genotypes following the VCF standard.
+     * </p>
+     *
+     * <p> Notice that is possible to request ploidy ==0. In that case the resulting array will have repetitions
+     * of the empty genotype allele count.
+     * </p>
+     *
+     * <p>
+     *     For example,
+     *
+     *     <pre>
+     *         ploidy = 1, length = 5 : [ {A}, {B}, {C}, {D}, {E} ]
+     *         ploidy = 2, length = 7 : [ {AA}, {AB}, {BB}, {AC}, {BC}, {CC}, {AD}
+     *         ploidy = 3, length = 10 : [ {AAA}, {AAB}, {ABB}, {BBB}, {AAC}, {ABC}, {BBC}, {BCC}, {CCC}, {AAD} ]
+     *     </pre>
+     * </p>
+     *
+     * @param ploidy requested ploidy.
+     * @param alleleCount number of different alleles that the genotype table must support.
+     * @param genotypeOffsetTable table with the offset of the first genotype that contain an allele given
+     *                            the ploidy and its index.
+     *
+     * @return never {@code null}, follows the specification above.
+     */
     fn build_genotype_allele_counts_array(
         ploidy: i32,
         allele_count:i32,
-        offset_table: &ArrayBase<OwnedRepr<i32>, (i32, i32)>
-    ) {
+        offset_table: &Array2<i32>
+    ) -> Vec<GenotypeAlleleCounts> {
         let length = offset_table[[ploidy, allele_count]];
         let strong_ref_length = if length == -1 { 1000 } else { std::cmp::min(length, 1000) };
-        
 
+        let mut result = vec![GenotypeAlleleCounts::build_empty()];
+        result[0] = GenotypeAlleleCounts::first(ploidy);
+
+        for genotype_index in 0..strong_ref_length {
+            result[genotype_index] = result[genotype_index - 1].next();
+        }
+        
+        return result
     }
 
 
