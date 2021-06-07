@@ -1,6 +1,6 @@
 use bio::stats::LogProb;
 use ordered_float::{NotNan, OrderedFloat};
-use model::genotype_builder::Genotype;
+use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculator};
 use model::variants::Allele;
 use itertools::Itertools;
 
@@ -97,7 +97,7 @@ impl VariantContext {
      * @return                                   VC with assigned genotypes
      */
     pub fn calculate_genotypes(
-        self,
+        &mut self,
         ploidy: f32,
         gpc: Option<f32>,
         given_alleles: Vec<VariantContext>,
@@ -108,7 +108,7 @@ impl VariantContext {
         }
 
         if 180 < self.variants.len() {
-
+            let alleles_to_keep = self.calculate_most_likely_alleles(ploidy, 180);
         }
 
         return Some(self)
@@ -138,15 +138,16 @@ impl VariantContext {
         num_alt_alleles_to_keep: usize,
     ) -> Vec<Allele> {
         let has_symbolic_non_ref = self.has_non_ref_allele();
-        let number_of_alleles_that_arent_proper_alt = if has_symbolic_non_ref { 1 } else { 2 };
+        let number_of_alleles_that_arent_proper_alt = if has_symbolic_non_ref { 2 } else { 1 };
         let number_of_proper_alts = self.get_n_alleles() - number_of_alleles_that_arent_proper_alt;
 
         if num_alt_alleles_to_keep >= number_of_proper_alts {
             return self.get_alleles()
         }
 
-        // let likelihood_sums =
+        let likelihood_sums = self.calculate_likelihood_sums(ploidy);
 
+        return self.f
     }
 
     /** the likelihood sum for an alt allele is the sum over all samples whose likeliest genotype contains that allele of
@@ -169,6 +170,10 @@ impl VariantContext {
                 genotype.likelihoods[index_of_most_likely_genotype] - genotype.likelihoods[0];
             let ploidy = if genotype.get_ploidy() > 0 { genotype.get_ploidy() } else { ploidy };
 
+            let allele_counts = GenotypeLikelihoodCalculator::get_instance(
+                ploidy,
+                self.get_n_alleles() as i32
+            )
         }
     }
 }
