@@ -64,7 +64,7 @@ pub struct RefVsAnyResult {
     /**
      * The genotype likelihoods for ref/ref ref/non-ref non-ref/non-ref
      */
-    pub genotype_likelihoods: Vec<OrderedFloat<f32>>,
+    pub genotype_likelihoods: Vec<OrderedFloat<f64>>,
     pub final_phred_scaled_genotype_likelihoods: Vec<i32>,
     pub ref_depth: i32,
     pub non_ref_depth: i32,
@@ -115,7 +115,7 @@ impl RefVsAnyResult {
      * Caps the het and hom var likelihood values by the hom ref likelihood.
      * The capping is done on the fly.
      */
-    pub fn get_genotype_likelihoods_capped_by_hom_ref_likelihood(&self) -> Vec<OrderedFloat<f32>> {
+    pub fn get_genotype_likelihoods_capped_by_hom_ref_likelihood(&self) -> Vec<OrderedFloat<f64>> {
         let mut output = vec![OrderedFloat(0.0); self.genotype_likelihoods.len()];
 
         for i in 0..self.genotype_likelihoods.len() {
@@ -155,7 +155,7 @@ pub fn collect_activity_profile(
     //     .unwrap();
     let min_soft_clip_qual = 29;
 
-    let ploidy: f32 = m.value_of("ploidy").unwrap().parse().unwrap();
+    let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
 
     let mut genotype_likelihoods = Vec::with_capacity(
         short_sample_count + long_sample_count
@@ -245,7 +245,7 @@ pub fn update_activity_profile<'b,
     split_threads: usize,
     ref_idx: usize,
     readtype: ReadType,
-    ploidy: f32,
+    ploidy: usize,
     bq: i32,
     min_soft_clip_qual: i32,
     genomes_and_contigs: &'b GenomesAndContigs,
@@ -267,8 +267,8 @@ pub fn update_activity_profile<'b,
         .collect();
     let target_names = header.target_names();
 
-    let likelihoodcount = (ploidy + 1.) as usize;
-    let log10ploidy = OrderedFloat((likelihoodcount as f32).log10());
+    let likelihoodcount = ploidy + 1;
+    let log10ploidy = OrderedFloat((likelihoodcount as f64).log10());
 
     let mut contig_stats: HashMap<usize, Vec<f64>> = HashMap::new();
 
@@ -356,7 +356,7 @@ pub fn update_activity_profile<'b,
                                             }
                                         }
 
-                                        let denominator = OrderedFloat(result.read_counts as f32) * log10ploidy;
+                                        let denominator = OrderedFloat(result.read_counts as f64) * log10ploidy;
                                         for i in 0..likelihoodcount {
                                             result.genotype_likelihoods[i] -= denominator
                                         }
@@ -396,7 +396,7 @@ pub fn update_activity_profile<'b,
 pub fn calculate_activity_probabilities(
     genotype_likelihoods: Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
     target_ids_and_lens: HashMap<usize, u64>,
-    ploidy: f32,
+    ploidy: usize,
 ) {
     if genotype_likelihoods.len() == 1 {
         // Faster implementation for single sample analysis
@@ -410,10 +410,10 @@ pub fn calculate_activity_probabilities(
                 let mut genotypes = Vec::new();
                 for sample_likelihoods in genotype_likelihoods.iter() {
                     let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
-                    genotypes.push(Genotype::build(ploidy as i32, result))
+                    genotypes.push(Genotype::build(ploidy, result))
                 }
 
-                let mut fake_alleles = Allele::create_fake_alleles();
+                let fake_alleles = Allele::create_fake_alleles();
 
                 let mut variant_context = VariantContext::build(
                     *tid, pos, pos, fake_alleles
@@ -422,8 +422,10 @@ pub fn calculate_activity_probabilities(
                 variant_context.add_genotypes(
                     genotypes
                 );
+
                 variant_context.calculate_genotypes(
-                    activity_probability,
+                    None,
+                    Vec::new(),
                 );
 
             }
@@ -431,16 +433,9 @@ pub fn calculate_activity_probabilities(
     }
 }
 
-pub fn calculate_genotypes(
-    variant_context: VariantContext,
-    activity_probability: f32,
-) {
-    if 180 < alleles.len() - 1 {}
-}
-
-pub calculate_most_likely_alleles(
-
-)
+// pub fn calculate_most_likely_alleles(
+//
+// )
 
 /**
  * Calculate the posterior probability that a single biallelic genotype is non-ref
@@ -468,7 +463,7 @@ fn calculate_single_sample_biallelic_non_ref_posterior(
 fn alignment_context_creation(
     alignment: &bam::pileup::Alignment,
     result: &mut RefVsAnyResult,
-    log10ploidy: OrderedFloat<f32>,
+    log10ploidy: OrderedFloat<f64>,
     likelihoodcount: usize,
     min_soft_clip_qual: i32,
     refr_base: u8,
@@ -488,12 +483,12 @@ fn alignment_context_creation(
             if refr_base != read_char {
                 is_alt = true;
                 result.non_ref_depth += 1;
-                non_ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual as f64))));
-                ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())))
+                non_ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))));
+                ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())))
             } else {
                 result.ref_depth += 1;
-                ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual as f64))));
-                non_ref_likelihood = OrderedFloat(f32::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())));
+                ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))));
+                non_ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())));
             }
 
             update_heterozygous_likelihood(
@@ -589,9 +584,9 @@ fn count_high_quality_soft_clips(
 fn update_heterozygous_likelihood(
     result: &mut RefVsAnyResult,
     likelihoodcount: usize,
-    log10ploidy: OrderedFloat<f32>,
-    ref_likelihood: OrderedFloat<f32>,
-    non_ref_likelihood: OrderedFloat<f32>
+    log10ploidy: OrderedFloat<f64>,
+    ref_likelihood: OrderedFloat<f64>,
+    non_ref_likelihood: OrderedFloat<f64>
 ) {
     // https://github.com/broadinstitute/gatk/blob/master/src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller/ReferenceConfidenceModel.java
     // applyPileupElementRefVsNonRefLikelihoodAndCount
@@ -603,8 +598,8 @@ fn update_heterozygous_likelihood(
     let mut j = likelihoodcount - 2;
     while i < (likelihoodcount - 1) {
         result.genotype_likelihoods[i] += (
-            ref_likelihood + OrderedFloat((j as f32).log10()),
-            non_ref_likelihood + OrderedFloat((i as f32).log10())
+            ref_likelihood + OrderedFloat((j as f64).log10()),
+            non_ref_likelihood + OrderedFloat((i as f64).log10())
         );
         i += 1;
         j -= 1;

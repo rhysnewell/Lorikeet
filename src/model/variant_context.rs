@@ -1,8 +1,9 @@
 use bio::stats::LogProb;
 use ordered_float::{NotNan, OrderedFloat};
-use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculator};
+use model::genotype_builder::{Genotype, GenotypesContext};
 use model::variants::Allele;
 use itertools::Itertools;
+use model::allele_subsetting_utils::AlleleSubsettingUtils;
 
 
 pub struct VariantContext {
@@ -17,10 +18,12 @@ pub struct VariantContext {
     // variant alleles
     pub variants: Vec<Allele>,
     // per sample likelihoods
-    pub genotypes: Vec<Genotype>,
+    pub genotypes: GenotypesContext,
 }
 
 impl VariantContext {
+    pub const MAX_ALTERNATE_ALLELES: usize = 180;
+
     pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Alleles>) -> VariantContext {
         VariantContext {
             tid,
@@ -28,7 +31,7 @@ impl VariantContext {
             end,
             refr: alleles[0].clone(),
             variants: alleles[1..].iter().cloned().collect_vec(),
-            genotypes: Vec::new(),
+            genotypes: GenotypesContext::empty(),
         }
     }
 
@@ -46,14 +49,13 @@ impl VariantContext {
     ) {
         for genotype in genotypes.iter() {
             if genotype.likelihoods.len() != self.variants.len() + 1 {
-                panic!(format!(
+                panic!(
                     "Number of likelihoods does not match number of alleles at position {} on tid {}",
                     self.start, self.tid
                 )
-                )
             }
         }
-        self.genot = likelihoods
+        self.genotypes = GenotypesContext::new(genotypes);
     }
 
     pub fn has_non_ref_allele(&self) -> bool {
@@ -97,21 +99,69 @@ impl VariantContext {
      * @return                                   VC with assigned genotypes
      */
     pub fn calculate_genotypes(
-        &mut self,
-        ploidy: f32,
-        gpc: Option<f32>,
+        mut vc: VariantContext,
+        ploidy: usize,
+        gpc: Option<f64>,
         given_alleles: Vec<VariantContext>,
 
     ) -> Option<VariantContext> {
-        if self.has_too_many_alternative_alleles() || self.get_n_samples() == 0 {
+        if vc.has_too_many_alternative_alleles() || vc.get_n_samples() == 0 {
             return None
         }
 
-        if 180 < self.variants.len() {
-            let alleles_to_keep = self.calculate_most_likely_alleles(ploidy, 180);
+        if VariantContext::MAX_ALTERNATE_ALLELES < vc.variants.len() {
+            let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
+                &mut vc,
+                ploidy,
+                VariantContext::MAX_ALTERNATE_ALLELES
+            );
+
+            let reduced_genotypes = if alleles_to_keep.len() == 1 {
+                VariantContext::subset_to_ref_only(vc, ploidy)
+            } else {
+
+            }
         }
 
-        return Some(self)
+        return Some(vc)
+    }
+
+    /**
+     * Subset the samples in VC to reference only information with ref call alleles
+     *
+     * Preserves DP if present
+     *
+     * @param vc the variant context to subset down to
+     * @param defaultPloidy defaultPloidy to use if a genotype doesn't have any alleles
+     * @return a GenotypesContext
+     */
+    pub fn subset_to_ref_only(vc: VariantContext, default_ploidy: usize) -> GentypesContext {
+        if default_ploidy < 1 {
+            panic!("default_ploidy must be >= 1, got {}", default_ploidy)
+        } else {
+            let old_gts = vc.get_genotypes();
+            if old_gts.is_empty() { return old_gts }
+
+            let mut new_gts = GenotypesContext::create(old_gts.size());
+
+            let ref_allele = vc.get_reference();
+            let diploid_ref_alleles = vec![ref_allele; 2];
+
+            // create the new genotypes
+            for g in old_gts.genotypes() {
+                let g_ploidy = if g.get_ploidy() == 0 { default_ploidy } else { g.get_ploidy() };
+                let ref_alleles = if g_ploidy == 2 { diploid_ref_alleles.clone() } else { vec![ref_allele; g_ploidy] };
+
+                let genotype = Genotype::build_from_alleles(ref_alleles);
+                new_gts.add(genotype);
+            }
+
+            return new_gts
+        }
+    }
+
+    pub fn get_genotypes(&self) -> GenotypesContext {
+        self.genotypes.clone()
     }
 
     pub fn get_alleles(&self) -> Vec<Allele> {
@@ -121,59 +171,7 @@ impl VariantContext {
         return all_alleles
     }
 
-    /**
-     * Returns the new set of alleles to use based on a likelihood score: alleles' scores are the sum of their counts in
-     * sample genotypes, weighted by the confidence in the genotype calls.
-     *
-     * In the case of ties, the alleles will be chosen from lowest index to highest index.
-     *
-     * @param vc target variant context.
-     * @param numAltAllelesToKeep number of alt alleles to keep.
-     * @return the list of alleles to keep, including the reference and {@link Allele#NON_REF_ALLELE} if present
-     *
-     */
-    pub fn calculate_most_likely_alleles(
-        &mut self,
-        ploidy: f32,
-        num_alt_alleles_to_keep: usize,
-    ) -> Vec<Allele> {
-        let has_symbolic_non_ref = self.has_non_ref_allele();
-        let number_of_alleles_that_arent_proper_alt = if has_symbolic_non_ref { 2 } else { 1 };
-        let number_of_proper_alts = self.get_n_alleles() - number_of_alleles_that_arent_proper_alt;
-
-        if num_alt_alleles_to_keep >= number_of_proper_alts {
-            return self.get_alleles()
-        }
-
-        let likelihood_sums = self.calculate_likelihood_sums(ploidy);
-
-        return self.f
-    }
-
-    /** the likelihood sum for an alt allele is the sum over all samples whose likeliest genotype contains that allele of
-     * the GL difference between the most likely genotype and the hom ref genotype
-     *
-     * Since GLs are log likelihoods, this quantity is thus
-     * SUM_{samples whose likeliest genotype contains this alt allele} log(likelihood alt / likelihood hom ref)
-     */
-    pub fn calculate_likelihood_sums(
-        &self,
-        ploidy: f32,
-    ) -> Vec<f32> {
-        let mut likelihood_sums = vec![0.; self.get_n_alleles()];
-
-        for genotype in self.genotypes.iter() {
-            let index_of_most_likely_genotype = genotype.likelihoods.iter()
-                .position(|&item| item == *(genotype.likelihoods.iter().max().unwrap())).unwrap();
-
-            let difference_between_best_and_ref =
-                genotype.likelihoods[index_of_most_likely_genotype] - genotype.likelihoods[0];
-            let ploidy = if genotype.get_ploidy() > 0 { genotype.get_ploidy() } else { ploidy };
-
-            let allele_counts = GenotypeLikelihoodCalculator::get_instance(
-                ploidy,
-                self.get_n_alleles() as i32
-            )
-        }
+    pub fn get_reference(&self) -> Allele {
+        self.refr.clone()
     }
 }

@@ -94,7 +94,7 @@ pub struct SV {
     end: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
 pub enum Variant {
     Deletion(u32),
     Insertion(Vec<u8>),
@@ -102,15 +102,18 @@ pub enum Variant {
     SNV(u8),
     MNV(Vec<u8>),
     SV(SV),
+    NonRefAllele,
     None,
 }
 
-#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
 pub struct Allele {
     variant: Variant
 }
 
 impl Allele {
+    pub const NON_REF_ALLELE: Variant = Variant::NonRefAllele;
+
     pub fn create_fake_alleles() -> Vec<Allele> {
         let mut alleles = vec![Allele::fake(), 2];
 
@@ -120,6 +123,13 @@ impl Allele {
     pub fn fake() -> Allele {
         Allele {
             variant: Variant::None
+        }
+    }
+
+    pub fn is_reference(&self) -> bool {
+        match &self.variant {
+            Variant::None => true,
+            _ => false,
         }
     }
 }
@@ -135,6 +145,7 @@ impl Variant {
             &Variant::SV(_) => true,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
+            &Variant::NonRefAllele => false,
             &Variant::None => false,
         }
     }
@@ -161,6 +172,7 @@ impl Variant {
             &Variant::SV(_) => false,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
+            &Variant::NonRefAllele => false,
             &Variant::None => false,
         }
     }
@@ -191,7 +203,7 @@ impl Variant {
             &Variant::Deletion(length) => start + length,
             &Variant::Insertion(_) | &Variant::Inversion(_) => start + 1, // end of insertion is the next regular base
             &Variant::SV(sv) => sv.end,
-            &Variant::SNV(_) | &Variant::None => start,
+            &Variant::SNV(_) | &Variant::None | &Variant::NonRefAllele => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32,
         }
     }
@@ -201,7 +213,7 @@ impl Variant {
             &Variant::Deletion(length) => start + length / 2,
             &Variant::Insertion(_) | &Variant::Inversion(_) => start, // end of insertion is the next regular base
             &Variant::SV(sv) => (sv.start + sv.len) / 2,
-            &Variant::SNV(_) | &Variant::None => start,
+            &Variant::SNV(_) | &Variant::None | &Variant::NonRefAllele => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32 / 2,
         }
     }
@@ -213,7 +225,7 @@ impl Variant {
             &Variant::SV(sv) => sv.len,
             &Variant::SNV(_) => 1,
             &Variant::MNV(ref alt) => alt.len() as u32,
-            &Variant::None => 1,
+            &Variant::None | &Variant::NonRefAllele => 1,
         }
     }
 }

@@ -60,10 +60,12 @@ use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
  *
  * The total number of possible genotypes is only bounded by the maximum allele index.
  */
+
+#[derive(Clone, Debug)]
 pub struct GenotypeAlleleCounts {
-    ploidy: i32,
-    distinct_allele_count: i32,
-    sorted_allele_counts: Vec<i32>,
+    ploidy: usize,
+    distinct_allele_count: usize,
+    sorted_allele_counts: Vec<usize>,
     index: usize,
     log10_combination_count: f64,
 }
@@ -77,6 +79,17 @@ impl GenotypeAlleleCounts {
             distinct_allele_count: 0,
             log10_combination_count: -1.,
         }
+    }
+
+    pub fn is_null(&self) -> bool {
+        if self.ploidy == 0
+            && self.index == 0
+            && self.sorted_allele_counts.len() == 0
+            && self.distinct_allele_count == 0
+            && self.log10_combination_count == -1 {
+            true
+        }
+        false
     }
 
     /**
@@ -104,21 +117,21 @@ impl GenotypeAlleleCounts {
      * @param sortedAlleleCounts sorted allele counts following the restrictions above.
      * @param index the genotype index.
      */
-    pub fn build(ploidy: i32, index: usize, sorted_allele_counts: &[i32]) -> GenotypeAlleleCounts {
+    pub fn build(ploidy: usize, index: usize, sorted_allele_counts: &[usize]) -> GenotypeAlleleCounts {
         GenotypeAlleleCounts {
             ploidy,
             index,
             sorted_allele_counts: Vec::from(sorted_allele_counts),
-            distinct_allele_count: sorted_allele_counts.len() as i32 >> 1,
+            distinct_allele_count: sorted_allele_counts.len() >> 1,
             log10_combination_count: -1.,
         }
     }
 
     pub fn build_with_count(
-        ploidy: i32,
+        ploidy: usize,
         index: usize,
-        sorted_allele_counts: Vec<i32>,
-        distinct_allele_count: i32
+        sorted_allele_counts: Vec<usize>,
+        distinct_allele_count: usize
     ) -> GenotypeAlleleCounts {
         GenotypeAlleleCounts {
             ploidy,
@@ -129,9 +142,9 @@ impl GenotypeAlleleCounts {
         }
     }
 
-    pub fn ploidy(&self) -> i32 {
-        self.ploidy
-    }
+    pub fn ploidy(&self) -> usize { self.ploidy }
+
+    pub fn index(&self) -> usize { self.index }
 
     /**
      * Increases the allele counts a number of times.
@@ -278,7 +291,7 @@ impl GenotypeAlleleCounts {
      *
      * @return never {@code null}.
      */
-    pub fn first(ploidy: i32) -> GenotypeAlleleCounts {
+    pub fn first(ploidy: usize) -> GenotypeAlleleCounts {
         if ploidy < 0 {
             panic!("Ploidy must be >= 0");
         }
@@ -288,5 +301,121 @@ impl GenotypeAlleleCounts {
         } else {
             return GenotypeAlleleCounts::build(ploidy, 0, &[0, ploidy])
         };
+    }
+
+    /**
+     * Returns the allele counts for each allele index to maximum.
+     * @param maximumAlleleIndex the maximum allele index required.
+     * @throws IllegalArgumentException if {@code maximumAlleleIndex} is less than 0.
+     * @return never {@code null}, an array of exactly {@code maximumAlleleIndex + 1} positions with the counts
+     * of each allele where the position in the array is equal to its index.
+     */
+    pub fn allele_counts_by_index(&self, maximum_allele_index: usize) -> Vec<i32> {
+        if maximum_allele_index < 0 {
+            panic!("The requested allele count cannot be less than 0")
+        } else {
+            let mut result = vec![0; maximum_allele_index + 1];
+            self.copy_allele_counts_by_index(&mut result, 0, 0, maximum_allele_index);
+
+            return result
+        }
+    }
+
+    fn copy_allele_counts_by_index(
+        &self,
+        dest: &mut Vec<i32>,
+        offset: i32,
+        minimum_allele_index: usize,
+        maximum_allele_index: usize,
+    ) {
+        // First we determine what section of the sortedAlleleCounts array contains the counts of interest,
+        // By the present allele rank range of interest.
+        let minimum_allele_rank = self.allele_rank_for(minimum_allele_index);
+        let maximum_allele_rank = self.allele_rank_for(maximum_allele_index);
+
+        // If the min or max allele index are absent (returned rank < 0) we note where the would be inserted; that
+        // way we avoid going through the rest of positions in the sortedAlleleCounts array.
+        // The range of interest is then [startRank,endRank].
+        let start_rank = if minimum_allele_index < 0 { -minimum_allele_rank - 1 } else { minimum_allele_rank };
+        let end_rank = if maximum_allele_rank < 0 { -maximum_allele_rank - 2 } else { maximum_allele_rank };
+
+        let mut next_index = minimum_allele_index; // next index that we want to output the count for.
+        let mut next_rank = start_rank; // next rank to query in sortedAlleleCounts.
+        let mut next_sorted_allele_counts_offset = next_rank << 1; // offset in sortedAlleleCounts where the info is present for the next rank.
+        let mut next_dest_offset = offset; // next offset in destination array where to set the count for the nextIndex.
+
+        while next_rank <= end_rank {
+            next_rank += 1;
+            let allele_index = self.sorted_allele_counts[next_sorted_allele_counts_offset];
+            next_sorted_allele_counts_offset += 1;
+            // fill non-present allele counts with 0s.
+            while allele_index > next_index {
+                dest[next_dest_offset] = 0;
+                next_dest_offset += 1;
+                next_index += 1;
+            }
+
+            // It is guaranteed that at this point alleleIndex == nextIndex
+            // thanks to the condition of the enclosing while: there must be at least one index of interest that
+            // is present in the remaining (nextRank,endRank] interval as otherwise endRank would be less than nextRank.
+            dest[next_dest_offset] = self.sorted_allele_counts[next_sorted_allele_counts_offset];
+            next_dest_offset += 1;
+            next_sorted_allele_counts_offset += 1;
+            next_index += 1;
+        }
+
+        // Finally we take care of trailing requested allele indices.
+        while next_index <= maximum_allele_index {
+            next_index += 1;
+            dest[next_dest_offset] = 0;
+            next_dest_offset += 1;
+        }
+    }
+
+    /**
+     * Returns the rank of an allele in the genotype by its index.
+     *
+     * @param index the target index.
+     *
+     * @throws IllegalArgumentException if {@code index} is less that 0. Indices can be arbitrarily large.
+     *
+     * @return -1 or less if the allele index is not present in the genotype, 0 to {@link #distinctAlleleCount()} - 1 otherwise.
+     *   If negative, the absolute value can be used to determine where would be that index inserted within {@code [0,{@link #distinctAlleleCount()}]} as
+     *   {@code - result - 1}.
+     *
+     */
+    pub fn allele_rank_for(&self, index: usize) -> i64 {
+        return self.allele_index_to_rank(index, 0, self.distinct_allele_count as usize)
+    }
+
+    /**
+     * Implements binary search across allele indexes.
+     * @param index the target index.
+     * @param from first inclusive possible rank.
+     * @param to last exclusive possible rank.
+     * @return -1 or less if the allele index is not in the genotype false otherwise. You can obtain
+     *  the potential insertion point (within the interval [from,to]) as {@code -result - 1}
+     */
+    fn allele_index_to_rank(&self, index: usize, from: usize, to: usize) -> i64 {
+        if to <= from {
+            return -(from as i64) - 1
+        }
+        if from == to - 1 {
+            let only_index = self.sorted_allele_counts[from << 1] as usize;
+            if only_index == index { from } else {
+                if only_index > index { -(from as i64) - 1 } else { -(to as i64) - 1 }
+            }
+        }
+
+        let mid = (to + from) >> 1;
+        let mid_index = self.sorted_allele_counts[mid << 1] as usize;
+
+        if mid_index == index {
+            return mid as i64
+        } else if mid_index < index {
+            return self.allele_index_to_rank(index, mid + 1, to);
+        } else {
+            return self.allele_index_to_rank(index, 0, mid);
+        }
     }
 }
