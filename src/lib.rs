@@ -52,6 +52,8 @@ extern crate serde_derive;
 extern crate lazy_static;
 extern crate derive_new;
 extern crate pest_derive;
+#[macro_use]
+extern crate enum_ordinalize;
 
 use clap::*;
 use std::process;
