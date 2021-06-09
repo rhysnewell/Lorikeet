@@ -1,9 +1,5 @@
 pub mod variants;
 pub mod variant_context;
-pub mod genotype_builder;
-pub mod genotype_allele_counts;
-pub mod genotype_likelihood_calculator;
 pub mod allele_subsetting_utils;
-pub mod genotype_likelihood_calculators;
-pub mod genotype_prior_calculator;
 pub mod allele_list;
+pub mod allele_frequency_calculator;

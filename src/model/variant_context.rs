@@ -4,6 +4,8 @@ use model::genotype_builder::{Genotype, GenotypesContext};
 use model::variants::Allele;
 use itertools::Itertools;
 use model::allele_subsetting_utils::AlleleSubsettingUtils;
+use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod};
+use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 
 
 pub struct VariantContext {
@@ -101,7 +103,7 @@ impl VariantContext {
     pub fn calculate_genotypes(
         mut vc: VariantContext,
         ploidy: usize,
-        gpc: Option<f64>,
+        gpc: Option<GenotypePriorCalculator>,
         given_alleles: Vec<VariantContext>,
 
     ) -> Option<VariantContext> {
@@ -119,7 +121,15 @@ impl VariantContext {
             let reduced_genotypes = if alleles_to_keep.len() == 1 {
                 VariantContext::subset_to_ref_only(vc, ploidy)
             } else {
-
+                AlleleSubsettingUtils::subset_alleles(
+                    vc.get_genotypes(),
+                    ploidy,
+                    vc.get_alleles(),
+                    alleles_to_keep,
+                    gpc,
+                    GenotypeAssignmentMethod::SetToNoCall,
+                    vc.
+                )
             }
         }
 

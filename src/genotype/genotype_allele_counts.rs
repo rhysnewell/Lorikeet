@@ -4,6 +4,8 @@ The following code is adapted from the broadinstitute GATK HaplotypeCaller progr
 
 use ordered_float::{NotNan, OrderedFloat};
 use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
+use utils::math_utils::MathUtils;
+use rayon::prelude::*;
 
 
 /**
@@ -71,6 +73,8 @@ pub struct GenotypeAlleleCounts {
 }
 
 impl GenotypeAlleleCounts {
+    const UNCOMPUTED_LOG_10_COMBINATION_COUNT: f64 = -1.;
+
     pub fn build_empty() -> GenotypeAlleleCounts {
         GenotypeAlleleCounts {
             ploidy: 0,
@@ -145,6 +149,30 @@ impl GenotypeAlleleCounts {
     pub fn ploidy(&self) -> usize { self.ploidy }
 
     pub fn index(&self) -> usize { self.index }
+    /**
+     * Gets the log10 combination count, computing it if uninitialized.  Note that the invoked MathUtils method uses fast cached
+     * log10 values of integers for any reasonable ploidy.
+     *
+     * This method should be invoked on instances of {@link GenotypeAlleleCounts} cached in {@link GenotypeLikelihoodCalculators::genotypeTableByPloidy}.
+     * Such usage allows the result of this computation to be cached once for an entire run of HaplotypeCaller.
+     * @return
+     */
+    pub fn log10_combination_count(&mut self) -> f64 {
+        if self.log10_combination_count == GenotypeAlleleCounts::UNCOMPUTED_LOG_10_COMBINATION_COUNT {
+            self.log10_combination_count =
+                MathUtils::log10_factorial(self.ploidy as f64)
+                    - (0..self.distinct_allele_count).into_par_iter().map(|i| {
+                    &self.sorted_allele_counts[i]
+                }).sum()
+        }
+        return self.log10_combination_count
+    }
+
+    pub fn sum_over_allele_indices_and_counts<F>(&self, f: F) -> f64
+        where F: Fn(usize, f64, &Vec<f64>) -> f64 {
+        // let result = (0..self.distinct_allele_count)
+        0.
+    }
 
     /**
      * Increases the allele counts a number of times.

@@ -1,0 +1,87 @@
+use utils::math_utils;
+use utils::simple_interval::SimpleInterval;
+
+#[derive(Clone, Debug)]
+pub enum Type<T: Float + Copy> {
+    None,
+    HighQualitySoftClips(T),
+}
+
+impl<T: Float + Copy> Type<T> {
+    pub fn new<T: Float + Copy>(high_quality_soft_clips_mean: T, threshold: T) -> Type<T> {
+        if high_quality_soft_clips >= threshold {
+            Type::HighQualitySoftClips(high_quality_soft_clips_mean)
+        } else {
+            Type::None
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ActivityProfileState {
+    loc: SimpleInterval,
+    active_prob: f64,
+    result_state: Type,
+}
+
+impl ActivityProfileState {
+    // When range-checking probabilities, we allow this much tolerance.
+    pub const PROBABILITY_TOLERANCE: f64 = 0.01;
+
+    /**
+     * Create a new ActivityProfileState at loc with probability of being active of activeProb that maintains some
+     * information about the result state and value
+     *
+     * The only state value in use is HighQualitySoftClips, and here the value is interpreted as the number
+     * of bp affected by the soft clips.
+     *
+     * @param loc the position of the result profile (for debugging purposes)
+     * @param activeProb the probability of being active (between 0 and 1)
+     */
+    pub fn new(loc: SimpleInterval, active_prob: f64, result_state: Type) -> ActivityProfileState {
+        if loc.size() != 1 {
+            panic!("Location for an ActivityProfileState must have to size 1 bp but saw {:?}", loc)
+        };
+
+        ActivityProfileState {
+            loc,
+            active_prob,
+            result_state
+        }
+    }
+
+    pub fn is_acitve_prob(&self) -> f64 {
+        self.active_prob
+    }
+
+    /**
+     * Set the probability that this site is active.
+     *
+     * Probabilities should be between 0.0 and 1.0, however this is not currently enforced
+     * because the {@link BandPassActivityProfile} can sometimes generate probabilities that
+     * slightly exceed 1.0 when moving probability mass around. We intend to fix this by
+     * capping at 1.0, but first we must evaluate the effects of capping on the HaplotypeCaller.
+     *
+     * @param activeProb probability (should be between 0.0 and 1.0) that the site is active
+     */
+    pub fn set_is_active_prob(&mut self, active_prob: f64) {
+        self.active_prob = active_prob
+    }
+
+    pub fn get_result_state(&self) -> &Type {
+        &self.result_state
+    }
+
+    pub fn get_result_value(&self) -> usize {
+        match self.result_state {
+            Type::None => {
+                0
+            },
+            Type::HighQualitySoftClips(count) => {
+                return count
+            }
+        }
+    }
+
+
+}
