@@ -7,6 +7,9 @@ use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use rayon::prelude::*;
 use std::collections::{HashSet, BTreeMap};
 use model::genotype_prior_calculator::GenotypePriorCalculator;
+use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod};
+use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 
 pub struct AlleleSubsettingUtils {}
 
@@ -129,7 +132,7 @@ impl AlleleSubsettingUtils {
         default_ploidy: usize,
         original_alleles: Vec<Allele>,
         alleles_to_keep: Vec<Allele>,
-        gpc: GenotypePriorCalculator,
+        gpc: Option<GenotypePriorCalculator>,
         assignment_method: GenotypeAssignmentMethod,
         depth: usize,
     ) -> GenotypesContext {

@@ -14,6 +14,15 @@ impl GenotypeLikelihoodCalculators {
 
     pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: i32 = 1000;
 
+    pub fn build_empty() -> GenotypeLikelihoodCalculators {
+        GenotypeLikelihoodCalculators {
+            ploidy: 0,
+            allele_count: 0,
+            allele_first_genotype_offset_by_ploidy: Array2::zeros([0, 0]),
+            genotype_table_by_ploidy: Vec::new(),
+        }
+    }
+
     pub fn get_instance(ploidy: usize, allele_count: usize) -> GenotypeLikelihoodCalculator {
         let allele_first_offset_by_ploidy =
             GenotypeLikelihoodCalculators::calculate_genotype_counts_using_table_and_validate(ploidy, allele_count);

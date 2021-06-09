@@ -1776,14 +1776,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("0.01"),
                 )
                 .arg(
-                    Arg::with_name("heterozygosity")
-                        .long("heterozygosity")
+                    Arg::with_name("heterozygosity-stdev")
+                        .long("heterozygosity-stdev")
                         .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("snp-heterozygosity")
+                        .long("snp-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("indel-heterozygosity")
                         .long("indel-heterozygosity")
-                        .default_value("0.001"),
+                        .default_value("0.000125"),
                 )
                 .arg(
                     Arg::with_name("kmer-size")

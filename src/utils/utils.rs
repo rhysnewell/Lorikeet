@@ -19,6 +19,7 @@ use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
+use std::ops::{Add, Div, Mul};
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -122,6 +123,10 @@ pub fn begin_tick(
 
 // pub fn log10_binomial_coefficient(n: i64, k: i64) -> i64 {
 //
+// }
+
+// pub fn factorial<T: Sized + Send + Add + Div + Mul + PartialEq + PartialOrd>(x: T) -> T {
+//     if let Some(mut factorial) =
 // }
 
 // pub fn finish_and_clear()

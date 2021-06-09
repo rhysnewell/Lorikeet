@@ -37,6 +37,10 @@ impl Genotype {
 
     pub fn get_ploidy(&self) -> usize { self.ploidy }
 
+    pub fn get_likelihoods(&mut self) -> &mut Vec<OrderedFloat<f64>> {
+        &mut self.likelihoods
+    }
+
 
     // pub fn genotype_likelihood_calculator(&self,)
 

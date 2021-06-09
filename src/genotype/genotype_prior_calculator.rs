@@ -1,4 +1,5 @@
 use enum_ordinalize;
+use utils::math_utils::MathUtils;
 
 #[derive(Debug, PartialEq, Eq, Ordinalize)]
 enum AlleleType {
@@ -61,7 +62,7 @@ impl GenotypePriorCalculator {
         het_values[AlleleType::OTHER.ordinal()] = other_het;
         hom_values[AlleleType::OTHER.ordinal()] = other_hom;
 
-        let diff_values = ebe_subtract(&hom_values, &het_values);
+        let diff_values = MathUtils::ebe_subtract(&hom_values, &het_values);
 
         GenotypePriorCalculator {
             het_values,
@@ -116,13 +117,3 @@ impl GenotypePriorCalculator {
 
 }
 
-/**
-* Element by elemnt subtraction of two vectors
-*/
-fn ebe_subtract(a: &[f64], b: &[f64]) -> Vec<f64> {
-    let mut z = Vec::with_capacity(a.len());
-    for (i, (aval, bval)) in a.iter().zip(&b).enumerate() {
-        z[i] = aval - bval;
-    }
-    z
-}

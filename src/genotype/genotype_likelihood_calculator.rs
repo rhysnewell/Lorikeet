@@ -159,4 +159,5 @@ impl GenotypeLikelihoodCalculator {
             }
         }
     }
+
 }

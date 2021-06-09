@@ -5,6 +5,7 @@ pub mod external_command_checker;
 pub mod model;
 pub mod utils;
 pub mod haplotype;
+pub mod genotype;
 
 // HTS and bio files
 extern crate bio;
@@ -23,6 +24,7 @@ extern crate linregress;
 extern crate ndarray;
 extern crate ndarray_npy;
 extern crate statrs;
+extern crate mathru;
 
 // Utilities
 extern crate clap;
@@ -54,6 +56,7 @@ extern crate derive_new;
 extern crate pest_derive;
 #[macro_use]
 extern crate enum_ordinalize;
+extern crate term;
 
 use clap::*;
 use std::process;
