@@ -1,3 +1,4 @@
+pub mod genotype_likelihoods;
 pub mod genotyping_engine;
 pub mod genotype_likelihood_calculators;
 pub mod genotype_likelihood_calculator;

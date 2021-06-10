@@ -142,6 +142,70 @@ impl MathUtils {
         return max_value + (if sum_tot != 1.0 { sum.log10() } else { 0.0 })
 
     }
+
+    /**
+     * Given an array of log space (log or log10) values, subtract all values by the array maximum so that the max element in log space
+     * is zero.  This is equivalent to dividing by the maximum element in real space and is useful for avoiding underflow/overflow
+     * when the array's values matter only up to an arbitrary normalizing factor, for example, an array of likelihoods.
+     *
+     * @param array
+     * @return the scaled-in-place array
+     */
+    //TODO: Check this remains in correct order
+    pub fn scale_log_space_array_for_numeric_stability<T: Float>(array: &mut [T]) {
+        let max_value = array.max();
+        array.par_iter_mut().for_each(|x| { *x = x - max_value})
+    }
+
+    /**
+     * See #normalizeFromLog10 but with the additional option to use an approximation that keeps the calculation always in log-space
+     *
+     * @param array
+     * @param takeLog10OfOutput
+     * @param keepInLogSpace
+     *
+     * @return array
+     */
+    //TODO: Check that this works
+    pub fn normalize_from_log10<T: Float + Copy>(
+        array: &[T],
+        take_log10_of_output: bool,
+        keep_in_log_space: bool
+    ) -> Vec<T> {
+        // for precision purposes, we need to add (or really subtract, since they're
+        // all negative) the largest value; also, we need to convert to normal-space.
+        let max_value: T = array.max();
+
+        // we may decide to just normalize in log space without converting to linear space
+        if keep_in_log_space {
+            let array: Vec<T> = array.par_iter().for_each(|x| *x -= max_value).collect_vec();
+            return array
+        }
+        // default case: go to linear space
+        let mut normalized: Vec<T> = (0..array.len())
+            .into_par_iter()
+            .map(|i| {
+                (10. as T).powf(array[i] - max_value)
+            })
+            .collect_vec();
+
+        let sum: T = normalized.par_iter().sum();
+
+        normalized.par_iter_mut().enumerate().for_each(
+            |i, mut x: T| {
+                x = x / sum;
+                if take_log10_of_output {
+                    x = x.log10();
+                    if x < MathUtils::LOG10_P_OF_ZERO
+                        || x.is_infinite() {
+                        x = array[i] - max_value
+                    }
+                }
+            }
+        );
+
+        return normalized
+    }
 }
 
 #[Derive(Debug, Clone, Copy)]

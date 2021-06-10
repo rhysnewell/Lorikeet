@@ -1,12 +1,12 @@
 use model::allele_list::AlleleList;
 use model::variants::Allele;
-use model::genotype_builder::Genotype;
-use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use genotype::genotype_builder::Genotype;
 use model::variant_context::VariantContext;
 use clap::ArgMatches;
-use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use utils::math_utils::MathUtils;
 use ordered_float::OrderedFloat;
+use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 
 pub struct AlleleFrequencyCalculator {
     pub ref_pseudo_count: f64,

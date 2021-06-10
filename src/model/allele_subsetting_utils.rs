@@ -1,19 +1,20 @@
-use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculator, GenotypesContext, GenotypeAssignmentMethod};
 use model::variants::Allele;
 use itertools::Itertools;
 use model::variant_context::VariantContext;
-use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-
 use rayon::prelude::*;
 use std::collections::{HashSet, BTreeMap};
-use model::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod};
+use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use model::allele_list::{AlleleList, AlleleListPermutation};
+use utils::math_utils::MathUtils;
+use ordered_float::OrderedFloat;
 
 pub struct AlleleSubsettingUtils {}
 
 impl AlleleSubsettingUtils {
+    const GL_CALCS: GenotypeLikelihoodCalculators = GenotypeLikelihoodCalculators::build_empty();
+
     /**
      * Returns the new set of alleles to use based on a likelihood score: alleles' scores are the sum of their counts in
      * sample genotypes, weighted by the confidence in the genotype calls.
@@ -132,9 +133,9 @@ impl AlleleSubsettingUtils {
         default_ploidy: usize,
         original_alleles: Vec<Allele>,
         alleles_to_keep: Vec<Allele>,
-        gpc: Option<GenotypePriorCalculator>,
+        gpc: GenotypePriorCalculator,
         assignment_method: GenotypeAssignmentMethod,
-        depth: usize,
+        depth: i64,
     ) -> GenotypesContext {
         if alleles_to_keep.len() == 0 {
             panic!("alleles_to_keep is empty")
@@ -144,16 +145,50 @@ impl AlleleSubsettingUtils {
         }
 
         let mut new_gts = GenotypesContext::create(original_gs.size());
-
-        // allele permuation goes here
-        // final Permutation<Allele> allelePermutation = new IndexedAlleleList<>(originalAlleles).permutation(new IndexedAlleleList<>(allelesToKeep));
+        let allele_permutation = AlleleList::new(&original_alleles).permuation(AlleleList::new(&alleles_to_keep));
         let mut subsetted_likelihood_indices_by_ploidy = BTreeMap::new();
 
-        for g in original_gs.genotypes() {
+        for g in original_gs.genotypes().iter_mut() {
             let ploidy = if g.get_ploidy() > 0 { g.get_ploidy() } else { default_ploidy };
 
-            if !subsetted_likelihood_indices_by_ploidy.contains_key(&ploidy) {
-                subsetted_likelihood_indices_by_ploidy.insert(ploidy, )
+            let mut subsetted_likelihoods_indices = subsetted_likelihood_indices_by_ploidy.entry(ploidy)
+                .or_insert(
+                    AlleleSubsettingUtils::subsetted_pl_indices(
+                        ploidy,
+                        &original_alleles,
+                        &alleles_to_keep,
+                        g,
+                    )
+                );
+
+            let expected_num_likelihoods = g.num_likelihoods(original_alleles.len() as i64, ploidy as i64)
+            let mut new_likelihoods: Option<Vec<OrderedFloat<f64>>>;
+            let mut new_log10_gq = -1;
+
+            let mut original_likelihoods = g.get_likelihoods();
+            new_likelihoods =
+                if original_likelihoods.len() == expected_num_likelihoods {
+                    let mut subsetted_likeihoods =
+                        subsetted_likelihoods_indices.iter().map(|i| original_likelihoods[i]).collect_vec();
+                    MathUtils::scale_log_space_array_for_numeric_stability(&mut subsetted_likeihoods);
+                    Some(subsetted_likeihoods)
+                } else {
+                    None
+                };
+            match new_likelihoods {
+                Some(new_likelihoods) => {
+                    let pl_index = MathUtils::max_element_index(&new_likelihoods, 0, new_likelihoods.len());
+                    new_log10_gq = g.get_likelihoods().get_gq_log10_from_likelihoods(pl_index);
+                },
+                None => {}
+            }
+
+            let use_new_likelihoods = match new_likelihoods {
+                Some(_) => {
+                    if depth != 0 ||  {
+
+                    }
+                }
             }
         }
     }
@@ -171,11 +206,40 @@ impl AlleleSubsettingUtils {
      * @return                      old PL indices of new genotypes
      */
     pub fn subsetted_pl_indices(
-        &self,
         ploidy: usize,
-        original_alleles: Vec<Allele>,
-        new_alleles: Vec<Allele>
+        original_alleles: &Vec<Allele>,
+        new_alleles: &Vec<Allele>,
+        g: &mut Genotype
     ) -> Vec<usize> {
-        
+        let mut result = vec![0; g.num_likelihoods(new_alleles.len() as i64, ploidy as i64) as usize];
+
+        let allele_permutation = AlleleList::new(original_alleles).permuation(AlleleList::new(new_alleles));
+
+        let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, original_alleles.len());
+
+        for old_pl_index in (0..gl_calc).into_iter() {
+            let old_allele_counts = gl_calc.genotype_allele_counts_at(old_pl_index);
+            let contains_only_new_alleles = (0..old_allele_counts.distinct_allele_count())
+                .map(|i| {
+                    old_allele_counts.allele_index_at(i)
+                }).all(|b| allele_permutation.is_kept(b));
+
+            if contains_only_new_alleles {
+                // make an array in the format described in {@link GenotypeAlleleCounts}:
+                // [(new) index of first allele, count of first allele, (new) index of second allele, count of second allele. . .]
+                let new_allele_counts = (0..new_alleles.len()).into_iter()
+                    .flat_map(|new_allele_index| {
+                        (new_allele_index..old_allele_counts.allele_count_for(
+                            allele_permutation.from_index(new_allele_index)
+                        ))
+                    }).collect_vec();
+
+                let new_pl_index = gl_calc.allele_counts_to_index(&new_allele_counts);
+
+                result[new_pl_index] = old_pl_index
+            }
+        }
+        return result
     }
+
 }

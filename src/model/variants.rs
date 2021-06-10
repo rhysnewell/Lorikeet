@@ -114,6 +114,7 @@ pub struct Allele {
 impl Allele {
     pub const NON_REF_ALLELE: Variant = Variant::NonRefAllele;
 
+
     pub fn create_fake_alleles() -> Vec<Allele> {
         let mut alleles = vec![Allele::fake(), 2];
 

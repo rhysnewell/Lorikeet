@@ -7,9 +7,9 @@ pub struct AlleleList<T> {
 }
 
 impl AlleleList<Allele> {
-    pub fn new(input_list: Vec<Allele>) -> AlleleList<Allele> {
+    pub fn new(input_list: &Vec<Allele>) -> AlleleList<Allele> {
         AlleleList {
-            list: input_list
+            list: input_list.clone()
         }
     }
 
