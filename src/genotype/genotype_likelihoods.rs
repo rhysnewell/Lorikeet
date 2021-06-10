@@ -1,0 +1,181 @@
+use std::collections::HashMap;
+use ordered_float::OrderedFloat;
+use utils::math_utils::MathUtils;
+
+pub struct GenotypeLikelihoods {
+    num_likelihood_cache: GenotypeNumLikelihoodsCache,
+    //
+    // There are two objects here because we are lazy in creating both representations
+    // for this object: a vector of log10 Probs and the PL phred-scaled string.  Supports
+    // having one set during initializating, and dynamic creation of the other, if needed
+    //
+    log10_likelihoods: Vec<OrderedFloat<f64>>,
+    // likelihoods_as_string_pls: String,
+}
+
+impl GenotypeLikelihoods {
+    pub fn new() -> GenotypeLikelihoods {
+        GenotypeLikelihoods {
+            num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
+            log10_likelihoods: Vec::new(),
+        }
+    }
+
+    pub fn from_log10_likelihoods(log10_likelihoods: Vec<OrderedFloat<f64>>) -> GenotypeLikelihoods {
+        GenotypeLikelihoods {
+            num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
+            log10_likelihoods
+        }
+    }
+
+    pub fn get_gq_log10_from_likelihoods<T: Float + Copy>(&self, i_of_chosen_genotype: usize) -> T {
+        let mut qual: T = std::f64::NEG_INFINITY as T;
+
+        for i in (0..self.log10_likelihoods.len()).into_iter() {
+            if i == i_of_chosen_genotype {
+                continue
+            } else if self.log10_likelihoods[i] >= qual {
+                qual = self.log10_likelihoods[i]
+            }
+        }
+
+        // qual contains now max(likelihoods[k]) for all k != bestGTguess
+        qual = self.log10_likelihoods[i_of_chosen_genotype] - qual;
+
+        if qual < OrderedFloat(0.) {
+            let normalized: Vec<T> = MathUtils::normalize_from_log10(
+                &self.log10_likelihoods,
+                false,
+                false
+            );
+            let chosen_genotype: T = normalized[i_of_chosen_genotype];
+
+            ((1.0 as T) - chosen_genotype).log10() as T
+        } else {
+            (-1. as T) * qual
+        }
+    }
+
+    /**
+     * Compute how many likelihood elements are associated with the given number of alleles
+     * Equivalent to asking in how many ways N non-negative integers can add up to P is S(N,P)
+     * where P = ploidy (number of chromosomes) and N = total # of alleles.
+     * Each chromosome can be in one single state (0,...,N-1) and there are P of them.
+     * Naive solution would be to store N*P likelihoods, but this is not necessary because we can't distinguish chromosome states, but rather
+     * only total number of alt allele counts in all chromosomes.
+     *
+     * For example, S(3,2) = 6: For alleles A,B,C, on a diploid organism we have six possible genotypes:
+     * AA,AB,BB,AC,BC,CC.
+     * Another way of expressing is with vector (#of A alleles, # of B alleles, # of C alleles)
+     * which is then, for ordering above, (2,0,0), (1,1,0), (0,2,0), (1,1,0), (0,1,1), (0,0,2)
+     * In general, for P=2 (regular biallelic), then S(N,2) = N*(N+1)/2
+     *
+     * Note this method caches the value for most common num Allele / ploidy combinations for efficiency
+     *
+     * For non-cached values, the result is calculated via a call to calcNumLikelihoods,
+     * which uses the Apache Commons CombinatoricsUtils class
+     * using the formula (numAlleles + ploidy - 1) choose ploidy
+     *
+     *   @param  numAlleles      Number of alleles (including ref)
+     *   @param  ploidy          Ploidy, or number of chromosomes in set
+     *   @return    Number of likelihood elements we need to hold.
+     */
+    pub fn num_likelihoods(&mut self, num_alleles: i64, ploidy: i64) -> i64 {
+        self.num_likelihood_cache.get(num_alleles, ploidy)
+    }
+
+    pub fn get_as_vector(&mut self) -> &mut Vec<OrderedFloat<f64>> {
+        &mut self.log10_likelihoods
+    }
+}
+
+pub struct GenotypeNumLikelihoodsCache {
+    static_cache: Vec<Vec<i64>>,
+    dynamic_cache: HashMap<CacheKey, i64>,
+}
+
+impl GenotypeNumLikelihoodsCache {
+    const DEFAULT_N_ALLELES: i64 = 5;
+    const DEFAULT_PLOIDY: i64 = 5;
+
+    pub fn new_empty() -> GenotypeNumLikelihoodsCache {
+        GenotypeNumLikelihoodsCache {
+            static_cache: Vec::new(),
+            dynamic_cache: HashMap::new(),
+        }
+
+    }
+
+    pub fn default_values(&mut self) {
+        self.add(
+            GenotypeNumLikelihoodsCache::DEFAULT_N_ALLELES,
+            GenotypeNumLikelihoodsCache::DEFAULT_PLOIDY
+        )
+    }
+
+    pub fn add(&mut self, num_alleles: i64, ploidy: i64) {
+        self.static_cache = vec![vec![0; ploidy as usize]; num_alleles as usize]
+
+        self.fill_cache();
+    }
+
+    fn fill_cache(&mut self) {
+        for num_alleles in (0..self.static_cache.len()).into_iter() {
+            for ploidy in (0..self.static_cache[num_alleles].len()).into_iter() {
+                self.static_cache[num_alleles][ploidy] =
+                    GenotypeLikelihoods.calc_num_likelihoods(num_alleles + 1, ploidy + 1);
+            }
+        }
+    }
+
+    fn put(&mut self, num_alleles: i64, ploidy: i64, num_likelihoods: i64) {
+        self.dynamic_cache.insert(CacheKey::build(num_alleles, ploidy), num_likelihoods);
+    }
+
+    /**
+     * Returns the number of likelihoods for the specified allele count and ploidy
+     * Values not present yet in the cache will be calculated and cached when get is called
+     * @param numAlleles
+     * @param ploidy
+     * @return number of likelihoods
+     */
+    fn get(&mut self, num_alleles: i64, ploidy: i64) -> i64 {
+        if num_alleles <= 0 || ploidy <= 0 {
+            panic!("num_alleles and ploidy must both exceed 0, but they are numAlleles {}, ploidy {}",
+                   num_alleles, ploidy
+            )
+        }
+        if (num_alleles as usize) < self.static_cache.len()
+            && (ploidy as usize) < self.static_cache[num_alleles as usize].len() {
+            self.static_cache[(num_alleles - 1) as usize][(ploidy - 1) as usize]
+        } else {
+            let cached_value = self.dynamic_cache[&CacheKey::build(num_alleles, ploidy)];
+            self.put(num_alleles, ploidy, new_value);
+
+            new_value
+        }
+    }
+}
+
+#[Derive(Debug, Clone, Hash, Eq)]
+struct CacheKey {
+    num_alleles: i64,
+    ploidy: i64,
+}
+
+impl CacheKey {
+    pub fn build(num_alleles: i64, ploidy: i64) -> CacheKey {
+        CacheKey {
+            num_alleles,
+            ploidy
+        }
+    }
+
+    pub fn equals(&self, other_cache: &CacheKey) -> bool {
+        self == other_cache
+    }
+
+    pub fn hash_code(&self) -> i64 {
+        self.num_alleles * 31 + ploidy
+    }
+}

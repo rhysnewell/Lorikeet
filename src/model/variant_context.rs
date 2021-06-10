@@ -4,8 +4,9 @@ use model::genotype_builder::{Genotype, GenotypesContext};
 use model::variants::Allele;
 use itertools::Itertools;
 use model::allele_subsetting_utils::AlleleSubsettingUtils;
-use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod};
+use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use utils::math_utils::MathUtils;
 
 
 pub struct VariantContext {
@@ -103,7 +104,7 @@ impl VariantContext {
     pub fn calculate_genotypes(
         mut vc: VariantContext,
         ploidy: usize,
-        gpc: Option<GenotypePriorCalculator>,
+        gpc: GenotypePriorCalculator,
         given_alleles: Vec<VariantContext>,
 
     ) -> Option<VariantContext> {
@@ -119,7 +120,7 @@ impl VariantContext {
             );
 
             let reduced_genotypes = if alleles_to_keep.len() == 1 {
-                VariantContext::subset_to_ref_only(vc, ploidy)
+                VariantContext::subset_to_ref_only(&mut vc, ploidy)
             } else {
                 AlleleSubsettingUtils::subset_alleles(
                     vc.get_genotypes(),
@@ -128,12 +129,16 @@ impl VariantContext {
                     alleles_to_keep,
                     gpc,
                     GenotypeAssignmentMethod::SetToNoCall,
-                    vc.
+                    vc.get_dp(),
                 )
             }
         }
 
         return Some(vc)
+    }
+
+    pub fn is_informative<T: Float + Copy>(gls: &[T]) -> bool {
+        MathUtils::sum
     }
 
     /**
@@ -145,7 +150,7 @@ impl VariantContext {
      * @param defaultPloidy defaultPloidy to use if a genotype doesn't have any alleles
      * @return a GenotypesContext
      */
-    pub fn subset_to_ref_only(vc: VariantContext, default_ploidy: usize) -> GentypesContext {
+    pub fn subset_to_ref_only(vc: &mut VariantContext, default_ploidy: usize) -> GentypesContext {
         if default_ploidy < 1 {
             panic!("default_ploidy must be >= 1, got {}", default_ploidy)
         } else {
@@ -183,5 +188,9 @@ impl VariantContext {
 
     pub fn get_reference(&self) -> Allele {
         self.refr.clone()
+    }
+
+    pub fn get_dp(&self) -> i64 {
+        self.genotypes.get_dp()
     }
 }

@@ -23,7 +23,6 @@ use coverm::FlagFilter;
 use external_command_checker;
 use model::variants::*;
 use model::variant_context::VariantContext;
-use model::genotype_builder::Genotype;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
@@ -36,9 +35,11 @@ use model::allele_frequency_calculator::AlleleFrequencyCalculator;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
 use utils::activity_profile_state::{ActivityProfileState, Type};
+use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 
 pub struct HaplotypeCallerEngine {
     allele_frequency_calculator: AlleleFrequencyCalculator,
+    genotype_prior_calculator: GenotypePriorCalculator,
     ref_idx: usize,
 }
 
@@ -84,6 +85,7 @@ impl HaplotypeCallerEngine {
     pub fn new(args: &clap::ArgMatches, ref_idx: usize) -> HaplotypeCallerEngine {
         HaplotypeCallerEngine {
             allele_frequency_calculator: AlleleFrequencyCalculator::make_calculator(args),
+            genotype_prior_calculator: GenotypePriorCalculator::max(args),
             ref_idx,
         }
     }
@@ -100,7 +102,7 @@ impl HaplotypeCallerEngine {
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
         tree: &Mutex<Arc<Vec<&Elem>>>,
-    ) {
+    ) -> HashMap<usize, Vec<ActivityProfileState>> {
 
 
         // minimum PHRED base quality
@@ -414,9 +416,11 @@ impl HaplotypeCallerEngine {
                         genotypes
                     );
 
+
                     VariantContext::calculate_genotypes(
                         variant_context,
-                        None,
+                        ploidy,
+                        self.genotype_prior_calculator.clone(),
                         Vec::new(),
                     );
 

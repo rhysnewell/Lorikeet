@@ -3,6 +3,9 @@ use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
 use model::genotype_allele_counts::GenotypeAlleleCounts;
 use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculators};
 use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use std::collections::BinaryHeap;
 
 #[derive(Clone, Debug)]
 pub struct GenotypeLikelihoodCalculator {
@@ -94,6 +97,11 @@ pub struct GenotypeLikelihoodCalculator {
      * </p>
      */
     read_genotype_likelihood_components: Vec<f64>,
+
+    /**
+    * Max-heap for integers used for this calculator internally.
+    */
+    allele_heap: BinaryHeap<usize>,
 }
 
 impl GenotypeLikelihoodCalculator {
@@ -116,7 +124,8 @@ impl GenotypeLikelihoodCalculator {
             allele_count,
             ploidy,
             allele_first_genotype_offset_by_ploidy,
-            read_genotype_likelihood_components: vec![]
+            read_genotype_likelihood_components: vec![],
+            allele_heap: BinaryHeap::with_capacity(ploidy),
         }
     }
 
@@ -160,4 +169,69 @@ impl GenotypeLikelihoodCalculator {
         }
     }
 
+    /**
+     * Returns the likelihood index given the allele counts.
+     *
+     * @param alleleCountArray the query allele counts. This must follow the format returned by
+     *  {@link GenotypeAlleleCounts#copyAlleleCounts} with 0 offset.
+     *
+     * @throws IllegalArgumentException if {@code alleleCountArray} is not a valid {@code allele count array}:
+     *  <ul>
+     *      <li>is {@code null},</li>
+     *      <li>or its length is not even,</li>
+     *      <li>or it contains any negatives,
+     *      <li>or the count sum does not match the calculator ploidy,</li>
+     *      <li>or any of the alleles therein is negative or greater than the maximum allele index.</li>
+     *  </ul>
+     *
+     * @return 0 or greater but less than {@link #genotypeCount}.
+     */
+    pub fn allele_counts_to_index(&mut self, allele_count_array: &[usize]) -> usize {
+        if allele_count_array.len() % 2 != 0 {
+            panic!("The allele counts array cannot have odd length")
+        }
+        self.allele_heap.clear();
+        for i in (0..allele_count_array.len()).step_by(2) {
+            let index = allele_count_array[i];
+            let count = allele_count_array[i + 1];
+            if count < 0 {
+                panic!("No allele count can be less than 0")
+            }
+            for j in (0..count).into_iter() {
+                self.allele_heap.push(index)
+            }
+        }
+
+        return self.allele_heap_to_index
+    }
+
+    /**
+     * Transforms the content of the heap into an index.
+     *
+     * <p>
+     *     The heap contents are flushed as a result, so is left ready for another use.
+     * </p>
+     *
+     * @return a valid likelihood index.
+     */
+    fn allele_heap_to_index(&mut self) -> usize {
+        if self.allele_heap.len() != self.ploidy {
+            panic!("The sum of allele counts must be equal to the ploidy of the calculator");
+        }
+
+        if self.allele_heap.peek().unwrap() >= &self.allele_count {
+            panic!("Invalid allele {:?} more than the maximum {}",
+                   self.allele_heap.peek(), self.allele_count - 1)
+        }
+
+        let mut result = 0;
+        for p in (ploidy..0).into_iter() {
+            let allele = self.allele_heap.pop().unwrap();
+            if allele < 0 {
+                panic!("Invalid allele {} must be >= 0", allele)
+            }
+            result += self.allele_first_genotype_offset_by_ploidy[p][allele]
+        }
+        return result
+    }
 }

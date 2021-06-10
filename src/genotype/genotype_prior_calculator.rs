@@ -102,18 +102,36 @@ impl GenotypePriorCalculator {
      * @param indelHet the prior for an INDEL alternative allele in log10 scale.
      * @return never {@code null}.
      */
-    pub fn assuming_HW(
+    pub fn assuming_hw(
         snp_het: f64,
         indel_het: f64,
-        other_het: f64
+        other_het: Option<f64>
     ) -> GenotypePriorCalculator {
-        GenotypePriorCalculator::genotype_prior_calculator(
-            snp_het, snp_het * 2.,
-            indel_het, indel_het * 2.,
-            other_het, other_het * 2.,
-        )
+        match other_het {
+            Some(other) => {
+                GenotypePriorCalculator::genotype_prior_calculator(
+                    snp_het, snp_het * 2.,
+                    indel_het, indel_het * 2.,
+                    other, other * 2.,
+                )
+            },
+            None => {
+                GenotypePriorCalculator::genotype_prior_calculator(
+                    snp_het, snp_het * 2.,
+                    indel_het, indel_het * 2.,
+                    std::cmp::max(snp_het, indel_het),
+                )
+            }
+        }
+
     }
 
+    pub fn make(args: &clap::ArgMatches) -> GenotypePriorCalculator {
+        let snp_het = args.value_of("snp-heterozygosity").unwrap().parse::<f64>().unwrap();
+        let ind_het = args.value_of("indel-heterozygosity").unwrap().parse::<f64>().unwrap();
+
+        GenotypePriorCalculator::assuming_hw(snp_het, ind_het, None)
+    }
 
 }
 

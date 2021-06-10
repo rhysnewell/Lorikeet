@@ -2,6 +2,7 @@ use model::genotype_allele_counts::GenotypeAlleleCounts;
 use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::allele_subsetting_utils;
 use ndarray::{Array2, Array};
+use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 
 pub struct GenotypeLikelihoodCalculators {
     pub ploidy: usize,

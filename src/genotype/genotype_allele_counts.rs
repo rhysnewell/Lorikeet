@@ -349,6 +349,23 @@ impl GenotypeAlleleCounts {
         }
     }
 
+    /**
+     * Returns the index of the allele from its rank in the genotype.
+     *
+     * @param rank the query rank.
+     *
+     * @throws IllegalArgumentException if the {@code rank} provided is outside the valid range [0,{@link #distinctAlleleCount()}).
+     *
+     * @return 0 or greater.
+     */
+    pub fn allele_index_at(&self, rank: usize) -> usize {
+        if rank >= self.distinct_allele_count {
+            panic!("The requested rank {} is out of range [0, {})", rank, self.distinct_allele_count);
+        }
+
+        self.sorted_allele_counts[rank << 1]
+    }
+
     fn copy_allele_counts_by_index(
         &self,
         dest: &mut Vec<i32>,
@@ -417,6 +434,36 @@ impl GenotypeAlleleCounts {
     }
 
     /**
+     * Returns the count of an allele in the genotype given is rank in the genotype (not the allele index itself).
+     *
+     * @param rank of the requested allele within the genotype.
+     *
+     * @throws IllegalArgumentException if {@code rank} is out the the valid range [0,{@link #distinctAlleleCount})
+     *
+     * @return 1 or greater.
+     */
+    pub fn allele_count_at(&self, rank: usize) -> usize {
+        if rank >= self.distinct_allele_count {
+            panic!("The rank is out of range")
+        }
+        return self.sorted_allele_counts[(rank << 1) + 1]
+    }
+
+    /**
+     * Returns the count of an allele in the genotype given it index.
+     *
+     * @return 0 if the allele is not present in the genotype, 1 or more otherwise.
+     */
+    pub fn allele_count_for(&self, index: usize) -> usize {
+        let rank = self.allele_rank_for(index);
+        if rank < 0 {
+            0
+        } else {
+            self.allele_count_at(rank)
+        }
+    }
+
+    /**
      * Implements binary search across allele indexes.
      * @param index the target index.
      * @param from first inclusive possible rank.
@@ -445,5 +492,9 @@ impl GenotypeAlleleCounts {
         } else {
             return self.allele_index_to_rank(index, 0, mid);
         }
+    }
+
+    pub fn distinct_allele_count(&self) -> usize {
+        self.distinct_allele_count
     }
 }
