@@ -14,6 +14,8 @@ pub struct GenotypeLikelihoods {
 }
 
 impl GenotypeLikelihoods {
+    pub const MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED: usize = 50;
+
     pub fn new() -> GenotypeLikelihoods {
         GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
@@ -45,6 +47,34 @@ impl GenotypeLikelihoods {
         if qual < OrderedFloat(0.) {
             let normalized: Vec<T> = MathUtils::normalize_from_log10(
                 &self.log10_likelihoods,
+                false,
+                false
+            );
+            let chosen_genotype: T = normalized[i_of_chosen_genotype];
+
+            ((1.0 as T) - chosen_genotype).log10() as T
+        } else {
+            (-1. as T) * qual
+        }
+    }
+
+    pub fn get_gq_log10_from_likelihoods_on_the_fly<T: Float + Copy>(i_of_chosen_genotype: usize, log10_likelihoods: &[T]) -> T {
+        let mut qual: T = std::f64::NEG_INFINITY as T;
+
+        for i in (0..log10_likelihoods.len()).into_iter() {
+            if i == i_of_chosen_genotype {
+                continue
+            } else if log10_likelihoods[i] >= qual {
+                qual = log10_likelihoods[i]
+            }
+        }
+
+        // qual contains now max(likelihoods[k]) for all k != bestGTguess
+        qual = log10_likelihoods[i_of_chosen_genotype] - qual;
+
+        if qual < OrderedFloat(0.) {
+            let normalized: Vec<T> = MathUtils::normalize_from_log10(
+                &log10_likelihoods,
                 false,
                 false
             );

@@ -6,6 +6,7 @@ use ordered_float::{NotNan, OrderedFloat};
 use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
 use utils::math_utils::MathUtils;
 use rayon::prelude::*;
+use model::variants::Allele;
 
 
 /**
@@ -496,5 +497,53 @@ impl GenotypeAlleleCounts {
 
     pub fn distinct_allele_count(&self) -> usize {
         self.distinct_allele_count
+    }
+
+    /**
+     * Composes a list with the alleles, possibly containing repeats i.e. if internally this stores
+     * allele 0 count = 1, allele 2 count = 2, the output is [Allele0, Allele2, Allele2]
+     *
+     * @param allelesToUse alleles to use.
+     *
+     * @throws IllegalArgumentException if {@code allelesToUse} is {@code null},
+     *          or does not contain enough elements to accommodate the maximum allele index in this allele-counts.
+     *
+     * @return never null, but it might be restricted (unmodifiable or non-expandable).
+     */
+    pub fn as_allele_list(&self, alleles_to_use: &Vec<Allele>) -> Vec<Allele> {
+        if (alleles_to_use.len() as i64) < self.maximum_allele_index() {
+            panic!("the provided alleles to use does not contain an element for the maximum allele")
+        }
+
+        if self.distinct_allele_count == 1 {
+            let mut result = vec![alleles_to_use.get(self.sorted_allele_counts[0]).unwrap(); ploidy];
+            let result = result.par_iter_mut().map(|allele| {
+                *allele = Allele::unwrap(allele)
+            }).collect();
+            result
+        } else {
+            let result = (0..self.distinct_allele_count).into_par_iter()
+                .flatmap(|distinct_allele| {
+                    let mut allele = alleles_to_use.get(self.sorted_allele_counts[2 * self.distinct_allele_count]);
+                    let allele = Allele::unwrap(allele);
+                    let repeats = self.sorted_allele_counts[2 * self.distinct_allele_count + 1];
+                    vec![allele; repeats]
+                }).collect_vec();
+            result
+        }
+
+    }
+
+    /**
+     * Returns the largest allele index present in the genotype.
+     *
+     * @return -1 if there is no alleles (ploidy == 0), 0 or greater otherwise.
+     */
+    pub fn maximum_allele_index(&self) -> i64 {
+        if self.distinct_allele_count == 0 {
+            -1
+        } else {
+            self.sorted_allele_counts[(self.distinct_allele_count - 1) << 1] as i64
+        }
     }
 }

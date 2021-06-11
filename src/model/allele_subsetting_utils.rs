@@ -9,6 +9,7 @@ use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use model::allele_list::{AlleleList, AlleleListPermutation};
 use utils::math_utils::MathUtils;
 use ordered_float::OrderedFloat;
+use genotype::genotype_likelihoods::GenotypeLikelihoods;
 
 pub struct AlleleSubsettingUtils {}
 
@@ -161,7 +162,7 @@ impl AlleleSubsettingUtils {
                     )
                 );
 
-            let expected_num_likelihoods = g.num_likelihoods(original_alleles.len() as i64, ploidy as i64)
+            let expected_num_likelihoods = g.num_likelihoods(original_alleles.len() as i64, ploidy as i64);
             let mut new_likelihoods: Option<Vec<OrderedFloat<f64>>>;
             let mut new_log10_gq = -1;
 
@@ -176,21 +177,54 @@ impl AlleleSubsettingUtils {
                     None
                 };
             match new_likelihoods {
-                Some(new_likelihoods) => {
-                    let pl_index = MathUtils::max_element_index(&new_likelihoods, 0, new_likelihoods.len());
+                Some(&new_likelihoods) => {
+                    let pl_index = MathUtils::max_element_index(new_likelihoods, 0, new_likelihoods.len());
                     new_log10_gq = g.get_likelihoods().get_gq_log10_from_likelihoods(pl_index);
                 },
-                None => {}
+                _ => {}
             }
 
             let use_new_likelihoods = match new_likelihoods {
-                Some(_) => {
-                    if depth != 0 ||  {
-
+                Some(&new_likelihoods) => {
+                    if depth != 0 || VariantContext::is_informative(new_likelihoods) {
+                        true
+                    } else {
+                        false
                     }
-                }
+                },
+                _ => false,
+            };
+
+            let mut gb = Genotype::from(g.clone());
+            if use_new_likelihoods {
+                gb.pl(GenotypeLikelihoods::from_log10_likelihoods(new_likelihoods.unwrap()));
+                // Don't worry about extended attributes here, we won't use them
             }
+
+            VariantContext::make_genotype_call
+
+            if g.has_ad() {
+                let old_ad = g.get_ad();
+                let new_ad = (0..alleles_to_keep.len()).into_par_iter().map(|n| {
+                    old_ad[allele_permutation.from_index(n)]
+                }).collect_vec();
+
+                let non_ref_index = alleles_to_keep.par_iter().position(|&p| p == Allele::NON_REF_ALLELE);
+
+                match non_ref_index {
+                    Some(index) => {
+                        new_ad[index] = 0;
+                    },
+                    _ => {
+                        // pass
+                    },
+                }
+                gb.ad = new_ad.clone();
+            }
+
+            new_gts.add(gb)
         }
+        return new_gts
     }
 
     /**
