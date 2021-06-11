@@ -1,5 +1,6 @@
 use enum_ordinalize;
 use utils::math_utils::MathUtils;
+use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 
 #[derive(Debug, PartialEq, Eq, Ordinalize)]
 enum AlleleType {
@@ -115,11 +116,11 @@ impl GenotypePriorCalculator {
                     other, other * 2.,
                 )
             },
-            None => {
+            _ => {
                 GenotypePriorCalculator::genotype_prior_calculator(
                     snp_het, snp_het * 2.,
                     indel_het, indel_het * 2.,
-                    std::cmp::max(snp_het, indel_het),
+                    std::cmp::max(snp_het, indel_het), std::cmp::max(snp_het, indel_het) * 2.
                 )
             }
         }
@@ -131,6 +132,74 @@ impl GenotypePriorCalculator {
         let ind_het = args.value_of("indel-heterozygosity").unwrap().parse::<f64>().unwrap();
 
         GenotypePriorCalculator::assuming_hw(snp_het, ind_het, None)
+    }
+
+    /**
+     * Calculates the priors given the alleles to genetype and a likelihood calculator that determines the ploidy
+     * of the sample at that site.
+     * @param likelihood_calculator the input calculator
+     * @param alleles the input alleles.
+     * @throws IllegalArgumentException if either input is {@code null} or the calculator maximum number of supported alleles is less that the input allele size.
+     * @return never {@code null}, the array will have as many positions as necessary to hold the priors of all possible
+     * unphased genotypes as per the number of input alleles and the input calculator's ploidy.
+     */
+    pub fn get_log10_priors(&self, likelihood_calculator: GenotypeLikelihoodCalculator, alleles: &Vec<Allele>) -> Vec<f64> {
+        if likelihood_calculator.allele_count < alleles.len() {
+            panic!("the number of alleles in the input calculator must be at least as large as the number of alleles in the input list")
+        }
+
+        let allele_types = GenotypePriorCalculator::calculate_allele_types(alleles);
+        let mut number_of_genotypes = likelihood_calculator.genotype_count;
+        if number_of_genotypes == -1 {
+            number_of_genotypes = 0
+        }
+        let number_of_genotype = number_of_genotypes as usize;
+        let mut result = vec![0.; number_of_genotypes];
+
+        for g in (1..number_of_genotypes).into_iter() {
+            let gac = likelihood_calculator.genotype_allele_counts_at(g);
+            result[g] = gac.sum_over_allele_indices_and_counts(
+                |idx: usize, cnt: usize| {
+                    if cnt == 2 {
+                        self.hom_values[allele_types[idx]]
+                    } else {
+                        self.het_values[allele_types[idx]] + self.diff_values[allele_types[idx]] * (cnt - 1)
+                    }
+                }
+            );
+        }
+
+        return result
+    }
+
+    fn calculate_allele_types(alleles: &Vec<Allele>) -> Vec<i64> {
+        let ref_allele = alleles[0];
+        if !ref_allele.is_reference() {
+            panic!("The first allele must be a valid reference")
+        }
+        let ref_length = ref_allele.length();
+
+        let result = alleles.par_iter().map(|allele| {
+            if allele.is_reference() {
+                return AlleleType::REF.ordinal()
+            } else if allele.is_called() && !allele.is_symbolic() {
+                match allele.variant() {
+                    Variant::Insertion(_) | Variant::Deletion(_) => {
+                        AlleleType::INDEL.ordinal()
+                    },
+                    Variant::SNV(_) => {
+                        AlleleType::SNP.ordinal()
+                    },
+                    _ => AlleleType::OTHER.ordinal()
+                }
+            } else if allele.is_called() && allele.is_symbolic() {
+                panic!("Cannot handle symbolic structural variants at the moment")
+            } else {
+                AlleleType::OTHER.ordinal()
+            }
+        }).collect_vec();
+
+        result
     }
 
 }

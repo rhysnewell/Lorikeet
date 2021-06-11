@@ -65,8 +65,8 @@ impl AlleleFrequencyCalculator {
                 let result = gac.log10_combination_count()
                     + log10_likelihoods[genotype_index]
                     + gac.sum_over_allele_indices_and_counts(
-                    |index: usize, count: f64, log10_allele_frequencies: &Vec<f64>| {
-                        count * log10_allele_frequencies[index]
+                    |index: usize, count: usize| {
+                        (count as f64) * &log10_allele_frequencies[index]
                     }
                 );
                 result

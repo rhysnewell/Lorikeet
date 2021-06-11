@@ -108,9 +108,9 @@ impl MathUtils {
         return array
     }
 
-    pub fn log10_sum_log10(log10_values: &Vec<f64>, start: usize, finish: usize) -> f64 {
+    pub fn log10_sum_log10<T: Float + Copy>(log10_values: &[T], start: usize, finish: usize) -> T {
         if start >= finish {
-            return std::f64::NEG_INFINITY
+            return std::f64::NEG_INFINITY as T
         }
 
         let max_element_index = MathUtils::max_element_index(
@@ -121,7 +121,7 @@ impl MathUtils {
 
         let max_value = log10_values[max_element_index];
 
-        if max_value == std::f64::NEG_INFINITY {
+        if max_value == (std::f64::NEG_INFINITY as T) {
             return max_value
         }
 
@@ -129,18 +129,26 @@ impl MathUtils {
             .par_iter()
             .enumerate()
             .filter(|&(index, value)| {
-                i != max_element_index || value != std::f64::NEG_INFINITY
+                i != max_element_index || value != (std::f64::NEG_INFINITY as T)
             })
             .map(|&(_, value)| {
                 value
             }).sum();
 
-        if sum_tot == std::f64::NAN || sum == std::f64::INFINITY {
+        if sum_tot == (std::f64::NAN as T) || sum == (std::f64::INFINITY as T) {
             panic!("log10 p: Values must be non-infinite and non-NAN")
         }
 
-        return max_value + (if sum_tot != 1.0 { sum.log10() } else { 0.0 })
+        return max_value + (if sum_tot != 1.0 { sum.log10() as T } else { 0.0 as T})
 
+    }
+
+    pub fn log10_sum_log10_two_values<T>(a: T, b: T) -> T {
+        if a > b {
+            a + ((1. as T) + (10.0 as T).powf(b - a))
+        } else {
+            b + ((1. as T) + (10.0 as T).powf(a - b))
+        }
     }
 
     /**
