@@ -62,7 +62,25 @@ impl Genotype {
         self.pl.num_likelihoods(num_alleles, ploidy)
     }
 
+    pub fn log10_p_error(&mut self, p_log10_error: f64) {
+        self.gq((p_log10_error * -10) as i64)
+    }
 
+    pub fn gq(&mut self, gq: i64) {
+        self.gq = gq
+    }
+
+    pub fn pl(&mut self, pl: GenotypeLikelihoods) {
+        self.pl = pl
+    }
+
+    pub fn has_ad(&self) -> bool {
+        self.ad.len() == self.alleles.len()
+    }
+
+    pub fn get_ad(&mut self) -> &mut Vec<i64> {
+        &mut self.ad
+    }
     // pub fn genotype_likelihood_calculator(&self,)
 
 

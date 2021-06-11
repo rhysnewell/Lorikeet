@@ -7,6 +7,9 @@ use model::allele_subsetting_utils::AlleleSubsettingUtils;
 use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use utils::math_utils::MathUtils;
+use rayon::prelude::*;
+use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 
 
 pub struct VariantContext {
@@ -26,6 +29,7 @@ pub struct VariantContext {
 
 impl VariantContext {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
+    pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
 
     pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Alleles>) -> VariantContext {
         VariantContext {
@@ -85,10 +89,62 @@ impl VariantContext {
      * {@link GenotypeLikelihoods#MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED}.
      */
     pub fn has_too_many_alternative_alleles(&self) -> bool {
-        if self.get_n_alleles() <= 180 {
+        if self.get_n_alleles() <= GenotypeLikelihoods::MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED {
             false
         } else {
             true
+        }
+    }
+
+    /**
+     * Add the genotype call (GT) field to GenotypeBuilder using the requested {@link GenotypeAssignmentMethod}
+     *
+     * @param gb the builder where we should put our newly called alleles, cannot be null
+     * @param assignmentMethod the method to use to do the assignment, cannot be null
+     * @param genotypeLikelihoods a vector of likelihoods to use if the method requires PLs, should be log10 likelihoods, cannot be null
+     * @param allelesToUse the alleles with respect to which the likelihoods are defined
+     */
+    pub fn make_genotype_call<T: Float + Copy>(
+        ploidy: usize,
+        gb: &mut Genotype,
+        assignment_method: &GenotypeAssignmentMethod,
+        genotype_likelihoods: &[T],
+        alleles_to_use: &Vec<Allele>,
+        original_gt: &Vec<Allele>,
+        gpc: &GenotypePriorCalculator
+    ) {
+        match GenotypeAssignmentMethod {
+            GenotypeAssignmentMethod::SetToNoCall => {
+                gb.alleles = vec![Allele::fake(); ploidy];
+            },
+            GenotypeAssignmentMethod::UsePLsToAssign => {
+                if !VariantContext::is_informative(genotype_likelihoods) {
+                    gb.alleles = vec![Allele::fake(); ploidy];
+                } else {
+                    let max_likelihood_index = MathUtils::max_element_index(genotype_likelihoods, 0, genotype_likelihoods.len());
+                    let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles_to_use.len());
+                    let allele_counts = gl_calc.genotype_allele_counts_at(max_likelihood_index);
+                    let final_alleles = allele_counts.as_allele_list(alleles_to_use);
+                    if final_alleles.contains(&Allele::NON_REF_ALLELE) {
+                        gb.alleles = vec![Allele::fake(); ploidy];
+                        gb.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![0.0 as T; genotype_likelihoods.len()]);
+                    } else {
+                        gb.alleles = final_alleles;
+                    }
+                    let num_alt_alleles = alleles_to_use.len() - 1;
+                    if num_alt_alleles > 0 {
+                        gb.log10_p_error(
+                            GenotypeLikelihoods::get_gq_log10_from_likelihoods_on_the_fly(max_likelihood_index, genotype_likelihoods)
+                        );
+                    }
+                }
+            },
+            GenotypeAssignmentMethod::SetToNoCallNoAnnotations => {
+                gb.alleles = vec![Allele::fake(); ploidy];
+            },
+            GenotypeAssignmentMethod::BestMatchToOriginal => {
+
+            }
         }
     }
 
@@ -131,14 +187,14 @@ impl VariantContext {
                     GenotypeAssignmentMethod::SetToNoCall,
                     vc.get_dp(),
                 )
-            }
+            };
         }
 
         return Some(vc)
     }
 
     pub fn is_informative<T: Float + Copy>(gls: &[T]) -> bool {
-        MathUtils::sum
+        gls.par_iter().sum() < (VariantContext::SUM_GL_THRESH_NOCALL as T)
     }
 
     /**

@@ -112,8 +112,13 @@ pub struct Allele {
 }
 
 impl Allele {
-    pub const NON_REF_ALLELE: Variant = Variant::NonRefAllele;
+    pub const NON_REF_ALLELE: Allele = Allele::new(Variant::NonRefAllele);
 
+    pub fn new(variant: Variant) -> Allele {
+        Allele {
+            variant
+        }
+    }
 
     pub fn create_fake_alleles() -> Vec<Allele> {
         let mut alleles = vec![Allele::fake(), 2];
@@ -132,6 +137,16 @@ impl Allele {
             Variant::None => true,
             _ => false,
         }
+    }
+
+    pub fn unwrap(possible_allele: Option<&Allele>) -> Allele {
+        let a = match possible_allele {
+            Some(a) => {
+                *a.clone()
+            },
+            _ => Allele::fake()
+        };
+        a
     }
 }
 
