@@ -12,8 +12,9 @@ use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use utils::vcf_constants::VCFConstants;
+use model::allele_frequency_calculator::AlleleFrequencyCalculator;
 
-
+#[Derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantContext {
     // contig id
     pub tid: usize,
@@ -32,6 +33,7 @@ pub struct VariantContext {
 impl VariantContext {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
     pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
+    pub const TOO_LONG_PL: usize = 100000;
 
     pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Alleles>) -> VariantContext {
         VariantContext {
@@ -283,6 +285,7 @@ impl VariantContext {
             return None
         }
 
+        let mut reduced_vc: VariantContext;
         if VariantContext::MAX_ALTERNATE_ALLELES < vc.variants.len() {
             let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
                 &mut vc,
@@ -303,7 +306,25 @@ impl VariantContext {
                     vc.get_dp(),
                 )
             };
+            reduced_vc = vc.clone();
+            reduced_vc.variants = alleles_to_keep;
+            reduced_vc.genotypes = reduced_genotypes;
+
         }
+
+        //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
+        let max_pl_length = GenotypeLikelihoods::calc_num_likelihoods(
+            reduced_vc.get_n_alleles(),
+            ploidy
+        );
+
+        if max_pl_length >= VariantContext::TOO_LONG_PL {
+            warn!("Length of PL arrays for this Variant Context \
+            (position: {}, allles: {}, ploidy: {}) is likely to reach {} so processing may take a long time",
+            vc.start, vc.get_n_alleles(), vc.genotypes.get_max_ploidy(ploidy), max_pl_length)
+        }
+
+        let af_result = AlleleFrequencyCalculator::c
 
         return Some(vc)
     }

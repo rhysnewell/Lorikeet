@@ -163,4 +163,18 @@ impl GenotypesContext {
     pub fn get_dp(&self) -> i64 {
         self.genotypes[0].dp
     }
+
+    pub fn get_max_ploidy(&mut self, default_ploidy: usize) -> i32 {
+        if self.max_ploidy == -1 {
+            self.max_ploidy = 0;
+            for g in self.genotypes {
+                self.max_ploidy = std::cmp::max(self.max_ploidy, g.ploidy as i32)
+            }
+
+            if self.max_ploidy == 0 {
+                self.max_ploidy = default_ploidy as i32
+            }
+        }
+        return self.max_ploidy
+    }
 }

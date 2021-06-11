@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use ordered_float::OrderedFloat;
 use utils::math_utils::MathUtils;
+use statrs::function::factorial::binomial;
 
 pub struct GenotypeLikelihoods {
     num_likelihood_cache: GenotypeNumLikelihoodsCache,
@@ -15,6 +16,10 @@ pub struct GenotypeLikelihoods {
 
 impl GenotypeLikelihoods {
     pub const MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED: usize = 50;
+
+    pub fn calc_num_likelihoods(num_alleles: usize, ploidy: usize) -> usize {
+        binomial((num_alleles + ploidy - 1), ploidy)
+    }
 
     pub fn new() -> GenotypeLikelihoods {
         GenotypeLikelihoods {

@@ -113,4 +113,13 @@ impl AlleleFrequencyCalculator {
             1 - MathUtils::normalize_log10(log10_unnormalized_posteriors, false)[0]
         }
     }
+
+    /**
+     * Compute the probability of the alleles segregating given the genotype likelihoods of the samples in vc
+     *
+     * @param vc the VariantContext holding the alleles and sample information.  The VariantContext
+     *           must have at least 1 alternative allele
+     * @return result (for programming convenience)
+     */
+    pub fn calculate(vc: VariantContext, )
 }
