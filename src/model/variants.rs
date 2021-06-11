@@ -102,41 +102,61 @@ pub enum Variant {
     SNV(u8),
     MNV(Vec<u8>),
     SV(SV),
-    NonRefAllele,
     None,
 }
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
 pub struct Allele {
-    variant: Variant
+    variant: Variant,
+    reference: bool
 }
 
 impl Allele {
-    pub const NON_REF_ALLELE: Allele = Allele::new(Variant::NonRefAllele);
 
-    pub fn new(variant: Variant) -> Allele {
+    const SINGLE_BREAKEND_INDICATOR: char = '.';
+    const BREAKEND_EXTENDING_RIGHT: char = '[';
+    const BREAKEND_EXTENDING_LEFT: char = ']';
+    const SYMBOLIC_ALLELE_START: char = '<';
+    const SYMBOLIC_ALLELE_END: char = '>';
+
+    const NO_CALL: char = '.';
+    const SPAND_DEL: char = '*';
+
+    const NON_REF_STRING: String = "<NON_REF>".to_string();
+    pub const NON_REF_ALLELE: Allele = Allele::new(
+        Variant::MNV(Allele::NON_REF_STRING.into_bytes()),
+        false
+    );
+
+    pub fn new(variant: Variant, reference: bool) -> Allele {
         Allele {
-            variant
+            variant,
+            reference,
         }
     }
 
     pub fn create_fake_alleles() -> Vec<Allele> {
-        let mut alleles = vec![Allele::fake(), 2];
+        let mut alleles = vec![Allele::fake(true), Allele::fake(false)];
 
         return alleles
     }
 
-    pub fn fake() -> Allele {
+    pub fn fake(reference: bool) -> Allele {
         Allele {
-            variant: Variant::None
+            variant: Variant::None,
+            reference,
+        }
+    }
+
+    pub fn no_call() -> Allele {
+        Allele {
+            variant: Variant::SNV(Allele::NO_CALL as u8),
+            reference: false,
         }
     }
 
     pub fn is_reference(&self) -> bool {
-        match &self.variant {
-            Variant::None => true,
-            _ => false,
-        }
+        self.reference
     }
 
     pub fn unwrap(possible_allele: Option<&Allele>) -> Allele {
@@ -144,15 +164,92 @@ impl Allele {
             Some(a) => {
                 *a.clone()
             },
-            _ => Allele::fake()
+            _ => Allele::fake(false)
         };
         a
+    }
+
+    pub fn is_no_call(&self) -> bool {
+        match &self.variant {
+            Variant::SNV(snp) => {
+                snp == &(Allele::NO_CALL as u8)
+            },
+            _ => false
+        }
+    }
+
+    pub fn is_called(&self) -> bool {
+        match &self.variant {
+            Variant::SNV(snp) => {
+                snp != &(Allele::NO_CALL as u8)
+            },
+            _ => true
+        }
+    }
+
+    pub fn is_symbolic(&self) -> bool {
+        self.variant.is_symbolic()
+    }
+
+    pub fn length(&self) -> usize {
+        self.variant.len()
+    }
+
+    pub fn variant(&self) -> &Variant {
+        &self.variant
     }
 }
 
 
 #[allow(unused)]
 impl Variant {
+
+    const SINGLE_BREAKEND_INDICATOR: u8 = '.' as u8;
+    const BREAKEND_EXTENDING_RIGHT: u8 = '[' as u8;
+    const BREAKEND_EXTENDING_LEFT: u8 = ']' as u8;
+    const SYMBOLIC_ALLELE_START: u8 = '<' as u8;
+    const SYMBOLIC_ALLELE_END: u8 = '>' as u8;
+
+    const NO_CALL: u8 = '.' as u8;
+    const SPAND_DEL: u8 = '*' as u8;
+
+    pub fn is_symbolic(&self) -> bool {
+        match self {
+            &Variant::Inversion(var)
+            | &Variant::Insertion(var)
+            | &Variant::MNV(var) => {
+                if var.contains(Variant::SINGLE_BREAKEND_INDICATOR)
+                    | var.contains(Variant::BREAKEND_EXTENDING_LEFT)
+                    | var.contains(Variant::BREAKEND_EXTENDING_RIGHT)
+                    | var.contains(Variant::SYMBOLIC_ALLELE_START)
+                    | var.contains(Variant::SYMBOLIC_ALLELE_END)
+                    | var.contains(Variant::NO_CALL) {
+                    true
+                } else {
+                    false
+                }
+            },
+            &Variant::SNV(var) => {
+                if (var == Variant::SINGLE_BREAKEND_INDICATOR)
+                    | (var == Variant::BREAKEND_EXTENDING_LEFT)
+                    | (var == Variant::BREAKEND_EXTENDING_RIGHT)
+                    | (var == Variant::SYMBOLIC_ALLELE_START)
+                    | (var == Variant::SYMBOLIC_ALLELE_END)
+                    | (var == Variant::NO_CALL) {
+                    true
+                } else {
+                    false
+                }
+            },
+            &Variant::Deletion(_)
+            | &Variant::SV(_) => {
+                false
+            }
+            &Variant::None => true,
+
+        }
+    }
+
     pub fn has_fragment_evidence(&self) -> bool {
         match self {
             &Variant::Deletion(_) => true,
@@ -161,7 +258,6 @@ impl Variant {
             &Variant::SV(_) => true,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
-            &Variant::NonRefAllele => false,
             &Variant::None => false,
         }
     }
@@ -188,7 +284,6 @@ impl Variant {
             &Variant::SV(_) => false,
             &Variant::SNV(_) => false,
             &Variant::MNV(_) => false,
-            &Variant::NonRefAllele => false,
             &Variant::None => false,
         }
     }
@@ -219,7 +314,7 @@ impl Variant {
             &Variant::Deletion(length) => start + length,
             &Variant::Insertion(_) | &Variant::Inversion(_) => start + 1, // end of insertion is the next regular base
             &Variant::SV(sv) => sv.end,
-            &Variant::SNV(_) | &Variant::None | &Variant::NonRefAllele => start,
+            &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32,
         }
     }
@@ -229,7 +324,7 @@ impl Variant {
             &Variant::Deletion(length) => start + length / 2,
             &Variant::Insertion(_) | &Variant::Inversion(_) => start, // end of insertion is the next regular base
             &Variant::SV(sv) => (sv.start + sv.len) / 2,
-            &Variant::SNV(_) | &Variant::None | &Variant::NonRefAllele => start,
+            &Variant::SNV(_) | &Variant::None => start,
             &Variant::MNV(ref alt) => start + alt.len() as u32 / 2,
         }
     }
@@ -241,7 +336,7 @@ impl Variant {
             &Variant::SV(sv) => sv.len,
             &Variant::SNV(_) => 1,
             &Variant::MNV(ref alt) => alt.len() as u32,
-            &Variant::None | &Variant::NonRefAllele => 1,
+            &Variant::None => 1,
         }
     }
 }

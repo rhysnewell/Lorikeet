@@ -201,7 +201,15 @@ impl AlleleSubsettingUtils {
                 // Don't worry about extended attributes here, we won't use them
             }
 
-            VariantContext::make_genotype_call
+            VariantContext::make_genotype_call(
+                g.ploidy,
+                &mut gb,
+                &assignment_method,
+                new_likelihoods,
+                &alleles_to_keep,
+                &g.alleles,
+                &gpc
+            );
 
             if g.has_ad() {
                 let old_ad = g.get_ad();

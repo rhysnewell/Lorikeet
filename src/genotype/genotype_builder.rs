@@ -4,6 +4,7 @@ use model::genotype_allele_counts::GenotypeAlleleCounts;
 use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use std::collections::HashMap;
 
 pub enum GenotypeAssignmentMethod {
     BestMatchToOriginal,
@@ -11,6 +12,7 @@ pub enum GenotypeAssignmentMethod {
     SetToNoCall,
     SetToNoCallNoAnnotations,
     UsePLsToAssign,
+    UsePosteriorProbabilities,
 }
 
 pub struct Genotype {
@@ -21,6 +23,7 @@ pub struct Genotype {
     pub dp: i64,
     pub gq: i64,
     pub is_phased: bool,
+    pub attributes: HashMap<String, Vec<f64>>
 }
 
 impl Genotype {
@@ -36,7 +39,8 @@ impl Genotype {
             dp: -1,
             gq: -1,
             ad: Vec::with_capacity(likelihoods.len()),
-            is_phased: false
+            is_phased: false,
+            attributes: HashMap::new(),
         }
     }
 
@@ -48,6 +52,7 @@ impl Genotype {
             gq: -1,
             ad: Vec::with_capacity(likelihoods.len()),
             is_phased: false,
+            attributes: HashMap::new(),
             alleles,
         }
     }
@@ -80,6 +85,25 @@ impl Genotype {
 
     pub fn get_ad(&mut self) -> &mut Vec<i64> {
         &mut self.ad
+    }
+
+    pub fn no_call_alleles(&mut self, ploidy: usize) {
+        self.alleles = vec![Allele::no_call(); ploidy]
+    }
+
+    pub fn no_qg(&mut self) {
+        self.gq = -1
+    }
+
+    pub fn no_annotations(&mut self) {
+        self.gq = -1;
+        self.ad = Vec::new();
+        self.dp = -1;
+        self.attributes = HashMap::new();
+    }
+
+    pub fn attribute(&mut self, attribute: String, value: Vec<f64>) {
+        self.insert(attribute, value)
     }
     // pub fn genotype_likelihood_calculator(&self,)
 

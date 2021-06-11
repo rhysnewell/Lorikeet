@@ -170,9 +170,11 @@ impl GenotypeAlleleCounts {
     }
 
     pub fn sum_over_allele_indices_and_counts<F>(&self, f: F) -> f64
-        where F: Fn(usize, f64, &Vec<f64>) -> f64 {
+        where F: Fn(usize, usize) -> f64 {
         // let result = (0..self.distinct_allele_count)
-        0.
+        (0..self.distinct_allele_count).into_par_iter()
+            .map(|n|
+                f(self.sorted_allele_counts[2*n], self.sorted_allele_counts[2*n + 1])).sum()
     }
 
     /**
