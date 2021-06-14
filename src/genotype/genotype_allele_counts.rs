@@ -177,6 +177,14 @@ impl GenotypeAlleleCounts {
                 f(self.sorted_allele_counts[2*n], self.sorted_allele_counts[2*n + 1])).sum()
     }
 
+    pub fn for_each_allele_index_and_count<F>(&self, f: F)
+        where F: Fn(usize, usize) {
+        (0..self.distinct_allele_count).into_iter()
+            .for_each(|n| {
+                f(self.sorted_allele_counts[2*n], self.sorted_allele_counts[2*n + 1])
+            })
+    }
+
     /**
      * Increases the allele counts a number of times.
      *
@@ -546,6 +554,33 @@ impl GenotypeAlleleCounts {
             -1
         } else {
             self.sorted_allele_counts[(self.distinct_allele_count - 1) << 1] as i64
+        }
+    }
+
+    /**
+     * Perform an action for every allele index not represented in this genotype.  For example if the total allele count
+     * is 4 and {@code sortedAlleleCounts} is [0,1,2,1] then alleles 0 and 2 are present, each with a count of 1, while
+     * alleles 1 and 3 are absent, so we perform {@code action} on 1 and 3.
+     */
+    pub fn for_each_absent_allele_index<F>(&self, f: F, allele_count: usize)
+        where F: Fn(usize) {
+        let mut present_allele_index = 0;
+        let mut present_allele = self.sorted_allele_counts[0];
+
+        for n in (0..allele_count).into_iter() {
+            // if we find n in sortedAlleleCounts, it is present, so we move presentAllele to the next
+            // index in sortedAlleleCounts and skip the allele; otherwise the allele is absent and we perform the action on it.
+            if n == present_allele {
+                // if we haven't exhausted all the present alleles, move to the next one.
+                // Note that distinctAlleleCount == sortedAlleleCounts.length/2
+                present_allele_index += 1;
+                if present_allele_index < self.distinct_allele_count {
+                    // every other entry in sortedAlleleCounts is an allele index; hence we multiply by 2
+                    present_allele = self.sorted_allele_counts[2 * present_allele_index];
+                }
+                continue
+            }
+            f(n);
         }
     }
 }

@@ -13,6 +13,7 @@ use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use utils::vcf_constants::VCFConstants;
 use model::allele_frequency_calculator::AlleleFrequencyCalculator;
+use model::allele_frequency_calculator_result::AFCalculationResult;
 
 #[Derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantContext {
@@ -277,7 +278,8 @@ impl VariantContext {
     pub fn calculate_genotypes(
         mut vc: VariantContext,
         ploidy: usize,
-        gpc: GenotypePriorCalculator,
+        gpc: &GenotypePriorCalculator,
+        allele_frequency_calculator: &AlleleFrequencyCalculator,
         given_alleles: Vec<VariantContext>,
 
     ) -> Option<VariantContext> {
@@ -324,9 +326,27 @@ impl VariantContext {
             vc.start, vc.get_n_alleles(), vc.genotypes.get_max_ploidy(ploidy), max_pl_length)
         }
 
-        let af_result = AlleleFrequencyCalculator::c
+        let af_result = allele_frequency_calculator.calculate(reduced_vc, ploidy);
 
         return Some(vc)
+    }
+
+    /**
+     * Provided the exact mode computations it returns the appropriate subset of alleles that progress to genotyping.
+     * @param afCalculationResult the allele fraction calculation result.
+     * @param vc the variant context
+     * @return information about the alternative allele subsetting {@code null}.
+     */
+    fn calculate_output_allele_subset(af_calculation_result: &AFCalculationResult, vc: &VariantContext, given_allele: &Vec<VariantContext>) -> OutputAlleleSubset {
+        let mut output_allele = Vec::new();
+        let mut mle_counts = Vec::new();
+
+        let mut sit_is_monomorphic = true;
+        let alleles = af_calculation_result.get_alleles_used_in_genotyping();
+        let alternative_allele_count = alleles.len() - 1;
+        let reference_size = 0;
+
+        let forced_alleles = 
     }
 
     pub fn is_informative<T: Float + Copy>(gls: &[T]) -> bool {
