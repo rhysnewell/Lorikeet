@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use std::ops::{Add, Sub, Mul};
 use mathru::special;
+use utils::natural_log_utils::NaturalLogUtils;
 
 pub struct MathUtils {
 
@@ -32,6 +33,15 @@ impl MathUtils {
             });
 
         return new_pls
+    }
+
+    /**
+    * Element by elemnt addition of two vectors in place
+    */
+    pub fn ebe_add_in_place<T: Add>(a: &mut [T], b: &[T]) {
+        a.par_iter_mut().enumerate().for_each(|(i, val)| {
+            *val += b[i]
+        });
     }
 
     /**
@@ -159,7 +169,6 @@ impl MathUtils {
      * @param array
      * @return the scaled-in-place array
      */
-    //TODO: Check this remains in correct order
     pub fn scale_log_space_array_for_numeric_stability<T: Float>(array: &mut [T]) {
         let max_value = array.max();
         array.par_iter_mut().for_each(|x| { *x = x - max_value})
@@ -213,6 +222,28 @@ impl MathUtils {
         );
 
         return normalized
+    }
+
+    pub fn is_valid_log10_probability(result: f64) -> bool {
+        result <= 0.0
+    }
+
+    /**
+     * Calculates {@code log10(1-10^a)} without losing precision.
+     *
+     * @param a the input exponent.
+     * @return {@link Double#NaN NaN} if {@code a > 0}, otherwise the corresponding value.
+     */
+    pub fn log10_one_minus_pow10<T: Float + Copy>(a: T) -> T {
+        if a > 0 {
+            return std::f64::NAN as T
+        }
+        if a == 0 {
+            return std::f64::NEG_INFINITY
+        }
+
+        let b = a * (MathUtils::LOG_10 as T);
+        return NaturalLogUtils::log1mexp(b) * MathUtils::INV_LOG_10
     }
 }
 

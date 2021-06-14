@@ -75,6 +75,10 @@ impl Genotype {
         self.gq = gq
     }
 
+    pub fn has_likelihoods(&self) -> bool {
+        !self.pl.is_empty()
+    }
+
     pub fn pl(&mut self, pl: GenotypeLikelihoods) {
         self.pl = pl
     }

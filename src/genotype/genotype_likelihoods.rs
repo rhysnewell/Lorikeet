@@ -28,6 +28,10 @@ impl GenotypeLikelihoods {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.log10_likelihoods.len() == 0
+    }
+
     pub fn from_log10_likelihoods(log10_likelihoods: Vec<OrderedFloat<f64>>) -> GenotypeLikelihoods {
         GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),

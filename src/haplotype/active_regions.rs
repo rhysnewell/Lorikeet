@@ -420,7 +420,8 @@ impl HaplotypeCallerEngine {
                     VariantContext::calculate_genotypes(
                         variant_context,
                         ploidy,
-                        self.genotype_prior_calculator.clone(),
+                        self.genotype_prior_calculator,
+                        self.allele_frequency_calculator,
                         Vec::new(),
                     );
 

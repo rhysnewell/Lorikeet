@@ -198,6 +198,17 @@ impl Allele {
     pub fn variant(&self) -> &Variant {
         &self.variant
     }
+
+    pub fn contains(&self, variant: &Variant) -> bool {
+        self.variant == variant
+    }
+
+    pub fn is_del(&self) -> bool {
+        match self.variant {
+            &Variant::Deletion(_) => true,
+            _ => false,
+        }
+    }
 }
 
 
