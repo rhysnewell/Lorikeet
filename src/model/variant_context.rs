@@ -14,21 +14,20 @@ use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use utils::vcf_constants::VCFConstants;
 use model::allele_frequency_calculator::AlleleFrequencyCalculator;
 use model::allele_frequency_calculator_result::AFCalculationResult;
+use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use utils::simple_interval::SimpleInterval;
+use std::collections::HashSet;
 
 #[Derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantContext {
-    // contig id
-    pub tid: usize,
-    // context start
-    pub start: usize,
-    // context end
-    pub end: usize,
-    // reference allele
-    pub refr: Allele,
+    pub loc: SimpleInterval,
     // variant alleles
-    pub variants: Vec<Allele>,
+    pub alleles: Vec<Allele>,
     // per sample likelihoods
     pub genotypes: GenotypesContext,
+    pub source: String,
+    pub log10_p_error: f64,
+    pub filters: HashSet<String>
 }
 
 impl VariantContext {
@@ -38,13 +37,40 @@ impl VariantContext {
 
     pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Alleles>) -> VariantContext {
         VariantContext {
-            tid,
-            start,
-            end,
-            refr: alleles[0].clone(),
-            variants: alleles[1..].iter().cloned().collect_vec(),
+            loc: SimpleInterval::new(tid, start, end),
+            alleles,
             genotypes: GenotypesContext::empty(),
+            source: "".to_string(),
+            log10_p_error: 0.0,
+            filters: HashSet::new(),
         }
+    }
+
+    pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
+        VariantContext {
+            loc: vc.loc,
+            alleles: Vec::new(),
+            genotypes: GenotypesContext::empty(),
+            source: "".to_string(),
+            log10_p_error: 0.0,
+            filters: HashSet::new()
+        }
+    }
+
+    pub fn filter(&mut self, filter: String) {
+        self.filters.insert(filter)
+    }
+
+    pub fn log10_p_error(&mut self, error: f64) {
+        self.log10_p_error = error
+    }
+
+    pub fn add_alleles(&mut self, alleles: Vec<Allele>) {
+        self.alleles = alleles
+    }
+
+    pub fn add_source(&mut self, source: String) {
+        self.source = source
     }
 
     pub fn get_n_samples(&self) -> usize {
@@ -52,7 +78,7 @@ impl VariantContext {
     }
 
     pub fn get_n_alleles(&self) -> usize {
-        self.variants.len() + 1
+        self.alleles.len()
     }
 
     pub fn add_genotypes(
@@ -60,7 +86,7 @@ impl VariantContext {
         genotypes: Vec<Genotype>
     ) {
         for genotype in genotypes.iter() {
-            if genotype.pl..len() != self.variants.len() + 1 {
+            if genotype.pl..len() != self.alleles.len() {
                 panic!(
                     "Number of likelihoods does not match number of alleles at position {} on tid {}",
                     self.start, self.tid
@@ -71,13 +97,7 @@ impl VariantContext {
     }
 
     pub fn has_non_ref_allele(&self) -> bool {
-        for alt_allele in self.variants.iter() {
-            if alt_allele != self.refr {
-                return true
-            }
-        }
-
-        false
+        self.alleles.iter().any(|a| !a.is_reference())
     }
 
     /**
@@ -266,89 +286,6 @@ impl VariantContext {
         }
     }
 
-    /**
-     * Main entry function to calculate genotypes of a given VC with corresponding GL's that is shared across genotypers (namely UG and HC).
-     *
-     * Completes a variant context with genotype calls and associated annotations given the genotype likelihoods and
-     * the model that need to be applied.
-     *
-     * @param self                               Input variant context to complete.
-     * @return                                   VC with assigned genotypes
-     */
-    pub fn calculate_genotypes(
-        mut vc: VariantContext,
-        ploidy: usize,
-        gpc: &GenotypePriorCalculator,
-        allele_frequency_calculator: &AlleleFrequencyCalculator,
-        given_alleles: Vec<VariantContext>,
-
-    ) -> Option<VariantContext> {
-        if vc.has_too_many_alternative_alleles() || vc.get_n_samples() == 0 {
-            return None
-        }
-
-        let mut reduced_vc: VariantContext;
-        if VariantContext::MAX_ALTERNATE_ALLELES < vc.variants.len() {
-            let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
-                &mut vc,
-                ploidy,
-                VariantContext::MAX_ALTERNATE_ALLELES
-            );
-
-            let reduced_genotypes = if alleles_to_keep.len() == 1 {
-                VariantContext::subset_to_ref_only(&mut vc, ploidy)
-            } else {
-                AlleleSubsettingUtils::subset_alleles(
-                    vc.get_genotypes(),
-                    ploidy,
-                    vc.get_alleles(),
-                    alleles_to_keep,
-                    gpc,
-                    GenotypeAssignmentMethod::SetToNoCall,
-                    vc.get_dp(),
-                )
-            };
-            reduced_vc = vc.clone();
-            reduced_vc.variants = alleles_to_keep;
-            reduced_vc.genotypes = reduced_genotypes;
-
-        }
-
-        //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
-        let max_pl_length = GenotypeLikelihoods::calc_num_likelihoods(
-            reduced_vc.get_n_alleles(),
-            ploidy
-        );
-
-        if max_pl_length >= VariantContext::TOO_LONG_PL {
-            warn!("Length of PL arrays for this Variant Context \
-            (position: {}, allles: {}, ploidy: {}) is likely to reach {} so processing may take a long time",
-            vc.start, vc.get_n_alleles(), vc.genotypes.get_max_ploidy(ploidy), max_pl_length)
-        }
-
-        let af_result = allele_frequency_calculator.calculate(reduced_vc, ploidy);
-
-        return Some(vc)
-    }
-
-    /**
-     * Provided the exact mode computations it returns the appropriate subset of alleles that progress to genotyping.
-     * @param afCalculationResult the allele fraction calculation result.
-     * @param vc the variant context
-     * @return information about the alternative allele subsetting {@code null}.
-     */
-    fn calculate_output_allele_subset(af_calculation_result: &AFCalculationResult, vc: &VariantContext, given_allele: &Vec<VariantContext>) -> OutputAlleleSubset {
-        let mut output_allele = Vec::new();
-        let mut mle_counts = Vec::new();
-
-        let mut sit_is_monomorphic = true;
-        let alleles = af_calculation_result.get_alleles_used_in_genotyping();
-        let alternative_allele_count = alleles.len() - 1;
-        let reference_size = 0;
-
-        let forced_alleles = 
-    }
-
     pub fn is_informative<T: Float + Copy>(gls: &[T]) -> bool {
         gls.par_iter().sum() < (VariantContext::SUM_GL_THRESH_NOCALL as T)
     }
@@ -391,18 +328,19 @@ impl VariantContext {
         self.genotypes.clone()
     }
 
-    pub fn get_alleles(&self) -> Vec<Allele> {
-        let mut all_alleles = vec![self.refr.clone()];
-        all_alleles.extend(self.variants.clone());
-
-        return all_alleles
+    pub fn get_alleles(&self) -> &Vec<Allele> {
+        self.alleles
     }
 
-    pub fn get_reference(&self) -> Allele {
-        self.refr.clone()
+    pub fn get_reference(&self) -> &Allele {
+        self.alleles[0]
     }
 
     pub fn get_dp(&self) -> i64 {
         self.genotypes.get_dp()
+    }
+
+    pub fn get_alternate_alleles(&self) -> &Vec<Allele> {
+        self.variants[1..]
     }
 }

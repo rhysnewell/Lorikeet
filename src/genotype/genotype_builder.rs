@@ -15,6 +15,17 @@ pub enum GenotypeAssignmentMethod {
     UsePosteriorProbabilities,
 }
 
+impl GenotypeAssignmentMethod {
+    pub fn from_args(args: &clap::ArgMatches) -> GenotypeAssignmentMethod {
+        match args.values_of("genotype-assignment-method").unwrap() {
+            "UsePLsToAssign" => GenotypeAssignmentMethod::UsePLsToAssign,
+            "UsePosteriorProbabilities" => GenotypeAssignmentMethod::UsePosteriorProbabilities,
+            "BestMatchToOriginal" => GenotypeAssignmentMethod::BestMatchToOriginal,
+            _ => GenotypeAssignmentMethod::DoNotAssignGenotypes,
+        }
+    }
+}
+
 pub struct Genotype {
     pub ploidy: usize,
     pub pl: GenotypeLikelihoods,
@@ -109,6 +120,10 @@ impl Genotype {
     pub fn attribute(&mut self, attribute: String, value: Vec<f64>) {
         self.insert(attribute, value)
     }
+
+    pub fn has_attribute(&self, attribute: &String) -> bool {
+        self.attributes.contains_key(attribute)
+    }
     // pub fn genotype_likelihood_calculator(&self,)
 
 
@@ -156,7 +171,7 @@ impl GenotypesContext {
         self.genotypes.len()
     }
 
-    pub fn genotypes(self) -> Vec<Genotype> {
+    pub fn genotypes(&self) -> &Vec<Genotype> {
         self.genotypes
     }
 

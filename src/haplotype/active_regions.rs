@@ -36,11 +36,13 @@ use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
 use utils::activity_profile_state::{ActivityProfileState, Type};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use genotype::genotyping_engine::GenotypingEngine;
 
 pub struct HaplotypeCallerEngine {
-    allele_frequency_calculator: AlleleFrequencyCalculator,
+    genotyping_engine: GenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
     ref_idx: usize,
+    stand_min_conf: f64,
 }
 
 impl HaplotypeCallerEngine {
@@ -82,12 +84,23 @@ impl HaplotypeCallerEngine {
 
     // const NO_CALLS: Vec<Allele> = Vec::new();
 
-    pub fn new(args: &clap::ArgMatches, ref_idx: usize) -> HaplotypeCallerEngine {
+    pub fn new(
+        args: &clap::ArgMatches,
+        ref_idx: usize,
+        samples: Vec<String>,
+        do_allele_specific_calcs: bool,
+        sample_ploidy: usize
+    ) -> HaplotypeCallerEngine {
         HaplotypeCallerEngine {
-            allele_frequency_calculator: AlleleFrequencyCalculator::make_calculator(args),
-            genotype_prior_calculator: GenotypePriorCalculator::max(args),
+            genotyping_engine: GenotypingEngine::make(args, samples, do_allele_specific_calcs, sample_ploidy),
+            genotype_prior_calculator: GenotypePriorCalculator::make(args),
+            stand_min_conf: args.value_of("standard-min-confidence-threshold-for-calling").unwrap().parse().unwrap(),
             ref_idx,
         }
+    }
+
+    pub fn stand_min_conf(&self) -> f64 {
+        self.stand_min_conf
     }
 
     pub fn collect_activity_profile(
@@ -377,7 +390,7 @@ impl HaplotypeCallerEngine {
                 .par_iter().map(|&(tid, vec_of_ref_vs_any_result)| {
                 let result = vec_of_ref_vs_any_result.iter().map(|ref_vs_any_result| {
                     let is_active_prob =
-                        self.allele_frequency_calculator
+                        self.genotyping_engine.allele_frequency_calculator
                             .calculate_single_sample_biallelic_non_ref_posterior(
                                 &ref_vs_any_result.genotype_likelihoods,
                                 true
@@ -417,12 +430,12 @@ impl HaplotypeCallerEngine {
                     );
 
 
-                    VariantContext::calculate_genotypes(
+                    self.genotyping_engine.calculate_genotypes(
                         variant_context,
                         ploidy,
                         self.genotype_prior_calculator,
-                        self.allele_frequency_calculator,
                         Vec::new(),
+                        self.stand_min_conf
                     );
 
                 }
