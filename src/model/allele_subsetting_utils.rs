@@ -134,7 +134,7 @@ impl AlleleSubsettingUtils {
         default_ploidy: usize,
         original_alleles: Vec<Allele>,
         alleles_to_keep: Vec<Allele>,
-        gpc: GenotypePriorCalculator,
+        gpc: &GenotypePriorCalculator,
         assignment_method: GenotypeAssignmentMethod,
         depth: i64,
     ) -> GenotypesContext {

@@ -729,15 +729,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .required(false)
                         .conflicts_with_all(&["assembly"]),
                 )
-                .arg(
-                    Arg::with_name("assembly")
-                        .short("a")
-                        .long("query-assembly")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly-bam-files"]),
-                )
                 .arg(Arg::with_name("gff").long("gff").takes_value(true))
                 .arg(
                     Arg::with_name("prodigal-params")
@@ -1789,6 +1780,24 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("indel-heterozygosity")
                         .long("indel-heterozygosity")
                         .default_value("0.000125"),
+                )
+                .arg(
+                    Arg::with_name("standard-min-confidence-threshold-for-calling")
+                        .long("standard-min-confidence-threshold-for-calling")
+                        .short("stand-call-conf")
+                        .default_value("30.0")
+                )
+                .arg(
+                    Arg::with_name("genotype-assignment-method")
+                        .long("genotype-assignment-method")
+                        .default_value("UsePLsToAssign")
+                        .possible_values(&["UsePLsToAssign", "UsePosteriorProbabilities", "BestMatchToOriginal", "DoNotAssignGenotypes"])
+                )
+                .arg(
+                    Arg::with_name("use-posteriors-to-calculate-qual")
+                        .long("use-posteriors-to-calculate-qual")
+                        .short("gp-qual")
+                        .default_value(false)
                 )
                 .arg(
                     Arg::with_name("kmer-size")

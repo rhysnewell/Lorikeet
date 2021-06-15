@@ -6,3 +6,4 @@ pub mod vcf_constants;
 pub mod dirichlet;
 pub mod natural_log_utils;
 pub mod quality_utils;
+pub mod assembly_based_caller_utils;
