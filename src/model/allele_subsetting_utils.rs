@@ -130,12 +130,12 @@ impl AlleleSubsettingUtils {
      * @return                         a new non-null GenotypesContext
      */
     pub fn subset_alleles(
-        original_gs: GenotypesContext,
+        original_gs: &GenotypesContext,
         default_ploidy: usize,
-        original_alleles: Vec<Allele>,
-        alleles_to_keep: Vec<Allele>,
+        original_alleles: &Vec<Allele>,
+        alleles_to_keep: &Vec<Allele>,
         gpc: &GenotypePriorCalculator,
-        assignment_method: GenotypeAssignmentMethod,
+        assignment_method: &GenotypeAssignmentMethod,
         depth: i64,
     ) -> GenotypesContext {
         if alleles_to_keep.len() == 0 {

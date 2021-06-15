@@ -124,6 +124,10 @@ impl Genotype {
     pub fn has_attribute(&self, attribute: &String) -> bool {
         self.attributes.contains_key(attribute)
     }
+
+    pub fn get_attribute(&mut self, attribute: &String) -> Vec<f64> {
+        self.attributes.entry(attribute).or_insert(vec![std::f64::NAN; self.alleles.len()])
+    }
     // pub fn genotype_likelihood_calculator(&self,)
 
 

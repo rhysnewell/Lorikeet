@@ -1,3 +1,5 @@
+use utils::math_utils::MathUtils;
+
 pub struct QualityUtils {}
 
 impl QualityUtils {
@@ -20,5 +22,25 @@ impl QualityUtils {
      */
     pub fn qual_to_error_prob_log10<T: Float + Copy>(qual: T) -> T {
         qual * (-0.1 as T)
+    }
+
+    /**
+     * Calculate the sum of phred scores.
+     * @param phreds the phred score values.
+     * @return the sum.
+     */
+    pub fn phred_sum<T: Float + Copy>(phreds: &mut [T]) -> T {
+        match phreds.len() {
+            0 => std::f64::MAX as T,
+            1 => phreds[0],
+            2 => (-10.0 as T) * MathUtils::log10_sum_log10_two_values(phreds[0] * (-0.1 as T), phreds[1] * (-0.1 as T)),
+            3 => (-10.0 as T) * MathUtils::log10_sum_log10_three_values(phreds[0] * (-0.1 as T), phreds[1] * (-0.1 as T), phreds[2] * (-0.1 as T)),
+            _ => {
+                phreds.par_iter().for_each(|p| {
+                    *p = p * (-0.1 as T)
+                });
+                (-10.0 as T) * MathUtils::log10_sum_log10(phreds, 0, phreds.len())
+            }
+        }
     }
 }

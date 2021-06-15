@@ -9,7 +9,11 @@ use model::allele_subsetting_utils::AlleleSubsettingUtils;
 use utils::simple_interval::SimpleInterval;
 use nix::unistd::getgroups;
 use utils::vcf_constants::VCFConstants;
-use genotype::genotype_builder::{GenotypeAssignmentMethod, GenotypesContext};
+use genotype::genotype_builder::{GenotypeAssignmentMethod, GenotypesContext, Genotype};
+use utils::quality_utils::QualityUtils;
+use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use utils::math_utils::MathUtils;
+use model::allele_frequency_calculator_result::AFCalculationResult;
 
 pub struct GenotypingEngine {
     pub allele_frequency_calculator: AlleleFrequencyCalculator,
@@ -153,7 +157,7 @@ impl GenotypingEngine {
                 vc.get_genotypes(),
                 ploidy,
                 vc.get_alleles(),
-                output_alleles,
+                &output_alleles,
                 gpc,
                 self.genotype_assignment_method,
                 vc.get_dp(),
@@ -161,14 +165,56 @@ impl GenotypingEngine {
         };
 
         if self.use_posterior_probabilities_to_calculate_qual && GenotypingEngine::has_posteriors(&genotypes) {
-            let log10_no_variant_posterior =
+            let log10_no_variant_posterior = GenotypingEngine::phred_no_variant_posterior_probability(&output_alleles, &mut genotypes) * (-0.1);
+
+            let qual_update = if !output_alternative_alleles.site_is_monomorphic { // TODO: add || self.annotate_all_sites_with_pls
+                log10_no_variant_posterior + 0.0
+            } else {
+                MathUtils::log10_one_minus_pow10(log10_no_variant_posterior) + 0.0
+            };
+
+            if !qual_update.is_nan() {
+                builder.log10_p_error(qual_update)
+            }
         }
+
+        // calculating strand bias involves overwriting data structures, so we do it last
+        let
 
 
         return Some(vc)
     }
 
-    fn phred_no_variant_posterior_probability()
+    fn phred_no_variant_posterior_probability(alleles: &Vec<Allele>, gc: &mut GenotypesContext) -> f64 {
+        gc.genotypes().iter_mut().map(|&mut gt| GenotypingEngine::extract_p_no_alt(alleles, gt))
+    }
+
+    fn extract_p_no_alt(allele: &Vec<Allele>, gt: &mut Genotype) -> f64 {
+        let gp_array = gt.get_attribute(VCFConstants::GENOTYPE_POSTERIORS_KEY);
+
+        GenotypingEngine::extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &mut Genotype, gp_array)
+    }
+
+    fn extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &mut Genotype, posteriors: &mut [f64]) -> f64 {
+        if !alleles.par_iter().any(|allele| allele.is_del()) {
+            return posteriors[0] - std::cmp::max(0, QualityUtils::phred_sum(&mut posteriors))
+        } else {
+            // here we need to get indices of genotypes composed of REF and * alleles
+            let ploidy = gt.ploidy;
+            let gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
+            let span_del_index = alleles.par_iter().position(|allele| allele.is_del());
+            // allele counts are in the GenotypeLikelihoodCalculator format of {ref index, ref count, span del index, span del count}
+            let non_variant_log10_posteriors = (0..ploidy).into_iter().map(|n| {
+                gl_calc.allele_counts_to_index(vec![0, ploidy - n, span_del_index, n]);
+                posteriors[n]
+            }).collect_vec();
+
+            // when the only alt allele is the spanning deletion the probability that the site is non-variant
+            // may be so close to 1 that finite precision error in log10SumLog10 (called by phredSum) yields a positive value,
+            // which is bogus.  Thus we cap it at 0. See AlleleFrequencyCalculator.
+            return std::cmp::max(0.0, QualityUtils::phred_sum(&mut non_variant_log10_posteriors)) - std::cmp::max(0, QualityUtils::phred_sum(&mut posteriors))
+        }
+    }
 
     /**
      *  Record emitted deletions in order to remove downstream spanning deletion alleles that are not covered by any emitted deletion.
@@ -256,6 +302,26 @@ impl GenotypingEngine {
 
     fn has_posteriors(gc: &GenotypesContext) -> bool {
         gc.genotypes().par_iter().any(|genotype| genotype.has_attribute(VCFConstants::GENOTYPE_POSTERIORS_KEY))
+    }
+
+    fn compose_call_attributes(
+        vc: &VariantContext,
+        allele_counts_of_mle: &Vec<i64>,
+        af_result: &AFCalculationResult,
+        all_alleles_to_use: &Vec<Allele>,
+        genotypes: &GenotypesContext
+    ) -> HashMap<String, Vec<f64>> {
+        let mut attributes = HashMap::new();
+
+        // add the MLE AC and AF annotations
+        if !allele_counts_of_mle.is_empty() {
+            attributes.insert(VCFConstants::MLE_ALLELE_COUNT_KEY, allele_counts_of_mle.par_iter().map(|count| count as f64).collect_vec());
+            let mle_frequencies =
+        }
+    }
+
+    fn calculate_mle_allele_frequencies(allele_counts_of_mle: &[i64], genotypes: &GenotypesContext) -> Vec<f64> {
+        let an = genotypes.genotypes().
     }
 }
 

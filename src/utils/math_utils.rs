@@ -153,11 +153,28 @@ impl MathUtils {
 
     }
 
-    pub fn log10_sum_log10_two_values<T>(a: T, b: T) -> T {
+    pub fn log10_sum_log10_two_values<T: Float + Copy>(a: T, b: T) -> T {
         if a > b {
             a + ((1. as T) + (10.0 as T).powf(b - a))
         } else {
             b + ((1. as T) + (10.0 as T).powf(a - b))
+        }
+    }
+
+    /**
+     * Do the log-sum trick for three double values.
+     * @param a
+     * @param b
+     * @param c
+     * @return the sum... perhaps NaN or infinity if it applies.
+     */
+    pub fn log10_sum_log10_three_values<T: Float + Copy>(a: T, b: T, c: T) -> T {
+        if a >= b && a >= c {
+            return a + ((1.0 as T) + (10.0 as T).powf(b - a)).log10() + (10.0 as T).powf(c - a)
+        } else if b >= c {
+            return b + ((1.0 as T) + (10.0 as T).powf(a - b)).log10() + (10.0 as T).powf(c - b)
+        } else {
+            return c + ((1.0 as T) + (10.0 as T).powf(a - c)).log10() + (10.0 as T).powf(b - c)
         }
     }
 
