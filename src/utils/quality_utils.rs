@@ -1,4 +1,5 @@
 use utils::math_utils::MathUtils;
+use num::traits::Float;
 
 pub struct QualityUtils {}
 
@@ -42,5 +43,41 @@ impl QualityUtils {
                 (-10.0 as T) * MathUtils::log10_sum_log10(phreds, 0, phreds.len())
             }
         }
+    }
+
+    /**
+     * Convert a phred-scaled quality score to its probability of being true (Q30 => 0.999)
+     *
+     * This is the Phred-style conversion, *not* the Illumina-style conversion.
+     *
+     * Because the input is a double value, this function must call Math.pow so can be quite expensive
+     *
+     * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
+     * @return a probability (0.0-1.0)
+     */
+    pub fn qual_to_prob<T: Float + Copy>(qual: T) -> T {
+        if qual < (0.0 as T) {
+            panic!("Qual must be >= 0.0 but got {}", qual)
+        }
+
+        return (1.0 as T) - QualityUtils::qual_to_error_prob(qual)
+    }
+
+    /**
+     * Convert a phred-scaled quality score to its probability of being wrong (Q30 => 0.001)
+     *
+     * This is the Phred-style conversion, *not* the Illumina-style conversion.
+     *
+     * Because the input is a double value, this function must call Math.pow so can be quite expensive
+     *
+     * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
+     * @return a probability (0.0-1.0)
+     */
+    pub fn qual_to_error_prob<T: Float + Copy>(qual: T) -> T {
+        if qual < (0.0 as T) {
+            panic!("Qual must be >= 0.0 but got {}", qual)
+        }
+
+        (10.0 as T).powf(qual / (-10.0 as T))
     }
 }

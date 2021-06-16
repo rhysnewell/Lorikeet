@@ -1,24 +1,19 @@
-use bio::stats::LogProb;
-use ordered_float::{NotNan, OrderedFloat};
 use model::genotype_builder::{Genotype, GenotypesContext};
 use model::variants::Allele;
 use itertools::Itertools;
-use model::allele_subsetting_utils::AlleleSubsettingUtils;
 use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use utils::math_utils::MathUtils;
 use rayon::prelude::*;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use utils::vcf_constants::VCFConstants;
-use model::allele_frequency_calculator::AlleleFrequencyCalculator;
-use model::allele_frequency_calculator_result::AFCalculationResult;
 use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use utils::simple_interval::SimpleInterval;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use num::traits::Float;
 
-#[Derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VariantContext {
     pub loc: SimpleInterval,
     // variant alleles
@@ -27,15 +22,15 @@ pub struct VariantContext {
     pub genotypes: GenotypesContext,
     pub source: String,
     pub log10_p_error: f64,
-    pub filters: HashSet<String>
+    pub filters: HashSet<String>,
+    pub attributes: HashMap<String, Vec<f64>>
 }
 
 impl VariantContext {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
     pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
-    pub const TOO_LONG_PL: usize = 100000;
 
-    pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Alleles>) -> VariantContext {
+    pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Allele>) -> VariantContext {
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -43,6 +38,7 @@ impl VariantContext {
             source: "".to_string(),
             log10_p_error: 0.0,
             filters: HashSet::new(),
+            attributes: HashMap::new(),
         }
     }
 
@@ -53,12 +49,25 @@ impl VariantContext {
             genotypes: GenotypesContext::empty(),
             source: "".to_string(),
             log10_p_error: 0.0,
-            filters: HashSet::new()
+            filters: HashSet::new(),
+            attributes: HashMap::new(),
         }
+    }
+
+    pub fn attributes(&mut self, attributes: HashMap<String, Vec<f64>>) {
+        self.attributes.merge(attributes)
     }
 
     pub fn filter(&mut self, filter: String) {
         self.filters.insert(filter)
+    }
+
+    pub fn get_log10_p_error(&self) -> f64 {
+        self.log10_p_error
+    }
+
+    pub fn get_phred_scaled_qual(&self) -> f64 {
+        (self.log10_p_error * (-10.0)) + 0.0
     }
 
     pub fn log10_p_error(&mut self, error: f64) {
@@ -86,7 +95,7 @@ impl VariantContext {
         genotypes: Vec<Genotype>
     ) {
         for genotype in genotypes.iter() {
-            if genotype.pl..len() != self.alleles.len() {
+            if genotype.pl.len() != self.alleles.len() {
                 panic!(
                     "Number of likelihoods does not match number of alleles at position {} on tid {}",
                     self.start, self.tid
@@ -140,12 +149,12 @@ impl VariantContext {
     ) {
         match genotype_likelihoods {
             Some(genotype_likelihoods) => {
-                match GenotypeAssignmentMethod {
-                    GenotypeAssignmentMethod::SetToNoCall => {
+                match assignment_method {
+                    &GenotypeAssignmentMethod::SetToNoCall => {
                         gb.no_call_alleles(ploidy);
                         gb.no_qg();
                     },
-                    GenotypeAssignmentMethod::UsePLsToAssign => {
+                    &GenotypeAssignmentMethod::UsePLsToAssign => {
                         if !VariantContext::is_informative(genotype_likelihoods) {
                             gb.no_call_alleles(ploidy);
                             gb.no_qg();
@@ -168,11 +177,11 @@ impl VariantContext {
                             }
                         }
                     },
-                    GenotypeAssignmentMethod::SetToNoCallNoAnnotations => {
+                    &GenotypeAssignmentMethod::SetToNoCallNoAnnotations => {
                         gb.no_call_alleles(ploidy);
                         gb.no_annotations();
                     },
-                    GenotypeAssignmentMethod::BestMatchToOriginal => {
+                    &GenotypeAssignmentMethod::BestMatchToOriginal => {
                         let mut best = Vec::new();
                         let refr = alleles_to_use[0];
                         for original_allele in original_gt.iter() {
@@ -184,7 +193,7 @@ impl VariantContext {
                         }
                         gb.alleles = best;
                     },
-                    GenotypeAssignmentMethod::UsePosteriorProbabilities => {
+                    &GenotypeAssignmentMethod::UsePosteriorProbabilities => {
                         // Calculate posteriors.
                         let gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles_to_use.len());
                         let log10_priors = gpc.get_log10_priors(gl_calc, alleles_to_use);
@@ -299,7 +308,7 @@ impl VariantContext {
      * @param defaultPloidy defaultPloidy to use if a genotype doesn't have any alleles
      * @return a GenotypesContext
      */
-    pub fn subset_to_ref_only(vc: &mut VariantContext, default_ploidy: usize) -> GentypesContext {
+    pub fn subset_to_ref_only(vc: &mut VariantContext, default_ploidy: usize) -> GenotypesContext {
         if default_ploidy < 1 {
             panic!("default_ploidy must be >= 1, got {}", default_ploidy)
         } else {

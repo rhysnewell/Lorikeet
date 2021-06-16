@@ -1,5 +1,4 @@
-use ordered_float::{NotNan, OrderedFloat};
-use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
+use ordered_float::OrderedFloat;
 use model::genotype_allele_counts::GenotypeAlleleCounts;
 use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::variants::Allele;
@@ -17,7 +16,7 @@ pub enum GenotypeAssignmentMethod {
 
 impl GenotypeAssignmentMethod {
     pub fn from_args(args: &clap::ArgMatches) -> GenotypeAssignmentMethod {
-        match args.values_of("genotype-assignment-method").unwrap() {
+        match args.value_of("genotype-assignment-method").unwrap() {
             "UsePLsToAssign" => GenotypeAssignmentMethod::UsePLsToAssign,
             "UsePosteriorProbabilities" => GenotypeAssignmentMethod::UsePosteriorProbabilities,
             "BestMatchToOriginal" => GenotypeAssignmentMethod::BestMatchToOriginal,
@@ -26,6 +25,7 @@ impl GenotypeAssignmentMethod {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Genotype {
     pub ploidy: usize,
     pub pl: GenotypeLikelihoods,
@@ -38,8 +38,8 @@ pub struct Genotype {
 }
 
 impl Genotype {
-    const HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake()];
-    const DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(); 2];
+    const HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
+    const DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false); 2];
 
 
     pub fn build(default_ploidy: usize, likelihoods: Vec<OrderedFloat<f64>>) -> Genotype {
@@ -61,7 +61,7 @@ impl Genotype {
             pl: GenotypeLikelihoods::from_log10_likelihoods(vec![OrderedFloat(0.0); alleles.len()]),
             dp: -1,
             gq: -1,
-            ad: Vec::with_capacity(likelihoods.len()),
+            ad: Vec::with_capacity(alleles.len()),
             is_phased: false,
             attributes: HashMap::new(),
             alleles,
@@ -79,7 +79,7 @@ impl Genotype {
     }
 
     pub fn log10_p_error(&mut self, p_log10_error: f64) {
-        self.gq((p_log10_error * -10) as i64)
+        self.gq((p_log10_error * -10.0) as i64)
     }
 
     pub fn gq(&mut self, gq: i64) {
@@ -118,16 +118,17 @@ impl Genotype {
     }
 
     pub fn attribute(&mut self, attribute: String, value: Vec<f64>) {
-        self.insert(attribute, value)
+        self.attributes.insert(attribute, value);
     }
 
     pub fn has_attribute(&self, attribute: &String) -> bool {
         self.attributes.contains_key(attribute)
     }
 
-    pub fn get_attribute(&mut self, attribute: &String) -> Vec<f64> {
-        self.attributes.entry(attribute).or_insert(vec![std::f64::NAN; self.alleles.len()])
+    pub fn get_attribute(&mut self, attribute: &String) -> &mut Vec<f64> {
+        self.attributes.entry(attribute.clone()).or_insert(vec![std::f64::NAN; self.alleles.len()])
     }
+
     // pub fn genotype_likelihood_calculator(&self,)
 
 
@@ -176,7 +177,7 @@ impl GenotypesContext {
     }
 
     pub fn genotypes(&self) -> &Vec<Genotype> {
-        self.genotypes
+        &self.genotypes
     }
 
     pub fn get(&self, index: usize) -> Genotype {

@@ -1,7 +1,8 @@
 use rayon::prelude::*;
-use std::ops::{Add, Sub, Mul};
-use mathru::special;
+use std::ops::Add;
+use num::traits::Float;
 use utils::natural_log_utils::NaturalLogUtils;
+use std::ops::Sub;
 
 pub struct MathUtils {
 
@@ -16,7 +17,6 @@ impl MathUtils {
     const LOG_10: f64 = (10. as f64).ln();
     const INV_LOG_10: f64 = (1.0) / MathUtils::LOG_10;
     pub const LOG10_E: f64 = std::f64::consts::E.log10();
-    c
 
     const ROOT_TWO_PI: f64 = (2.0 * std::f64::consts::PI).sqrt();
 
@@ -25,7 +25,7 @@ impl MathUtils {
     // const DIGAMMA_CACHE: DiGammaCache
 
     pub fn normalize_pls<T: Sub>(pls: &[T]) -> Vec<T> {
-        let mut new_pls = vec![0 as T; pls.len()];
+        let mut new_pls = vec![T::from(0).unwrap(); pls.len()];
         let smallest = pls.min();
         new_pls.par_iter_mut().enumerate()
             .for_each(|(i, pl)| {
@@ -72,7 +72,7 @@ impl MathUtils {
      * @return log10(x)
      */
     pub fn log_to_log10<T: Float>(ln: T) -> T {
-        ln * MathUtils::LOG10_E
+        ln * T::from(MathUtils::LOG10_E).unwrap()
     }
 
     /**
@@ -85,7 +85,7 @@ impl MathUtils {
     }
 
     pub fn log10_factorial<T: Float>(n: T) -> T {
-        n.log_gamma() * MathUtils::LOG10_E
+        n.log_gamma() * T::from(MathUtils::LOG10_E).unwrap()
     }
 
     pub fn max_element_index<T: PartialOrd + PartialEq>(
@@ -120,7 +120,7 @@ impl MathUtils {
 
     pub fn log10_sum_log10<T: Float + Copy>(log10_values: &[T], start: usize, finish: usize) -> T {
         if start >= finish {
-            return std::f64::NEG_INFINITY as T
+            return T::from(std::f64::NEG_INFINITY).unwrap()
         }
 
         let max_element_index = MathUtils::max_element_index(
@@ -131,7 +131,7 @@ impl MathUtils {
 
         let max_value = log10_values[max_element_index];
 
-        if max_value == (std::f64::NEG_INFINITY as T) {
+        if max_value == T::from(std::f64::NEG_INFINITY).unwrap() {
             return max_value
         }
 
@@ -139,17 +139,17 @@ impl MathUtils {
             .par_iter()
             .enumerate()
             .filter(|&(index, value)| {
-                i != max_element_index || value != (std::f64::NEG_INFINITY as T)
+                index != max_element_index || value != T::from(std::f64::NEG_INFINITY).unwrap()
             })
             .map(|&(_, value)| {
                 value
             }).sum();
 
-        if sum_tot == (std::f64::NAN as T) || sum == (std::f64::INFINITY as T) {
+        if sum_tot == T::from(std::f64::NAN).unwrap() || sum_tot == T::from(std::f64::INFINITY).unwrap() {
             panic!("log10 p: Values must be non-infinite and non-NAN")
         }
 
-        return max_value + (if sum_tot != 1.0 { sum.log10() as T } else { 0.0 as T})
+        return max_value + (if sum_tot != 1.0 { sum_tot.log10() } else { T::from(0.0).unwrap()})
 
     }
 

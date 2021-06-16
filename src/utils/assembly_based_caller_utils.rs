@@ -1,5 +1,6 @@
 use model::variant_context::VariantContext;
 use model::location_and_alleles::{LocationsAndAlleles, LocationAndAlleles};
+use model::variants::Allele;
 use std::collections::HashSet;
 
 struct PhaseGroup {
@@ -73,7 +74,7 @@ impl AssemblyBasedCallerUtils {
         return results
     }
 
-    pub fn get_alleles_consistent_with_given_alleles(given_alleles: &Vec<VariantContext>, merged_vc: VariantContext) -> HashSet<Allele> {
+    pub fn get_alleles_consistent_with_given_alleles(given_alleles: &Vec<VariantContext>, merged_vc: &VariantContext) -> HashSet<Allele> {
         if given_alleles.is_empty() {
             return HashSet::new();
         }

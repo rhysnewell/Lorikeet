@@ -6,6 +6,7 @@ pub mod model;
 pub mod utils;
 pub mod haplotype;
 pub mod genotype;
+pub mod activity_profile;
 
 // HTS and bio files
 extern crate bio;
@@ -39,6 +40,7 @@ extern crate rayon;
 extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
+extern crate num;
 
 //extern crate plotly;
 extern crate strum;

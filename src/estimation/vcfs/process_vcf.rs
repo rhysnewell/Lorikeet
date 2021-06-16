@@ -9,8 +9,7 @@ use coverm::FlagFilter;
 use estimation::variant_matrix::*;
 use external_command_checker;
 use model::variants::*;
-use utils::*;
-
+use utils::utils::*;
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use scoped_threadpool::Pool;

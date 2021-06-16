@@ -1797,7 +1797,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("use-posteriors-to-calculate-qual")
                         .long("use-posteriors-to-calculate-qual")
                         .short("gp-qual")
-                        .default_value(false)
+                )
+                .arg(
+                    Arg::with_name("annotate-with-num-discovered-alleles")
+                        .long("annotate-with-num-discovered-alleles")
                 )
                 .arg(
                     Arg::with_name("kmer-size")

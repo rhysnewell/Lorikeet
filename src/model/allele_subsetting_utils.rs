@@ -271,9 +271,9 @@ impl AlleleSubsettingUtils {
                 // [(new) index of first allele, count of first allele, (new) index of second allele, count of second allele. . .]
                 let new_allele_counts = (0..new_alleles.len()).into_iter()
                     .flat_map(|new_allele_index| {
-                        (new_allele_index..old_allele_counts.allele_count_for(
+                        new_allele_index..old_allele_counts.allele_count_for(
                             allele_permutation.from_index(new_allele_index)
-                        ))
+                        )
                     }).collect_vec();
 
                 let new_pl_index = gl_calc.allele_counts_to_index(&new_allele_counts);

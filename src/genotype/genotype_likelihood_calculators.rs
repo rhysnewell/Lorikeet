@@ -1,8 +1,6 @@
-use model::genotype_allele_counts::GenotypeAlleleCounts;
-use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use model::allele_subsetting_utils;
 use ndarray::{Array2, Array};
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use genotype::genotype_allele_counts::GenotypeAlleleCounts;
 
 pub struct GenotypeLikelihoodCalculators {
     pub ploidy: usize,
@@ -27,7 +25,7 @@ impl GenotypeLikelihoodCalculators {
     pub fn get_instance(ploidy: usize, allele_count: usize) -> GenotypeLikelihoodCalculator {
         let allele_first_offset_by_ploidy =
             GenotypeLikelihoodCalculators::calculate_genotype_counts_using_table_and_validate(ploidy, allele_count);
-        let genotype_table_by_ploidy = GenotypeLikelihoodCalculators::build_genotype_allele_counts_table(
+        let genotype_table_by_ploidy: Vec<Vec<GenotypeAlleleCounts>> = GenotypeLikelihoodCalculators::build_genotype_allele_counts_table(
             ploidy,
             allele_count,
             &allele_first_offset_by_ploidy,
@@ -154,7 +152,7 @@ impl GenotypeLikelihoodCalculators {
 
         let mut result = Array::zeros([row_count, col_count]);
 
-        result[[0, 1..]].assign(1);
+        result.slice_mut(s![[0, 1..col_count]]).fill(1);
 
         for p in 1..row_count {
             for a in 1..col_count {
@@ -240,12 +238,16 @@ impl GenotypeLikelihoodCalculators {
         offset_table: &Array2<i32>
     ) -> Vec<GenotypeAlleleCounts> {
         let length = offset_table[[ploidy, allele_count]];
-        let strong_ref_length = if length == -1 { GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY } else { std::cmp::min(length, GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY) };
+        let strong_ref_length = if length == -1 {
+            GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
+        } else {
+            std::cmp::min(length, GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY)
+        };
 
         let mut result = vec![GenotypeAlleleCounts::build_empty()];
         result[0] = GenotypeAlleleCounts::first(ploidy);
 
-        for genotype_index in 0..strong_ref_length {
+        for genotype_index in 0..strong_ref_length as usize {
             result[genotype_index] = result[genotype_index - 1].next();
         }
 

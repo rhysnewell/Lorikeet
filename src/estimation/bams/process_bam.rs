@@ -8,8 +8,7 @@ use estimation::contig_variants::*;
 use estimation::variant_matrix::*;
 use model::variants::*;
 use rayon::prelude::*;
-use utils::*;
-
+use utils::utils::*;
 use coverm::genomes_and_contigs::*;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;

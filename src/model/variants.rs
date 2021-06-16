@@ -1,6 +1,6 @@
 use bio::stats::LogProb;
 use itertools::Itertools;
-use ordered_float::{NotNan, OrderedFloat};
+use ordered_float::NotNan;
 use rust_htslib::{bcf, bcf::record::Numeric};
 use std::collections::HashSet;
 use std::fmt::Debug;

@@ -1439,7 +1439,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 // The initialization vector for the EM algorithm
                                 genotype_vectors = vec![
                                     vec![
-                                        genotype_abundances::Genotype::new(0);
+                                        genotype_abundances::GenotypeWeights::new(0);
                                         number_of_genotypes
                                     ];
                                     number_of_samples
@@ -1614,7 +1614,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                             "Genotype Vector before EM {} {:?}",
                                             idx, sample_genotypes
                                         );
-                                        genotype_abundances::calculate_abundances(sample_genotypes);
+                                        genotype_abundances::GenotypeWeights::calculate_abundances(sample_genotypes);
                                         debug!(
                                             "Genotype Vector after EM {} {:?}",
                                             idx, sample_genotypes

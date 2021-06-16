@@ -1,5 +1,6 @@
 use statrs::function::gamma;
 use utils::math_utils::MathUtils;
+use num::traits::Float;
 
 pub struct Dirichlet<T: Float + Copy> {
     alpha: Vec<T>
@@ -24,7 +25,7 @@ impl<T: Float + Copy> Dirichlet<T>{
             panic!("Concentration must be positive")
         }
 
-        Dirichlet(&vec![concentration / (num_states as T); num_states])
+        Dirichlet::new(&vec![concentration / (num_states as T); num_states])
     }
 
     // in variational Bayes one often needs the effective point estimate of a multinomial distribution with a
@@ -33,7 +34,7 @@ impl<T: Float + Copy> Dirichlet<T>{
     // amounts to an arbitrary normalization constant, but it's important to keep in mind because some classes may expect
     // normalized weights.  In that case the calling code must normalize the weights.
     pub fn effective_multinomial_weights(&self) -> Vec<T> {
-        let digamma_of_sum = gamma::digammma(self.alpha.sum());
+        let digamma_of_sum = gamma::digamma(self.alpha.sum());
         let result = self.alpha.par_iter().map(|a| {
             (gamma::digamma(a) - digamma_of_sum).exp()
         }).collect_vec();
@@ -42,7 +43,7 @@ impl<T: Float + Copy> Dirichlet<T>{
     }
 
     pub fn effective_log10_multinomial_weights(&self) -> Vec<T> {
-        let digamma_of_sum = gamma::digammma(self.alpha.sum());
+        let digamma_of_sum = gamma::digamma(self.alpha.sum());
         let result = self.alpha.par_iter().map(|a| {
             (gamma::digamma(a) - digamma_of_sum) * (MathUtils::LOG10_E as T)
         }).collect_vec();
@@ -51,9 +52,9 @@ impl<T: Float + Copy> Dirichlet<T>{
     }
 
     pub fn effective_log_multinomial_weights(&self) -> Vec<T> {
-        let digamma_of_sum = gamma::digammma(self.alpha.sum());
+        let digamma_of_sum = gamma::digamma(self.alpha.sum());
         let result = self.alpha.par_iter().map(|a| {
-            (gamma::digamma(a) - digamma_of_sum)
+            gamma::digamma(a) - digamma_of_sum
         }).collect_vec();
 
         return result

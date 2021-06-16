@@ -1,6 +1,5 @@
 use ordered_float::OrderedFloat;
 use utils::simple_interval::SimpleInterval;
-use utils::math_utils::RunningAverage;
 
 /**
  * Holds information about a genotype call of a single sample reference vs. any non-ref event
@@ -13,7 +12,6 @@ pub struct RefVsAnyResult {
     pub final_phred_scaled_genotype_likelihoods: Vec<i32>,
     pub ref_depth: i32,
     pub non_ref_depth: i32,
-    pub soft_clips: RunningAverage<f64>,
     pub read_counts: i32,
     pub loc: SimpleInterval,
 }
@@ -25,9 +23,8 @@ impl RefVsAnyResult {
             final_phred_scaled_genotype_likelihoods: vec![0; likelihood_capacity],
             ref_depth: 0,
             non_ref_depth: 0,
-            soft_clips: RunningAverage::new(),
             read_counts: 0,
-            loc: SimpleInterval::new(tid, start, start),
+            loc: SimpleInterval::new(tid, pos, pos),
         }
     }
 
