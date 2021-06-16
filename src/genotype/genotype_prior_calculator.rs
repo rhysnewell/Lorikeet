@@ -1,6 +1,7 @@
-use enum_ordinalize;
 use utils::math_utils::MathUtils;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use model::variants::Allele;
+use rayon::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, Ordinalize)]
 enum AlleleType {
@@ -54,14 +55,14 @@ impl GenotypePriorCalculator {
         // so they are already set.
 
         // SNPs: normalized for all possible mutations (number of nucs (4) - 1)
-        het_values[AlleleType::SNP.ordinal()] = snp_het - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
-        hom_values[AlleleType::SNP.ordinal()] = snp_hom - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
+        het_values[AlleleType::SNP.ordinal() as usize] = snp_het - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
+        hom_values[AlleleType::SNP.ordinal() as usize] = snp_hom - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
         // INDELs:
-        het_values[AlleleType::INDEL.ordinal()] = indel_het;
-        hom_values[AlleleType::INDEL.ordinal()] = indel_hom;
+        het_values[AlleleType::INDEL.ordinal() as usize] = indel_het;
+        hom_values[AlleleType::INDEL.ordinal() as usize] = indel_hom;
         // Others:
-        het_values[AlleleType::OTHER.ordinal()] = other_het;
-        hom_values[AlleleType::OTHER.ordinal()] = other_hom;
+        het_values[AlleleType::OTHER.ordinal() as usize] = other_het;
+        hom_values[AlleleType::OTHER.ordinal() as usize] = other_hom;
 
         let diff_values = MathUtils::ebe_subtract(&hom_values, &het_values);
 
@@ -120,7 +121,7 @@ impl GenotypePriorCalculator {
                 GenotypePriorCalculator::genotype_prior_calculator(
                     snp_het, snp_het * 2.,
                     indel_het, indel_het * 2.,
-                    std::cmp::max(snp_het, indel_het), std::cmp::max(snp_het, indel_het) * 2.
+                    std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)) as f64, std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)) as f64 * 2.0
                 )
             }
         }
@@ -153,7 +154,7 @@ impl GenotypePriorCalculator {
         if number_of_genotypes == -1 {
             number_of_genotypes = 0
         }
-        let number_of_genotype = number_of_genotypes as usize;
+        let number_of_genotypes = number_of_genotypes as usize;
         let mut result = vec![0.; number_of_genotypes];
 
         for g in (1..number_of_genotypes).into_iter() {
@@ -161,9 +162,9 @@ impl GenotypePriorCalculator {
             result[g] = gac.sum_over_allele_indices_and_counts(
                 |idx: usize, cnt: usize| {
                     if cnt == 2 {
-                        self.hom_values[allele_types[idx]]
+                        self.hom_values[allele_types[idx] as usize]
                     } else {
-                        self.het_values[allele_types[idx]] + self.diff_values[allele_types[idx]] * (cnt - 1)
+                        self.het_values[allele_types[idx] as usize] + self.diff_values[allele_types[idx] as usize] * (cnt - 1) as f64
                     }
                 }
             );
@@ -181,23 +182,23 @@ impl GenotypePriorCalculator {
 
         let result = alleles.par_iter().map(|allele| {
             if allele.is_reference() {
-                return AlleleType::REF.ordinal()
+                return AlleleType::REF.ordinal() as i64
             } else if allele.is_called() && !allele.is_symbolic() {
                 match allele.variant() {
                     Variant::Insertion(_) | Variant::Deletion(_) => {
-                        AlleleType::INDEL.ordinal()
+                        AlleleType::INDEL.ordinal() as i64
                     },
                     Variant::SNV(_) => {
-                        AlleleType::SNP.ordinal()
+                        AlleleType::SNP.ordinal() as i64
                     },
-                    _ => AlleleType::OTHER.ordinal()
+                    _ => AlleleType::OTHER.ordinal() as i64
                 }
             } else if allele.is_called() && allele.is_symbolic() {
                 panic!("Cannot handle symbolic structural variants at the moment")
             } else {
-                AlleleType::OTHER.ordinal()
+                AlleleType::OTHER.ordinal() as i64
             }
-        }).collect_vec();
+        }).collect::<Vec<i64>>();
 
         result
     }

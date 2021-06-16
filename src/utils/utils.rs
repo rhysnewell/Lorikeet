@@ -19,7 +19,6 @@ use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
-use std::ops::{Add, Div, Mul};
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -42,7 +41,7 @@ pub struct Elem {
 pub fn setup_progress_bars(
     references: &Vec<&str>,
     reference_map: &mut HashMap<usize, String>,
-    genome_and_contigs: &GenomesAndContigs,
+    genomes_and_contigs: &GenomesAndContigs,
     short_sample_count: usize,
     long_sample_count: usize,
 ) -> Vec<Elem> {
@@ -112,13 +111,15 @@ pub fn setup_progress_bars(
 pub fn begin_tick(
     index: usize,
     progress_bars: &Vec<Elem>,
+    multi_inner: &Arc<MultiProgress>,
+    message: &str,
 ) {
     let elem = &progress_bars[index];
     let pb = multi_inner.insert(index, elem.progress_bar.clone());
 
     pb.enable_steady_tick(500);
 
-    pb.set_message(&format!("{}...", &elem.key,));
+    pb.set_message(&format!("{}: {}...", &elem.key, message));
 }
 
 // pub fn log10_binomial_coefficient(n: i64, k: i64) -> i64 {

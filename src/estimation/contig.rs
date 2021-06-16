@@ -6,9 +6,8 @@ use coverm::bam_generator::*;
 use estimation::bams::{index_bams::*, process_bam::*};
 use estimation::codon_structs::*;
 use estimation::variant_matrix::*;
-use estimation::vcfs::process_vcf::*;
 use external_command_checker;
-use utils::{*, Elem};
+use utils::utils::{*, Elem};
 use haplotype::active_regions::{update_activity_profile, collect_activity_profile};
 
 use crate::*;
@@ -17,7 +16,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use glob::glob;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::MultiProgress;
 use rayon::prelude::*;
 use scoped_threadpool::Pool;
 use std::path::Path;
@@ -26,7 +25,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-
+use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 
 #[allow(unused)]
 pub fn pileup_variants<
@@ -109,11 +108,11 @@ pub fn pileup_variants<
     let multi = Arc::new(MultiProgress::new());
 
     let multi_inner = Arc::clone(&multi);
-    let mut progress_bars = utils::setup_progress_bars(
+    let mut progress_bars = setup_progress_bars(
         &references,
         &mut reference_map,
         &genomes_and_contigs,
-        short_samples_count,
+        short_sample_count,
         long_sample_count,
     );
 
@@ -141,8 +140,8 @@ pub fn pileup_variants<
 
     pool.scoped(|scope| {
 
-        utils::begin_tick(0, &progress_bars);
-        utils::begin_tick(1, &progress_bars);
+        begin_tick(0, &progress_bars, &multi_inner, "");
+        begin_tick(1, &progress_bars, &multi_inner, "");
 
         for (ref_idx, reference_stem) in reference_map.clone().into_iter() {
 
@@ -230,18 +229,7 @@ pub fn pileup_variants<
 
             scope.execute(move || {
                 let reference = &genomes_and_contigs.genomes[ref_idx];
-
-                {
-                    let elem = &progress_bars[ref_idx + 2];
-                    let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
-
-                    pb.enable_steady_tick(500);
-
-                    pb.set_message(&format!("{}: Preparing variants...", &elem.key,));
-                    // multi.join().unwrap();
-
-                    // tree.lock().unwrap().insert(elem.index, &elem);
-                }
+                begin_tick(ref_idx + 2, &progress_bars, &multi_inner, "Preparing variants");
                 let mut codon_table = CodonTable::setup();
 
                 // Read BAMs back in as indexed
@@ -375,14 +363,24 @@ pub fn pileup_variants<
                     indexed_bam_readers.len()
                 );
 
-                utils::collect_activity_profile(
+                let mut hc_engine = HaplotypeCallerEngine::new(
+                    m,
+                    ref_idx,
+                    indexed_bam_readers.clone(),
+                    false,
+                    m.value_of("ploidy").parse().unwrap()
+                );
+
+                hc_engine.collect_activity_profile(
                     &indexed_bam_readers,
+                    short_sample_count,
+                    long_sample_count,
                     n_threads,
                     ref_idx,
                     per_reference_samples,
                     m,
                     genomes_and_contigs,
-                    concatened_genomes,
+                    concatenated_genomes,
                     flag_filters,
                     &tree
                 );

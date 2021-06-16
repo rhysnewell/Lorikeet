@@ -1,5 +1,6 @@
 use utils::quality_utils::QualityUtils;
 use core::f64;
+use num::traits::Float;
 
 pub struct NaturalLogUtils {}
 
@@ -10,7 +11,7 @@ impl NaturalLogUtils {
     const PHRED_TO_ERROR_PROB_FACTOR: f64 = -(10.0.ln())/10.0;
 
     const qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL).into_par_iter().map(|n| {
-        NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n aas f64))
+        NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n as f64))
     }).collect_vec();
 
     /**
@@ -180,11 +181,11 @@ impl NaturalLogUtils {
         s = f / (2.0 + f);
         z = s * s;
         w = z * z;
-        t1 = w * (LG2 + w * (LG4 + w * LG6));
-        t2 = z * (LG1 + w * (LG3 + w * (LG5 + w * LG7)));
+        t1 = w * (NaturalLogUtils::LG2 + w * (NaturalLogUtils::LG4 + w * NaturalLogUtils::LG6));
+        t2 = z * (NaturalLogUtils::LG1 + w * (NaturalLogUtils::LG3 + w * (NaturalLogUtils::LG5 + w * NaturalLogUtils::LG7)));
         r = t2 + t1;
         dk = k as f64;
-        s * (hfsq + r) + (dk * LN2_LO + c) - hfsq + f + dk * LN2_HI
+        s * (hfsq + r) + (dk * NaturalLogUtils::LN2_LO + c) - hfsq + f + dk * NaturalLogUtils::LN2_HI
     }
 
     pub fn qual_to_log_error_prob(qual: f64) -> f64 {

@@ -2,12 +2,20 @@
 The following code is adapted from the broadinstitute GATK HaplotypeCaller program
 */
 
-use ordered_float::{NotNan, OrderedFloat};
-use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
 use utils::math_utils::MathUtils;
 use rayon::prelude::*;
 use model::variants::Allele;
 
+
+
+#[derive(Clone, Debug)]
+pub struct GenotypeAlleleCounts {
+    ploidy: usize,
+    distinct_allele_count: usize,
+    sorted_allele_counts: Vec<usize>,
+    index: usize,
+    log10_combination_count: f64,
+}
 
 /**
  * Collection of allele counts for a genotype. It encompasses what alleles are present in the genotype and in what number.</p>
@@ -63,16 +71,6 @@ use model::variants::Allele;
  *
  * The total number of possible genotypes is only bounded by the maximum allele index.
  */
-
-#[derive(Clone, Debug)]
-pub struct GenotypeAlleleCounts {
-    ploidy: usize,
-    distinct_allele_count: usize,
-    sorted_allele_counts: Vec<usize>,
-    index: usize,
-    log10_combination_count: f64,
-}
-
 impl GenotypeAlleleCounts {
     const UNCOMPUTED_LOG_10_COMBINATION_COUNT: f64 = -1.;
 
@@ -91,10 +89,11 @@ impl GenotypeAlleleCounts {
             && self.index == 0
             && self.sorted_allele_counts.len() == 0
             && self.distinct_allele_count == 0
-            && self.log10_combination_count == -1 {
+            && self.log10_combination_count == -1.0 {
             true
+        } else {
+            false
         }
-        false
     }
 
     /**
@@ -161,16 +160,16 @@ impl GenotypeAlleleCounts {
     pub fn log10_combination_count(&mut self) -> f64 {
         if self.log10_combination_count == GenotypeAlleleCounts::UNCOMPUTED_LOG_10_COMBINATION_COUNT {
             self.log10_combination_count =
-                MathUtils::log10_factorial(self.ploidy as f64)
+                MathUtils::log10_factorial(self.ploidy as f64) as f64
                     - (0..self.distinct_allele_count).into_par_iter().map(|i| {
-                    &self.sorted_allele_counts[i]
-                }).sum()
+                    self.sorted_allele_counts[i] as f64
+                }).sum::<f64>()
         }
         return self.log10_combination_count
     }
 
     pub fn sum_over_allele_indices_and_counts<F>(&self, f: F) -> f64
-        where F: Fn(usize, usize) -> f64 {
+        where F: Fn(usize, usize) -> f64 + Sync {
         // let result = (0..self.distinct_allele_count)
         (0..self.distinct_allele_count).into_par_iter()
             .map(|n|
@@ -216,7 +215,7 @@ impl GenotypeAlleleCounts {
                         self.sorted_allele_counts[2] = self.sorted_allele_counts[0] + 1;
                         self.sorted_allele_counts[3] = 1;
                         self.sorted_allele_counts[0] = 0;
-                        self.sorted_allele_counts[1] = ploidy - 1;
+                        self.sorted_allele_counts[1] = self.ploidy - 1;
                         self.distinct_allele_count = 2
                     }
                 } else {
@@ -239,7 +238,11 @@ impl GenotypeAlleleCounts {
                     let sorted_allele_counts_length = self.distinct_allele_count << 1;
                     if freq0 == 1 {
                         // in this case allele0 wont be present in the result and all is frequency should go to allele0 + 1.
-                        self.sorted_allele_counts[0..(sorted_allele_counts_length - 2) as usize] = self.sorted_allele_counts[2..(sorted_allele_counts_length - 2) as usize];
+                        for (count, old_count) in self.sorted_allele_counts[0..((sorted_allele_count_lengths - 2) as usize)]
+                            .iter_mut()
+                            .zip(self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)].to_vec().iter()) {
+                            *count = *old_count
+                        }
                         self.sorted_allele_counts[1] += 1;
                         self.distinct_allele_count -= 1;
                     } else {
@@ -252,7 +255,11 @@ impl GenotypeAlleleCounts {
                                 // make room for new component
                                 self.sorted_allele_counts.resize((sorted_allele_counts_length + 2) as usize, 0)
                             }
-                            self.sorted_allele_counts[4..(sorted_allele_counts_length - 2) as usize] = self.sorted_allele_counts[2..(sorted_allele_counts_length - 2) as usize];
+                            for (count, old_count) in self.sorted_allele_counts[4..((sorted_allele_count_lengths - 2) as usize)]
+                                .iter_mut()
+                                .zip(self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)].to_vec().iter()) {
+                                *count = *old_count
+                            }
                             self.sorted_allele_counts[0] = 0;
                             self.sorted_allele_counts[1] = freq0 - 1;
                             self.sorted_allele_counts[2] = allele0_plus1;
@@ -274,12 +281,12 @@ impl GenotypeAlleleCounts {
      */
     pub fn next(&mut self) -> GenotypeAlleleCounts {
         // a few cases worth explicitly optimizing
-        if self.distinctAlleleCount == 0 {
+        if self.distinct_allele_count == 0 {
             return self.clone();    // only one possible genotype with zero ploidy
-        } else if distinctAlleleCount == 1 && ploidy == 1 {
+        } else if self.distinct_allele_count == 1 && self.ploidy == 1 {
             return GenotypeAlleleCounts::build(1, self.index + 1, &[self.sorted_allele_counts[0] + 1, 1]);    // A -> B , D -> E etc...
-        } else if distinctAlleleCount == 1 {
-            return GenotypeAlleleCounts::build(ploidy, index + 1, &[0, ploidy - 1, sortedAlleleCounts[0] + 1, 1]);    // AAAAA -> AAAAB, DDD -> AAE etc...
+        } else if self.distinct_allele_count == 1 {
+            return GenotypeAlleleCounts::build(self.ploidy, self.index + 1, &[0, self.ploidy - 1, self.sorted_allele_counts[0] + 1, 1]);    // AAAAA -> AAAAB, DDD -> AAE etc...
         }
 
         // The following logic avoids dynamically sizing the new sorted-allele-counts array, which would be very slow
@@ -316,10 +323,14 @@ impl GenotypeAlleleCounts {
                 new_sorted_allele_counts[1] = freq0 - 1;
                 new_sorted_allele_counts[2] = allele0_plus1;
                 new_sorted_allele_counts[3] += 1; // = 1 as the array was freshly created with 0s.
-                new_sorted_allele_counts[4..(sorted_allele_counts_length - 2) as usize] = self.sorted_allele_counts[2..(sorted_allele_counts_length - 2) as usize];
+                for (count, old_count) in new_sorted_allele_counts[4..((sorted_allele_count_lengths - 2) as usize)]
+                    .iter_mut()
+                    .zip(self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)].iter()) {
+                    *count = *old_count
+                }
             }
         }
-        return GenotypeAlleleCounts::build(ploidy, index + 1, &new_sorted_allele_counts[..])
+        return GenotypeAlleleCounts::build(self.ploidy, self.index + 1, &new_sorted_allele_counts[..])
     }
 
     /**
@@ -380,7 +391,7 @@ impl GenotypeAlleleCounts {
     fn copy_allele_counts_by_index(
         &self,
         dest: &mut Vec<i32>,
-        offset: i32,
+        offset: usize,
         minimum_allele_index: usize,
         maximum_allele_index: usize,
     ) {
@@ -392,8 +403,8 @@ impl GenotypeAlleleCounts {
         // If the min or max allele index are absent (returned rank < 0) we note where the would be inserted; that
         // way we avoid going through the rest of positions in the sortedAlleleCounts array.
         // The range of interest is then [startRank,endRank].
-        let start_rank = if minimum_allele_index < 0 { -minimum_allele_rank - 1 } else { minimum_allele_rank };
-        let end_rank = if maximum_allele_rank < 0 { -maximum_allele_rank - 2 } else { maximum_allele_rank };
+        let start_rank = if minimum_allele_index < 0 { (-minimum_allele_rank - 1) as usize } else { minimum_allele_rank as usize };
+        let end_rank = if maximum_allele_rank < 0 { (-maximum_allele_rank - 2) as usize } else { maximum_allele_rank as usize };
 
         let mut next_index = minimum_allele_index; // next index that we want to output the count for.
         let mut next_rank = start_rank; // next rank to query in sortedAlleleCounts.
@@ -414,7 +425,7 @@ impl GenotypeAlleleCounts {
             // It is guaranteed that at this point alleleIndex == nextIndex
             // thanks to the condition of the enclosing while: there must be at least one index of interest that
             // is present in the remaining (nextRank,endRank] interval as otherwise endRank would be less than nextRank.
-            dest[next_dest_offset] = self.sorted_allele_counts[next_sorted_allele_counts_offset];
+            dest[next_dest_offset] = self.sorted_allele_counts[next_sorted_allele_counts_offset] as i32;
             next_dest_offset += 1;
             next_sorted_allele_counts_offset += 1;
             next_index += 1;
@@ -470,7 +481,7 @@ impl GenotypeAlleleCounts {
         if rank < 0 {
             0
         } else {
-            self.allele_count_at(rank)
+            self.allele_count_at(rank as usize)
         }
     }
 
@@ -488,8 +499,14 @@ impl GenotypeAlleleCounts {
         }
         if from == to - 1 {
             let only_index = self.sorted_allele_counts[from << 1] as usize;
-            if only_index == index { from } else {
-                if only_index > index { -(from as i64) - 1 } else { -(to as i64) - 1 }
+            if only_index == index {
+                return from as i64
+            } else {
+                if only_index > index {
+                    return -(from as i64) - 1
+                } else {
+                    return -(to as i64) - 1
+                }
             }
         }
 
@@ -526,19 +543,19 @@ impl GenotypeAlleleCounts {
         }
 
         if self.distinct_allele_count == 1 {
-            let mut result = vec![alleles_to_use.get(self.sorted_allele_counts[0]).unwrap(); ploidy];
+            let mut result = vec![alleles_to_use.get(self.sorted_allele_counts[0]); self.ploidy];
             let result = result.par_iter_mut().map(|allele| {
-                *allele = Allele::unwrap(allele)
-            }).collect();
+                Allele::unwrap(*allele).clone()
+            }).collect::<Vec<Allele>>();
             result
         } else {
             let result = (0..self.distinct_allele_count).into_par_iter()
-                .flatmap(|distinct_allele| {
+                .flat_map(|distinct_allele| {
                     let mut allele = alleles_to_use.get(self.sorted_allele_counts[2 * self.distinct_allele_count]);
-                    let allele = Allele::unwrap(allele);
+                    let allele = Allele::unwrap(allele).clone();
                     let repeats = self.sorted_allele_counts[2 * self.distinct_allele_count + 1];
                     vec![allele; repeats]
-                }).collect_vec();
+                }).collect::<Vec<Allele>>();
             result
         }
 

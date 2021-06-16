@@ -1,5 +1,5 @@
-use utils::math_utils;
 use utils::simple_interval::SimpleInterval;
+use num::traits::Float;
 
 #[derive(Clone, Debug)]
 pub enum Type<T: Float + Copy> {
@@ -9,7 +9,7 @@ pub enum Type<T: Float + Copy> {
 
 impl<T: Float + Copy> Type<T> {
     pub fn new<T: Float + Copy>(high_quality_soft_clips_mean: T, threshold: T) -> Type<T> {
-        if high_quality_soft_clips >= threshold {
+        if high_quality_soft_clips_mean >= threshold {
             Type::HighQualitySoftClips(high_quality_soft_clips_mean)
         } else {
             Type::None
@@ -21,7 +21,7 @@ impl<T: Float + Copy> Type<T> {
 pub struct ActivityProfileState {
     loc: SimpleInterval,
     active_prob: f64,
-    result_state: Type,
+    result_state: Type<f64>,
 }
 
 impl ActivityProfileState {
@@ -38,7 +38,7 @@ impl ActivityProfileState {
      * @param loc the position of the result profile (for debugging purposes)
      * @param activeProb the probability of being active (between 0 and 1)
      */
-    pub fn new(loc: SimpleInterval, active_prob: f64, result_state: Type) -> ActivityProfileState {
+    pub fn new(loc: SimpleInterval, active_prob: f64, result_state: Type<f64>) -> ActivityProfileState {
         if loc.size() != 1 {
             panic!("Location for an ActivityProfileState must have to size 1 bp but saw {:?}", loc)
         };
@@ -50,7 +50,7 @@ impl ActivityProfileState {
         }
     }
 
-    pub fn is_acitve_prob(&self) -> f64 {
+    pub fn is_active_prob(&self) -> f64 {
         self.active_prob
     }
 
@@ -68,20 +68,28 @@ impl ActivityProfileState {
         self.active_prob = active_prob
     }
 
-    pub fn get_result_state(&self) -> &Type {
+    pub fn get_result_state(&self) -> &Type<f64> {
         &self.result_state
     }
 
-    pub fn get_result_value(&self) -> usize {
+    pub fn get_result_value(&self) -> f64 {
         match self.result_state {
             Type::None => {
-                0
+                0.0
             },
             Type::HighQualitySoftClips(count) => {
-                return count
+                count
             }
         }
     }
 
+    /**
+     * The offset of state w.r.t. our current region's start location
+     * @param regionStartLoc the start of the region, as a Locatable
+     * @return the position of this profile relative to the start of this region
+     */
+    pub fn get_offset(&self, region_start_loc: SimpleInterval) -> i64 {
+        (self.loc.get_start() as i64) - (region_start_loc.get_start() as i64)
+    }
 
 }

@@ -1,4 +1,4 @@
-
+use std::cmp::Ordering;
 // #[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Deserialize, Clone)]
 // pub struct Locus {
 //     pub chrom: String,
@@ -153,7 +153,7 @@ impl CoordMath {
      */
     pub fn overlaps(start: usize, end: usize, start2: usize, end2: usize) -> bool {
         (start2 >= start && start2 <= end) || (end2 >= start && end2 <= end)
-        || CoordMath::encloses()
+        || CoordMath::encloses(start2, end2, start, end)
     }
 
     /** Returns true if the "inner" coords and totally enclosed by the "outer" coords. */

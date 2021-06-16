@@ -1,5 +1,4 @@
-use ordered_float::{NotNan, OrderedFloat};
-use ndarray::{Array, Array2, ArrayBase, OwnedRepr};
+use ndarray::Array2;
 use model::genotype_allele_counts::GenotypeAlleleCounts;
 use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculators};
 use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
@@ -159,11 +158,11 @@ impl GenotypeLikelihoodCalculator {
                 || self.last_overhead_counts.index() > index {
                 let mut result = self.genotype_allele_counts[(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1) as usize].clone();
 
-                result.increase((index as i32 - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY + 1));
+                result.increase(index as i32 - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY + 1);
                 self.last_overhead_counts = result.clone();
                 return result
             } else {
-                self.last_overhead_counts.increase((index as i32 - self.last_overhead_counts.index() as i32));
+                self.last_overhead_counts.increase(index as i32 - self.last_overhead_counts.index() as i32);
                 return self.last_overhead_counts.clone()
             }
         }
@@ -202,7 +201,7 @@ impl GenotypeLikelihoodCalculator {
             }
         }
 
-        return self.allele_heap_to_index
+        return self.allele_heap_to_index()
     }
 
     /**
@@ -225,13 +224,13 @@ impl GenotypeLikelihoodCalculator {
         }
 
         let mut result = 0;
-        for p in (ploidy..0).into_iter() {
+        for p in (self.ploidy..0).into_iter() {
             let allele = self.allele_heap.pop().unwrap();
             if allele < 0 {
                 panic!("Invalid allele {} must be >= 0", allele)
             }
-            result += self.allele_first_genotype_offset_by_ploidy[p][allele]
+            result += self.allele_first_genotype_offset_by_ploidy[[p, allele]]
         }
-        return result
+        return result as usize
     }
 }

@@ -1,4 +1,3 @@
-use model::allele_list::AlleleList;
 use model::variants::Allele;
 use genotype::genotype_builder::Genotype;
 use model::variant_context::VariantContext;
@@ -9,6 +8,8 @@ use utils::dirichlet::Dirichlet;
 use ordered_float::OrderedFloat;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use model::allele_frequency_calculator_result::AFCalculationResult;
+use num::traits::Float;
+use std::collections::{HashMap, BTreeMap};
 
 pub struct AlleleFrequencyCalculator {
     pub ref_pseudo_count: f64,
@@ -18,7 +19,6 @@ pub struct AlleleFrequencyCalculator {
 }
 
 impl AlleleFrequencyCalculator {
-    const GL_CALCS: GenotypeLikeliHoodCalculators = GenotypeLikelihoodCalculators::build_empty();
     const THRESHOLD_FOR_ALLELE_COUNT_CONVERGENCE: f64 = 0.1;
     const HOM_REF_GENOTYPE_INDEX: usize = 0;
 
@@ -40,7 +40,7 @@ impl AlleleFrequencyCalculator {
         let snp_het = args.value_of("snp-heterozygosity").unwrap().parse::<f64>().unwrap();
         let ind_het = args.value_of("indel-heterozygosity").unwrap().parse::<f64>().unwrap();
         let het_std = args.value_of("heterozygosity-stdev").unwrap().parse::<f64>().unwrap();
-        let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
+        let ploidy: usize = args.value_of("ploidy").unwrap().parse().unwrap();
 
         let ref_pseudo_count = snp_het / (het_std.powf(2.));
         let snp_pseudo_count = snp_het * ref_pseudo_count;
@@ -170,7 +170,7 @@ impl AlleleFrequencyCalculator {
         // re-usable buffers of the log10 genotype posteriors of genotypes missing each allele
         let mut log10_absent_posteriors = vec![Vec::new(); num_alleles];
 
-        for genotype in vc.get_genotypes().iter_mut() {
+        for g in vc.get_genotypes().iter_mut() {
             if !g.has_likelihoods() {
                 continue
             }
@@ -219,7 +219,7 @@ impl AlleleFrequencyCalculator {
             log10_absent_posteriors.par_iter_mut().for_each(|arr| {
                 *arr.clear()
             });
-            for genotype in (0..gl_calc.genotype_count) {
+            for genotype in (0..gl_calc.genotype_count).into_iter() {
                 let log10_genotype_posterior = log10_genotype_posteriors[genotype];
                 gl_calc.genotype_allele_counts_at(genotype)
                     .for_each_absent_allele_index(|a| {

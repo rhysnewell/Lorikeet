@@ -1,6 +1,7 @@
 use model::variants::Allele;
 use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
+use std::collections::HashMap;
 
 /**
  * Describes the results of the AFCalc

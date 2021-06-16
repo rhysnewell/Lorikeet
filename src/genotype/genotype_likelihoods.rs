@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use ordered_float::OrderedFloat;
 use utils::math_utils::MathUtils;
 use statrs::function::factorial::binomial;
+use num::traits::Float;
 
+#[derive(Debug, Clone)]
 pub struct GenotypeLikelihoods {
     num_likelihood_cache: GenotypeNumLikelihoodsCache,
     //
@@ -17,8 +19,8 @@ pub struct GenotypeLikelihoods {
 impl GenotypeLikelihoods {
     pub const MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED: usize = 50;
 
-    pub fn calc_num_likelihoods(num_alleles: usize, ploidy: usize) -> usize {
-        binomial((num_alleles + ploidy - 1), ploidy)
+    pub fn calc_num_likelihoods(num_alleles: usize, ploidy: usize) -> i64 {
+        binomial(num_alleles + ploidy - 1, ploidy) as i64
     }
 
     pub fn new() -> GenotypeLikelihoods {
@@ -40,7 +42,7 @@ impl GenotypeLikelihoods {
     }
 
     pub fn get_gq_log10_from_likelihoods<T: Float + Copy>(&self, i_of_chosen_genotype: usize) -> T {
-        let mut qual: T = std::f64::NEG_INFINITY as T;
+        let mut qual: T = T::from(std::f64::NEG_INFINITY).unwrap();
 
         for i in (0..self.log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
@@ -53,7 +55,7 @@ impl GenotypeLikelihoods {
         // qual contains now max(likelihoods[k]) for all k != bestGTguess
         qual = self.log10_likelihoods[i_of_chosen_genotype] - qual;
 
-        if qual < OrderedFloat(0.) {
+        if qual < T::from(0.0).unwrap() {
             let normalized: Vec<T> = MathUtils::normalize_from_log10(
                 &self.log10_likelihoods,
                 false,
@@ -61,14 +63,14 @@ impl GenotypeLikelihoods {
             );
             let chosen_genotype: T = normalized[i_of_chosen_genotype];
 
-            ((1.0 as T) - chosen_genotype).log10() as T
+            (T::from(-1.).unwrap() - T::from(chosen_genotype)).log10()
         } else {
-            (-1. as T) * qual
+            T::from(-1.).unwrap() * qual
         }
     }
 
     pub fn get_gq_log10_from_likelihoods_on_the_fly<T: Float + Copy>(i_of_chosen_genotype: usize, log10_likelihoods: &[T]) -> T {
-        let mut qual: T = std::f64::NEG_INFINITY as T;
+        let mut qual: T = T::from(std::f64::NEG_INFINITY);
 
         for i in (0..log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
@@ -81,7 +83,7 @@ impl GenotypeLikelihoods {
         // qual contains now max(likelihoods[k]) for all k != bestGTguess
         qual = log10_likelihoods[i_of_chosen_genotype] - qual;
 
-        if qual < OrderedFloat(0.) {
+        if qual < T::from(0.) {
             let normalized: Vec<T> = MathUtils::normalize_from_log10(
                 &log10_likelihoods,
                 false,
@@ -89,9 +91,9 @@ impl GenotypeLikelihoods {
             );
             let chosen_genotype: T = normalized[i_of_chosen_genotype];
 
-            ((1.0 as T) - chosen_genotype).log10() as T
+            T::from(T::from(1.0) - T::from(chosen_genotype).log10())
         } else {
-            (-1. as T) * qual
+            T::from(-1.) * qual
         }
     }
 
@@ -126,6 +128,10 @@ impl GenotypeLikelihoods {
     pub fn get_as_vector(&mut self) -> &mut Vec<OrderedFloat<f64>> {
         &mut self.log10_likelihoods
     }
+
+    pub fn len(&self) -> usize {
+        self.log10_likelihoods.len()
+    }
 }
 
 pub struct GenotypeNumLikelihoodsCache {
@@ -153,7 +159,7 @@ impl GenotypeNumLikelihoodsCache {
     }
 
     pub fn add(&mut self, num_alleles: i64, ploidy: i64) {
-        self.static_cache = vec![vec![0; ploidy as usize]; num_alleles as usize]
+        self.static_cache = vec![vec![0; ploidy as usize]; num_alleles as usize];
 
         self.fill_cache();
     }
@@ -162,7 +168,7 @@ impl GenotypeNumLikelihoodsCache {
         for num_alleles in (0..self.static_cache.len()).into_iter() {
             for ploidy in (0..self.static_cache[num_alleles].len()).into_iter() {
                 self.static_cache[num_alleles][ploidy] =
-                    GenotypeLikelihoods.calc_num_likelihoods(num_alleles + 1, ploidy + 1);
+                    GenotypeLikelihoods::calc_num_likelihoods(num_alleles + 1, ploidy + 1);
             }
         }
     }
@@ -188,15 +194,21 @@ impl GenotypeNumLikelihoodsCache {
             && (ploidy as usize) < self.static_cache[num_alleles as usize].len() {
             self.static_cache[(num_alleles - 1) as usize][(ploidy - 1) as usize]
         } else {
-            let cached_value = self.dynamic_cache[&CacheKey::build(num_alleles, ploidy)];
-            self.put(num_alleles, ploidy, new_value);
+            let cached_value = self.dynamic_cache.get(&CacheKey::build(num_alleles, ploidy));
+            match cached_value {
+                Some(value) => return *value,
+                None => {
+                    let new_value = GenotypeLikelihoods::calc_num_likelihoods(num_alleles as usize, ploidy as usize);
+                    self.put(num_alleles, ploidy, new_value);
 
-            new_value
+                    return new_value
+                }
+            }
         }
     }
 }
 
-#[Derive(Debug, Clone, Hash, Eq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 struct CacheKey {
     num_alleles: i64,
     ploidy: i64,
@@ -215,6 +227,6 @@ impl CacheKey {
     }
 
     pub fn hash_code(&self) -> i64 {
-        self.num_alleles * 31 + ploidy
+        self.num_alleles * 31 + self.ploidy
     }
 }
