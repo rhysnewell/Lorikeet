@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use ordered_float::OrderedFloat;
 use utils::math_utils::MathUtils;
 use statrs::function::factorial::binomial;
 use num::traits::Float;
@@ -12,7 +11,7 @@ pub struct GenotypeLikelihoods {
     // for this object: a vector of log10 Probs and the PL phred-scaled string.  Supports
     // having one set during initializating, and dynamic creation of the other, if needed
     //
-    log10_likelihoods: Vec<OrderedFloat<f64>>,
+    log10_likelihoods: Vec<f64>,
     // likelihoods_as_string_pls: String,
 }
 
@@ -20,7 +19,7 @@ impl GenotypeLikelihoods {
     pub const MAX_DIPLOID_ALT_ALLELES_THAT_CAN_BE_GENOTYPED: usize = 50;
 
     pub fn calc_num_likelihoods(num_alleles: usize, ploidy: usize) -> i64 {
-        binomial(num_alleles + ploidy - 1, ploidy) as i64
+        binomial((num_alleles + ploidy - 1) as u64, ploidy as u64) as i64
     }
 
     pub fn new() -> GenotypeLikelihoods {
@@ -34,15 +33,15 @@ impl GenotypeLikelihoods {
         self.log10_likelihoods.len() == 0
     }
 
-    pub fn from_log10_likelihoods(log10_likelihoods: Vec<OrderedFloat<f64>>) -> GenotypeLikelihoods {
+    pub fn from_log10_likelihoods(log10_likelihoods: Vec<f64>) -> GenotypeLikelihoods {
         GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
             log10_likelihoods
         }
     }
 
-    pub fn get_gq_log10_from_likelihoods<T: Float + Copy>(&self, i_of_chosen_genotype: usize) -> T {
-        let mut qual: T = T::from(std::f64::NEG_INFINITY).unwrap();
+    pub fn get_gq_log10_from_likelihoods(&self, i_of_chosen_genotype: usize) -> f64 {
+        let mut qual = std::f64::NEG_INFINITY;
 
         for i in (0..self.log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
@@ -55,22 +54,22 @@ impl GenotypeLikelihoods {
         // qual contains now max(likelihoods[k]) for all k != bestGTguess
         qual = self.log10_likelihoods[i_of_chosen_genotype] - qual;
 
-        if qual < T::from(0.0).unwrap() {
-            let normalized: Vec<T> = MathUtils::normalize_from_log10(
-                &self.log10_likelihoods,
+        if qual < 0.0 {
+            let normalized = MathUtils::normalize_from_log10(
+                &self.log10_likelihoods[..],
                 false,
                 false
             );
-            let chosen_genotype: T = normalized[i_of_chosen_genotype];
+            let chosen_genotype = normalized[i_of_chosen_genotype];
 
-            (T::from(-1.).unwrap() - T::from(chosen_genotype)).log10()
+            (1.0 - chosen_genotype).log10()
         } else {
-            T::from(-1.).unwrap() * qual
+            -1. * qual
         }
     }
 
-    pub fn get_gq_log10_from_likelihoods_on_the_fly<T: Float + Copy>(i_of_chosen_genotype: usize, log10_likelihoods: &[T]) -> T {
-        let mut qual: T = T::from(std::f64::NEG_INFINITY);
+    pub fn get_gq_log10_from_likelihoods_on_the_fly(i_of_chosen_genotype: usize, log10_likelihoods: &[f64]) -> f64 {
+        let mut qual = std::f64::NEG_INFINITY;
 
         for i in (0..log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
@@ -83,17 +82,17 @@ impl GenotypeLikelihoods {
         // qual contains now max(likelihoods[k]) for all k != bestGTguess
         qual = log10_likelihoods[i_of_chosen_genotype] - qual;
 
-        if qual < T::from(0.) {
-            let normalized: Vec<T> = MathUtils::normalize_from_log10(
-                &log10_likelihoods,
+        if qual < 0. {
+            let normalized = MathUtils::normalize_from_log10(
+                &log10_likelihoods[..],
                 false,
                 false
             );
-            let chosen_genotype: T = normalized[i_of_chosen_genotype];
+            let chosen_genotype = normalized[i_of_chosen_genotype];
 
-            T::from(T::from(1.0) - T::from(chosen_genotype).log10())
+            (1.0 - chosen_genotype).log10()
         } else {
-            T::from(-1.) * qual
+            -1.0 * qual
         }
     }
 
@@ -125,7 +124,7 @@ impl GenotypeLikelihoods {
         self.num_likelihood_cache.get(num_alleles, ploidy)
     }
 
-    pub fn get_as_vector(&mut self) -> &mut Vec<OrderedFloat<f64>> {
+    pub fn get_as_vector(&mut self) -> &mut Vec<f64> {
         &mut self.log10_likelihoods
     }
 
@@ -134,6 +133,7 @@ impl GenotypeLikelihoods {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GenotypeNumLikelihoodsCache {
     static_cache: Vec<Vec<i64>>,
     dynamic_cache: HashMap<CacheKey, i64>,

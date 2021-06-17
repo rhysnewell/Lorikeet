@@ -1,7 +1,7 @@
 use model::variants::Allele;
 use rayon::prelude::*;
 
-#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub struct AlleleList<T> {
     list: Vec<T>
 }

@@ -3,7 +3,7 @@ use bio_types::strand;
 use itertools::{izip, Itertools};
 use model::variants::{Base, Variant};
 use std::collections::HashMap;
-use utils::{mean, std_deviation};
+use utils::utils::{mean, std_deviation};
 
 #[allow(dead_code)]
 pub struct GeneInfo {

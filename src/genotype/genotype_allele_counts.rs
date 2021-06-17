@@ -238,9 +238,9 @@ impl GenotypeAlleleCounts {
                     let sorted_allele_counts_length = self.distinct_allele_count << 1;
                     if freq0 == 1 {
                         // in this case allele0 wont be present in the result and all is frequency should go to allele0 + 1.
-                        for (count, old_count) in self.sorted_allele_counts[0..((sorted_allele_count_lengths - 2) as usize)]
+                        for (count, old_count) in self.sorted_allele_counts[0..((sorted_allele_counts_length - 2) as usize)]
                             .iter_mut()
-                            .zip(self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)].to_vec().iter()) {
+                            .zip(self.sorted_allele_counts[2..((sorted_allele_counts_length - 2) as usize)].to_vec().iter()) {
                             *count = *old_count
                         }
                         self.sorted_allele_counts[1] += 1;
@@ -255,9 +255,9 @@ impl GenotypeAlleleCounts {
                                 // make room for new component
                                 self.sorted_allele_counts.resize((sorted_allele_counts_length + 2) as usize, 0)
                             }
-                            for (count, old_count) in self.sorted_allele_counts[4..((sorted_allele_count_lengths - 2) as usize)]
+                            for (count, old_count) in self.sorted_allele_counts[4..((sorted_allele_counts_length - 2) as usize)]
                                 .iter_mut()
-                                .zip(self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)].to_vec().iter()) {
+                                .zip(self.sorted_allele_counts[2..((sorted_allele_counts_length - 2) as usize)].to_vec().iter()) {
                                 *count = *old_count
                             }
                             self.sorted_allele_counts[0] = 0;

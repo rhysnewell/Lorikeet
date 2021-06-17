@@ -8,7 +8,7 @@ pub enum Type<T: Float + Copy> {
 }
 
 impl<T: Float + Copy> Type<T> {
-    pub fn new<T: Float + Copy>(high_quality_soft_clips_mean: T, threshold: T) -> Type<T> {
+    pub fn new(high_quality_soft_clips_mean: T, threshold: T) -> Type<T> {
         if high_quality_soft_clips_mean >= threshold {
             Type::HighQualitySoftClips(high_quality_soft_clips_mean)
         } else {

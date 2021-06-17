@@ -1,6 +1,5 @@
-use ordered_float::OrderedFloat;
-use model::genotype_allele_counts::GenotypeAlleleCounts;
-use model::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
+use genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use std::collections::HashMap;
@@ -42,7 +41,7 @@ impl Genotype {
     const DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false); 2];
 
 
-    pub fn build(default_ploidy: usize, likelihoods: Vec<OrderedFloat<f64>>) -> Genotype {
+    pub fn build(default_ploidy: usize, likelihoods: Vec<f64>) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
             alleles: Vec::with_capacity(likelihoods.len()),
@@ -58,7 +57,7 @@ impl Genotype {
     pub fn build_from_alleles(alleles: Vec<Allele>) -> Genotype {
         Genotype {
             ploidy: alleles.len(),
-            pl: GenotypeLikelihoods::from_log10_likelihoods(vec![OrderedFloat(0.0); alleles.len()]),
+            pl: GenotypeLikelihoods::from_log10_likelihoods(vec![0.0; alleles.len()]),
             dp: -1,
             gq: -1,
             ad: Vec::with_capacity(alleles.len()),
@@ -70,7 +69,7 @@ impl Genotype {
 
     pub fn get_ploidy(&self) -> usize { self.ploidy }
 
-    pub fn get_likelihoods(&mut self) -> &mut Vec<OrderedFloat<f64>> {
+    pub fn get_likelihoods(&mut self) -> &mut Vec<f64> {
         &mut self.pl.get_as_vector()
     }
 

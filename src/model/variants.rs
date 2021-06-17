@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-use utils::ReadType;
+use utils::utils::ReadType;
 
 use rayon::prelude::*;
 
@@ -94,7 +94,7 @@ pub struct SV {
     end: u32,
 }
 
-#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub enum Variant {
     Deletion(u32),
     Insertion(Vec<u8>),
@@ -105,7 +105,7 @@ pub enum Variant {
     None,
 }
 
-#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq, Sized)]
+#[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub struct Allele {
     variant: Variant,
     reference: bool

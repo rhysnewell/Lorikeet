@@ -2,6 +2,7 @@ use model::variants::Allele;
 use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
 use std::collections::HashMap;
+use rayon::prelude::*;
 
 /**
  * Describes the results of the AFCalc
@@ -91,7 +92,7 @@ impl AFCalculationResult {
      * @return a non-empty list of alleles used during genotyping, the first of which is the reference allele
      */
     pub fn get_alleles_used_in_genotyping(&self) -> &Vec<Allele> {
-        self.alleles_used_in_genotyping
+        &self.alleles_used_in_genotyping
     }
 
     pub fn log10_prob_only_ref_allele_exists(&self) -> f64 {
@@ -129,6 +130,6 @@ impl AFCalculationResult {
      */
     pub fn get_log10_posterior_of_allele_absent(&self, allele: &Allele) -> f64 {
         let log10_p_non_ref = self.log10_p_ref_by_allele.get(allele).unwrap();
-        return log10_p_non_ref
+        return *log10_p_non_ref
     }
 }
