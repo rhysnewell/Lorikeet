@@ -17,8 +17,9 @@ use std::process::Stdio;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 use std::path::Path;
+use std::sync::Arc;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";

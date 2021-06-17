@@ -22,6 +22,7 @@ extern crate galah;
 // Stats
 extern crate kodama;
 extern crate linregress;
+#[macro_use]
 extern crate ndarray;
 extern crate ndarray_npy;
 extern crate statrs;
@@ -41,6 +42,7 @@ extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
 extern crate num;
+extern crate libm;
 
 //extern crate plotly;
 extern crate strum;

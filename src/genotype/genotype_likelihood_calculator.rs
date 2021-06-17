@@ -1,8 +1,6 @@
 use ndarray::Array2;
-use model::genotype_allele_counts::GenotypeAlleleCounts;
-use model::genotype_builder::{Genotype, GenotypeLikelihoodCalculators};
-use model::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_allele_counts::GenotypeAlleleCounts;
+use genotype::genotype_builder::Genotype;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use std::collections::BinaryHeap;
 

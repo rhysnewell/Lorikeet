@@ -28,7 +28,7 @@ use std::path::Path;
 use std::str;
 use std::sync::{Arc, Mutex};
 use tempfile;
-use utils::generate_faidx;
+use utils::utils::generate_faidx;
 
 #[derive(Debug, Clone)]
 /// Container for all variants within a genome and associated clusters
@@ -1467,7 +1467,7 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                     for (strain_id, _) in genotype_map.iter() {
                                         let genotype_idx = genotype_key.get(strain_id).unwrap();
                                         sample_vec[*genotype_idx] =
-                                            genotype_abundances::Genotype::new(*strain_id);
+                                            genotype_abundances::GenotypeWeights::new(*strain_id);
                                     }
                                 });
 

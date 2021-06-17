@@ -1,8 +1,3 @@
-// Copyright (c) 2017 10X Genomics, Inc. All rights reserved.
-use regex::Regex;
-use serde_json;
-use serde_json::Value;
-use ordered_float::OrderedFloat;
 use rust_htslib::bam::{self, record::Cigar, Read, Record};
 
 use bio::stats::{LogProb, PHREDProb};
@@ -18,7 +13,6 @@ use model::variant_context::VariantContext;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use statrs::statistics::Variance;
 use utils::utils::{ReadType, retrieve_reference, Elem, fetch_contig_from_reference, read_sequence_to_vec};
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
@@ -26,7 +20,7 @@ use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
 use utils::quality_utils::QualityUtils;
-use utils::math_utils::RunningAverage;
+use utils::math_utils::{MathUtils, RunningAverage};
 use utils::simple_interval::SimpleInterval;
 
 pub struct HaplotypeCallerEngine {
@@ -228,7 +222,7 @@ impl HaplotypeCallerEngine {
         concatenated_genomes: &'b Option<String>,
         flag_filters: &'b FlagFilter,
         target_ids_and_lengths: &mut HashMap<usize, u64>,
-        per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage<f64>>>,
+        per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
     ) -> HashMap<usize, Vec<RefVsAnyResult>>{
         let mut bam_generated = bam_generator.start();
 
@@ -245,7 +239,7 @@ impl HaplotypeCallerEngine {
         let target_names = header.target_names();
 
         let likelihoodcount = ploidy + 1;
-        let log10ploidy = OrderedFloat((likelihoodcount as f64).log10());
+        let log10ploidy = (likelihoodcount as f64).log10();
 
         let mut contig_stats: HashMap<usize, Vec<f64>> = HashMap::new();
 
@@ -339,7 +333,7 @@ impl HaplotypeCallerEngine {
                                                 }
                                             }
 
-                                            let denominator = OrderedFloat(result.read_counts as f64) * log10ploidy;
+                                            let denominator = result.read_counts as f64 * log10ploidy;
                                             for i in 0..likelihoodcount {
                                                 result.genotype_likelihoods[i] -= denominator
                                             }
@@ -386,14 +380,14 @@ impl HaplotypeCallerEngine {
     pub fn calculate_activity_probabilities(
         &mut self,
         genotype_likelihoods: Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
-        per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage<f64>>>,
+        per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage>>,
         target_ids_and_lens: HashMap<usize, u64>,
         ploidy: usize,
     ) -> HashMap<usize, Vec<ActivityProfileState>> {
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
             let per_contig_activity_profile_states: HashMap<usize, Vec<ActivityProfileState>> = genotype_likelihoods[0]
-                .par_iter().map(|&(tid, vec_of_ref_vs_any_result)| {
+                .par_iter().map(|(tid, vec_of_ref_vs_any_result)| {
                 let result = vec_of_ref_vs_any_result.iter().enumerate().map(|(pos, ref_vs_any_result)| {
                     let is_active_prob =
                         self.genotyping_engine.allele_frequency_calculator
@@ -402,8 +396,8 @@ impl HaplotypeCallerEngine {
                                 true
                             );
 
-                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid)
-                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid]]);
+                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
+                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[&tid] as usize]);
 
                     let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
                     ActivityProfileState::new(
@@ -416,7 +410,7 @@ impl HaplotypeCallerEngine {
                     )
                 }).collect::<Vec<ActivityProfileState>>();
 
-                (tid, result)
+                (*tid, result)
             }).collect::<HashMap<usize, Vec<ActivityProfileState>>>();
 
             return per_contig_activity_profile_states
@@ -425,13 +419,13 @@ impl HaplotypeCallerEngine {
             let mut per_contig_activity_profile_states = HashMap::new();
             for (tid, length) in target_ids_and_lens.iter() {
 
-                let mut activity_profile_states = Vec::with_capacity(length);
-                for pos in 0..length.iter() {
+                let mut activity_profile_states = Vec::with_capacity(*length as usize);
+                for pos in 0..(*length as usize) {
                     let mut activity_probability = 0.;
                     let mut genotypes = Vec::new();
 
-                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid)
-                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid]]);
+                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
+                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid] as usize]);
                     let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
 
                     for sample_likelihoods in genotype_likelihoods.iter() {
@@ -453,7 +447,7 @@ impl HaplotypeCallerEngine {
                     let vc_out = self.genotyping_engine.calculate_genotypes(
                         variant_context,
                         ploidy,
-                        self.genotype_prior_calculator,
+                        &self.genotype_prior_calculator,
                         Vec::new(),
                         self.stand_min_conf
                     );
@@ -466,7 +460,7 @@ impl HaplotypeCallerEngine {
                     };
 
                     let activity_profile_state = ActivityProfileState::new(
-                        SimpleInterval::new(tid, pos, pos),
+                        SimpleInterval::new(*tid, pos, pos),
                         is_active_prob,
                         Type::new(
                             hq_soft_clips.mean(),
@@ -475,7 +469,7 @@ impl HaplotypeCallerEngine {
                     );
                     activity_profile_states.push(activity_profile_state);
                 }
-                per_contig_activity_profile_states.insert(tid, activity_profile_states)
+                per_contig_activity_profile_states.insert(*tid, activity_profile_states);
             }
             return per_contig_activity_profile_states
         }
@@ -488,15 +482,15 @@ impl HaplotypeCallerEngine {
     fn alignment_context_creation(
         alignment: &bam::pileup::Alignment,
         result: &mut RefVsAnyResult,
-        hq_soft_clips: &mut RunningAverage<f64>,
-        log10ploidy: OrderedFloat<f64>,
+        hq_soft_clips: &mut RunningAverage,
+        log10ploidy: f64,
         likelihoodcount: usize,
         min_soft_clip_qual: i32,
         refr_base: u8,
         bq: i32,
     ) {
-        let mut ref_likelihood = OrderedFloat(0.0);
-        let mut non_ref_likelihood = OrderedFloat(0.0);
+        let mut ref_likelihood = 0.0;
+        let mut non_ref_likelihood = 0.0;
         let record = alignment.record();
 
         if !alignment.is_del() && !alignment.is_refskip() {
@@ -509,12 +503,12 @@ impl HaplotypeCallerEngine {
                 if refr_base != read_char {
                     is_alt = true;
                     result.non_ref_depth += 1;
-                    non_ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))));
-                    ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())))
+                    non_ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)));
+                    ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0_f64.log10()))
                 } else {
                     result.ref_depth += 1;
-                    ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))));
-                    non_ref_likelihood = OrderedFloat(f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0.log10())));
+                    ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)));
+                    non_ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0_f64.log10()));
                 }
 
                 HaplotypeCallerEngine::update_heterozygous_likelihood(
@@ -538,7 +532,7 @@ impl HaplotypeCallerEngine {
                                     HaplotypeCallerEngine::count_high_quality_soft_clips(
                                         &cig,
                                         &record,
-                                        &mut read_cursor,
+                                        read_cursor,
                                         min_soft_clip_qual
                                     )
                                 )
@@ -554,7 +548,7 @@ impl HaplotypeCallerEngine {
                                     HaplotypeCallerEngine::count_high_quality_soft_clips(
                                         &cig,
                                         &record,
-                                        &mut read_cursor,
+                                        read_cursor,
                                         min_soft_clip_qual
                                     )
                                 )
@@ -593,18 +587,18 @@ impl HaplotypeCallerEngine {
     fn count_high_quality_soft_clips(
         cig: &Cigar,
         record: &Record,
-        cigar_cursor: &mut usize,
+        cigar_cursor: usize,
         min_soft_clip_qual: i32
-    ) -> usize {
+    ) -> f64 {
         // https://gatk.broadinstitute.org/hc/en-us/articles/360036227652?id=4147
         // If we have high quality soft clips then we want to
         // track them
         // get mean base quality
-        let mut num_high_quality_soft_clips = 0;
+        let mut num_high_quality_soft_clips = 0.0;
         for rpos in cigar_cursor..(cigar_cursor + cig.len() as usize) {
-            let qual_pos = record.qual()[rpos];
+            let qual_pos = record.qual()[rpos] as i32;
             if qual_pos >= min_soft_clip_qual {
-                num_high_quality_soft_clips += 1
+                num_high_quality_soft_clips += 1.0
             }
         }
         return num_high_quality_soft_clips
@@ -613,9 +607,9 @@ impl HaplotypeCallerEngine {
     fn update_heterozygous_likelihood(
         result: &mut RefVsAnyResult,
         likelihoodcount: usize,
-        log10ploidy: OrderedFloat<f64>,
-        ref_likelihood: OrderedFloat<f64>,
-        non_ref_likelihood: OrderedFloat<f64>
+        log10ploidy: f64,
+        ref_likelihood: f64,
+        non_ref_likelihood: f64
     ) {
         // https://github.com/broadinstitute/gatk/blob/master/src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller/ReferenceConfidenceModel.java
         // applyPileupElementRefVsNonRefLikelihoodAndCount
@@ -626,32 +620,12 @@ impl HaplotypeCallerEngine {
         let mut i = 1;
         let mut j = likelihoodcount - 2;
         while i < (likelihoodcount - 1) {
-            result.genotype_likelihoods[i] += (
-                ref_likelihood + OrderedFloat((j as f64).log10()),
-                non_ref_likelihood + OrderedFloat((i as f64).log10())
+            result.genotype_likelihoods[i] += MathUtils::approximate_log10_sum_log10(
+                ref_likelihood + (j as f64).log10(),
+                non_ref_likelihood + (i as f64).log10()
             );
             i += 1;
             j -= 1;
         }
     }
-}
-
-
-
-fn compute_moving_average(window: &[(u32, u32)]) -> (u32, f32) {
-    let window_size = window.len();
-
-    let current_year = window[window_size / 2].0;
-
-    let sum: u32 = window.iter().map(|&(_, val)| val).sum();
-    let sum = sum as f32 / window_size as f32;
-
-    (current_year, sum)
-}
-
-fn extract_moving_average_for_year(year: u32, moving_average: &[(u32, f32)]) -> Option<f32> {
-    moving_average
-        .iter()
-        .find(|(yr, _)| yr == year)
-        .map(|&(_, val)| val)
 }

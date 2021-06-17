@@ -1,4 +1,3 @@
-use model::genotype_builder::{Genotype, GenotypesContext};
 use model::variants::Allele;
 use itertools::Itertools;
 use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};

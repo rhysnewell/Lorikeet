@@ -5,7 +5,7 @@ use model::variants::Allele;
  * providing a more liberal equals method so that VariantContext objects can be placed into a Set
  * which retains only VCs that have non-redundant location and Allele lists.
  */
-#[Derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocationAndAlleles {
     loc: usize,
     alleles: Vec<Allele>
@@ -24,6 +24,6 @@ impl LocationAndAlleles {
     }
 
     pub fn get_alleles(&self) -> &Vec<Allele> {
-        self.alleles
+        &self.alleles
     }
 }

@@ -204,7 +204,7 @@ impl GenotypingEngine {
             .map(|gt| GenotypingEngine::extract_p_no_alt(alleles, &mut gt))
             .filter(|d| !d.is_nan())
             .fold(|| std::f64::NAN, |a, b| {
-                if d.is_nan() {
+                if a.is_nan() {
                     b
                 } else if b.is_nan() {
                     a
@@ -214,10 +214,10 @@ impl GenotypingEngine {
             }).sum::<f64>()
     }
 
-    fn extract_p_no_alt(allele: &Vec<Allele>, gt: &mut Genotype) -> f64 {
+    fn extract_p_no_alt(alleles: &Vec<Allele>, gt: &mut Genotype) -> f64 {
         let gp_array = gt.get_attribute(&VCFConstants::GENOTYPE_POSTERIORS_KEY);
 
-        GenotypingEngine::extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &mut Genotype, gp_array)
+        GenotypingEngine::extract_p_no_alt_with_posteriors(alleles, gt, gp_array)
     }
 
     fn extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &mut Genotype, posteriors: &mut [f64]) -> f64 {

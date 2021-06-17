@@ -1,5 +1,8 @@
 use utils::math_utils::MathUtils;
 use num::traits::Float;
+use std::fmt::Display;
+use rayon::prelude::*;
+use std::ops::{Div, Mul, Sub};
 
 pub struct QualityUtils {}
 
@@ -21,8 +24,8 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double
      * @return log of probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob_log10<T: Float + Copy>(qual: T) -> T {
-        qual * (-0.1 as T)
+    pub fn qual_to_error_prob_log10(qual: f64) -> f64 {
+        qual * -0.1
     }
 
     /**
@@ -30,17 +33,17 @@ impl QualityUtils {
      * @param phreds the phred score values.
      * @return the sum.
      */
-    pub fn phred_sum<T: Float + Copy>(phreds: &mut [T]) -> T {
+    pub fn phred_sum(phreds: &mut [f64]) -> f64 {
         match phreds.len() {
-            0 => std::f64::MAX as T,
+            0 => std::f64::MAX,
             1 => phreds[0],
-            2 => (-10.0 as T) * MathUtils::log10_sum_log10_two_values(phreds[0] * (-0.1 as T), phreds[1] * (-0.1 as T)),
-            3 => (-10.0 as T) * MathUtils::log10_sum_log10_three_values(phreds[0] * (-0.1 as T), phreds[1] * (-0.1 as T), phreds[2] * (-0.1 as T)),
+            2 => -10.0 * MathUtils::log10_sum_log10_two_values(phreds[0] * -0.1, phreds[1] * -0.1),
+            3 => -10.0 * MathUtils::log10_sum_log10_three_values(phreds[0] * -0.1, phreds[1] * -0.1, phreds[2] * -0.1),
             _ => {
-                phreds.par_iter().for_each(|p| {
-                    *p = p * (-0.1 as T)
+                phreds.iter_mut().for_each(|p| {
+                    *p = *p * -0.1
                 });
-                (-10.0 as T) * MathUtils::log10_sum_log10(phreds, 0, phreds.len())
+                -10.0 * MathUtils::log10_sum_log10(phreds, 0, phreds.len())
             }
         }
     }
@@ -55,12 +58,12 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)
      */
-    pub fn qual_to_prob<T: Float + Copy>(qual: T) -> T {
-        if qual < (0.0 as T) {
+    pub fn qual_to_prob(qual: f64) -> f64 {
+        if qual < 0.0 {
             panic!("Qual must be >= 0.0 but got {}", qual)
         }
 
-        return (1.0 as T) - QualityUtils::qual_to_error_prob(qual)
+        return 1.0 - QualityUtils::qual_to_error_prob(qual)
     }
 
     /**
@@ -73,11 +76,11 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob<T: Float + Copy>(qual: T) -> T {
-        if qual < (0.0 as T) {
+    pub fn qual_to_error_prob(qual: f64) -> f64 {
+        if qual < 0.0 {
             panic!("Qual must be >= 0.0 but got {}", qual)
         }
 
-        (10.0 as T).powf(qual / (-10.0 as T))
+        10.0.powf(qual / -10.0)
     }
 }

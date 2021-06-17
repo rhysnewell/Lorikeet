@@ -152,7 +152,7 @@ impl GenotypeLikelihoodCalculators {
 
         let mut result = Array::zeros([row_count, col_count]);
 
-        result.slice_mut(s![[0, 1..col_count]]).fill(1);
+        result.slice_mut(s![0, 1..col_count]).fill(1);
 
         for p in 1..row_count {
             for a in 1..col_count {

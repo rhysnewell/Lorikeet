@@ -8,7 +8,6 @@ use estimation::codon_structs::*;
 use estimation::variant_matrix::*;
 use external_command_checker;
 use utils::utils::{*, Elem};
-use haplotype::active_regions::{update_activity_profile, collect_activity_profile};
 
 use crate::*;
 use bio::io::gff;

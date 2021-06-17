@@ -1,7 +1,8 @@
 use utils::math_utils::MathUtils;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use model::variants::Allele;
+use model::variants::{Allele, Variant};
 use rayon::prelude::*;
+use ordered_float::OrderedFloat;
 
 #[derive(Debug, PartialEq, Eq, Ordinalize)]
 enum AlleleType {
@@ -121,7 +122,7 @@ impl GenotypePriorCalculator {
                 GenotypePriorCalculator::genotype_prior_calculator(
                     snp_het, snp_het * 2.,
                     indel_het, indel_het * 2.,
-                    std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)) as f64, std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)) as f64 * 2.0
+                    std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner(), std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner() * 2.0
                 )
             }
         }

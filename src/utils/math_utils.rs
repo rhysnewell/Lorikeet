@@ -1,8 +1,12 @@
 use rayon::prelude::*;
 use std::ops::Add;
+use std::clone::Clone;
+use std::marker::Send;
 use num::traits::Float;
 use utils::natural_log_utils::NaturalLogUtils;
 use std::ops::Sub;
+use rand_distr::utils::Float;
+use ordered_float::{OrderedFloat, NotNan};
 
 pub struct MathUtils {
 
@@ -24,12 +28,12 @@ impl MathUtils {
     // const LOG_10_FACTORIAL_CACHE: Log10FactorialCache
     // const DIGAMMA_CACHE: DiGammaCache
 
-    pub fn normalize_pls<T: Sub>(pls: &[T]) -> Vec<T> {
-        let mut new_pls = vec![T::from(0).unwrap(); pls.len()];
-        let smallest = pls.min();
+    pub fn normalize_pls(pls: &[f64]) -> Vec<f64> {
+        let mut new_pls = vec![0.0; pls.len()];
+        let smallest = *pls.par_iter().min_by_key(|x| OrderedFloat(**x)).unwrap_or(&std::f64::NAN);
         new_pls.par_iter_mut().enumerate()
             .for_each(|(i, pl)| {
-                pl = pls[i] - smallest;
+                *pl = pls[i] - smallest;
             });
 
         return new_pls
@@ -38,19 +42,19 @@ impl MathUtils {
     /**
     * Element by elemnt addition of two vectors in place
     */
-    pub fn ebe_add_in_place<T: Add>(a: &mut [T], b: &[T]) {
+    pub fn ebe_add_in_place<T: Add + Copy>(a: &mut [T], b: &[T]) {
         a.par_iter_mut().enumerate().for_each(|(i, val)| {
-            *val += b[i]
+            *val += *b[i]
         });
     }
 
     /**
     * Element by elemnt addition of two vectors
     */
-    pub fn ebe_add<T: Add>(a: &[T], b: &[T]) -> Vec<T> {
+    pub fn ebe_add<T: Add + Copy>(a: &[T], b: &[T]) -> Vec<T> {
         let mut z = Vec::with_capacity(a.len());
-        for (i, (aval, bval)) in a.iter().zip(&b).enumerate() {
-            z[i] = aval + bval;
+        for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
+            z[i] = *aval + *bval;
         }
         z
     }
@@ -58,10 +62,10 @@ impl MathUtils {
     /**
     * Element by elemnt subtraction of two vectors
     */
-    pub fn ebe_subtract<T: Sub>(a: &[T], b: &[T]) -> Vec<T> {
+    pub fn ebe_subtract<T: Sub + Copy>(a: &[T], b: &[T]) -> Vec<T> {
         let mut z = Vec::with_capacity(a.len());
-        for (i, (aval, bval)) in a.iter().zip(&b).enumerate() {
-            z[i] = aval - bval;
+        for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
+            z[i] = *aval - *bval;
         }
         z
     }
@@ -71,35 +75,42 @@ impl MathUtils {
      * @param ln log(x)
      * @return log10(x)
      */
-    pub fn log_to_log10<T: Float>(ln: T) -> T {
-        ln * T::from(MathUtils::LOG10_E).unwrap()
+    pub fn log_to_log10(ln: f64) -> f64 {
+        ln * MathUtils::LOG10_E
     }
 
     /**
      * @see #binomialCoefficient(int, int) with log10 applied to result
      */
-    pub fn log10_binomial_coeffecient<T: Float + Copy>(n: T, k: T) -> T {
+    pub fn log10_binomial_coeffecient(n: f64, k: f64) -> f64 {
         return MathUtils::log10_factorial(n)
             - MathUtils::log10_factorial(k)
             - MathUtils::log10_factorial(n - k)
     }
 
-    pub fn log10_factorial<T: Float>(n: T) -> T {
-        n.log_gamma() * T::from(MathUtils::LOG10_E).unwrap()
+    pub fn log10_factorial(n: f64) -> f64 {
+        n.log_gamma() * MathUtils::LOG10_E
     }
 
-    pub fn max_element_index<T: PartialOrd + PartialEq>(
-        array: &[T],
+    /**
+    * Gets the maximum element's index of an array of f64 values
+    * Rather convoluted due to Rust not allowing proper comparisons between floats
+    */
+    pub fn max_element_index(
+        array: &[f64],
         start: usize,
         finish: usize
     ) -> usize {
 
-        let result = array[start..finish]
-            .par_iter()
-            .enumerate()
-            .max_by(|&(_, item)| item);
+        let non_nan_floats: Vec<_> = array[start..finish].par_iter().cloned()
+            .map(NotNan::new)
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
 
-        return result
+        let max = non_nan_floats.par_iter().max().unwrap();
+        let index = non_nan_floats.par_iter().position_first(|f| f == max).unwrap();
+
+        return index
     }
 
     pub fn normalize_log10(
@@ -109,18 +120,18 @@ impl MathUtils {
         let log10_sum = MathUtils::log10_sum_log10(&array, 0, array.len());
         array
             .par_iter_mut()
-            .for_each(|x| x = x - log10_sum);
+            .for_each(|x| *x = *x - log10_sum);
         if take_log10_of_output {
             array
                 .par_iter_mut()
-                .for_each(|x| x = (10.0).powf(x))
+                .for_each(|x| *x = (10.0).powf(*x))
         }
         return array
     }
 
-    pub fn log10_sum_log10<T: Float + Copy>(log10_values: &[T], start: usize, finish: usize) -> T {
+    pub fn log10_sum_log10(log10_values: &[f64], start: usize, finish: usize) -> f64 {
         if start >= finish {
-            return T::from(std::f64::NEG_INFINITY).unwrap()
+            return std::f64::NEG_INFINITY
         }
 
         let max_element_index = MathUtils::max_element_index(
@@ -131,33 +142,33 @@ impl MathUtils {
 
         let max_value = log10_values[max_element_index];
 
-        if max_value == T::from(std::f64::NEG_INFINITY).unwrap() {
+        if max_value == std::f64::NEG_INFINITY {
             return max_value
         }
 
         let sum_tot = log10_values[start..finish]
             .par_iter()
             .enumerate()
-            .filter(|&(index, value)| {
-                index != max_element_index || value != T::from(std::f64::NEG_INFINITY).unwrap()
+            .filter(|(index, value)| {
+                *index != max_element_index || **value != std::f64::NEG_INFINITY
             })
-            .map(|&(_, value)| {
+            .map(|(_, value)| {
                 value
-            }).sum();
+            }).sum::<f64>();
 
-        if sum_tot == T::from(std::f64::NAN).unwrap() || sum_tot == T::from(std::f64::INFINITY).unwrap() {
+        if sum_tot == std::f64::NAN || sum_tot == std::f64::INFINITY {
             panic!("log10 p: Values must be non-infinite and non-NAN")
         }
 
-        return max_value + (if sum_tot != 1.0 { sum_tot.log10() } else { T::from(0.0).unwrap()})
+        return max_value + (if sum_tot != 1.0 { sum_tot.log10() } else { 0.0})
 
     }
 
-    pub fn log10_sum_log10_two_values<T: Float + Copy>(a: T, b: T) -> T {
+    pub fn log10_sum_log10_two_values(a: f64, b: f64) -> f64 {
         if a > b {
-            a + ((1. as T) + (10.0 as T).powf(b - a))
+            a + (1. + 10.0.powf(b - a))
         } else {
-            b + ((1. as T) + (10.0 as T).powf(a - b))
+            b + (1. + 10.0.powf(a - b))
         }
     }
 
@@ -168,13 +179,13 @@ impl MathUtils {
      * @param c
      * @return the sum... perhaps NaN or infinity if it applies.
      */
-    pub fn log10_sum_log10_three_values<T: Float + Copy>(a: T, b: T, c: T) -> T {
+    pub fn log10_sum_log10_three_values(a: f64, b: f64, c: f64) -> f64 {
         if a >= b && a >= c {
-            return a + ((1.0 as T) + (10.0 as T).powf(b - a)).log10() + (10.0 as T).powf(c - a)
+            return a + (1.0 + 10.0.powf(b - a)).log10() + 10.0.powf(c - a)
         } else if b >= c {
-            return b + ((1.0 as T) + (10.0 as T).powf(a - b)).log10() + (10.0 as T).powf(c - b)
+            return b + (1.0 + 10.0.powf(a - b)).log10() + 10.0.powf(c - b)
         } else {
-            return c + ((1.0 as T) + (10.0 as T).powf(a - c)).log10() + (10.0 as T).powf(b - c)
+            return c + (1.0 + 10.0.powf(a - c)).log10() + 10.0.powf(b - c)
         }
     }
 
@@ -186,9 +197,9 @@ impl MathUtils {
      * @param array
      * @return the scaled-in-place array
      */
-    pub fn scale_log_space_array_for_numeric_stability<T: Float>(array: &mut [T]) {
-        let max_value = array.max();
-        array.par_iter_mut().for_each(|x| { *x = x - max_value})
+    pub fn scale_log_space_array_for_numeric_stability(array: &mut [f64]) {
+        let max_value: f64 = *array.par_iter().max_by_key(|x| OrderedFloat(**x)).unwrap_or(&std::f64::NAN);
+        array.par_iter_mut().for_each(|x| { *x = *x - max_value})
     }
 
     /**
@@ -201,38 +212,38 @@ impl MathUtils {
      * @return array
      */
     //TODO: Check that this works
-    pub fn normalize_from_log10<T: Float + Copy>(
-        array: &[T],
+    pub fn normalize_from_log10(
+        array: &[f64],
         take_log10_of_output: bool,
         keep_in_log_space: bool
-    ) -> Vec<T> {
+    ) -> Vec<f64> {
         // for precision purposes, we need to add (or really subtract, since they're
         // all negative) the largest value; also, we need to convert to normal-space.
-        let max_value: T = array.max();
+        let max_value: f64 = *array.par_iter().max_by_key(|x| OrderedFloat(**x)).unwrap_or(&std::f64::NAN);
 
         // we may decide to just normalize in log space without converting to linear space
         if keep_in_log_space {
-            let array: Vec<T> = array.par_iter().for_each(|x| *x -= max_value).collect_vec();
+            let array: Vec<f64> = array.par_iter().map(|x| *x - max_value).collect::<Vec<f64>>();
             return array
         }
         // default case: go to linear space
-        let mut normalized: Vec<T> = (0..array.len())
+        let mut normalized: Vec<f64> = (0..array.len())
             .into_par_iter()
             .map(|i| {
-                (10. as T).powf(array[i] - max_value)
+                10.0.powf(array[i] - max_value)
             })
-            .collect_vec();
+            .collect::<Vec<f64>>();
 
-        let sum: T = normalized.par_iter().sum();
+        let sum: f64 = normalized.par_iter().sum::<f64>();
 
         normalized.par_iter_mut().enumerate().for_each(
-            |i, mut x: T| {
-                x = x / sum;
+            |(i, x)| {
+                *x = *x / sum;
                 if take_log10_of_output {
-                    x = x.log10();
-                    if x < MathUtils::LOG10_P_OF_ZERO
+                    *x = x.log10();
+                    if *x < MathUtils::LOG10_P_OF_ZERO
                         || x.is_infinite() {
-                        x = array[i] - max_value
+                        *x = array[i] - max_value
                     }
                 }
             }
@@ -251,28 +262,44 @@ impl MathUtils {
      * @param a the input exponent.
      * @return {@link Double#NaN NaN} if {@code a > 0}, otherwise the corresponding value.
      */
-    pub fn log10_one_minus_pow10<T: Float + Copy>(a: T) -> T {
-        if a > 0 {
-            return std::f64::NAN as T
+    pub fn log10_one_minus_pow10(a: f64) -> f64 {
+        if a > 0.0 {
+            return std::f64::NAN
         }
-        if a == 0 {
+        if a == 0.0 {
             return std::f64::NEG_INFINITY
         }
 
-        let b = a * (MathUtils::LOG_10 as T);
+        let b = a * MathUtils::LOG_10;
         return NaturalLogUtils::log1mexp(b) * MathUtils::INV_LOG_10
+    }
+
+    pub fn approximate_log10_sum_log10(a: f64, b: f64) -> f64 {
+        // this code works only when a <= b so we flip them if the order is opposite
+        if a > b {
+            return MathUtils::approximate_log10_sum_log10(b, a)
+        } else if a == std::f64::NEG_INFINITY {
+            return b
+        } else {
+            // if |b-a| < tol we need to compute log(e^a + e^b) = log(e^b(1 + e^(a-b))) = b + log(1 + e^(-(b-a)))
+            // we compute the second term as a table lookup with integer quantization
+            // we have pre-stored correction for 0,0.1,0.2,... 10.0
+            let diff = b - a;
+
+            return b + if diff < JacobianLogTable::MAX_TOLERANCE { JacobianLogTable::get(diff) } else { 0.0 }
+        }
     }
 }
 
-#[Derive(Debug, Clone, Copy)]
-pub struct RunningAverage<T: Float + Copy> {
-    mean: T,
-    s: T,
+#[derive(Debug, Clone, Copy)]
+pub struct RunningAverage {
+    mean: f64,
+    s: f64,
     obs_count: usize,
 }
 
-impl<T: Float + Copy> RunningAverage<T> {
-    pub fn new() -> RunningAverage<T> {
+impl RunningAverage {
+    pub fn new() -> RunningAverage {
         RunningAverage {
             mean: 0.0,
             s: 0.0,
@@ -280,32 +307,63 @@ impl<T: Float + Copy> RunningAverage<T> {
         }
     }
 
-    pub fn add<T: Float + Copy>(&mut self, obs: T) {
+    pub fn add(&mut self, obs: f64) {
         self.obs_count += 1;
         let old_mean = self.mean;
-        self.mean += (obs - self.mean) / self.obs_count;
+        self.mean += (obs - self.mean) / self.obs_count as f64;
         self.s += (obs - old_mean) * (obs - old_mean)
     }
 
-    pub fn add_all<T: Float + Copy>(&mut self, col: &[T]) {
+    pub fn add_all(&mut self, col: &[f64]) {
         for obs in col {
-            self.add(obs)
+            self.add(*obs)
         }
     }
 
-    pub fn mean<T: Float + Copy>(&self) -> T {
+    pub fn mean(&self) -> f64 {
         self.mean
     }
 
-    pub fn stddev<T: Float + Copy>(&self) -> T {
-        (self.s / (self.obs_count - 1)).sqrt()
+    pub fn stddev(&self) -> f64 {
+        (self.s / (self.obs_count - 1) as f64).sqrt()
     }
 
-    pub fn var<T: Float + Copy>(&self) -> T {
-        self.s / (self.obs_count - 1)
+    pub fn var(&self) -> f64 {
+        self.s / (self.obs_count - 1) as f64
     }
 
     pub fn obs_count(&self) -> usize {
         self.obs_count
     }
 }
+
+/**
+ * Encapsulates the second term of Jacobian log identity for differences up to MAX_TOLERANCE
+ */
+struct JacobianLogTable {
+
+}
+
+impl JacobianLogTable {
+    // if log(a) - log(b) > MAX_TOLERANCE, b is effectively treated as zero in approximateLogSumLog
+    // MAX_TOLERANCE = 8.0 introduces an error of at most one part in 10^8 in sums
+    pub const MAX_TOLERANCE: f64 = 8.0;
+
+    //  Phred scores Q and Q+1 differ by 0.1 in their corresponding log-10 probabilities, and by
+    // 0.1 * log(10) in natural log probabilities.  Setting TABLE_STEP to an exact divisor of this
+    // quantity ensures that approximateSumLog in fact caches exact values for integer phred scores
+    const TABLE_STEP: f64 = 0.0001;
+    const INV_STEP: f64 = (1.0) / JacobianLogTable::TABLE_STEP;
+    const cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE / JacobianLogTable::TABLE_STEP) + 1.0) as usize)
+        .into_par_iter()
+        .map(|k| {
+            1.0 + (10.0).powf(-(k as f64) * JacobianLogTable::INV_STEP)
+        })
+        .collect::<Vec<f64>>();
+
+    pub fn get(difference: f64) -> f64 {
+        let index = (difference * JacobianLogTable::INV_STEP).abs() as usize;
+        return JacobianLogTable::cache[index]
+    }
+}
+
