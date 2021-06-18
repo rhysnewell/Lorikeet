@@ -26,7 +26,7 @@ impl AlleleList<Allele> {
      * @throws IllegalArgumentException if allele is null.
      */
     pub fn index_of_allele(&self, input: &Allele) -> usize {
-        self.list.par_iter().position(|&p| p == input).unwrap()
+        self.list.par_iter().position_first(|p| p == input).unwrap()
     }
 
     /**
@@ -84,7 +84,7 @@ impl AlleleList<Allele> {
      * @return -1 if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
      */
     pub fn index_of_reference(&self) -> usize {
-        self.list.par_iter().position(|&p| p.is_reference())
+        self.list.par_iter().position_first(|p| p.is_reference()).unwrap()
     }
 
     /**
@@ -132,9 +132,9 @@ pub trait AlleleListPermutation<T> {
 
     fn number_of_alleles(&self) -> usize;
 
-    fn index_of_allele(&self, allele: T) -> usize;
+    fn index_of_allele(&self, allele: &T) -> usize;
 
-    fn get_allele(&self, index: usize) -> T;
+    fn get_allele(&self, index: usize) -> &T;
 }
 
 pub enum Permutation<T> {
@@ -178,7 +178,7 @@ impl Permutation<Allele> {
                 }
                 kept_from_indices[original_index] = true;
                 from_index[i] = original_index;
-                non_permuted = non_permuted & original_index == i;
+                non_permuted = non_permuted & (original_index == i);
             }
 
             return Permutation::ActualPermutation {
@@ -202,7 +202,7 @@ impl AlleleListPermutation<Allele> for Permutation<Allele> {
             Permutation::ActualPermutation {
                 is_partial,
                 ..
-            } => { is_partial }
+            } => { *is_partial }
         }
     }
 
@@ -214,7 +214,7 @@ impl AlleleListPermutation<Allele> for Permutation<Allele> {
             Permutation::ActualPermutation {
                 non_permuted,
                 ..
-            } => { non_permuted }
+            } => { *non_permuted }
         }
     }
 

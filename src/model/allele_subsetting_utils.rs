@@ -1,4 +1,4 @@
-use model::variants::Allele;
+use model::variants::{Allele, NON_REF_ALLELE};
 use itertools::Itertools;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
@@ -14,7 +14,6 @@ use genotype::genotype_likelihoods::GenotypeLikelihoods;
 pub struct AlleleSubsettingUtils {}
 
 impl AlleleSubsettingUtils {
-    const GL_CALCS: GenotypeLikelihoodCalculators = GenotypeLikelihoodCalculators::build_empty();
 
     /**
      * Returns the new set of alleles to use based on a likelihood score: alleles' scores are the sum of their counts in
@@ -37,14 +36,14 @@ impl AlleleSubsettingUtils {
         let number_of_proper_alts = vc.get_n_alleles() - number_of_alleles_that_arent_proper_alt;
 
         if num_alt_alleles_to_keep >= number_of_proper_alts {
-            return vc.get_alleles()
+            return vc.get_alleles().to_vec()
         }
 
         let likelihood_sums = AlleleSubsettingUtils::calculate_likelihood_sums(vc, ploidy);
 
         return AlleleSubsettingUtils::filter_to_max_number_of_alt_alleles_based_on_scores(
             num_alt_alleles_to_keep,
-            vc.get_alleles(),
+            vc.get_alleles().to_vec(),
             likelihood_sums,
         )
     }
@@ -60,19 +59,24 @@ impl AlleleSubsettingUtils {
         alleles: Vec<Allele>,
         likelihood_sums: Vec<f64>
     ) -> Vec<Allele> {
-        let non_ref_alt_allele_index = alleles.par_iter().position(|&a| a == Allele::NON_REF_ALLELE).unwrap();
+        let non_ref_alt_allele_index = alleles.par_iter().position_first(|a| a == &*NON_REF_ALLELE).unwrap();
         let num_alleles = alleles.len();
+        let mut indices = (1..num_alleles).collect_vec();
+        indices
+            .sort_unstable_by_key(|n| OrderedFloat(likelihood_sums[*n]));
 
         let proper_alt_indexes_to_keep =
-            (1..num_alleles).into_par_iter()
-            .filter(|n| n != non_ref_alt_allele_index)
-            .par_sort_by_key(|n| likelihood_sums[n])
-            .reverse()
-            .take(num_alt_alleles_to_keep)
-            .collect::<HashSet<usize>>();
+            indices
+                .into_par_iter()
+                .filter(|n| *n != non_ref_alt_allele_index)
+                .collect::<Vec<usize>>()
+                .into_par_iter()
+                .rev()
+                .take(num_alt_alleles_to_keep)
+                .collect::<HashSet<usize>>();
 
         let result = (0..num_alleles).into_par_iter()
-            .filter(|i| {i == 0 || i == non_ref_alt_allele_index || proper_alt_indexes_to_keep.contains(i)})
+            .filter(|i| {*i == 0 || *i == non_ref_alt_allele_index || proper_alt_indexes_to_keep.contains(i)})
             .map(|i| {alleles[i].clone()}).collect::<Vec<Allele>>();
 
         return result
@@ -90,12 +94,13 @@ impl AlleleSubsettingUtils {
     ) -> Vec<f64> {
         let mut likelihood_sums = vec![0.; vc.get_n_alleles()];
 
-        for genotype in vc.genotypes.iter() {
-            let index_of_most_likely_genotype = genotype.likelihoods.iter()
-                .position(|&item| item == *(genotype.likelihoods.iter().max().unwrap())).unwrap();
+        for genotype in vc.get_genotypes().genotypes().iter() {
+
+            let index_of_most_likely_genotype =
+                MathUtils::max_element_index(genotype.pl.get_likelihoods(), 0, genotype.pl.get_likelihoods().len());
 
             let difference_between_best_and_ref =
-                genotype.likelihoods[index_of_most_likely_genotype] - genotype.likelihoods[0];
+                genotype.pl.get_likelihoods()[index_of_most_likely_genotype] - genotype.pl.get_likelihoods()[0];
             let ploidy = if genotype.get_ploidy() > 0 { genotype.get_ploidy() } else { ploidy };
 
             let allele_counts = GenotypeLikelihoodCalculators::get_instance(
@@ -130,7 +135,7 @@ impl AlleleSubsettingUtils {
      * @return                         a new non-null GenotypesContext
      */
     pub fn subset_alleles(
-        original_gs: &GenotypesContext,
+        mut original_gs: GenotypesContext,
         default_ploidy: usize,
         original_alleles: &Vec<Allele>,
         alleles_to_keep: &Vec<Allele>,
@@ -149,10 +154,10 @@ impl AlleleSubsettingUtils {
         let allele_permutation = AlleleList::new(&original_alleles).permuation(AlleleList::new(&alleles_to_keep));
         let mut subsetted_likelihood_indices_by_ploidy = BTreeMap::new();
 
-        for g in original_gs.genotypes().iter_mut() {
+        for g in original_gs.genotypes_mut().iter_mut() {
             let ploidy = if g.get_ploidy() > 0 { g.get_ploidy() } else { default_ploidy };
 
-            let mut subsetted_likelihoods_indices = subsetted_likelihood_indices_by_ploidy.entry(ploidy)
+            let subsetted_likelihoods_indices = subsetted_likelihood_indices_by_ploidy.entry(ploidy)
                 .or_insert(
                     AlleleSubsettingUtils::subsetted_pl_indices(
                         ploidy,
@@ -163,29 +168,30 @@ impl AlleleSubsettingUtils {
                 );
 
             let expected_num_likelihoods = g.num_likelihoods(original_alleles.len() as i64, ploidy as i64);
-            let mut new_likelihoods: Option<Vec<OrderedFloat<f64>>>;
-            let mut new_log10_gq = -1;
 
-            let mut original_likelihoods = g.get_likelihoods();
+            let new_likelihoods: Option<Vec<f64>>;
+            let mut new_log10_gq = -1.0;
+
+            let original_likelihoods = g.get_likelihoods_mut().get_as_vector();
             new_likelihoods =
                 if original_likelihoods.len() == expected_num_likelihoods {
                     let mut subsetted_likeihoods =
-                        subsetted_likelihoods_indices.iter().map(|i| original_likelihoods[i]).collect_vec();
+                        subsetted_likelihoods_indices.iter().map(|i| original_likelihoods[*i]).collect::<Vec<f64>>();
                     MathUtils::scale_log_space_array_for_numeric_stability(&mut subsetted_likeihoods);
                     Some(subsetted_likeihoods)
                 } else {
                     None
                 };
-            match new_likelihoods {
-                Some(&new_likelihoods) => {
+            match &new_likelihoods {
+                Some(new_likelihoods) => {
                     let pl_index = MathUtils::max_element_index(new_likelihoods, 0, new_likelihoods.len());
                     new_log10_gq = g.get_likelihoods().get_gq_log10_from_likelihoods(pl_index);
                 },
                 _ => {}
             }
 
-            let use_new_likelihoods = match new_likelihoods {
-                Some(&new_likelihoods) => {
+            let use_new_likelihoods = match &new_likelihoods {
+                Some(new_likelihoods) => {
                     if depth != 0 || VariantContext::is_informative(new_likelihoods) {
                         true
                     } else {
@@ -197,7 +203,7 @@ impl AlleleSubsettingUtils {
 
             let mut gb = Genotype::from(g.clone());
             if use_new_likelihoods {
-                gb.pl(GenotypeLikelihoods::from_log10_likelihoods(new_likelihoods.unwrap()));
+                gb.pl(GenotypeLikelihoods::from_log10_likelihoods(new_likelihoods.clone().unwrap()));
                 // Don't worry about extended attributes here, we won't use them
             }
 
@@ -213,11 +219,11 @@ impl AlleleSubsettingUtils {
 
             if g.has_ad() {
                 let old_ad = g.get_ad();
-                let new_ad = (0..alleles_to_keep.len()).into_par_iter().map(|n| {
+                let mut new_ad = (0..alleles_to_keep.len()).into_par_iter().map(|n| {
                     old_ad[allele_permutation.from_index(n)]
-                }).collect_vec();
+                }).collect::<Vec<i64>>();
 
-                let non_ref_index = alleles_to_keep.par_iter().position(|&p| p == Allele::NON_REF_ALLELE);
+                let non_ref_index = alleles_to_keep.par_iter().position_first(|p| p == &*NON_REF_ALLELE);
 
                 match non_ref_index {
                     Some(index) => {
@@ -259,7 +265,7 @@ impl AlleleSubsettingUtils {
 
         let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, original_alleles.len());
 
-        for old_pl_index in (0..gl_calc).into_iter() {
+        for old_pl_index in (0..gl_calc.genotype_count as usize).into_iter() {
             let old_allele_counts = gl_calc.genotype_allele_counts_at(old_pl_index);
             let contains_only_new_alleles = (0..old_allele_counts.distinct_allele_count())
                 .map(|i| {

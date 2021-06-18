@@ -4,6 +4,14 @@ use model::variants::{Allele, Variant};
 use rayon::prelude::*;
 use ordered_float::OrderedFloat;
 
+lazy_static! {
+    static ref NUMBER_OF_ALLELE_TYPES: usize = 4;
+
+    // A snp can go to 3 different bases (standard-nucs - 1), so we normalize SNP lks accordingly. Here is the
+    // log10 constant used for that:
+    static ref LOG10_SNP_NORMALIZATION_CONSTANT: f64 = (3. as f64).log10();
+}
+
 #[derive(Debug, PartialEq, Eq, Ordinalize)]
 enum AlleleType {
     REF,
@@ -34,11 +42,6 @@ pub struct GenotypePriorCalculator {
 }
 
 impl GenotypePriorCalculator {
-    const NUMBER_OF_ALLELE_TYPES: usize = 4;
-
-    // A snp can go to 3 different bases (standard-nucs - 1), so we normalize SNP lks accordingly. Here is the
-    // log10 constant used for that:
-    const LOG10_SNP_NORMALIZATION_CONSTANT: f64 = (3. as f64).log10();
 
     fn genotype_prior_calculator(
         snp_het: f64,
@@ -48,16 +51,16 @@ impl GenotypePriorCalculator {
         other_het: f64,
         other_hom: f64
     ) -> GenotypePriorCalculator {
-        let mut het_values = vec![0.; GenotypePriorCalculator::NUMBER_OF_ALLELE_TYPES];
-        let mut hom_values = vec![0.; GenotypePriorCalculator::NUMBER_OF_ALLELE_TYPES];
+        let mut het_values = vec![0.; *NUMBER_OF_ALLELE_TYPES];
+        let mut hom_values = vec![0.; *NUMBER_OF_ALLELE_TYPES];
 
         // REF
         // by convention ref log10 likelihoods are set to 0.
         // so they are already set.
 
         // SNPs: normalized for all possible mutations (number of nucs (4) - 1)
-        het_values[AlleleType::SNP.ordinal() as usize] = snp_het - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
-        hom_values[AlleleType::SNP.ordinal() as usize] = snp_hom - GenotypePriorCalculator::LOG10_SNP_NORMALIZATION_CONSTANT;
+        het_values[AlleleType::SNP.ordinal() as usize] = snp_het - *LOG10_SNP_NORMALIZATION_CONSTANT;
+        hom_values[AlleleType::SNP.ordinal() as usize] = snp_hom - *LOG10_SNP_NORMALIZATION_CONSTANT;
         // INDELs:
         het_values[AlleleType::INDEL.ordinal() as usize] = indel_het;
         hom_values[AlleleType::INDEL.ordinal() as usize] = indel_hom;
@@ -145,7 +148,7 @@ impl GenotypePriorCalculator {
      * @return never {@code null}, the array will have as many positions as necessary to hold the priors of all possible
      * unphased genotypes as per the number of input alleles and the input calculator's ploidy.
      */
-    pub fn get_log10_priors(&self, likelihood_calculator: GenotypeLikelihoodCalculator, alleles: &Vec<Allele>) -> Vec<f64> {
+    pub fn get_log10_priors(&self, likelihood_calculator: &mut GenotypeLikelihoodCalculator, alleles: &Vec<Allele>) -> Vec<f64> {
         if likelihood_calculator.allele_count < alleles.len() {
             panic!("the number of alleles in the input calculator must be at least as large as the number of alleles in the input list")
         }
@@ -175,11 +178,11 @@ impl GenotypePriorCalculator {
     }
 
     fn calculate_allele_types(alleles: &Vec<Allele>) -> Vec<i64> {
-        let ref_allele = alleles[0];
+        let ref_allele = &alleles[0];
         if !ref_allele.is_reference() {
             panic!("The first allele must be a valid reference")
         }
-        let ref_length = ref_allele.length();
+        // let ref_length = ref_allele.length();
 
         let result = alleles.par_iter().map(|allele| {
             if allele.is_reference() {

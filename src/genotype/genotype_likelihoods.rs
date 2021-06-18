@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
 use statrs::function::factorial::binomial;
-use num::traits::Float;
 
 #[derive(Debug, Clone)]
 pub struct GenotypeLikelihoods {
@@ -127,6 +126,8 @@ impl GenotypeLikelihoods {
     pub fn get_as_vector(&mut self) -> &mut Vec<f64> {
         &mut self.log10_likelihoods
     }
+
+    pub fn get_likelihoods(&self) -> &Vec<f64> { &self.log10_likelihoods }
 
     pub fn len(&self) -> usize {
         self.log10_likelihoods.len()

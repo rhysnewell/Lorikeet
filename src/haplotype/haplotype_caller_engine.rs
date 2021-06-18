@@ -98,10 +98,9 @@ impl HaplotypeCallerEngine {
         per_reference_samples: usize,
         m: &clap::ArgMatches,
         genomes_and_contigs: &GenomesAndContigs,
-        reference_map: &HashMap<usize, String>,
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
-        tree: &Mutex<Arc<Vec<&Elem>>>,
+        tree: &Arc<Mutex<Vec<&Elem>>>,
     ) -> HashMap<usize, Vec<ActivityProfileState>> {
 
 
@@ -133,7 +132,7 @@ impl HaplotypeCallerEngine {
         indexed_bam_readers.iter().enumerate().for_each(
             |(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using
-                let mut bam_generator = generate_indexed_named_bam_readers_from_bam_files(
+                let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
                     vec![&bam_generator],
                     n_threads as u32,
                 )
@@ -241,8 +240,6 @@ impl HaplotypeCallerEngine {
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
 
-        let mut contig_stats: HashMap<usize, Vec<f64>> = HashMap::new();
-
         let mut ref_vs_any_container = HashMap::new();
         // for each genomic position, only has hashmap when variants are present. Includes read ids
         match readtype {
@@ -260,7 +257,7 @@ impl HaplotypeCallerEngine {
                         {
                             // Get contig stats
                             let target_len = target_lens[tid];
-                            let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
+                            let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
 
                             if !target_ids_and_lengths.contains_key(&tid) {
                                 target_ids_and_lengths.insert(tid, target_len);
@@ -380,7 +377,7 @@ impl HaplotypeCallerEngine {
     pub fn calculate_activity_probabilities(
         &mut self,
         genotype_likelihoods: Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
-        per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage>>,
+        mut per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage>>,
         target_ids_and_lens: HashMap<usize, u64>,
         ploidy: usize,
     ) -> HashMap<usize, Vec<ActivityProfileState>> {
@@ -396,12 +393,11 @@ impl HaplotypeCallerEngine {
                                 true
                             );
 
-                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
-                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[&tid] as usize]);
+                    let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
-                    let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
+                    let hq_soft_clips = per_base_hq_soft_clips[pos];
                     ActivityProfileState::new(
-                        ref_vs_any_result.loc,
+                        ref_vs_any_result.loc.clone(),
                         is_active_prob,
                         Type::new(
                             hq_soft_clips.mean(),
@@ -418,15 +414,15 @@ impl HaplotypeCallerEngine {
 
             let mut per_contig_activity_profile_states = HashMap::new();
             for (tid, length) in target_ids_and_lens.iter() {
+                let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
+                    .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid] as usize]);
 
                 let mut activity_profile_states = Vec::with_capacity(*length as usize);
                 for pos in 0..(*length as usize) {
-                    let mut activity_probability = 0.;
                     let mut genotypes = Vec::new();
 
-                    let mut per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
-                        .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid] as usize]);
-                    let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
+
+                    let hq_soft_clips = per_base_hq_soft_clips[pos];
 
                     for sample_likelihoods in genotype_likelihoods.iter() {
                         let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
@@ -489,8 +485,8 @@ impl HaplotypeCallerEngine {
         refr_base: u8,
         bq: i32,
     ) {
-        let mut ref_likelihood = 0.0;
-        let mut non_ref_likelihood = 0.0;
+        let ref_likelihood;
+        let non_ref_likelihood;
         let record = alignment.record();
 
         if !alignment.is_del() && !alignment.is_refskip() {

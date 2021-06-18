@@ -1,14 +1,16 @@
 use utils::math_utils::MathUtils;
 use num::traits::Float;
-use std::fmt::Display;
 use rayon::prelude::*;
-use std::ops::{Div, Mul, Sub};
+
+lazy_static! {
+    static ref MIN_LOG10_SCALED_QUAL: f64 = (std::f64::MIN).log10();
+    static ref MIN_PHRED_SCALED_QUAL: f64 = -10.0 * *MIN_LOG10_SCALED_QUAL;
+}
 
 pub struct QualityUtils {}
 
 impl QualityUtils {
-    const MIN_LOG10_SCALED_QUAL: f64 = (std::f64::MIN).log10();
-    const MIN_PHRED_SCALED_QUAL: f64 = -10.0 * QualityUtils::MIN_LOG10_SCALED_QUAL;
+
 
     const MAX_REASONABLE_Q_SCORE: u64 = 60;
 
@@ -33,17 +35,17 @@ impl QualityUtils {
      * @param phreds the phred score values.
      * @return the sum.
      */
-    pub fn phred_sum(phreds: &mut [f64]) -> f64 {
+    pub fn phred_sum(phreds: &[f64]) -> f64 {
         match phreds.len() {
             0 => std::f64::MAX,
             1 => phreds[0],
             2 => -10.0 * MathUtils::log10_sum_log10_two_values(phreds[0] * -0.1, phreds[1] * -0.1),
             3 => -10.0 * MathUtils::log10_sum_log10_three_values(phreds[0] * -0.1, phreds[1] * -0.1, phreds[2] * -0.1),
             _ => {
-                phreds.iter_mut().for_each(|p| {
-                    *p = *p * -0.1
-                });
-                -10.0 * MathUtils::log10_sum_log10(phreds, 0, phreds.len())
+                let log10_vals = phreds.par_iter().map(|p| {
+                    *p * -0.1
+                }).collect::<Vec<f64>>();
+                -10.0 * MathUtils::log10_sum_log10(&log10_vals, 0, log10_vals.len())
             }
         }
     }

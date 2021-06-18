@@ -1,12 +1,28 @@
 use rayon::prelude::*;
-use std::ops::Add;
+use std::ops::{Add, AddAssign, Sub};
 use std::clone::Clone;
-use std::marker::Send;
-use num::traits::Float;
 use utils::natural_log_utils::NaturalLogUtils;
-use std::ops::Sub;
-use rand_distr::utils::Float;
+use statrs::function::gamma::ln_gamma;
 use ordered_float::{OrderedFloat, NotNan};
+
+lazy_static! {
+    static ref cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE / JacobianLogTable::TABLE_STEP) + 1.0) as usize)
+        .into_par_iter()
+        .map(|k| {
+            1.0 + (10.0_f64).powf(-(k as f64) * JacobianLogTable::INV_STEP)
+        })
+        .collect::<Vec<f64>>();
+
+    pub static ref LOG10_ONE_HALF: f64 = (0.5 as f64).log10();
+    pub static ref LOG10_ONE_THIRD: f64 = -((3.0 as f64).log10());
+    pub static ref LOG_ONE_THIRD: f64 = -((3.0 as f64).ln());
+    pub static ref INV_LOG_2: f64 = (1.0 as f64) / (2.0 as f64).ln();
+    static ref LOG_10: f64 = (10. as f64).ln();
+    static ref INV_LOG_10: f64 = (1.0) / *LOG_10;
+    pub static ref LOG10_E: f64 = std::f64::consts::E.log10();
+
+    static ref ROOT_TWO_PI: f64 = (2.0 * std::f64::consts::PI).sqrt();
+}
 
 pub struct MathUtils {
 
@@ -14,15 +30,7 @@ pub struct MathUtils {
 
 impl MathUtils {
     pub const LOG10_P_OF_ZERO: f64 = -1000000.0;
-    pub const LOG10_ONE_HALF: f64 = (0.5 as f64).log10();
-    pub const LOG10_ONE_THIRD: f64 = -((3.0 as f64).log10());
-    pub const LOG_ONE_THIRD: f64 = -((3.0 as f64).ln());
-    pub const INV_LOG_2: f64 = (1.0 as f64) / (2.0 as f64).ln();
-    const LOG_10: f64 = (10. as f64).ln();
-    const INV_LOG_10: f64 = (1.0) / MathUtils::LOG_10;
-    pub const LOG10_E: f64 = std::f64::consts::E.log10();
 
-    const ROOT_TWO_PI: f64 = (2.0 * std::f64::consts::PI).sqrt();
 
     // const LOG_10_CACHE: Log10Cache
     // const LOG_10_FACTORIAL_CACHE: Log10FactorialCache
@@ -42,16 +50,16 @@ impl MathUtils {
     /**
     * Element by elemnt addition of two vectors in place
     */
-    pub fn ebe_add_in_place<T: Add + Copy>(a: &mut [T], b: &[T]) {
-        a.par_iter_mut().enumerate().for_each(|(i, val)| {
-            *val += *b[i]
+    pub fn ebe_add_in_place<T: Add + Copy + AddAssign>(a: &mut [T], b: &[T]) {
+        a.iter_mut().enumerate().for_each(|(i, val)| {
+            *val += b[i]
         });
     }
 
     /**
     * Element by elemnt addition of two vectors
     */
-    pub fn ebe_add<T: Add + Copy>(a: &[T], b: &[T]) -> Vec<T> {
+    pub fn ebe_add<T: Add + Copy + Add<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
         let mut z = Vec::with_capacity(a.len());
         for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
             z[i] = *aval + *bval;
@@ -62,7 +70,7 @@ impl MathUtils {
     /**
     * Element by elemnt subtraction of two vectors
     */
-    pub fn ebe_subtract<T: Sub + Copy>(a: &[T], b: &[T]) -> Vec<T> {
+    pub fn ebe_subtract<T: Sub + Copy + Sub<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
         let mut z = Vec::with_capacity(a.len());
         for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
             z[i] = *aval - *bval;
@@ -76,7 +84,7 @@ impl MathUtils {
      * @return log10(x)
      */
     pub fn log_to_log10(ln: f64) -> f64 {
-        ln * MathUtils::LOG10_E
+        ln * *LOG10_E
     }
 
     /**
@@ -89,7 +97,7 @@ impl MathUtils {
     }
 
     pub fn log10_factorial(n: f64) -> f64 {
-        n.log_gamma() * MathUtils::LOG10_E
+        ln_gamma(n) * *LOG10_E
     }
 
     /**
@@ -124,7 +132,7 @@ impl MathUtils {
         if take_log10_of_output {
             array
                 .par_iter_mut()
-                .for_each(|x| *x = (10.0).powf(*x))
+                .for_each(|x| *x = 10.0_f64.powf(*x))
         }
         return array
     }
@@ -166,9 +174,9 @@ impl MathUtils {
 
     pub fn log10_sum_log10_two_values(a: f64, b: f64) -> f64 {
         if a > b {
-            a + (1. + 10.0.powf(b - a))
+            a + (1. + 10.0_f64.powf(b - a))
         } else {
-            b + (1. + 10.0.powf(a - b))
+            b + (1. + 10.0_f64.powf(a - b))
         }
     }
 
@@ -181,11 +189,11 @@ impl MathUtils {
      */
     pub fn log10_sum_log10_three_values(a: f64, b: f64, c: f64) -> f64 {
         if a >= b && a >= c {
-            return a + (1.0 + 10.0.powf(b - a)).log10() + 10.0.powf(c - a)
+            return a + (1.0 + 10.0_f64.powf(b - a)).log10() + 10.0_f64.powf(c - a)
         } else if b >= c {
-            return b + (1.0 + 10.0.powf(a - b)).log10() + 10.0.powf(c - b)
+            return b + (1.0 + 10.0_f64.powf(a - b)).log10() + 10.0_f64.powf(c - b)
         } else {
-            return c + (1.0 + 10.0.powf(a - c)).log10() + 10.0.powf(b - c)
+            return c + (1.0 + 10.0_f64.powf(a - c)).log10() + 10.0_f64.powf(b - c)
         }
     }
 
@@ -197,9 +205,10 @@ impl MathUtils {
      * @param array
      * @return the scaled-in-place array
      */
-    pub fn scale_log_space_array_for_numeric_stability(array: &mut [f64]) {
+    pub fn scale_log_space_array_for_numeric_stability(array: &[f64]) -> Vec<f64> {
         let max_value: f64 = *array.par_iter().max_by_key(|x| OrderedFloat(**x)).unwrap_or(&std::f64::NAN);
-        array.par_iter_mut().for_each(|x| { *x = *x - max_value})
+        let result = array.par_iter().map(|x| *x - max_value).collect::<Vec<f64>>();
+        return result
     }
 
     /**
@@ -230,7 +239,7 @@ impl MathUtils {
         let mut normalized: Vec<f64> = (0..array.len())
             .into_par_iter()
             .map(|i| {
-                10.0.powf(array[i] - max_value)
+                10.0_f64.powf(array[i] - max_value)
             })
             .collect::<Vec<f64>>();
 
@@ -270,8 +279,8 @@ impl MathUtils {
             return std::f64::NEG_INFINITY
         }
 
-        let b = a * MathUtils::LOG_10;
-        return NaturalLogUtils::log1mexp(b) * MathUtils::INV_LOG_10
+        let b = a * *LOG_10;
+        return NaturalLogUtils::log1mexp(b) * *INV_LOG_10
     }
 
     pub fn approximate_log10_sum_log10(a: f64, b: f64) -> f64 {
@@ -352,18 +361,12 @@ impl JacobianLogTable {
     //  Phred scores Q and Q+1 differ by 0.1 in their corresponding log-10 probabilities, and by
     // 0.1 * log(10) in natural log probabilities.  Setting TABLE_STEP to an exact divisor of this
     // quantity ensures that approximateSumLog in fact caches exact values for integer phred scores
-    const TABLE_STEP: f64 = 0.0001;
-    const INV_STEP: f64 = (1.0) / JacobianLogTable::TABLE_STEP;
-    const cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE / JacobianLogTable::TABLE_STEP) + 1.0) as usize)
-        .into_par_iter()
-        .map(|k| {
-            1.0 + (10.0).powf(-(k as f64) * JacobianLogTable::INV_STEP)
-        })
-        .collect::<Vec<f64>>();
+    pub const TABLE_STEP: f64 = 0.0001;
+    pub const INV_STEP: f64 = (1.0) / JacobianLogTable::TABLE_STEP;
 
     pub fn get(difference: f64) -> f64 {
         let index = (difference * JacobianLogTable::INV_STEP).abs() as usize;
-        return JacobianLogTable::cache[index]
+        return cache[index]
     }
 }
 
