@@ -96,7 +96,7 @@ impl SimpleInterval {
      */
     pub fn within_distance_of(&self, other: &SimpleInterval, distance: usize) -> bool {
         // Avoid usize going below 0
-        let mut other_start = if distance > other.get_start() {
+        let other_start = if distance > other.get_start() {
             0
         } else {
             other.get_start() - distance

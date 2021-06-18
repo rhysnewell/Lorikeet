@@ -1,9 +1,15 @@
-use genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use std::collections::HashMap;
+use lazy_static;
 
+lazy_static! {
+    static ref HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
+    static ref DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false); 2];
+}
+
+
+#[derive(Debug, Clone)]
 pub enum GenotypeAssignmentMethod {
     BestMatchToOriginal,
     DoNotAssignGenotypes,
@@ -37,18 +43,16 @@ pub struct Genotype {
 }
 
 impl Genotype {
-    const HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
-    const DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false); 2];
 
 
     pub fn build(default_ploidy: usize, likelihoods: Vec<f64>) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
             alleles: Vec::with_capacity(likelihoods.len()),
+            ad: Vec::with_capacity(likelihoods.len()),
             pl: GenotypeLikelihoods::from_log10_likelihoods(likelihoods),
             dp: -1,
             gq: -1,
-            ad: Vec::with_capacity(likelihoods.len()),
             is_phased: false,
             attributes: HashMap::new(),
         }
@@ -69,12 +73,21 @@ impl Genotype {
 
     pub fn get_ploidy(&self) -> usize { self.ploidy }
 
-    pub fn get_likelihoods(&mut self) -> &mut Vec<f64> {
-        &mut self.pl.get_as_vector()
+    pub fn get_likelihoods(&self) -> &GenotypeLikelihoods {
+        &self.pl
     }
 
-    pub fn num_likelihoods(&mut self, num_alleles: i64, ploidy: i64) -> i64 {
-        self.pl.num_likelihoods(num_alleles, ploidy)
+    pub fn get_likelihoods_mut(&mut self) -> &mut GenotypeLikelihoods {
+        &mut self.pl
+    }
+
+    pub fn num_likelihoods(&mut self, num_alleles: i64, ploidy: i64) -> usize {
+        let result = self.pl.num_likelihoods(num_alleles, ploidy);
+        if result < 0 {
+            0
+        } else {
+            result as usize
+        }
     }
 
     pub fn log10_p_error(&mut self, p_log10_error: f64) {
@@ -124,16 +137,24 @@ impl Genotype {
         self.attributes.contains_key(attribute)
     }
 
-    pub fn get_attribute(&mut self, attribute: &String) -> &mut Vec<f64> {
+    pub fn get_attribute(&self, attribute: &String) -> Option<&Vec<f64>> {
+        self.attributes.get(attribute)
+    }
+
+    pub fn get_attribute_mut(&mut self, attribute: &String) -> &mut Vec<f64> {
         self.attributes.entry(attribute.clone()).or_insert(vec![std::f64::NAN; self.alleles.len()])
     }
 
+    pub fn alleles(&mut self, alleles: Vec<Allele>) {
+        self.alleles = alleles
+    }
     // pub fn genotype_likelihood_calculator(&self,)
 
 
     // fn calculate_genotype_counts_using_tables_and_validate()
 }
 
+#[derive(Debug, Clone)]
 pub struct GenotypesContext {
     // sample_names_in_order: Vec<String>,
     genotypes: Vec<Genotype>,
@@ -179,6 +200,10 @@ impl GenotypesContext {
         &self.genotypes
     }
 
+    pub fn genotypes_mut(&mut self) -> &mut Vec<Genotype> {
+        &mut self.genotypes
+    }
+
     pub fn get(&self, index: usize) -> Genotype {
         self.genotypes[index].clone()
     }
@@ -190,7 +215,7 @@ impl GenotypesContext {
     pub fn get_max_ploidy(&mut self, default_ploidy: usize) -> i32 {
         if self.max_ploidy == -1 {
             self.max_ploidy = 0;
-            for g in self.genotypes {
+            for g in &self.genotypes {
                 self.max_ploidy = std::cmp::max(self.max_ploidy, g.ploidy as i32)
             }
 
@@ -199,5 +224,9 @@ impl GenotypesContext {
             }
         }
         return self.max_ploidy
+    }
+
+    pub fn len(&self) -> usize {
+        self.genotypes.len()
     }
 }

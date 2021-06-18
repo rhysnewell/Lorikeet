@@ -4,14 +4,18 @@ use model::variants::Allele;
 use std::collections::HashSet;
 use rayon::prelude::*;
 
+lazy_static! {
+    static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
+    static ref PHASE_10: PhaseGroup = PhaseGroup::new("1|0".to_string(), 0);
+}
+
 struct PhaseGroup {
     description: String,
     alt_allele_index: usize,
 }
 
 impl PhaseGroup {
-    const PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
-    const PHASE_10: PhaseGroup = PhaseGroup::new("1|0".to_string(), 0);
+
 
 
     pub fn new(description: String, alt_allele_index: usize) -> PhaseGroup {
@@ -39,7 +43,7 @@ impl AssemblyBasedCallerUtils {
 
     pub fn get_variant_contexts_from_given_alleles(
         loc: usize,
-        active_alleles_to_genotype: &Vec<VariantContext>,
+        active_alleles_to_genotype: Vec<VariantContext>,
         include_spanning_events: bool
     ) -> Vec<VariantContext> {
         let mut unique_locations_and_alleles = HashSet::new();
@@ -75,7 +79,7 @@ impl AssemblyBasedCallerUtils {
         return results
     }
 
-    pub fn get_alleles_consistent_with_given_alleles(given_alleles: &Vec<VariantContext>, merged_vc: &VariantContext) -> HashSet<Allele> {
+    pub fn get_alleles_consistent_with_given_alleles(given_alleles: Vec<VariantContext>, merged_vc: &VariantContext) -> HashSet<Allele> {
         if given_alleles.is_empty() {
             return HashSet::new();
         }
@@ -84,8 +88,10 @@ impl AssemblyBasedCallerUtils {
             AssemblyBasedCallerUtils::get_variant_contexts_from_given_alleles(merged_vc.loc.get_start(), given_alleles, false)
                 .into_par_iter()
                 .flat_map(|vc| {
-                    vc.get_alternate_alleles().par_iter().map(|allele| {
-                        (allele.clone(), vc.get_reference().clone())
+                    let refr = vc.get_reference().clone();
+                    let alt = vc.get_alternate_alleles();
+                    alt.into_par_iter().map(move |allele| {
+                        (allele, refr.clone())
                     })
                 }).collect::<Vec<(Allele, Allele)>>();
 
@@ -106,8 +112,8 @@ impl AssemblyBasedCallerUtils {
     }
 
     fn alleles_are_consistent(alt_and_ref_1: &(Allele, Allele), alt_and_ref_2: &(Allele, Allele)) -> bool {
-        let alt1 = alt_and_ref_1.0;
-        let alt2 = alt_and_ref_2.0;
+        let alt1 = &alt_and_ref_1.0;
+        let alt2 = &alt_and_ref_2.0;
 
         if alt1.is_symbolic() || alt2.is_symbolic() {
             return false

@@ -1,18 +1,17 @@
-use model::variants::Allele;
-use itertools::Itertools;
+use model::variants::{Allele, NON_REF_ALLELE};
 use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use utils::math_utils::MathUtils;
 use rayon::prelude::*;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
-use utils::vcf_constants::VCFConstants;
+use utils::vcf_constants::*;
 use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use utils::simple_interval::SimpleInterval;
 use std::collections::{HashMap, HashSet};
-use num::traits::Float;
+use ordered_float::OrderedFloat;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct VariantContext {
     pub loc: SimpleInterval,
     // variant alleles
@@ -43,7 +42,7 @@ impl VariantContext {
 
     pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
         VariantContext {
-            loc: vc.loc,
+            loc: vc.loc.clone(),
             alleles: Vec::new(),
             genotypes: GenotypesContext::empty(),
             source: "".to_string(),
@@ -54,11 +53,11 @@ impl VariantContext {
     }
 
     pub fn attributes(&mut self, attributes: HashMap<String, Vec<f64>>) {
-        self.attributes.merge(attributes)
+        self.attributes.par_extend(attributes);
     }
 
     pub fn filter(&mut self, filter: String) {
-        self.filters.insert(filter)
+        self.filters.insert(filter);
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -97,7 +96,7 @@ impl VariantContext {
             if genotype.pl.len() != self.alleles.len() {
                 panic!(
                     "Number of likelihoods does not match number of alleles at position {} on tid {}",
-                    self.start, self.tid
+                    self.loc.get_start(), self.loc.get_contig()
                 )
             }
         }
@@ -137,11 +136,11 @@ impl VariantContext {
      * @param genotypeLikelihoods a vector of likelihoods to use if the method requires PLs, should be log10 likelihoods, cannot be null
      * @param allelesToUse the alleles with respect to which the likelihoods are defined
      */
-    pub fn make_genotype_call<T: Float + Copy>(
+    pub fn make_genotype_call(
         ploidy: usize,
         gb: &mut Genotype,
         assignment_method: &GenotypeAssignmentMethod,
-        genotype_likelihoods: Option<&[T]>,
+        genotype_likelihoods: Option<Vec<f64>>,
         alleles_to_use: &Vec<Allele>,
         original_gt: &Vec<Allele>,
         gpc: &GenotypePriorCalculator
@@ -154,24 +153,24 @@ impl VariantContext {
                         gb.no_qg();
                     },
                     &GenotypeAssignmentMethod::UsePLsToAssign => {
-                        if !VariantContext::is_informative(genotype_likelihoods) {
+                        if !VariantContext::is_informative(&genotype_likelihoods) {
                             gb.no_call_alleles(ploidy);
                             gb.no_qg();
                         } else {
-                            let max_likelihood_index = MathUtils::max_element_index(genotype_likelihoods, 0, genotype_likelihoods.len());
+                            let max_likelihood_index = MathUtils::max_element_index(&genotype_likelihoods, 0, genotype_likelihoods.len());
                             let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles_to_use.len());
                             let allele_counts = gl_calc.genotype_allele_counts_at(max_likelihood_index);
                             let final_alleles = allele_counts.as_allele_list(alleles_to_use);
-                            if final_alleles.contains(&Allele::NON_REF_ALLELE) {
+                            if final_alleles.contains(&*NON_REF_ALLELE) {
                                 gb.no_call_alleles(ploidy);
-                                gb.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![0.0 as T; genotype_likelihoods.len()]);
+                                gb.pl = GenotypeLikelihoods::from_log10_likelihoods(vec![0.0; genotype_likelihoods.len()]);
                             } else {
                                 gb.alleles = final_alleles;
                             }
                             let num_alt_alleles = alleles_to_use.len() - 1;
                             if num_alt_alleles > 0 {
                                 gb.log10_p_error(
-                                    GenotypeLikelihoods::get_gq_log10_from_likelihoods_on_the_fly(max_likelihood_index, genotype_likelihoods)
+                                    GenotypeLikelihoods::get_gq_log10_from_likelihoods_on_the_fly(max_likelihood_index, &genotype_likelihoods)
                                 );
                             }
                         }
@@ -182,45 +181,45 @@ impl VariantContext {
                     },
                     &GenotypeAssignmentMethod::BestMatchToOriginal => {
                         let mut best = Vec::new();
-                        let refr = alleles_to_use[0];
+                        let refr = &alleles_to_use[0];
                         for original_allele in original_gt.iter() {
                             if alleles_to_use.contains(original_allele) || original_allele.is_no_call() {
                                 best.push(original_allele.clone())
                             } else {
-                                best.push(refr)
+                                best.push(refr.clone())
                             }
                         }
                         gb.alleles = best;
                     },
                     &GenotypeAssignmentMethod::UsePosteriorProbabilities => {
                         // Calculate posteriors.
-                        let gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles_to_use.len());
-                        let log10_priors = gpc.get_log10_priors(gl_calc, alleles_to_use);
+                        let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles_to_use.len());
+                        let log10_priors = gpc.get_log10_priors(&mut gl_calc, alleles_to_use);
                         let log10_posteriors = MathUtils::ebe_add(&log10_priors, &genotype_likelihoods);
                         let normalized_log10_posteriors = MathUtils::scale_log_space_array_for_numeric_stability(
                             &log10_posteriors
                         );
                         // Update GP and PG annotations:
                         gb.attribute(
-                            VCFConstants::GENOTYPE_POSTERIOR_KEY,
+                            (&(*GENOTYPE_POSTERIORS_KEY)).to_string(),
                             normalized_log10_posteriors.par_iter().map(|v| {
-                                if v == 0.0 { // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
+                                if *v == 0.0 { // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
                                     0.0
                                 } else {
                                     v * -10.
                                 }
-                            }).collect_vec()
+                            }).collect::<Vec<f64>>()
                         );
 
                         gb.attribute(
-                            VCFConstants::GENOTYPE_PRIOR_KEY,
+                            (&(*GENOTYPE_PRIOR_KEY)).to_string(),
                             log10_priors.par_iter().map(|v| {
-                                if v == 0.0 {
+                                if *v == 0.0 {
                                     0.0
                                 } else {
                                     v * -10.
                                 }
-                            }).collect_vec()
+                            }).collect::<Vec<f64>>()
                         );
                         // Set the GQ accordingly
                         let max_posterior_index = MathUtils::max_element_index(&log10_posteriors, 0, log10_posteriors.len());
@@ -242,10 +241,10 @@ impl VariantContext {
         }
     }
 
-    fn get_gq_log10_from_posteriors<T: Float + Copy>(best_genotype_index: usize, log10_posteriors: &[T]) -> T {
+    fn get_gq_log10_from_posteriors(best_genotype_index: usize, log10_posteriors: &[f64]) -> f64 {
         match log10_posteriors.len() {
             0 | 1 => {
-                1.0 as T
+                1.0
             },
             2 => {
                 if best_genotype_index == 0 {
@@ -255,7 +254,7 @@ impl VariantContext {
                 }
             },
             3 => {
-                std::cmp::min(0. as T, MathUtils::log10_sum_log10_two_values(
+                std::cmp::min(OrderedFloat(0.0), OrderedFloat(MathUtils::log10_sum_log10_two_values(
                     log10_posteriors[
                             if best_genotype_index == 0 {
                                 2
@@ -270,32 +269,33 @@ impl VariantContext {
                                 best_genotype_index + 1
                             }
                         ]
-                ))
+                    )
+                )).into_inner()
             },
             _ => {
                 if best_genotype_index == 0 {
                     MathUtils::log10_sum_log10(log10_posteriors, 1, log10_posteriors.len())
                 } else if best_genotype_index == (log10_posteriors.len() - 1) {
-                    MathUtils::log10_sum_log10(log10_posteriors, 0, best_genotype_index);
+                    MathUtils::log10_sum_log10(log10_posteriors, 0, best_genotype_index)
                 } else {
                     std::cmp::min(
-                        0. as T,
-                        MathUtils::log10_sum_log10_two_values(
+                        OrderedFloat(0.0),
+                        OrderedFloat(MathUtils::log10_sum_log10_two_values(
                             MathUtils::log10_sum_log10(
                                 log10_posteriors, 0, best_genotype_index
                             ),
                             MathUtils::log10_sum_log10(
                                 log10_posteriors, best_genotype_index + 1, log10_posteriors.len()
                             )
-                        )
-                    )
+                        ))
+                    ).into_inner()
                 }
             }
         }
     }
 
-    pub fn is_informative<T: Float + Copy>(gls: &[T]) -> bool {
-        gls.par_iter().sum() < (VariantContext::SUM_GL_THRESH_NOCALL as T)
+    pub fn is_informative(gls: &[f64]) -> bool {
+        gls.par_iter().sum::<f64>() < VariantContext::SUM_GL_THRESH_NOCALL
     }
 
     /**
@@ -311,18 +311,18 @@ impl VariantContext {
         if default_ploidy < 1 {
             panic!("default_ploidy must be >= 1, got {}", default_ploidy)
         } else {
-            let old_gts = vc.get_genotypes();
+            let old_gts = vc.get_genotypes().clone();
             if old_gts.is_empty() { return old_gts }
 
             let mut new_gts = GenotypesContext::create(old_gts.size());
 
             let ref_allele = vc.get_reference();
-            let diploid_ref_alleles = vec![ref_allele; 2];
+            let diploid_ref_alleles = vec![ref_allele.clone(); 2];
 
             // create the new genotypes
             for g in old_gts.genotypes() {
                 let g_ploidy = if g.get_ploidy() == 0 { default_ploidy } else { g.get_ploidy() };
-                let ref_alleles = if g_ploidy == 2 { diploid_ref_alleles.clone() } else { vec![ref_allele; g_ploidy] };
+                let ref_alleles = if g_ploidy == 2 { diploid_ref_alleles.clone() } else { vec![ref_allele.clone(); g_ploidy] };
 
                 let genotype = Genotype::build_from_alleles(ref_alleles);
                 new_gts.add(genotype);
@@ -332,23 +332,27 @@ impl VariantContext {
         }
     }
 
-    pub fn get_genotypes(&self) -> GenotypesContext {
-        self.genotypes.clone()
+    pub fn get_genotypes(&self) -> &GenotypesContext {
+        &self.genotypes
+    }
+
+    pub fn get_genotypes_mut(&mut self) -> &mut GenotypesContext {
+        &mut self.genotypes
     }
 
     pub fn get_alleles(&self) -> &Vec<Allele> {
-        self.alleles
+        &self.alleles
     }
 
     pub fn get_reference(&self) -> &Allele {
-        self.alleles[0]
+        &self.alleles[0]
     }
 
     pub fn get_dp(&self) -> i64 {
         self.genotypes.get_dp()
     }
 
-    pub fn get_alternate_alleles(&self) -> &Vec<Allele> {
-        self.variants[1..]
+    pub fn get_alternate_alleles(&self) -> Vec<Allele> {
+        self.alleles[1..].to_vec()
     }
 }

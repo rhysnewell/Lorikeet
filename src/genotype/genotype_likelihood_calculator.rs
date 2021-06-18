@@ -1,6 +1,5 @@
 use ndarray::Array2;
 use genotype::genotype_allele_counts::GenotypeAlleleCounts;
-use genotype::genotype_builder::Genotype;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use std::collections::BinaryHeap;
 
@@ -194,7 +193,7 @@ impl GenotypeLikelihoodCalculator {
             if count < 0 {
                 panic!("No allele count can be less than 0")
             }
-            for j in (0..count).into_iter() {
+            for _ in (0..count).into_iter() {
                 self.allele_heap.push(index)
             }
         }

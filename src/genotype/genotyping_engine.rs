@@ -5,13 +5,13 @@ use model::variant_context::VariantContext;
 use std::collections::BinaryHeap;
 use model::allele_subsetting_utils::AlleleSubsettingUtils;
 use utils::simple_interval::SimpleInterval;
-use utils::vcf_constants::VCFConstants;
+use utils::vcf_constants::*;
 use genotype::genotype_builder::{GenotypeAssignmentMethod, GenotypesContext, Genotype};
 use utils::quality_utils::QualityUtils;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use utils::math_utils::MathUtils;
 use model::allele_frequency_calculator_result::AFCalculationResult;
-use model::variants::Allele;
+use model::variants::{Allele, NON_REF_ALLELE};
 use std::collections::HashMap;
 use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use ordered_float::OrderedFloat;
@@ -42,9 +42,9 @@ impl GenotypingEngine {
     ) -> GenotypingEngine {
         GenotypingEngine {
             allele_frequency_calculator: AlleleFrequencyCalculator::make_calculator(args),
+            number_of_genomes: samples.len() * sample_ploidy,
             samples,
             do_allele_specific_calcs,
-            number_of_genomes: samples.len() * sample_ploidy,
             upstream_deletions_loc: BinaryHeap::new(),
             genotype_assignment_method: GenotypeAssignmentMethod::from_args(args),
             use_posterior_probabilities_to_calculate_qual: args.is_present("use-posteriors-to-calculate-qual"),
@@ -86,7 +86,7 @@ impl GenotypingEngine {
                 VariantContext::subset_to_ref_only(&mut vc, ploidy)
             } else {
                 AlleleSubsettingUtils::subset_alleles(
-                    &vc.get_genotypes(),
+                    vc.get_genotypes().clone(),
                     ploidy,
                     vc.get_alleles(),
                     &alleles_to_keep,
@@ -99,6 +99,8 @@ impl GenotypingEngine {
             reduced_vc.alleles = alleles_to_keep;
             reduced_vc.genotypes = reduced_genotypes;
 
+        } else {
+            reduced_vc = vc.clone();
         }
 
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
@@ -114,10 +116,11 @@ impl GenotypingEngine {
         }
 
         let af_result = self.allele_frequency_calculator.calculate(reduced_vc, ploidy);
+        let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles = GenotypingEngine::calculate_output_allele_subset(
             &af_result,
             &vc,
-            &given_alleles,
+            given_alleles,
             stand_min_conf
         );
 
@@ -138,7 +141,7 @@ impl GenotypingEngine {
             stand_min_conf,
             output_alternative_alleles.site_is_monomorphic,
         ) && GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(&output_alternative_alleles.alleles)
-            && given_alleles.is_empty() {
+            && given_alleles_empty {
             return None
         }
 
@@ -147,20 +150,20 @@ impl GenotypingEngine {
 
         self.record_deletions(&vc, &output_alleles);
 
-        let mut builder = VariantContext::build(vc.loc.get_contig(), vc.loc.get_start(), vc.loc.get_end(), output_alleles);
+        let mut builder = VariantContext::build(vc.loc.get_contig(), vc.loc.get_start(), vc.loc.get_end(), output_alleles.clone());
 
         builder.log10_p_error(log10_confidence);
         if !GenotypingEngine::passes_call_threshold(phred_scaled_confidence, stand_min_conf) {
-            builder.filter(VCFConstants::LOW_QUAL_FILTER_NAME)
+            builder.filter((&(*LOW_QUAL_FILTER_NAME)).to_string())
         }
 
         // create the genotypes
         //TODO: omit subsetting if output alleles is not a proper subset of vc.getAlleles
-        let genotypes = if output_alleles.len() == 1 {
+        let mut genotypes = if builder.alleles.len() == 1 {
             VariantContext::subset_to_ref_only(&mut vc, ploidy)
         } else {
             AlleleSubsettingUtils::subset_alleles(
-                &vc.get_genotypes(),
+                vc.get_genotypes().clone(),
                 ploidy,
                 vc.get_alleles(),
                 &output_alleles,
@@ -200,8 +203,8 @@ impl GenotypingEngine {
     }
 
     fn phred_no_variant_posterior_probability(alleles: &Vec<Allele>, gc: &mut GenotypesContext) -> f64 {
-        gc.genotypes().par_iter()
-            .map(|gt| GenotypingEngine::extract_p_no_alt(alleles, &mut gt))
+        gc.genotypes_mut().par_iter_mut()
+            .map(|mut gt| GenotypingEngine::extract_p_no_alt(alleles, &mut gt))
             .filter(|d| !d.is_nan())
             .fold(|| std::f64::NAN, |a, b| {
                 if a.is_nan() {
@@ -215,19 +218,24 @@ impl GenotypingEngine {
     }
 
     fn extract_p_no_alt(alleles: &Vec<Allele>, gt: &mut Genotype) -> f64 {
-        let gp_array = gt.get_attribute(&VCFConstants::GENOTYPE_POSTERIORS_KEY);
+        let gp_array = gt.get_attribute(&(*GENOTYPE_POSTERIORS_KEY).to_string());
 
-        GenotypingEngine::extract_p_no_alt_with_posteriors(alleles, gt, gp_array)
+        match gp_array {
+            Some(array) => {
+                GenotypingEngine::extract_p_no_alt_with_posteriors(alleles, &gt, &array)
+            },
+            None => std::f64::NAN
+        }
     }
 
-    fn extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &mut Genotype, posteriors: &mut [f64]) -> f64 {
+    fn extract_p_no_alt_with_posteriors(alleles: &Vec<Allele>, gt: &Genotype, posteriors: &[f64]) -> f64 {
         if !alleles.par_iter().any(|allele| allele.is_del()) {
             let reducer: f64 = std::cmp::max(OrderedFloat(0.0), OrderedFloat(QualityUtils::phred_sum(posteriors))).into();
             return posteriors[0] - reducer
         } else {
             // here we need to get indices of genotypes composed of REF and * alleles
             let ploidy = gt.ploidy;
-            let gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
+            let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
             let span_del_index = alleles.par_iter().position_first(|allele| allele.is_del()).unwrap();
             // allele counts are in the GenotypeLikelihoodCalculator format of {ref index, ref count, span del index, span del count}
             let mut non_variant_log10_posteriors = (0..ploidy).into_iter().map(|n| {
@@ -269,7 +277,7 @@ impl GenotypingEngine {
     }
 
     fn no_alleles_or_first_allele_is_not_non_ref(alt_alleles: &Vec<Allele>) -> bool {
-        alt_alleles.is_empty() || alt_alleles[0] != Allele::NON_REF_ALLELE
+        alt_alleles.is_empty() || alt_alleles[0] != *NON_REF_ALLELE
     }
 
     pub fn passes_emit_threshold(conf: f64, min_conf: f64, best_guess_is_ref: bool) -> bool {
@@ -288,7 +296,8 @@ impl GenotypingEngine {
      */
     fn calculate_output_allele_subset(
         af_calculation_result: &AFCalculationResult,
-        vc: &VariantContext, given_alleles: &Vec<VariantContext>,
+        vc: &VariantContext,
+        given_alleles: Vec<VariantContext>,
         stand_min_conf: f64
     ) -> OutputAlleleSubset {
         let mut output_alleles = Vec::new();
@@ -297,25 +306,25 @@ impl GenotypingEngine {
         let mut site_is_monomorphic = true;
         let alleles = af_calculation_result.get_alleles_used_in_genotyping();
         let alternative_allele_count = alleles.len() - 1;
-        let mut reference_size = 0;
+        let mut _reference_size;
 
         let forced_alleles = AssemblyBasedCallerUtils::get_alleles_consistent_with_given_alleles(given_alleles, vc);
 
         for allele in alleles.iter() {
             if allele.is_reference() {
-                reference_size = allele.length();
+                _reference_size = allele.length();
             } else {
                 // we want to keep the NON_REF symbolic allele but only in the absence of a non-symbolic allele, e.g.
                 // if we combined a ref / NON_REF gVCF with a ref / alt gVCF
-                let is_non_ref_which_is_lone_alt_allele = alternative_allele_count == 1 && allele.eq(&Allele::NON_REF_ALLELE);
+                let is_non_ref_which_is_lone_alt_allele = alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = allele.is_del();
 
-                let to_output = is_plausible || is_non_ref_which_is_lone_alt_allele || forced_alleles.contains(allele);
+                let to_output = (is_plausible || is_non_ref_which_is_lone_alt_allele || forced_alleles.contains(allele)) && !is_spurious_spanning_deletion;
 
-                site_is_monomorphic = site_is_monomorphic & !(is_plausible);
+                site_is_monomorphic = site_is_monomorphic & !(is_plausible && !is_spurious_spanning_deletion);
 
                 if to_output {
                     output_alleles.push(allele.clone());
@@ -328,7 +337,7 @@ impl GenotypingEngine {
     }
 
     fn has_posteriors(gc: &GenotypesContext) -> bool {
-        gc.genotypes().par_iter().any(|genotype| genotype.has_attribute(&VCFConstants::GENOTYPE_POSTERIORS_KEY))
+        gc.genotypes().par_iter().any(|genotype| genotype.has_attribute(&(*GENOTYPE_POSTERIORS_KEY).to_string()))
     }
 
     fn compose_call_attributes(
@@ -343,12 +352,12 @@ impl GenotypingEngine {
 
         // add the MLE AC and AF annotations
         if !allele_counts_of_mle.is_empty() {
-            attributes.insert(VCFConstants::MLE_ALLELE_COUNT_KEY, allele_counts_of_mle.par_iter().map(|count| *count as f64).collect::<Vec<f64>>());
+            attributes.insert((&(*MLE_ALLELE_COUNT_KEY)).to_string(), allele_counts_of_mle.par_iter().map(|count| *count as f64).collect::<Vec<f64>>());
             let mle_frequencies = GenotypingEngine::calculate_mle_allele_frequencies(
                 &allele_counts_of_mle,
                 genotypes
             );
-            attributes.insert(VCFConstants::MLE_ALLELE_FREQUENCY_KEY, mle_frequencies);
+            attributes.insert((&(*MLE_ALLELE_FREQUENCY_KEY)).to_string(), mle_frequencies);
         }
 
         if self.do_allele_specific_calcs {
@@ -365,11 +374,11 @@ impl GenotypingEngine {
                 //*-10 to convert from log10-scale to Phred-scale, as QUALs are typically represented
                 per_allele_quals.push(af_result.log10_prob_only_ref_allele_exists() * -10.0);
             }
-            attributes.insert(VCFConstants::AS_QUAL_KEY, per_allele_quals);
+            attributes.insert((&(*AS_QUAL_KEY)).to_string(), per_allele_quals);
         }
 
         if self.annotate_number_of_alleles_discovered {
-            attributes.insert(VCFConstants::NUMBER_OF_DISCOVERED_ALLELES_KEY, vec![vc.get_alternate_alleles().len() as f64]);
+            attributes.insert((&(*NUMBER_OF_DISCOVERED_ALLELES_KEY)).to_string(), vec![vc.get_alternate_alleles().len() as f64]);
         }
 
         return attributes

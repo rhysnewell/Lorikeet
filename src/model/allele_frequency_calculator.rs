@@ -10,6 +10,10 @@ use model::allele_frequency_calculator_result::AFCalculationResult;
 use num::traits::Float;
 use rayon::prelude::*;
 use std::collections::{HashMap, BTreeMap};
+use statrs::function::gamma::ln_gamma;
+use ordered_float::OrderedFloat;
+use std::sync::{Arc, Mutex};
+
 
 pub struct AlleleFrequencyCalculator {
     pub ref_pseudo_count: f64,
@@ -59,20 +63,20 @@ impl AlleleFrequencyCalculator {
         g: &Genotype,
         gl_calc: &mut GenotypeLikelihoodCalculator,
         log10_allele_frequencies: &mut [f64],
-    ) -> Vec<T> {
-        let mut log10_likelihoods = g.get_likelihoods();
+    ) -> Vec<f64> {
+        let log10_likelihoods = g.get_likelihoods().get_likelihoods();
         let log10_posteriors =
-            (0..gl_calc.genotype_count as usize).iter().map(|genotype_index| {
+            (0..gl_calc.genotype_count as usize).into_iter().map(|genotype_index| {
                 let mut gac = gl_calc.genotype_allele_counts_at(genotype_index);
                 let result = gac.log10_combination_count()
                     + log10_likelihoods[genotype_index]
                     + gac.sum_over_allele_indices_and_counts(
                     |index: usize, count: usize| {
-                        (count as T) * &log10_allele_frequencies[index]
+                        (count as f64) * &log10_allele_frequencies[index]
                     }
                 );
                 result
-            }).collect::<Vec<T>>();
+            }).collect::<Vec<f64>>();
 
         return MathUtils::normalize_log10(log10_posteriors, true);
     }
@@ -89,8 +93,7 @@ impl AlleleFrequencyCalculator {
         return_zero_if_ref_is_max: bool,
     ) -> f64 {
         if return_zero_if_ref_is_max
-            && log10_genotype_likelihoods.par_iter()
-            .position_first(|&item| item == *(log10_genotype_likelihoods.par_iter().max().unwrap())).unwrap() == 0
+            && MathUtils::max_element_index(log10_genotype_likelihoods, 0, log10_genotype_likelihoods.len()) == 0
             && (log10_genotype_likelihoods[0] != 0.5 && log10_genotype_likelihoods.len() == 2){
             return 0.
         }
@@ -98,21 +101,21 @@ impl AlleleFrequencyCalculator {
         let ploidy = log10_genotype_likelihoods.len() - 1;
 
         let log10_unnormalized_posteriors = (0..ploidy + 1)
-            .iter()
+            .into_par_iter()
             .map(|n| {
                 log10_genotype_likelihoods[n]
                     + MathUtils::log10_binomial_coeffecient(ploidy as f64, n as f64)
                     + MathUtils::log_to_log10(
-                    (n as f64 + self.snp_pseudo_count).log_gamma()
-                        + ((ploidy - n) as f64 + self.ref_pseudo_count).log_gamma()
+                    ln_gamma(n as f64 + self.snp_pseudo_count)
+                        + ln_gamma((ploidy - n) as f64 + self.ref_pseudo_count)
                 )
-            });
+            }).collect::<Vec<f64>>();
 
         return if return_zero_if_ref_is_max
-            && MathUtils::max_element_index(log10_unnormalized_posteriors, 0, log10_unnormalized_posteriors.len()) == 0 {
+            && MathUtils::max_element_index(&log10_unnormalized_posteriors, 0, log10_unnormalized_posteriors.len()) == 0 {
             0.0
         } else {
-            1 - MathUtils::normalize_log10(log10_unnormalized_posteriors, false)[0]
+            1.0 - MathUtils::normalize_log10(log10_unnormalized_posteriors, false)[0]
         }
     }
 
@@ -137,7 +140,7 @@ impl AlleleFrequencyCalculator {
             } else {
                 self.indel_pseudo_count
             }
-        }).collect_vec::<Vec<f64>>();
+        }).collect::<Vec<f64>>();
 
         let mut allele_counts = vec![0.0; num_alleles];
         let flat_log10_allele_frequency = -((num_alleles as f64).log10());
@@ -147,9 +150,9 @@ impl AlleleFrequencyCalculator {
         while allele_counts_maximum_difference > AlleleFrequencyCalculator::THRESHOLD_FOR_ALLELE_COUNT_CONVERGENCE {
             let new_allele_counts = self.effective_allele_counts(&vc, &mut log10_allele_frequencies);
             allele_counts_maximum_difference =
-                MathUtils::ebe_subtract(&allele_counts, &new_allele_counts).par_iter_mut().for_each(|x| {
-                    *x = x.abs()
-                }).max();
+                MathUtils::ebe_subtract(&allele_counts, &new_allele_counts).par_iter_mut().map(|x| {
+                    x.abs()
+                }).max_by_key(|x| OrderedFloat(*x)).unwrap_or(std::f64::NAN);
             allele_counts = new_allele_counts;
 
             let posterior_pseudo_counts = MathUtils::ebe_add(&prior_pseudo_counts, &allele_counts);
@@ -160,22 +163,22 @@ impl AlleleFrequencyCalculator {
             log10_allele_frequencies = Dirichlet::new(&posterior_pseudo_counts).log10_mean_weights();
         }
 
-        let log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
+        let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
         let mut log10_p_no_variant = 0.0;
 
         let spanning_deletion_present = alleles.par_iter().any(|allele| allele.is_del());
 
-        let non_variant_indices_by_ploidy = BTreeMap::new();
+        let mut non_variant_indices_by_ploidy = BTreeMap::new();
 
         // re-usable buffers of the log10 genotype posteriors of genotypes missing each allele
         let mut log10_absent_posteriors = vec![Vec::new(); num_alleles];
 
-        for g in vc.get_genotypes().iter_mut() {
+        for g in vc.get_genotypes().genotypes().iter() {
             if !g.has_likelihoods() {
                 continue
             }
 
-            let ploidy = if g.get_ploidy == 0 {
+            let ploidy = if g.get_ploidy() == 0 {
                 default_ploidy
             } else {
                 g.get_ploidy()
@@ -184,7 +187,7 @@ impl AlleleFrequencyCalculator {
             let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, num_alleles);
 
             let log10_genotype_posteriors = self.log10_normalized_genotype_posteriors(
-                &mut g,
+                &g,
                 &mut gl_calc,
                 &mut log10_allele_frequencies,
             );
@@ -199,14 +202,14 @@ impl AlleleFrequencyCalculator {
                     ));
 
                 let non_variant_log10_posteriors = non_variant_indices.par_iter().map(|n| {
-                    log10_genotype_posteriors[n]
-                }).collect_vec();
+                    log10_genotype_posteriors[*n]
+                }).collect::<Vec<f64>>();
                 // when the only alt allele is the spanning deletion the probability that the site is non-variant
                 // may be so close to 1 that finite precision error in log10SumLog10 yields a positive value,
                 // which is bogus.  Thus we cap it at 0.
                 log10_p_no_variant += std::cmp::min(
-                    0,
-                    MathUtils::log10_sum_log10(&non_variant_log10_posteriors, 0, non_variant_log10_posteriors.len()));
+                    OrderedFloat(0.0),
+                    OrderedFloat(MathUtils::log10_sum_log10(&non_variant_log10_posteriors, 0, non_variant_log10_posteriors.len()))).into_inner();
             }
 
             // if the VC is biallelic the allele-specific qual equals the variant qual
@@ -217,21 +220,25 @@ impl AlleleFrequencyCalculator {
             // for each allele, we collect the log10 probabilities of genotypes in which the allele is absent, then add (in log space)
             // to get the log10 probability that the allele is absent in this sample
             log10_absent_posteriors.par_iter_mut().for_each(|arr| {
-                *arr.clear()
+                arr.clear()
             });
-            for genotype in (0..gl_calc.genotype_count).into_iter() {
+
+            let log10_absent_posteriors = Arc::new(Mutex::new(log10_absent_posteriors.clone()));
+            for genotype in (0..gl_calc.genotype_count as usize).into_iter() {
                 let log10_genotype_posterior = log10_genotype_posteriors[genotype];
                 gl_calc.genotype_allele_counts_at(genotype)
                     .for_each_absent_allele_index(|a| {
+                        let mut log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
                         log10_absent_posteriors[a].push(log10_genotype_posterior)
                     }, num_alleles);
             }
 
+            let log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
             let log10_p_no_allele = log10_absent_posteriors.par_iter().map(|buffer| {
                 let mut result = MathUtils::log10_sum_log10(&buffer, 0, buffer.len());
-                result = std::cmp::min(0, result);
+                result = std::cmp::min(OrderedFloat(0.0), OrderedFloat(result)).into_inner();
                 result
-            }).collect_vec();
+            }).collect::<Vec<f64>>();
 
             // multiply the cumulative probabilities of alleles being absent, which is addition of logs
             MathUtils::ebe_add_in_place(&mut log10_p_of_zero_counts_by_allele, &log10_p_no_allele);
@@ -242,25 +249,25 @@ impl AlleleFrequencyCalculator {
             log10_p_of_zero_counts_by_allele[1] = log10_p_no_variant
         }
 
-        let int_allele_counts = allele_counts.par_iter().map(|n| n as i64).collect_vec();
-        let int_alt_allele_counts = int_allele_counts[1..].clone();
+        let int_allele_counts = allele_counts.par_iter().map(|n| *n as i64).collect::<Vec<i64>>();
+        let int_alt_allele_counts = int_allele_counts[1..].to_vec();
         let log10_p_ref_by_allele = (1..num_alleles).into_par_iter().map(|a| {
-            (alleles[a], log10_p_of_zero_counts_by_allele[a])
+            (alleles[a].clone(), log10_p_of_zero_counts_by_allele[a].clone())
         }).collect::<HashMap<Allele, f64>>();
 
-        return AFCalculationResult::new(int_alt_allele_counts, alleles, log10_p_no_variant, log10_p_ref_by_allele)
+        return AFCalculationResult::new(int_alt_allele_counts, alleles.to_vec(), log10_p_no_variant, log10_p_ref_by_allele)
 
     }
 
     fn genotype_indices_with_only_ref_and_span_del(ploidy: usize, alleles: &Vec<Allele>) -> Vec<usize> {
-        let gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
+        let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
 
         let spanning_deletion_present = alleles.par_iter().any(|allele| allele.is_del());
 
         if !spanning_deletion_present {
             vec![AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX]
         } else {
-            let span_del_index = alleles.par_iter().position(|allele| allele.is_del()).unwrap();
+            let span_del_index = alleles.par_iter().position_first(|allele| allele.is_del()).unwrap();
             let result = (0..ploidy + 1).into_iter().map(|n| {
                 gl_calc.allele_counts_to_index(&vec![0, ploidy - n, span_del_index, n])
             }).collect::<Vec<usize>>();
@@ -277,29 +284,32 @@ impl AlleleFrequencyCalculator {
     */
     fn effective_allele_counts(&mut self, vc: &VariantContext, log10_allele_frequencies: &mut [f64]) -> Vec<f64> {
         let num_alleles = vc.get_n_alleles();
-        let mut log10_result = vec![std::f64::NEG_INFINITY; num_alleles];
+        let log10_result = Arc::new(Mutex::new(vec![std::f64::NEG_INFINITY; num_alleles]));
         for g in vc.get_genotypes().genotypes().iter() {
             if !g.has_likelihoods() {
                 continue
             }
             let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(g.get_ploidy(), num_alleles);
 
-            let log10_genotype_posteriors = self.log10_normalized_genotype_posteriors(g, &mut gl_calc, &mut log10_allele_frequencies);
+            let log10_genotype_posteriors = self.log10_normalized_genotype_posteriors(g, &mut gl_calc, log10_allele_frequencies);
 
-            (0..gl_calc.genotype_count as usize).into_iter().for_each(|genotype_index|{
+            for genotype_index in (0..gl_calc.genotype_count as usize).into_iter() {
                 gl_calc.genotype_allele_counts_at(genotype_index).for_each_allele_index_and_count(
                     |allele_index: usize, count: usize| {
-                    log10_result[allele_index] =
-                        MathUtils::log10_sum_log10_two_values(
-                            log10_result[allele_index],
-                            log10_genotype_posteriors[genotype_index] + (count as f64).log10()
-                        )
-                })
-            });
+                        let mut log10_result = log10_result.lock().unwrap();
+                        log10_result[allele_index] =
+                            MathUtils::log10_sum_log10_two_values(
+                                log10_result[allele_index],
+                                log10_genotype_posteriors[genotype_index] + (count as f64).log10()
+                            )
+                });
+            };
         }
+
+        let mut log10_result = log10_result.lock().unwrap();
         log10_result.par_iter_mut().for_each(|x| {
-            *x = (10.0).powf(x)
+            *x = (10.0).powf(*x)
         });
-        return log10_result
+        return log10_result.clone()
     }
 }

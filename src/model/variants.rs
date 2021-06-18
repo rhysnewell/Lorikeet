@@ -12,6 +12,14 @@ use rayon::prelude::*;
 
 pub type AlleleFreq = NotNan<f64>;
 
+lazy_static! {
+    static ref NON_REF_STRING: String = "<NON_REF>".to_string();
+    pub static ref NON_REF_ALLELE: Allele = Allele::new(
+        Variant::MNV((&(*NON_REF_STRING)).clone().into_bytes().to_vec()),
+        false
+    );
+}
+
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Debug, Ord)]
 pub enum StrandBias {
     None,
@@ -122,11 +130,6 @@ impl Allele {
     const NO_CALL: char = '.';
     const SPAND_DEL: char = '*';
 
-    const NON_REF_STRING: String = "<NON_REF>".to_string();
-    pub const NON_REF_ALLELE: Allele = Allele::new(
-        Variant::MNV(Allele::NON_REF_STRING.into_bytes()),
-        false
-    );
 
     pub fn new(variant: Variant, reference: bool) -> Allele {
         Allele {
@@ -136,7 +139,7 @@ impl Allele {
     }
 
     pub fn create_fake_alleles() -> Vec<Allele> {
-        let mut alleles = vec![Allele::fake(true), Allele::fake(false)];
+        let alleles = vec![Allele::fake(true), Allele::fake(false)];
 
         return alleles
     }
@@ -162,7 +165,7 @@ impl Allele {
     pub fn unwrap(possible_allele: Option<&Allele>) -> Allele {
         let a = match possible_allele {
             Some(a) => {
-                *a.clone()
+                a.clone()
             },
             _ => Allele::fake(false)
         };
@@ -192,7 +195,7 @@ impl Allele {
     }
 
     pub fn length(&self) -> usize {
-        self.variant.len()
+        self.variant.len() as usize
     }
 
     pub fn variant(&self) -> &Variant {
@@ -200,12 +203,12 @@ impl Allele {
     }
 
     pub fn contains(&self, variant: &Variant) -> bool {
-        self.variant == variant
+        &self.variant == variant
     }
 
     pub fn is_del(&self) -> bool {
         match self.variant {
-            &Variant::Deletion(_) => true,
+            Variant::Deletion(_) => true,
             _ => false,
         }
     }
@@ -226,37 +229,37 @@ impl Variant {
 
     pub fn is_symbolic(&self) -> bool {
         match self {
-            &Variant::Inversion(var)
-            | &Variant::Insertion(var)
-            | &Variant::MNV(var) => {
-                if var.contains(Variant::SINGLE_BREAKEND_INDICATOR)
-                    | var.contains(Variant::BREAKEND_EXTENDING_LEFT)
-                    | var.contains(Variant::BREAKEND_EXTENDING_RIGHT)
-                    | var.contains(Variant::SYMBOLIC_ALLELE_START)
-                    | var.contains(Variant::SYMBOLIC_ALLELE_END)
-                    | var.contains(Variant::NO_CALL) {
+            Variant::Inversion(var)
+            | Variant::Insertion(var)
+            | Variant::MNV(var) => {
+                if var.contains(&Variant::SINGLE_BREAKEND_INDICATOR)
+                    | var.contains(&Variant::BREAKEND_EXTENDING_LEFT)
+                    | var.contains(&Variant::BREAKEND_EXTENDING_RIGHT)
+                    | var.contains(&Variant::SYMBOLIC_ALLELE_START)
+                    | var.contains(&Variant::SYMBOLIC_ALLELE_END)
+                    | var.contains(&Variant::NO_CALL) {
                     true
                 } else {
                     false
                 }
             },
-            &Variant::SNV(var) => {
-                if (var == Variant::SINGLE_BREAKEND_INDICATOR)
-                    | (var == Variant::BREAKEND_EXTENDING_LEFT)
-                    | (var == Variant::BREAKEND_EXTENDING_RIGHT)
-                    | (var == Variant::SYMBOLIC_ALLELE_START)
-                    | (var == Variant::SYMBOLIC_ALLELE_END)
-                    | (var == Variant::NO_CALL) {
+            Variant::SNV(var) => {
+                if (var == &Variant::SINGLE_BREAKEND_INDICATOR)
+                    | (var == &Variant::BREAKEND_EXTENDING_LEFT)
+                    | (var == &Variant::BREAKEND_EXTENDING_RIGHT)
+                    | (var == &Variant::SYMBOLIC_ALLELE_START)
+                    | (var == &Variant::SYMBOLIC_ALLELE_END)
+                    | (var == &Variant::NO_CALL) {
                     true
                 } else {
                     false
                 }
             },
-            &Variant::Deletion(_)
-            | &Variant::SV(_) => {
+            Variant::Deletion(_)
+            | Variant::SV(_) => {
                 false
-            }
-            &Variant::None => true,
+            },
+            Variant::None => true,
 
         }
     }

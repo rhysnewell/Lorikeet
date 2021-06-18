@@ -367,7 +367,7 @@ pub fn pileup_variants<
                     ref_idx,
                     indexed_bam_readers.clone(),
                     false,
-                    m.value_of("ploidy").parse().unwrap()
+                    m.value_of("ploidy").unwrap().parse().unwrap()
                 );
 
                 hc_engine.collect_activity_profile(
@@ -379,9 +379,9 @@ pub fn pileup_variants<
                     per_reference_samples,
                     m,
                     genomes_and_contigs,
-                    concatenated_genomes,
+                    &concatenated_genomes,
                     flag_filters,
-                    &tree
+                    tree
                 );
 
                 // if genotype_likelihoods.len() == 1 {

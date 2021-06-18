@@ -1,6 +1,5 @@
 use statrs::function::gamma;
-use utils::math_utils::MathUtils;
-use num::traits::Float;
+use utils::math_utils::{MathUtils, LOG10_E};
 use rayon::prelude::*;
 
 pub struct Dirichlet {
@@ -46,7 +45,7 @@ impl Dirichlet{
     pub fn effective_log10_multinomial_weights(&self) -> Vec<f64> {
         let digamma_of_sum = gamma::digamma(self.alpha.par_iter().sum::<f64>());
         let result = self.alpha.par_iter().map(|a| {
-            (gamma::digamma(*a) - digamma_of_sum) * MathUtils::LOG10_E
+            (gamma::digamma(*a) - digamma_of_sum) * *LOG10_E
         }).collect::<Vec<f64>>();
 
         return result
