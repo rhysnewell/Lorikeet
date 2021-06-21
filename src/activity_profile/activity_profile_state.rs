@@ -2,6 +2,10 @@ use utils::simple_interval::SimpleInterval;
 use num::traits::Float;
 
 #[derive(Clone, Debug)]
+/**
+ * Captures the probability that a specific locus in the genome represents an "active" site containing
+ * real variation.
+ */
 pub enum Type<T: Float + Copy> {
     None,
     HighQualitySoftClips(T),
@@ -90,6 +94,10 @@ impl ActivityProfileState {
      */
     pub fn get_offset(&self, region_start_loc: SimpleInterval) -> i64 {
         (self.loc.get_start() as i64) - (region_start_loc.get_start() as i64)
+    }
+
+    pub fn get_loc(&self) -> &SimpleInterval {
+        &self.loc
     }
 
 }
