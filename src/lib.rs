@@ -7,6 +7,7 @@ pub mod utils;
 pub mod haplotype;
 pub mod genotype;
 pub mod activity_profile;
+pub mod assembly;
 
 // HTS and bio files
 extern crate bio;

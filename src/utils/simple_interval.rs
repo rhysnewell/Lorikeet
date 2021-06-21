@@ -1,28 +1,5 @@
-use std::cmp::Ordering;
-// #[derive(PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Deserialize, Clone)]
-// pub struct Locus {
-//     pub chrom: String,
-//     pub start: u32,
-//     pub end: u32,
-//     pub activity: f32,
-// }
-//
-// impl Locus {
-//     pub fn new(chrom: String, start: u32, end: u32) -> Locus {
-//         Locus {
-//             chrom: chrom,
-//             start: start,
-//             end: end,
-//             activity: 0.0,
-//         }
-//     }
-// }
-//
-// impl fmt::Display for Locus {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "{}:{}-{}", self.chrom, self.start, self.end)
-//     }
-// }
+use std::cmp::{min, max, Ordering};
+use utils::interval_utils::IntervalUtils;
 
 /**
 * Minimal immutable class representing a 1-based closed ended genomic interval
@@ -114,6 +91,74 @@ impl SimpleInterval {
      */
     pub fn contains(&self, other: &SimpleInterval) -> bool {
         self.contigs_match(other) && CoordMath::encloses(self.get_start(), self.get_end(), other.get_start(), other.get_end())
+    }
+
+    /**
+     * Returns a new SimpleInterval that represents the region between the endpoints of this and other.
+     *
+     * Unlike {@link #mergeWithContiguous}, the two intervals do not need to be contiguous
+     *
+     * @param other the other interval with which to calculate the span
+     * @return a new SimpleInterval that represents the region between the endpoints of this and other.
+     */
+    pub fn span_with(&self, other: &Self) -> SimpleInterval {
+        if !self.contigs_match(other) {
+            panic!("Cannot get span for intervals on different contigs")
+        } else {
+            return SimpleInterval::new(self.tid, min(self.start, other.start), max(self.end, other.end))
+        }
+    }
+
+    /**
+     * Returns a new SimpleInterval that represents this interval as expanded by the specified amount in both
+     * directions, bounded by the contig start/stop if necessary.
+     *
+     * @param padding amount to expand this interval
+     * @param contigLength length of this interval's contig
+     * @return a new SimpleInterval that represents this interval as expanded by the specified amount in both
+     *         directions, bounded by the contig start/stop if necessary.
+     */
+    pub fn expand_within_contig(&self, padding: usize, contig_length: usize) -> SimpleInterval {
+        let mut start = self.get_start();
+        if start < padding {
+            start = 0
+        } else {
+            start = start - padding
+        }
+
+        IntervalUtils::trim_interval_to_contig(self.tid, start, self.end + padding, contig_length)
+    }
+
+    /**
+     * Returns the intersection of the two intervals. The intervals must overlap or IllegalArgumentException will be thrown.
+     */
+    pub fn intersect(&self, that: &Self) -> SimpleInterval {
+        assert!(self.overlaps)
+    }
+
+    /**
+     * Determines whether this interval overlaps the provided locatable.
+     *
+     * @param other interval to check
+     * @return true if this interval overlaps other, otherwise false
+     */
+    pub fn overlaps(&self, other: &Self) -> bool {
+        self.overlaps_with_margin(other, 0)
+    }
+
+    /**
+     * Determines whether this interval comes within "margin" of overlapping the provided locatable.
+     * This is the same as plain overlaps if margin=0.
+     *
+     * @param other interval to check
+     * @param margin how many bases may be between the two interval for us to still consider them overlapping; must be non-negative
+     * @return true if this interval overlaps other, otherwise false
+     * @throws IllegalArgumentException if margin is negative
+     */
+    pub fn overlaps_with_margin(&self, other: &Self, margin: usize) -> bool {
+
+        self.contigs_match(other) && self.start <= other.end + margin
+            && other.start.checked_sub(margin).unwrap_or(0) <= self.end
     }
 }
 
