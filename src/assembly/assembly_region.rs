@@ -1,4 +1,4 @@
-use rust_htslib::bam::Read;
+use rust_htslib::bam::Record;
 use utils::simple_interval::SimpleInterval;
 use utils::interval_utils::IntervalUtils;
 
@@ -78,6 +78,24 @@ impl AssemblyRegion {
         }
 
         IntervalUtils::trim_interval_to_contig(tid, start, active_span.get_end() + padding, contig_length);
+    }
+
+    pub fn new_with_padded_span(
+        active_span: SimpleInterval,
+        padded_span: SimpleInterval,
+        is_active: bool,
+        contig_length: usize,
+        tid: usize
+    ) -> AssemblyRegion {
+        AssemblyRegion {
+            padded_span,
+            active_span,
+            is_active,
+            contig_length,
+            tid,
+            reads: Vec::new(),
+            has_been_finalized: false,
+        }
     }
 
     pub fn get_contig(&self) -> usize {
@@ -169,6 +187,13 @@ impl AssemblyRegion {
      * @return a non-null, empty active region
      */
     pub fn trim_with_padded_span(&self, span: SimpleInterval, padded_span: SimpleInterval) -> AssemblyRegion {
-        let new_active_span = self.get_span().intersect
+        let new_active_span = self.get_span().intersect(&span);
+        let new_padded_span = self.get_padded_span().intersect(&padded_span);
+
+        let result = AssemblyRegion::new_with_padded_span(
+            new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid
+        );
+
+        let trimmed_reads = self.reads.
     }
 }

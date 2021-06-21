@@ -133,7 +133,13 @@ impl SimpleInterval {
      * Returns the intersection of the two intervals. The intervals must overlap or IllegalArgumentException will be thrown.
      */
     pub fn intersect(&self, that: &Self) -> SimpleInterval {
-        assert!(self.overlaps)
+        assert!(self.overlaps(that), "The two intervals need to overlap {:?} and {:?}", &self, that);
+
+        return SimpleInterval::new(
+            self.get_contig(),
+            max(self.start, that.start),
+            min(self.end, that.end)
+        )
     }
 
     /**
