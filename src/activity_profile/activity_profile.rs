@@ -1,6 +1,7 @@
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
 use utils::simple_interval::SimpleInterval;
+use ordered_float::OrderedFloat;
 
 /**
  * Class holding information about per-base activity scores for
@@ -380,7 +381,7 @@ impl ActivityProfile {
         let mut end_of_active_region = self.find_first_activity_boundary(is_active_region, max_region_size);
 
         if is_active_region && (end_of_active_region == max_region_size) {
-            end_of_active_region = self.find_best_cut_site
+            end_of_active_region = self.find_best_cut_site()
         }
     }
 

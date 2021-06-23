@@ -1,7 +1,6 @@
 use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use std::collections::HashMap;
-use lazy_static;
 
 lazy_static! {
     static ref HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
