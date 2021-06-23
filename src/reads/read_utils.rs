@@ -1,5 +1,5 @@
 use reads::bird_tool_reads::BirdToolRead;
-use rust_htslib::bam::record::{CigarStringView, Cigar};
+use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
 
 pub struct ReadUtils {}
 
@@ -55,35 +55,14 @@ impl ReadUtils {
         Self::get_read_index_for_reference_coordinate(read.get_soft_start(), read.read.cigar(), ref_coord)
     }
 
+    pub fn empty_read(read: &BirdToolRead) -> BirdToolRead {
+        let mut empty_read = read.clone();
 
-    pub fn cigar_consumes_read_bases(cig: &Cigar) -> bool {
-        // Consumes read bases
-        match cig {
-            Cigar::Match(_)
-            | Cigar::Equal(_)
-            | Cigar::Diff(_)
-            | Cigar::Ins(_)
-            | Cigar::SoftClip(_) => true,
-            _ => false
-        }
-    }
+        empty_read.read.set_mate_unmapped();
+        empty_read.read.set_unmapped();
+        empty_read.read.set_mapq(0);
+        empty_read.read.set(read.read.qname(), Some(&CigarString(vec![""])), &[0], &[0]);
 
-    pub fn cigar_consumes_reference_bases(cig: &Cigar) -> bool {
-        // consumes reference bases
-        match cig {
-            Cigar::Match(_)
-            | Cigar::Del(_)
-            | Cigar::RefSkip(_)
-            | Cigar::Equal(_)
-            | Cigar::Diff(_) => true,
-            _ => false
-        }
-    }
-
-    pub fn cigar_is_soft_clip(cig: &Cigar) -> bool {
-        match cig {
-            Cigar::SoftClip(_) => true,
-            _ => false,
-        }
+        return empty_read
     }
 }

@@ -22,6 +22,12 @@ pub struct BirdToolRead {
 }
 
 impl BirdToolRead {
+    pub fn new(read: Record) -> BirdToolRead {
+        BirdToolRead {
+            read
+        }
+    }
+
     pub fn get_start(&self) -> usize {
         self.read.reference_start() as usize
     }
@@ -34,22 +40,9 @@ impl BirdToolRead {
         self.read.reference_end() as usize
     }
 
-    pub fn get_soft_start(&self) -> usize {
+    pub fn get_soft_start(&self) -> Option<usize> {
         let mut start = self.get_start();
-        for cig in self.read.cigar() {
-            match cig {
-                Cigar::SoftClip(length) => {
-                    start = start.checked_sub(length as usize).unwrap_or(start)
-                },
-                Cigar::HardClip(_) => {
-                    continue
-                },
-                _ => {
-                    break
-                }
-            }
-        }
-
+        start.checked_sub(self.read.cigar().leading_softclips());
         return start
     }
 }

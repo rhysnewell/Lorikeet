@@ -1,6 +1,7 @@
 use rust_htslib::bam::Record;
 use utils::simple_interval::SimpleInterval;
 use utils::interval_utils::IntervalUtils;
+use reads::bird_tool_reads::BirdToolRead;
 
 
 /**
@@ -30,7 +31,7 @@ pub struct AssemblyRegion {
      * The reads included in this assembly region.  May be empty upon creation, and expand / contract
      * as reads are added or removed from this region.
      */
-    reads: Vec<Read>,
+    reads: Vec<BirdToolRead>,
     /**
      * The active span in which this AssemblyRegion is responsible for calling variants
      */
@@ -77,7 +78,7 @@ impl AssemblyRegion {
             start = start - padding
         }
 
-        IntervalUtils::trim_interval_to_contig(tid, start, active_span.get_end() + padding, contig_length);
+        IntervalUtils::trim_interval_to_contig(tid, start, active_span.get_end() + padding, contig_length).unwrap_or(active_span.clone())
     }
 
     pub fn new_with_padded_span(
@@ -148,7 +149,7 @@ impl AssemblyRegion {
      * The reads are sorted by their coordinate position.
      * @return an unmodifiable and inmutable copy of the reads in the assembly region.
     */
-    pub fn get_reads(&self) -> &Vec<Read> {
+    pub fn get_reads(&self) -> &Vec<BirdToolRead> {
         &self.reads
     }
 
@@ -194,6 +195,6 @@ impl AssemblyRegion {
             new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid
         );
 
-        let trimmed_reads = self.reads.
+        let trimmed_reads = self.reads.par_iter().map(|read| clipped = )
     }
 }
