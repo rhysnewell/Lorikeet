@@ -2,6 +2,7 @@ use rust_htslib::bam::Record;
 use utils::simple_interval::SimpleInterval;
 use utils::interval_utils::IntervalUtils;
 use reads::bird_tool_reads::BirdToolRead;
+use reads::read_clipper::ReadClipper;
 
 
 /**
@@ -195,6 +196,7 @@ impl AssemblyRegion {
             new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid
         );
 
-        let trimmed_reads = self.reads.par_iter().map(|read| clipped = )
+        let trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read.clone(), new_padded_span.get_start(), new_padded_span.get_end()))
+            .filter(|read| !read.read.is_empty && read.overlaps(result.padded_span)) // TODO: Implement overlaps for reads
     }
 }

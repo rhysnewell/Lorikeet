@@ -65,7 +65,7 @@ impl ReadClipper {
     ) -> BirdToolRead {
         let start = read.get_start();
         let end = read.get_end();
-        return Self::hard_clip_to_region_with_alignment_interval()
+        return Self::hard_clip_to_region_with_alignment_interval(read, ref_start, ref_stop, start, stop)
     }
 
     fn hard_clip_to_region_with_alignment_interval(
@@ -73,8 +73,16 @@ impl ReadClipper {
     ) -> BirdToolRead {
         if alignment_start <= ref_stop && alignment_stop >= ref_start {
             if alignment_start < ref_start && alignment_stop > ref_stop {
-                return ReadClipper::new(read).hardref_start.checked_sub(1).unwrap_or(0), r).
+                return ReadClipper::new(read).hard_clip_both_ends_by_reference_coordinates(ref_start.checked_sub(1).unwrap_or(0), ref_start + 1)
+            } else if alignment_start < ref_start {
+                return ReadClipper::new(read).hard_clip_by_reference_coordinates_left_tail(ref_start.checked_sub(1).unwrap_or(0))
+            } else if alignment_stop > ref_stop {
+                return ReadClipper::new(read).hard_clip_by_reference_coordinates_right_tail(ref_stop + 1)
             }
+
+            return read
+        } else {
+            return ReadUtils::empty_read(&read)
         }
     }
 
@@ -175,7 +183,38 @@ impl ReadClipper {
             return ReadUtils::empty_read(&self.read)
         }
 
-        let left_tail_read =
+        let left_tail_read = self.clip_by_reference_coordinates(Some(right), None, ClippingRepresentation::HardclipBases);
+
+        // after clipping one tail, it is possible that the consequent hard clipping of adjacent deletions
+        // make the left cut index no longer part of the read. In that case, clip the read entirely.
+        if left > left_tail_read.get_end() {
+            return ReadUtils::empty_read(&self.read)
+        }
+
+        let mut clipper = ReadClipper::new(left_tail_read);
+        return clipper.hard_clip_by_reference_coordinates_left_tail(left)
+    }
+
+    /**
+     * Hard clips the left tail of a read up to (and including) refStop using reference
+     * coordinates.
+     *
+     * @param refStop the last base to be hard clipped in the left tail of the read.
+     * @return a new read, without the left tail (Could be an empty, unmapped read if the clip removed all bases).
+     */
+    fn hard_clip_by_reference_coordinates_left_tail(&mut self, ref_stop: usize) -> BirdToolRead {
+        return self.clip_by_reference_coordinates(None, Some(ref_stop), ClippingRepresentation::HardclipBases)
+    }
+
+    /**
+     * Hard clips the right tail of a read starting at (and including) refStart using reference
+     * coordinates.
+     *
+     * @param refStart refStop the first base to be hard clipped in the right tail of the read.
+     * @return a new read, without the right tail (Could be an empty, unmapped read if the clip removed all bases).
+     */
+    fn hard_clip_by_reference_coordinates_right_tail(&mut self, ref_start: usize) -> BirdToolRead {
+        return self.clip_by_reference_coordinates(Some(ref_start), None, ClippingRepresentation::HardclipBases)
     }
 
     /**
