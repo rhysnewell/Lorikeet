@@ -8,8 +8,144 @@ use tempfile::NamedTempFile;
 use std::collections::HashMap;
 use std::io::Write;
 use std::process;
-use bird_tool_utils::external_command_checker;
+use external_command_checker;
+use rayon::prelude::*;
 
+pub struct ReferenceReader {
+    indexed_reader: IndexedReader<File>,
+    pub current_sequence: Vec<u8>,
+    genomes_and_contigs: GenomesAndContigs,
+    target_names: HashMap<usize, Vec<u8>>,
+}
+
+impl ReferenceReader {
+    pub fn new(
+        concatenated_genomes: &Option<String>,
+        genomes_and_contigs: GenomesAndContigs,
+        number_of_contigs: usize,
+    ) -> ReferenceReader {
+        let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
+
+        ReferenceReader {
+            indexed_reader,
+            current_sequence: Vec::new(),
+            target_names: HashMap::new(),
+            genomes_and_contigs: genomes_and_contigs,
+        }
+    }
+
+    pub fn new_with_target_names(
+        concatenated_genomes: &Option<String>,
+        genomes_and_contigs: GenomesAndContigs,
+        target_names: Vec<&[u8]>,
+    ) -> ReferenceReader {
+        let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
+
+        ReferenceReader {
+            indexed_reader,
+            current_sequence: Vec::new(),
+            target_names: target_names.into_par_iter().enumerate()
+                .map(|(tid, target)| (tid, target.to_vec())).collect::<HashMap<usize, Vec<u8>>>(),
+            genomes_and_contigs: genomes_and_contigs,
+        }
+    }
+
+    pub fn add_target(&mut self, target: &[u8], tid: usize) {
+        self.target_names.insert(tid, target.to_vec());
+    }
+
+    pub fn retrieve_reference_stem(&self, ref_idx: usize) -> String {
+        self.genomes_and_contigs.genomes[ref_idx].clone()
+    }
+
+    pub fn update_current_sequence_capacity(&mut self, size: usize) {
+        self.current_sequence = Vec::with_capacity(size);
+    }
+
+    pub fn update_current_sequence_without_capcity(&mut self) {
+        self.current_sequence = Vec::new();
+    }
+
+    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &String) -> bool {
+        match self.genomes_and_contigs.contig_to_genome.get(target_name) {
+            Some(ref_id) => *ref_id == ref_idx,
+            None => false,
+        }
+    }
+
+    pub fn fetch_contig_from_reference_by_contig_name(
+        &mut self,
+        contig_name: &[u8],
+        ref_idx: usize,
+    ) {
+        match self.indexed_reader.fetch_all(std::str::from_utf8(contig_name).unwrap()) {
+            Ok(reference) => reference,
+            Err(_e) => match self.indexed_reader.fetch_all(&format!(
+                "{}~{}",
+                self.genomes_and_contigs.genomes[ref_idx],
+                std::str::from_utf8(contig_name).unwrap()
+            )) {
+                Ok(reference) => reference,
+                Err(e) => {
+                    println!(
+                        "Cannot read sequence from reference {} {:?}",
+                        format!(
+                            "{}~{}",
+                            &self.genomes_and_contigs.genomes[ref_idx],
+                            std::str::from_utf8(contig_name).unwrap()
+                        ),
+                        e,
+                    );
+                    std::process::exit(1);
+                }
+            },
+        };
+    }
+
+    pub fn fetch_contig_from_reference_by_tid(
+        &mut self,
+        tid: usize,
+        ref_idx: usize,
+    ) {
+        match self.indexed_reader.fetch_all(std::str::from_utf8(&self.target_names[&tid]).unwrap()) {
+            Ok(reference) => reference,
+            Err(_e) => match self.indexed_reader.fetch_all(&format!(
+                "{}~{}",
+                self.genomes_and_contigs.genomes[ref_idx],
+                std::str::from_utf8(&self.target_names[&tid]).unwrap()
+            )) {
+                Ok(reference) => reference,
+                Err(e) => {
+                    println!(
+                        "Cannot read sequence from reference {} {:?}",
+                        format!(
+                            "{}~{}",
+                            &self.genomes_and_contigs.genomes[ref_idx],
+                            std::str::from_utf8(&self.target_names[&tid]).unwrap()
+                        ),
+                        e,
+                    );
+                    std::process::exit(1);
+                }
+            },
+        };
+    }
+
+    pub fn read_sequence_to_vec(
+        &mut self,
+    ) {
+        match self.indexed_reader.read(&mut self.current_sequence) {
+            Ok(reference) => reference,
+            Err(e) => {
+                println!(
+                    "Cannot read sequence from reference {:?}",
+                    e,
+                );
+                std::process::exit(1)
+            }
+        };
+    }
+}
 
 pub struct ReferenceReaderUtils {}
 
@@ -25,54 +161,6 @@ impl ReferenceReaderUtils {
         };
 
         reference
-    }
-
-    pub fn fetch_contig_from_reference(
-        reference: &mut IndexedReader<File>,
-        contig_name: &Vec<u8>,
-        genomes_and_contigs: &GenomesAndContigs,
-        ref_idx: usize,
-    ) {
-        match reference.fetch_all(std::str::from_utf8(&contig_name[..]).unwrap()) {
-            Ok(reference) => reference,
-            Err(_e) => match reference.fetch_all(&format!(
-                "{}~{}",
-                &genomes_and_contigs.genomes[ref_idx],
-                std::str::from_utf8(&contig_name[..]).unwrap()
-            )) {
-                Ok(reference) => reference,
-                Err(e) => {
-                    println!(
-                        "Cannot read sequence from reference {} {:?}",
-                        format!(
-                            "{}~{}",
-                            &genomes_and_contigs.genomes[ref_idx],
-                            std::str::from_utf8(&contig_name[..]).unwrap()
-                        ),
-                        e,
-                    );
-                    std::process::exit(1);
-                }
-            },
-        };
-    }
-
-    pub fn read_sequence_to_vec(
-        ref_seq: &mut Vec<u8>,
-        reference: &mut IndexedReader<File>,
-        contig_name: &Vec<u8>,
-    ) {
-        match reference.read(ref_seq) {
-            Ok(reference) => reference,
-            Err(e) => {
-                println!(
-                    "Cannot read sequence from reference {} {:?}",
-                    std::str::from_utf8(&contig_name[..]).unwrap(),
-                    e,
-                );
-                std::process::exit(1)
-            }
-        };
     }
 
 

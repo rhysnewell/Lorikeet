@@ -78,7 +78,7 @@ impl ClippingOp {
 
         let stop = std::cmp::min(self.stop, self.start + read.read.len() - 2);
 
-        assert!(start <= 0 || stop == read.read.len() - 1,
+        assert!(self.start <= 0 || stop == read.read.len() - 1,
                 "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname(), self.start, stop);
 
         let old_cigar = read.read.cigar();
@@ -87,7 +87,7 @@ impl ClippingOp {
         let mut read_copied = read.clone();
         read.read.set(read.read.qname(), Some(&new_cigar), read.read.seq().encoded, read.read.qual());
 
-        let alignment_start_shift = if start == 0 { CigarUtils::alignment_start_shift(&old_cigar, (stop + 1) as i64) } else { 0 };
+        let alignment_start_shift = if self.start == 0 { CigarUtils::alignment_start_shift(&old_cigar, (stop + 1) as i64) } else { 0 };
         let new_start = read_copied.get_start() as i64 + alignment_start_shift;
 
         read_copied.read.set_pos(new_start);

@@ -1190,13 +1190,13 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                                 Some(temp_file) => {
                                     match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                         Ok(reader) => reader,
-                                        Err(_e) => generate_faidx(&temp_file),
+                                        Err(_e) => ReferenceReaderUtils::generate_faidx(&temp_file),
                                     }
                                 },
                                 None => {
                                     match bio::io::fasta::IndexedReader::from_file(&reference_path) {
                                         Ok(reader) => reader,
-                                        Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                                        Err(_e) => ReferenceReaderUtils::generate_faidx(&reference_path.to_str().unwrap()),
                                     }
                                 }
                             };
@@ -2027,12 +2027,12 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                         Some(temp_file) => {
                             match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                 Ok(reader) => reader,
-                                Err(_e) => generate_faidx(&temp_file),
+                                Err(_e) => ReferenceReaderUtils::generate_faidx(&temp_file),
                             }
                         }
                         None => match bio::io::fasta::IndexedReader::from_file(&reference_path) {
                             Ok(reader) => reader,
-                            Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                            Err(_e) => ReferenceReaderUtils::generate_faidx(&reference_path.to_str().unwrap()),
                         },
                     };
 
@@ -2157,13 +2157,13 @@ impl VariantMatrixFunctions for VariantMatrix<'_> {
                             Some(temp_file) => {
                                 match bio::io::fasta::IndexedReader::from_file(&temp_file) {
                                     Ok(reader) => reader,
-                                    Err(_e) => generate_faidx(&temp_file),
+                                    Err(_e) => ReferenceReaderUtils::generate_faidx(&temp_file),
                                 }
                             },
                             None => {
                                 match bio::io::fasta::IndexedReader::from_file(&reference_path) {
                                     Ok(reader) => reader,
-                                    Err(_e) => generate_faidx(&reference_path.to_str().unwrap()),
+                                    Err(_e) => ReferenceReaderUtils::generate_faidx(&reference_path.to_str().unwrap()),
                                 }
                             }
                         };

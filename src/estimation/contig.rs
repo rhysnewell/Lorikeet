@@ -424,65 +424,65 @@ pub fn pileup_variants<
                                 .into_iter()
                                 .next()
                                 .unwrap();
-                            if sample_idx < short_sample_count {
-                                process_bam(
-                                    bam_generator,
-                                    sample_idx,
-                                    per_reference_samples,
-                                    &mut coverage_estimators,
-                                    &mut variant_matrix,
-                                    n_threads,
-                                    m,
-                                    &output_prefix,
-                                    coverage_fold,
-                                    &codon_table,
-                                    min_var_depth,
-                                    contig_end_exclusion,
-                                    min,
-                                    max,
-                                    ref_idx,
-                                    mode,
-                                    include_soft_clipping,
-                                    include_indels,
-                                    &flag_filters,
-                                    mapq_threshold,
-                                    method,
-                                    ReadType::Short,
-                                    &genomes_and_contigs,
-                                    &reference_map,
-                                    &concatenated_genomes,
-                                )
-                            } else if sample_idx >= short_sample_count
-                                && sample_idx < (short_sample_count + long_sample_count)
-                            {
-                                process_bam(
-                                    bam_generator,
-                                    sample_idx,
-                                    per_reference_samples,
-                                    &mut coverage_estimators,
-                                    &mut variant_matrix,
-                                    n_threads,
-                                    m,
-                                    &output_prefix,
-                                    coverage_fold,
-                                    &codon_table,
-                                    min_var_depth,
-                                    contig_end_exclusion,
-                                    min,
-                                    max,
-                                    ref_idx,
-                                    mode,
-                                    include_soft_clipping,
-                                    include_indels,
-                                    &flag_filters,
-                                    mapq_threshold,
-                                    method,
-                                    ReadType::Long,
-                                    &genomes_and_contigs,
-                                    &reference_map,
-                                    &concatenated_genomes,
-                                )
-                            }
+                            // if sample_idx < short_sample_count {
+                            //     process_bam(
+                            //         bam_generator,
+                            //         sample_idx,
+                            //         per_reference_samples,
+                            //         &mut coverage_estimators,
+                            //         &mut variant_matrix,
+                            //         n_threads,
+                            //         m,
+                            //         &output_prefix,
+                            //         coverage_fold,
+                            //         &codon_table,
+                            //         min_var_depth,
+                            //         contig_end_exclusion,
+                            //         min,
+                            //         max,
+                            //         ref_idx,
+                            //         mode,
+                            //         include_soft_clipping,
+                            //         include_indels,
+                            //         &flag_filters,
+                            //         mapq_threshold,
+                            //         method,
+                            //         ReadType::Short,
+                            //         &genomes_and_contigs,
+                            //         &reference_map,
+                            //         &concatenated_genomes,
+                            //     )
+                            // } else if sample_idx >= short_sample_count
+                            //     && sample_idx < (short_sample_count + long_sample_count)
+                            // {
+                            //     process_bam(
+                            //         bam_generator,
+                            //         sample_idx,
+                            //         per_reference_samples,
+                            //         &mut coverage_estimators,
+                            //         &mut variant_matrix,
+                            //         n_threads,
+                            //         m,
+                            //         &output_prefix,
+                            //         coverage_fold,
+                            //         &codon_table,
+                            //         min_var_depth,
+                            //         contig_end_exclusion,
+                            //         min,
+                            //         max,
+                            //         ref_idx,
+                            //         mode,
+                            //         include_soft_clipping,
+                            //         include_indels,
+                            //         &flag_filters,
+                            //         mapq_threshold,
+                            //         method,
+                            //         ReadType::Long,
+                            //         &genomes_and_contigs,
+                            //         &reference_map,
+                            //         &concatenated_genomes,
+                            //     )
+                            // }
 
                             if mode == "evolve" || mode == "full" {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];

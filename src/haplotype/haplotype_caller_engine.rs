@@ -14,7 +14,7 @@ use model::variant_context::VariantContext;
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use utils::utils::{ReadType, Elem};
-use utils::reference_reader_utils::ReferenceReaderUtils;
+use utils::reference_reader_utils::{ReferenceReaderUtils, ReferenceReader};
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
@@ -226,9 +226,6 @@ impl HaplotypeCallerEngine {
     ) -> HashMap<usize, Vec<RefVsAnyResult>>{
         let mut bam_generated = bam_generator.start();
 
-        let reference = &genomes_and_contigs.genomes[ref_idx];
-        let mut reference_file = retrieve_reference(concatenated_genomes);
-
         bam_generated.set_threads(split_threads);
 
         let header = bam_generated.header().clone(); // bam header
@@ -237,6 +234,9 @@ impl HaplotypeCallerEngine {
             .map(|tid| header.target_len(tid).unwrap())
             .collect();
         let target_names = header.target_names();
+        let mut reference_reader = ReferenceReader::new(concatenated_genomes, *genomes_and_contigs.clone(), target_names.len());
+        let reference = reference_reader.retrieve_reference_stem(ref_idx);
+
 
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
@@ -250,13 +250,11 @@ impl HaplotypeCallerEngine {
                     .enumerate()
                     .for_each(|(tid, contig_name)| {
                         let target_name = String::from_utf8(contig_name.to_vec()).unwrap();
-                        if target_name.contains(reference)
-                            || match genomes_and_contigs.contig_to_genome.get(&target_name) {
-                            Some(ref_id) => *ref_id == ref_idx,
-                            None => false,
-                        }
+                        if target_name.contains(&reference)
+                            || reference_reader.match_target_name_and_ref_idx(ref_idx, &target_name)
                         {
                             // Get contig stats
+                            reference_reader.add_target(contig_name, tid);
                             let target_len = target_lens[tid];
                             let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
 
@@ -275,26 +273,20 @@ impl HaplotypeCallerEngine {
                                 // Calculate likelihood of activity being present at this position
                                 match bam_generated.pileup() {
                                     Some(pileups) => {
-                                        let mut ref_seq = Vec::with_capacity(target_len as usize);
+                                        reference_reader.update_current_sequence_capacity(target_len as usize);
                                         // Update all contig information
-                                        fetch_contig_from_reference(
-                                            &mut reference_file,
+                                        reference_reader.fetch_contig_from_reference_by_contig_name(
                                             &contig_name.to_vec(),
-                                            genomes_and_contigs,
                                             ref_idx as usize,
                                         );
 
-                                        read_sequence_to_vec(
-                                            &mut ref_seq,
-                                            &mut reference_file,
-                                            &contig_name.to_vec(),
-                                        );
+                                        reference_reader.read_sequence_to_vec();
 
                                         for p in pileups {
                                             let pileup = p.unwrap();
                                             let pos = pileup.pos() as usize;
                                             let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
-                                            let refr_base = ref_seq[pos];
+                                            let refr_base = reference_reader.current_sequence[pos];
                                             let mut result = RefVsAnyResult::new(
                                                 likelihoodcount,
                                                 pos,
@@ -346,17 +338,6 @@ impl HaplotypeCallerEngine {
                             // Add in genotype_likelihoods to return result
                             ref_vs_any_container.insert(tid, genotype_likelihoods);
 
-                            // // Get coverage mean and standard dev
-                            // let contig_cov = depth_sum as f64 / target_len as f64;
-                            // let std_dev = 10. * coverage.std_dev();
-                            // contig_stats.entry(tid).or_insert(vec![contig_cov, std_dev]);
-                            //
-                            // for (index, count) in soft_clips.iter().enumerate() {
-                            //     if count >= 5 {
-                            //         activity[index] += count as f32; // Add in good soft clips
-                            //     }
-                            //     activity[index] /= depths[index] as f32; // divide by depth
-                            // }
                         }
                     });
             }

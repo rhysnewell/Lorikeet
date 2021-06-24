@@ -17,6 +17,7 @@ pub struct ActivityProfile {
     region_stop_loc: Option<SimpleInterval>,
     contig_len: usize,
     tid: usize,
+    ref_idx: usize,
 }
 
 impl ActivityProfile {
@@ -26,7 +27,7 @@ impl ActivityProfile {
      * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
      * @param activeProbThreshold threshold for the probability of a profile state being active
      */
-    pub fn new(max_prob_propagation_distance: usize, active_prob_threshold: f64) -> ActivityProfile {
+    pub fn new(max_prob_propagation_distance: usize, active_prob_threshold: f64, ref_idx: usize) -> ActivityProfile {
         ActivityProfile {
             state_list: Vec::new(),
             max_prob_propagation_distance,
@@ -35,6 +36,7 @@ impl ActivityProfile {
             region_stop_loc: Some(SimpleInterval::new(0, 0, 0)),
             contig_len: 0,
             tid: 0,
+            ref_idx: ref_idx,
         }
     }
 
@@ -76,7 +78,7 @@ impl ActivityProfile {
         if self.is_empty() {
             None
         } else {
-            Some(self.region_start_loc.unwrap().span_with(self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0))))
+            Some(self.region_start_loc.unwrap().span_with(&self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0))))
         }
     }
 
@@ -339,7 +341,7 @@ impl ActivityProfile {
                 }
 
                 let region_loc = SimpleInterval::new(first.get_loc().get_contig(), first.get_loc().get_start(), first.get_loc().get_start() + offset_of_next_region_end);
-                return Some(AssemblyRegion::new(region_loc, is_active_region, assembly_region_extension, self.contig_len, self.tid))
+                return Some(AssemblyRegion::new(region_loc, is_active_region, assembly_region_extension, self.contig_len, self.tid, self.ref_idx))
             },
             None => {
                 None
