@@ -1,4 +1,4 @@
-use rust_htslib::bam::{self, record::Cigar, Read, Record};
+use rust_htslib::bam::{self, record::Cigar, Record};
 
 use bio::stats::{LogProb, PHREDProb};
 use std::collections::HashMap;
@@ -13,7 +13,8 @@ use model::variant_context::VariantContext;
 
 use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use utils::utils::{ReadType, retrieve_reference, Elem, fetch_contig_from_reference, read_sequence_to_vec};
+use utils::utils::{ReadType, Elem};
+use utils::reference_reader_utils::ReferenceReaderUtils;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};

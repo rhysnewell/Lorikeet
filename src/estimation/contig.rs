@@ -8,6 +8,7 @@ use estimation::codon_structs::*;
 use estimation::variant_matrix::*;
 use external_command_checker;
 use utils::utils::{*, Elem};
+use utils::reference_reader_utils::ReferenceReaderUtils;
 
 use crate::*;
 use bio::io::gff;
@@ -62,10 +63,10 @@ pub fn pileup_variants<
     let mut pool = Pool::new(parallel_genomes);
     let n_threads = std::cmp::max(threads / parallel_genomes as usize, 2);
 
-    let references = parse_references(&m);
+    let references = ReferenceReaderUtils::parse_references(&m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
-    retrieve_reference(&Some(
+    ReferenceReaderUtils::retrieve_reference(&Some(
         concatenated_genomes
             .as_ref()
             .unwrap()
@@ -124,7 +125,6 @@ pub fn pileup_variants<
         }
     }
 
-
     debug!(
         "{} Longread BAM files, {} Shortread BAM files {} Total BAMs over {} genome(s)",
         long_sample_count,
@@ -132,10 +132,6 @@ pub fn pileup_variants<
         (short_sample_count + long_sample_count),
         reference_count
     );
-
-
-
-
 
     pool.scoped(|scope| {
 

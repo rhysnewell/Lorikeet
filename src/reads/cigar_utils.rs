@@ -52,7 +52,7 @@ impl CigarUtils {
             match element {
                 // copy hard clips
                 Cigar::HardClip(len) => {
-                    new_cigar.push(Cigar::HardClip(len))
+                    new_cigar.push(Cigar::HardClip(*len))
                 },
                 Cigar::SoftClip(len)
                 | Cigar::Diff(len)
@@ -62,7 +62,7 @@ impl CigarUtils {
                 | Cigar::Match(len)
                 | Cigar::Ins(len)
                 | Cigar::Pad(len) => {
-                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { len } else { 0 };
+                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { *len } else { 0 };
 
                     // element precedes start or follows end of clip, copy it to new cigar
                     if element_end <= start || element_start >= stop {
@@ -108,7 +108,7 @@ impl CigarUtils {
         for element in cigar.iter() {
             match element {
                 Cigar::SoftClip(length) => {
-                    builder.push(CigarUtils::cigar_from_element_and_length(&Cigar::Match(0), length))
+                    builder.push(CigarUtils::cigar_from_element_and_length(&Cigar::Match(0), *length))
                 },
                 _ => {
                     builder.push(element.clone())
@@ -121,7 +121,7 @@ impl CigarUtils {
     /**
      * How many bases to the right does a read's alignment start shift given its cigar and the number of left soft clips
      */
-    pub fn alignment_start_shift(cigar: &CigarStringView, num_clipped: usize) -> i64 {
+    pub fn alignment_start_shift(cigar: &CigarStringView, num_clipped: i64) -> i64 {
         let ref_bases_clipped = 0;
 
         let element_start = 0; // this and elementEnd are indices in the read's bases
@@ -139,12 +139,12 @@ impl CigarUtils {
                 | Cigar::Match(len)
                 | Cigar::Ins(len)
                 | Cigar::Pad(len) => {
-                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { len } else { 0 };
+                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { *len as i64 } else { 0 };
 
                     if element_end <= num_clipped { // totally within clipped span -- this includes deletions immediately following clipping
-                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element) { len } else { 0 };
+                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element) { *len as i64 } else { 0 };
                     } else if element_start < num_clipped { // clip in middle of element, which means the element necessarily consumes read bases
-                        let clipped_length = num_clipped.checked_sub(element_start).unwrap();
+                        let clipped_length = num_clipped - element_start;
                         ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element) { clipped_length } else { 0 };
                     }
                     element_start = element_end;

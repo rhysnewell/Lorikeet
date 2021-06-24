@@ -2,6 +2,7 @@ use model::variant_context::VariantContext;
 use model::location_and_alleles::LocationAndAlleles;
 use model::variants::Allele;
 use std::collections::HashSet;
+use utils::simple_interval::Locatable;
 use rayon::prelude::*;
 
 lazy_static! {

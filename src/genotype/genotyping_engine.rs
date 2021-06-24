@@ -4,7 +4,7 @@ use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use model::variant_context::VariantContext;
 use std::collections::BinaryHeap;
 use model::allele_subsetting_utils::AlleleSubsettingUtils;
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
 use genotype::genotype_builder::{GenotypeAssignmentMethod, GenotypesContext, Genotype};
 use utils::quality_utils::QualityUtils;

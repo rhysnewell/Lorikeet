@@ -1,11 +1,12 @@
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 use num::traits::Float;
 
-#[derive(Clone, Debug)]
+
 /**
  * Captures the probability that a specific locus in the genome represents an "active" site containing
  * real variation.
  */
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Type<T: Float + Copy> {
     None,
     HighQualitySoftClips(T),
@@ -21,7 +22,7 @@ impl<T: Float + Copy> Type<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct ActivityProfileState {
     loc: SimpleInterval,
     active_prob: f64,

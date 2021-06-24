@@ -28,7 +28,7 @@ use std::path::Path;
 use std::str;
 use std::sync::{Arc, Mutex};
 use tempfile;
-use utils::utils::generate_faidx;
+use utils::reference_reader_utils::ReferenceReaderUtils;
 
 #[derive(Debug, Clone)]
 /// Container for all variants within a genome and associated clusters
