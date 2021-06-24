@@ -7,7 +7,7 @@ use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use utils::vcf_constants::*;
 use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 use std::collections::{HashMap, HashSet};
 use ordered_float::OrderedFloat;
 

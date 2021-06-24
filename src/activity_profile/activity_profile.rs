@@ -1,7 +1,9 @@
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 use ordered_float::OrderedFloat;
+use itertools::Itertools;
+
 
 /**
  * Class holding information about per-base activity scores for
@@ -74,7 +76,7 @@ impl ActivityProfile {
         if self.is_empty() {
             None
         } else {
-            Some(self.region_start_loc.span_with(self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0))))
+            Some(self.region_start_loc.unwrap().span_with(self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0))))
         }
     }
 
@@ -103,7 +105,7 @@ impl ActivityProfile {
         if start < 1 || start > self.contig_len as i64 {
             return None
         } else {
-            return Some(SimpleInterval::new(self.region_start_loc.unwrao_or(SimpleInterval::new(0, 0, 0)).get_contig(), start as usize, start as usize))
+            return Some(SimpleInterval::new(self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_contig(), start as usize, start as usize))
         }
     }
 
@@ -137,10 +139,10 @@ impl ActivityProfile {
             self.contig_len = contig_len;
             self.tid = state.get_loc().get_contig();
         } else {
-            if self.region_stop_loc.get_start() != loc.get_start() - 1 {
+            if self.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
                 panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.region_stop_loc)
             }
-            self.region_stop_loc = Some(loc);
+            self.region_stop_loc = Some(loc.clone());
         }
         let processed_states = self.process_state(state);
 
@@ -161,15 +163,15 @@ impl ActivityProfile {
      */
     fn incorporate_single_state(&mut self, state_to_add: ActivityProfileState) {
         let position = state_to_add.get_offset(self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)));
-        if position > self.size() {
+        if position > self.size() as i64 {
             panic!("Must add state contiguous to existing states: adding {:?}", state_to_add)
         }
 
         if position >= 0 {
-            if position < self.size() {
-                self.state_list[position].set_is_active_prob(self.state_list[position].is_active_prob() + state_to_add.is_active_prob());
+            if position < self.size() as i64 {
+                self.state_list[position as usize].set_is_active_prob(self.state_list[position as usize].is_active_prob() + state_to_add.is_active_prob());
             } else {
-                if position != self.size() {
+                if position != self.size() as i64 {
                     panic!("Position is meant to == size, but it did not {:?}", state_to_add)
                 }
                 self.state_list.push(state_to_add)
@@ -333,7 +335,7 @@ impl ActivityProfile {
                     self.region_start_loc = None;
                     self.region_stop_loc = None;
                 } else {
-                    self.region_start_loc = self.state_list[0].get_loc().clone();
+                    self.region_start_loc = Some(self.state_list[0].get_loc().clone());
                 }
 
                 let region_loc = SimpleInterval::new(first.get_loc().get_contig(), first.get_loc().get_start(), first.get_loc().get_start() + offset_of_next_region_end);
@@ -381,8 +383,10 @@ impl ActivityProfile {
         let mut end_of_active_region = self.find_first_activity_boundary(is_active_region, max_region_size);
 
         if is_active_region && (end_of_active_region == max_region_size) {
-            end_of_active_region = self.find_best_cut_site()
+            end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
         }
+
+        return end_of_active_region.checked_sub(1)
     }
 
     /**

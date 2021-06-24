@@ -20,6 +20,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::Builder;
+use utils::reference_reader_utils::ReferenceReaderUtils;
 
 #[allow(unused)]
 pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerator<R> + Send>(
@@ -42,7 +43,7 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
     let mut stoit_name = bam_generated.name().to_string();
 
     let reference = &genomes_and_contigs.genomes[ref_idx];
-    let mut reference_file = retrieve_reference(concatenated_genomes);
+    let mut reference_file = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
     bam_generated.set_threads(split_threads);
 
@@ -112,13 +113,13 @@ pub fn process_vcf<'b, R: IndexedNamedBamReader + Send, G: NamedBamReaderGenerat
                                 Some(pileups) => {
                                     let mut ref_seq = Vec::new();
                                     // Update all contig information
-                                    fetch_contig_from_reference(
+                                    ReferenceReaderUtils::fetch_contig_from_reference(
                                         &mut reference_file,
                                         &contig_name.to_vec(),
                                         genomes_and_contigs,
                                         ref_idx as usize,
                                     );
-                                    read_sequence_to_vec(
+                                    ReferenceReaderUtils::read_sequence_to_vec(
                                         &mut ref_seq,
                                         &mut reference_file,
                                         &contig_name.to_vec(),

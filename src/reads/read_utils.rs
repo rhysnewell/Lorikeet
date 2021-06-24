@@ -1,5 +1,8 @@
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
+use utils::simple_interval::Locatable;
+use std::cmp::Ordering;
+use reads::cigar_utils::CigarUtils;
 
 pub struct ReadUtils {}
 
@@ -32,12 +35,12 @@ impl ReadUtils {
         for cig in cigar.iter() {
             first_read_pos_of_element = last_read_pos_of_element;
             first_ref_pos_of_element = last_ref_pos_of_element;
-            last_read_pos_of_element += if Self::cigar_consumes_read_bases(cig) { cig.len() as usize } else { 0 };
-            last_ref_pos_of_element += if Self::cigar_consumes_reference_bases(cig) || Self::cigar_is_soft_clip(cig) { cig.len() as usize } else { 0 };
+            last_read_pos_of_element += if CigarUtils::cigar_consumes_read_bases(cig) { cig.len() as usize } else { 0 };
+            last_ref_pos_of_element += if CigarUtils::cigar_consumes_reference_bases(cig) || CigarUtils::cigar_is_soft_clip(cig) { cig.len() as usize } else { 0 };
 
             if first_ref_pos_of_element <= ref_coord && ref_coord < last_ref_pos_of_element { // refCoord falls within this cigar element
                 let read_pos_at_ref_coord = first_read_pos_of_element +
-                    (if Self::cigar_consumes_read_bases(cig) { ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0) } else { 0 });
+                    (if CigarUtils::cigar_consumes_read_bases(cig) { ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0) } else { 0 });
                 return (Some(read_pos_at_ref_coord), Some(cig.clone()))
             }
         }
@@ -52,7 +55,7 @@ impl ReadUtils {
     pub fn get_read_index_for_reference_coordinate_from_read(
         read: &BirdToolRead, ref_coord: usize
     ) -> (Option<usize>, Option<Cigar>) {
-        Self::get_read_index_for_reference_coordinate(read.get_soft_start(), read.read.cigar(), ref_coord)
+        Self::get_read_index_for_reference_coordinate(read.get_soft_start().unwrap_or(0), read.read.cigar(), ref_coord)
     }
 
     pub fn empty_read(read: &BirdToolRead) -> BirdToolRead {
@@ -61,8 +64,29 @@ impl ReadUtils {
         empty_read.read.set_mate_unmapped();
         empty_read.read.set_unmapped();
         empty_read.read.set_mapq(0);
-        empty_read.read.set(read.read.qname(), Some(&CigarString(vec![""])), &[0], &[0]);
+        empty_read.read.set(read.read.qname(), Some(&CigarString(vec![Cigar::Match(0)])), &[0], &[0]);
 
         return empty_read
+    }
+
+    pub fn compare_coordinates(first: &BirdToolRead, second: &BirdToolRead) -> Ordering {
+        let first_ref_index = first.read.tid();
+        let second_ref_index = second.read.tid();
+
+        if first_ref_index == -1 {
+            if second_ref_index == -1 {
+                return Ordering::Equal
+            } else {
+                return Ordering::Greater
+            }
+        } else if second_ref_index == -1 {
+            return Ordering::Less
+        }
+
+        if first_ref_index != second_ref_index {
+            return first_ref_index.cmp(&second_ref_index)
+        } else {
+            return first.get_start().cmp(&second.get_start())
+        }
     }
 }

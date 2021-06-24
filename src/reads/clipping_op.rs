@@ -7,6 +7,7 @@ use rust_htslib::bam::record::{CigarString, Cigar, CigarStringView};
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::Record;
 use bio_types::sequence::SequenceRead;
+use utils::simple_interval::Locatable;
 
 pub struct ClippingOp {
     pub start: usize,
@@ -60,7 +61,7 @@ impl ClippingOp {
                 return self.apply_soft_clip_bases(original_read)
             },
             ClippingRepresentation::RevertSoftclippedBases => {
-                return self.app
+                return self.apply_revert_soft_clipped_bases(original_read)
             },
             _ => {
                 panic!("unexpected clipping operator type {:?}", algorithm)
@@ -78,16 +79,16 @@ impl ClippingOp {
         let stop = std::cmp::min(self.stop, self.start + read.read.len() - 2);
 
         assert!(start <= 0 || stop == read.read.len() - 1,
-                "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname().to_str().unwrap(), self.start, stop);
+                "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname(), self.start, stop);
 
         let old_cigar = read.read.cigar();
-        let mut new_cigar = CigarUtils::clip_cigar(&old_cigar, self.start, stop + 1, Cigar::SoftClip(0));
+        let mut new_cigar = CigarUtils::clip_cigar(&old_cigar, self.start as u32, (stop + 1) as u32, Cigar::SoftClip(0));
 
         let mut read_copied = read.clone();
         read.read.set(read.read.qname(), Some(&new_cigar), read.read.seq().encoded, read.read.qual());
 
-        let alignment_start_shift = if start == 0 { CigarUtils::alignment_start_shift(&old_cigar, stop + 1) } else { 0 };
-        let new_start = read_copied.get_start() + alignment_start_shift;
+        let alignment_start_shift = if start == 0 { CigarUtils::alignment_start_shift(&old_cigar, (stop + 1) as i64) } else { 0 };
+        let new_start = read_copied.get_start() as i64 + alignment_start_shift;
 
         read_copied.read.set_pos(new_start);
 
@@ -99,7 +100,7 @@ impl ClippingOp {
 
         if original_cigar.is_empty() || !(((original_cigar.leading_hardclips() + original_cigar.leading_softclips()) > 0) ||
             (original_cigar.trailing_hardclips() + original_cigar.trailing_softclips() > 0)) {
-            read.clone()
+            return read.clone()
         }
 
         let mut unclipped = read.clone();
@@ -123,7 +124,7 @@ impl ClippingOp {
                 let new_start = (read.get_start() as i64) - (read.read.cigar().leading_softclips() as i64);
 
                 let new_end = if new_start < 0 { -new_start } else { 0 };
-                unclipped.set_pos(0);
+                unclipped.read.set_pos(0);
                 unclipped = ClippingOp::apply_hard_clip_bases(&unclipped, 0, new_end as usize);
 
                 // Reset the position to 1 again only if we didn't end up with an empty, unmapped read after hard clipping.
@@ -213,7 +214,7 @@ impl ClippingOp {
         hard_clipped_read.read.set(read.read.qname(), Some(&new_cigar), new_bases, new_quals);
 
         if start == 0 && !read.read.is_unmapped() {
-            hard_clipped_read.read.set_pos(read.read.pos() + CigarUtils::alignment_start_shift(&cigar, stop + 1))
+            hard_clipped_read.read.set_pos(read.read.pos() + CigarUtils::alignment_start_shift(&cigar, (stop + 1) as i64))
         }
 
         // BSQR shenanigans happen here but we won't worry about that

@@ -3,6 +3,11 @@ use utils::simple_interval::SimpleInterval;
 use utils::interval_utils::IntervalUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
+use utils::simple_interval::Locatable;
+use rayon::prelude::*;
+use bio_types::sequence::SequenceRead;
+use bio::io::fasta::IndexedReader;
+use std::fs::File;
 
 
 /**
@@ -192,11 +197,86 @@ impl AssemblyRegion {
         let new_active_span = self.get_span().intersect(&span);
         let new_padded_span = self.get_padded_span().intersect(&padded_span);
 
-        let result = AssemblyRegion::new_with_padded_span(
+        let mut result = AssemblyRegion::new_with_padded_span(
             new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid
         );
 
-        let trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read.clone(), new_padded_span.get_start(), new_padded_span.get_end()))
-            .filter(|read| !read.read.is_empty && read.overlaps(result.padded_span)) // TODO: Implement overlaps for reads
+        let mut trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read.clone(), new_padded_span.get_start(), new_padded_span.get_end()))
+            .filter(|read| !read.read.is_empty() && read.overlaps(result.padded_span)).collect::<Vec<BirdToolRead>>();
+        trimmed_reads.par_sort_unstable();
+
+        result.reads.clear();
+        result.reads.par_extend(trimmed_reads);
+
+        return result
+    }
+
+    /**
+     * Add read to this region
+     *
+     * Read must have alignment start >= than the last read currently in this active region.
+     *
+     * @throws IllegalArgumentException if read doesn't overlap the padded region of this active region
+     *
+     * @param read a non-null GATKRead
+     */
+    pub fn add(&mut self, read: BirdToolRead) {
+        // let read_loc = SimpleInterval::new(read.get_contig(), read.get_start(), read.get_end());
+
+        assert!(self.padded_span.overlaps(&read), "Read does not overlap with active region padded span");
+
+        if !self.reads.is_empty() {
+            let final_read = &self.reads.last().unwrap();
+
+            assert!(final_read.get_contig() == read.get_contig(), "Attempting to add a read to ActiveRegion not on the same contig as other reads");
+            assert!(read.get_start() >= final_read.get_start(), "Attempting to add a read to ActiveRegion out of order w.r.t. other reads:");
+        }
+
+        self.reads.push(read);
+    }
+
+    /**
+     * Clear all of the reads currently in this region
+     */
+    pub fn clear_reads(&mut self) {
+        self.reads.clear();
+    }
+
+    /**
+     * Remove all of the reads in readsToRemove from this region
+     * @param readsToRemove the set of reads we want to remove
+     */
+    pub fn remove_all(&mut self, reads_to_remove: &Vec<BirdToolRead>) {
+        self.reads = self.reads.into_par_iter().filter(|read| !reads_to_remove.contains(read)).collect::<Vec<BirdToolRead>>()
+    }
+
+    /**
+     * Add all readsToAdd to this region
+     * @param readsToAdd a collection of readsToAdd to add to this active region
+     */
+    pub fn add_all(&mut self, reads_to_add: Vec<BirdToolRead>){
+        self.par_extend(reads_to_add)
+    }
+
+    /**
+     * Get the reference bases from referenceReader spanned by the padded span of this region,
+     * including additional padding bp on either side.  If this expanded region would exceed the boundaries
+     * of the active region's contig, the returned result will be truncated to only include on-genome reference
+     * bases.
+     *
+     * @param referenceReader the source of the reference genome bases
+     * @param padding the padding, in BP, we want to add to either side of this active region padded span
+     * @param genomeLoc a non-null genome loc indicating the base span of the bp we'd like to get the reference for
+     * @return a non-null array of bytes holding the reference bases in referenceReader
+     */
+    fn get_reference(&mut self, reference_reader: &mut IndexedReader<File>)
+}
+
+impl ParallelExtend<BirdToolRead> for AssemblyRegion {
+    fn par_extend<I>(&mut self, par_iter: I)
+        where I: IntoParallelIterator<Item = BirdToolRead>
+    {
+        let par_iter = par_iter.into_par_iter();
+        par_iter.for_each(|read| { self.add(read) });
     }
 }

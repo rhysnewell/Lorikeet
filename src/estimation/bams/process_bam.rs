@@ -71,7 +71,7 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
     let mut total_indels_in_current_contig = 0;
 
     let reference = &genomes_and_contigs.genomes[ref_idx]; // File stem of current reference
-    let mut reference_file = retrieve_reference(concatenated_genomes); // Indexed fasta reader of concatenated genome
+    let mut reference_file = ReferenceReaderUtils::retrieve_reference(concatenated_genomes); // Indexed fasta reader of concatenated genome
 
     let mut skipped_reads = 0; // for record in records
 
@@ -443,7 +443,7 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
             let total_mismatches =
                 total_edit_distance_in_current_contig - total_indels_in_current_contig;
 
-            fetch_contig_from_reference(
+            ReferenceReaderUtils::fetch_contig_from_reference(
                 &mut reference_file,
                 &contig_name,
                 genomes_and_contigs,
@@ -451,7 +451,7 @@ pub fn process_bam<'b, R: IndexedNamedBamReader>(
             );
 
             ref_seq = Vec::new();
-            read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
+            ReferenceReaderUtils::read_sequence_to_vec(&mut ref_seq, &mut reference_file, &contig_name);
 
             process_previous_contigs_var(
                 mode,

@@ -38,13 +38,13 @@ impl SimpleInterval {
         self.tid
     }
 
-    pub fn get_start(&self) -> usize {
-        self.start
-    }
-
-    pub fn get_end(&self) -> usize {
-        self.end
-    }
+    // pub fn get_start(&self) -> usize {
+    //     self.start
+    // }
+    //
+    // pub fn get_end(&self) -> usize {
+    //     self.end
+    // }
 
     /**
      * Determine if this is on the same contig as other
@@ -126,7 +126,7 @@ impl SimpleInterval {
             start = start - padding
         }
 
-        IntervalUtils::trim_interval_to_contig(self.tid, start, self.end + padding, contig_length)
+        IntervalUtils::trim_interval_to_contig(self.tid, start, self.end + padding, contig_length).unwrap()
     }
 
     /**
@@ -142,15 +142,15 @@ impl SimpleInterval {
         )
     }
 
-    /**
-     * Determines whether this interval overlaps the provided locatable.
-     *
-     * @param other interval to check
-     * @return true if this interval overlaps other, otherwise false
-     */
-    pub fn overlaps(&self, other: &Self) -> bool {
-        self.overlaps_with_margin(other, 0)
-    }
+    // /**
+    //  * Determines whether this interval overlaps the provided locatable.
+    //  *
+    //  * @param other interval to check
+    //  * @return true if this interval overlaps other, otherwise false
+    //  */
+    // pub fn overlaps(&self, other: &Self) -> bool {
+    //     self.overlaps_with_margin(other, 0)
+    // }
 
     /**
      * Determines whether this interval comes within "margin" of overlapping the provided locatable.
@@ -233,5 +233,35 @@ impl CoordMath {
         } else {
             read_base_index + 1
         }
+    }
+}
+
+
+pub trait Locatable {
+    fn tid(&self) -> usize;
+
+    fn get_start(&self) -> usize;
+
+    fn get_end(&self) -> usize;
+
+    fn overlaps<T: Locatable>(&self, other: &T) -> bool {
+        (other.get_start() >= self.get_start() && other.get_start() <= self.get_end()) || (other.get_end() >= self.get_start() && other.get_end() <= self.get_end())
+            || CoordMath::encloses(other.get_start(), other.get_end(), self.get_start(), self.get_end())
+    }
+}
+
+
+impl Locatable for SimpleInterval {
+
+    fn tid(&self) -> usize {
+        self.tid
+    }
+
+    fn get_start(&self) -> usize {
+        self.start
+    }
+
+    fn get_end(&self) -> usize {
+        self.end
     }
 }

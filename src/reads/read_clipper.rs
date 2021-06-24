@@ -3,6 +3,8 @@ use reads::bird_tool_reads::BirdToolRead;
 use bio_types::sequence::SequenceRead;
 use reads::read_utils::ReadUtils;
 use reads::clipping_op::ClippingOp;
+use utils::simple_interval::Locatable;
+use reads::cigar_utils::CigarUtils;
 
 /**
  * A comprehensive clipping tool.
@@ -102,7 +104,7 @@ impl ReadClipper {
         &mut self, ref_start: Option<usize>, ref_stop: Option<usize>, clipping_op: ClippingRepresentation
     ) -> BirdToolRead {
         if self.read.read.is_empty() {
-            return ReadUtils::empty_read(self.read)
+            return ReadUtils::empty_read(&self.read)
         }
         if clipping_op == ClippingRepresentation::SoftclipBases && self.read.read.is_unmapped() {
             panic!("Cannot soft-clip read {:?} by reference coordinates because it is unmapped", self.read)
@@ -123,7 +125,7 @@ impl ReadClipper {
                         let stop_pos_and_operator = ReadUtils::get_read_index_for_reference_coordinate_from_read(&self.read, ref_stop);
                         match stop_pos_and_operator.0 {
                             Some(pos) => {
-                                stop = Some(pos - (if ReadUtils::cigar_consumes_read_bases(&stop_pos_and_operator.1.unwrap()) { 0 } else { 1 }));
+                                stop = Some(pos - (if CigarUtils::cigar_consumes_read_bases(&stop_pos_and_operator.1.unwrap()) { 0 } else { 1 }));
                             },
                             None => {
                                 stop = None;

@@ -25,7 +25,7 @@ impl IntervalUtils {
         if (bounded_start > contig_length) || (bounded_stop < 1) {
             return None
         } else {
-            return SimpleInterval::new(tid, bounded_start, bounded_stop)
+            return Some(SimpleInterval::new(tid, bounded_start, bounded_stop))
         }
     }
 }
