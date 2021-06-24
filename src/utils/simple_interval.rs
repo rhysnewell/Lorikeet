@@ -238,7 +238,7 @@ impl CoordMath {
 
 
 pub trait Locatable {
-    fn tid(&self) -> usize;
+    fn tid(&self) -> i32;
 
     fn get_start(&self) -> usize;
 
@@ -253,8 +253,8 @@ pub trait Locatable {
 
 impl Locatable for SimpleInterval {
 
-    fn tid(&self) -> usize {
-        self.tid
+    fn tid(&self) -> i32 {
+        self.tid as i32
     }
 
     fn get_start(&self) -> usize {

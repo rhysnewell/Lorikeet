@@ -8,6 +8,7 @@ use rayon::prelude::*;
 use bio_types::sequence::SequenceRead;
 use bio::io::fasta::IndexedReader;
 use std::fs::File;
+use utils::reference_reader_utils::ReferenceReader;
 
 
 /**
@@ -31,6 +32,7 @@ use std::fs::File;
  * and as such need not equal the original padding that was used for assembly.
  */
 pub struct AssemblyRegion {
+    ref_idx: usize,
     tid: usize,
     contig_length: usize,
     /**
@@ -64,13 +66,14 @@ impl AssemblyRegion {
      * @param isActive indicates whether this is an active region, or an inactive one
      * @param padding the active region padding to use for this active region
      */
-    pub fn new(active_span: SimpleInterval, is_active: bool, padding: usize, contig_length: usize, tid: usize) -> AssemblyRegion {
+    pub fn new(active_span: SimpleInterval, is_active: bool, padding: usize, contig_length: usize, tid: usize, ref_idx: usize) -> AssemblyRegion {
         AssemblyRegion {
             padded_span: AssemblyRegion::make_padded_span(&active_span, padding, contig_length, tid),
             active_span,
             is_active,
             contig_length,
             tid,
+            ref_idx,
             reads: Vec::new(),
             has_been_finalized: false,
         }
@@ -92,7 +95,8 @@ impl AssemblyRegion {
         padded_span: SimpleInterval,
         is_active: bool,
         contig_length: usize,
-        tid: usize
+        tid: usize,
+        ref_idx: usize,
     ) -> AssemblyRegion {
         AssemblyRegion {
             padded_span,
@@ -100,6 +104,7 @@ impl AssemblyRegion {
             is_active,
             contig_length,
             tid,
+            ref_idx,
             reads: Vec::new(),
             has_been_finalized: false,
         }
@@ -198,11 +203,11 @@ impl AssemblyRegion {
         let new_padded_span = self.get_padded_span().intersect(&padded_span);
 
         let mut result = AssemblyRegion::new_with_padded_span(
-            new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid
+            new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid, self.ref_idx,
         );
 
         let mut trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read.clone(), new_padded_span.get_start(), new_padded_span.get_end()))
-            .filter(|read| !read.read.is_empty() && read.overlaps(result.padded_span)).collect::<Vec<BirdToolRead>>();
+            .filter(|read| !read.read.is_empty() && read.overlaps(&result.padded_span)).collect::<Vec<BirdToolRead>>();
         trimmed_reads.par_sort_unstable();
 
         result.reads.clear();
@@ -269,7 +274,23 @@ impl AssemblyRegion {
      * @param genomeLoc a non-null genome loc indicating the base span of the bp we'd like to get the reference for
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    fn get_reference(&mut self, reference_reader: &mut IndexedReader<File>)
+    fn get_reference(&mut self, reference_reader: &mut ReferenceReader, padding: usize, genome_loc: SimpleInterval) -> &[u8] {
+        assert!(genome_loc.size() > 0, "genome_loc must have size > 0 but got {:?}", genome_loc);
+
+        reference_reader.update_current_sequence_without_capcity();
+        // Update all contig information
+        reference_reader.fetch_contig_from_reference_by_tid(
+            tid,
+            self.ref_idx,
+        );
+        reference_reader.read_sequence_to_vec();
+
+        if reference_reader.current_sequence.is_empty() {
+            panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, tid);
+        };
+
+        return // subsequence
+    }
 }
 
 impl ParallelExtend<BirdToolRead> for AssemblyRegion {

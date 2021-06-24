@@ -6,14 +6,9 @@ use coverm::mapping_index_maintenance;
 use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 
-use bio::io::fasta::IndexedReader;
-use glob::glob;
 use nix::{sys::stat, unistd};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use std::process::Stdio;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;

@@ -66,7 +66,7 @@ impl ReadClipper {
         read: BirdToolRead, ref_start: usize, ref_stop: usize
     ) -> BirdToolRead {
         let start = read.get_start();
-        let end = read.get_end();
+        let stop = read.get_end();
         return Self::hard_clip_to_region_with_alignment_interval(read, ref_start, ref_stop, start, stop)
     }
 
