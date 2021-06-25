@@ -27,15 +27,15 @@ impl ActivityProfile {
      * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
      * @param activeProbThreshold threshold for the probability of a profile state being active
      */
-    pub fn new(max_prob_propagation_distance: usize, active_prob_threshold: f64, ref_idx: usize) -> ActivityProfile {
+    pub fn new(max_prob_propagation_distance: usize, active_prob_threshold: f64, ref_idx: usize, tid: usize, contig_len: usize) -> ActivityProfile {
         ActivityProfile {
             state_list: Vec::new(),
             max_prob_propagation_distance,
             active_prob_threshold,
             region_start_loc: Some(SimpleInterval::new(0, 0, 0)),
             region_stop_loc: Some(SimpleInterval::new(0, 0, 0)),
-            contig_len: 0,
-            tid: 0,
+            contig_len,
+            tid,
             ref_idx: ref_idx,
         }
     }
@@ -132,14 +132,12 @@ impl ActivityProfile {
      *
      * @param state a well-formed ActivityProfileState result to incorporate into this profile
      */
-    pub fn add(&mut self, state: ActivityProfileState, contig_len: usize) {
+    pub fn add(&mut self, state: ActivityProfileState) {
         let loc = state.get_loc();
 
         if self.is_empty() {
             self.region_start_loc = Some(loc.clone());
             self.region_stop_loc = Some(loc.clone());
-            self.contig_len = contig_len;
-            self.tid = state.get_loc().get_contig();
         } else {
             if self.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
                 panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.region_stop_loc)
@@ -480,5 +478,31 @@ impl ActivityProfile {
             let index_p = self.get_prob(index);
             return index_p <= self.get_prob(index + 1) && index_p < self.get_prob(index - 1)
         }
+    }
+}
+
+/**
+* Implement the parallel extend method for ActivityProfile when
+* given a parallel iterator of ActivityProfileState
+*/
+impl ParallelExtend<ActivityProfileState> for ActivityProfile {
+    fn par_extend<I>(&mut self, par_iter: I)
+        where I: IntoParallelIterator<Item = ActivityProfileState>
+    {
+        let par_iter = par_iter.into_par_iter();
+        par_iter.for_each(|state| { self.add(state) });
+    }
+}
+
+/**
+* Implement the extend method for ActivityProfile when
+* given a parallel iterator of ActivityProfileState
+*/
+impl Extend<ActivityProfileState> for ActivityProfile {
+    fn extend<I>(&mut self, iter: I)
+        where I: IntoIterator<Item = ActivityProfileState>
+    {
+        let iter = iter.into_iter();
+        iter.for_each(|state| { self.add(state) });
     }
 }
