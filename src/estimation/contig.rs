@@ -366,7 +366,7 @@ pub fn pileup_variants<
                     m.value_of("ploidy").unwrap().parse().unwrap()
                 );
 
-                hc_engine.collect_activity_profile(
+                hc_engine.apply(
                     &indexed_bam_readers,
                     short_sample_count,
                     long_sample_count,

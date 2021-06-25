@@ -289,8 +289,28 @@ impl AssemblyRegion {
             panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, tid);
         };
 
-        return // subsequence
+        return reference_reader.current_sequence[
+            std::cmp::max(0, genome_loc.get_start().checked_sub(padding).unwrap_or(0))..
+                std::cmp::min(reference_reader.current_sequence.len(), genome_loc.get_end() + padding)]
     }
+
+    /**
+     * Get the reference bases from referenceReader spanned by the padded span of this active region,
+     * including additional padding bp on either side.  If this expanded region would exceed the boundaries
+     * of the active region's contig, the returned result will be truncated to only include on-genome reference
+     * bases
+     *
+     * @param referenceReader the source of the reference genome bases
+     * @param padding the padding, in BP, we want to add to either side of this active region padded region
+     * @return a non-null array of bytes holding the reference bases in referenceReader
+     */
+    pub fn get_assembly_region_reference(&mut self, reference_reader: &mut ReferenceReader, padding: usize) -> &[u8] {
+        return self.get_reference(reference_reader, padding, self.padded_span)
+    }
+
+    pub fn set_finalized(&mut self, value: bool) { self.has_been_finalized = value }
+
+    pub fn is_finalized(&self) -> bool { self.has_been_finalized }
 }
 
 impl ParallelExtend<BirdToolRead> for AssemblyRegion {

@@ -23,6 +23,7 @@ use genotype::genotyping_engine::GenotypingEngine;
 use utils::quality_utils::QualityUtils;
 use utils::math_utils::{MathUtils, RunningAverage};
 use utils::simple_interval::SimpleInterval;
+use activity_profile::activity_profile::ActivityProfile;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -83,6 +84,35 @@ impl HaplotypeCallerEngine {
             stand_min_conf: args.value_of("standard-min-confidence-threshold-for-calling").unwrap().parse().unwrap(),
             ref_idx,
         }
+    }
+
+    pub fn apply(&mut self, indexed_bam_readers: &Vec<String>,
+                 short_sample_count: usize,
+                 long_sample_count: usize,
+                 n_threads: usize,
+                 ref_idx: usize,
+                 per_reference_samples: usize,
+                 m: &clap::ArgMatches,
+                 genomes_and_contigs: &GenomesAndContigs,
+                 concatenated_genomes: &Option<String>,
+                 flag_filters: &FlagFilter,
+                 tree: &Arc<Mutex<Vec<&Elem>>>,) {
+
+        let mut per_contig_activity_states = self.collect_activity_profile(
+            &indexed_bam_readers,
+            short_sample_count,
+            long_sample_count,
+            n_threads,
+            ref_idx,
+            per_reference_samples,
+            m,
+            genomes_and_contigs,
+            &concatenated_genomes,
+            flag_filters,
+            tree
+        );
+
+
     }
 
     pub fn stand_min_conf(&self) -> f64 {
@@ -199,7 +229,7 @@ impl HaplotypeCallerEngine {
         );
 
         // return genotype_likelihoods for each contig in current genome across samples
-        self.calculate_activity_probabilities(
+        return self.calculate_activity_probabilities(
             genotype_likelihoods,
             per_contig_per_base_hq_soft_clips,
             target_ids_and_lengths,
@@ -388,8 +418,9 @@ impl HaplotypeCallerEngine {
                     )
                 }).collect::<Vec<ActivityProfileState>>();
 
+                // let mut activity_profile = ActivityProfile::new()
                 (*tid, result)
-            }).collect::<HashMap<usize, Vec<ActivityProfileState>>>();
+            }).collect::<HashMap<usize, ActivityProfile>>();
 
             return per_contig_activity_profile_states
         } else {

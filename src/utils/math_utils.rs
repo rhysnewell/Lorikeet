@@ -261,6 +261,7 @@ impl MathUtils {
         return normalized
     }
 
+
     pub fn is_valid_log10_probability(result: f64) -> bool {
         result <= 0.0
     }
@@ -297,6 +298,25 @@ impl MathUtils {
 
             return b + if diff < JacobianLogTable::MAX_TOLERANCE { JacobianLogTable::get(diff) } else { 0.0 }
         }
+    }
+
+    pub fn well_formed_f64(val: f64) -> bool {
+        return !val.is_nan() && !val.is_infinite()
+    }
+
+    /**
+     * Calculate f(x) = Normal(x | mu = mean, sigma = sd)
+     * @param mean the desired mean of the Normal distribution
+     * @param sd the desired standard deviation of the Normal distribution
+     * @param x the value to evaluate
+     * @return a well-formed double
+     */
+    pub fn normal_distribution(mean: f64, sd: f64, x: f64) -> f64 {
+        assert!(sd >= 0.0, "Standard deviation must be >= 0.0");
+        assert!(
+            Self::well_formed_f64(mean) && Self::well_formed_f64(sd) && Self::well_formed_f64(x),
+            "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
+        )
     }
 }
 
