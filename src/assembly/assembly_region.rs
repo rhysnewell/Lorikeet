@@ -280,13 +280,13 @@ impl AssemblyRegion {
         reference_reader.update_current_sequence_without_capcity();
         // Update all contig information
         reference_reader.fetch_contig_from_reference_by_tid(
-            tid,
+            self.tid,
             self.ref_idx,
         );
         reference_reader.read_sequence_to_vec();
 
         if reference_reader.current_sequence.is_empty() {
-            panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, tid);
+            panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, self.tid);
         };
 
         return reference_reader.current_sequence[
