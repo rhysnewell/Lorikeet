@@ -316,7 +316,30 @@ impl MathUtils {
         assert!(
             Self::well_formed_f64(mean) && Self::well_formed_f64(sd) && Self::well_formed_f64(x),
             "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
-        )
+        );
+
+        return ((-((x - mean).powf(2.0))) / (2.0 * sd.powf(2.0))).exp() / (sd * ROOT_TWO_PI)
+    }
+
+    /**
+     * normalizes the real-space probability array.
+     *
+     * Does not assume anything about the values in the array, beyond that no elements are below 0.  It's ok
+     * to have values in the array of > 1, or have the sum go above 0.
+     *
+     * @param array the array to be normalized
+     * @return a newly allocated array corresponding the normalized values in array
+     */
+    pub fn normalize_sum_to_one(array: Vec<f64>) -> Vec<f64> {
+        if array.len() == 0 {
+            return array
+        }
+
+        let sum = array.par_iter().sum::<f64>();
+        assert!(sum >= 0, "Values in probability array sum to a negative number");
+        array.par_iter_mut().for_each(|x| *x = x / sum);
+
+        return array
     }
 }
 

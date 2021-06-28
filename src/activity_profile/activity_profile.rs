@@ -3,6 +3,7 @@ use assembly::assembly_region::AssemblyRegion;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use ordered_float::OrderedFloat;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 
 /**
@@ -13,15 +14,81 @@ pub struct ActivityProfile {
     state_list: Vec<ActivityProfileState>,
     max_prob_propagation_distance: usize,
     active_prob_threshold: f64,
-    region_start_loc: Option<SimpleInterval>,
-    region_stop_loc: Option<SimpleInterval>,
+    pub region_start_loc: Option<SimpleInterval>,
+    pub region_stop_loc: Option<SimpleInterval>,
     contig_len: usize,
     tid: usize,
     ref_idx: usize,
 }
 
-impl ActivityProfile {
+pub trait Profile {
 
+    fn get_max_prob_propagation_distance(&self) -> usize;
+
+    fn size(&self) -> usize;
+
+    fn get_contig(&self) -> usize;
+
+    fn is_empty(&self) -> bool;
+
+    fn get_span(&self) -> Option<SimpleInterval>;
+
+    fn get_end(&self) -> usize;
+
+    fn get_state_list(&self) -> &Vec<ActivityProfileState>;
+
+    fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval>;
+
+    fn get_current_contig_length(&self) -> usize;
+
+    fn add(&mut self, state: ActivityProfileState);
+
+    fn process_state(&self, just_added_state: ActivityProfileState) -> Vec<ActivityProfileState>;
+
+    fn incorporate_single_state(&mut self, state_to_add: ActivityProfileState);
+
+    fn pop_ready_assembly_regions(
+        &mut self,
+        assembly_region_extension: usize,
+        min_region_size: usize,
+        max_region_size: usize,
+        force_conversion: bool,
+    ) -> Vec<AssemblyRegion>;
+
+    fn pop_next_ready_assembly_region(
+        &mut self,
+        assembly_region_extension: usize,
+        min_region_size: usize,
+        max_region_size: usize,
+        force_conversion: bool,
+    ) -> Option<AssemblyRegion>;
+
+    fn find_end_of_region(
+        &mut self,
+        is_active_region: bool,
+        min_region_size: usize,
+        max_region_size: usize,
+        force_conversion: bool,
+    ) -> Option<usize>;
+
+    fn find_best_cut_site(
+        &self,
+        end_of_active_region: usize,
+        min_region_size: usize
+    ) -> usize;
+
+    fn find_first_activity_boundary(
+        &self,
+        is_active_region: bool,
+        max_region_size: usize,
+    ) -> usize;
+
+    fn get_prob(&self, index: usize) -> f64;
+
+    fn is_minimum(&self, index: usize) -> bool;
+}
+
+impl ActivityProfile {
     /**
      * Create a empty ActivityProfile, restricting output to profiles overlapping intervals, if not null
      * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
@@ -39,6 +106,9 @@ impl ActivityProfile {
             ref_idx: ref_idx,
         }
     }
+}
+
+impl Profile for ActivityProfile {
 
     /**
      * How far away can probability mass be moved around in this profile?
@@ -50,7 +120,7 @@ impl ActivityProfile {
      *
      * @return a positive integer distance in bp
      */
-    pub fn get_max_prob_propagation_distance(&self) -> usize {
+    fn get_max_prob_propagation_distance(&self) -> usize {
         self.max_prob_propagation_distance
     }
 
@@ -58,7 +128,7 @@ impl ActivityProfile {
      * How many profile results are in this profile?
      * @return the number of profile results
      */
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         self.state_list.len()
     }
 
@@ -66,7 +136,7 @@ impl ActivityProfile {
      * Is this profile empty? (ie., does it contain no ActivityProfileStates?)
      * @return true if the profile is empty (ie., contains no ActivityProfileStates)
      */
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.state_list.is_empty()
     }
 
@@ -74,7 +144,7 @@ impl ActivityProfile {
      * Get the span of this activity profile, which is from the start of the first state to the stop of the last
      * @return a potentially null SimpleInterval.  Will be null if this profile is empty
      */
-    pub fn get_span(&self) -> Option<SimpleInterval> {
+    fn get_span(&self) -> Option<SimpleInterval> {
         if self.is_empty() {
             None
         } else {
@@ -82,11 +152,11 @@ impl ActivityProfile {
         }
     }
 
-    pub fn get_contig(&self) -> usize {
+    fn get_contig(&self) -> usize {
         self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_contig()
     }
 
-    pub fn get_end(&self) -> usize {
+    fn get_end(&self) -> usize {
         self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_end()
     }
 
@@ -94,7 +164,7 @@ impl ActivityProfile {
      * Get the list of activity profile results in this object
      * @return a non-null, ordered list of activity profile results
      */
-    pub fn get_state_list(&self) -> &Vec<ActivityProfileState> {
+    fn get_state_list(&self) -> &Vec<ActivityProfileState> {
         &self.state_list
     }
 
@@ -102,7 +172,7 @@ impl ActivityProfile {
      * Get the probabilities of the states as a single linear array of doubles
      * @return a non-null array
      */
-    pub fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval> {
+    fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval> {
         let start = relative_loc.get_start() as i64 + offset;
         if start < 1 || start > self.contig_len as i64 {
             return None
@@ -115,7 +185,7 @@ impl ActivityProfile {
      * Get the length of the current contig
      * @return the length in bp
      */
-    pub fn get_current_contig_length(&self) -> usize {
+    fn get_current_contig_length(&self) -> usize {
         self.contig_len
     }
 
@@ -132,7 +202,7 @@ impl ActivityProfile {
      *
      * @param state a well-formed ActivityProfileState result to incorporate into this profile
      */
-    pub fn add(&mut self, state: ActivityProfileState) {
+    fn add(&mut self, state: ActivityProfileState) {
         let loc = state.get_loc();
 
         if self.is_empty() {
@@ -250,7 +320,7 @@ impl ActivityProfile {
      *                        as the end of the contig)
      * @return a non-null list of active regions
      */
-    pub fn pop_ready_assembly_regions(
+    fn pop_ready_assembly_regions(
         &mut self,
         assembly_region_extension: usize,
         min_region_size: usize,

@@ -23,7 +23,8 @@ use genotype::genotyping_engine::GenotypingEngine;
 use utils::quality_utils::QualityUtils;
 use utils::math_utils::{MathUtils, RunningAverage};
 use utils::simple_interval::SimpleInterval;
-use activity_profile::activity_profile::ActivityProfile;
+use activity_profile::activity_profile::{ActivityProfile, Profile};
+use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -86,25 +87,27 @@ impl HaplotypeCallerEngine {
         }
     }
 
-    pub fn apply(&mut self, indexed_bam_readers: &Vec<String>,
-                 short_sample_count: usize,
-                 long_sample_count: usize,
-                 n_threads: usize,
-                 ref_idx: usize,
-                 per_reference_samples: usize,
-                 m: &clap::ArgMatches,
-                 genomes_and_contigs: &GenomesAndContigs,
-                 concatenated_genomes: &Option<String>,
-                 flag_filters: &FlagFilter,
-                 tree: &Arc<Mutex<Vec<&Elem>>>,) {
+    pub fn apply(
+        &mut self,
+        indexed_bam_readers: &Vec<String>,
+        short_sample_count: usize,
+        long_sample_count: usize,
+        n_threads: usize,
+        ref_idx: usize,
+        per_reference_samples: usize,
+        m: &clap::ArgMatches,
+        genomes_and_contigs: &GenomesAndContigs,
+        concatenated_genomes: &Option<String>,
+        flag_filters: &FlagFilter,
+        tree: &Arc<Mutex<Vec<&Elem>>>,
+    ) {
 
-        let mut per_contig_activity_states = self.collect_activity_profile(
+        let mut per_contig_activity_profile = self.collect_activity_profile(
             &indexed_bam_readers,
             short_sample_count,
             long_sample_count,
             n_threads,
             ref_idx,
-            per_reference_samples,
             m,
             genomes_and_contigs,
             &concatenated_genomes,
@@ -126,13 +129,12 @@ impl HaplotypeCallerEngine {
         long_sample_count: usize,
         n_threads: usize,
         ref_idx: usize,
-        per_reference_samples: usize,
         m: &clap::ArgMatches,
         genomes_and_contigs: &GenomesAndContigs,
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
         tree: &Arc<Mutex<Vec<&Elem>>>,
-    ) -> HashMap<usize, Vec<ActivityProfileState>> {
+    ) -> HashMap<usize, BandPassActivityProfile> {
 
 
         // minimum PHRED base quality
@@ -142,6 +144,17 @@ impl HaplotypeCallerEngine {
             .parse::<i32>()
             .unwrap();
 
+        let max_prob_prop = m
+            .value_of("max-prob-propagation-distance")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
+        let active_prob_thresh = m
+            .value_of("active-probability-threshold")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
 
         // let min_variant_quality = m
         //     .value_of("min-variant-quality")
@@ -234,6 +247,9 @@ impl HaplotypeCallerEngine {
             per_contig_per_base_hq_soft_clips,
             target_ids_and_lengths,
             ploidy,
+            max_prob_prop,
+            active_prob_thresh,
+            ref_idx,
         )
 
     }
@@ -384,7 +400,7 @@ impl HaplotypeCallerEngine {
     * Note that the current implementation will always return either 1.0 or 0.0, as it relies on the smoothing in
     * {@link org.broadinstitute.hellbender.utils.activityprofile.BandPassActivityProfile} to create the full distribution
     *
-    * @return HashMap<usize, Vec<ActivityProfileState>> - contig id and per base activity
+    * @return HashMap<usize, BandPassActivityProfile> - contig id and per base activity
     */
     pub fn calculate_activity_probabilities(
         &mut self,
@@ -392,12 +408,31 @@ impl HaplotypeCallerEngine {
         mut per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage>>,
         target_ids_and_lens: HashMap<usize, u64>,
         ploidy: usize,
-    ) -> HashMap<usize, Vec<ActivityProfileState>> {
+        max_prob_propagation: usize,
+        active_prob_threshold: f64,
+        ref_idx: usize,
+    ) -> HashMap<usize, BandPassActivityProfile> {
+
+
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
-            let per_contig_activity_profile_states: HashMap<usize, Vec<ActivityProfileState>> = genotype_likelihoods[0]
+            let per_contig_activity_profiles: HashMap<usize, Vec<ActivityProfileState>> = genotype_likelihoods[0]
                 .par_iter().map(|(tid, vec_of_ref_vs_any_result)| {
-                let result = vec_of_ref_vs_any_result.iter().enumerate().map(|(pos, ref_vs_any_result)| {
+
+                // Create bandpass
+                let mut activity_profile = BandPassActivityProfile::new(
+                    max_prob_prop,
+                    active_prob_threshold,
+                    BandPassActivityProfile::MAX_FILTER_SIZE,
+                    BandPassActivityProfile::DEFAULT_SIGMA,
+                    true,
+                    ref_idx,
+                    tid,
+                    target_ids_and_lens.get(&tid).unwrap_or(0) as usize
+                );
+
+                // for each position determine per locus activity and add to bandpass
+                vec_of_ref_vs_any_result.iter().enumerate().for_each(|(pos, ref_vs_any_result)| {
                     let is_active_prob =
                         self.genotyping_engine.allele_frequency_calculator
                             .calculate_single_sample_biallelic_non_ref_posterior(
@@ -408,29 +443,41 @@ impl HaplotypeCallerEngine {
                     let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
                     let hq_soft_clips = per_base_hq_soft_clips[pos];
-                    ActivityProfileState::new(
+                    let activity_profile_state = ActivityProfileState::new(
                         ref_vs_any_result.loc.clone(),
                         is_active_prob,
                         Type::new(
                             hq_soft_clips.mean(),
                             HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
                         )
-                    )
-                }).collect::<Vec<ActivityProfileState>>();
+                    );
 
-                // let mut activity_profile = ActivityProfile::new()
-                (*tid, result)
-            }).collect::<HashMap<usize, ActivityProfile>>();
+                    activity_profile.add(activity_profile_state);
+                });
 
-            return per_contig_activity_profile_states
+                (*tid, activity_profile)
+            }).collect::<HashMap<usize, BandPassActivityProfile>>();
+
+            return per_contig_activity_profiles
         } else {
 
-            let mut per_contig_activity_profile_states = HashMap::new();
+            let mut per_contig_activity_profiles = HashMap::new();
             for (tid, length) in target_ids_and_lens.iter() {
                 let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
                     .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid] as usize]);
 
-                let mut activity_profile_states = Vec::with_capacity(*length as usize);
+                // Create bandpass
+                let mut activity_profile = BandPassActivityProfile::new(
+                    max_prob_prop,
+                    active_prob_threshold,
+                    BandPassActivityProfile::MAX_FILTER_SIZE,
+                    BandPassActivityProfile::DEFAULT_SIGMA,
+                    true,
+                    ref_idx,
+                    tid,
+                    target_ids_and_lens.get(&tid).unwrap_or(0) as usize
+                );
+
                 for pos in 0..(*length as usize) {
                     let mut genotypes = Vec::new();
 
@@ -476,11 +523,11 @@ impl HaplotypeCallerEngine {
                             HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
                         )
                     );
-                    activity_profile_states.push(activity_profile_state);
+                    activity_profile.add(activity_profile_state);
                 }
-                per_contig_activity_profile_states.insert(*tid, activity_profile_states);
+                per_contig_activity_profiles.insert(*tid, activity_profile);
             }
-            return per_contig_activity_profile_states
+            return per_contig_activity_profiles
         }
     }
 

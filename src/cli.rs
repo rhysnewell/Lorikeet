@@ -1803,6 +1803,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("annotate-with-num-discovered-alleles")
                 )
                 .arg(
+                    Arg::with_name("max-prob-propagation-distance")
+                        .long("max-prob-propagation-distance")
+                        .default_value("50")
+                )
+                .arg(
+                    Arg::with_name("active-probability-threshold")
+                        .long("active-probability-threshold")
+                        .default_value("0.002")
+                )
+                .arg(
                     Arg::with_name("kmer-size")
                         .long("kmer-size")
                         .short("k")
