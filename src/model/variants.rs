@@ -365,24 +365,23 @@ pub enum Filter {
     None,
 }
 
-#[allow(unused)]
 impl Filter {
-    pub fn from(string: &str) -> Filter {
-        match string {
-            "PASS" => Filter::PASS,
-            "LowCov" => Filter::LowCov,
-            "Amb" => Filter::Amb,
-            "Del" => Filter::Del,
+    pub fn from<S: Into<String>>(string: S) -> Filter {
+        match string.into() {
+            format!("PASS") => Filter::PASS,
+            format!("LowCov") => Filter::LowCov,
+            format!("Amb") => Filter::Amb,
+            format!("Del") => Filter::Del,
             _ => Filter::None,
         }
     }
 
-    pub fn from_result(string: Result<&str, std::str::Utf8Error>) -> Filter {
+    pub fn from_result<S: Into<String>>(string: Result<S, std::str::Utf8Error>) -> Filter {
         match string {
-            Ok("PASS") => Filter::PASS,
-            Ok("LowCov") => Filter::LowCov,
-            Ok("Amb") => Filter::Amb,
-            Ok("Del") => Filter::Del,
+            Ok(format!("PASS")) => Filter::PASS,
+            Ok(format!("LowCov")) => Filter::LowCov,
+            Ok(format!("Amb")) => Filter::Amb,
+            Ok(format!("Del")) => Filter::Del,
             _ => Filter::None,
         }
     }
@@ -619,222 +618,6 @@ impl Base {
     pub fn assign_read(&mut self, read_id: Vec<u8>) {
         self.reads.insert(read_id);
     }
-}
-
-/// Collect variants from a given ´bcf::Record`.
-pub fn collect_variants(
-    record: &mut bcf::Record,
-    omit_snvs: bool,
-    omit_indels: bool,
-    indel_len_range: Option<Range<u32>>,
-) -> Vec<Variant> {
-    let pos = record.pos();
-    let svlens = match record.info(b"SVLEN").integer() {
-        // Gets value from SVLEN tag in VCF record
-        Ok(Some(svlens)) => Some(
-            svlens
-                .into_iter()
-                .map(|l| {
-                    if !l.is_missing() {
-                        Some(l.abs() as u32)
-                    } else {
-                        None
-                    }
-                })
-                .collect_vec(),
-        ),
-        _ => None,
-    };
-    let end = match record.info(b"END").integer() {
-        Ok(Some(end)) => {
-            let end = end[0] as u32 - 1;
-            Some(end)
-        }
-        _ => None,
-    };
-    // TODO avoid cloning svtype
-    let svtype = match record.info(b"SVTYPE").string() {
-        Ok(Some(svtype)) => Some(svtype[0].to_owned()),
-        _ => None,
-    };
-
-    // check if len is within the given range
-    let is_valid_len = |svlen| {
-        if let Some(ref len_range) = indel_len_range {
-            // TODO replace with Range::contains once stabilized
-            if svlen < len_range.start || svlen >= len_range.end {
-                return false;
-            }
-        }
-        true
-    };
-
-    let is_valid_insertion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
-        alt_allele == b"<INS>"
-            || (ref_allele.len() < alt_allele.len()
-                && ref_allele == &alt_allele[..ref_allele.len()])
-    };
-
-    let is_valid_deletion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
-        alt_allele == b"<DEL>"
-            || (ref_allele.len() > alt_allele.len()
-                && &ref_allele[..alt_allele.len()] == alt_allele)
-    };
-
-    let is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
-        alt_allele == b"<INV>" || (ref_allele.len() == alt_allele.len())
-    };
-
-    let is_valid_mnv = |ref_allele: &[u8], alt_allele: &[u8]| {
-        alt_allele == b"<MNV>" || (ref_allele.len() == alt_allele.len())
-    };
-
-    let variants = if let Some(svtype) = svtype {
-        vec![if omit_indels {
-            Variant::None
-        } else if svtype == b"INS" {
-            // get sequence
-            let alleles = record.alleles();
-            if alleles.len() > 2 {
-                panic!("SVTYPE=INS but more than one ALT allele".to_owned());
-            }
-            let ref_allele = alleles[0];
-            let alt_allele = alleles[1];
-
-            if alt_allele == b"<INS>" {
-                // don't support insertions without exact sequence
-                Variant::None
-            } else {
-                let len = alt_allele.len() - ref_allele.len();
-
-                if is_valid_insertion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
-                    Variant::Insertion(alt_allele[ref_allele.len()..].to_owned())
-                } else {
-                    Variant::None
-                }
-            }
-        } else if svtype == b"INV" {
-            // get sequence
-            let alleles = record.alleles();
-            if alleles.len() > 2 {
-                panic!("SVTYPE=INS but more than one ALT allele".to_owned());
-            }
-            let ref_allele = alleles[0];
-            let alt_allele = alleles[1];
-            debug!("Inversion being collected...");
-            if alt_allele == b"<INV>" {
-                // don't support inversions without exact sequence
-                Variant::None
-            } else {
-                let len = alt_allele.len();
-
-                if is_valid_inversion_alleles(ref_allele, alt_allele) && is_valid_len(len as u32) {
-                    Variant::Inversion(alt_allele.to_owned())
-                } else {
-                    Variant::None
-                }
-            }
-        } else if svtype == b"DEL" {
-            let svlen = match (svlens, end) {
-                (Some(ref svlens), _) if svlens[0].is_some() => svlens[0].unwrap(),
-                (None, Some(end)) => end - (pos as u32 + 1), // pos is pointing to the allele before the DEL
-                _ => {
-                    panic!("SVLEN or END".to_owned());
-                }
-            };
-            if svlen == 0 {
-                panic!(
-                    "Absolute value of SVLEN or END - POS must be greater than zero.".to_owned()
-                );
-            }
-            let alleles = record.alleles();
-            if alleles.len() > 2 {
-                panic!("SVTYPE=DEL but more than one ALT allele".to_owned());
-            }
-            let ref_allele = alleles[0];
-            let alt_allele = alleles[1];
-
-            if alt_allele == b"<DEL>" || is_valid_deletion_alleles(ref_allele, alt_allele) {
-                if is_valid_len(svlen) {
-                    Variant::Deletion(svlen)
-                } else {
-                    Variant::None
-                }
-            } else {
-                Variant::None
-            }
-        } else {
-            Variant::None
-        }]
-    } else {
-        let alleles = record.alleles();
-        let ref_allele = alleles[0];
-        let mut variant_vec = vec![];
-        alleles
-            .iter()
-            .skip(1)
-            .enumerate()
-            .for_each(|(i, alt_allele)| {
-                if alt_allele == b"<*>" {
-                    // dummy non-ref allele, signifying potential homozygous reference site
-                    if omit_snvs {
-                        variant_vec.push(Variant::None)
-                    } else {
-                        variant_vec.push(Variant::None)
-                    }
-                } else if alt_allele == b"<DEL>" {
-                    if let Some(ref svlens) = svlens {
-                        if let Some(svlen) = svlens[i] {
-                            variant_vec.push(Variant::Deletion(svlen))
-                        } else {
-                            // TODO fail with an error in this case
-                            variant_vec.push(Variant::None)
-                        }
-                    } else {
-                        // TODO fail with an error in this case
-                        variant_vec.push(Variant::None)
-                    }
-                } else if alt_allele[0] == b'<' {
-                    // TODO Catch <DUP> structural variants here
-                    // skip any other special alleles
-                    variant_vec.push(Variant::None)
-                } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
-                    // SNV
-                    if omit_snvs {
-                        variant_vec.push(Variant::None)
-                    } else if alt_allele == &ref_allele {
-                        variant_vec.push(Variant::None)
-                    } else {
-                        variant_vec.push(Variant::SNV(alt_allele[0]))
-                    }
-                } else {
-                    let indel_len =
-                        (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
-                    // TODO fix position if variant is like this: cttt -> ct
-
-                    if (omit_indels || !is_valid_len(indel_len))
-                        && is_valid_mnv(ref_allele, alt_allele)
-                    {
-                        // println!("MNV 1 {:?} {:?}", ref_allele, alt_allele);
-                        variant_vec.push(Variant::MNV(alt_allele.to_vec()))
-                    } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
-                        variant_vec.push(Variant::Deletion(
-                            (ref_allele.len() - alt_allele.len()) as u32,
-                        ))
-                    } else if is_valid_insertion_alleles(ref_allele, alt_allele) {
-                        variant_vec.push(Variant::Insertion(
-                            alt_allele[ref_allele.len()..].to_owned(),
-                        ))
-                    } else if is_valid_mnv(ref_allele, alt_allele) {
-                        // println!("MNV 2 {:?} {:?}", ref_allele, alt_allele);
-                        variant_vec.push(Variant::MNV(alt_allele.to_vec()))
-                    }
-                }
-            });
-        variant_vec
-    };
-
-    variants
 }
 
 #[cfg(test)]

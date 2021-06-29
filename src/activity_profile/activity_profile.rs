@@ -376,7 +376,8 @@ impl Profile for ActivityProfile {
         if self.state_list.is_empty() {
             return None
         }
-        // If we are flushing the activity profile we need to trim off the excess states so that we don't create regions outside of our current processing interval
+        // If we are flushing the activity profile we need to trim off the excess
+        // states so that we don't create regions outside of our current processing interval
         if force_conversion {
             let span = self.get_span();
             match span {

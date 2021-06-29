@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use scoped_threadpool::Pool;
 use std::path::Path;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
+use assembly::assembly_region_walker::AssemblyRegionWalker;
 
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -46,6 +47,7 @@ pub struct LorikeetEngine<'a> {
     multi_inner: Arc<MultiProgress>,
     progress_bars: Vec<Elem>,
     tree: Arc<Mutex<&Elem>>,
+    reference_reader: ReferenceReader,
 }
 
 impl LorikeetEngine {
@@ -79,8 +81,14 @@ impl LorikeetEngine {
                 .to_string(),
         ));
 
+        let reference_reader = ReferenceReader::new(
+            concatenated_genomes,
+            genomes_and_contigs.clone(),
+            genomes_and_contigs.contig_to_genome.len()
+        );
+
         // All different counts of samples I need. Changes depends on when using concatenated genomes or not
-        let mut short_read_bam_count = bam_readers.len();
+        let short_read_bam_count = bam_readers.len();
         let mut long_read_bam_count = 0;
         let mut reference_count = references.len();
 
@@ -134,7 +142,8 @@ impl LorikeetEngine {
         );
 
 
-        let mut lorikeet_engine = Lorikeet {
+        let mut lorikeet_engine = LorikeetEngine {
+            args: m,
             short_read_bam_count,
             long_read_bam_count,
             coverage_estimators,
@@ -148,7 +157,7 @@ impl LorikeetEngine {
             multi_inner,
             progress_bars,
             tree,
-            args: m,
+            reference_reader,
         };
 
         lorikeet_engine.apply_per_reference()
@@ -194,6 +203,7 @@ impl LorikeetEngine {
                     None => None,
                 };
                 let mut coverage_estimators = self.coverage_estimators.clone();
+                let mut reference_reader = self.reference_reader.clone();
                 let genomes_and_contigs = &self.genomes_and_contigs;
 
                 let output_prefix = format!(
@@ -284,27 +294,43 @@ impl LorikeetEngine {
                         indexed_bam_readers.len()
                     );
 
-                    let mut hc_engine = HaplotypeCallerEngine::new(
-                        &self.args,
-                        ref_idx,
-                        indexed_bam_readers.clone(),
-                        false,
-                        self.args.value_of("ploidy").unwrap().parse().unwrap()
-                    );
 
-                    hc_engine.apply(
-                        &indexed_bam_readers,
+                    let mut assembly_engine = AssemblyRegionWalker::start(
+                        self.args,
+                        ref_idx,
                         self.short_read_bam_count,
                         self.long_read_bam_count,
-                        n_threads,
-                        ref_idx,
-                        per_reference_samples,
-                        &self.args,
+                        &indexed_bam_readers,
                         genomes_and_contigs,
                         &concatenated_genomes,
                         flag_filters,
-                        tree
+                        tree,
+                        reference_reader,
+                        n_threads,
                     );
+
+                    assembly_engine.traverse();
+                    // let mut hc_engine = HaplotypeCallerEngine::new(
+                    //     &self.args,
+                    //     ref_idx,
+                    //     indexed_bam_readers.clone(),
+                    //     false,
+                    //     self.args.value_of("ploidy").unwrap().parse().unwrap()
+                    // );
+                    //
+                    // hc_engine.apply(
+                    //     &indexed_bam_readers,
+                    //     self.short_read_bam_count,
+                    //     self.long_read_bam_count,
+                    //     n_threads,
+                    //     ref_idx,
+                    //     per_reference_samples,
+                    //     &self.args,
+                    //     genomes_and_contigs,
+                    //     &concatenated_genomes,
+                    //     flag_filters,
+                    //     tree
+                    // );
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];

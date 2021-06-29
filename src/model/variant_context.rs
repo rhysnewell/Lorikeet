@@ -1,4 +1,4 @@
-use model::variants::{Allele, NON_REF_ALLELE};
+use model::variants::{Allele, NON_REF_ALLELE, Filter, Variant};
 use genotype::genotype_builder::{GenotypesContext, GenotypeAssignmentMethod, Genotype};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use utils::math_utils::MathUtils;
@@ -10,6 +10,7 @@ use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use std::collections::{HashMap, HashSet};
 use ordered_float::OrderedFloat;
+use rust_htslib::bcf;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -20,13 +21,25 @@ pub struct VariantContext {
     pub genotypes: GenotypesContext,
     pub source: String,
     pub log10_p_error: f64,
-    pub filters: HashSet<String>,
+    pub filters: HashSet<Filter>,
     pub attributes: HashMap<String, Vec<f64>>
 }
 
 impl VariantContext {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
     pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
+
+    pub fn empty(tid: usize, start: usize, end: usize) -> VariantContext {
+        VariantContext {
+            loc: SimpleInterval::new(tid, start, end),
+            alleles: Vec::new(),
+            genotypes: GenotypesContext::empty(),
+            source: "".to_string(),
+            log10_p_error: 0.0,
+            filters: HashSet::new(),
+            attributes: HashMap::new(),
+        }
+    }
 
     pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Allele>) -> VariantContext {
         VariantContext {
@@ -56,8 +69,8 @@ impl VariantContext {
         self.attributes.par_extend(attributes);
     }
 
-    pub fn filter(&mut self, filter: String) {
-        self.filters.insert(filter);
+    pub fn filter<S: Into<String>>(&mut self, filter: S) {
+        self.filters.insert(Filter::from(filter.into()));
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -355,4 +368,216 @@ impl VariantContext {
     pub fn get_alternate_alleles(&self) -> Vec<Allele> {
         self.alleles[1..].to_vec()
     }
+
+    pub fn process_vcf(vcf_path: &str) -> Vec<VariantContext> {
+        let vcf = bcf::Reader::from_path(vcf_path);
+
+        match vcf_reader {
+            Ok(ref mut reader) => {
+                pool.scoped(|scope| {
+                    for vcf_record in reader.records().into_iter() {
+                        scope.execute(|| {
+                            let mut vcf_record = vcf_record.unwrap();
+                            // let vcf_header = vcf_record.header();
+                            let variant_rid = vcf_record.rid().unwrap();
+
+                            let base_option = Self::from_vcf_record(
+                                &mut vcf_record,
+                            );
+                            match base_option {
+                                Some(bases) => {
+                                    for base in bases {
+                                        let mut variant_matrix_sync =
+                                            variant_matrix_sync.lock().unwrap();
+                                        variant_matrix_sync.add_variant_to_matrix(
+                                            sample_idx,
+                                            &base,
+                                            variant_rid as usize,
+                                            ref_idx,
+                                        );
+                                    }
+                                }
+                                None => {}
+                            }
+                            // } else {
+                            //     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
+                            // }
+                        });
+                    }
+                });
+            }
+            Err(_) => {
+                debug!("No VCF records found for sample {}", &stoit_name);
+            }
+        }
+    }
+
+    pub fn from_vcf_record(
+        record: &mut bcf::Record,
+    ) -> Option<VariantContext> {
+        let variants = Self::collect_variants(record, false, false, None);
+        if variants.len() > 0 {
+
+            let mut bases = vec![];
+            let mut refr_base_empty = true;
+            // Get elements from record
+            let mut vc = Self::build(
+                record.rid().unwrap(),
+                record.pos(),
+                sample_count,
+                variants,
+            );
+            vc.log10_p_error(record.qual() as f64);
+
+            // Separate filters into hashset of filter struct
+            let filters = record.filters();
+            let header = record.header();
+            for filter in filters {
+                vc.filter(Filter::from_result(std::str::from_utf8(
+                    &header.id_to_name(filter)[..],
+                )));
+            }
+
+            let mut depths = record.format(b"AD").float().unwrap_or(vec![0.0; variants.len()]);
+            depths.par_iter_mut().for_each(|dp| dp as f64);
+            Some(vc)
+        } else {
+            None
+        }
+    }
+
+    /// Collect variants from a given ´bcf::Record`.
+    pub fn collect_variants(
+        record: &mut bcf::Record,
+        omit_snvs: bool,
+        omit_indels: bool,
+        indel_len_range: Option<Range<u32>>,
+    ) -> Vec<Allele> {
+        let pos = record.pos();
+        let svlens = match record.info(b"SVLEN").integer() {
+            // Gets value from SVLEN tag in VCF record
+            Ok(Some(svlens)) => Some(
+                svlens
+                    .into_iter()
+                    .map(|l| {
+                        if !l.is_missing() {
+                            Some(l.abs() as u32)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect_vec(),
+            ),
+            _ => None,
+        };
+        let end = match record.info(b"END").integer() {
+            Ok(Some(end)) => {
+                let end = end[0] as u32 - 1;
+                Some(end)
+            }
+            _ => None,
+        };
+
+        // check if len is within the given range
+        let is_valid_len = |svlen| {
+            if let Some(ref len_range) = indel_len_range {
+                // TODO replace with Range::contains once stabilized
+                if svlen < len_range.start || svlen >= len_range.end {
+                    return false;
+                }
+            }
+            true
+        };
+
+        let is_valid_insertion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+            alt_allele == b"<INS>"
+                || (ref_allele.len() < alt_allele.len()
+                && ref_allele == &alt_allele[..ref_allele.len()])
+        };
+
+        let is_valid_deletion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+            alt_allele == b"<DEL>"
+                || (ref_allele.len() > alt_allele.len()
+                && &ref_allele[..alt_allele.len()] == alt_allele)
+        };
+
+        let is_valid_inversion_alleles = |ref_allele: &[u8], alt_allele: &[u8]| {
+            alt_allele == b"<INV>" || (ref_allele.len() == alt_allele.len())
+        };
+
+        let is_valid_mnv = |ref_allele: &[u8], alt_allele: &[u8]| {
+            alt_allele == b"<MNV>" || (ref_allele.len() == alt_allele.len())
+        };
+
+        let variants = {
+            let alleles = record.alleles();
+            // let ref_allele = Allele::new(alleles[0], true);
+            let mut variant_vec = vec![];
+            alleles
+                .iter()
+                .enumerate()
+                .for_each(|(i, alt_allele)| {
+                    let is_reference = i == 0;
+                    if alt_allele == b"<*>" {
+                        // dummy non-ref allele, signifying potential homozygous reference site
+                        if omit_snvs {
+                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                        } else {
+                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                        }
+                    } else if alt_allele == b"<DEL>" {
+                        if let Some(ref svlens) = svlens {
+                            if let Some(svlen) = svlens[i] {
+                                variant_vec.push(Allele::new(Variant::Deletion(svlen), is_reference))
+                            } else {
+                                // TODO fail with an error in this case
+                                variant_vec.push(Allele::new(Variant::None, is_reference))
+                            }
+                        } else {
+                            // TODO fail with an error in this case
+                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                        }
+                    } else if alt_allele[0] == b'<' {
+                        // TODO Catch <DUP> structural variants here
+                        // skip any other special alleles
+                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                    } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
+                        // SNV
+                        if omit_snvs {
+                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                        } else if alt_allele == &ref_allele {
+                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                        } else {
+                            variant_vec.push(Allele::new(Variant::SNV(alt_allele[0]), is_reference))
+                        }
+                    } else {
+                        let indel_len =
+                            (alt_allele.len() as i32 - ref_allele.len() as i32).abs() as u32;
+                        // TODO fix position if variant is like this: cttt -> ct
+
+                        if (omit_indels || !is_valid_len(indel_len))
+                            && is_valid_mnv(ref_allele, alt_allele)
+                        {
+                            // println!("MNV 1 {:?} {:?}", ref_allele, alt_allele);
+                            variant_vec.push(Allele::new(Variant::MNV(alt_allele.to_vec()), is_reference))
+                        } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
+                            variant_vec.push(Allele::new(Variant::Deletion(
+                                (ref_allele.len() - alt_allele.len()) as u32,
+                            ), is_reference))
+                        } else if is_valid_insertion_alleles(ref_allele, alt_allele) {
+                            variant_vec.push(Allele::new(Variant::Insertion(
+                                alt_allele[ref_allele.len()..].to_owned(),
+                            ), is_reference))
+                        } else if is_valid_mnv(ref_allele, alt_allele) {
+                            // println!("MNV 2 {:?} {:?}", ref_allele, alt_allele);
+                            variant_vec.push(Allele::new(Variant::MNV(alt_allele.to_vec()), is_reference))
+                        }
+                    }
+                });
+            variant_vec
+        };
+
+        variants
+    }
+
 }
