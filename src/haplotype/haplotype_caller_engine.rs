@@ -25,6 +25,8 @@ use utils::math_utils::{MathUtils, RunningAverage};
 use utils::simple_interval::SimpleInterval;
 use activity_profile::activity_profile::{ActivityProfile, Profile};
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
+use estimation::lorikeet_engine::ReadType;
+use assembly::assembly_region::AssemblyRegion;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -87,37 +89,6 @@ impl HaplotypeCallerEngine {
         }
     }
 
-    pub fn apply(
-        &mut self,
-        indexed_bam_readers: &Vec<String>,
-        short_sample_count: usize,
-        long_sample_count: usize,
-        n_threads: usize,
-        ref_idx: usize,
-        per_reference_samples: usize,
-        m: &clap::ArgMatches,
-        genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<String>,
-        flag_filters: &FlagFilter,
-        tree: &Arc<Mutex<Vec<&Elem>>>,
-    ) {
-
-        let mut per_contig_activity_profile = self.collect_activity_profile(
-            &indexed_bam_readers,
-            short_sample_count,
-            long_sample_count,
-            n_threads,
-            ref_idx,
-            m,
-            genomes_and_contigs,
-            &concatenated_genomes,
-            flag_filters,
-            tree
-        );
-
-
-    }
-
     pub fn stand_min_conf(&self) -> f64 {
         self.stand_min_conf
     }
@@ -134,6 +105,7 @@ impl HaplotypeCallerEngine {
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
         tree: &Arc<Mutex<Vec<&Elem>>>,
+        reference_reader: &mut ReferenceReader,
     ) -> HashMap<usize, BandPassActivityProfile> {
 
 
@@ -198,6 +170,7 @@ impl HaplotypeCallerEngine {
                             flag_filters,
                             &mut target_ids_and_lengths,
                             &mut per_contig_per_base_hq_soft_clips,
+                            reference_reader,
                         )
                     );
                 } else if (m.is_present("longreads") | m.is_present("longread-bam-files"))
@@ -221,6 +194,7 @@ impl HaplotypeCallerEngine {
                             flag_filters,
                             &mut target_ids_and_lengths,
                             &mut per_contig_per_base_hq_soft_clips,
+                            reference_reader,
                         )
                     );
                 }
@@ -269,6 +243,7 @@ impl HaplotypeCallerEngine {
         flag_filters: &'b FlagFilter,
         target_ids_and_lengths: &mut HashMap<usize, u64>,
         per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
+        reference_reader: &mut ReferenceReader,
     ) -> HashMap<usize, Vec<RefVsAnyResult>>{
         let mut bam_generated = bam_generator.start();
 
@@ -280,7 +255,6 @@ impl HaplotypeCallerEngine {
             .map(|tid| header.target_len(tid).unwrap())
             .collect();
         let target_names = header.target_names();
-        let mut reference_reader = ReferenceReader::new(concatenated_genomes, *genomes_and_contigs.clone(), target_names.len());
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
 
 
@@ -531,6 +505,43 @@ impl HaplotypeCallerEngine {
         }
     }
 
+    /**
+     * Generate variant calls for an assembly region
+     *
+     * @param region region to assemble and perform variant calling on
+     * @param features Features overlapping the assembly region
+     * @return List of variants discovered in the region (may be empty)
+     */
+    pub fn call_region(
+        &mut self,
+        region: &mut AssemblyRegion,
+        features: &Vec<VariantContext>,
+        args: &clap::ArgMatches
+    ) -> Vec<VariantContext> {
+        let vc_priors = Vec::new();
+        if !region.is_active() {
+            return self.reference_model_for_no_variation(region, true, vc_priors)
+        }
+
+        let given_alleles = features; // TODO: Implement reading in of given alleles from VCF
+    }
+
+    /**
+     * Create an ref model result (ref model or no calls depending on mode) for an active region without any variation
+     * (not is active, or assembled to just ref)
+     *
+     * @param region the region to return a no-variation result
+     * @param needsToBeFinalized should the region be finalized before computing the ref model (should be false if already done)
+     * @return a list of variant contexts (can be empty) to emit for this ref region
+     */
+    fn reference_model_for_no_variation(
+        &mut self,
+        region: &mut AssemblyRegion,
+        needs_to_be_finalized: bool,
+        vc_priors: &Vec<VariantContext>,
+    ) -> Vec<VariantContext> {
+        Vec::new()
+    }
 
     /**
     * Populates reference and non reference depth vectors
