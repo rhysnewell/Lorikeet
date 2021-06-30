@@ -2,11 +2,15 @@ use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use std::collections::HashMap;
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use utils::reference_reader_utils::ReferenceReader;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
+use rust_htslib::bcf::{IndexedReader, Read};
+use model::variant_context::VariantContext;
+use coverm::FlagFilter;
+use reference::reference_reader::ReferenceReader;
 
 pub struct AssemblyRegionWalker {
     evaluator: HaplotypeCallerEngine,
+    features: Option<IndexedReader>,
     shards: HashMap<usize, BandPassActivityProfile>,
     indexed_bam_readers: Vec<String>,
     short_read_bam_count: usize,
@@ -63,10 +67,16 @@ impl AssemblyRegionWalker {
         let max_assembly_region_size = args.value_of("max-assembly-region-size")
             .unwrap().parse().unwrap();
 
+        let features_vcf = match args.value_of("features-vcf") {
+            Some(vcf_path) => Some(IndexedReader::from_path(vcf_path)),
+            None => None,
+        };
+
         AssemblyRegionWalker {
             evaluator: hc_engine,
             shards: shards,
             indexed_bam_readers: *indexed_bam_readers.clone(),
+            features: features_vcf,
             short_read_bam_count,
             long_read_bam_count,
             ref_idx,
@@ -78,13 +88,26 @@ impl AssemblyRegionWalker {
         }
     }
 
-    pub fn traverse(&mut self) {
+    /**
+    * Iterates through activity profiles per contig, sending each activity profile to be processed
+    *
+    */
+    pub fn traverse(
+        &mut self,
+        flag_filters: &FlagFilter,
+        args: &clap::ArgMatches
+    ) {
         for (tid, activity_profile) in self.shards.iter_mut() {
-            self.process_shard(activity_profile)
+            self.process_shard(activity_profile, flag_filters, args)
         }
     }
 
-    fn process_shard(&mut self, shard: &mut BandPassActivityProfile, args: &clap::ArgMatches) {
+    fn process_shard(
+        &mut self,
+        shard: &mut BandPassActivityProfile,
+        flag_filters: &FlagFilter,
+        args: &clap::ArgMatches
+    ) {
 
         let mut assembly_region_iter = AssemblyRegionIterator::new(
             &mut self.reference_reader,
@@ -96,9 +119,57 @@ impl AssemblyRegionWalker {
             self.n_threads,
         );
 
-        for assembly_region in assembly_region_iter.pending_regions.iter_mut() {
-            AssemblyRegionIterator::fill_next_assembly_region_with_reads(&mut assembly_region, self.n_threads);
-            self.evaluator.call_region(assembly_region, args) // TODO: Implement Call Region
+        match &mut self.features {
+            Some(indexed_vcf_reader) => {
+                // Indexed readers don't have sync so we cannot parallelize this
+                indexed_vcf_reader.set_threads(self.n_threads as usize);
+                for assembly_region in assembly_region_iter.pending_regions.iter_mut() {
+                    AssemblyRegionIterator::fill_next_assembly_region_with_reads(
+                        &mut assembly_region, flag_filters, self.n_threads
+                    );
+
+                    let vcf_rid = VariantContext::get_contig_vcf_tid(
+                        indexed_vcf_reader.header(),
+                        self.reference_reader.retrieve_contig_name_from_tid(
+                            assembly_region.get_contig()
+                        )
+                    );
+
+                    let feature_variants = match vcf_rid {
+                        Some(rid) => {
+                            VariantContext::process_vcf_in_region(
+                                indexed_vcf_reader,
+                                rid,
+                                assembly_region.get_start() as u64,
+                                assembly_region.get_end() as u64
+                            )
+                        },
+                        None => {
+                            Vec::new()
+                        }
+                    };
+
+                    self.evaluator.call_region(
+                        assembly_region,
+                        feature_variants,
+                        args
+                    ) // TODO: Implement Call Region
+                }
+            },
+            None => {
+                assembly_region_iter.pending_regions.iter_mut()
+                    .for_each(|assembly_region| {
+                        AssemblyRegionIterator::fill_next_assembly_region_with_reads(
+                            &mut assembly_region, flag_filters, self.n_threads
+                        );
+
+                        self.evaluator.call_region(
+                            assembly_region,
+                            Vec::new(),
+                            args
+                        ) // TODO: Implement Call Region
+                });
+            }
         }
     }
 }

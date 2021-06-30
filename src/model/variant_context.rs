@@ -11,6 +11,9 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 use std::collections::{HashMap, HashSet};
 use ordered_float::OrderedFloat;
 use rust_htslib::bcf;
+use rust_htslib::bcf::IndexedReader;
+use rust_htslib::bcf::header::HeaderView;
+use reference::reference_reader::ReferenceReader;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -369,45 +372,42 @@ impl VariantContext {
         self.alleles[1..].to_vec()
     }
 
-    pub fn process_vcf(vcf_path: &str) -> Vec<VariantContext> {
-        let vcf = bcf::Reader::from_path(vcf_path);
+    pub fn process_vcf_in_region(
+        indexed_vcf: &mut IndexedReader,
+        tid: u32,
+        start: u64,
+        end: u64
+    ) -> Vec<VariantContext> {
+        indexed_vcf.fetch(tid, start, end);
 
+        let variant_contexts = reader.records().into_par_iter().map(|record|{
+            let mut vcf_record = vcf_record.unwrap();
+            let vc = Self::from_vcf_record(
+                &mut vcf_record,
+            );
+            vc
+        }).collect::<Vec<VariantContext>>();
+
+        return variant_contexts
+    }
+
+    pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext> {
+        let vcf = bcf::Reader::from_path(vcf_path);
         match vcf_reader {
             Ok(ref mut reader) => {
-                pool.scoped(|scope| {
-                    for vcf_record in reader.records().into_iter() {
-                        scope.execute(|| {
-                            let mut vcf_record = vcf_record.unwrap();
-                            // let vcf_header = vcf_record.header();
-                            let variant_rid = vcf_record.rid().unwrap();
+                let variant_contexts = reader.records().into_par_iter().map(|record|{
+                    let mut vcf_record = vcf_record.unwrap();
+                    let vc = Self::from_vcf_record(
+                        &mut vcf_record,
+                    );
+                    vc
+                }).collect::<Vec<VariantContext>>();
 
-                            let base_option = Self::from_vcf_record(
-                                &mut vcf_record,
-                            );
-                            match base_option {
-                                Some(bases) => {
-                                    for base in bases {
-                                        let mut variant_matrix_sync =
-                                            variant_matrix_sync.lock().unwrap();
-                                        variant_matrix_sync.add_variant_to_matrix(
-                                            sample_idx,
-                                            &base,
-                                            variant_rid as usize,
-                                            ref_idx,
-                                        );
-                                    }
-                                }
-                                None => {}
-                            }
-                            // } else {
-                            //     panic!("Bug: VCF record reference ids do not match BAM reference ids. Perhaps BAM is unsorted?")
-                            // }
-                        });
-                    }
-                });
+                return variant_contexts
             }
             Err(_) => {
-                debug!("No VCF records found for sample {}", &stoit_name);
+                debug!("No VCF records found for {}", vcf_path);
+                return Vec::new()
             }
         }
     }
@@ -580,4 +580,22 @@ impl VariantContext {
         variants
     }
 
+    pub fn get_contig_vcf_tid(vcf_header: &HeaderView, contig_name: &[u8]) -> Some(u32) {
+        match vcf_header.name2rid(contig_name) {
+            Ok(rid) => {
+                return Some(rid)
+            },
+            Err(_) => {
+                // Remove leading reference stem
+                match vcf_header.name2rid(ReferenceReader::split_contig_name(contig_name, '~')) {
+                    Ok(rid) => {
+                        return Some(rid)
+                    },
+                    Err(_) => {
+                        return None
+                    }
+                }
+            }
+        }
+    }
 }

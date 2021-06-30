@@ -6,6 +6,7 @@ use activity_profile::activity_profile::{ActivityProfile, Profile};
 use reads::bird_tool_reads::BirdToolRead;
 use coverm::bam_generator::{generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader};
 use rust_htslib::bam::Record;
+use coverm::FlagFilter;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -57,7 +58,11 @@ impl AssemblyRegionIterator {
         }
     }
 
-    pub fn fill_next_assembly_region_with_reads(region: &mut AssemblyRegion, n_threads: u32) {
+    pub fn fill_next_assembly_region_with_reads(
+        region: &mut AssemblyRegion,
+        flag_filters: &FlagFilter,
+        n_threads: u32
+    ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
         let mut record = Record::new(); // Empty bam record
@@ -65,7 +70,7 @@ impl AssemblyRegionIterator {
             |(sample_idx, bam_generator)| {
                 let bam_generated = generate_indexed_named_bam_readers_from_bam_files(
                     vec![&bam_generator],
-                    self.n_threads,
+                    n_threads,
                 )
                     .into_iter()
                     .next()
@@ -78,7 +83,19 @@ impl AssemblyRegionIterator {
                 ));
 
                 while bam_generated.read(&mut record) == true {
-                    region.add(BirdToolRead::new(*record.clone()))
+                    // TODO: Implement read filtering here
+                    if (!flag_filters.include_supplementary
+                        && record.is_supplementary()) // We want supp alignments for longreads
+                        || (!flag_filters.include_secondary
+                        && record.is_secondary())
+                        || record.is_unmapped()
+                    // Check against filter flags and current sample type
+                    {
+                        skipped_reads += 1;
+                        continue;
+                    } else {
+                        region.add(BirdToolRead::new(*record.clone()))
+                    }
                 }
             });
     }

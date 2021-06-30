@@ -1,14 +1,16 @@
+pub mod activity_profile;
+pub mod assembly;
 pub mod cli;
 pub mod dbscan;
 pub mod estimation;
 pub mod external_command_checker;
-pub mod model;
-pub mod utils;
 pub mod haplotype;
 pub mod genotype;
-pub mod activity_profile;
-pub mod assembly;
+pub mod graphs;
+pub mod model;
+pub mod utils;
 pub mod reads;
+pub mod reference;
 
 // HTS and bio files
 extern crate bio;
@@ -45,7 +47,7 @@ extern crate tempdir;
 extern crate tempfile;
 extern crate num;
 extern crate libm;
-
+extern crate petgraph;
 //extern crate plotly;
 extern crate strum;
 
