@@ -4,6 +4,7 @@ use model::variants::Allele;
 use std::collections::HashSet;
 use utils::simple_interval::Locatable;
 use rayon::prelude::*;
+use assembly::assembly_region::AssemblyRegion;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -41,6 +42,17 @@ pub struct AssemblyBasedCallerUtils {
 
 impl AssemblyBasedCallerUtils {
 
+    /**
+     * High-level function that runs the assembler on the given region's reads,
+     * returning a data structure with the resulting information needed
+     * for further HC steps
+     */
+    pub fn assemble_reads(
+        region: AssemblyRegion,
+        given_alleles: Vec<VariantContext>,
+        args: &clap::ArgMatches,
+        reference_reader: &
+    )
 
     pub fn get_variant_contexts_from_given_alleles(
         loc: usize,

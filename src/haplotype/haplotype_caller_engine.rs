@@ -1,17 +1,12 @@
 use rust_htslib::bam::{self, record::Cigar, Record};
-
 use bio::stats::{LogProb, PHREDProb};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use rayon::prelude::*;
-
-
 use coverm::bam_generator::*;
 use coverm::FlagFilter;
 use model::variants::*;
 use model::variant_context::VariantContext;
-
-use crate::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use utils::utils::{ReadType, Elem};
 use utils::reference_reader_utils::{ReferenceReaderUtils, ReferenceReader};
@@ -27,10 +22,17 @@ use activity_profile::activity_profile::{ActivityProfile, Profile};
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use estimation::lorikeet_engine::ReadType;
 use assembly::assembly_region::AssemblyRegion;
+use reference::reference_reader::ReferenceReader;
+use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
+use assembly::read_threading_assembler::ReadThreadingAssembler;
+use utils::smith_waterman_aligner::SmithWatermanAligner;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
+    assembly_region_trimmer: AssemblyRegionTrimmer,
+    assembly_engine: ReadThreadingAssembler,
+    aligner: SmithWatermanAligner,
     ref_idx: usize,
     stand_min_conf: f64,
 }
@@ -515,7 +517,8 @@ impl HaplotypeCallerEngine {
     pub fn call_region(
         &mut self,
         region: &mut AssemblyRegion,
-        features: &Vec<VariantContext>,
+        reference_reader: &mut ReferenceReader,
+        given_alleles: &Vec<VariantContext>,
         args: &clap::ArgMatches
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
@@ -523,7 +526,12 @@ impl HaplotypeCallerEngine {
             return self.reference_model_for_no_variation(region, true, vc_priors)
         }
 
-        let given_alleles = features; // TODO: Implement reading in of given alleles from VCF
+        if given_alleles.is_empty() && region.len() == 0 {
+            return self.reference_model_for_no_variation(region, true, vc_priors)
+        }
+
+        // run the local assembler, getting back a collection of information on how we should proceed
+        let untrimmed_assembly_result =
     }
 
     /**
@@ -540,7 +548,7 @@ impl HaplotypeCallerEngine {
         needs_to_be_finalized: bool,
         vc_priors: &Vec<VariantContext>,
     ) -> Vec<VariantContext> {
-        Vec::new()
+        Vec::new() // TODO: Implement this potentially?
     }
 
     /**

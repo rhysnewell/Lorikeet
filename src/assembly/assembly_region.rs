@@ -126,6 +126,10 @@ impl AssemblyRegion {
         self.is_active
     }
 
+    pub fn len(&self) -> usize {
+        self.reads.len()
+    }
+
     /**
      * Override activity state of the region
      *

@@ -5,6 +5,5 @@ pub mod vcf_constants;
 pub mod dirichlet;
 pub mod natural_log_utils;
 pub mod quality_utils;
-pub mod assembly_based_caller_utils;
 pub mod interval_utils;
-pub mod reference_reader_utils;
+pub mod smith_waterman_aligner;
