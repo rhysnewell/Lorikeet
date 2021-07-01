@@ -65,6 +65,7 @@ extern crate pest_derive;
 #[macro_use]
 extern crate enum_ordinalize;
 extern crate term;
+extern crate test;
 
 use clap::*;
 use std::process;
