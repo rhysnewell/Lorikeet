@@ -90,7 +90,6 @@ impl AssemblyRegionWalker {
 
     /**
     * Iterates through activity profiles per contig, sending each activity profile to be processed
-    *
     */
     pub fn traverse(
         &mut self,

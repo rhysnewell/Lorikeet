@@ -3,7 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
 use petgraph::Direction;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BinaryHeap};
 
 /**
  * Common code for graphs used for local assembly.
@@ -72,10 +72,10 @@ impl BaseGraph {
      *       which is deterministic in output due to the underlying sets all being BTreeSet
      * @return a non-null set
      */
-    pub fn get_sources(&self) -> BTreeSet<NodeIndex> {
+    pub fn get_sources(&self) -> BinaryHeap<NodeIndex> {
         return self.graph.node_indices().into_par_iter().filter(|v_index| {
             self.is_source(v_index)
-        }).collect::<BTreeSet<NodeIndex>>()
+        }).collect::<BinaryHeap<NodeIndex>>()
     }
 
     /**
@@ -84,9 +84,9 @@ impl BaseGraph {
      *       which is deterministic in output due to the underlying sets all being BTreeSet
      * @return a non-null set
      */
-    pub fn get_sinks(&self) -> BTreeSet<NodeIndex> {
+    pub fn get_sinks(&self) -> BinaryHeap<NodeIndex> {
         return self.graph.node_indices().into_par_iter().filter(|v_index| {
             self.is_sink(v_index)
-        }).collect::<BTreeSet<NodeIndex>>()
+        }).collect::<BinaryHeap<NodeIndex>>()
     }
 }
