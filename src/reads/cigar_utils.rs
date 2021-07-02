@@ -2,6 +2,7 @@ use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use bio::alignment::pairwise::{Scoring, MIN_SCORE};
 use bio_types::alignment::Alignment;
+use reads::alignment_utils::AlignmentUtils;
 
 lazy_static! {
     static SW_PAD: String = format!("NNNNNNNNNN");
@@ -258,7 +259,21 @@ impl CigarUtils {
         let base_start = *SW_PAD.len();
         let base_end = padded_path.len() - *SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
 
+        let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
+            CigarString::from_alignment(&alignment, false), base_start, base_end
+        );
 
+        let mut non_standard =
+
+
+    }
+
+    pub fn is_indel(cigar: &Cigar) -> bool {
+        match cigar {
+            Cigar::Del(_)
+            | Cigar::Ins(_) => true,
+            _ => false,
+        }
     }
 
     /**
@@ -283,5 +298,255 @@ impl CigarUtils {
         }
 
         return false
+    }
+
+    /**
+    * Check to see if two cigar operators are of the same type regardless of length
+    */
+    pub fn cigar_elements_are_same_type(this: &Cigar, other: &Option<Cigar>) -> bool {
+        match other {
+            None => false,
+            Some(element) => {
+                match element {
+                    Cigar::SoftClip(_) => {
+                        match this {
+                            Cigar::SoftClip(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::HardClip(_) => {
+                        match this {
+                            Cigar::HardClip(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Match(_) => {
+                        match this {
+                            Cigar::Match(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Diff(_) => {
+                        match this {
+                            Cigar::Diff(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Equal(_) => {
+                        match this {
+                            Cigar::Equal(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::RefSkip(_) => {
+                        match this {
+                            Cigar::RefSkip(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Ins(_) => {
+                        match this {
+                            Cigar::Ins(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Del(_) => {
+                        match this {
+                            Cigar::Del(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                    Cigar::Pad(_) => {
+                        match this {
+                            Cigar::Pad(_) => {
+                                true
+                            },
+                            _ => false,
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    pub fn is_clipping(element: &Cigar) -> bool {
+        match element {
+            Cigar::SoftClip(_)
+            | Cigar::HardClip(_) => true,
+            _ => false,
+        }
+    }
+
+    /**
+    * Combine two cigar operators of equal type and add their lengths creating new operator
+    */
+    pub fn combine_cigar_operators(this: &Cigar, other: &Cigar) -> Option<Cigar> {
+        match other {
+            Cigar::SoftClip(other_len) => {
+                match this {
+                    Cigar::SoftClip(this_len) => {
+                        Some(Cigar::SoftClip(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::HardClip(other_len) => {
+                match this {
+                    Cigar::HardClip(this_len) => {
+                        Some(Cigar::HardClip(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Match(other_len) => {
+                match this {
+                    Cigar::Match(this_len) => {
+                        Some(Cigar::Match(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Equal(other_len) => {
+                match this {
+                    Cigar::Equal(this_len) => {
+                        Some(Cigar::Equal(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Diff(other_len) => {
+                match this {
+                    Cigar::Diff(this_len) => {
+                        Some(Cigar::Diff(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::RefSkip(other_len) => {
+                match this {
+                    Cigar::RefSkip(this_len) => {
+                        Some(Cigar::RefSkip(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Ins(other_len) => {
+                match this {
+                    Cigar::Ins(this_len) => {
+                        Some(Cigar::Ins(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Del(other_len) => {
+                match this {
+                    Cigar::Del(this_len) => {
+                        Some(Cigar::Del(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+            Cigar::Pad(other_len) => {
+                match this {
+                    Cigar::Pad(this_len) => {
+                        Some(Cigar::Pad(other_len + this_len))
+                    },
+                    _ => None,
+                }
+            },
+        }
+    }
+
+    /**
+    * Creates a new cigar element using the same operator as the provided cigar but with the new
+    * provided length
+    */
+    pub fn new_cigar_from_operator_and_length(old_cigar: &Cigar, new_length: u32) -> Cigar {
+        match old_cigar {
+            Cigar::SoftClip(_) => {
+                Cigar::SoftClip(new_length)
+            },
+            Cigar::HardClip(_) => {
+                Cigar::HardClip(new_length)
+            },
+            Cigar::Match(_) => {
+                Cigar::Match(new_length)
+            },
+            Cigar::Equal(_) => {
+                Cigar::Equal(new_length)
+            },
+            Cigar::Diff(_) => {
+                Cigar::Diff(new_length)
+            },
+            Cigar::RefSkip(_) => {
+                Cigar::RefSkip(new_length)
+            },
+            Cigar::Ins(_) => {
+                Cigar::Ins(new_length)
+            },
+            Cigar::Del(_) => {
+                Cigar::Del(new_length)
+            },
+            Cigar::Pad(_) => {
+                Cigar::Pad(new_length)
+            },
+        }
+    }
+
+    /**
+     * @return The number of reference bases that the read covers, excluding padding.
+     */
+    pub fn get_reference_length(cigar: &CigarString) -> u32 {
+        let length = cigar.0.par_iter().map(|elem|{
+            match elem {
+                Cigar::Match(len)
+                | Cigar::Del(len)
+                | Cigar::RefSkip(len)
+                | Cigar::Equal(len)
+                | Cigar::Diff(len) => {
+                    len
+                },
+                _ => 0
+            }
+        }).sum::<u32>();
+
+        return length
+    }
+
+    /**
+     * @return The number of reference bases that the read covers, including padding.
+     */
+    pub fn get_padded_reference_length(cigar: &CigarString) -> u32 {
+        let length = cigar.0.par_iter().map(|elem|{
+            match elem {
+                Cigar::Match(len)
+                | Cigar::Del(len)
+                | Cigar::RefSkip(len)
+                | Cigar::Equal(len)
+                | Cigar::Diff(len)
+                | Cigar::Pad(len) => {
+                    len
+                },
+                _ => 0
+            }
+        }).sum::<u32>();
+
+        return length
     }
 }
