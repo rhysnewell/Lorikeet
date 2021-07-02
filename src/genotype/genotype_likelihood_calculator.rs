@@ -221,7 +221,7 @@ impl GenotypeLikelihoodCalculator {
         }
 
         let mut result = 0;
-        for p in (self.ploidy..0).into_iter() {
+        for p in (0..self.ploidy).into_iter().rev() {
             let allele = self.allele_heap.pop().unwrap();
             if allele < 0 {
                 panic!("Invalid allele {} must be >= 0", allele)

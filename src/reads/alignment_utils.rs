@@ -94,14 +94,23 @@ impl AlignmentUtils {
         }
 
         // we need reference bases from the start of the read to the rightmost indel
-        let last_indel = (0..cigar.len()).into_par_iter().filter(|n| CigarUtils::is_indel(&cigar.0[n])).max();
+        let last_indel = (0..cigar.0.len()).into_par_iter().filter(|n| CigarUtils::is_indel(&cigar.0[n])).max();
         let necessary_ref_length = read_start + cigar.0.iter().take(last_indel + 1).map(|e| Self::length_on_reference(e)).sum();
         assert!(necessary_ref_length <= ref_seq.len(), "Read goes past end of reference");
 
         // at this point, we are one base past the end of the read.  Now we traverse the cigar from right to left
         let mut result_right_to_left = Vec::new();
         let ref_length = CigarUtils::get_reference_length(&cigar);
-        let ref_indel_range = (read_start + ref_length..read_start + ref_length);
-        let read_indel_range = (read.len()..read.len());
+        let mut ref_indel_range = (read_start + ref_length..read_start + ref_length);
+        let mut read_indel_range = (read.len()..read.len());
+        for n in (0..cigar.0.len()).into_iter().rev() {
+            let element = cigar.0[n];
+            // if it's an indel, just accumulate the read and ref bases consumed.  We won't shift the indel until we hit an alignment
+            // block or the read start.
+            if CigarUtils::is_indel(&element) {
+                ref_indel_range.start = ref_indel_range.start - Self::length_on_reference(&element);
+                read_indel_range.start = read_indel_range.start - Self::length_on_read(&element);
+            } else if (ref_indel_range.len())
+        }
     }
 }
