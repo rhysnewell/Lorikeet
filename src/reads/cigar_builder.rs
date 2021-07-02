@@ -137,6 +137,12 @@ impl CigarBuilder {
         }
     }
 
+    pub fn add_all(&mut self, elements: Vec<Cigar>) {
+        for element in elements {
+            self.add(element)
+        }
+    }
+
     fn last_two_elements_were_deletion_and_insertion(&self) -> bool {
         match self.last_operator {
             None => false,

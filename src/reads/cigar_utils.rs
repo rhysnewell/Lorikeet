@@ -549,4 +549,14 @@ impl CigarUtils {
 
         return length
     }
+
+    /** Returns true if the operator is a M, a X or a EQ */
+    pub fn is_alignment(cigar: &Cigar) -> bool {
+        match cigar {
+            Cigar::Match(_)
+            | Cigar::Equal(_)
+            | Cigar::Diff(_) => true,
+            _ => false
+        }
+    }
 }
