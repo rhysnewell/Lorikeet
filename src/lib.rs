@@ -11,6 +11,7 @@ pub mod model;
 pub mod utils;
 pub mod reads;
 pub mod reference;
+pub mod read_orientation;
 
 // HTS and bio files
 extern crate bio;

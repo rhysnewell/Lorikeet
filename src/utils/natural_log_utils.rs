@@ -55,11 +55,25 @@ impl NaturalLogUtils {
         libm::log1p(x)
     }
 
+    /**
+     * Convert a phred-scaled quality score to its log10 probability of being wrong (Q30 => log10(0.001))
+     *
+     * This is the Phred-style conversion, *not* the Illumina-style conversion.
+     *
+     * The calculation is extremely efficient
+     *
+     * @param qual a phred-scaled quality score encoded as a double
+     * @return log of probability (0.0-1.0)
+     */
     pub fn qual_to_log_error_prob(qual: f64) -> f64 {
         if qual < 0.0 {
             panic!("Qual must be >= 0 but got {}", qual)
         }
 
         return qual * *PHRED_TO_ERROR_PROB_FACTOR
+    }
+
+    pub fn qual_to_log_prob(qual: u8) -> f64 {
+        return *qual_to_log_prob_cache[qual as usize] // Map: 127 -> 127; -128 -> 128; -1 -> 255; etc.
     }
 }
