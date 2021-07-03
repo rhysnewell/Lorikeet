@@ -263,9 +263,38 @@ impl CigarUtils {
             CigarString::from_alignment(&alignment, false), base_start, base_end
         );
 
-        let mut non_standard =
+        let mut non_standard = trimmed_cigar_and_deletions_removed.cigar.0;
 
+        if trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed > 0 {
+            non_standard.push(Cigar::Del(trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed));
+        }
 
+        let mut left_alignment_result = AlignmentUtils::left_align_indels(
+            CigarString::from(non_standard),
+            ref_seq,
+            alt_seq,
+            trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed
+        );
+
+        // we must account for possible leading deletions removed when trimming the padding and when left-aligning
+        // trailing deletions removed when trimming have already been restored for left-alignment, but left-alingment may have removed them again.
+        let total_leading_deletions_removed = trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed + left_alignment_result.leading_deletion_bases_removed;
+        let total_trailing_deletions_removed = left_alignment_result.trailing_deletion_bases_removed;
+
+        if total_leading_deletions_removed == 0 && total_trailing_deletions_removed == 0 {
+            return left_alignment_result.cigar
+        } else {
+            let mut result_elements = Vec::new();
+            if total_leading_deletions_removed > 0 {
+                result_elements.push(Cigar::Del(total_leading_deletions_removed))
+            }
+
+            result_elements.par_extend(left_alignment_result.cigar.0);
+            if total_trailing_deletions_removed > 0 {
+                result_elements.push(Cigar::Del(total_trailing_deletions_removed))
+            }
+            return CigarString::from(result_elements);
+        }
     }
 
     pub fn is_indel(cigar: &Cigar) -> bool {

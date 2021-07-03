@@ -266,6 +266,9 @@ impl MathUtils {
         result <= 0.0
     }
 
+    pub fn log10_to_log(log10: f64) -> f64 {
+        return log10 * (*LOG_10)
+    }
     /**
      * Calculates {@code log10(1-10^a)} without losing precision.
      *
@@ -340,6 +343,21 @@ impl MathUtils {
         array.par_iter_mut().for_each(|x| *x = x / sum);
 
         return array
+    }
+
+    /**
+     * Computes the entropy -p*ln(p) - (1-p)*ln(1-p) of a Bernoulli distribution with success probability p
+     * using an extremely fast Pade approximation that is very accurate for all values of 0 <= p <= 1.
+     *
+     * See http://www.nezumi.demon.co.uk/consult/logx.htm
+     */
+    pub fn fast_bernoulli_entropy(p: f64) -> f64 {
+        let product = p * (1.0 - p);
+        return product * (11.0 + 33.0 * product) / (2.0 + 20.0 * product)
+    }
+
+    pub fn is_valid_probability(result: f64) -> bool {
+        return result >= 0.0 && result <= 1.0
     }
 }
 

@@ -26,6 +26,9 @@ use reference::reference_reader::ReferenceReader;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
 use assembly::read_threading_assembler::ReadThreadingAssembler;
 use utils::smith_waterman_aligner::SmithWatermanAligner;
+use read_orientation::beta_distribution_shape::BetaDistributionShape;
+use mathru::special::gamma::{digamma, ln_gamma};
+use utils::natural_log_utils::NaturalLogUtils;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -702,5 +705,52 @@ impl HaplotypeCallerEngine {
             i += 1;
             j -= 1;
         }
+    }
+
+    /**
+     *  this implements the isActive() algorithm described in docs/mutect/mutect.pdf
+     *  the multiplicative factor is for the special case where we pass a singleton list
+     *  of alt quals and want to duplicate that alt qual over multiple reads
+     * @param nRef          ref read count
+     * @param altQuals      Phred-scaled qualities of alt-supporting reads
+     * @param repeatFactor  Number of times each alt qual is duplicated
+     * @param afPrior       Beta prior on alt allele fraction
+     * @return
+     */
+    pub fn log_likelihood_ratio(n_ref: usize, alt_quals: Vec<u8>, repeat_factor: usize, af_prior: Option<BetaDistributionShape>) -> f64 {
+        let n_alt = repeat_factor * alt_quals.len();
+        let n = n_ref + n_alt;
+
+        let f_tilde_ratio = (digamma(n_ref as f64 + 1.) - digamma(n_alt as f64 + 1.)).exp();
+
+        let read_sum = alt_quals.par_iter().map(|qual|{
+            let epsilon = QualityUtils::qual_to_error_prob(qual as f64);
+            let z_bar_alt = (1.0 - epsilon) / (1.0 - epsilon + epsilon * f_tilde_ratio);
+            let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(qual as f64);
+            let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(qual);
+            z_bar_alt * (log_one_minus_epsilon - log_epsilon) + MathUtils::fast_bernoulli_entropy(z_bar_alt)
+        }).sum::<f64>();
+
+        let mut beta_entropy;
+        match af_prior {
+            Some(af_prior) => {
+                let alpha = af_prior.get_alpha();
+                let beta = af_prior.get_beta();
+                beta_entropy = ln_gamma(alpha + beta) - ln_gamma(alpha) - ln_gamma(beta)
+                    - ln_gamma(alpha + beta + n as f64) + ln_gamma(alpha + n_alt as f64) + ln_gamma(beta + n_ref as f64);
+            },
+            None => {
+                beta_entropy = MathUtils::log10_to_log(
+                    -MathUtils::log10_factorial(n as f64 + 1.0) + MathUtils::log10_factorial(n_alt as f64) + MathUtils::log10_factorial(n_ref as f64)
+                );
+            }
+        }
+
+        return beta_entropy + read_sum * repeat_factor as f64
+    }
+
+    pub fn log_likelihood_ratio_constant_error(ref_count: usize, alt_count: usize, error_probability: f64) -> f64 {
+        let qual = QualityUtils::error_prob_to_qual(error_probability);
+        return Self::log_likelihood_ratio(ref_count, vec![qual], alt_count, None)
     }
 }

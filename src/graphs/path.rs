@@ -6,6 +6,7 @@ use petgraph::csr::NodeIndex;
 use petgraph::graph::{EdgeIndex, Edge, EdgeReference};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::CigarString;
+use reads::cigar_utils::CigarUtils;
 
 /**
  * A path thought a BaseGraph
@@ -102,6 +103,14 @@ impl Path {
     }
 
     /**
+     * Get the final vertex of the path
+     * @return a non-null vertex
+     */
+    pub fn get_last_vertex(&self) -> NodeIndex {
+        self.last_vertex
+    }
+
+    /**
      * The base sequence for this path. Pull the full sequence for source nodes and then the suffix for all subsequent nodes
      * @return  non-null sequence of bases corresponding to this path
      */
@@ -125,7 +134,7 @@ impl Path {
      * @param aligner
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(&self, ref_seq: &[u8], aligner: SmithWatermanAligner) -> CigarString {
-
+    pub fn calculate_cigar(&self, ref_seq: &[u8], grasph: &BaseGraph, aligner: SmithWatermanAligner) -> CigarString {
+        return CigarUtils::calculate_cigar(ref_seq, self.get_bases(graph), aligner)
     }
 }
