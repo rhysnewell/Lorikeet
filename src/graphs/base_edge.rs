@@ -5,7 +5,7 @@ use rayon::prelude::*;
  *
  * Works equally well for all graph types (kmer or sequence)
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialOrd, PartialEq)]
 pub struct BaseEdge {
     multiplicity: usize,
     is_ref: bool,

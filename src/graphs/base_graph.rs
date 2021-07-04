@@ -4,10 +4,14 @@ use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
 use petgraph::Direction;
 use std::collections::{BTreeSet, BinaryHeap};
+use graphs::path::Path;
+use std::cmp::Ordering;
+use utils::base_utils::BaseUtils;
 
 /**
  * Common code for graphs used for local assembly.
  */
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BaseGraph {
     kmer_size: usize,
     pub graph: Graph<BaseVertex, BaseEdge>,
@@ -88,5 +92,11 @@ impl BaseGraph {
         return self.graph.node_indices().into_par_iter().filter(|v_index| {
             self.is_sink(v_index)
         }).collect::<BinaryHeap<NodeIndex>>()
+    }
+
+    pub fn compare_paths(&self, first_path: &Path, second_path: &Path) -> Ordering {
+        return BaseUtils::bases_comparator(
+            first_path.get_bases(self.graph), second_path.get_bases(self.graph)
+        )
     }
 }
