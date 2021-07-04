@@ -7,6 +7,9 @@ use petgraph::graph::{EdgeIndex, Edge, EdgeReference};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::CigarString;
 use reads::cigar_utils::CigarUtils;
+use std::cmp::Ordering;
+use ordered_float::OrderedFloat;
+use utils::base_utils::BaseUtils;
 
 /**
  * A path thought a BaseGraph
@@ -14,6 +17,7 @@ use reads::cigar_utils::CigarUtils;
  * class to keep track of paths
  *
  */
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Copy)]
 pub struct Path {
     last_vertex: NodeIndex,
     edges_in_order: Vec<EdgeReference<BaseEdge, u32>>,
@@ -136,5 +140,52 @@ impl Path {
      */
     pub fn calculate_cigar(&self, ref_seq: &[u8], grasph: &BaseGraph, aligner: SmithWatermanAligner) -> CigarString {
         return CigarUtils::calculate_cigar(ref_seq, self.get_bases(graph), aligner)
+    }
+
+    /**
+     * Length of the path in edges.
+     *
+     * @return {@code 0} or greater.
+     */
+    pub fn len(&self) -> usize {
+        self.edges_in_order.len()
+    }
+}
+
+pub struct PathWithGraph
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Chain {
+    pub log_odds: OrderedFloat<f64>,
+    pub path: &Path,
+    graph: &BaseGraph,
+}
+
+impl Chain {
+    pub fn new(log_odds: OrderedFloat<f64>, path: &Path, graph: &BaseGraph) -> Chain {
+        Chain {
+            log_odds,
+            path,
+            graph
+        }
+    }
+}
+
+// The priority queue depends on `Ord`.
+// Explicitly implement the trait so the queue becomes a min-heap
+// instead of a max-heap.
+impl Ord for Chain {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // In case of a tie we compare positions - this step is necessary
+        // to make implementations of `PartialEq` and `Ord` consistent.
+        (-other.log_odds).cmp(&(-self.log_odds))
+            .then_with(|| BaseUtils::bases_comparator(self.path.get_bases(self.graph), other.path.get_bases(other.graph)))
+    }
+}
+
+// `PartialOrd` needs to be implemented as well.
+impl PartialOrd for Chain {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }

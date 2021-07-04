@@ -35,6 +35,7 @@ extern crate mathru;
 
 // Utilities
 extern crate clap;
+extern crate comparator;
 extern crate csv;
 extern crate env_logger;
 extern crate glob;
@@ -46,8 +47,10 @@ extern crate rayon;
 extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
+extern crate multimap;
 extern crate num;
 extern crate libm;
+extern crate linked_hash_set;
 extern crate petgraph;
 //extern crate plotly;
 extern crate strum;

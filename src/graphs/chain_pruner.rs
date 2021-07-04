@@ -9,19 +9,19 @@ use itertools::Itertools;
 use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
 
 pub trait ChainPruner {
-    fn prune_low_weight_chain(graph: &mut BaseGraph);
+    fn prune_low_weight_chain(&self, graph: &mut BaseGraph);
 
-    fn final_all_chains(graph: &BaseGraph) -> Vec<Path>;
+    fn find_all_chains(graph: &BaseGraph) -> Vec<Path>;
 
     fn find_chain(start_edge: EdgeReference<BaseEdge, u32>, graph: &BaseGraph) -> Path;
 
-    fn chains_to_remove(chains: Vec<Path>, graph: &BaseGraph) -> Vec<Path>;
+    fn chains_to_remove(&self, chains: Vec<Path>, graph: &BaseGraph) -> Vec<Path>
 }
 
 impl ChainPruner for AdaptiveChainPruner {
-    fn prune_low_weight_chain(graph: &mut BaseGraph) {
+    fn prune_low_weight_chain(&self, graph: &mut BaseGraph) {
         let chains = Self::find_all_chains(graph);
-        let chains_to_remove = Self::chains_to_remove(chains);
+        let chains_to_remove = self.chains_to_remove(chains, graph);
     }
 
     fn find_all_chains(graph: &BaseGraph) -> Vec<Path> {
@@ -64,11 +64,22 @@ impl ChainPruner for AdaptiveChainPruner {
         return Path::new(last_vertex_id, edges)
     }
 
-    fn chains_to_remove(chains: Vec<Path>, graph: &BaseGraph) -> Vec<Path> {
+    fn chains_to_remove(&self, chains: Vec<Path>, graph: &BaseGraph) -> Vec<Path> {
         if chains.is_empty() {
             return Vec::new()
         }
-        let probable_error_chains =
+        let probable_error_chains = self.likely_error_chains(&chains, graph, self.initial_error_probability);
+        let error_count = probable_error_chains.into_par_iter().map(|chain| {
+            chain.get_edges().par_iter().map(|e| e.get_multiplicity()).sum()
+        }).sum();
+        let total_bases = chains.par_iter().map(|chain| {
+            chain.get_edges().par_iter().map(|e| e.get_multiplicity()).sum()
+        }).sum();
 
+        let error_rate = error_count as f64 / total_bases as f64;
+
+        return self.likely_error_chains(&chains, graph, error_rate).into_par_iter().filter(|c| {
+            !c.get_edges().par_iter().any(|e| e.weight().is_ref())
+        }).collect::<Vec<Path>>()
     }
 }

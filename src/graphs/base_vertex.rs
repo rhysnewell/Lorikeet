@@ -4,7 +4,7 @@ use std::hash::Hasher;
 /**
  * A graph vertex that holds some sequence information
  */
-
+#[derive(Debug, Ord, PartialOrd)]
 pub struct BaseVertex {
     additonal_info: String,
     sequence: &[u8],
