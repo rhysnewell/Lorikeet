@@ -12,6 +12,7 @@ pub mod utils;
 pub mod reads;
 pub mod reference;
 pub mod read_orientation;
+pub mod read_threading;
 
 // HTS and bio files
 extern crate bio;
@@ -51,6 +52,7 @@ extern crate multimap;
 extern crate num;
 extern crate libm;
 extern crate linked_hash_set;
+extern crate linked_hash_map;
 extern crate petgraph;
 //extern crate plotly;
 extern crate strum;
