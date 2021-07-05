@@ -52,8 +52,30 @@ impl SeqGraph {
         for i in 0..max_cycles {
             if i > Self::MAX_REASONABLE_SIMPLIFICATION_CYCLES {
                 warn!("Infinite loop detected in simpliciation routines.  Writing current graph to debugMeRhys.dot");
-                self.
+                self.base_graph.print_graph("debugMeRhys.dot", true, 0);
+                panic!("Infinite loop detected in simplification routines for kmer graph {}", self.base_graph.get_kmer_size());
             }
+
+            let did_some_work = self.sim
+        }
+    }
+
+    /**
+     * Run one full cycle of the graph simplification algorithms
+     * @return true if any algorithms said they did some simplification
+     */
+    fn simplify_graph_once(&mut self, iteration: usize) {
+        // iterate until we haven't don't anything useful
+
+    }
+
+    /**
+     * Print simplication step of this graph, if PRINT_SIMPLIFY_GRAPHS is enabled
+     * @param file the destination for the graph DOT file
+     */
+    fn print_graph_simplification(&self, path: &str) {
+        if Self::PRINT_SIMPLIFY_GRAPHS {
+
         }
     }
 
