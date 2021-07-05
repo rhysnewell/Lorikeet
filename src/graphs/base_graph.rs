@@ -3,7 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
 use petgraph::Direction;
-use std::collections::{BTreeSet, BinaryHeap};
+use std::collections::{BTreeSet, BinaryHeap, HashSet};
 use graphs::path::Path;
 use std::cmp::Ordering;
 use utils::base_utils::BaseUtils;
@@ -21,9 +21,9 @@ pub struct BaseGraph<V: BaseVertex, E: BaseEdge> {
     pub graph: Graph<V, E>,
 }
 
-impl BaseGraph {
+impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
-    pub fn new<V: BaseVertex, E: BaseEdge>(kmer_size: usize) -> BaseGraph<V, E> {
+    pub fn new(kmer_size: usize) -> BaseGraph<V, E> {
         BaseGraph {
             kmer_size,
             graph: Graph::<V, E>::new(),
@@ -149,11 +149,79 @@ impl BaseGraph {
         let mut graph_writer = File::create(destination).unwrap();
 
         if write_header {
-            graph_writer.write(b"digraph assemblyGraphs {")
+            graph_writer.write(b"digraph assemblyGraphs {\n")
         }
 
         for edge in self.graph.edge_indices() {
-
+            let edge_string = format!("\t{} -> {} ", self.get_edge_source(edge).into(), self.get_edge_target(edge).into());
+            let mut edge_label_string;
+            let edge_weight = self.graph.edge_weight(edge).unwrap();
+            if edge_weight.get_multiplicity() > 0 && edge.get_multiplicity() < prune_factor {
+                edge_label_string = format!("[style=dotted,color=grey,label=\"{}\"];", edge.get_dot_label());
+            } else {
+                edge_label_string = format!("[label=\"{}\"];", edge.get_dot_label());
+            }
+            graph_writer.write(edge_string.as_bytes());
+            graph_writer.write(edge_label_string.as_bytes());
+            if edge_weight.is_ref() {
+                graph_writer.write(format!("{} [color=red];\n", edge_string).as_bytes());
+            }
         }
+
+        for v in self.graph.node_indices() {
+            let node_weight = self.graph.node_weight(v).unwrap();
+            graph_writer.write(format!("\t{} [label=\"{}\",shape=box]\n", node_weight.to_string(),
+                                       format!(
+                                           "{}{}",
+                                           std::str::from_utf8(self.get_additional_sequence(v, node_weight)).unwrap(),
+                                           node_weight.get_additional_info()
+                                       )));
+        }
+
+        if write_header {
+            graph_writer.print("}\n")
+        }
+    }
+
+    /**
+     * Pull out the additional sequence implied by traversing this node in the graph
+     * @param v the vertex from which to pull out the additional base sequence
+     * @return  non-null byte array
+     */
+    pub fn get_additional_sequence(&self, index: NodeIndex, v: &V) -> &[u8] {
+        return v.get_additional_sequence(self.is_source(index))
+    }
+
+    /**
+     * Get the set of vertices within distance edges of source, regardless of edge direction
+     *
+     * @param source the source vertex to consider
+     * @param distance the distance
+     * @return a set of vertices within distance of source
+     */
+    fn vertices_within_distance(&self, source: NodeIndex, distance: usize) -> HashSet<NodeIndex> {
+        if distance == 0 {
+            return vec![source]
+        }
+
+        let mut found = HashSet::new();
+        found.insert(source);
+        for v in self.graph.neighbors(source) {
+            found.par_extend(self.vertices_within_distance(v, distance - 1))
+        }
+
+        return found
+    }
+
+    /**
+     * Get a graph containing only the vertices within distance edges of target
+     * @param target a vertex in graph
+     * @param distance the max distance
+     * @return a non-null graph
+     */
+    pub fn subset_to_neighbors(&self, target: NodeIndex, distance: usize) -> BaseGraph<V, E> {
+        let to_keep = self.vertices_within_distance(target, distance);
+        let mut to_remove = self.graph.node_indices().collect_vec();
+        to_remove.re
     }
 }
