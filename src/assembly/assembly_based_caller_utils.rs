@@ -5,6 +5,9 @@ use std::collections::HashSet;
 use utils::simple_interval::Locatable;
 use rayon::prelude::*;
 use assembly::assembly_region::AssemblyRegion;
+use reference::reference_reader::ReferenceReader;
+use assembly::read_threading_assembler::ReadThreadingAssembler;
+use utils::smith_waterman_aligner::SmithWatermanAligner;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -51,8 +54,11 @@ impl AssemblyBasedCallerUtils {
         region: AssemblyRegion,
         given_alleles: Vec<VariantContext>,
         args: &clap::ArgMatches,
-        reference_reader: &
-    )
+        reference_reader: &mut ReferenceReader,
+        assembly_engine: &mut ReadThreadingAssembler,
+        aligner: &mut SmithWatermanAligner,
+        correct_overlapping_base_qualities: bool,
+    ) -> 
 
     pub fn get_variant_contexts_from_given_alleles(
         loc: usize,

@@ -7,22 +7,26 @@ use std::collections::{BTreeSet, BinaryHeap};
 use graphs::path::Path;
 use std::cmp::Ordering;
 use utils::base_utils::BaseUtils;
+use linked_hash_set::LinkedHashSet;
+use petgraph::csr::EdgeIndex;
+use std::fs::File;
+use std::io::Write;
 
 /**
  * Common code for graphs used for local assembly.
  */
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct BaseGraph {
+pub struct BaseGraph<V: BaseVertex, E: BaseEdge> {
     kmer_size: usize,
-    pub graph: Graph<BaseVertex, BaseEdge>,
+    pub graph: Graph<V, E>,
 }
 
 impl BaseGraph {
 
-    pub fn new(kmer_size: usize) -> BaseGraph {
+    pub fn new<V: BaseVertex, E: BaseEdge>(kmer_size: usize) -> BaseGraph<V, E> {
         BaseGraph {
             kmer_size,
-            graph: Graph::<BaseVertex, BaseEdge>::new(),
+            graph: Graph::<V, E>::new(),
         }
     }
 
@@ -98,5 +102,58 @@ impl BaseGraph {
         return BaseUtils::bases_comparator(
             first_path.get_bases(self.graph), second_path.get_bases(self.graph)
         )
+    }
+
+    /**
+     * Get the set of vertices connected to v by incoming edges
+     * NOTE: We return a LinkedHashSet here in order to preserve the determinism in the output order of VertexSet(),
+     *       which is deterministic in output due to the underlying sets all being LinkedHashSets.
+     * @param v a non-null vertex
+     * @return a set of vertices {X} connected X -> v
+     */
+    pub fn incoming_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
+        return self.graph.neighbors_directed(vertex_index, Direction::Incoming).par_iter().collect::<LinkedHashSet<NodeIndex>>()
+    }
+
+    /**
+     * Get the set of vertices connected to v by outgoing edges
+     * NOTE: We return a LinkedHashSet here in order to preserve the determinism in the output order of VertexSet(),
+     *       which is deterministic in output due to the underlying sets all being LinkedHashSets.
+     * @param v a non-null vertex
+     * @return a set of vertices {X} connected X -> v
+     */
+    pub fn outgoing_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
+        return self.graph.neighbors_directed(vertex_index, Direction::Outgoing).par_iter().collect::<LinkedHashSet<NodeIndex>>()
+    }
+
+    pub fn get_edge_target(&self, edge: EdgeIndex) -> NodeIndex {
+        self.graph.edge_endpoints(edge).unwrap().1
+    }
+
+    pub fn get_edge_source(&self, edge: EdgeIndex) -> NodeIndex {
+        self.graph.edge_endpoints(edge).unwrap().0
+    }
+
+    /**
+    * Removes all provided vertices from the graph
+    */
+    pub fn remove_all_vertices(&mut self, vertices: &Vec<NodeIndex>) {
+        self.graph.retain_nodes(|v| !vertices.contains(&v));
+    }
+
+    /**
+     * Print out the graph in the dot language for visualization
+     * @param destination File to write to
+     */
+    pub fn print_graph(&self, destination: &str, write_header: bool, prune_factor: usize) {
+        let mut graph_writer = File::create(destination).unwrap();
+
+        if write_header {
+            graph_writer.write(b"digraph assemblyGraphs {")
+        }
+
+        for edge in self.graph.edge_indices() {
+
+        }
     }
 }

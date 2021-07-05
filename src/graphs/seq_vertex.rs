@@ -1,47 +1,78 @@
-use rayon::prelude::*;
-use std::hash::Hasher;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use graphs::base_vertex::BaseVertex;
 
 /**
- * A graph vertex that holds some sequence information
+ * A graph vertex containing a sequence of bases and a unique ID that
+ * allows multiple distinct nodes in the graph to have the same sequence.
+ *
+ * This is essential when thinking about representing the actual sequence of a haplotype
+ * in a graph.  There can be many parts of the sequence that have the same sequence, but
+ * are distinct elements in the graph because they have a different position in the graph.  For example:
+ *
+ * A -> C -> G -> A -> T
+ *
+ * The two As are not the same, because they occur with different connections.  In a kmer graph equals()
+ * is based on the sequence itself, as each distinct kmer can only be represented once.  But the transformation
+ * of the kmer graph into a graph of base sequences, without their kmer prefixes, means that nodes that
+ * where once unique including their prefix can become equal after shedding the prefix.  So we need to
+ * use some mechanism -- here a unique ID per node -- to separate nodes that have the same sequence
+ * but are distinct elements of the graph.
+ *
  */
-pub trait BaseVertex {
-    fn is_empty(&self) -> bool;
-
-    fn len(&self) -> usize;
-
-    fn to_string(&self) -> String;
-
-    fn get_sequence(&self) -> &[u8];
-
-    fn get_sequence_string(&self) -> String;
-
-    fn get_additional_sequence(&self, source: bool) -> &[u8];
-
-    fn set_additional_info(&mut self, info: String);
-
-    fn get_additional_info(&self) -> &String;
-
-    fn has_ambiguous_sequence(&self) -> bool;
+pub struct SeqVertex {
+    sequence: &[u8],
+    additional_info: String,
 }
 
-impl BaseVertex for MultiDeBruijnVertex {
-    /**
-     * Create a new sequence vertex with sequence
-     *
-     * This code doesn't copy sequence for efficiency reasons, so sequence must absolutely not be modified
-     * in any way after passing this sequence to the BaseVertex
-     *
-     * @param sequence a non-null sequence of bases contained in this vertex
-     */
-    // pub fn new<'a>(sequence: &'a [u8]) -> Self {
-    //     Self {
-    //         sequence,
-    //         additonal_info: format!(""),
-    //         // node_index: 0,
-    //     }
-    // }
+impl SeqVertex {
+    pub fn new(sequence: &[u8]) -> Self {
+        Self {
+            sequence,
+            additional_info: format!("")
+        }
+    }
 
+    /**
+     * Get the unique ID for this SeqVertex
+     * @return a positive integer >= 0
+     */
+    pub fn get_id(&self) -> usize {
+        self.hash()
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("SeqVertex_id_{}_seq_{}", self.hash().into(), std::str::from_utf8(self.sequence).unwrap())
+    }
+
+    /**
+     * Return a new SeqVertex derived from this one but not including the suffix bases
+     *
+     * @param suffix the suffix bases to remove from this vertex
+     * @return a newly allocated SeqVertex with appropriate prefix, or null if suffix removes all bases from this node
+     */
+    pub fn without_suffix(&self, suffix: &[u8]) -> Option<SeqVertex> {
+        let prefix_size = self.sequence.len() - suffix.len();
+
+        return if prefix_size > 0 { Self::new(self.sequence[0..suffix.len()]) } else { None }
+    }
+
+    /**
+     * Return a new SeqVertex derived from this one but not including prefix or suffix bases
+     *
+     * @param prefix the previx bases to remove
+     * @param suffix the suffix bases to remove from this vertex
+     * @return a newly allocated SeqVertex
+     */
+    pub fn without_prefix_and_suffix(&self, prefix: &[u8], suffix: &[u8]) -> Option<SeqVertex> {
+        let start = prefix.len();
+        let length = self.sequence.len() - suffix.len() - prefix.len();
+        let stop = start + length;
+
+        return if length > 0 { SeqVertex::new(self.sequence[start..stop]) } else { None }
+    }
+
+}
+
+impl BaseVertex for SeqVertex {
     /**
      * Does this vertex have an empty sequence?
      *
@@ -140,3 +171,17 @@ impl BaseVertex for MultiDeBruijnVertex {
         })
     }
 }
+
+impl Hash for SeqVertex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.sequence.hash(state)
+    }
+}
+
+impl PartialEq for SeqVertex {
+    fn eq(&self, other: &Self) -> bool {
+        self.sequence == other.sequence
+    }
+}
+
+impl Eq for MultiDeBruijnVertex {}
