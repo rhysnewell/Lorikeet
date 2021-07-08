@@ -2,14 +2,13 @@ use rayon::prelude::*;
 use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
-use petgraph::csr::NodeIndex;
-use petgraph::graph::{EdgeIndex, Edge, EdgeReference};
+use petgraph::graph::{EdgeIndex, NodeIndex, Edge, EdgeReference};
+use petgraph::visit::EdgeRef;
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::CigarString;
 use reads::cigar_utils::CigarUtils;
-use std::cmp::Ordering;
 use ordered_float::OrderedFloat;
-use utils::base_utils::BaseUtils;
+use std::hash::{Hash, Hasher};
 
 /**
  * A path thought a BaseGraph
@@ -17,23 +16,26 @@ use utils::base_utils::BaseUtils;
  * class to keep track of paths
  *
  */
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Copy)]
-pub struct Path {
+#[derive(Debug, Clone)]
+pub struct Path<'a, V: BaseVertex, E: BaseEdge> {
     last_vertex: NodeIndex,
-    edges_in_order: Vec<EdgeReference<BaseEdge, u32>>,
-    // graph: BaseGraph
+    edges_in_order: Vec<EdgeIndex>,
+    pub graph: &'a BaseGraph<V, E>
 }
 
-impl Path {
+impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Path<'a, V, E> {
     /**
      * Create a new Path containing no edges and starting at initialVertex
      * @param initialVertex the starting vertex of the path
      * @param graph the graph this path will follow through
      */
-    pub fn new(initial_vertex: NodeIndex, edges_in_order: Vec<EdgeReference<BaseEdge, u32>>) -> Self {
+    pub fn new(
+        initial_vertex: NodeIndex, edges_in_order: Vec<EdgeIndex>, graph: &'a BaseGraph<V, E>
+    ) -> Self {
         Self {
             last_vertex: initial_vertex,
-            edges_in_order: edges_in_order,
+            edges_in_order,
+            graph,
         }
     }
 
@@ -62,12 +64,16 @@ impl Path {
      */
     pub fn contains_vertex(&self, v: NodeIndex) -> bool {
         v == self.get_first_vertex() || self.edges_in_order.par_iter().map(|e| {
-            e.target()
+            self.graph.graph.edge_endpoints(*e).unwrap().1
         }).any(|edge_target| edge_target == v)
     }
 
     pub fn to_string(&self) -> String {
+        let mut joined_path = self.get_vertices().par_iter().map(|v| {
+            self.graph.graph.node_weight(*v).unwrap().get_sequence_string()
+        }).collect::<Vec<String>>().join("->");
 
+        return format!("Path{{path={}}}", joined_path)
     }
 
     /**
@@ -80,7 +86,7 @@ impl Path {
     }
 
     pub fn get_last_edge(&self) -> EdgeIndex {
-        self.edges_in_order.last().unwrap();
+        *self.edges_in_order.last().unwrap()
     }
 
     /**
@@ -89,8 +95,10 @@ impl Path {
      */
     pub fn get_vertices(&self) -> Vec<NodeIndex> {
         let mut result = Vec::with_capacity(self.edges_in_order.len() + 1);
-        result.add(self.get_first_vertex());
-        result.par_extend(self.edges_in_order.par_iter().map(|e| e.target()).collect::<Vec<NodeIndex>>());
+        result.push(self.get_first_vertex());
+        result.par_extend(self.edges_in_order.par_iter().map(|e| {
+            self.graph.graph.edge_endpoints(*e).unwrap().1
+        }).collect::<Vec<NodeIndex>>());
         return result
     }
 
@@ -102,7 +110,7 @@ impl Path {
         if self.edges_in_order.is_empty() {
             return self.last_vertex
         } else {
-            return self.edges_in_order[0].source()
+            return self.graph.graph.edge_endpoints(self.edges_in_order[0]).unwrap().0
         }
     }
 
@@ -118,17 +126,18 @@ impl Path {
      * The base sequence for this path. Pull the full sequence for source nodes and then the suffix for all subsequent nodes
      * @return  non-null sequence of bases corresponding to this path
      */
-    pub fn get_bases(&self, graph: &BaseGraph) -> &[u8] {
+    pub fn get_bases(&self) -> &[u8] {
         if self.edges_in_order.is_empty() {
-            return graph.graph[self.last_vertex].unwrap().get_additional_sequence(true)
+            return self.graph.graph.node_weight(self.last_vertex).unwrap().get_additional_sequence(true)
         }
 
-        let mut bases = graph.graph[self.edges_in_order[0].source()].unwrap().get_additional_sequence(true);
+        let mut bases =
+            self.graph.graph.node_weight(self.graph.graph.edge_endpoints(self.edges_in_order[0]).unwrap().0).unwrap().get_additional_sequence(true).to_vec();
         for e in self.edges_in_order {
-            bases.par_extend(graph.graph[e].unwrap().get_additional_sequence(true));
+            bases.par_extend(self.graph.graph.node_weight(self.graph.graph.edge_endpoints(e).unwrap().1).unwrap().get_additional_sequence(true));
         }
 
-        return bases
+        return &bases[..]
     }
 
     /**
@@ -138,8 +147,8 @@ impl Path {
      * @param aligner
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(&self, ref_seq: &[u8], grasph: &BaseGraph, aligner: SmithWatermanAligner) -> CigarString {
-        return CigarUtils::calculate_cigar(ref_seq, self.get_bases(graph), aligner)
+    pub fn calculate_cigar(&self, ref_seq: &[u8], aligner: SmithWatermanAligner) -> CigarString {
+        return CigarUtils::calculate_cigar(ref_seq, self.get_bases(), aligner).unwrap()
     }
 
     /**
@@ -152,40 +161,32 @@ impl Path {
     }
 }
 
-pub struct PathWithGraph
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Chain {
-    pub log_odds: OrderedFloat<f64>,
-    pub path: &Path,
-    graph: &BaseGraph,
+impl<'a, V: BaseVertex, E: BaseEdge> PartialEq for Path<'a, V, E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.edges_in_order == other.edges_in_order
+    }
 }
 
-impl Chain {
-    pub fn new(log_odds: OrderedFloat<f64>, path: &Path, graph: &BaseGraph) -> Chain {
+// `Eq` needs to be implemented as well.
+impl<'a, V: BaseVertex, E: BaseEdge> Eq for Path<'a, V, E> {}
+
+impl<V: BaseVertex, E: BaseEdge> Hash for Path<'_, V, E> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.edges_in_order.hash(state)
+    }
+}
+
+#[derive(Debug)]
+pub struct Chain<'a, V: BaseVertex, E: BaseEdge> {
+    pub log_odds: OrderedFloat<f64>,
+    pub path: &'a Path<'a, V, E>,
+}
+
+impl<'a, V: BaseVertex, E: BaseEdge> Chain<'a, V, E> {
+    pub fn new(log_odds: OrderedFloat<f64>, path: &'a Path<'a, V, E>) -> Chain<'a, V, E> {
         Chain {
             log_odds,
             path,
-            graph
         }
-    }
-}
-
-// The priority queue depends on `Ord`.
-// Explicitly implement the trait so the queue becomes a min-heap
-// instead of a max-heap.
-impl Ord for Chain {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // In case of a tie we compare positions - this step is necessary
-        // to make implementations of `PartialEq` and `Ord` consistent.
-        (-other.log_odds).cmp(&(-self.log_odds))
-            .then_with(|| BaseUtils::bases_comparator(self.path.get_bases(self.graph), other.path.get_bases(other.graph)))
-    }
-}
-
-// `PartialOrd` needs to be implemented as well.
-impl PartialOrd for Chain {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }

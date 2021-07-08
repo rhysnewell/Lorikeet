@@ -21,7 +21,7 @@ use graphs::base_edge::BaseEdge;
  * }
  * </pre>
  */
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialOrd, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct MultiSampleEdge {
     current_single_sample_multiplicity: usize,
     single_sample_capacity: usize,
@@ -40,7 +40,6 @@ impl MultiSampleEdge {
      * @param singleSampleCapacity the max number of samples to track edge multiplicities
      */
     pub fn new(is_ref: bool, multiplicity: usize, single_sample_capacity: usize) -> MultiSampleEdge {
-        let base_edge = BaseEdge::new(is_ref, multiplicity);
         let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
         single_sample_multiplicities.push(multiplicity);
 
@@ -63,14 +62,14 @@ impl MultiSampleEdge {
         if self.single_sample_multiplicities.len() == self.single_sample_capacity + 1 {
             self.single_sample_multiplicities.pop();
         } else if self.single_sample_multiplicities.len() > self.single_sample_capacity + 1 {
-            panic!("Somehow the per sample multiplicity list has grown too big: {}", self.single_sample_multiplicities);
+            panic!("Somehow the per sample multiplicity list has grown too big: {:?}", self.single_sample_multiplicities);
         }
 
         self.current_single_sample_multiplicity = 0;
     }
 
     pub fn inc_multiplicity(&mut self, incr: usize) {
-        self.base_edge.inc_multiplicity(incr);
+        self.multiplicity += incr;
         self.current_single_sample_multiplicity += incr;
     }
 

@@ -6,24 +6,24 @@ use graphs::multi_sample_edge::MultiSampleEdge;
  *
  * Works equally well for all graph types (kmer or sequence)
  */
-pub trait BaseEdge {
+pub trait BaseEdge: Clone + Send + Sync {
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;
 
     fn inc_multiplicity(&mut self, incr: usize);
 
-    fn get_pruning_multiplicity(&self);
+    fn get_pruning_multiplicity(&self) -> usize;
 
     fn set_multiplicity(&mut self, value: usize);
 
-    fn is_ref(&self);
+    fn is_ref(&self) -> bool;
 
     fn set_is_ref(&mut self, is_ref: bool);
 
     fn add(&mut self, edge: Self);
 
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: bool, single_sample_capacity: usize);
+    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self where Self: std::marker::Sized;
 
     fn to_string(&self) -> String;
 }
@@ -109,7 +109,7 @@ impl BaseEdge for MultiSampleEdge {
      * @param multiplicity our desired multiplicity
      * @return a newly allocated BaseEdge
      */
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: bool, single_sample_capacity: usize) -> Self {
+    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self {
         assert!(!edges.is_empty(), "Edges cannot be empty");
         let is_ref = edges.par_iter().any(|e| e.is_ref());
 
@@ -216,7 +216,7 @@ impl BaseEdge for BaseEdgeStruct {
      * @param multiplicity our desired multiplicity
      * @return a newly allocated BaseEdge
      */
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: bool, single_sample_capacity: usize) -> Self {
+    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self {
         assert!(!edges.is_empty(), "Edges cannot be empty");
         let is_ref = edges.par_iter().any(|e| e.is_ref());
 

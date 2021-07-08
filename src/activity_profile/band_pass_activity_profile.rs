@@ -1,6 +1,10 @@
 use activity_profile::activity_profile::{ActivityProfile, Profile};
 use utils::math_utils::MathUtils;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
+use assembly::assembly_region::AssemblyRegion;
+use utils::simple_interval::{SimpleInterval, Locatable};
+use rayon::prelude::*;
+
 
 /**
  * A band pass filtering version of the activity profile
@@ -60,7 +64,7 @@ impl BandPassActivityProfile {
     fn make_kernel(filter_size: usize, sigma: f64) -> Vec<f64> {
         let band_size = 2 * filter_size + 1;
         // let mut kernel = vec![0.0; band_size];
-        let mut kernel = (0..band_size).into_par_iter().for_each(|iii| {
+        let mut kernel = (0..band_size).into_par_iter().map(|iii| {
             MathUtils::normal_distribution(filter_size as f64, sigma, iii as f64)
         }).collect::<Vec<f64>>();
 
@@ -195,10 +199,10 @@ impl Profile for BandPassActivityProfile {
             self.activity_profile.region_start_loc = Some(loc.clone());
             self.activity_profile.region_stop_loc = Some(loc.clone());
         } else {
-            if self.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
-                panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.region_stop_loc)
+            if self.activity_profile.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
+                panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.activity_profile.region_stop_loc)
             }
-            self.region_stop_loc = Some(loc.clone());
+            self.activity_profile.region_stop_loc = Some(loc.clone());
         }
         let processed_states = self.process_state(state);
 
@@ -288,7 +292,7 @@ impl Profile for BandPassActivityProfile {
         max_region_size: usize,
         force_conversion: bool,
     ) -> Option<AssemblyRegion> {
-        self.activity_profile.pop_next_ready_assembly_regions(
+        self.activity_profile.pop_next_ready_assembly_region(
             assembly_region_extension,
             min_region_size,
             max_region_size,

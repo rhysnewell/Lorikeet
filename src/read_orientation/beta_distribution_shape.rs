@@ -1,6 +1,6 @@
 
 lazy_static! {
-    pub static FLAT_BETA: BetaDistributionShape = BetaDistributionShape::new(1.0, 1.0);
+    pub static ref FLAT_BETA: BetaDistributionShape = BetaDistributionShape::new(1.0, 1.0);
 }
 
 pub struct BetaDistributionShape {
@@ -10,8 +10,8 @@ pub struct BetaDistributionShape {
 
 impl BetaDistributionShape {
     pub fn new(alpha: f64, beta: f64) -> BetaDistributionShape {
-        assert!(alpha > 0, "Alpha must be greater than 0 but got {}", alpha);
-        assert!(beta > 0, "Beta must be greater than 0 but got {}", beta);
+        assert!(alpha > 0.0, "Alpha must be greater than 0 but got {}", alpha);
+        assert!(beta > 0.0, "Beta must be greater than 0 but got {}", beta);
 
         BetaDistributionShape {
             alpha,

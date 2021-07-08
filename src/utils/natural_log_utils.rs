@@ -74,6 +74,6 @@ impl NaturalLogUtils {
     }
 
     pub fn qual_to_log_prob(qual: u8) -> f64 {
-        return *qual_to_log_prob_cache[qual as usize] // Map: 127 -> 127; -128 -> 128; -1 -> 255; etc.
+        return qual_to_log_prob_cache[qual as usize] // Map: 127 -> 127; -128 -> 128; -1 -> 255; etc.
     }
 }

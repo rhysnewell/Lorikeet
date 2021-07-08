@@ -7,23 +7,26 @@ use rust_htslib::bcf::{IndexedReader, Read};
 use model::variant_context::VariantContext;
 use coverm::FlagFilter;
 use reference::reference_reader::ReferenceReader;
+use estimation::lorikeet_engine::Elem;
+use std::sync::{Arc, Mutex};
+use bio::alignment::pairwise::MatchFunc;
 
-pub struct AssemblyRegionWalker {
+pub struct AssemblyRegionWalker<'a> {
     evaluator: HaplotypeCallerEngine,
-    features: Option<IndexedReader>,
+    features: Option<Result<IndexedReader, rust_htslib::errors::Error>>,
     shards: HashMap<usize, BandPassActivityProfile>,
     indexed_bam_readers: Vec<String>,
     short_read_bam_count: usize,
     long_read_bam_count: usize,
     ref_idx: usize,
-    reference_reader: ReferenceReader,
+    reference_reader: ReferenceReader<'a>,
     assembly_region_padding: usize,
     min_assembly_region_size: usize,
     max_assembly_region_size: usize,
     n_threads: u32,
 }
 
-impl AssemblyRegionWalker {
+impl<'a> AssemblyRegionWalker<'a> {
     pub fn start(
         args: &clap::ArgMatches,
         ref_idx: usize,
@@ -34,9 +37,9 @@ impl AssemblyRegionWalker {
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
         tree: &Arc<Mutex<Vec<&Elem>>>,
-        mut reference_reader: ReferenceReader,
+        mut reference_reader: ReferenceReader<'a>,
         n_threads: usize,
-    ) -> AssemblyRegionWalker {
+    ) -> AssemblyRegionWalker<'a> {
 
         let mut hc_engine = HaplotypeCallerEngine::new(
             args,
@@ -75,7 +78,7 @@ impl AssemblyRegionWalker {
         AssemblyRegionWalker {
             evaluator: hc_engine,
             shards: shards,
-            indexed_bam_readers: *indexed_bam_readers.clone(),
+            indexed_bam_readers: indexed_bam_readers.to_vec(),
             features: features_vcf,
             short_read_bam_count,
             long_read_bam_count,
@@ -121,9 +124,10 @@ impl AssemblyRegionWalker {
         match &mut self.features {
             Some(indexed_vcf_reader) => {
                 // Indexed readers don't have sync so we cannot parallelize this
+                let mut indexed_vcf_reader = indexed_vcf_reader.unwrap();
                 indexed_vcf_reader.set_threads(self.n_threads as usize);
                 for assembly_region in assembly_region_iter.pending_regions.iter_mut() {
-                    AssemblyRegionIterator::fill_next_assembly_region_with_reads(
+                    assembly_region_iter.fill_next_assembly_region_with_reads(
                         &mut assembly_region, flag_filters, self.n_threads
                     );
 
@@ -131,7 +135,7 @@ impl AssemblyRegionWalker {
                         indexed_vcf_reader.header(),
                         self.reference_reader.retrieve_contig_name_from_tid(
                             assembly_region.get_contig()
-                        )
+                        ).unwrap()
                     );
 
                     let feature_variants = match vcf_rid {
@@ -150,23 +154,25 @@ impl AssemblyRegionWalker {
 
                     self.evaluator.call_region(
                         assembly_region,
-                        feature_variants,
+                        &mut self.reference_reader,
+                        &feature_variants,
                         args
-                    ) // TODO: Implement Call Region
+                    ); // TODO: Implement Call Region
                 }
             },
             None => {
                 assembly_region_iter.pending_regions.iter_mut()
                     .for_each(|assembly_region| {
-                        AssemblyRegionIterator::fill_next_assembly_region_with_reads(
+                        assembly_region_iter.fill_next_assembly_region_with_reads(
                             &mut assembly_region, flag_filters, self.n_threads
                         );
 
                         self.evaluator.call_region(
                             assembly_region,
-                            Vec::new(),
+                            &mut self.reference_reader,
+                            &Vec::new(),
                             args
-                        ) // TODO: Implement Call Region
+                        ); // TODO: Implement Call Region
                 });
             }
         }

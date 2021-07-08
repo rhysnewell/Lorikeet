@@ -1,6 +1,7 @@
 use rust_htslib::bam::record::{CigarString, Cigar};
 use reads::cigar_utils::CigarUtils;
 
+#[derive(Debug, Eq, PartialEq)]
 enum Section {
     LeftHardClip,
     LeftSoftClip,
@@ -64,6 +65,8 @@ impl CigarBuilder {
                             Cigar::Ins(length) => {
                                 if self.cigar_elements.len() == 1 || CigarUtils::is_clipping(&self.cigar_elements[self.cigar_elements.len() - 2]) {
                                     true
+                                } else {
+                                    false
                                 }
                             },
                             _ => false,
@@ -71,14 +74,14 @@ impl CigarBuilder {
                     },
                 } {
                     self.leading_deletion_bases_removed += element.len();
-                }
+                };
             }
 
             self.advance_section_and_validate_cigar_order(&element);
 
             if CigarUtils::cigar_elements_are_same_type(&element, &self.last_operator) {
                 let n = self.cigar_elements.len() - 1;
-                self.cigar_elements[n] = CigarUtils::combine_cigar_operators(&element, &self.last_operator.unwrap());
+                self.cigar_elements[n] = CigarUtils::combine_cigar_operators(&element, &self.last_operator.unwrap()).unwrap_or(self.cigar_elements[n]);
                 self.last_operator = Some(element);
             } else {
                 match self.last_operator {
@@ -97,8 +100,8 @@ impl CigarBuilder {
                                 self.cigar_elements[self.cigar_elements.len() - 1] = element.clone();
                                 self.last_operator = Some(element);
                             } else if self.remove_deletions_at_ends && self.last_two_elements_were_deletion_and_insertion() {
-                                self.trailing_deletion_bases_removed += self.cigar_elements[self.cigar_elements.len() - w].len();
-                                self.cigar_elements[self.cigar_elements.len() - 2] = self.cigar_elements[self.cigar_elements.len() - 2].clone();
+                                self.trailing_deletion_bases_removed += self.cigar_elements[self.cigar_elements.len() - 2].len();
+                                self.cigar_elements[self.cigar_elements.len() - 2] = self.cigar_elements[self.cigar_elements.len() - 1].clone();
                                 self.cigar_elements[self.cigar_elements.len() - 1] = element.clone();
                                 self.last_operator = Some(element);
                             } else {
@@ -161,6 +164,8 @@ impl CigarBuilder {
                         },
                         _ => false
                     }
+                } else {
+                    false
                 }
             }
         }

@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use bio_types::sequence::SequenceRead;
 use bio::io::fasta::IndexedReader;
 use std::fs::File;
-use utils::reference_reader_utils::ReferenceReader;
+use reference::reference_reader::ReferenceReader;
 
 
 /**
@@ -31,6 +31,7 @@ use utils::reference_reader_utils::ReferenceReader;
  * and a new padded interval.  The amount of padding of the new padded interval around the variants depends on the needs of local realignment
  * and as such need not equal the original padding that was used for assembly.
  */
+#[derive(Debug)]
 pub struct AssemblyRegion {
     ref_idx: usize,
     tid: usize,
@@ -278,7 +279,7 @@ impl AssemblyRegion {
      * @param genomeLoc a non-null genome loc indicating the base span of the bp we'd like to get the reference for
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    fn get_reference(&mut self, reference_reader: &mut ReferenceReader, padding: usize, genome_loc: SimpleInterval) -> &[u8] {
+    fn get_reference<'a>(&mut self, reference_reader: &'a mut ReferenceReader<'a>, padding: usize, genome_loc: SimpleInterval) -> &'a [u8] {
         assert!(genome_loc.size() > 0, "genome_loc must have size > 0 but got {:?}", genome_loc);
 
         reference_reader.update_current_sequence_without_capcity();
@@ -293,7 +294,7 @@ impl AssemblyRegion {
             panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, self.tid);
         };
 
-        return reference_reader.current_sequence[
+        return &reference_reader.current_sequence[
             std::cmp::max(0, genome_loc.get_start().checked_sub(padding).unwrap_or(0))..
                 std::cmp::min(reference_reader.current_sequence.len(), genome_loc.get_end() + padding)]
     }
@@ -308,7 +309,7 @@ impl AssemblyRegion {
      * @param padding the padding, in BP, we want to add to either side of this active region padded region
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    pub fn get_assembly_region_reference(&mut self, reference_reader: &mut ReferenceReader, padding: usize) -> &[u8] {
+    pub fn get_assembly_region_reference<'a>(&mut self, reference_reader: &'a mut ReferenceReader<'a>, padding: usize) -> &'a [u8] {
         return self.get_reference(reference_reader, padding, self.padded_span)
     }
 

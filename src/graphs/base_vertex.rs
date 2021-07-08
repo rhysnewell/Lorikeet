@@ -1,11 +1,13 @@
 use rayon::prelude::*;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use std::collections::hash_map::DefaultHasher;
+use itertools::Itertools;
 
 /**
  * A graph vertex that holds some sequence information
  */
-pub trait BaseVertex {
+pub trait BaseVertex: Clone + Send + Sync {
     fn is_empty(&self) -> bool;
 
     fn len(&self) -> usize;
@@ -20,12 +22,12 @@ pub trait BaseVertex {
 
     fn set_additional_info(&mut self, info: String);
 
-    fn get_additional_info(&self) -> &String;
+    fn get_additional_info(&self) -> String;
 
     fn has_ambiguous_sequence(&self) -> bool;
 }
 
-impl BaseVertex for MultiDeBruijnVertex {
+impl BaseVertex for MultiDeBruijnVertex<'_> {
     /**
      * Create a new sequence vertex with sequence
      *
@@ -63,7 +65,9 @@ impl BaseVertex for MultiDeBruijnVertex {
     }
 
     fn to_string(&self) -> String {
-        return format!("MultiDeBruijnVertex_is_{}_seq_{}", self.hash().into(), String::from_utf8_lossy(self.sequence).into_string())
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        return format!("MultiDeBruijnVertex_id_{}_seq_{}", hasher.finish(), String::from_utf8_lossy(self.sequence).to_string())
     }
 
     /**
@@ -107,12 +111,12 @@ impl BaseVertex for MultiDeBruijnVertex {
     /**
      * @return the additional information for display about this vertex
      */
-    fn get_additional_info(&self) -> &String {
+    fn get_additional_info(&self) -> String {
         if self.reads.contains(&format!("ref")) {
-            return &self.additonal_info
+            return self.additonal_info.to_string()
         } else {
             return format!("{}{}", self.additonal_info,
-                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { "" } )
+                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { "".to_string() } )
         }
 
     }
@@ -133,7 +137,9 @@ impl BaseVertex for MultiDeBruijnVertex {
      */
     fn has_ambiguous_sequence(&self) -> bool {
         return self.sequence.par_iter().any(|base|{
-            match base.to_ascii_uppercase() {
+            let base = base.to_ascii_uppercase();
+            let base = base as char;
+            match base {
                 'A' | 'T' | 'C' | 'G' => false,
                 _ => true
             }

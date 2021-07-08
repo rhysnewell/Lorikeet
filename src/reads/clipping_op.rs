@@ -3,7 +3,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use rayon::prelude::*;
 use num::traits::AsPrimitive;
 use reads::read_utils::ReadUtils;
-use rust_htslib::bam::record::{CigarString, Cigar, CigarStringView};
+use rust_htslib::bam::record::{CigarString, Cigar};
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::Record;
 use bio_types::sequence::SequenceRead;

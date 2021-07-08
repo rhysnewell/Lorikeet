@@ -1,3 +1,6 @@
+use assembly::assembly_result::AssemblyResult;
+use std::collections::HashMap;
+
 /**
  * Collection of read assembly using several kmerSizes.
  *
@@ -13,6 +16,6 @@
  * @original_author Valentin Ruano-Rubio &lt;valentin@broadinstitute.com&gt;
  * @author Rhys Newell; rhys.newell@hdr.qut.edu.au; Rust re-implementation
  */
-pub struct AssemblyResultSet {
-    assembly_result_by_kmer_size: HashMap<usize, Assemb>
+pub struct AssemblyResultSet<'a> {
+    assembly_result_by_kmer_size: HashMap<usize, AssemblyResult<'a>>
 }

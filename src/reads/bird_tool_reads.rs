@@ -1,7 +1,6 @@
-use rust_htslib::bam::record::{Record, CigarString, Cigar, CigarStringView};
+use rust_htslib::bam::record::Record;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use std::fs::soft_link;
-use utils::simple_interval::{SimpleInterval, Locatable};
+use utils::simple_interval::Locatable;
 use std::cmp::Ordering;
 use reads::read_utils::ReadUtils;
 

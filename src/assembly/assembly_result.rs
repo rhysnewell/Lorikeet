@@ -9,8 +9,8 @@ pub enum Status {
 /**
  * Result of assembling, with the resulting graph and status
  */
-pub struct AssemblyResult {
+pub struct AssemblyResult<'a> {
     status: Status,
-    threading_graph: AbstractReadThreadingGraph,
-    graph: 
+    threading_graph: AbstractReadThreadingGraph<'a>,
+    // graph:
 }

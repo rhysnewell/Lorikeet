@@ -1,19 +1,21 @@
 use graphs::base_graph::BaseGraph;
-use graphs::base_edge::{BaseEdgeStruct, BaseEdge};
+use graphs::base_edge::BaseEdge;
+use graphs::base_vertex::BaseVertex;
 use graphs::seq_vertex::SeqVertex;
 use petgraph::graph::NodeIndex;
-use itertools::zip;
 use petgraph::Direction;
+use petgraph::visit::EdgeRef;
+use rayon::prelude::*;
 
 /**
  * A graph that contains base sequence at each node
  */
 #[derive(Debug, Clone)]
-pub struct SeqGraph {
-    base_graph: BaseGraph<SeqVertex, BaseEdgeStruct>,
+pub struct SeqGraph<'a, E: BaseEdge> {
+    base_graph: BaseGraph<SeqVertex<'a>, E>,
 }
 
-impl SeqGraph {
+impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
     const PRINT_SIMPLIFY_GRAPHS: bool = false;
     /**
      * How many cycles of the graph simplifications algorithms will we run before
@@ -29,9 +31,9 @@ impl SeqGraph {
      *
      * @param kmer kmer
      */
-    pub fn new(kmer: usize) -> SeqGraph {
+    pub fn new(kmer: usize) -> SeqGraph<'a, E> {
         SeqGraph {
-            base_graph: BaseGraph::new(kmer)
+            base_graph: BaseGraph::<SeqVertex<'a>, E>::new(kmer)
         }
     }
 
@@ -48,7 +50,7 @@ impl SeqGraph {
         // start off with one round of zipping of chains for performance reasons
         self.zip_linear_chains();
 
-        let prev_graph = None;
+        // let prev_graph = None;
         for i in 0..max_cycles {
             if i > Self::MAX_REASONABLE_SIMPLIFICATION_CYCLES {
                 warn!("Infinite loop detected in simpliciation routines.  Writing current graph to debugMeRhys.dot");
@@ -56,7 +58,7 @@ impl SeqGraph {
                 panic!("Infinite loop detected in simplification routines for kmer graph {}", self.base_graph.get_kmer_size());
             }
 
-            let did_some_work = self.sim
+            // let did_some_work = self.sim
         }
     }
 
@@ -75,7 +77,7 @@ impl SeqGraph {
      */
     fn print_graph_simplification(&self, path: &str) {
         if Self::PRINT_SIMPLIFY_GRAPHS {
-
+            self.base_graph.subset_to_neighbours(self.base_graph.get_reference_source_vertex(), 5).print_graph(path, true, 0)
         }
     }
 
@@ -130,7 +132,7 @@ impl SeqGraph {
     fn is_linear_chain_start(&self, source: NodeIndex) -> bool {
         return self.base_graph.out_degree_of(source) == 1 &&
             (self.base_graph.in_degree_of(source) != 1 ||
-                self.base_graph.out_degree_of(self.base_graph.incoming_vertices_of(source).iter().next()) > 1)
+                self.base_graph.out_degree_of(*self.base_graph.incoming_vertices_of(source).iter().next().unwrap()) > 1)
     }
 
     /**
@@ -158,7 +160,10 @@ impl SeqGraph {
 
             // there can only be one (outgoing edge of last) by contract
             let target = self.base_graph.get_edge_target(
-                self.base_graph.graph.first_edge(last, Direction::Outgoing).unwrap_or_else(break)
+                match self.base_graph.graph.first_edge(last, Direction::Outgoing) {
+                    Some(edge_index) => edge_index,
+                    None => break,
+                }
             );
 
             if self.base_graph.in_degree_of(target) != 1 || last == target {
@@ -189,14 +194,14 @@ impl SeqGraph {
      * @param linearChain a non-empty chain of vertices that can be zipped up into a single vertex
      * @return true if we actually merged at least two vertices together
      */
-    fn merge_linear_chain(&self, linear_chain: &Vec<NodeIndex>) -> bool {
+    fn merge_linear_chain(&self, linear_chain: &'a Vec<NodeIndex>) -> bool {
         match self.merge_linear_chain_vertex(linear_chain) {
             Some(index) => true,
             None => false
         }
     }
 
-    fn merge_linear_chain_vertex(&self, linear_chain: &Vec<NodeIndex>) -> Option<NodeIndex> {
+    fn merge_linear_chain_vertex(&mut self, linear_chain: &'a Vec<NodeIndex>) -> Option<NodeIndex> {
         assert!(!linear_chain.is_empty(), "Cannot have linear chain with 0 elements but got {:?}", linear_chain);
 
         let first = linear_chain.first().unwrap();
@@ -213,25 +218,25 @@ impl SeqGraph {
         let added_node_index = self.base_graph.graph.add_node(added_vertex);
 
         // update the incoming and outgoing edges to point to the new vertex
-        for edge in self.base_graph.graph.edges_directed(last, Direction::Outgoing) {
-            self.base_graph.graph.add_edge(added_node_index, self.base_graph.get_edge_target(edge.id()), edge.weight().clone())
+        for edge in self.base_graph.graph.edges_directed(*last, Direction::Outgoing) {
+            self.base_graph.graph.add_edge(added_node_index, self.base_graph.get_edge_target(edge.id()), edge.weight().clone());
         }
-        for edge in self.base_graph.graph.edges_directed(last, Direction::Incoming) {
-            self.base_graph.graph.add_edge(self.base_graph.get_edge_source(edge.id()), added_node_index, edge.weight().clone())
+        for edge in self.base_graph.graph.edges_directed(*last, Direction::Incoming) {
+            self.base_graph.graph.add_edge(self.base_graph.get_edge_source(edge.id()), added_node_index, edge.weight().clone());
         }
 
-        self.base_graph.graph.retain_nodes(|v| !linear_chain.contains(&v));
+        self.base_graph.graph.retain_nodes(|gr, v| !linear_chain.contains(&v));
 
         return Some(added_node_index)
     }
 
-    fn merge_linear_chain_vertices(&self, vertices: &Vec<NodeIndex>) -> SeqVertex {
+    fn merge_linear_chain_vertices(&self, vertices: &'a Vec<NodeIndex>) -> SeqVertex<'a> {
         let seqs = vertices.par_iter().map(|v| {
-            self.base_graph.graph[v].unwrap().get_sequence()
+            self.base_graph.graph.node_weight(*v).unwrap().get_sequence()
         }).collect::<Vec<&[u8]>>();
 
         let seqs_joined = seqs.concat();
 
-        return SeqVertex::new(seqs_joined);
+        return SeqVertex::new(&seqs_joined);
     }
 }
