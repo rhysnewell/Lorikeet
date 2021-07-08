@@ -349,6 +349,8 @@ impl Profile for ActivityProfile {
                 }
             }
         }
+
+        return regions
     }
 
     /**

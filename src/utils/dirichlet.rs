@@ -1,5 +1,5 @@
 use statrs::function::gamma;
-use utils::math_utils::{MathUtils, LOG10_E};
+use utils::math_utils::LOG10_E;
 use rayon::prelude::*;
 
 pub struct Dirichlet {

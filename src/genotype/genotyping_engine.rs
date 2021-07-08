@@ -11,9 +11,9 @@ use utils::quality_utils::QualityUtils;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use utils::math_utils::MathUtils;
 use model::allele_frequency_calculator_result::AFCalculationResult;
-use model::variants::{Allele, NON_REF_ALLELE};
+use model::variants::{Allele, NON_REF_ALLELE, Filter};
 use std::collections::HashMap;
-use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 
@@ -73,6 +73,7 @@ impl GenotypingEngine {
         if vc.has_too_many_alternative_alleles() || vc.get_n_samples() == 0 {
             return None
         }
+
 
         let mut reduced_vc: VariantContext;
         if VariantContext::MAX_ALTERNATE_ALLELES < (vc.alleles.len() - 1) {
@@ -154,7 +155,7 @@ impl GenotypingEngine {
 
         builder.log10_p_error(log10_confidence);
         if !GenotypingEngine::passes_call_threshold(phred_scaled_confidence, stand_min_conf) {
-            builder.filter((&(*LOW_QUAL_FILTER_NAME)).to_string())
+            builder.filter(Filter::from(&(*LOW_QUAL_FILTER_NAME)))
         }
 
         // create the genotypes

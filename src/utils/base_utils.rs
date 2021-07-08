@@ -1,10 +1,13 @@
 use std::cmp::{Ordering, min};
-lazy_static! {
-    pub static BASES: HashSet<u8> = {'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8};
-    pub static BASE_CHARS: HashSet<char> = {'A', 'C', 'G', 'T'};
+use std::collections::HashSet;
+use rayon::prelude::*;
 
-    pub static BASES_EXTENDED: HashSet<u8> = {'A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8};
-    pub static BASE_CHARS_EXTENDED: HashSet<char> = {'A', 'C', 'G', 'T', 'N', 'D'};
+lazy_static! {
+    pub static ref BASES: HashSet<u8> = ['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8].into_par_iter().cloned().collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS: HashSet<char> = ['A', 'C', 'G', 'T'].into_par_iter().cloned().collect::<HashSet<char>>();
+
+    pub static ref BASES_EXTENDED: HashSet<u8> = ['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8].into_par_iter().cloned().collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS_EXTENDED: HashSet<char> = ['A', 'C', 'G', 'T', 'N', 'D'].into_par_iter().cloned().collect::<HashSet<char>>();
 }
 
 pub enum Base {
@@ -18,6 +21,7 @@ pub enum Base {
 
 impl Base {
     pub fn new(base: char) -> Base {
+
         match base {
             'A' => Base::A(base),
             'C' => Base::C(base),

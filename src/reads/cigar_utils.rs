@@ -1,15 +1,16 @@
 use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
-use bio::alignment::pairwise::{Scoring, MIN_SCORE};
+use bio::alignment::pairwise::{Scoring, MIN_SCORE, MatchParams};
 use bio_types::alignment::Alignment;
 use reads::alignment_utils::AlignmentUtils;
+use rayon::prelude::*;
 
 lazy_static! {
-    static SW_PAD: String = format!("NNNNNNNNNN");
+    static ref SW_PAD: String = format!("NNNNNNNNNN");
     // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    static NEW_SW_PARAMETERS: Scoring = Scoring::new(-260, -11, 200, -150).xclip(MIN_SCORE).yclip(MIN_SCORE);
+    static ref NEW_SW_PARAMETERS: Scoring<MatchParams> = Scoring::from_scores(-260, -11, 200, -150).xclip(MIN_SCORE).yclip(MIN_SCORE);
     // FROM GATK COMMENTS:
     // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
     // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
@@ -17,7 +18,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    static ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Scoring = Scoring::new(-30, -5, 10, -15).xclip(MIN_SCORE).yclip(MIN_SCORE);
+    static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Scoring<MatchParams> = Scoring::from_scores(-30, -5, 10, -15).xclip(MIN_SCORE).yclip(MIN_SCORE);
 }
 
 pub struct CigarUtils {}
@@ -223,7 +224,7 @@ impl CigarUtils {
     pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8], aligner: SmithWatermanAligner) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
-            return CigarString::from(vec![Cigar::Del(ref_seq.len())])
+            return Some(CigarString::from(vec![Cigar::Del(ref_seq.len() as u32)]))
         }
 
         //Note: this is a performance optimization.
@@ -241,26 +242,25 @@ impl CigarUtils {
             }).sum::<usize>();
 
             if mismatch_count <= 2 {
-                let matching = CigarString::from(vec![Cigar::Match(ref_seq.len())]);
-                return matching
+                let matching = CigarString::from(vec![Cigar::Match(ref_seq.len() as u32)]);
+                return Some(matching)
             }
         }
 
-        let mut non_standard;
-        let padded_ref = format!("{}{}{}", *SW_PAD, std::str::from_utf8(ref_seq).unwrap(), SW_PAD);
-        let padded_path = format!("{}{}{}", *SW_PAD, std::str::from_utf8(alt_seq).unwrap(), SW_PAD);
-        let alignment = aligner.align(ref_seq, alt_seq, *NEW_SW_PARAMETERS);
+        let padded_ref = format!("{}{}{}", *SW_PAD, std::str::from_utf8(ref_seq).unwrap(), *SW_PAD);
+        let padded_path = format!("{}{}{}", *SW_PAD, std::str::from_utf8(alt_seq).unwrap(), *SW_PAD);
+        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, *NEW_SW_PARAMETERS);
 
         if Self::is_s_w_failure(&alignment) {
             return None
         }
 
         // cut off the padding bases
-        let base_start = *SW_PAD.len();
-        let base_end = padded_path.len() - *SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
+        let base_start = SW_PAD.len();
+        let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
 
         let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
-            CigarString::from_alignment(&alignment, false), base_start, base_end
+            CigarString::from_alignment(&alignment, false), base_start as u32, base_end as u32
         );
 
         let mut non_standard = trimmed_cigar_and_deletions_removed.cigar.0;
@@ -282,7 +282,7 @@ impl CigarUtils {
         let total_trailing_deletions_removed = left_alignment_result.trailing_deletion_bases_removed;
 
         if total_leading_deletions_removed == 0 && total_trailing_deletions_removed == 0 {
-            return left_alignment_result.cigar
+            return Some(left_alignment_result.cigar)
         } else {
             let mut result_elements = Vec::new();
             if total_leading_deletions_removed > 0 {
@@ -293,7 +293,7 @@ impl CigarUtils {
             if total_trailing_deletions_removed > 0 {
                 result_elements.push(Cigar::Del(total_trailing_deletions_removed))
             }
-            return CigarString::from(result_elements);
+            return Some(CigarString::from(result_elements));
         }
     }
 
@@ -549,7 +549,7 @@ impl CigarUtils {
                 | Cigar::RefSkip(len)
                 | Cigar::Equal(len)
                 | Cigar::Diff(len) => {
-                    len
+                    *len
                 },
                 _ => 0
             }
@@ -570,7 +570,7 @@ impl CigarUtils {
                 | Cigar::Equal(len)
                 | Cigar::Diff(len)
                 | Cigar::Pad(len) => {
-                    len
+                    *len
                 },
                 _ => 0
             }

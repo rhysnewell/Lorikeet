@@ -6,14 +6,15 @@ use rayon::prelude::*;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use utils::vcf_constants::*;
-use utils::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use std::collections::{HashMap, HashSet};
 use ordered_float::OrderedFloat;
-use rust_htslib::bcf;
-use rust_htslib::bcf::IndexedReader;
+use rust_htslib::bcf::record::Numeric;
+use rust_htslib::bcf::{IndexedReader, Record, Reader, Read};
 use rust_htslib::bcf::header::HeaderView;
 use reference::reference_reader::ReferenceReader;
+use std::ops::Range;
+use itertools::Itertools;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -72,8 +73,12 @@ impl VariantContext {
         self.attributes.par_extend(attributes);
     }
 
-    pub fn filter<S: Into<String>>(&mut self, filter: S) {
-        self.filters.insert(Filter::from(filter.into()));
+    pub fn set_attribute<S: Into<String>>(&mut self, tag: S, value: Vec<f64>) {
+        self.attributes.insert(tag.into(), value);
+    }
+
+    pub fn filter(&mut self, filter: Filter) {
+        self.filters.insert(filter);
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -380,27 +385,28 @@ impl VariantContext {
     ) -> Vec<VariantContext> {
         indexed_vcf.fetch(tid, start, end);
 
-        let variant_contexts = reader.records().into_par_iter().map(|record|{
-            let mut vcf_record = vcf_record.unwrap();
+        let variant_contexts = indexed_vcf.records().into_iter().map(|record|{
+            let mut vcf_record = record.unwrap();
             let vc = Self::from_vcf_record(
                 &mut vcf_record,
             );
-            vc
+            vc.unwrap()
         }).collect::<Vec<VariantContext>>();
 
         return variant_contexts
     }
 
     pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext> {
-        let vcf = bcf::Reader::from_path(vcf_path);
+
+        let vcf_reader = Reader::from_path(vcf_path);
         match vcf_reader {
             Ok(ref mut reader) => {
-                let variant_contexts = reader.records().into_par_iter().map(|record|{
-                    let mut vcf_record = vcf_record.unwrap();
+                let variant_contexts = reader.records().into_iter().map(|record|{
+                    let mut vcf_record = record.unwrap();
                     let vc = Self::from_vcf_record(
                         &mut vcf_record,
                     );
-                    vc
+                    vc.unwrap()
                 }).collect::<Vec<VariantContext>>();
 
                 return variant_contexts
@@ -413,18 +419,16 @@ impl VariantContext {
     }
 
     pub fn from_vcf_record(
-        record: &mut bcf::Record,
+        record: &mut Record,
     ) -> Option<VariantContext> {
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() > 0 {
 
-            let mut bases = vec![];
-            let mut refr_base_empty = true;
             // Get elements from record
             let mut vc = Self::build(
-                record.rid().unwrap(),
-                record.pos(),
-                sample_count,
+                record.rid().unwrap() as usize,
+                record.pos() as usize,
+                record.pos() as usize,
                 variants,
             );
             vc.log10_p_error(record.qual() as f64);
@@ -438,8 +442,10 @@ impl VariantContext {
                 )));
             }
 
-            let mut depths = record.format(b"AD").float().unwrap_or(vec![0.0; variants.len()]);
-            depths.par_iter_mut().for_each(|dp| dp as f64);
+            // let mut depths = record.format(b"AD").float().unwrap_or(vec![0.0; variants.len()]);
+            // let depths = depths.par_iter().map(|dp| dp[0] as f64).collect::<Vec<f64>>();
+            //
+            // vc.set_attribute("AD", depths);
             Some(vc)
         } else {
             None
@@ -448,7 +454,7 @@ impl VariantContext {
 
     /// Collect variants from a given ´bcf::Record`.
     pub fn collect_variants(
-        record: &mut bcf::Record,
+        record: &mut Record,
         omit_snvs: bool,
         omit_indels: bool,
         indel_len_range: Option<Range<u32>>,
@@ -511,7 +517,7 @@ impl VariantContext {
 
         let variants = {
             let alleles = record.alleles();
-            // let ref_allele = Allele::new(alleles[0], true);
+            let ref_allele = alleles[0];
             let mut variant_vec = vec![];
             alleles
                 .iter()
@@ -580,14 +586,14 @@ impl VariantContext {
         variants
     }
 
-    pub fn get_contig_vcf_tid(vcf_header: &HeaderView, contig_name: &[u8]) -> Some(u32) {
+    pub fn get_contig_vcf_tid(vcf_header: &HeaderView, contig_name: &[u8]) -> Option<u32> {
         match vcf_header.name2rid(contig_name) {
             Ok(rid) => {
                 return Some(rid)
             },
             Err(_) => {
                 // Remove leading reference stem
-                match vcf_header.name2rid(ReferenceReader::split_contig_name(contig_name, '~')) {
+                match vcf_header.name2rid(ReferenceReader::split_contig_name(contig_name, '~' as u8)) {
                     Ok(rid) => {
                         return Some(rid)
                     },

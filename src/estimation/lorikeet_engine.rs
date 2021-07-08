@@ -1,7 +1,8 @@
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::bam_generator::*;
 use coverm::FlagFilter;
-use utils::reference_reader_utils::{ReferenceReaderUtils, ReferenceReader};
+use reference::reference_reader_utils::ReferenceReaderUtils;
+use reference::reference_reader::ReferenceReader;
 use utils::utils::*;
 use estimation::bams::index_bams::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
@@ -9,9 +10,12 @@ use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use scoped_threadpool::Pool;
+use rayon::prelude::*;
 use std::path::Path;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
+use tempfile::NamedTempFile;
+use tempdir::TempDir;
 
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -33,41 +37,43 @@ The main lorikeet engine, takes input files and performs activity profiling and 
 per reference and per contig
 */
 pub struct LorikeetEngine<'a> {
-    args: &'a clap::ArgMatches,
+    args: &'a clap::ArgMatches<'a>,
     short_read_bam_count: usize,
     long_read_bam_count: usize,
     coverage_estimators: Vec<CoverageEstimator>,
     flag_filters: FlagFilter,
-    genomes_and_contigs: GenomesAndContigs,
+    genomes_and_contigs: &'a GenomesAndContigs,
     concatenated_genomes: Option<NamedTempFile>,
     tmp_bam_file_cache: Option<TempDir>,
     reference_map: HashMap<usize, String>,
-    references: Vec<&str>,
+    references: Vec<&'a str>,
     multi: Arc<MultiProgress>,
     multi_inner: Arc<MultiProgress>,
     progress_bars: Vec<Elem>,
-    tree: Arc<Mutex<&Elem>>,
-    reference_reader: ReferenceReader,
+    tree: Arc<Mutex<Vec<&'a Elem>>>,
+    reference_reader: ReferenceReader<'a>,
+    threads: usize,
 }
 
-impl LorikeetEngine {
+impl<'a> LorikeetEngine<'a> {
     pub fn start<
         R: NamedBamReader,
         S: NamedBamReaderGenerator<R>,
         T: NamedBamReader,
         U: NamedBamReaderGenerator<T>,
     >(
-        m: &clap::ArgMatches,
+        m: &'a clap::ArgMatches,
         bam_readers: Vec<S>,
         longreads: Option<Vec<U>>,
         mode: &str,
         coverage_estimators: Vec<CoverageEstimator>,
         flag_filters: FlagFilter,
-        genomes_and_contigs: GenomesAndContigs,
+        genomes_and_contigs: &'a GenomesAndContigs,
         tmp_bam_file_cache: Option<TempDir>,
         concatenated_genomes: Option<NamedTempFile>,
     ) {
 
+        let threads = m.value_of("threads").unwrap().parse().unwrap();
         let references = ReferenceReaderUtils::parse_references(&m);
         let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
 
@@ -82,8 +88,16 @@ impl LorikeetEngine {
         ));
 
         let reference_reader = ReferenceReader::new(
-            concatenated_genomes,
-            genomes_and_contigs.clone(),
+            &Some(
+                concatenated_genomes
+                    .as_ref()
+                    .unwrap()
+                    .path()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            ),
+            genomes_and_contigs,
             genomes_and_contigs.contig_to_genome.len()
         );
 
@@ -94,7 +108,7 @@ impl LorikeetEngine {
 
         let longreads = match longreads {
             Some(vec) => {
-                long_sample_count += vec.len();
+                long_read_bam_count += vec.len();
                 vec
             }
             None => vec![],
@@ -142,7 +156,7 @@ impl LorikeetEngine {
         );
 
 
-        let mut lorikeet_engine = LorikeetEngine {
+        let mut lorikeet_engine = Self {
             args: m,
             short_read_bam_count,
             long_read_bam_count,
@@ -158,6 +172,7 @@ impl LorikeetEngine {
             progress_bars,
             tree,
             reference_reader,
+            threads,
         };
 
         lorikeet_engine.apply_per_reference()
@@ -167,7 +182,7 @@ impl LorikeetEngine {
         let alpha: f64 = self.args.value_of("fdr-threshold").unwrap().parse().unwrap();
         let parallel_genomes = self.args.value_of("parallel-genomes").unwrap().parse().unwrap();
         let mut pool = Pool::new(parallel_genomes);
-        let n_threads = std::cmp::max(threads / parallel_genomes as usize, 2);
+        let n_threads = std::cmp::max(self.threads / parallel_genomes as usize, 2);
         let output_prefix = match self.args.is_present("output-directory") {
             true => {
                 match std::fs::create_dir_all(
@@ -183,8 +198,8 @@ impl LorikeetEngine {
 
         pool.scoped(|scope| {
 
-            Self::begin_tick(0, &progress_bars, &multi_inner, "");
-            Self::begin_tick(1, &progress_bars, &multi_inner, "");
+            Self::begin_tick(0, &self.progress_bars, &self.multi_inner, "");
+            Self::begin_tick(1, &self.progress_bars, &self.multi_inner, "");
 
             for (ref_idx, reference_stem) in self.reference_map.clone().into_iter() {
 
@@ -203,7 +218,7 @@ impl LorikeetEngine {
                     None => None,
                 };
                 let mut coverage_estimators = self.coverage_estimators.clone();
-                let mut reference_reader = self.reference_reader.clone();
+                let mut reference_reader = self.reference_reader;
                 let genomes_and_contigs = &self.genomes_and_contigs;
 
                 let output_prefix = format!(
@@ -255,7 +270,7 @@ impl LorikeetEngine {
                         {
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(
-                                ((short_sample_count + long_sample_count)
+                                ((self.short_read_bam_count + self.long_read_bam_count)
                                     as u64)
                                     * 2
                                     + 1,
@@ -309,7 +324,7 @@ impl LorikeetEngine {
                         n_threads,
                     );
 
-                    assembly_engine.traverse();
+                    assembly_engine.traverse(&self.flag_filters, &self.args);
                     // let mut hc_engine = HaplotypeCallerEngine::new(
                     //     &self.args,
                     //     ref_idx,
@@ -345,24 +360,24 @@ impl LorikeetEngine {
                         pb.progress_bar
                             .set_message(&format!("{}: Setting FDR threshold...", pb.key));
                     }
-                    variant_matrix
-                        .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
-
+                    // variant_matrix
+                    //     .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
+                    let mode = "genotype";
                     if mode == "genotype" {
-                        let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
-                        let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-                        let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
-                        let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-                        let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
-                        let anchor_size: usize = m.value_of("n-neighbors").unwrap().parse().unwrap();
-                        let anchor_similarity: f64 =
-                            m.value_of("cluster-distance").unwrap().parse().unwrap();
-                        let minimum_reads_in_link: usize = m
-                            .value_of("minimum-reads-in-link")
-                            .unwrap()
-                            .parse()
-                            .unwrap();
-                        let n_components: usize = m.value_of("n-components").unwrap().parse().unwrap();
+                        // let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
+                        // let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
+                        // let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
+                        // let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
+                        // let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
+                        // let anchor_size: usize = m.value_of("n-neighbors").unwrap().parse().unwrap();
+                        // let anchor_similarity: f64 =
+                        //     m.value_of("cluster-distance").unwrap().parse().unwrap();
+                        // let minimum_reads_in_link: usize = m
+                        //     .value_of("minimum-reads-in-link")
+                        //     .unwrap()
+                        //     .parse()
+                        //     .unwrap();
+                        // let n_components: usize = m.value_of("n-components").unwrap().parse().unwrap();
 
                         // Calculate the geometric mean values and CLR for each variant, reference specific
                         {
@@ -372,7 +387,7 @@ impl LorikeetEngine {
                                 &reference,
                             ));
                         }
-                        variant_matrix.generate_distances();
+                        // variant_matrix.generate_distances();
 
                         // Generate initial read linked clusters
                         // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
@@ -381,22 +396,22 @@ impl LorikeetEngine {
                             pb.progress_bar
                                 .set_message(&format!("{}: Running UMAP and HDBSCAN...", &reference,));
                         }
-                        variant_matrix.run_fuzzy_scan(
-                            e_min,
-                            e_max,
-                            pts_min,
-                            pts_max,
-                            phi,
-                            anchor_size,
-                            anchor_similarity,
-                            minimum_reads_in_link,
-                            &reference_map,
-                            &multi_inner,
-                            &output_prefix,
-                            anchor_size,
-                            n_components,
-                            n_threads,
-                        );
+                        // variant_matrix.run_fuzzy_scan(
+                        //     e_min,
+                        //     e_max,
+                        //     pts_min,
+                        //     pts_max,
+                        //     phi,
+                        //     anchor_size,
+                        //     anchor_similarity,
+                        //     minimum_reads_in_link,
+                        //     &reference_map,
+                        //     &multi_inner,
+                        //     &output_prefix,
+                        //     anchor_size,
+                        //     n_components,
+                        //     n_threads,
+                        // );
 
                         // Get strain abundances
                         {
@@ -406,11 +421,11 @@ impl LorikeetEngine {
                                 &reference,
                             ));
                         }
-                        variant_matrix.calculate_strain_abundances(
-                            &output_prefix,
-                            &reference_map,
-                            &genomes_and_contigs,
-                        );
+                        // variant_matrix.calculate_strain_abundances(
+                        //     &output_prefix,
+                        //     &reference_map,
+                        //     &genomes_and_contigs,
+                        // );
 
                         // Write genotypes to disk, reference specific
                         {
@@ -419,12 +434,12 @@ impl LorikeetEngine {
                                 .set_message(&format!("{}: Generating genotypes...", &reference,));
                         }
 
-                        variant_matrix.generate_genotypes(
-                            &output_prefix,
-                            &reference_map,
-                            &genomes_and_contigs,
-                            &concatenated_genomes,
-                        );
+                        // variant_matrix.generate_genotypes(
+                        //     &output_prefix,
+                        //     &reference_map,
+                        //     &genomes_and_contigs,
+                        //     &concatenated_genomes,
+                        // );
 
                         // Get sample distances
                         {
@@ -434,20 +449,20 @@ impl LorikeetEngine {
                                 &reference,
                             ));
                         }
-                        variant_matrix.calculate_sample_distances(
-                            &output_prefix,
-                            &reference_map,
-                            &genomes_and_contigs,
-                        );
+                        // variant_matrix.calculate_sample_distances(
+                        //     &output_prefix,
+                        //     &reference_map,
+                        //     &genomes_and_contigs,
+                        // );
 
                         // If flagged, then create plots using CMplot
-                        if m.is_present("plot") {
-                            let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                            variant_matrix.print_variant_stats(
-                                window_size,
-                                &output_prefix,
-                                &genomes_and_contigs,
-                            );
+                        if self.args.is_present("plot") {
+                            // let window_size = m.value_of("window-size").unwrap().parse().unwrap();
+                            // variant_matrix.print_variant_stats(
+                            //     window_size,
+                            //     &output_prefix,
+                            //     &genomes_and_contigs,
+                            // );
                         };
 
                         // Write variants in VCF format, reference specific
@@ -456,7 +471,7 @@ impl LorikeetEngine {
                             pb.progress_bar
                                 .set_message(&format!("{}: Generating VCF file...", &reference,));
                         }
-                        variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                        // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                     } else if mode == "polish" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -465,13 +480,13 @@ impl LorikeetEngine {
                                 &reference,
                             ));
                         }
-                        variant_matrix.generate_distances();
-                        variant_matrix.polish_genomes(
-                            &output_prefix,
-                            &reference_map,
-                            &genomes_and_contigs,
-                            &concatenated_genomes,
-                        );
+                        // variant_matrix.generate_distances();
+                        // variant_matrix.polish_genomes(
+                        //     &output_prefix,
+                        //     &reference_map,
+                        //     &genomes_and_contigs,
+                        //     &concatenated_genomes,
+                        // );
 
                         // Get sample distances
                         {
@@ -481,27 +496,27 @@ impl LorikeetEngine {
                                 &reference,
                             ));
                         }
-                        variant_matrix.calculate_sample_distances(
-                            &output_prefix,
-                            &reference_map,
-                            &genomes_and_contigs,
-                        );
+                        // variant_matrix.calculate_sample_distances(
+                        //     &output_prefix,
+                        //     &reference_map,
+                        //     &genomes_and_contigs,
+                        // );
                         // If flagged, then create plots using CMplot
-                        if m.is_present("plot") {
-                            let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                            variant_matrix.print_variant_stats(
-                                window_size,
-                                &output_prefix,
-                                &genomes_and_contigs,
-                            );
-                        };
+                        // if m.is_present("plot") {
+                        //     let window_size = self.args.value_of("window-size").unwrap().parse().unwrap();
+                        //     variant_matrix.print_variant_stats(
+                        //         window_size,
+                        //         &output_prefix,
+                        //         &genomes_and_contigs,
+                        //     );
+                        // };
 
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
                                 .set_message(&format!("{}: Generating VCF file...", &reference,));
                         }
-                        variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                        // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                     };
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -533,7 +548,7 @@ impl LorikeetEngine {
             }
 
             // pb_main.finish_with_message("All genomes staged...");
-            multi.join().unwrap();
+            self.multi.join().unwrap();
         });
     }
 

@@ -1,13 +1,11 @@
 use rayon::prelude::*;
 use reads::cigar_builder::{CigarBuilderResult, CigarBuilder};
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::record::{Cigar, CigarString};
 use reads::cigar_utils::CigarUtils;
 use std::ops::Range;
 use itertools::Itertools;
 
-pub struct AlignmentUtils {
-
-}
+pub struct AlignmentUtils {}
 
 impl AlignmentUtils {
     /**
@@ -91,20 +89,20 @@ impl AlignmentUtils {
      * @return a non-null cigar, in which the indels are guaranteed to be placed at the leftmost possible position across a repeat (if any)
      */
     pub fn left_align_indels(cigar: CigarString, ref_seq: &[u8], read: &[u8], read_start: u32) -> CigarBuilderResult {
-        if &cigar.0.par_iter().all(|elem| !CigarUtils::is_indel(elem)) {
+        if cigar.0.par_iter().all(|elem| !CigarUtils::is_indel(elem)) {
             return CigarBuilderResult::new(cigar, 0, 0)
         }
 
         // we need reference bases from the start of the read to the rightmost indel
-        let last_indel = (0..cigar.0.len()).into_par_iter().filter(|n| CigarUtils::is_indel(&cigar.0[n])).max();
-        let necessary_ref_length = read_start + cigar.0.iter().take(last_indel + 1).map(|e| Self::length_on_reference(e)).sum();
-        assert!(necessary_ref_length <= ref_seq.len(), "Read goes past end of reference");
+        let last_indel = (0..cigar.0.len()).into_par_iter().filter(|n| CigarUtils::is_indel(&cigar.0[*n])).max().unwrap_or(0);
+        let necessary_ref_length = read_start + cigar.0.iter().take(last_indel + 1).map(|e| Self::length_on_reference(e)).sum::<u32>();
+        assert!(necessary_ref_length <= ref_seq.len() as u32, "Read goes past end of reference");
 
         // at this point, we are one base past the end of the read.  Now we traverse the cigar from right to left
         let mut result_right_to_left = Vec::new();
         let ref_length = CigarUtils::get_reference_length(&cigar);
-        let mut ref_indel_range = ((read_start + ref_length) as i32..(read_start + ref_length) as i32);
-        let mut read_indel_range = (read.len() as i32..read.len() as i32);
+        let mut ref_indel_range = (read_start + ref_length) as i32..(read_start + ref_length) as i32;
+        let mut read_indel_range = read.len() as i32..read.len() as i32;
         for n in (0..cigar.0.len()).into_iter().rev() {
             let element = cigar.0[n];
             // if it's an indel, just accumulate the read and ref bases consumed.  We won't shift the indel until we hit an alignment
@@ -131,29 +129,29 @@ impl AlignmentUtils {
                 // emit if we didn't go all the way to the start of an alignment block
                 // OR we have reached clips OR we have reached the start of the cigar
                 let emit_indel = n == 0 || shifts.0 < max_shift as i32 || !CigarUtils::is_alignment(&element);
-                let new_match_left_due_to_trimming = if shifts.0 < 0 { -shift.0 } else { 0 };
+                let new_match_left_due_to_trimming = if shifts.0 < 0 { -shifts.0 } else { 0 };
                 let remaining_bases_on_left = if shifts.0 < 0 { element.len() as i32 } else { element.len() as i32 - shifts.0 };
 
                 if emit_indel { // some of this alignment block remains after left-alignment -- emit the indel
-                    result_right_to_left.push(Cigar::Del(ref_indel_range.len()));
-                    result_right_to_left.push(Cigar::Ins(read_indel_range.len()));
-                    ref_indel_range.end -= ref_indel_range.len(); // ref indel range is now empty and points to start of left-aligned indel
-                    read_indel_range.end -= read_indel_range.len(); // read indel range is now empty and points to start of left-aligned indel
+                    result_right_to_left.push(Cigar::Del(ref_indel_range.len() as u32));
+                    result_right_to_left.push(Cigar::Ins(read_indel_range.len() as u32));
+                    ref_indel_range.end -= ref_indel_range.len() as i32; // ref indel range is now empty and points to start of left-aligned indel
+                    read_indel_range.end -= read_indel_range.len() as i32; // read indel range is now empty and points to start of left-aligned indel
 
-                    ref_indel_range.start -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_reference_bases(&element) { remaining_bases_on_left } else { 0 }
-                    ref_indel_range.end -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_reference_bases(&element) { remaining_bases_on_left } else { 0 }
+                    ref_indel_range.start -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_reference_bases(&element) { remaining_bases_on_left } else { 0 };
+                    ref_indel_range.end -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_reference_bases(&element) { remaining_bases_on_left } else { 0 };
 
-                    read_indel_range.start -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_read_bases(&element) { remaining_bases_on_left } else { 0 }
-                    read_indel_range.end -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_read_bases(&element) { remaining_bases_on_left } else { 0 }
+                    read_indel_range.start -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_read_bases(&element) { remaining_bases_on_left } else { 0 };
+                    read_indel_range.end -= new_match_left_due_to_trimming + if CigarUtils::cigar_consumes_read_bases(&element) { remaining_bases_on_left } else { 0 };
                 }
 
-                result_right_to_left.push(Cigar::Match(new_match_left_due_to_trimming as i32));
+                result_right_to_left.push(Cigar::Match(new_match_left_due_to_trimming as u32));
                 result_right_to_left.push(CigarUtils::new_cigar_from_operator_and_length(&element, remaining_bases_on_left as u32));
             }
         }
 
-        result_right_to_left.push(Cigar::Del(ref_indel_range.len()));
-        result_right_to_left.push(Cigar::Ins(read_indel_range.len()));
+        result_right_to_left.push(Cigar::Del(ref_indel_range.len() as u32));
+        result_right_to_left.push(Cigar::Ins(read_indel_range.len() as u32));
         assert!(read_indel_range.start == 0, "Given cigar does not account for all bases of the read");
         let mut cigar_builder = CigarBuilder::new(true);
         result_right_to_left.reverse();
@@ -194,14 +192,14 @@ impl AlignmentUtils {
         assert!(!sequences.is_empty());
         assert!(sequences.len() == bounds.len(), "Must have one initial allele range per sequence");
         bounds.par_iter().for_each(|bound| {
-            asset!(max_shift <= bound.start, "maxShift goes past the start of a sequence")
+            assert!(max_shift <= bound.start as u32, "maxShift goes past the start of a sequence")
         });
 
         let mut start_shift = 0;
         let mut end_shift = 0;
 
         // consume any redundant shared bases at the end of the alleles
-        let mut min_size = bounds.par_iter().map(|bound| bound.len()).collect_vec().min() as i32;
+        let mut min_size = bounds.par_iter().map(|bound| bound.len()).min().unwrap() as i32;
         while trim && min_size > 0 && Self::last_base_on_right_is_same(sequences, &bounds) {
             bounds.par_iter_mut().for_each(|bound| {
                 bound.end -= 1;
@@ -235,10 +233,10 @@ impl AlignmentUtils {
     }
 
     // do all sequences share a common base at the end of the given index range
-    fn last_base_on_right_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<Range<i32>>) -> bool {
-        let last_base_on_right = sequences[0][bounds[0].end - 1];
+    fn last_base_on_right_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
+        let last_base_on_right = sequences[0][(bounds[0].end - 1) as usize];
         return (0..sequences.len()).into_par_iter().all(|n|{
-            if sequences[n][bounds[n].end - 1] != last_base_on_right {
+            if sequences[n][(bounds[n].end - 1) as usize] != last_base_on_right {
                 false
             } else {
                 true
@@ -247,10 +245,10 @@ impl AlignmentUtils {
     }
 
     // do all sequences share a common first base
-    fn first_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<Range<i32>>) -> bool {
-        let first_base_on_left = sequences[0][bounds[0].start];
+    fn first_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
+        let first_base_on_left = sequences[0][bounds[0].start as usize];
         return (0..sequences.len()).into_par_iter().all(|n|{
-            if sequences[n][bounds[n].start] != first_base_on_left {
+            if sequences[n][bounds[n].start as usize] != first_base_on_left {
                 false
             } else {
                 true
@@ -259,10 +257,10 @@ impl AlignmentUtils {
     }
 
     // do all sequences share a common base just before the given index ranges
-    fn next_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<Range<i32>>) -> bool {
-        let next_base_on_left = sequences[0][bounds[0].start - 1];
+    fn next_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
+        let next_base_on_left = sequences[0][(bounds[0].start - 1) as usize];
         return (0..sequences.len()).into_par_iter().all(|n|{
-            if sequences[n][bounds[n].start - 1] != next_base_on_left {
+            if sequences[n][(bounds[n].start - 1) as usize] != next_base_on_left {
                 false
             } else {
                 true

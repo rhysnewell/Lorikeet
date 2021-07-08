@@ -1,4 +1,3 @@
-use rust_htslib::bam::Record;
 use reads::bird_tool_reads::BirdToolRead;
 use bio_types::sequence::SequenceRead;
 use reads::read_utils::ReadUtils;

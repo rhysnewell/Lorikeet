@@ -321,7 +321,7 @@ impl MathUtils {
             "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
         );
 
-        return ((-((x - mean).powf(2.0))) / (2.0 * sd.powf(2.0))).exp() / (sd * ROOT_TWO_PI)
+        return ((-((x - mean).powf(2.0))) / (2.0 * sd.powf(2.0))).exp() / (sd * *ROOT_TWO_PI)
     }
 
     /**
@@ -339,8 +339,8 @@ impl MathUtils {
         }
 
         let sum = array.par_iter().sum::<f64>();
-        assert!(sum >= 0, "Values in probability array sum to a negative number");
-        array.par_iter_mut().for_each(|x| *x = x / sum);
+        assert!(sum >= 0.0, "Values in probability array sum to a negative number");
+        array.par_iter_mut().for_each(|x| *x = *x / sum);
 
         return array
     }

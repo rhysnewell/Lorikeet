@@ -8,8 +8,9 @@ use coverm::FlagFilter;
 use model::variants::*;
 use model::variant_context::VariantContext;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use utils::utils::{ReadType, Elem};
-use utils::reference_reader_utils::{ReferenceReaderUtils, ReferenceReader};
+use estimation::lorikeet_engine::Elem;
+use reference::reference_reader_utils::ReferenceReaderUtils;
+use reference::reference_reader::ReferenceReader;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
@@ -22,13 +23,13 @@ use activity_profile::activity_profile::{ActivityProfile, Profile};
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use estimation::lorikeet_engine::ReadType;
 use assembly::assembly_region::AssemblyRegion;
-use reference::reference_reader::ReferenceReader;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
-use assembly::read_threading_assembler::ReadThreadingAssembler;
+use read_threading::read_threading_assembler::ReadThreadingAssembler;
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use mathru::special::gamma::{digamma, ln_gamma};
 use utils::natural_log_utils::NaturalLogUtils;
+use bio::alignment::pairwise::MatchFunc;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -395,19 +396,19 @@ impl HaplotypeCallerEngine {
 
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
-            let per_contig_activity_profiles: HashMap<usize, Vec<ActivityProfileState>> = genotype_likelihoods[0]
+            let per_contig_activity_profiles: HashMap<usize, BandPassActivityProfile> = genotype_likelihoods[0]
                 .par_iter().map(|(tid, vec_of_ref_vs_any_result)| {
 
                 // Create bandpass
                 let mut activity_profile = BandPassActivityProfile::new(
-                    max_prob_prop,
+                    max_prob_propagation,
                     active_prob_threshold,
                     BandPassActivityProfile::MAX_FILTER_SIZE,
                     BandPassActivityProfile::DEFAULT_SIGMA,
                     true,
                     ref_idx,
-                    tid,
-                    target_ids_and_lens.get(&tid).unwrap_or(0) as usize
+                    *tid,
+                    *target_ids_and_lens.get(&tid).unwrap() as usize
                 );
 
                 // for each position determine per locus activity and add to bandpass
@@ -447,14 +448,14 @@ impl HaplotypeCallerEngine {
 
                 // Create bandpass
                 let mut activity_profile = BandPassActivityProfile::new(
-                    max_prob_prop,
+                    max_prob_propagation,
                     active_prob_threshold,
                     BandPassActivityProfile::MAX_FILTER_SIZE,
                     BandPassActivityProfile::DEFAULT_SIGMA,
                     true,
                     ref_idx,
-                    tid,
-                    target_ids_and_lens.get(&tid).unwrap_or(0) as usize
+                    *tid,
+                    *target_ids_and_lens.get(&tid).unwrap() as usize
                 );
 
                 for pos in 0..(*length as usize) {
@@ -526,15 +527,15 @@ impl HaplotypeCallerEngine {
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
         if !region.is_active() {
-            return self.reference_model_for_no_variation(region, true, vc_priors)
+            return self.reference_model_for_no_variation(region, true, &vc_priors)
         }
 
         if given_alleles.is_empty() && region.len() == 0 {
-            return self.reference_model_for_no_variation(region, true, vc_priors)
+            return self.reference_model_for_no_variation(region, true, &vc_priors)
         }
 
         // run the local assembler, getting back a collection of information on how we should proceed
-        let untrimmed_assembly_result =
+        // let untrimmed_assembly_result =
     }
 
     /**
@@ -724,10 +725,10 @@ impl HaplotypeCallerEngine {
         let f_tilde_ratio = (digamma(n_ref as f64 + 1.) - digamma(n_alt as f64 + 1.)).exp();
 
         let read_sum = alt_quals.par_iter().map(|qual|{
-            let epsilon = QualityUtils::qual_to_error_prob(qual as f64);
+            let epsilon = QualityUtils::qual_to_error_prob(*qual as f64);
             let z_bar_alt = (1.0 - epsilon) / (1.0 - epsilon + epsilon * f_tilde_ratio);
-            let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(qual as f64);
-            let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(qual);
+            let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(*qual as f64);
+            let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(*qual);
             z_bar_alt * (log_one_minus_epsilon - log_epsilon) + MathUtils::fast_bernoulli_entropy(z_bar_alt)
         }).sum::<f64>();
 

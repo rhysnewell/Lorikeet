@@ -1,4 +1,4 @@
-use utils::simple_interval::{SimpleInterval, CoordMath};
+use utils::simple_interval::SimpleInterval;
 
 pub struct IntervalUtils {}
 

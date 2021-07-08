@@ -36,7 +36,7 @@ extern crate mathru;
 
 // Utilities
 extern crate clap;
-extern crate comparator;
+extern crate compare;
 extern crate csv;
 extern crate env_logger;
 extern crate glob;
@@ -71,7 +71,6 @@ extern crate pest_derive;
 #[macro_use]
 extern crate enum_ordinalize;
 extern crate term;
-extern crate test;
 
 use clap::*;
 use std::process;

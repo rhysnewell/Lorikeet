@@ -1,4 +1,7 @@
 use graphs::base_vertex::BaseVertex;
+use std::hash::{Hash, Hasher};
+use rayon::prelude::*;
+use std::collections::hash_map::DefaultHasher;
 
 /**
  * A graph vertex containing a sequence of bases and a unique ID that
@@ -18,13 +21,14 @@ use graphs::base_vertex::BaseVertex;
  * but are distinct elements of the graph.
  *
  */
-pub struct SeqVertex {
-    sequence: &[u8],
-    additional_info: String,
+#[derive(Debug, Clone)]
+pub struct SeqVertex<'a> {
+    pub sequence: &'a [u8],
+    pub additional_info: String,
 }
 
-impl SeqVertex {
-    pub fn new(sequence: &[u8]) -> Self {
+impl<'a> SeqVertex<'a> {
+    pub fn new(sequence: &'a [u8]) -> SeqVertex<'a> {
         Self {
             sequence,
             additional_info: format!("")
@@ -36,11 +40,15 @@ impl SeqVertex {
      * @return a positive integer >= 0
      */
     pub fn get_id(&self) -> usize {
-        self.hash()
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish() as usize
     }
 
     pub fn to_string(&self) -> String {
-        format!("SeqVertex_id_{}_seq_{}", self.hash().into(), std::str::from_utf8(self.sequence).unwrap())
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        format!("SeqVertex_id_{}_seq_{}", hasher.finish(), std::str::from_utf8(self.sequence).unwrap())
     }
 
     /**
@@ -52,7 +60,7 @@ impl SeqVertex {
     pub fn without_suffix(&self, suffix: &[u8]) -> Option<SeqVertex> {
         let prefix_size = self.sequence.len() - suffix.len();
 
-        return if prefix_size > 0 { Self::new(self.sequence[0..suffix.len()]) } else { None }
+        return if prefix_size > 0 { Some(Self::new(&self.sequence[0..suffix.len()])) } else { None }
     }
 
     /**
@@ -67,12 +75,12 @@ impl SeqVertex {
         let length = self.sequence.len() - suffix.len() - prefix.len();
         let stop = start + length;
 
-        return if length > 0 { SeqVertex::new(self.sequence[start..stop]) } else { None }
+        return if length > 0 { Some(SeqVertex::new(&self.sequence[start..stop])) } else { None }
     }
 
 }
 
-impl BaseVertex for SeqVertex {
+impl BaseVertex for SeqVertex<'_> {
     /**
      * Does this vertex have an empty sequence?
      *
@@ -94,7 +102,9 @@ impl BaseVertex for SeqVertex {
     }
 
     fn to_string(&self) -> String {
-        return format!("MultiDeBruijnVertex_is_{}_seq_{}", self.hash().into(), String::from_utf8_lossy(self.sequence).into_string())
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        return format!("SeqVertex_id_{}_seq_{}", hasher.finish(), String::from_utf8_lossy(self.sequence).to_string())
     }
 
     /**
@@ -132,20 +142,14 @@ impl BaseVertex for SeqVertex {
      * @param info the new info value.
      */
     fn set_additional_info(&mut self, info: String) {
-        self.additonal_info = info
+        self.additional_info = info
     }
 
     /**
      * @return the additional information for display about this vertex
      */
-    fn get_additional_info(&self) -> &String {
-        if self.reads.contains(&format!("ref")) {
-            return &self.additonal_info
-        } else {
-            return format!("{}{}", self.additonal_info,
-                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { "" } )
-        }
-
+    fn get_additional_info(&self) -> String {
+        return self.additional_info.clone()
     }
 
     /**
@@ -164,24 +168,26 @@ impl BaseVertex for SeqVertex {
      */
     fn has_ambiguous_sequence(&self) -> bool {
         return self.sequence.par_iter().any(|base|{
-            match base.to_ascii_uppercase() {
-                'A' | 'T' | 'C' | 'G' => false,
+            let base = base.to_ascii_uppercase();
+            let base = base as char;
+            match base {
+                'A' | 'T'| 'C' | 'G' => false,
                 _ => true
             }
         })
     }
 }
 
-impl Hash for SeqVertex {
+impl Hash for SeqVertex<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.sequence.hash(state)
     }
 }
 
-impl PartialEq for SeqVertex {
+impl PartialEq for SeqVertex<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.sequence == other.sequence
     }
 }
 
-impl Eq for MultiDeBruijnVertex {}
+impl Eq for SeqVertex<'_> {}

@@ -1,32 +1,27 @@
 use bio::io::fasta::IndexedReader;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use process::Stdio;
 use std::fs::File;
-use glob::glob;
-use coverm::genomes_and_contigs::*;
-use tempfile::NamedTempFile;
 use std::collections::HashMap;
-use std::io::Write;
-use std::process;
-use external_command_checker;
 use rayon::prelude::*;
+use reference::reference_reader_utils::ReferenceReaderUtils;
 
 /**
 * Struct handling methods to read and handle information for references
 */
-pub struct ReferenceReader {
+#[derive(Debug)]
+pub struct ReferenceReader<'a> {
     indexed_reader: IndexedReader<File>,
     pub current_sequence: Vec<u8>,
-    pub genomes_and_contigs: GenomesAndContigs,
+    pub genomes_and_contigs: &'a GenomesAndContigs,
     target_names: HashMap<usize, Vec<u8>>,
 }
 
-impl ReferenceReader {
+impl<'a> ReferenceReader<'a> {
     pub fn new(
         concatenated_genomes: &Option<String>,
-        genomes_and_contigs: GenomesAndContigs,
+        genomes_and_contigs: &'a GenomesAndContigs,
         number_of_contigs: usize,
-    ) -> ReferenceReader {
+    ) -> ReferenceReader<'a> {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
         ReferenceReader {
@@ -39,9 +34,9 @@ impl ReferenceReader {
 
     pub fn new_with_target_names(
         concatenated_genomes: &Option<String>,
-        genomes_and_contigs: GenomesAndContigs,
+        genomes_and_contigs: &'a GenomesAndContigs,
         target_names: Vec<&[u8]>,
-    ) -> ReferenceReader {
+    ) -> ReferenceReader<'a> {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
         ReferenceReader {
@@ -76,7 +71,7 @@ impl ReferenceReader {
         }
     }
 
-    pub fn retrieve_contig_name_from_tid(&self, tid: usize) -> Option<&[u8]> {
+    pub fn retrieve_contig_name_from_tid(&self, tid: usize) -> Option<&Vec<u8>> {
         return self.target_names.get(&tid)
     }
 
@@ -156,10 +151,10 @@ impl ReferenceReader {
     /**
     * Takes a contig name &[u8] and splits around a suspected separator character
     */
-    pub fn split_contig_name<'a>(contig_name: &[u8], separator: u8) -> &'a [u8] {
+    pub fn split_contig_name<'b>(contig_name: &'b [u8], separator: u8) -> &'b [u8] {
         match contig_name.into_par_iter().position_first(|&x| x == separator) {
             Some(position) => {
-                return contig_name[position..contig_name.len()]
+                return &contig_name[position..contig_name.len()]
             },
             None => {
                 return contig_name

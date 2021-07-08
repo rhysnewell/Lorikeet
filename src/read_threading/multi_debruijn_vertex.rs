@@ -1,22 +1,24 @@
 use graphs::base_vertex::BaseVertex;
+use std::hash::{Hasher, Hash};
+use rayon::prelude::*;
+use itertools::Itertools;
 
 lazy_static! {
-    static mut suffices_as_byte_array: Vec<Vec<u8>> = vec![Vec::new(); std::u8::MAX - std::u8::MIN + 1];
-    static {
-        for i in 0..(*suffices_as_byte_array.len() as u16) {
-            suffices_as_byte_array[i] = i.to_be_bytes();
-        }
-    }
+    static ref suffices_as_byte_array: Vec<Vec<u8>> =
+        (0..(std::u8::MAX - std::u8::MIN + 1) as u16).into_par_iter().map(|i| {
+            i.to_be_bytes().iter().cloned().collect::<Vec<u8>>()
+        }).collect::<Vec<Vec<u8>>>();
 }
 
 /**
  * A DeBruijnVertex that supports multiple copies of the same kmer
  */
-pub struct MultiDeBruijnVertex {
+#[derive(Debug, Clone)]
+pub struct MultiDeBruijnVertex<'a> {
     pub(crate) reads: Vec<String>,
     merge_identical_nodes: bool,
     pub(crate) additonal_info: String,
-    pub sequence: &[u8],
+    pub sequence: &'a [u8],
 }
 
 /**
@@ -24,7 +26,7 @@ pub struct MultiDeBruijnVertex {
  * @param mergeIdenticalNodes should nodes with the same sequence be treated as equal?
  * @param sequence the kmer sequence
  */
-impl MultiDeBruijnVertex {
+impl MultiDeBruijnVertex<'_> {
     pub const KEEP_TRACK_OF_READS: bool = false;
 
     /**
@@ -32,10 +34,8 @@ impl MultiDeBruijnVertex {
      * @param mergeIdenticalNodes should nodes with the same sequence be treated as equal?
      * @param sequence the kmer sequence
      */
-    pub fn new(sequence: &[u8], merge_identical_nodes: bool) -> Self {
-        let base_vertex = BaseVertex::new(sequence);
-
-        Self {
+    pub fn new<'a>(sequence: &'a [u8], merge_identical_nodes: bool) -> MultiDeBruijnVertex<'a> {
+        MultiDeBruijnVertex {
             sequence,
             merge_identical_nodes,
             reads: Vec::new(),
@@ -47,7 +47,7 @@ impl MultiDeBruijnVertex {
      * Create a new MultiDeBruijnVertex with kmer sequence
      * @param sequence the kmer sequence
      */
-    pub fn new_with_sequence(seqeunce: &[u8]) -> Self {
+    pub fn new_with_sequence<'a>(seqeunce: &'a [u8]) -> MultiDeBruijnVertex<'a> {
         Self::new(seqeunce, false)
     }
 
@@ -67,12 +67,12 @@ impl MultiDeBruijnVertex {
         }
     }
 
-    pub fn get_additional_info(&self) {
+    pub fn get_additional_info(&self) -> String {
         if self.reads.contains(&format!("ref")) {
-            return self.base_vertex.get_additional_info()
+            return self.additonal_info
         } else {
-            return format!("{}{}", self.base_vertex.get_additional_info(),
-                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { "" } )
+            return format!("{}{}", self.additonal_info,
+                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { format!("") } )
         }
     }
 
@@ -81,7 +81,7 @@ impl MultiDeBruijnVertex {
      * @return integer >= 1
      */
     pub fn get_kmer_size(&self) -> usize {
-        return self.base_vertex.get_sequence().len()
+        return self.get_sequence().len()
     }
 
     /**
@@ -101,7 +101,7 @@ impl MultiDeBruijnVertex {
      * @return a byte
      */
     pub fn get_suffix(&self) -> u8 {
-        return self.base_vertex.sequence[self.get_kmer_size() - 1]
+        return self.sequence[self.get_kmer_size() - 1]
     }
 
     /**
@@ -112,20 +112,20 @@ impl MultiDeBruijnVertex {
      * @return a byte[] that contains 1 byte == getSuffix()
      */
     fn get_suffix_as_array(&self) -> &[u8] {
-        return &suffices_as_byte_array[self.get_suffix()][..]
+        return &suffices_as_byte_array[self.get_suffix() as usize][..]
     }
 }
 
-impl Hash for MultiDeBruijnVertex {
+impl Hash for MultiDeBruijnVertex<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.sequence.hash(state)
     }
 }
 
-impl PartialEq for MultiDeBruijnVertex {
+impl PartialEq for MultiDeBruijnVertex<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.sequence == other.sequence
     }
 }
 
-impl Eq for MultiDeBruijnVertex {}
+impl Eq for MultiDeBruijnVertex<'_> {}

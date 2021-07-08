@@ -7,33 +7,33 @@ use graphs::multi_sample_edge::MultiSampleEdge;
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
  */
-pub struct AbstractReadThreadingGraph {
+pub struct AbstractReadThreadingGraph<'a> {
     min_matchin_bases_to_dangling_end_recovery: i64,
     counter: usize,
     /**
      * Sequences added for read threading before we've actually built the graph
      */
-    pending: LinkedHashMap<String, Vec<SequenceForKmers>>,
+    pending: LinkedHashMap<String, Vec<SequenceForKmers<'a>>>,
     /**
      * A map from kmers -> their corresponding vertex in the graph
      */
-    kmer_to_vertex_map: LinkedHashMap<Kmer, MultiDeBruijnVertex>,
+    kmer_to_vertex_map: LinkedHashMap<Kmer<'a>, MultiDeBruijnVertex<'a>>,
     debug_graph_transformations: bool,
     min_base_quality_to_use_in_assembly: u8,
-    reference_path: Vec<MultiDeBruijnVertex>,
+    reference_path: Vec<MultiDeBruijnVertex<'a>>,
     already_built: bool,
     // --------------------------------------------------------------------------------
     // state variables, initialized in setToInitialState()
     // --------------------------------------------------------------------------------
-    ref_source: Option<Kmer>,
+    ref_source: Option<Kmer<'a>>,
     start_threading_only_at_existing_vertex: bool,
     max_mismatches_in_dangling_head: i32,
     increase_counts_through_branches: bool,
     num_pruning_samples: usize,
-    pub base_graph: BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>,
+    pub base_graph: BaseGraph<MultiDeBruijnVertex<'a>, MultiSampleEdge>,
 }
 
-impl AbstractReadThreadingGraph {
+impl AbstractReadThreadingGraph<'_> {
     pub fn new(
         kmer_size: usize,
         debug_graph_transformations: bool,
@@ -68,23 +68,23 @@ enum TraversalDirection {
 /**
  * Keeps track of the information needed to add a sequence to the read threading assembly graph
  */
-struct SequenceForKmers {
+struct SequenceForKmers<'a> {
     name: String,
-    sequence: &[u8],
+    sequence: &'a [u8],
     start: usize,
     stop: usize,
     count: usize,
     is_ref: bool
 }
 
-impl SequenceForKmers {
+impl SequenceForKmers<'_> {
 
     /**
      * Create a new sequence for creating kmers
      */
     pub fn new(
         name: String,
-        sequence: &[u8],
+        sequence: &'_ [u8],
         start: usize,
         stop: usize,
         count: usize,

@@ -9,20 +9,20 @@
  *    only does the work of that operation once, updating its internal state
  */
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Kmer {
+pub struct Kmer<'a> {
     // this values may be updated in the course of interacting with this kmer
-    bases: &[u8],
+    bases: &'a [u8],
     start: usize,
     // two constants
     length: usize,
 }
 
-impl Kmer {
+impl Kmer<'_> {
     /**
      * Create a new kmer using all bases in kmer
      * @param kmer a non-null byte[]. The input array must not be modified by the caller.
      */
-    pub fn new(kmer: &[u8]) -> Kmer {
+    pub fn new<'a>(kmer: &'a [u8]) -> Kmer<'a> {
         Kmer {
             start: 0,
             length: kmer.len(),
@@ -40,7 +40,7 @@ impl Kmer {
      * @param start the start of the kmer in bases, must be >= 0 and < bases.length
      * @param length the length of the kmer.  Must be >= 0 and start + length < bases.length
      */
-    pub fn new_with_start_and_length(bases: &[u8], start: usize, length: usize) -> Kmer {
+    pub fn new_with_start_and_length<'a>(bases: &'a [u8], start: usize, length: usize) -> Kmer<'a> {
         Kmer {
             bases,
             start,
@@ -54,7 +54,7 @@ impl Kmer {
      * @param newLength the new length
      * @return a new kmer based on the data in this kmer.  Does not make a copy, so shares most of the data
      */
-    pub fn sub_kmer(&self, new_start: usize, new_length: usize) -> Kmer {
+    pub fn sub_kmer(&self, new_start: usize, new_length: usize) -> Kmer<'_> {
         Kmer {
             bases: self.bases,
             start: self.start + new_start,
@@ -70,9 +70,9 @@ impl Kmer {
      * @return a non-null byte[] containing length() bases of this kmer, regardless of how this kmer was created
      */
     pub fn bases(&mut self) -> &[u8] {
-        if start != 0 || self.bases.len() != self.length {
+        if self.start != 0 || self.bases.len() != self.length {
             // update operation.  Rip out the exact byte[] and update start so we don't ever do this again
-            self.bases = self.bases[self.start..self.start + self.length];
+            self.bases = &self.bases[self.start..self.start + self.length];
             self.start = 0;
         }
 

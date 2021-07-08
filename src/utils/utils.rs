@@ -1,19 +1,16 @@
 use crate::*;
-
+use estimation::lorikeet_engine::ReadType;
 use coverm::bam_generator::*;
-use coverm::genomes_and_contigs::*;
 use coverm::mapping_index_maintenance;
 use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 
 use nix::{sys::stat, unistd};
 use rayon::prelude::*;
-use std::collections::HashMap;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
-use std::path::Path;
-use std::sync::Arc;
+
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
