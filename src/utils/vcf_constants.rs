@@ -9,3 +9,11 @@ lazy_static! {
     pub static ref AS_QUAL_KEY: String = "AS_QUAL".to_string();
     pub static ref NUMBER_OF_DISCOVERED_ALLELES_KEY: String = "NDA".to_string();
 }
+
+pub struct VCFConstants {}
+
+impl VCFConstants {
+    pub const SPANNING_DELETION_ALLELE: char = '*';
+    pub const NO_CALL_ALLELE: char = '.';
+    pub const NULL_ALLELE: char = '-';
+}

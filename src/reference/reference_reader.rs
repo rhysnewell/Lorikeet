@@ -14,6 +14,7 @@ pub struct ReferenceReader<'a> {
     pub current_sequence: Vec<u8>,
     pub genomes_and_contigs: &'a GenomesAndContigs,
     target_names: HashMap<usize, Vec<u8>>,
+    pub target_lens: HashMap<usize, u64>,
 }
 
 impl<'a> ReferenceReader<'a> {
@@ -28,6 +29,7 @@ impl<'a> ReferenceReader<'a> {
             indexed_reader,
             current_sequence: Vec::new(),
             target_names: HashMap::new(),
+            target_lens: HashMap::new(),
             genomes_and_contigs: genomes_and_contigs,
         }
     }
@@ -45,11 +47,24 @@ impl<'a> ReferenceReader<'a> {
             target_names: target_names.into_par_iter().enumerate()
                 .map(|(tid, target)| (tid, target.to_vec())).collect::<HashMap<usize, Vec<u8>>>(),
             genomes_and_contigs: genomes_and_contigs,
+            target_lens: HashMap::new(),
         }
     }
 
     pub fn add_target(&mut self, target: &[u8], tid: usize) {
         self.target_names.insert(tid, target.to_vec());
+    }
+
+    pub fn add_length(&mut self, tid: usize, length: u64) {
+        self.target_lens.insert(tid, length);
+    }
+
+    pub fn add_lengths(&mut self, target_lengths: HashMap<usize, u64>) {
+        self.target_lens = target_lengths
+    }
+
+    pub fn get_contig_length(&self, tid: usize) -> u64 {
+        self.target_lens.get(&tid).unwrap_or(0)
     }
 
     pub fn retrieve_reference_stem(&self, ref_idx: usize) -> String {

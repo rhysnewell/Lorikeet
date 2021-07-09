@@ -23,7 +23,6 @@ use coverm::FlagFilter;
  */
 #[derive(Debug)]
 pub struct AssemblyRegionIterator<'a> {
-    reference_reader: &'a mut ReferenceReader<'a>,
     indexed_bam_readers: &'a Vec<String>,
     pub pending_regions: Vec<AssemblyRegion>,
     n_threads: u32,
@@ -32,8 +31,7 @@ pub struct AssemblyRegionIterator<'a> {
 
 impl<'a> AssemblyRegionIterator<'a> {
     pub fn new<P: Profile>(
-        reference_reader: &'a mut ReferenceReader<'a>,
-        activity_profile: &'a mut Profile,
+        activity_profile: &'a mut P,
         indexed_bam_readers: &'a Vec<String>,
         assembly_region_padding: usize,
         min_assembly_region_size: usize,
@@ -52,7 +50,6 @@ impl<'a> AssemblyRegionIterator<'a> {
             false
         );
         AssemblyRegionIterator {
-            reference_reader,
             indexed_bam_readers,
             pending_regions,
             n_threads,
@@ -102,7 +99,6 @@ impl<'a> AssemblyRegionIterator<'a> {
     }
 
     pub fn iter(&self) -> std::slice::Iter<AssemblyRegion> {
-        Iter
         self.pending_regions.iter()
     }
 }

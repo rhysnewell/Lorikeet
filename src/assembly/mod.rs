@@ -6,3 +6,4 @@ pub mod assembly_region_trimmer;
 pub mod assembly_result_set;
 pub mod assembly_result;
 pub mod kmer;
+pub mod kmer_counter;

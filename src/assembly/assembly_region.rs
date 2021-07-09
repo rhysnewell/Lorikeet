@@ -211,7 +211,7 @@ impl AssemblyRegion {
             new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid, self.ref_idx,
         );
 
-        let mut trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read.clone(), new_padded_span.get_start(), new_padded_span.get_end()))
+        let mut trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read, new_padded_span.get_start(), new_padded_span.get_end()))
             .filter(|read| !read.read.is_empty() && read.overlaps(&result.padded_span)).collect::<Vec<BirdToolRead>>();
         trimmed_reads.par_sort_unstable();
 
