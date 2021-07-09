@@ -48,6 +48,35 @@ impl BirdToolRead {
         return new_start
     }
 
+    /**
+     * Finds the adaptor boundary around the read and returns the first base inside the adaptor that is closest to
+     * the read boundary. If the read is in the positive strand, this is the first base after the end of the
+     * fragment (Picard calls it 'insert'), if the read is in the negative strand, this is the first base before the
+     * beginning of the fragment.
+     *
+     * There are two cases we need to treat here:
+     *
+     * 1) Our read is in the reverse strand :
+     *
+     *     <----------------------| *
+     *   |--------------------->
+     *
+     *   in these cases, the adaptor boundary is at the mate start (minus one)
+     *
+     * 2) Our read is in the forward strand :
+     *
+     *   |---------------------->   *
+     *     <----------------------|
+     *
+     *   in these cases the adaptor boundary is at the start of the read plus the inferred insert size (plus one)
+     *
+     * @return the reference coordinate for the adaptor boundary (effectively the first base IN the adaptor, closest to the read).
+     * CANNOT_COMPUTE_ADAPTOR_BOUNDARY if the read is unmapped or the mate is mapped to another contig.
+     */
+    pub fn get_adaptor_boundary(&self) -> usize {
+        return ReadUtils::get_adaptor_boundary(&self)
+    }
+
 }
 
 

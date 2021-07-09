@@ -30,6 +30,7 @@ use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use mathru::special::gamma::{digamma, ln_gamma};
 use utils::natural_log_utils::NaturalLogUtils;
 use bio::alignment::pairwise::MatchFunc;
+use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -147,8 +148,6 @@ impl HaplotypeCallerEngine {
             short_sample_count + long_sample_count
         );
 
-        let mut target_ids_and_lengths = HashMap::new();
-
         let mut per_contig_per_base_hq_soft_clips = HashMap::new();
 
         indexed_bam_readers.iter().enumerate().for_each(
@@ -174,7 +173,6 @@ impl HaplotypeCallerEngine {
                             genomes_and_contigs,
                             concatenated_genomes,
                             flag_filters,
-                            &mut target_ids_and_lengths,
                             &mut per_contig_per_base_hq_soft_clips,
                             reference_reader,
                         )
@@ -198,7 +196,6 @@ impl HaplotypeCallerEngine {
                             genomes_and_contigs,
                             concatenated_genomes,
                             flag_filters,
-                            &mut target_ids_and_lengths,
                             &mut per_contig_per_base_hq_soft_clips,
                             reference_reader,
                         )
@@ -225,7 +222,7 @@ impl HaplotypeCallerEngine {
         return self.calculate_activity_probabilities(
             genotype_likelihoods,
             per_contig_per_base_hq_soft_clips,
-            target_ids_and_lengths,
+            &reference_reader.target_lens,
             ploidy,
             max_prob_prop,
             active_prob_thresh,
@@ -247,7 +244,6 @@ impl HaplotypeCallerEngine {
         genomes_and_contigs: &'b GenomesAndContigs,
         concatenated_genomes: &'b Option<String>,
         flag_filters: &'b FlagFilter,
-        target_ids_and_lengths: &mut HashMap<usize, u64>,
         per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
         reference_reader: &mut ReferenceReader,
     ) -> HashMap<usize, Vec<RefVsAnyResult>>{
@@ -282,11 +278,8 @@ impl HaplotypeCallerEngine {
                             // Get contig stats
                             reference_reader.add_target(contig_name, tid);
                             let target_len = target_lens[tid];
+                            reference_reader.add_length(tid, target_len);
                             let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
-
-                            if !target_ids_and_lengths.contains_key(&tid) {
-                                target_ids_and_lengths.insert(tid, target_len);
-                            }
                             // The raw activity profile.
                             // Frequency of bases not matching reference compared
                             // to depth
@@ -386,7 +379,7 @@ impl HaplotypeCallerEngine {
         &mut self,
         genotype_likelihoods: Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
         mut per_contig_per_base_hq_soft_clips: HashMap<usize, Vec<RunningAverage>>,
-        target_ids_and_lens: HashMap<usize, u64>,
+        target_ids_and_lens: &HashMap<usize, u64>,
         ploidy: usize,
         max_prob_propagation: usize,
         active_prob_threshold: f64,
@@ -535,7 +528,15 @@ impl HaplotypeCallerEngine {
         }
 
         // run the local assembler, getting back a collection of information on how we should proceed
-        // let untrimmed_assembly_result =
+        let untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
+            region,
+            given_alleles,
+            args,
+            reference_reader,
+            &mut self.assembly_engine,
+            &mut self.aligner,
+            args.is_present("correct-overlapping-quality")
+        );
     }
 
     /**

@@ -104,15 +104,14 @@ impl<'a> AssemblyRegionWalker<'a> {
         }
     }
 
-    fn process_shard(
+    fn process_shard<'b>(
         &mut self,
-        shard: &mut BandPassActivityProfile,
+        shard: &'b mut BandPassActivityProfile,
         flag_filters: &FlagFilter,
         args: &clap::ArgMatches
     ) {
 
         let mut assembly_region_iter = AssemblyRegionIterator::new(
-            &mut self.reference_reader,
             shard,
             &self.indexed_bam_readers,
             self.assembly_region_padding,
@@ -141,7 +140,7 @@ impl<'a> AssemblyRegionWalker<'a> {
                     let feature_variants = match vcf_rid {
                         Some(rid) => {
                             VariantContext::process_vcf_in_region(
-                                indexed_vcf_reader,
+                                &mut indexed_vcf_reader,
                                 rid,
                                 assembly_region.get_start() as u64,
                                 assembly_region.get_end() as u64

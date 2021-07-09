@@ -13,6 +13,7 @@ pub mod reads;
 pub mod reference;
 pub mod read_orientation;
 pub mod read_threading;
+pub mod read_error_corrector;
 
 // HTS and bio files
 extern crate bio;
