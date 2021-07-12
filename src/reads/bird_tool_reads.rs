@@ -20,13 +20,15 @@ use reads::read_utils::ReadUtils;
  */
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BirdToolRead {
-    pub read: Record
+    pub read: Record,
+    pub sample_index: usize,
 }
 
 impl BirdToolRead {
-    pub fn new(read: Record) -> BirdToolRead {
+    pub fn new(read: Record, sample_index: usize) -> BirdToolRead {
         BirdToolRead {
-            read
+            read,
+            sample_index
         }
     }
 

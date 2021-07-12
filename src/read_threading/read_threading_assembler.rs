@@ -205,6 +205,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
         aligner: &mut SmithWatermanAligner,
+        sample_names: &Vec<String>
     ) -> Option<AssemblyResult> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
@@ -221,7 +222,28 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
                 // This is where the junction tree debruijn graph would go but considering it is experimental
                 // we will leave it out for now
                 ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples, self.min_matching_bases_to_dangling_end_recovery)
+            };
+
+            rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
+
+            // add the reference sequence to the graph
+            rt_graph.add_sequence(
+                "ref".to_string(),
+                AbstractReadThreadingGraph::ANONYMOUS_SAMPLE,
+                sequence,
+                0,
+                sequence.len(),
+                1,
+                true,
+            );
+
+            // Next pull kmers out of every read and throw them on the graph
+            for read in reads {
+                rt_graph.add_read(read)
             }
+
+            // actually build the read threading graph
+            rt_graph.bu
         }
     }
 }
