@@ -11,7 +11,7 @@ pub struct KmerCounter<'a> {
     /**
      * A map of for each kmer to its num occurrences in addKmers
      */
-    counts_by_kmer: HashMap<Kmer<'a>, CountedKmer<'a>>,
+    counts_by_kmer: HashMap<&'a Kmer<'a>, CountedKmer<'a>>,
     kmer_length: usize,
 }
 
@@ -55,16 +55,35 @@ impl<'a> KmerCounter<'a> {
             counted_kmer.count >= min_count
         }).collect::<Vec<&Kmer>>()
     }
+
+    /**
+     * Remove all current counts, resetting the counter to an empty state
+     */
+    pub fn clear(&mut self) {
+        self.counts_by_kmer.clear()
+    }
+
+    /**
+     * Add a kmer that occurred kmerCount times
+     *
+     * @param kmer a kmer
+     * @param kmerCount the number of occurrences
+     */
+    pub fn add_kmer(&mut self, kmer: &'a Kmer<'a>, kmer_count: usize) {
+        assert!(kmer.len() == self.kmer_length, "Incorrect kmer length, {} expected {}", kmer.len(), self.kmer_length);
+        let mut counts_from_map = self.counts_by_kmer.entry(&kmer).or_insert(CountedKmer::new(kmer));
+        counts_from_map.count += kmer_count;
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 struct CountedKmer<'a> {
-    kmer: Kmer<'a>,
+    kmer: &'a Kmer<'a>,
     count: usize,
 }
 
 impl<'a> CountedKmer<'a> {
-    pub fn new(kmer: Kmer) -> CountedKmer<'a> {
+    pub fn new(kmer: &'a Kmer<'a>) -> CountedKmer<'a> {
         CountedKmer {
             kmer,
             count: 0
@@ -84,13 +103,13 @@ impl<'a> CountedKmer<'a> {
         }
     }
 
-impl Ord for CountedKmer {
+impl Ord for CountedKmer<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.count.cmp(other.count)
     }
 }
 
-impl PartialOrd for CountedKmer {
+impl PartialOrd for CountedKmer<'_> {
     fn cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }

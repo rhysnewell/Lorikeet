@@ -50,4 +50,12 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
     pub fn set_cigar(&mut self, cigar_string: Vec<Cigar>) {
         self.cigar = CigarString::from(cigar_string)
     }
+
+    pub fn set_genome_location(&mut self, genome_location: L) {
+        self.genome_location = Some(genome_location)
+    }
+
+    pub fn len(&self) -> usize {
+        self.allele.len()
+    }
 }
