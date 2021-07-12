@@ -13,7 +13,7 @@ pub struct QualityUtils {}
 impl QualityUtils {
 
 
-    const MAX_REASONABLE_Q_SCORE: u8 = 60;
+    pub const MAX_REASONABLE_Q_SCORE: u8 = 60;
 
     pub const MAX_QUAL: u8 = 254;
 

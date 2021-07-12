@@ -50,4 +50,8 @@ impl ByteArrayAllele {
             }
         }
     }
+
+    pub fn len(&self) -> usize {
+        return if self.is_symbolic { 0 } else { self.bases.len() }
+    }
 }

@@ -1,6 +1,7 @@
 use std::cmp::{Ordering, min};
 use std::collections::HashSet;
 use rayon::prelude::*;
+use bio::alphabets::dna::alphabet;
 
 lazy_static! {
     pub static ref BASES: HashSet<u8> = ['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8].into_par_iter().cloned().collect::<HashSet<u8>>();
@@ -49,5 +50,22 @@ impl BaseUtils {
             }
         }
         return o1.len().cmp(&o2.len())
+    }
+
+    /**
+     * Converts a simple base to a base index
+     *
+     * @param base [AaCcGgTt]
+     * @return 0, 1, 2, 3, or -1 if the base can't be understood
+     */
+    // pub fn simple_base_to_base_index(base: u8) -> i32 {
+    //
+    // }
+
+    /**
+     * Returns true iff the base represented by the byte is a 'regular' base (ACGT or *).
+     */
+    pub fn is_regular_base(base: u8) -> bool {
+        return alphabet().is_word(&[base])
     }
 }

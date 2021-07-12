@@ -17,6 +17,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use std::cmp::{max, min};
 use haplotype::reference_confidence_model::ReferenceConfidenceModel;
+use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -160,9 +161,18 @@ impl AssemblyBasedCallerUtils {
         let pileup_error_correction_log_odds = args.value_of("pileup-correction-log-odds").unwrap().parse::<f64>().unwrap();
         let read_error_corrector = if pileup_error_correction_log_odds == std::f64::NEG_INFINITY {
             if args.is_present("error-correct-reads") {
-                
+                Some(NearbyKmerErrorCorrector::default(
+                    args.value_of("kmer-length-for-read-error-correction").unwrap().parse::<usize>().unwrap(),
+                    HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
+                    args.value_of("min-observations-for-kmers-to-be-solid").unwrap().parse::<usize>().unwrap(),
+                    full_reference_with_padding,
+                ))
+            } else {
+                None
             }
-        }
+        };
+
+        let assembly_result_set = assembly_engine.run
     }
 
     pub fn get_variant_contexts_from_given_alleles(
