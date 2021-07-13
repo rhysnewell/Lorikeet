@@ -11,7 +11,7 @@ use model::byte_array_allele::ByteArrayAllele;
 
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
-    genome_location: Option<L>,
+    pub(crate) genome_location: Option<L>,
     event_map: Option<EventMap<'a, L>>,
     cigar: CigarString,
     alignment_start_hap_wrt_ref: usize,

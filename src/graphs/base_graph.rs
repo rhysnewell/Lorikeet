@@ -3,6 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
 use petgraph::Direction;
+use petgraph::algo;
 use std::collections::{BTreeSet, BinaryHeap, HashSet};
 use graphs::path::Path;
 use std::cmp::Ordering;
@@ -200,10 +201,17 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     }
 
     /**
-     * @return the reference source vertex pulled from the graph, can be null if it doesn't exist in the graph
+     * @return the reference source vertex pulled from the graph, can be None if it doesn't exist in the graph
      */
-    pub fn get_reference_source_vertex(&self) -> NodeIndex {
-        return self.graph.node_indices().filter(|v| self.is_reference_node(*v)).nth(0).unwrap()
+    pub fn get_reference_source_vertex(&self) -> Option<NodeIndex> {
+        return self.graph.node_indices().filter(|v| self.is_reference_source(*v)).nth(0)
+    }
+
+    /**
+     * @return the reference sink vertex pulled from the graph, can be None if it doesn't exist in the graph
+     */
+    pub fn get_reference_sink_vertex(&self) -> Option<NodeIndex> {
+        return self.graph.node_indices().filter(|v| self.is_reference_sink(*v)).nth(0)
     }
 
     /**
@@ -292,5 +300,29 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             kmer_size: self.kmer_size,
             graph: result
         }
+    }
+
+    /**
+     * Checks for the presence of directed cycles in the graph.
+     *
+     * @return {@code true} if the graph has cycles, {@code false} otherwise.
+     */
+    pub fn has_cycles(&self) -> bool {
+        algo::is_cyclic_directed(&self)
+    }
+
+    /**
+     * Remove all vertices in the graph that aren't on a path from the reference source vertex to the reference sink vertex
+     *
+     * More aggressive reference pruning algorithm than removeVerticesNotConnectedToRefRegardlessOfEdgeDirection,
+     * as it requires vertices to not only be connected by a series of directed edges but also prunes away
+     * paths that do not also meet eventually with the reference sink vertex
+     */
+    pub fn remove_paths_not_connected_to_ref(&mut self) {
+        if self.get_reference_source_vertex().is_none() || self.get_reference_sink_vertex().is_none() {
+            panic!("Graph must have ref source and sink vertices");
+        }
+
+        
     }
 }

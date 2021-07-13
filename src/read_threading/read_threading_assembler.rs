@@ -15,6 +15,7 @@ use graphs::seq_graph::SeqGraph;
 use graphs::base_edge::BaseEdge;
 use assembly::assembly_result::{AssemblyResult, Status};
 use read_threading::read_threading_graph::ReadThreadingGraph;
+use graphs::base_graph::BaseGraph;
 
 pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>> {
     kmer_sizes: Vec<usize>,
@@ -33,11 +34,13 @@ pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, Mu
     min_base_quality_to_use_in_assembly: u8,
     prune_factor: i32,
     min_matching_bases_to_dangling_end_recovery: i32,
-    chain_pruner: C
+    chain_pruner: C,
+    debug_graph_transformations: bool,
 }
 
 impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
-    L: Locatable, R: ReadErrorCorrector, E: BaseEdge> ReadThreadingAssembler<'a, C> {
+    L: Locatable, R: ReadErrorCorrector, E: BaseEdge,
+    A: AbstractReadThreadingGraph> ReadThreadingAssembler<'a, C> {
     const DEFAULT_NUM_PATHS_PER_GRAPH: usize = 128;
     const KMER_SIZE_ITERATION_INCREASE: usize = 10;
     const MAX_KMER_ITERATIONS_TO_ATTEMPT: usize = 6;
@@ -88,6 +91,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             min_matching_bases_to_dangling_end_recovery: min_matching_bases_to_dangle_end_recovery,
             recover_haplotypes_from_edges_not_covered_in_junction_trees: true,
             min_base_quality_to_use_in_assembly: Self::DEFAULT_MIN_BASE_QUALITY_TO_USE,
+            debug_graph_transformations: false
         }
     }
 
@@ -187,6 +191,21 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
     }
 
     /**
+     * Print graph to file NOTE this requires that debugGraphTransformations be enabled.
+     *
+     * @param graph the graph to print
+     * @param fileName the name to give the graph file
+     */
+    fn print_debug_graph_transform(&self, graph: &A, file_name: String) {
+        // if Self::PRINT_FILL_GRAPH_FOR_DEBUGGING {
+        //     graph.print_graph(file_name, self.prune_factor as usize)
+        // } else {
+        //     grap
+        // }
+        graph.print_graph(file_name, self.prune_factor as usize)
+    }
+
+    /**
      * Creates the sequence graph for the given kmerSize
      *
      * @param reads            reads to use
@@ -216,7 +235,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         ).is_empty() {
             return None
         } else {
-            let mut rt_graph: AbstractReadThreadingGraph = if self.generate_seq_graph {
+            let mut rt_graph: A = if self.generate_seq_graph {
                 ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples, self.min_matching_bases_to_dangling_end_recovery)
             } else {
                 // This is where the junction tree debruijn graph would go but considering it is experimental
@@ -229,7 +248,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             // add the reference sequence to the graph
             rt_graph.add_sequence(
                 "ref".to_string(),
-                AbstractReadThreadingGraph::ANONYMOUS_SAMPLE,
+                A::ANONYMOUS_SAMPLE,
                 sequence,
                 0,
                 sequence.len(),
@@ -243,7 +262,71 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             }
 
             // actually build the read threading graph
-            rt_graph.bu
+            rt_graph.build_graph_if_necessary();
+
+            if self.debug_graph_transformations {
+                self.print_debug_graph_transform(&rt_graph,
+                                                 format!(
+                                                     "{}_{}-{}-sequenceGraph.{}.0.0.raw_threading_graph.dot",
+                                                     ref_haplotype.genome_location.unwrap().tid(),
+                                                     ref_haplotype.genome_location.unwrap().get_start(),
+                                                     ref_haplotype.genome_location.unwrap().get_end(),
+                                                     kmer_size
+                                                 ))
+            }
+
+            // It's important to prune before recovering dangling ends so that we don't waste time recovering bad ends.
+            // It's also important to prune before checking for cycles so that sequencing errors don't create false cycles
+            // and unnecessarily abort assembly
+            if self.prune_before_cycle_counting {
+                self.chain_pruner.prune_low_weight_chains(&mut rt_graph);
+            }
+
+            // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
+            if self.generate_seq_graph && rt_graph.has_cycles() {
+                debug!("Not using kmer size of {}  in read threading assembler \
+                        because it contains a cycle", kmer_size);
+                return None
+            }
+
+            // sanity check: make sure the graph had enough complexity with the given kmer
+            if !allow_low_complexity_graphs && rt_graph.is_low_quality_graph() {
+                debug!("Not using kmer size of {} in read threading assembler because it does not \
+                        produce a graph with enough complexity", kmer_size);
+                return None
+            }
+
+            let result = self.get
         }
     }
+
+    fn get_assembly_result(
+        &self,
+        ref_haplotype: &Haplotype<L>,
+        kmer_size: usize,
+        rt_graph: &mut A,
+        aligner: &mut SmithWatermanAligner,
+    ) -> AssemblyResult<E, L> {
+        if !self.prune_before_cycle_counting {
+            self.chain_pruner.prune_low_weight_chains(rt_graph)
+        }
+
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&rt_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.0.1.raw_threading_graph.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ))
+        }
+
+        // look at all chains in the graph that terminate in a non-ref node (dangling sources and sinks) and see if
+        // we can recover them by merging some N bases from the chain back into the reference
+        if self.recover_dangling_branches {
+            rt_graph.r
+        }
+    }
+
 }
