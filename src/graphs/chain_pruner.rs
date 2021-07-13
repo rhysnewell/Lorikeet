@@ -12,7 +12,7 @@ use petgraph::graph::EdgeIndex;
 use petgraph::visit::EdgeRef;
 
 pub trait ChainPruner<V: BaseVertex, E: BaseEdge> {
-    fn prune_low_weight_chain(&self, graph: &mut BaseGraph<V, E>);
+    fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>);
 
     fn find_all_chains(graph: &BaseGraph<V, E>) -> Vec<Path<'_, V, E>>;
 
@@ -22,7 +22,7 @@ pub trait ChainPruner<V: BaseVertex, E: BaseEdge> {
 }
 
 impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPruner<V, E> for AdaptiveChainPruner {
-    fn prune_low_weight_chain(&self, graph: &mut BaseGraph<V, E>) {
+    fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
         let chains = Self::find_all_chains(graph);
         let chains_to_remove = self.chains_to_remove(&chains, graph);
         chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(chain.get_edges()));

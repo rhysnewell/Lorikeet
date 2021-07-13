@@ -4,16 +4,24 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use reads::bird_tool_reads::BirdToolRead;
+use petgraph::graph::NodeIndex;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
  */
-pub trait AbstractReadThreadingGraph<'a> {
+pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     const ANONYMOUS_SAMPLE: &'static str = "XXX_UNAMED_XXX";
     const WRITE_GRAPH: bool = false;
     const DEBUG_NON_UNIQUE_CALC: bool = false;
     const MAX_CIGAR_COMPLEXITY: usize = 3;
     const INCREASE_COUNTS_BACKWARDS: bool = true;
+
+    fn has_cycles(&self) -> bool;
+
+    // heuristic to decide if the graph should be thown away based on low complexity/poor assembly
+    fn is_low_quality_graph(&self) -> bool;
+
+    fn print_graph(&self, file_name: String, prune_factor: usize);
 
     /**
      * Checks whether a kmer can be the threading start based on the current threading start location policy.
@@ -25,15 +33,9 @@ pub trait AbstractReadThreadingGraph<'a> {
     fn is_threading_start(&self, kmer: &Kmer<'a>, start_threading_only_at_existing_vertex: bool) -> bool;
 
     // get the next kmerVertex for ChainExtension and validate if necessary.
-    fn get_next_kmer_vertex_for_chain_extension(&self, kmer: &Kmer<'a>, is_ref: bool, prev_vertex: &MultiDeBruijnVertex) -> MultiDeBruijnVertex;
-
-    /**
-     * Get the unique vertex for kmer, or null if not possible.
-     *
-     * @param allowRefSource if true, we will allow kmer to match the reference source vertex
-     * @return a vertex for kmer, or null (either because it doesn't exist or is non-unique for graphs that have such a distinction)
-     */
-    fn get_kmer_vertex(&self, kmer: &Kmer, allow_ref_source: bool) -> Option<&MultiDeBruijnVertex<'a>>;
+    fn get_next_kmer_vertex_for_chain_extension(
+        &self, kmer: &Kmer<'a>, is_ref: bool, prev_vertex: NodeIndex
+    ) -> Option<&NodeIndex>;
 
     /**
      * Add bases in sequence to this graph
@@ -72,6 +74,9 @@ pub trait AbstractReadThreadingGraph<'a> {
      */
     fn add_read(&mut self, read: BirdToolRead);
 
+    // only add the new kmer to the map if it exists and isn't in our non-unique kmer list
+    fn track_kmer(&mut self, kmer: Kmer, new_vertex: NodeIndex);
+
     /**
      * Determines whether a base can safely be used for assembly.
      * Currently disallows Ns and/or those with low quality
@@ -92,6 +97,77 @@ pub trait AbstractReadThreadingGraph<'a> {
      * been added to the graph.
      */
     fn build_graph_if_necessary(&mut self);
+
+    /**
+     * Thread sequence seqForKmers through the current graph, updating the graph as appropriate
+     *
+     * @param seqForKmers a non-null sequence
+     */
+    fn thread_sequence(&mut self, seq_for_kmers: &SequenceForKmers);
+
+    /**
+     * Find vertex and its position in seqForKmers where we should start assembling seqForKmers
+     *
+     * @param seqForKmers the sequence we want to thread into the graph
+     * @return the position of the starting vertex in seqForKmer, or -1 if it cannot find one
+     */
+    fn find_start(&self, seq_for_kmers: &SequenceForKmers) -> usize;
+
+    // whether reads are needed after graph construction
+    fn should_remove_reads_after_graph_construction(&self) -> bool;
+
+    /**
+     * Get the vertex for the kmer in sequence starting at start
+     *
+     * @param sequence the sequence
+     * @param start    the position of the kmer start
+     * @return a non-null vertex
+     */
+    fn get_or_create_kmer_vertex(&mut self, sequence: &[u8], start: usize) -> NodeIndex;
+
+    /**
+     * Get the unique vertex for kmer, or null if not possible.
+     *
+     * @param allowRefSource if true, we will allow kmer to match the reference source vertex
+     * @return a vertex for kmer, or null (either because it doesn't exist or is non-unique for graphs that have such a distinction)
+     */
+    fn get_kmer_vertex(&self, kmer: &Kmer, allow_ref_source: bool) -> Option<NodeIndex>;
+
+    /**
+     * Create a new vertex for kmer.  Add it to the kmerToVertexMap map if appropriate.
+     *
+     * @param kmer the kmer we want to create a vertex for
+     * @return the non-null created vertex
+     */
+    fn create_vertex(&mut self, kmer: Kmer) -> NodeIndex;
+
+    fn increase_counts_in_matched_kmers(
+        &mut self,
+        seqs_for_kmers: &SequenceForKmers,
+        vertex: NodeIndex,
+        original_kmer: &[u8],
+        offset: usize,
+    );
+
+    /**
+     * Workhorse routine of the assembler.  Given a sequence whose last vertex is anchored in the graph, extend
+     * the graph one bp according to the bases in sequence.
+     *
+     * @param prevVertex a non-null vertex where sequence was last anchored in the graph
+     * @param sequence   the sequence we're threading through the graph
+     * @param kmerStart  the start of the current kmer in graph we'd like to add
+     * @param count      the number of observations of this kmer in graph (can be > 1 for GGA)
+     * @param isRef      is this the reference sequence?
+     * @return a non-null vertex connecting prevVertex to in the graph based on sequence
+     */
+    fn extend_chain_by_one(
+        &mut self,
+        prev_vertex: NodeIndex,
+        sequence: &'a [u8],
+        kmer_start: usize,
+        count: usize,
+        is_ref: bool
+    ) -> NodeIndex;
 }
 
 impl AbstractReadThreadingGraph {
