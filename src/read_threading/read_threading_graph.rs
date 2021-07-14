@@ -4,13 +4,16 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use std::collections::HashSet;
-use read_threading::abstract_read_threading_graph::{SequenceForKmers, AbstractReadThreadingGraph};
+use read_threading::abstract_read_threading_graph::{SequenceForKmers, AbstractReadThreadingGraph, DanglingChainMergeHelper, TraversalDirection};
 use linked_hash_set::LinkedHashSet;
 use reads::bird_tool_reads::BirdToolRead;
-use petgraph::graph::NodeIndex;
+use petgraph::graph::{NodeIndex, EdgeIndex};
 use petgraph::Direction;
 use graphs::base_vertex::BaseVertex;
 use petgraph::stable_graph::node_index;
+use std::cmp::max;
+use compare::{Compare, Extract};
+
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -304,6 +307,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
                             &format!("threading.{}.{}.dot",
                                      self.counter, sequence_for_kmers.name.replace(" ", "_")),
                             true, 0);
+                        self.counter += 1;
                     }
                 }
 
@@ -519,5 +523,299 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         self.base_graph.graph.add_edge(prev_vertex, next_vertex, MultiSampleEdge::new(is_ref, count, self.num_pruning_samples));
 
         return next_vertex
+    }
+
+    /**
+     * Try to recover dangling tails
+     *
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     */
+    fn recover_dangling_tails(
+        &mut self,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) {
+        if !self.already_built {
+            panic!("recover_dangling_tails requires that graph already be built")
+        }
+
+        let mut attempted = 0;
+        let mut n_recovered = 0;
+        for v in self.base_graph.graph.node_indices() {
+            if self.base_graph.in_degree_of(v) == 0 && !self.base_graph.is_ref_sink(v) {
+                attempted += 1;
+                n_recovered += self.recover_dangling_tail(
+                    v, prune_factor, min_dangling_branch_length, recover_all, aligner
+                )
+            }
+        }
+    }
+
+    /**
+     * Try to recover dangling heads
+     *
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     */
+    fn recover_dangling_heads(
+        &mut self,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    );
+
+    /**
+     * Attempt to attach vertex with out-degree == 0 to the graph
+     *
+     * @param vertex                  the vertex to recover
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param aligner
+     * @return 1 if we successfully recovered the vertex and 0 otherwise
+     */
+    fn recover_dangling_tail(
+        &mut self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> usize {
+        if self.base_graph.out_degree_of(vertex) != 0 {
+            panic!("Attempting to recover a dangling tail for {} but it has out-degree > 0", vertex)
+        };
+
+        // generate the CIGAR string from Smith-Waterman between the dangling tail and reference paths
+        let dangling_tail_merge_result = self.
+    }
+
+    /**
+     * Attempt to attach vertex with in-degree == 0, or a vertex on its path, to the graph
+     *
+     * @param vertex                  the vertex to recover
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     * @return 1 if we successfully recovered a vertex and 0 otherwise
+     */
+    fn recover_dangling_head(
+        &mut self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> usize;
+
+    /**
+     * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
+     * provided vertex is the sink) and the reference path.
+     *
+     * @param aligner
+     * @param vertex      the sink of the dangling chain
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param recoverAll  recover even branches with forks
+     * @return a SmithWaterman object which can be null if no proper alignment could be generated
+     */
+    fn generate_cigar_against_downwards_reference_path(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> DanglingChainMergeHelper {
+        let min_tail_path_length = max(1, min_dangling_branch_length); // while heads can be 0, tails absolutely cannot
+
+        // find the lowest common ancestor path between this vertex and the diverging master path if available
+        let alt_path = self.find_path_upwards_to_lowest_common_ancestor(vertex, prune_factor, !recover_all);
+        match alt_path {
+            None => return None,
+            Some(alt_path) => {
+                if self.base_graph.is_ref_source(alt_path[0]) || alt_path.len() < min_tail_path_length + 1 {
+                    return None
+                }
+            }
+        };
+
+        let alt_path = alt_path.unwrap();
+        // now get the reference path from the LCA
+        let ref_path = self.get
+    }
+
+    /**
+     * Finds the path in the graph from this vertex to the reference sink, including this vertex
+     *
+     * @param start           the reference vertex to start from
+     * @param direction       describes which direction to move in the graph (i.e. down to the reference sink or up to the source)
+     * @param blacklistedEdge edge to ignore in the traversal down; useful to exclude the non-reference dangling paths
+     * @return the path (non-null, non-empty)
+     */
+    fn get_reference_path(
+        &self,
+        start: NodeIndex,
+        direction: TraversalDirection,
+        blacklisted_edge: Option<EdgeIndex>
+    ) -> Vec<NodeIndex> {
+        let mut path = Vec::new();
+
+        let mut v = Some(start);
+        while v != None {
+            path.push(v.unwrap());
+            v = match direction {
+                TraversalDirection::Downwards => self.get
+            }
+        }
+    }
+
+    /**
+     * Finds the path upwards in the graph from this vertex to the first diverging node, including that (lowest common ancestor) vertex.
+     * Note that nodes are excluded if their pruning weight is less than the pruning factor.
+     *
+     * @param vertex         the original vertex
+     * @param pruneFactor    the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param giveUpAtBranch stop trying to find a path if a vertex with multiple incoming or outgoing edge is found
+     * @return the path if it can be determined or null if this vertex either doesn't merge onto another path or
+     * has an ancestor with multiple incoming edges before hitting the reference path
+     */
+    fn find_path_upwards_to_lowest_common_ancestor(
+        &self, vertex: NodeIndex, prune_factor: usize, give_up_at_branch: bool
+    ) -> Option<Vec<NodeIndex>> {
+        return if give_up_at_branch {
+            let done = |v: NodeIndex| -> bool {
+                self.base_graph.in_degree_of(v) != 1 || self.base_graph.out_degree_of(v) >= 2
+            };
+
+            let return_path = |v: NodeIndex| -> bool {
+                self.base_graph.out_degree_of(v) > 1
+            };
+
+            let next_edge = |v: NodeIndex| -> EdgeIndex {
+                self.base_graph.incoming_edge_of(v)
+            };
+
+            let next_node = |e: EdgeIndex| -> NodeIndex {
+                self.base_graph.get_edge_source(e)
+            };
+
+            self.find_path(
+                vertex,
+                prune_factor,
+                &done,
+                &return_path,
+                &next_edge,
+                &next_node
+            )
+        } else {
+            let done = |v: NodeIndex| -> bool {
+                self.has_incident_ref_edge(v) || self.base_graph.in_degree_of(v)
+            };
+
+            let return_path = |v: NodeIndex| -> bool {
+                self.base_graph.out_degree_of(v) > 1 && self.has_incident_ref_edge(v)
+            };
+
+            let next_edge = |v: NodeIndex| -> EdgeIndex {
+                self.get_heaviest_incoming_edge(v)
+            };
+
+            let next_node = |e: EdgeIndex| -> NodeIndex {
+                self.base_graph.get_edge_source(e)
+            };
+
+            self.find_path(
+                vertex,
+                prune_factor,
+                &done,
+                &return_path,
+                &next_edge,
+                &next_node
+            )
+        }
+    }
+
+    /**
+     * Finds a path starting from a given vertex and satisfying various predicates
+     *
+     * @param vertex      the original vertex
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param done        test for whether a vertex is at the end of the path
+     * @param returnPath  test for whether to return a found path based on its terminal vertex
+     * @param nextEdge    function on vertices returning the next edge in the path
+     * @param nextNode    function of edges returning the next vertex in the path
+     * @return a path, if one satisfying all predicates is found, {@code null} otherwise
+     */
+    fn find_path(
+        &self, vertex: NodeIndex, prune_factor: usize,
+        done: &dyn Fn(NodeIndex) -> bool,
+        return_path: &dyn Fn(NodeIndex) -> bool,
+        next_edge: &dyn Fn(NodeIndex) -> EdgeIndex,
+        next_node: &dyn Fn(EdgeIndex) -> NodeIndex,
+    ) -> Option<Vec<NodeIndex>> {
+        let mut path = Vec::new();
+        let mut visited_nodes = HashSet::new();
+
+        let mut v = vertex;
+        while !done(v) {
+            let edge = next_edge(v);
+            // if it has too low a weight, don't use it (or previous vertexes) for the path
+            if self.base_graph.graph.edge_weight(edge).unwrap().get_pruning_multiplicity() < prune_factor {
+                // save the previously visited notes to protect us from riding forever 'neath the streets of boston
+                visited_nodes.par_extend(path);
+                path.clear();
+            } else {
+                path.insert(0, v);
+            }
+
+            v = next_node(edge);
+            // Check that we aren't stuck in a loop
+            if path.contains(&v) || visited_nodes.contains(&v) {
+                error!("Dangling end recovery killed because of a loop (find_path)");
+                return None
+            }
+        }
+        path.insert(0, v);
+
+        return if return_path(v) {
+            path
+        } else {
+            None
+        }
+    }
+
+    fn has_incident_ref_edge(
+        &self,
+        v: NodeIndex
+    ) -> bool {
+        for edge in self.base_graph.incoming_edge_of(v) {
+            if self.base_graph.edge_is_ref(edge) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fn get_heaviest_incoming_edge(&self, v: NodeIndex) -> EdgeIndex {
+        let incoming_edges = self.base_graph.graph.edges_directed(v, Direction::Incoming).collect::<Vec<EdgeIndex>>();
+        return if incoming_edges.len() == 1 {
+            incoming_edges[0]
+        } else {
+            let comparator = Extract::new(|edge: EdgeIndex| {
+                self.base_graph.graph.edge_weight(edge).unwrap().multiplicity
+            });
+
+            incoming_edges.par_iter().max_by(|l, r| {
+                comparator.compare(l, r)
+            }).unwrap()
+        }
     }
 }

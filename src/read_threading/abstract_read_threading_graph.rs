@@ -4,7 +4,9 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use reads::bird_tool_reads::BirdToolRead;
-use petgraph::graph::NodeIndex;
+use petgraph::graph::{NodeIndex, EdgeIndex};
+use utils::smith_waterman_aligner::SmithWatermanAligner;
+use rust_htslib::bam::record::Cigar;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -126,6 +128,123 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     fn get_or_create_kmer_vertex(&mut self, sequence: &[u8], start: usize) -> NodeIndex;
 
     /**
+     * Try to recover dangling tails
+     *
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     */
+    fn recover_dangling_tails(
+        &mut self,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    );
+
+    /**
+     * Try to recover dangling heads
+     *
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     */
+    fn recover_dangling_heads(
+        &mut self,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    );
+
+    /**
+     * Attempt to attach vertex with out-degree == 0 to the graph
+     *
+     * @param vertex                  the vertex to recover
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param aligner
+     * @return 1 if we successfully recovered the vertex and 0 otherwise
+     */
+    fn recover_dangling_tail(
+        &mut self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> usize;
+
+    /**
+     * Attempt to attach vertex with in-degree == 0, or a vertex on its path, to the graph
+     *
+     * @param vertex                  the vertex to recover
+     * @param pruneFactor             the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param minDanglingBranchLength the minimum length of a dangling branch for us to try to merge it
+     * @param recoverAll              recover even branches with forks
+     * @param aligner
+     * @return 1 if we successfully recovered a vertex and 0 otherwise
+     */
+    fn recover_dangling_head(
+        &mut self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> usize;
+
+    /**
+     * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
+     * provided vertex is the sink) and the reference path.
+     *
+     * @param aligner
+     * @param vertex      the sink of the dangling chain
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param recoverAll  recover even branches with forks
+     * @return a SmithWaterman object which can be null if no proper alignment could be generated
+     */
+    fn generate_cigar_against_downwards_reference_path(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+        aligner: &mut SmithWatermanAligner,
+    ) -> DanglingChainMergeHelper;
+
+    /**
+     * Finds the path upwards in the graph from this vertex to the first diverging node, including that (lowest common ancestor) vertex.
+     * Note that nodes are excluded if their pruning weight is less than the pruning factor.
+     *
+     * @param vertex         the original vertex
+     * @param pruneFactor    the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param giveUpAtBranch stop trying to find a path if a vertex with multiple incoming or outgoing edge is found
+     * @return the path if it can be determined or null if this vertex either doesn't merge onto another path or
+     * has an ancestor with multiple incoming edges before hitting the reference path
+     */
+    fn find_path_upwards_to_lowest_common_ancestor(
+        &self, vertex: NodeIndex, prune_factor: usize, give_up_at_branch: bool
+    ) -> Option<Vec<NodeIndex>>;
+
+    /**
+     * Finds the path in the graph from this vertex to the reference sink, including this vertex
+     *
+     * @param start           the reference vertex to start from
+     * @param direction       describes which direction to move in the graph (i.e. down to the reference sink or up to the source)
+     * @param blacklistedEdge edge to ignore in the traversal down; useful to exclude the non-reference dangling paths
+     * @return the path (non-null, non-empty)
+     */
+    fn get_reference_path(
+        &self,
+        start: NodeIndex,
+        direction: TraversalDirection,
+        blacklisted_edge: Option<EdgeIndex>
+    ) -> Vec<NodeIndex>;
+
+    /**
      * Get the unique vertex for kmer, or null if not possible.
      *
      * @param allowRefSource if true, we will allow kmer to match the reference source vertex
@@ -168,13 +287,36 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         count: usize,
         is_ref: bool
     ) -> NodeIndex;
+
+    /**
+     * Finds a path starting from a given vertex and satisfying various predicates
+     *
+     * @param vertex      the original vertex
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param done        test for whether a vertex is at the end of the path
+     * @param returnPath  test for whether to return a found path based on its terminal vertex
+     * @param nextEdge    function on vertices returning the next edge in the path
+     * @param nextNode    function of edges returning the next vertex in the path
+     * @return a path, if one satisfying all predicates is found, {@code null} otherwise
+     */
+    fn find_path(
+        &self, vertex: NodeIndex, prune_factor: usize,
+        done: &dyn Fn(NodeIndex) -> bool,
+        return_path: &dyn Fn(NodeIndex) -> bool,
+        next_edge: &dyn Fn(NodeIndex) -> EdgeIndex,
+        next_node: &dyn Fn(EdgeIndex) -> NodeIndex,
+    ) -> Option<Vec<NodeIndex>>;
+
+    fn has_incident_ref_edge(&self, v: NodeIndex) -> bool;
+
+    fn get_heaviest_incoming_edge(&self, v: NodeIndex) -> EdgeIndex;
 }
 
 impl AbstractReadThreadingGraph {
 
 }
 
-enum TraversalDirection {
+pub enum TraversalDirection {
     Downwards,
     Upwards,
 }
@@ -213,5 +355,16 @@ impl SequenceForKmers<'_> {
             is_ref
         }
     }
+}
+
+/**
+ * Class to keep track of the important dangling chain merging data
+ */
+pub struct DanglingChainMergeHelper<'a> {
+    pub(crate) dangling_path: NodeIndex,
+    pub(crate) reference_path: NodeIndex,
+    pub(crate) dangling_path_string: &'a [u8],
+    pub(crate) reference_path_string: &'a [u8],
+    pub(crate) cigar: Vec<Cigar>
 }
 
