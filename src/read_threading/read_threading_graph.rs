@@ -11,8 +11,12 @@ use petgraph::graph::{NodeIndex, EdgeIndex};
 use petgraph::Direction;
 use graphs::base_vertex::BaseVertex;
 use petgraph::stable_graph::node_index;
-use std::cmp::max;
+use std::cmp::{max, min};
 use compare::{Compare, Extract};
+use utils::smith_waterman_aligner::*;
+use reads::alignment_utils::AlignmentUtils;
+use rust_htslib::bam::record::{CigarString, Cigar};
+use reads::cigar_utils::CigarUtils;
 
 
 /**
@@ -587,14 +591,26 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     ) -> usize {
         if self.base_graph.out_degree_of(vertex) != 0 {
-            panic!("Attempting to recover a dangling tail for {} but it has out-degree > 0", vertex)
+            panic!("Attempting to recover a dangling tail for {:?} but it has out-degree > 0", vertex)
         };
 
         // generate the CIGAR string from Smith-Waterman between the dangling tail and reference paths
-        let dangling_tail_merge_result = self.
+        let dangling_tail_merge_result = self.generate_cigar_against_downwards_reference_path(
+            vertex, prune_factor,min_dangling_branch_length, recover_all,
+        );
+
+        match dangling_tail_merge_result {
+            None => return 0,
+            Some(dangling_tail_merge_result) => {
+                if !Self::cigar_is_okay_to_merge(&dangling_tail_merge_result.cigar, false, true) {
+                    return 0
+                } else {
+                    self.merge_dangling_tail(dangling_tail_merge_result)
+                }
+            }
+        }
     }
 
     /**
@@ -613,8 +629,38 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     ) -> usize;
+
+    /**
+     * Actually merge the dangling tail if possible
+     *
+     * @param danglingTailMergeResult the result from generating a Cigar for the dangling tail against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_tail(&mut self, dangling_tail_merge_result: DanglingChainMergeHelper) -> usize {
+        let elements = &dangling_tail_merge_result.cigar.0;
+        let last_element = elements[elements.len() - 1];
+
+        // the last element must be an M
+        match last_element {
+            Cigar::Match(_) => {
+                // correct operator but more checks to do
+            },
+            _ => panic!("Last cigar element must be Match(_)")
+        };
+
+        let last_ref_index = CigarUtils::get_reference_length(&dangling_tail_merge_result.cigar) -1;
+        let matching_suffix = min(
+            Self::longest_suffix_match(
+                &dangling_tail_merge_result.reference_path_string,
+                &dangling_tail_merge_result.dangling_path_string,
+                last_ref_index as i64
+            ),
+            last_element.len() as usize
+        );
+
+
+    }
 
     /**
      * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
@@ -632,8 +678,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
-    ) -> DanglingChainMergeHelper {
+    ) -> Option<DanglingChainMergeHelper> {
         let min_tail_path_length = max(1, min_dangling_branch_length); // while heads can be 0, tails absolutely cannot
 
         // find the lowest common ancestor path between this vertex and the diverging master path if available
@@ -649,7 +694,24 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
 
         let alt_path = alt_path.unwrap();
         // now get the reference path from the LCA
-        let ref_path = self.get
+        let ref_path = self.get_reference_path(
+            alt_path[0],
+            TraversalDirection::Downwards,
+            Some(self.get_heaviest_incoming_edge(alt_path[1]))
+        );
+
+        // create the Smith-Waterman strings to use
+        let ref_bases = self.get_bases_for_path(&ref_path, false);
+        let alt_bases = self.get_bases_for_path(&alt_path, false);
+
+        // run Smith-Waterman to determine the best alignment
+        // (and remove trailing deletions since they aren't interesting)
+        let alignment = SmithWatermanAligner::align(ref_bases, alt_bases, *STANDARD_NGS);
+
+        return Some(DanglingChainMergeHelper::new(
+            alt_path, ref_path,
+            alt_bases, ref_bases,
+            AlignmentUtils::remove_trailing_deletions(CigarString::from_alignment(&alignment, false))))
     }
 
     /**
@@ -669,12 +731,15 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         let mut path = Vec::new();
 
         let mut v = Some(start);
-        while v != None {
+        while v.is_some() {
             path.push(v.unwrap());
             v = match direction {
-                TraversalDirection::Downwards => self.get
-            }
+                TraversalDirection::Downwards => self.base_graph.get_next_reference_vertex(v, true, blacklisted_edge),
+                TraversalDirection::Upwards => self.base_graph.get_prev_reference_vertex(v),
+            };
         }
+
+        return path
     }
 
     /**
@@ -817,5 +882,27 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
                 comparator.compare(l, r)
             }).unwrap()
         }
+    }
+
+    /**
+     * The base sequence for the given path.
+     *
+     * @param path         the list of vertexes that make up the path
+     * @param expandSource if true and if we encounter a source node, then expand (and reverse) the character sequence for that node
+     * @return non-null sequence of bases corresponding to the given path
+     */
+    fn get_bases_for_path(&self, path: &Vec<NodeIndex>, expand_source: bool) -> &[u8] {
+        assert!(!path.is_empty(), "Path cannot be empty");
+
+
+        let sb = path.iter().map(|v| {
+            if expand_source && self.base_graph.is_source(v) {
+                self.base_graph.graph.node_weight(v).unwrap().to_string()
+            } else {
+                self.base_graph.graph.node_weight(v).unwrap().get_suffix_string()
+            }
+        }).collect::<String>();
+
+        return sb.as_bytes()
     }
 }
