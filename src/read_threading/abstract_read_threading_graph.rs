@@ -6,7 +6,7 @@ use graphs::multi_sample_edge::MultiSampleEdge;
 use reads::bird_tool_reads::BirdToolRead;
 use petgraph::graph::{NodeIndex, EdgeIndex};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
-use rust_htslib::bam::record::Cigar;
+use rust_htslib::bam::record::{Cigar, CigarString};
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -59,6 +59,48 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         count: usize,
         is_ref: bool,
     );
+
+    /**
+     * Determine whether the provided cigar is okay to merge into the reference path
+     *
+     * @param cigar                the cigar to analyze
+     * @param requireFirstElementM if true, require that the first cigar element be an M operator in order for it to be okay
+     * @param requireLastElementM  if true, require that the last cigar element be an M operator in order for it to be okay
+     * @return true if it's okay to merge, false otherwise
+     */
+    fn cigar_is_okay_to_merge(
+        cigar: &CigarString, require_first_element_m: bool, require_last_element_m: bool
+    ) -> bool {
+        let num_elements = cigar.0.len();
+
+        // don't allow more than a couple of different ops
+        if num_elements == 0 || num_elements > Self::MAX_CIGAR_COMPLEXITY {
+            return false
+        };
+
+        // the first element must be an M
+        if require_first_element_m {
+            match cigar.0[0] {
+                Cigar::Match(_) => {
+                    // correct operator but more checks to do
+                },
+                _ => return false
+            }
+        };
+
+        // the last element must be an M
+        if require_last_element_m {
+            match cigar.0[num_elements - 1] {
+                Cigar::Match(_) => {
+                    // correct operator but more checks to do
+                },
+                _ => return false
+            }
+        };
+
+        // note that there are checks for too many mismatches in the dangling branch later in the process
+        return true
+    }
 
     /**
      * Changes the threading start location policy.
@@ -119,6 +161,26 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     fn should_remove_reads_after_graph_construction(&self) -> bool;
 
     /**
+     * calculates the longest suffix match between a sequence and a smaller kmer
+     *
+     * @param seq      the (reference) sequence
+     * @param kmer     the smaller kmer sequence
+     * @param seqStart the index (inclusive) on seq to start looking backwards from
+     * @return the longest matching suffix
+     */
+    fn longest_suffix_match(seq: &[u8], kmer: &[u8], seq_start: i64) -> usize {
+        for len in 1..(kmer.len() as i64 + 1) {
+            let seq_i = seq_start - len + 1;
+            let kmer_i = kmer.len() as i64 - len;
+            if seq_i < 0 || seq_i[seq_i as usize] != kmer[kmer_i as usize] {
+                return len as usize - 1;
+            }
+        }
+
+        return kmer.len()
+    }
+
+    /**
      * Get the vertex for the kmer in sequence starting at start
      *
      * @param sequence the sequence
@@ -140,7 +202,6 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     );
 
     /**
@@ -156,7 +217,6 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     );
 
     /**
@@ -174,7 +234,6 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     ) -> usize;
 
     /**
@@ -193,9 +252,15 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
     ) -> usize;
 
+    /**
+     * Actually merge the dangling tail if possible
+     *
+     * @param danglingTailMergeResult the result from generating a Cigar for the dangling tail against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_tail(&mut self, dangling_tail_merge_result: DanglingChainMergeHelper) -> usize;
     /**
      * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
      * provided vertex is the sink) and the reference path.
@@ -212,8 +277,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
-    ) -> DanglingChainMergeHelper;
+    ) -> Option<DanglingChainMergeHelper>;
 
     /**
      * Finds the path upwards in the graph from this vertex to the first diverging node, including that (lowest common ancestor) vertex.
@@ -310,6 +374,15 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     fn has_incident_ref_edge(&self, v: NodeIndex) -> bool;
 
     fn get_heaviest_incoming_edge(&self, v: NodeIndex) -> EdgeIndex;
+
+    /**
+     * The base sequence for the given path.
+     *
+     * @param path         the list of vertexes that make up the path
+     * @param expandSource if true and if we encounter a source node, then expand (and reverse) the character sequence for that node
+     * @return non-null sequence of bases corresponding to the given path
+     */
+    fn get_bases_for_path(&self, path: &Vec<NodeIndex>, expand_source: bool) -> &[u8];
 }
 
 impl AbstractReadThreadingGraph {
@@ -324,6 +397,7 @@ pub enum TraversalDirection {
 /**
  * Keeps track of the information needed to add a sequence to the read threading assembly graph
  */
+#[derive(Debug, Clone)]
 pub struct SequenceForKmers<'a> {
     pub name: String,
     pub sequence: &'a [u8],
@@ -361,10 +435,28 @@ impl SequenceForKmers<'_> {
  * Class to keep track of the important dangling chain merging data
  */
 pub struct DanglingChainMergeHelper<'a> {
-    pub(crate) dangling_path: NodeIndex,
-    pub(crate) reference_path: NodeIndex,
+    pub(crate) dangling_path: Vec<NodeIndex>,
+    pub(crate) reference_path: Vec<NodeIndex>,
     pub(crate) dangling_path_string: &'a [u8],
     pub(crate) reference_path_string: &'a [u8],
-    pub(crate) cigar: Vec<Cigar>
+    pub(crate) cigar: CigarString
+}
+
+impl<'a> DanglingChainMergeHelper<'a> {
+    pub fn new(
+        dangling_path: Vec<NodeIndex>,
+        reference_path: Vec<NodeIndex>,
+        dangling_path_string: &'a [u8],
+        reference_path_string: &'a [u8],
+        cigar: CigarString
+    ) -> DanglingChainMergeHelper<'a> {
+        DanglingChainMergeHelper {
+            dangling_path,
+            reference_path,
+            dangling_path_string,
+            reference_path_string,
+            cigar,
+        }
+    }
 }
 

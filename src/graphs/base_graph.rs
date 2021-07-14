@@ -302,10 +302,15 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @param v the current vertex, can be null
      * @return  the previous reference vertex if it exists or null otherwise.
      */
-    pub fn get_prev_reference_vertex(&self, v: NodeIndex) -> Option<NodeIndex> {
+    pub fn get_prev_reference_vertex(&self, v: Option<NodeIndex>) -> Option<NodeIndex> {
         match v {
             None => return None,
-            Some(NodeIndex) => self.graph.edges_directed(v, Direction::Incoming);
+            Some(NodeIndex) => {
+                self.graph.edges_directed(v, Direction::Incoming).map(|e| {
+                        self.get_edge_source(e)
+                    }).filter(|v| self.is_reference_node(v)).take(1).next()
+                }
+            }
         }
     }
 
