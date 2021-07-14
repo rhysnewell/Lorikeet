@@ -1,4 +1,4 @@
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex};
+use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges};
 use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
@@ -126,6 +126,39 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         return self.graph.neighbors_directed(v, Direction::Outgoing).collect::<LinkedHashSet<NodeIndex>>()
     }
 
+    /**
+     * Get the incoming edge of v.  Requires that there be only one such edge or throws an error
+     * @param v our vertex
+     * @return the single incoming edge to v, or null if none exists
+     */
+    pub fn incoming_edge_of(&self, v: NodeIndex) -> EdgeIndex {
+        self.get_singleton_edge(self.graph.edges_directed(v, Direction::Incoming).collect::<Vec<EdgeIndex>>())
+    }
+
+    /**
+     * Get the incoming edge of v.  Requires that there be only one such edge or throws an error
+     * @param v our vertex
+     * @return the single incoming edge to v, or null if none exists
+     */
+    pub fn outgoing_edge_of(&self, v: NodeIndex) -> EdgeIndex {
+        self.get_singleton_edge(self.graph.edges_directed(v, Direction::Outgoing).collect::<Vec<EdgeIndex>>())
+    }
+
+    /**
+     * Helper function that gets the a single edge from edges, null if edges is empty, or
+     * throws an error is edges has more than 1 element
+     * @param edges a set of edges
+     * @return a edge
+     */
+    fn get_singleton_edge(&self, edges: Vec<EdgeIndex>) -> Option<EdgeIndex> {
+        assert!(edges.len() <= 1, "Cannot get a single incoming edge for a vertex with multiple incoming edges {:?}", edges);
+        return if edges.is_empty() {
+            None
+        } else {
+            edges[0]
+        }
+    }
+
     pub fn get_edge_target(&self, edge: EdgeIndex) -> NodeIndex {
         self.graph.edge_endpoints(edge).unwrap().1
     }
@@ -134,17 +167,21 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         self.graph.edge_endpoints(edge).unwrap().0
     }
 
+    pub fn edge_is_ref(&self, edge: EdgeIndex) -> bool {
+        self.graph.edge_weight(edge).unwrap().is_ref
+    }
+
     /**
     * Removes all provided vertices from the graph
     */
-    pub fn remove_all_vertices(&mut self, vertices: &Vec<NodeIndex>) {
+    pub fn remove_all_vertices<I: IntoIterator<Item=NodeIndex>>(&mut self, vertices: I) {
         self.graph.retain_nodes(|gr, v| !vertices.contains(&v));
     }
 
     /**
     * Removes all provided edges from the graph
     */
-    pub fn remove_all_edges(&mut self, edges: &Vec<EdgeIndex>) {
+    pub fn remove_all_edges<I: IntoIterator<Item=EdgeIndex>>(&mut self, edges: I) {
         self.graph.retain_edges(|gr, e| !edges.contains(&e));
     }
 
@@ -212,6 +249,64 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      */
     pub fn get_reference_sink_vertex(&self) -> Option<NodeIndex> {
         return self.graph.node_indices().filter(|v| self.is_reference_sink(*v)).nth(0)
+    }
+
+    /**
+     * Traverse the graph and get the next reference vertex if it exists
+     * @param v the current vertex, can be null
+     * @param allowNonRefPaths if true, allow sub-paths that are non-reference if there is only a single outgoing edge
+     * @param blacklistedEdge optional edge to ignore in the traversal down; useful to exclude the non-reference dangling paths
+     * @return the next vertex (but not necessarily on the reference path if allowNonRefPaths is true) if it exists, otherwise null
+     */
+    pub fn get_next_reference_vertex(
+        &self, v: Option<NodeIndex>, allow_non_ref_paths: bool, blacklisted_edge: Option<EdgeIndex>
+    ) -> Option<NodeIndex> {
+        if v.is_none() {
+            return None
+        }
+
+        let v = v.unwrap();
+        let outgoing_edges = self.graph.edges_directed(v, Direction::Outgoing);
+
+        for edge_to_test in outgoing_edges.iter() {
+            if edge_to_test.weight().is_ref() {
+                return self.get_edge_target(edge_to_test.id())
+            }
+        }
+
+        if !allow_non_ref_paths {
+            return None
+        }
+
+        //singleton or empty set
+        let edges = match blacklisted_edge {
+            Some(blacklisted_edge) => {
+                let edges = outgoing_edges.par_bridge().filter(|e| e.id() != blacklisted_edge).collect::<Vec<EdgeIndex>>();
+                edges
+            },
+            None => {
+                let edges = outgoing_edges.par_bridge().map(|e| e.id()).collect::<Vec<EdgeIndex>>();
+                edges
+            }
+        };
+
+        return if edges.len() == 1 {
+            Some(self.get_edge_target(edges[0]))
+        } else {
+            None
+        }
+    }
+
+    /**
+     * Traverse the graph and get the previous reference vertex if it exists
+     * @param v the current vertex, can be null
+     * @return  the previous reference vertex if it exists or null otherwise.
+     */
+    pub fn get_prev_reference_vertex(&self, v: NodeIndex) -> Option<NodeIndex> {
+        match v {
+            None => return None,
+            Some(NodeIndex) => self.graph.edges_directed(v, Direction::Incoming);
+        }
     }
 
     /**
@@ -323,6 +418,49 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             panic!("Graph must have ref source and sink vertices");
         }
 
-        
+        // get the set of vertices we can reach by going forward from the ref source
+        let mut on_path_from_ref_source = self.get_all_connected_nodes_from_node(
+            self.get_reference_source_vertex(),
+            Direction::Outgoing
+        );
+
+        // get the set of vertices we can reach by going backward from the ref sink
+        let mut on_path_from_ref_sink = self.get_all_connected_nodes_from_node(
+            self.get_reference_sink_vertex(),
+            Direction::Incoming
+        );
+
+        // we want to remove anything that's not in both the sink and source sets
+        let mut vertices_to_remove = on_path_from_ref_source.symmetric_difference(&on_path_from_ref_sink).collect::<HashSet<_>>();
+        self.remove_all_vertices(vertices_to_remove);
+
+        // simple sanity checks that this algorithm is working.
+        if self.get_sinks().len() > 1 {
+            panic!("Should have eliminated all but the reference sink, but found {:?}", self.get_sinks());
+        };
+
+        if self.get_sources().len() > 1 {
+            panic!("Should have eliminated all but the reference sink, but found {:?}", self.get_sources());
+        };
+    }
+
+    /**
+     * Iterate through the BaseGraph and return all vertices reachable by specified vertex in given
+     * direction
+     *
+     * Note that if both followIncomingEdges and followOutgoingEdges are false, we simply return the
+     * start vertex
+     *
+     * @param graph the graph to iterator over.  Cannot be null
+     * @param start the vertex to start at.  Cannot be null
+     * @param followIncomingEdges should we follow incoming edges during our
+     *                            traversal? (goes backward through the graph)
+     * @param followOutgoingEdges should we follow outgoing edges during out traversal?
+     */
+    fn get_all_connected_nodes_from_node(&self, starting_node: NodeIndex, direction: Direction) -> HashSet<NodeIndex> {
+        return self.graph.neighbors_directed(starting_node, direction).par_bridge()
+            .flat_map(|neighbour| {
+                self.graph.get_all_connected_nodes_from_node(neighbour, direction)
+            }).collect::<HashSet<NodeIndex>>()
     }
 }
