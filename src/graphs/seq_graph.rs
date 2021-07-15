@@ -2,7 +2,7 @@ use graphs::base_graph::BaseGraph;
 use graphs::base_edge::BaseEdge;
 use graphs::base_vertex::BaseVertex;
 use graphs::seq_vertex::SeqVertex;
-use petgraph::graph::NodeIndex;
+use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
 use petgraph::visit::EdgeRef;
 use rayon::prelude::*;
@@ -12,7 +12,7 @@ use rayon::prelude::*;
  */
 #[derive(Debug, Clone)]
 pub struct SeqGraph<'a, E: BaseEdge> {
-    base_graph: BaseGraph<SeqVertex<'a>, E>,
+    pub(crate) base_graph: BaseGraph<SeqVertex<'a>, E>,
 }
 
 impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
@@ -92,7 +92,7 @@ impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
      *
      * @return true if any such pair of vertices could be found, false otherwise
      */
-    pub fn zip_linear_chains(&self) -> bool {
+    pub fn zip_linear_chains(&mut self) -> bool {
         let mut zip_starts = Vec::new();
         for source in self.base_graph.graph.node_indices() {
             if self.is_linear_chain_start(source) {
@@ -194,7 +194,7 @@ impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
      * @param linearChain a non-empty chain of vertices that can be zipped up into a single vertex
      * @return true if we actually merged at least two vertices together
      */
-    fn merge_linear_chain(&self, linear_chain: &'a Vec<NodeIndex>) -> bool {
+    fn merge_linear_chain(&mut self, linear_chain: &'a Vec<NodeIndex>) -> bool {
         match self.merge_linear_chain_vertex(linear_chain) {
             Some(index) => true,
             None => false

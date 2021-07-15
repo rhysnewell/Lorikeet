@@ -2,13 +2,12 @@ use graphs::base_graph::BaseGraph;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use petgraph::Direction;
-use petgraph::graph::EdgeReference;
+use petgraph::stable_graph::{EdgeReference, EdgeIndex};
 use graphs::base_edge::BaseEdge;
 use graphs::base_vertex::BaseVertex;
 use graphs::path::Path;
 use itertools::Itertools;
 use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
-use petgraph::graph::EdgeIndex;
 use petgraph::visit::EdgeRef;
 
 pub trait ChainPruner<V: BaseVertex, E: BaseEdge> {

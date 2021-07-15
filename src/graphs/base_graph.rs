@@ -1,16 +1,18 @@
-use petgraph::graph::{Graph, NodeIndex, EdgeIndex, Edges};
+use petgraph::stable_graph::{StableDiGraph, NodeIndex, EdgeIndex, Edges};
 use graphs::base_vertex::BaseVertex;
-use graphs::base_edge::BaseEdge;
+use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use rayon::prelude::*;
 use petgraph::Direction;
 use petgraph::algo;
-use std::collections::{BTreeSet, BinaryHeap, HashSet};
+use std::collections::{BTreeSet, BinaryHeap, HashSet, HashMap};
 use graphs::path::Path;
 use std::cmp::Ordering;
 use utils::base_utils::BaseUtils;
 use linked_hash_set::LinkedHashSet;
 use std::fs::File;
 use std::io::Write;
+use graphs::seq_graph::SeqGraph;
+use graphs::seq_vertex::SeqVertex;
 
 /**
  * Common code for graphs used for local assembly.
@@ -18,7 +20,7 @@ use std::io::Write;
 #[derive(Debug, Clone)]
 pub struct BaseGraph<V: BaseVertex, E: BaseEdge> {
     kmer_size: usize,
-    pub graph: Graph<V, E>,
+    pub graph: StableDiGraph<V, E>,
 }
 
 impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
@@ -26,8 +28,44 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     pub fn new(kmer_size: usize) -> BaseGraph<V, E> {
         BaseGraph {
             kmer_size,
-            graph: Graph::<V, E>::new(),
+            graph: StableDiGraph::<V, E>::new(),
         }
+    }
+
+    /**
+     * Convert this kmer graph to a simple sequence graph.
+     *
+     * Each kmer suffix shows up as a distinct SeqVertex, attached in the same structure as in the kmer
+     * graph.  Nodes that are sources are mapped to SeqVertex nodes that contain all of their sequence
+     *
+     * @return a newly allocated SequenceGraph
+     */
+    pub fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct> {
+        let mut seq_graph = SeqGraph::new(self.kmer_size);
+        let mut vertex_map = HashMap::new();
+
+        // create all of the equivalent seq graph vertices
+        for dv in self.graph.node_indices() {
+            let v_weight = self.graph.node_weight(dv).unwrap();
+            let sv = SeqVertex::new(v_weight.get_additional_sequence(self.is_source(dv)));
+            sv.set_additional_info(v_weight.get_additional_info());
+            let sv_ind = seq_graph.base_graph.graph.add_node(sv);
+            vertex_map.insert(dv, sv_ind);
+        }
+
+        // walk through the nodes and connect them to their equivalent seq vertices
+        for e in self.graph.edge_indices() {
+            let seq_in_v = vertex_map.get(self.get_edge_source(e));
+            let seq_out_v = vertex_map.get(self.get_edge_target(e));
+            let e_weight = self.graph.edge_weight(e).unwrap();
+            seq_graph.base_graph.graph.add_edge(
+                seq_in_v,
+                seq_out_v,
+                BaseEdgeStruct::new(e_weight.is_ref(), e_weight.get_multiplicity())
+            )
+        }
+
+        return seq_graph
     }
 
     pub fn get_kmer_size(&self) -> usize {
@@ -309,7 +347,6 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
                 self.graph.edges_directed(v, Direction::Incoming).map(|e| {
                         self.get_edge_source(e)
                     }).filter(|v| self.is_reference_node(v)).take(1).next()
-                }
             }
         }
     }
@@ -467,5 +504,64 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             .flat_map(|neighbour| {
                 self.graph.get_all_connected_nodes_from_node(neighbour, direction)
             }).collect::<HashSet<NodeIndex>>()
+    }
+
+    /**
+     * Remove edges that are connected before the reference source and after the reference sink
+     *
+     * Also removes all vertices that are orphaned by this process
+     */
+    pub fn clean_non_ref_paths(&mut self) {
+        if self.get_reference_source_vertex().is_none() || self.get_reference_sink_vertex().is_none() {
+            // pass
+        } else {
+            // Remove non-ref edges connected before and after the reference path
+            let mut edges_to_check: BinaryHeap<EdgeIndex> = BinaryHeap::new();
+            edges_to_check.par_extend(self.graph.edges_directed(self.get_reference_source_vertex().unwrap(), Direction::Incoming));
+
+            while !edges_to_check.is_empty() {
+                let e = edges_to_check.pop().unwrap();
+                if self.graph.edge_weight(e).unwrap().is_ref() {
+                    edges_to_check.par_extend(self.graph.edges_directed(self.get_edge_source(e), Direction::Incoming));
+                    self.graph.remove_edge(e);
+                }
+            }
+
+            edges_to_check.par_extend(self.graph.edges_directed(self.get_reference_source_vertex().unwrap(), Direction::Outgoing));
+
+            while !edges_to_check.is_empty() {
+                let e = edges_to_check.pop().unwrap();
+                if self.graph.edge_weight(e).unwrap().is_ref() {
+                    edges_to_check.par_extend(self.graph.edges_directed(self.get_edge_source(e), Direction::Outgoing));
+                    self.graph.remove_edge(e);
+                }
+            }
+
+            self.remove_singleton_orphan_vertices();
+        }
+    }
+
+    /**
+     * Remove all vertices on the graph that cannot be accessed by following any edge,
+     * regardless of its direction, from the reference source vertex
+     */
+    pub fn remove_vertices_not_connected_to_ref_regardless_of_edge_direction(&mut self) {
+        let mut to_remove = HashSet::from(self.graph.node_indices().collect::<Vec<NodeIndex>>());
+
+        let ref_v = self.get_reference_source_vertex();
+        match ref_v {
+            None => self.remove_all_vertices(to_remove),
+            Some(ref_v) => {
+                for node in self.get_all_connected_nodes_from_node(ref_v, Direction::Incoming) {
+                    to_remove.remove(&node)
+                }
+
+                for node in self.get_all_connected_nodes_from_node(ref_v, Direction::Outgoing) {
+                    to_remove.remove(&node)
+                }
+            }
+        }
+
+        self.remove_all_vertices(to_remove);
     }
 }

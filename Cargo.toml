@@ -54,7 +54,7 @@ ordered-float = "1"
 #plotly = "0.4"
 pest = "2"
 pest_derive = "2"
-petgraph = "0.6.0"
+petgraph = {version = "0.6.0", features = ["stable_graph"]}
 rand = "0.6"
 rayon = "1.2"
 rust-htslib = "0.38.2"

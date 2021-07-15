@@ -4,9 +4,12 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use reads::bird_tool_reads::BirdToolRead;
-use petgraph::graph::{NodeIndex, EdgeIndex};
+use petgraph::stable_graph::{NodeIndex, EdgeIndex};
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::{Cigar, CigarString};
+use petgraph::Direction;
+use graphs::seq_graph::SeqGraph;
+use graphs::base_edge::BaseEdgeStruct;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -17,6 +20,8 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     const DEBUG_NON_UNIQUE_CALC: bool = false;
     const MAX_CIGAR_COMPLEXITY: usize = 3;
     const INCREASE_COUNTS_BACKWARDS: bool = true;
+
+    fn get_kmer_size(&self) -> usize;
 
     fn has_cycles(&self) -> bool;
 
@@ -261,6 +266,62 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
      * @return 1 if merge was successful, 0 otherwise
      */
     fn merge_dangling_tail(&mut self, dangling_tail_merge_result: DanglingChainMergeHelper) -> usize;
+
+    /**
+     * Actually merge the dangling head if possible, this is the old codepath that does not handle indels
+     *
+     * @param danglingHeadMergeResult   the result from generating a Cigar for the dangling head against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_head_legacy(&mut self, dangling_head_merge_result: DanglingChainMergeHelper) -> usize;
+
+    /**
+     * Actually merge the dangling head if possible
+     *
+     * @param danglingHeadMergeResult   the result from generating a Cigar for the dangling head against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_head(&mut self, dangling_head_merge_result: DanglingChainMergeHelper) -> usize;
+
+    /**
+     * Finds the index of the best extent of the prefix match between the provided paths, for dangling head merging.
+     * Requires that at a minimum there are at least #getMinMatchingBases() matches between the reference and the read
+     * at the end in order to emit an alignment offset.
+     *
+     * @param cigarElements cigar elements corresponding to the alignment between path1 and path2
+     * @param path1  the first path
+     * @param path2  the second path
+     * @return an integer pair object where the key is the offset into path1 and the value is offset into path2 (both -1 if no path is found)
+     */
+    fn best_prefix_match(&self, cigar_elements: &Vec<Cigar>, path1: &[u8], path2: &[u8]) -> (i64, i64);
+
+    /**
+     * Finds the index of the best extent of the prefix match between the provided paths, for dangling head merging.
+     * Assumes that path1.length >= maxIndex and path2.length >= maxIndex.
+     *
+     * @param path1    the first path
+     * @param path2    the second path
+     * @param maxIndex the maximum index to traverse (not inclusive)
+     * @return the index of the ideal prefix match or -1 if it cannot find one, must be less than maxIndex
+     */
+    fn best_prefix_match_legacy(&self, path1: &[u8], path2: &[u8], max_index: usize) -> Option<usize>;
+
+    /**
+     * NOTE: this method is only used for dangling heads and not tails.
+     *
+     * Determine the maximum number of mismatches permitted on the branch.
+     * Unless it's preset (e.g. by unit tests) it should be the length of the branch divided by the kmer size.
+     *
+     * @param lengthOfDanglingBranch the length of the branch itself
+     * @return positive integer
+     */
+    fn get_max_mismatches_legacy(&self, length_of_dangling_branch: usize) -> usize;
+
+    /**
+     * The minimum number of matches to be considered allowable for recovering dangling ends
+     */
+    fn get_min_matching_bases(&self) -> i64;
+
     /**
      * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
      * provided vertex is the sink) and the reference path.
@@ -280,6 +341,24 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     ) -> Option<DanglingChainMergeHelper>;
 
     /**
+     * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
+     * provided vertex is the source) and the reference path.
+     *
+     * @param aligner
+     * @param vertex      the source of the dangling head
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param recoverAll  recover even branches with forks
+     * @return a SmithWaterman object which can be null if no proper alignment could be generated
+     */
+    fn generate_cigar_against_upwards_reference_path(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool
+    ) -> Option<DanglingChainMergeHelper>;
+
+    /**
      * Finds the path upwards in the graph from this vertex to the first diverging node, including that (lowest common ancestor) vertex.
      * Note that nodes are excluded if their pruning weight is less than the pruning factor.
      *
@@ -291,6 +370,24 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
      */
     fn find_path_upwards_to_lowest_common_ancestor(
         &self, vertex: NodeIndex, prune_factor: usize, give_up_at_branch: bool
+    ) -> Option<Vec<NodeIndex>>;
+
+    /**
+     * Finds the path downwards in the graph from this vertex to the reference sequence, including the highest common descendant vertex.
+     * However note that the path is reversed so that this vertex ends up at the end of the path.
+     * Also note that nodes are excluded if their pruning weight is less than the pruning factor.
+     *
+     * @param vertex         the original vertex
+     * @param pruneFactor    the prune factor to use in ignoring chain pieces
+     * @param giveUpAtBranch stop trying to find a path if a vertex with multiple incoming or outgoing edge is found
+     * @return the path if it can be determined or null if this vertex either doesn't merge onto the reference path or
+     * has a descendant with multiple outgoing edges before hitting the reference path
+     */
+    fn find_path_downwards_to_highest_common_desendant_of_reference(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        give_up_at_branch: bool,
     ) -> Option<Vec<NodeIndex>>;
 
     /**
@@ -373,7 +470,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
 
     fn has_incident_ref_edge(&self, v: NodeIndex) -> bool;
 
-    fn get_heaviest_incoming_edge(&self, v: NodeIndex) -> EdgeIndex;
+    fn get_heaviest_edge(&self, v: NodeIndex, direction: Direction) -> EdgeIndex;
 
     /**
      * The base sequence for the given path.
@@ -383,10 +480,16 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
      * @return non-null sequence of bases corresponding to the given path
      */
     fn get_bases_for_path(&self, path: &Vec<NodeIndex>, expand_source: bool) -> &[u8];
-}
 
-impl AbstractReadThreadingGraph {
+    fn extend_dangling_path_against_reference(
+        &mut self,
+        dangling_head_merge_result: &DanglingChainMergeHelper,
+        num_nodes_to_extend: usize,
+    ) -> bool;
 
+    fn remove_paths_not_connected_to_ref(&mut self);
+
+    fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct>;
 }
 
 pub enum TraversalDirection {

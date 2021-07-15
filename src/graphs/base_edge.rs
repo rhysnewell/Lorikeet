@@ -7,6 +7,7 @@ use graphs::multi_sample_edge::MultiSampleEdge;
  * Works equally well for all graph types (kmer or sequence)
  */
 pub trait BaseEdge: Clone + Send + Sync {
+
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;
@@ -121,6 +122,11 @@ impl BaseEdge for MultiSampleEdge {
     }
 }
 
+
+/**
+* The most basic implementation of a BaseEdge like object. Only meant as a placeholder for certain
+* functions
+*/
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialOrd, PartialEq)]
 pub struct BaseEdgeStruct {
     pub(crate) multiplicity: usize,
