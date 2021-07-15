@@ -1,5 +1,6 @@
 use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
 use graphs::chain_pruner::ChainPruner;
+use graphs::base_graph::BaseGraph;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use assembly::assembly_region::AssemblyRegion;
@@ -12,10 +13,12 @@ use reads::read_clipper::ReadClipper;
 use reads::bird_tool_reads::BirdToolRead;
 use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
 use graphs::seq_graph::SeqGraph;
-use graphs::base_edge::BaseEdge;
+use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use assembly::assembly_result::{AssemblyResult, Status};
 use read_threading::read_threading_graph::ReadThreadingGraph;
-use graphs::base_graph::BaseGraph;
+use petgraph::stable_graph::NodeIndex;
+use graphs::seq_vertex::SeqVertex;
+
 
 pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>> {
     kmer_sizes: Vec<usize>,
@@ -223,7 +226,6 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
-        aligner: &mut SmithWatermanAligner,
         sample_names: &Vec<String>
     ) -> Option<AssemblyResult> {
         if ref_haplotype.len() < kmer_size {
@@ -304,29 +306,189 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         &self,
         ref_haplotype: &Haplotype<L>,
         kmer_size: usize,
-        rt_graph: &mut A,
-        aligner: &mut SmithWatermanAligner,
+        mut rt_graph: A,
     ) -> AssemblyResult<E, L> {
         if !self.prune_before_cycle_counting {
-            self.chain_pruner.prune_low_weight_chains(rt_graph)
+            self.chain_pruner.prune_low_weight_chains(&mut rt_graph)
         }
 
         if self.debug_graph_transformations {
             self.print_debug_graph_transform(&rt_graph,
                                              format!(
-                                                 "{}_{}-{}-sequenceGraph.{}.0.1.raw_threading_graph.dot",
+                                                 "{}_{}-{}-sequenceGraph.{}.0.1.chain_pruned_readthreading_graph.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
                                                  ref_haplotype.genome_location.unwrap().get_start(),
                                                  ref_haplotype.genome_location.unwrap().get_end(),
                                                  kmer_size
-                                             ))
-        }
+                                             ));
+        };
 
         // look at all chains in the graph that terminate in a non-ref node (dangling sources and sinks) and see if
         // we can recover them by merging some N bases from the chain back into the reference
         if self.recover_dangling_branches {
-            rt_graph.r
+            rt_graph.recover_dangling_tails(self.prune_factor, self.min_dangling_branch_length, self.recover_all_dangling_branches);
+            rt_graph.recover_dangling_heads(self.prune_factor, self.min_dangling_branch_length, self.recover_all_dangling_branches);
         }
+
+        // remove all heading and trailing paths
+        if self.remove_paths_not_connected_to_ref {
+            rt_graph.remove_paths_not_connected_to_ref()
+        }
+
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&rt_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.0.2.cleaned_readthreading_graph.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        // Either return an assembly result with a sequence graph or with an unchanged
+        // sequence graph deptending on the kmer duplication behavior
+        if self.generate_seq_graph {
+            let mut initial_seq_graph = rt_graph.to_sequence_graph();
+
+            if self.debug_graph_transformations {
+                rt_graph.print_graph(
+                     format!(
+                         "{}_{}-{}-sequenceGraph.{}.0.3.initial_seqgraph.dot",
+                         ref_haplotype.genome_location.unwrap().tid(),
+                         ref_haplotype.genome_location.unwrap().get_start(),
+                         ref_haplotype.genome_location.unwrap().get_end(),
+                         kmer_size
+                     ),
+                    10000
+                );
+            };
+
+            // if the unit tests don't want us to cleanup the graph, just return the raw sequence graph
+            if self.just_return_raw_graph {
+                return AssemblyResult::new(Status::AssembledSomeVariation, Some(initial_seq_graph), None)
+            }
+
+            debug!("Using kmer size of {} in read threading assembler", &rt_graph.get_kmer_size());
+
+            if self.debug_graph_transformations {
+                self.print_debug_graph_transform(&rt_graph,
+                                                 format!(
+                                                     "{}_{}-{}-sequenceGraph.{}.0.4.initial_seqgraph.dot",
+                                                     ref_haplotype.genome_location.unwrap().tid(),
+                                                     ref_haplotype.genome_location.unwrap().get_start(),
+                                                     ref_haplotype.genome_location.unwrap().get_end(),
+                                                     kmer_size
+                                                 ));
+            };
+
+            initial_seq_graph.base_graph.clean_non_ref_paths();
+            let cleaned = self.clean_up_seq_graph(initial_seq_graph, &ref_haplotype);
+            let status = cleaned.status;
+            return AssemblyResult::new(status, cleaned.graph, Some(rt_graph))
+        } else {
+            // if the unit tests don't want us to cleanup the graph, just return the raw sequence graph
+            if self.just_return_raw_graph {
+                return AssemblyResult::new(Status::AssembledSomeVariation, None, Some(rt_graph))
+            }
+
+            debug!("Using kmer size of {} in read threading assembler", &rt_graph.get_kmer_size());
+            let cleaned =
+        }
+
+    }
+
+    fn get_result_set_for_rt_graph(mut rt_graph: A) -> AssemblyResult<E, L> {
+        // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
+        // happen in cases where for example the reference somehow manages to acquire a cycle, or
+        // where the entire assembly collapses back into the reference sequence.
+    }
+
+    // Performs the various transformations necessary on a sequence graph
+    fn clean_up_seq_graph(&self, mut seq_graph: SeqGraph<E>, ref_haplotype: &Haplotype<L>) -> AssemblyResult<E> {
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&seq_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.1.0.non_ref_removed.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        // the very first thing we need to do is zip up the graph, or pruneGraph will be too aggressive
+        seq_graph.zip_linear_chains();
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&seq_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.1.1.zipped.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        // now go through and prune the graph, removing vertices no longer connected to the reference chain
+        seq_graph.base_graph.remove_singleton_orphan_vertices();
+        seq_graph.base_graph.remove_vertices_not_connected_to_ref_regardless_of_edge_direction();
+
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&seq_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.1.2.pruned.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        seq_graph.simplify_graph();
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&seq_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.1.3.merged.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
+        // happen in cases where for example the reference somehow manages to acquire a cycle, or
+        // where the entire assembly collapses back into the reference sequence.
+        if seq_graph.base_graph.get_reference_source_vertex().is_none() ||
+            seq_graph.base_graph.get_reference_sink_vertex().is_none() {
+            return AssemblyResult::new(Status::JustAssembledReference, Some(seq_graph), None)
+        };
+
+        seq_graph.base_graph.remove_paths_not_connected_to_ref();
+        seq_graph.simplify_graph();
+        if seq_graph.base_graph.graph.node_indices().collect::<Vec<NodeIndex>>().len() == 1 {
+            // we've perfectly assembled into a single reference haplotype, add a empty seq vertex to stop
+            // the code from blowing up.
+            // TODO -- ref properties should really be on the vertices, not the graph itself
+            let complete = seq_graph.base_graph.graph.node_indices().next().unwrap();
+            let dummy = SeqVertex::new("");
+            let dummy_index = seq_graph.base_graph.graph.add_node(dummy);
+            seq_graph.base_graph.graph.add_edge(complete, dummy_index, BaseEdgeStruct::new(true, 0));
+        };
+
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform(&seq_graph,
+                                             format!(
+                                                 "{}_{}-{}-sequenceGraph.{}.1.4.final.dot",
+                                                 ref_haplotype.genome_location.unwrap().tid(),
+                                                 ref_haplotype.genome_location.unwrap().get_start(),
+                                                 ref_haplotype.genome_location.unwrap().get_end(),
+                                                 kmer_size
+                                             ));
+        };
+
+        return AssemblyResult::new(Status::AssembledSomeVariation, Some(seq_graph), None)
     }
 
 }

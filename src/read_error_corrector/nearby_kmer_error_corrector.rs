@@ -6,6 +6,7 @@ use assembly::kmer::Kmer;
 use utils::base_utils::BaseUtils;
 use rayon::prelude::*;
 use std::ops::Deref;
+use read_error_corrector::read_error_corrector::ReadErrorCorrector
 
 /**
  * Utility class that error-corrects reads.
@@ -458,7 +459,7 @@ impl CorrectionSet {
     }
 }
 
-impl ReadErrorCorrector for NearbyKmerErrorCorrector {
+impl ReadErrorCorrector for NearbyKmerErrorCorrector<'_> {
     /**
      * Correct a collection of reads based on stored k-mer counts
      * @param reads

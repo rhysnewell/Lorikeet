@@ -172,7 +172,7 @@ impl AssemblyBasedCallerUtils {
             }
         };
 
-        let assembly_result_set = assembly_engine.run
+        let assembly_result_set = assembly_engine.run_local_assembly();
     }
 
     pub fn get_variant_contexts_from_given_alleles(

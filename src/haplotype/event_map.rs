@@ -24,7 +24,7 @@ impl<'a, L: Locatable> EventMap<'a, L> {
     const MAX_EVENT_PER_HAPLOTYPE: usize = 3;
     const MAX_INDELS_PER_HAPLOTYPE: usize = 3;
 
-    pub fn new(haplotype: Haplotype<L>, reference: &'a [u8], reference_loc: L, source_name_to_add: String, max_mnp_distance) -> EventMap<'a, L> {
+    pub fn new(haplotype: Haplotype<L>, reference: &'a [u8], reference_loc: L, source_name_to_add: String, max_mnp_distance: usize) -> EventMap<'a, L> {
         let mut result = EventMap {
             haplotype,
             reference,

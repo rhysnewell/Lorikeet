@@ -579,6 +579,17 @@ impl CigarUtils {
         return length
     }
 
+    /**
+     * @return The number of read bases that the read covers.
+     */
+    pub fn get_read_length(cigar: &CigarString) -> u32 {
+        let length = cigar.0.par_iter().filter(|elem|{
+            CigarUtils::cigar_consumes_read_bases(elem)
+        }).map(|elem| elem.len()).sum::<u32>();
+
+        return length
+    }
+
     /** Returns true if the operator is a M, a X or a EQ */
     pub fn is_alignment(cigar: &Cigar) -> bool {
         match cigar {

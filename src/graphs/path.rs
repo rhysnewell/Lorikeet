@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
-use petgraph::graph::{EdgeIndex, NodeIndex, Edge, EdgeReference};
+use petgraph::stable_graph::{EdgeIndex, NodeIndex, EdgeReference};
 use petgraph::visit::EdgeRef;
 use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::CigarString;

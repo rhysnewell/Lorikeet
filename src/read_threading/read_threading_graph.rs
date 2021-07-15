@@ -7,16 +7,17 @@ use std::collections::HashSet;
 use read_threading::abstract_read_threading_graph::{SequenceForKmers, AbstractReadThreadingGraph, DanglingChainMergeHelper, TraversalDirection};
 use linked_hash_set::LinkedHashSet;
 use reads::bird_tool_reads::BirdToolRead;
-use petgraph::graph::{NodeIndex, EdgeIndex};
+use petgraph::stable_graph::{NodeIndex, EdgeIndex};
 use petgraph::Direction;
 use graphs::base_vertex::BaseVertex;
-use petgraph::stable_graph::node_index;
 use std::cmp::{max, min};
 use compare::{Compare, Extract};
 use utils::smith_waterman_aligner::*;
 use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{CigarString, Cigar};
 use reads::cigar_utils::CigarUtils;
+use graphs::seq_graph::SeqGraph;
+use graphs::base_edge::BaseEdgeStruct;
 
 
 /**
@@ -548,16 +549,23 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             panic!("recover_dangling_tails requires that graph already be built")
         }
 
+        // we need to build a list of dangling tails because that process can modify the graph (and otherwise generate
+        // a ConcurrentModificationException if we do it while iterating over the vertexes)
+        let dangling_tails = self.base_graph.graph.node_indices().par_bridge()
+            .filter(|v| self.base_graph.out_degree_of(*v) == 0 && !self.base_graph.is_ref_sink(*v))
+            .map(|v| *v)
+            .collect::<Vec<NodeIndex>>();
+
         let mut attempted = 0;
         let mut n_recovered = 0;
-        for v in self.base_graph.graph.node_indices() {
-            if self.base_graph.in_degree_of(v) == 0 && !self.base_graph.is_ref_sink(v) {
-                attempted += 1;
-                n_recovered += self.recover_dangling_tail(
-                    v, prune_factor, min_dangling_branch_length, recover_all, aligner
-                )
-            }
+        for v in dangling_tails {
+            attempted += 1;
+            n_recovered += self.recover_dangling_tail(
+                v, prune_factor, min_dangling_branch_length, recover_all, aligner
+            )
         }
+
+        debug!("Recovered {} of {} dangling tails", n_recovered, attempted);
     }
 
     /**
@@ -573,8 +581,30 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-        aligner: &mut SmithWatermanAligner,
-    );
+    ) -> usize {
+        if !self.already_built {
+            panic!("recover_dangling_tails requires that graph already be built")
+        }
+
+        // we need to build a list of dangling heads because that process can modify the graph (and otherwise generate
+        // a ConcurrentModificationException if we do it while iterating over the vertexes)
+        let dangling_heads = self.base_graph.graph.node_indices().par_bridge()
+            .filter(|v| self.base_graph.in_degree_of(*v) == 0 && !self.base_graph.is_ref_source(*v))
+            .map(|v| *v)
+            .collect::<Vec<NodeIndex>>();
+
+        // now we can try to recover the dangling heads
+        let mut attempted = 0;
+        let mut n_recovered = 0;
+        for v in dangling_heads {
+            attempted += 1;
+            n_recovered += self.recover_dangling_head(
+                v, prune_factor, min_dangling_branch_length, recover_all, aligner
+            )
+        }
+
+        debug!("Recovered {} of {} dangling heads", n_recovered, attempted);
+    }
 
     /**
      * Attempt to attach vertex with out-degree == 0 to the graph
@@ -598,7 +628,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
 
         // generate the CIGAR string from Smith-Waterman between the dangling tail and reference paths
         let dangling_tail_merge_result = self.generate_cigar_against_downwards_reference_path(
-            vertex, prune_factor,min_dangling_branch_length, recover_all,
+            vertex, prune_factor, min_dangling_branch_length, recover_all,
         );
 
         match dangling_tail_merge_result {
@@ -629,7 +659,31 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-    ) -> usize;
+    ) -> usize {
+        if self.base_graph.in_degree_of(vertex) != 0 {
+            panic!("Attempting to recover a dangling head for {:?} but it has in-degree > 0", vertex)
+        };
+
+        // generate the CIGAR string from Smith-Waterman between the dangling tail and reference paths
+        let dangling_head_merge_result = self.generate_cigar_against_upwards_reference_path(
+            vertex, prune_factor, min_dangling_branch_length, recover_all,
+        );
+
+        match dangling_head_merge_result {
+            None => return 0,
+            Some(dangling_head_merge_result) => {
+                if !Self::cigar_is_okay_to_merge(&dangling_head_merge_result.cigar, true, false) {
+                    return 0
+                } else {
+                    if self.min_matching_bases_to_dangling_end_recovery >= 0 {
+                        self.merge_dangling_head(dangling_head_merge_result)
+                    } else {
+                        self.marge_dangling_head_result_legacy(dangling_head_merge_result)
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Actually merge the dangling tail if possible
@@ -649,7 +703,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             _ => panic!("Last cigar element must be Match(_)")
         };
 
-        let last_ref_index = CigarUtils::get_reference_length(&dangling_tail_merge_result.cigar) -1;
+        let last_ref_index = CigarUtils::get_reference_length(&dangling_tail_merge_result.cigar) - 1;
         let matching_suffix = min(
             Self::longest_suffix_match(
                 &dangling_tail_merge_result.reference_path_string,
@@ -659,7 +713,318 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             last_element.len() as usize
         );
 
+        if self.min_matching_bases_to_dangling_end_recovery >= 0 {
+            if matching_suffix < self.min_matching_bases_to_dangling_end_recovery as usize
+                || matching_suffix == 0 {
+                return 0
+            }
+        }
 
+        let alt_index_to_merge =
+            (CigarUtils::get_read_length(&dangling_tail_merge_result.cigar) as usize)
+                .checked_sub(matching_suffix).unwrap_or(0).checked_sub(1).unwrap_or(0);
+
+        // there is an important edge condition that we need to handle here: Smith-Waterman correctly calculates that there is a
+        // deletion, that deletion is left-aligned such that the LCA node is part of that deletion, and the rest of the dangling
+        // tail is a perfect match to the suffix of the reference path.  In this case we need to push the reference index to merge
+        // down one position so that we don't incorrectly cut a base off of the deletion.
+        let first_element_is_deletion = CigarUtils::cigar_elements_are_same_type(
+            &dangling_tail_merge_result.cigar.0[0], Cigar::Del(0)
+        );
+        let must_handle_leading_deletion_case = first_element_is_deletion
+            && ((&dangling_tail_merge_result.cigar.0[0].len() + matching_suffix as u32) == last_ref_index + 1);
+        let ref_index_to_merge = last_ref_index as i32 - matching_suffix as i32 + 1 +
+            if must_handle_leading_deletion_case {
+                1
+            } else {
+                0
+            };
+
+        // another edge condition occurs here: if Smith-Waterman places the whole tail into an insertion then it will try to
+        // merge back to the LCA, which results in a cycle in the graph.  So we do not want to merge in such a case.
+        if ref_index_to_merge <= 0 {
+            return 0
+        }
+
+        // it's safe to merge now
+        self.base_graph.graph.add_edge(
+            dangling_tail_merge_result.dangling_path[alt_index_to_merge],
+            dangling_tail_merge_result.reference_path[ref_index_to_merge as usize],
+            MultiSampleEdge::new(false, 1, self.num_pruning_samples)
+        );
+
+        return 1
+    }
+
+    /**
+     * Actually merge the dangling head if possible, this is the old codepath that does not handle indels
+     *
+     * @param danglingHeadMergeResult   the result from generating a Cigar for the dangling head against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_head_legacy(&mut self, dangling_head_merge_result: DanglingChainMergeHelper) -> usize {
+        let first_element = &dangling_head_merge_result.cigar.0[0];
+
+        // the last element must be an M
+        match first_element {
+            Cigar::Match(_) => {
+                // correct operator but more checks to do
+            },
+            _ => panic!("First cigar element must be Match(_)")
+        };
+
+        let indexes_to_merge = self.best_prefix_match_legacy(
+            &dangling_head_merge_result.reference_path_string,
+            &dangling_head_merge_result.dangling_path_string,
+            first_element.len() as usize
+        );
+
+        match indexes_to_merge {
+            None => return 0,
+            Some(indexes_to_merge) => {
+                // we can't push back the reference path
+                if indexes_to_merge >= dangling_head_merge_result.reference_path.len() - 1 {
+                    return 0
+                }
+
+                // but we can manipulate the dangling path if we need to
+                if indexes_to_merge >= dangling_head_merge_result.dangling_path.len() &&
+                    !self.extend_dangling_path_against_reference(
+                        &mut dangling_head_merge_result,
+                        indexes_to_merge - dangling_head_merge_result.dangling_path.len() + 2,
+                    ) {
+                    return 0
+                }
+
+                // it's safe to merge now
+                self.base_graph.graph.add_edge(
+                    dangling_head_merge_result.reference_path[indexes_to_merge + 1 as usize],
+                    dangling_head_merge_result.dangling_path[indexes_to_merge as usize],
+                    MultiSampleEdge::new(false, 1, self.num_pruning_samples)
+                );
+
+                return 1
+            }
+        }
+    }
+
+    /**
+     * Finds the index of the best extent of the prefix match between the provided paths, for dangling head merging.
+     * Assumes that path1.length >= maxIndex and path2.length >= maxIndex.
+     *
+     * @param path1    the first path
+     * @param path2    the second path
+     * @param maxIndex the maximum index to traverse (not inclusive)
+     * @return the index of the ideal prefix match or -1 if it cannot find one, must be less than maxIndex
+     */
+    fn best_prefix_match_legacy(&self, path1: &[u8], path2: &[u8], max_index: usize) -> Option<usize> {
+        let max_mismatches = self.get_max_mismatches_legacy(max_index);
+
+        let mut mismatches = 0;
+        let mut index = 0;
+        let mut last_good_index = None;
+
+        while index < max_index {
+            if path1[index] != path2[index] {
+                mismatches += 1;
+                if mismatches > max_mismatches {
+                    return None
+                }
+                last_good_index = Some(index);
+            }
+            index += 1;
+        }
+
+        // if we got here then we hit the max index
+        return last_good_index
+    }
+
+    /**
+     * NOTE: this method is only used for dangling heads and not tails.
+     *
+     * Determine the maximum number of mismatches permitted on the branch.
+     * Unless it's preset (e.g. by unit tests) it should be the length of the branch divided by the kmer size.
+     *
+     * @param lengthOfDanglingBranch the length of the branch itself
+     * @return positive integer
+     */
+    fn get_max_mismatches_legacy(&self, length_of_dangling_branch: usize) -> usize {
+        return if self.max_mismatches_in_dangling_head > 0 {
+            self.max_mismatches_in_dangling_head as usize
+        } else {
+            max(1, length_of_dangling_branch / self.base_graph.get_kmer_size())
+        }
+    }
+
+    /**
+     * Actually merge the dangling head if possible
+     *
+     * @param danglingHeadMergeResult   the result from generating a Cigar for the dangling head against the reference
+     * @return 1 if merge was successful, 0 otherwise
+     */
+    fn merge_dangling_head(&mut self, dangling_head_merge_result: DanglingChainMergeHelper) -> usize {
+        let first_element = &dangling_head_merge_result.cigar.0[0];
+
+        // the last element must be an M
+        match first_element {
+            Cigar::Match(_) => {
+                // correct operator but more checks to do
+            },
+            _ => panic!("First cigar element must be Match(_)")
+        };
+
+        let indexes_to_merge = self.best_prefix_match(
+            &dangling_head_merge_result.cigar.0,
+            &dangling_head_merge_result.reference_path_string,
+            &dangling_head_merge_result.dangling_path_string
+        );
+
+        if indexes_to_merge.0 <= 0 || indexes_to_merge.1 <= 0 {
+            return 0
+        };
+
+        // we can't push back the reference path
+        if indexes_to_merge.0 as usize >= dangling_head_merge_result.reference_path.len() - 1 {
+            return 0
+        };
+
+        // but we can manipulate the dangling path if we need to
+        if indexes_to_merge.0 >= dangling_head_merge_result.dangling_path.len() &&
+            !self.extend_dangling_path_against_reference(
+                &mut dangling_head_merge_result,
+                (indexes_to_merge.0 - dangling_head_merge_result.dangling_path.len() + 2) as usize,
+            ) {
+            return 0
+        }
+
+        self.base_graph.graph.add_edge(
+            dangling_head_merge_result.reference_path[indexes_to_merge.0 + 1 as usize],
+            dangling_head_merge_result.dangling_path[indexes_to_merge.1 as usize],
+            MultiSampleEdge::new(false, 1, self.num_pruning_samples)
+        );
+
+        return 1
+    }
+
+    fn extend_dangling_path_against_reference(
+        &mut self,
+        dangling_head_merge_result: &mut DanglingChainMergeHelper,
+        num_nodes_to_extend: usize,
+    ) -> bool {
+        let index_of_last_dangling_node = dangling_head_merge_result.dangling_path.len() - 1;
+        let offset_for_ref_end_to_dangling_end = &dangling_head_merge_result.cigar.0.iter()
+            .par_bridge().map(|ce| {
+                let a = if CigarUtils::cigar_consumes_reference_bases(ce) {
+                    ce.len() as i64
+                } else {
+                    0
+                };
+
+                let b = if CigarUtils::cigar_consumes_read_bases(ce) {
+                    ce.len() as i64
+                } else {
+                    0
+                };
+
+                a - b
+            }).sum::<i64>();
+
+        let index_of_ref_node_to_use = index_of_last_dangling_node as i64 +
+            offset_for_ref_end_to_dangling_end +
+            num_nodes_to_extend as i64;
+
+        if index_of_ref_node_to_use >=  dangling_head_merge_result.reference_path.len() as i64 {
+            return false
+        }
+
+        let dangling_source = dangling_head_merge_result.dangling_path.remove(index_of_last_dangling_node);
+        let ref_source_sequence = self.base_graph.graph.node_weight(
+            dangling_head_merge_result.reference_path[index_of_ref_node_to_use as usize]).unwrap().get_sequence();
+
+        let mut sb = String::from("");
+        for i in 0..num_nodes_to_extend {
+            sb.push(ref_source_sequence[i] as char)
+        }
+        sb.extend(self.base_graph.graph.node_weight(dangling_source).unwrap().get_sequence_string());
+        let mut sequence_to_extend = sb.as_bytes();
+
+        // clean up the source and edge
+        let source_edge = self.get_heaviest_edge(dangling_source, Direction::Outgoing);
+        let mut prev_v = self.base_graph.get_edge_target(source_edge);
+        self.base_graph.graph.remove_edge(source_edge);
+
+        // extend the path
+        // TODO: Make sure there are tests for this
+        for i in (1..num_nodes_to_extend+1).rev() {
+            let new_v = MultiDeBruijnVertex::new_with_sequence(sequence_to_extend[i..i+self.base_graph.get_kmer_size()]);
+            let new_v_index = self.base_graph.graph.add_node(new_v);
+            let new_e = MultiSampleEdge::new(
+                false,
+                self.base_graph.graph.edge_weight(source_edge).unwrap().multiplicity,
+                self.num_pruning_samples
+            );
+            let new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);
+            dangling_head_merge_result.dangling_path.push(new_v_index);
+            prev_v = new_v_index;
+        }
+
+        return true
+    }
+
+    /**
+     * Finds the index of the best extent of the prefix match between the provided paths, for dangling head merging.
+     * Requires that at a minimum there are at least #getMinMatchingBases() matches between the reference and the read
+     * at the end in order to emit an alignment offset.
+     *
+     * @param cigarElements cigar elements corresponding to the alignment between path1 and path2
+     * @param path1  the first path
+     * @param path2  the second path
+     * @return an integer pair object where the key is the offset into path1 and the value is offset into path2 (both -1 if no path is found)
+     */
+    fn best_prefix_match(&self, cigar_elements: &Vec<Cigar>, path1: &[u8], path2: &[u8]) -> (i64, i64) {
+        let min_matching_bases = self.get_min_matching_bases();
+
+        let ref_idx = cigar_elements.iter().par_bridge().map(|cigar| {
+            if CigarUtils::cigar_consumes_reference_bases(cigar) {
+                cigar.len() as i64
+            } else {
+                0
+            }
+        }).sum::<i64>() - 1;
+        let read_idx = path2.len() as i64 - 1;
+
+        // NOTE: this only works when the last cigar element has a sufficient number of M bases,
+        // so no indels within min-mismatches of the edge.
+        'cigarLoop: for ce in cigar_elements.iter().rev() {
+            if !(CigarUtils::cigar_consumes_reference_bases(ce) && CigarUtils::cigar_consumes_read_bases(ce)) {
+                break
+            } else {
+                for j in 0..(ce.len()) {
+                    if path1[ref_idx as usize] != path2[read_idx as usize] {
+                        break 'cigarLoop
+                    };
+                    ref_idx -= 1;
+                    read_idx -= 1;
+                    if ref_idx < 0 || read_idx < 0 {
+                        break 'cigarLoop
+                    }
+                }
+            }
+        }
+
+        let matches = path2.len() as i64 - 1 - read_idx;
+        return if matches < min_matching_bases {
+            (-1, -1)
+        } else {
+            (ref_idx, read_idx)
+        }
+    }
+
+    /**
+     * The minimum number of matches to be considered allowable for recovering dangling ends
+     */
+    fn get_min_matching_bases(&self) -> i64 {
+        self.min_matching_bases_to_dangling_end_recovery
     }
 
     /**
@@ -712,6 +1077,126 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             alt_path, ref_path,
             alt_bases, ref_bases,
             AlignmentUtils::remove_trailing_deletions(CigarString::from_alignment(&alignment, false))))
+    }
+
+    /**
+     * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
+     * provided vertex is the source) and the reference path.
+     *
+     * @param aligner
+     * @param vertex      the source of the dangling head
+     * @param pruneFactor the prune factor to use in ignoring chain pieces if edge multiplicity is < pruneFactor
+     * @param recoverAll  recover even branches with forks
+     * @return a SmithWaterman object which can be null if no proper alignment could be generated
+     */
+    fn generate_cigar_against_upwards_reference_path(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        min_dangling_branch_length: usize,
+        recover_all: bool,
+    ) -> Option<DanglingChainMergeHelper> {
+        // find the highest common descendant path between vertex and the reference source if available
+        let alt_path = self.find_path_downwards_to_highest_common_desendant_of_reference(
+            vertex, prune_factor, !recover_all
+        );
+
+        match alt_path {
+            None => return None,
+            Some(alt_path) => {
+                if self.base_graph.is_ref_sink(alt_path[0]) || alt_path.len() < min_dangling_branch_length = 1 {
+                    return None
+                }
+            }
+        }
+        let alt_path = alt_path.unwrap();
+
+        // now get the reference path from the LCA
+        let ref_path = self.get_reference_path(alt_path[0], TraversalDirection::Upwards, None);
+
+        // create the Smith-Waterman strings to use
+        let ref_bases = self.get_bases_for_path(&ref_path, true);
+        let alt_bases = self.get_bases_for_path(&alt_path, true);
+
+        // run Smith-Waterman to determine the best alignment
+        // (and remove trailing deletions since they aren't interesting)
+        let alignment = SmithWatermanAligner::align(ref_bases, alt_bases, *STANDARD_NGS);
+
+        return Some(DanglingChainMergeHelper::new(
+            alt_path, ref_path,
+            alt_bases, ref_bases,
+            AlignmentUtils::remove_trailing_deletions(CigarString::from_alignment(&alignment, false))))
+
+    }
+
+    /**
+     * Finds the path downwards in the graph from this vertex to the reference sequence, including the highest common descendant vertex.
+     * However note that the path is reversed so that this vertex ends up at the end of the path.
+     * Also note that nodes are excluded if their pruning weight is less than the pruning factor.
+     *
+     * @param vertex         the original vertex
+     * @param pruneFactor    the prune factor to use in ignoring chain pieces
+     * @param giveUpAtBranch stop trying to find a path if a vertex with multiple incoming or outgoing edge is found
+     * @return the path if it can be determined or null if this vertex either doesn't merge onto the reference path or
+     * has a descendant with multiple outgoing edges before hitting the reference path
+     */
+    fn find_path_downwards_to_highest_common_desendant_of_reference(
+        &self,
+        vertex: NodeIndex,
+        prune_factor: usize,
+        give_up_at_branch: bool,
+    ) -> Option<Vec<NodeIndex>> {
+        return if give_up_at_branch {
+            let done = |v: NodeIndex| -> bool {
+                self.base_graph.is_reference_node(v) || self.base_graph.out_degree_of(v) != 1
+            };
+
+            let return_path = |v: NodeIndex| -> bool {
+                self.base_graph.is_reference_node(v)
+            };
+
+            let next_edge = |v: NodeIndex| -> EdgeIndex {
+                self.base_graph.outgoing_edge_of(v)
+            };
+
+            let next_node = |e: EdgeIndex| -> NodeIndex {
+                self.base_graph.get_edge_target(e)
+            };
+
+            self.find_path(
+                vertex,
+                prune_factor,
+                &done,
+                &return_path,
+                &next_edge,
+                &next_node
+            )
+        } else {
+            let done = |v: NodeIndex| -> bool {
+                self.base_graph.is_reference_node(v) || self.base_graph.out_degree_of(v) == 0
+            };
+
+            let return_path = |v: NodeIndex| -> bool {
+                self.base_graph.is_reference_node(v)
+            };
+
+            let next_edge = |v: NodeIndex| -> EdgeIndex {
+                self.get_heaviest_edge(v, Direction::Outgoing)
+            };
+
+            let next_node = |e: EdgeIndex| -> NodeIndex {
+                self.base_graph.get_edge_target(e)
+            };
+
+            self.find_path(
+                vertex,
+                prune_factor,
+                &done,
+                &return_path,
+                &next_edge,
+                &next_node
+            )
+        }
     }
 
     /**
@@ -790,7 +1275,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             };
 
             let next_edge = |v: NodeIndex| -> EdgeIndex {
-                self.get_heaviest_incoming_edge(v)
+                self.get_heaviest_edge(v, Direction::Incoming)
             };
 
             let next_node = |e: EdgeIndex| -> NodeIndex {
@@ -869,16 +1354,16 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         return false
     }
 
-    fn get_heaviest_incoming_edge(&self, v: NodeIndex) -> EdgeIndex {
-        let incoming_edges = self.base_graph.graph.edges_directed(v, Direction::Incoming).collect::<Vec<EdgeIndex>>();
-        return if incoming_edges.len() == 1 {
-            incoming_edges[0]
+    fn get_heaviest_edge(&self, v: NodeIndex, direction: Direction) -> EdgeIndex {
+        let edges = self.base_graph.graph.edges_directed(v, direction).map(|e| e.id()).collect::<Vec<EdgeIndex>>();
+        return if edges.len() == 1 {
+            edges[0]
         } else {
             let comparator = Extract::new(|edge: EdgeIndex| {
                 self.base_graph.graph.edge_weight(edge).unwrap().multiplicity
             });
 
-            incoming_edges.par_iter().max_by(|l, r| {
+            edges.par_iter().max_by(|l, r| {
                 comparator.compare(l, r)
             }).unwrap()
         }
@@ -904,5 +1389,17 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         }).collect::<String>();
 
         return sb.as_bytes()
+    }
+
+    fn remove_paths_not_connected_to_ref(&mut self) {
+        self.base_graph.remove_paths_not_connected_to_ref()
+    }
+
+    fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct> {
+        self.base_graph.to_sequence_graph()
+    }
+
+    fn get_kmer_size(&self) -> usize {
+        self.base_graph.get_kmer_size()
     }
 }
