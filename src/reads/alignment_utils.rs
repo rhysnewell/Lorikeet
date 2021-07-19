@@ -282,4 +282,29 @@ impl AlignmentUtils {
             _ => c
         }
     }
+
+    /**
+     * Find the last occurrence of the query sequence in the reference sequence
+     *
+     * Returns the index of the last occurrence or -1 if the query sequence is not found
+     *
+     * @param reference the reference sequence
+     * @param query the query sequence
+     */
+    pub fn last_index_of(reference: &[u8], query: &[u8]) -> Option<usize> {
+        let query_length = query.len();
+        // start search from the last possible matching position and search to the left
+        for r in (0..(reference.len().checked_sub(query_length).unwrap_or(0) + 1)).into_iter().rev() {
+            let mut q = 0;
+            while q < query_length && reference[r + q] == query[q] {
+                q += 1;
+            }
+
+            if q == query_length {
+                return Some(r)
+            }
+        }
+
+        return None
+    }
 }

@@ -221,7 +221,7 @@ impl CigarUtils {
      * @param refSeq the reference sequence that all of the bases in this path should align to
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8], aligner: SmithWatermanAligner) -> Option<CigarString> {
+    pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8]) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
             return Some(CigarString::from(vec![Cigar::Del(ref_seq.len() as u32)]))

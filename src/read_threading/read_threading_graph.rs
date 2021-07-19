@@ -1402,4 +1402,22 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
     fn get_kmer_size(&self) -> usize {
         self.base_graph.get_kmer_size()
     }
+
+    fn get_reference_source_vertex(&self) -> Option<NodeIndex> {
+        self.base_graph.get_reference_source_vertex()
+    }
+
+    fn get_reference_sink_vertex(&self) -> Option<NodeIndex> {
+        self.base_graph.get_reference_sink_vertex()
+    }
+
+    // Method that will be called immediately before haplotype finding in the event there are
+    // alteations that must be made to the graph based on implementation
+    fn post_process_for_haplotype_finding<L: Locatable>(
+        &mut self,
+        debug_graph_output_path: String,
+        ref_haplotype: &L
+    ) {
+        // Do nothing There is no processing required for this graph so simply return
+    }
 }

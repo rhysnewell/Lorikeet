@@ -12,12 +12,12 @@ use model::byte_array_allele::ByteArrayAllele;
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,
-    event_map: Option<EventMap<'a, L>>,
-    cigar: CigarString,
-    alignment_start_hap_wrt_ref: usize,
-    score: f64,
+    pub(crate) event_map: Option<EventMap<'a, L>>,
+    pub(crate) cigar: CigarString,
+    pub(crate) alignment_start_hap_wrt_ref: usize,
+    pub(crate) score: f64,
     // debug information for tracking kmer sizes used in graph construction for debug output
-    kmer_size: usize,
+    pub(crate) kmer_size: usize,
 }
 
 impl<'a, L: Locatable> Haplotype<'a, L> {
