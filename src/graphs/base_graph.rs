@@ -68,6 +68,24 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         return seq_graph
     }
 
+    /**
+     * Checks whether the graph contains all the vertices in a collection.
+     *
+     * @param vertices the vertices to check. Must not be null and must not contain a null.
+     *
+     * @throws IllegalArgumentException if {@code vertices} is {@code null}.
+     *
+     * @return {@code true} if all the vertices in the input collection are present in this graph.
+     * Also if the input collection is empty. Otherwise it returns {@code false}.
+     */
+    pub fn contains_all_vertices<I: IntoParallelIterator<Item=NodeIndex>>(&self, nodes: &I) {
+        return nodes.into_par_iter().all(|v| self.graph.contains_node(v))
+    }
+
+    pub fn contains_edge(&self, edge: EdgeIndex) -> bool {
+        self.graph.edge_endpoints(edge).is_some()
+    }
+
     pub fn get_kmer_size(&self) -> usize {
         self.kmer_size
     }
@@ -563,5 +581,39 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         }
 
         self.remove_all_vertices(to_remove);
+    }
+
+    /**
+     * Walk along the reference path in the graph and pull out the corresponding bases
+     * @param fromVertex    starting vertex
+     * @param toVertex      ending vertex
+     * @param includeStart  should the starting vertex be included in the path
+     * @param includeStop   should the ending vertex be included in the path
+     * @return              byte[] array holding the reference bases, this can be null if there are no nodes between the starting and ending vertex (insertions for example)
+     */
+    pub fn get_reference_bytes(
+        &self,
+        from_vertex: NodeIndex,
+        to_vertex: Option<NodeIndex>,
+        include_start: bool,
+        include_stop: bool
+    ) -> &[u8] {
+        let mut bytes = Vec::new();
+        let mut v = Some(from_vertex);
+        if include_start {
+            bytes.par_extend(self.graph.node_weight(v.unwrap()).unwrap().get_additional_sequence());
+        };
+
+        v = self.get_next_reference_vertex(Some(v), false, None);
+        while v.is_some() && v != to_vertex {
+            bytes.par_extend(self.graph.node_weight(v.unwrap()).unwrap().get_additional_sequence());
+            v = self.get_next_reference_vertex(Some(v), false, None);
+        }
+
+        if include_stop && v.is_some() && v == to_vertex {
+            bytes.par_extend(self.graph.node_weight(v.unwrap()).unwrap().get_additional_sequence());
+        };
+
+        return bytes.as_slice()
     }
 }

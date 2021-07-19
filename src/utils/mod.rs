@@ -6,5 +6,4 @@ pub mod dirichlet;
 pub mod natural_log_utils;
 pub mod quality_utils;
 pub mod interval_utils;
-pub mod smith_waterman_aligner;
 pub mod base_utils;

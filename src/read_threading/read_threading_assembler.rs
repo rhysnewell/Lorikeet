@@ -18,6 +18,11 @@ use assembly::assembly_result::{AssemblyResult, Status};
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use petgraph::stable_graph::NodeIndex;
 use graphs::seq_vertex::SeqVertex;
+use graphs::base_vertex::BaseVertex;
+use linked_hash_set::LinkedHashSet;
+use graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
+use reads::cigar_utils::CigarUtils;
+use rust_htslib::bam::record::{CigarString, Cigar};
 
 
 pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>> {
@@ -39,6 +44,8 @@ pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, Mu
     min_matching_bases_to_dangling_end_recovery: i32,
     chain_pruner: C,
     debug_graph_transformations: bool,
+    debug_graph_output_path: String,
+    graph_haplotype_histogram_path: Option<String>,
 }
 
 impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
@@ -94,7 +101,9 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             min_matching_bases_to_dangling_end_recovery: min_matching_bases_to_dangle_end_recovery,
             recover_haplotypes_from_edges_not_covered_in_junction_trees: true,
             min_base_quality_to_use_in_assembly: Self::DEFAULT_MIN_BASE_QUALITY_TO_USE,
-            debug_graph_transformations: false
+            debug_graph_transformations: false,
+            debug_graph_output_path: format!("graph_debugging"),
+            graph_haplotype_histogram_path: None,
         }
     }
 
@@ -153,9 +162,10 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         ref_loc: &'a SimpleInterval,
         aligner: &mut SmithWatermanAligner,
         corrected_reads: Vec<BirdToolRead>,
-        non_ref_rt_graphs: Vec<AbstractReadThreadingGraph>,
+        non_ref_rt_graphs: &mut Vec<AbstractReadThreadingGraph>,
         result_set: AssemblyResultSet<L>,
         active_region_extended_location: &SimpleInterval,
+        sample_names: &Vec<String>,
     ) {
         let mut assembly_result_by_rt_graph = HashMap::new();
 
@@ -168,9 +178,69 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             let kmer_size = kmers_to_try[i];
             let is_last_cycle = i == kmers_to_try.len() - 1;
             if !has_adequately_assembled_graph {
-                assembled_result = self.cre
+                let mut assembled_result = self.create_graph(
+                    corrected_reads,
+                    &ref_haplotype,
+                    kmer_size,
+                    is_last_cycle || self.dont_increase_kmer_sizes_for_cycles,
+                    is_last_cycle || self.allow_non_unique_kmers_in_ref,
+                    &sample_names,
+                );
+                match assembled_result {
+                    None =>{},//pass
+                    Some(assembled_result) => {
+                        if assembled_result.status == Status::AssembledSomeVariation {
+                            // do some QC on the graph
+                            Self::sanity_check_graph(
+                                assembled_result.threading_graph.as_ref().unwrap(),
+                                &ref_haplotype
+                            );
+                            assembled_result.threading_graph.as_mut().unwrap().post_process_for_haplotype_finding(
+                                self.debug_graph_output_path,
+                                ref_haplotype.genome_location.as_ref().unwrap()
+                            );
+                            // add it to graphs with meaningful non-reference features
+                            non_ref_rt_graphs.push(assembled_result.threading_graph.clone().unwrap());
+                            // if graph
+                            // TODO: Add histogram plotting
+                            let
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /**
+     * Make sure the reference sequence is properly represented in the provided graph
+     *
+     * @param graph the graph to check
+     * @param refHaplotype the reference haplotype
+     */
+    fn sanity_check_graph<V: BaseVertex>(graph: &BaseGraph<V, E>, ref_haplotype: &Haplotype<L>) {
+        if graph.get_reference_source_vertex().is_none() {
+            panic!("All reference graphs must have a reference source vertex");
+        };
+
+        if graph.get_reference_sink_vertex().is_none() {
+            panic!("All reference graphs must have a reference sink vertex");
+        };
+
+        if graph.get_reference_bytes(
+            graph.get_reference_source_vertex(),
+            graph.get_reference_sink_vertex(),
+            true,
+            true
+        ) == ref_haplotype.get_bases().as_slice() {
+            panic!("Mismatch between the reference haplotype and the reference assembly graph path.\
+                    for graph = {} compared to haplotype = {}",
+                   std::str::from_utf8(graph.get_reference_bytes(
+                        graph.get_reference_source_vertex(),
+                        graph.get_reference_sink_vertex(),
+                        true,
+                        true
+                    )).unwrap(), std::str::from_utf8(ref_haplotype.get_bases().as_slice()).unwrap());
+        };
     }
 
     /**
@@ -206,6 +276,114 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         //     grap
         // }
         graph.print_graph(file_name, self.prune_factor as usize)
+    }
+
+    /**
+     * Find discover paths by using KBestHaplotypeFinder over each graph.
+     *
+     * This method has the side effect that it will annotate all of the AssemblyResults objects with the derived haplotypes
+     * which can be used for basing kmer graph pruning on the discovered haplotypes.
+     *
+     * @param graph                 graph to be used for kmer detection
+     * @param assemblyResults       assembly results objects for this graph
+     * @param refHaplotype          reference haplotype
+     * @param refLoc                location of reference haplotype
+     * @param activeRegionWindow    window of the active region (without padding)
+     * @param resultSet             (can be null) the results set into which to deposit discovered haplotypes
+     * @param aligner               SmithWaterman aligner to use for aligning the discovered haplotype to the reference haplotype
+     * @return A list of discovered haplotyes (note that this is not currently used for anything)
+     */
+    fn find_best_path<V: BaseVertex>(
+        &self,
+        graph: &BaseGraph<V, E>,
+        assembly_result: &mut AssemblyResult<E, L>,
+        ref_haplotype: &mut Haplotype<L>,
+        ref_loc: &SimpleInterval,
+        active_region_window: &SimpleInterval,
+        result_set: Option<HashSet<AssemblyResult<E, L>>>,
+    ) -> LinkedHashSet<Haplotype<L>> {
+        // add the reference haplotype separately from all the others to ensure
+        // that it is present in the list of haplotypes
+        let mut return_haplotypes = LinkedHashSet::new();
+        let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
+        let mut failed_cigars = 0;
+
+        // Validate that the graph is valid with extant source and sink before operating
+        let source = graph.get_reference_source_vertex();
+        let sink = graph.get_reference_sink_vertex();
+        assert!(source.is_some() && sink.is_some(), "Both source and sink cannot be null");
+        let k_best_haplotypes = if self.generate_seq_graph {
+            GraphBasedKBestHaplotypeFinder::new_from_singletons(
+                graph, source.unwrap(), sink.unwrap()
+            ).find_best_haplotypes(self.num_best_haplotypes_per_graph)
+        } else {
+            // TODO: JunctionTreeKBestHaplotype looks munted and I haven't implemented the other
+            //       JunctionTree stuff so skipping for now
+            panic!("JunctionTree not yet supported, please set generate_seq_graph to true")
+        };
+
+        for k_best_haplotype in k_best_haplotypes {
+            // TODO for now this seems like the solution, perhaps in the future it will be to excise the haplotype completely)
+            // TODO: Lorikeet note, some weird Java shit happens here, will need a work around when
+            //       junction tree is implemented
+            let mut h = k_best_haplotype.haplotype();
+            h.kmer_size = k_best_haplotype.path.graph.get_kmer_size();
+
+            if !return_haplotypes.contains(&h) {
+                // TODO this score seems to be irrelevant at this point...
+                if k_best_haplotype.is_reference {
+                    ref_haplotype.score = k_best_haplotype.score;
+                };
+
+                let cigar = CigarUtils::calculate_cigar(ref_haplotype.get_bases(), h.get_bases());
+
+                match cigar {
+                    None => {
+                        failed_cigars += 1;
+                        continue
+                    },
+                    Some(cigar) => {
+                        if cigar.is_empty() {
+                            panic!(
+                                "Smith-Waterman alignment failure. Cigar = {:?}, with reference \
+                                length {} but expecting reference length of {}",
+                                &cigar, CigarUtils::get_reference_length(&cigar),
+                                CigarUtils::get_reference_length(&ref_haplotype.cigar)
+                            )
+                        } else if Self::path_is_too_divergent_from_reference(&cigar)
+                            || CigarUtils::get_reference_length(&cigar) < Self::MIN_HAPLOTYPE_REFERENCE_LENGTH {
+                            // N cigar elements means that a bubble was too divergent from the reference so skip over this path
+                            continue
+                        } else if CigarUtils::get_reference_length(&cigar)
+                            != CigarUtils::get_reference_length(&ref_haplotype.cigar) {
+                            // the SOFTCLIP strategy can produce a haplotype cigar that matches the beginning of the reference and
+                            // skips the latter part of the reference.  For example, when padded haplotype = NNNNNNNNNN[sequence 1]NNNNNNNNNN
+                            // and padded ref = NNNNNNNNNN[sequence 1][sequence 2]NNNNNNNNNN, the alignment may choose to align only sequence 1.
+                            // If aligning with an indel strategy produces a cigar with deletions for sequence 2 (which is reflected in the
+                            // reference length of the cigar matching the reference length of the ref haplotype), then the assembly window was
+                            // simply too small to reliably resolve the deletion; it should only throw an IllegalStateException when aligning
+                            // with the INDEL strategy still produces discrepant reference lengths.
+                            // You might wonder why not just use the INDEL strategy from the beginning.  This is because the SOFTCLIP strategy only fails
+                            // when there is insufficient flanking sequence to resolve the cigar unambiguously.  The INDEL strategy would produce
+                            // valid but most likely spurious indel cigars.
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
+    /**
+     * We use CigarOperator.N as the signal that an incomplete or too divergent bubble was found during bubble traversal
+     * @param c the cigar to test
+     * @return  true if we should skip over this path
+     */
+    fn path_is_too_divergent_from_reference(c: &CigarString) -> bool {
+        return c.0.par_iter().any(|ce| match ce {
+            Cigar::RefSkip(_) => true,
+            _ => false
+        })
     }
 
     /**
@@ -298,7 +476,13 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
                 return None
             }
 
-            let result = self.get
+            let result = self.get_assembly_result(ref_haplotype, kmer_size, rt_graph);
+            // check whether recovering dangling ends created cycles
+            if self.recover_all_dangling_branches && result.threading_graph.as_ref().unwrap().has_cycles() {
+                return None
+            }
+
+            return Some(result)
         }
     }
 
@@ -393,7 +577,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
             }
 
             debug!("Using kmer size of {} in read threading assembler", &rt_graph.get_kmer_size());
-            let cleaned =
+            let cleaned = Self::get_result_set_for_rt_graph(rt_graph);
+            return cleaned
         }
 
     }
@@ -402,6 +587,12 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge<'a>>,
         // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
         // happen in cases where for example the reference somehow manages to acquire a cycle, or
         // where the entire assembly collapses back into the reference sequence.
+        if rt_graph.get_reference_source_vertex().is_none() ||
+            rt_graph.get_reference_sink_vertex().is_none() {
+            return AssemblyResult::new(Status::JustAssembledReference, None, Some(rt_graph))
+        };
+
+        return AssemblyResult::new(Status::AssembledSomeVariation, None, Some(rt_graph))
     }
 
     // Performs the various transformations necessary on a sequence graph

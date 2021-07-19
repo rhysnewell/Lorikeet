@@ -10,6 +10,7 @@ use rust_htslib::bam::record::{Cigar, CigarString};
 use petgraph::Direction;
 use graphs::seq_graph::SeqGraph;
 use graphs::base_edge::BaseEdgeStruct;
+use haplotype::haplotype::Haplotype;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -22,6 +23,10 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     const INCREASE_COUNTS_BACKWARDS: bool = true;
 
     fn get_kmer_size(&self) -> usize;
+
+    fn get_reference_source_vertex(&self) -> Option<NodeIndex>;
+
+    fn get_reference_sink_vertex(&self) -> Option<NodeIndex>;
 
     fn has_cycles(&self) -> bool;
 
@@ -490,6 +495,14 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     fn remove_paths_not_connected_to_ref(&mut self);
 
     fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct>;
+
+    // Method that will be called immediately before haplotype finding in the event there are
+    // alteations that must be made to the graph based on implementation
+    fn post_process_for_haplotype_finding<L: Locatable>(
+        &mut self,
+        debug_graph_output_path: String,
+        ref_haplotype: &L
+    );
 }
 
 pub enum TraversalDirection {

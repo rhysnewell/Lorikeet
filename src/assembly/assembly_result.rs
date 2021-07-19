@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use haplotype::haplotype::Haplotype;
 use utils::simple_interval::Locatable;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Status {
     Failed,
     JustAssembledReference,

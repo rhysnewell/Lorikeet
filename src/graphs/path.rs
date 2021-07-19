@@ -18,9 +18,9 @@ use std::hash::{Hash, Hasher};
  */
 #[derive(Debug, Clone)]
 pub struct Path<'a, V: BaseVertex, E: BaseEdge> {
-    last_vertex: NodeIndex,
-    edges_in_order: Vec<EdgeIndex>,
-    pub graph: &'a BaseGraph<V, E>
+    pub(crate) last_vertex: NodeIndex,
+    pub(crate) edges_in_order: Vec<EdgeIndex>,
+    pub(crate) graph: &'a BaseGraph<V, E>
 }
 
 impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Path<'a, V, E> {
@@ -48,9 +48,47 @@ impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Pat
      * @throws IllegalArgumentException if {@code p} or {@code edge} are {@code null}, or {@code edge} is
      * not part of {@code p}'s graph, or {@code edge} does not have as a source the last vertex in {@code p}.
      */
-    // pub fn extend_path(p: &mut Self, edge: BaseEdge) {
-    //     assert!(p.graph.graph.)
-    // }
+    pub fn new_add_edge(&self, edge: EdgeIndex) -> Path<'a, V, E> {
+        assert!(self.graph.contains_edge(edge), "Graph must contain edge {:?} but it doesn't", edge);
+        assert_eq!(self.graph.get_edge_source(edge), self.last_vertex, "Edges added to path must be contiguous.");
+        let mut edges_in_order = self.edges_in_order.clone();
+        edges_in_order.push(edge);
+        Path {
+            graph: self.graph,
+            last_vertex: self.graph.get_edge_target(edge),
+            edges_in_order,
+        }
+    }
+
+    /**
+     * Create a new Path extending p with edge
+     *
+     * @param p the path to extend.
+     * @param edges list of edges to extend. Does not check arguments' validity i.e. doesn't check that edges are in order
+     *
+     * @throws IllegalArgumentException if {@code p} or {@code edges} are {@code null} or empty, or {@code edges} is
+     * not part of {@code p}'s graph, or {@code edges} does not have as a source the last vertex in {@code p}.
+     */
+    pub fn new_add_edges(&self, edges: Vec<EdgeIndex>) -> Path<'a, V, E> {
+        assert!(edges.par_iter().all(|edge| self.graph.contains_edge(*edge)),
+                "Graph does not contain an edge that attempted to be added to the path");
+        assert_eq!(self.graph.get_edge_source(edge), self.last_vertex, "Edges added to path must be contiguous.");
+
+        let tmp_vertex = self.last_vertex;
+        for edge in edges.iter() {
+            if self.graph.get_edge_source(edge) != tmp_vertex {
+                panic!("Edges added to the path must be contiguous")
+            };
+            tmp_vertex = self.graph.get_edge_target(edge)
+        }
+        let mut edges_in_order = self.edges_in_order.clone();
+        edges_in_order.par_extend(edges);
+        Path {
+            graph: self.graph,
+            last_vertex: tmp_vertex,
+            edges_in_order,
+        }
+    }
 
     fn paths_are_the_same(&self, path: &Self) -> bool {
         self.edges_in_order == path.edges_in_order
