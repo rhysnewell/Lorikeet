@@ -9,16 +9,19 @@ use linked_hash_set::LinkedHashSet;
 use reads::bird_tool_reads::BirdToolRead;
 use petgraph::stable_graph::{NodeIndex, EdgeIndex};
 use petgraph::Direction;
+use petgraph::visit::EdgeRef;
 use graphs::base_vertex::BaseVertex;
 use std::cmp::{max, min};
 use compare::{Compare, Extract};
-use utils::smith_waterman_aligner::*;
+use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{CigarString, Cigar};
 use reads::cigar_utils::CigarUtils;
 use graphs::seq_graph::SeqGraph;
-use graphs::base_edge::BaseEdgeStruct;
-
+use graphs::base_edge::{BaseEdgeStruct, BaseEdge};
+use utils::simple_interval::Locatable;
+use smith_waterman::bindings::SWOverhangStrategy;
+use rayon::prelude::*;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -142,6 +145,11 @@ impl<'a> ReadThreadingGraph<'a> {
 }
 
 impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
+
+    fn get_base_graph<V: BaseVertex, E: BaseEdge>(&self) -> &BaseGraph<V, E> {
+        &self.base_graph
+    }
+
     /**
      * Checks whether a kmer can be the threading start based on the current threading start location policy.
      *
@@ -459,7 +467,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         let prev_size = self.base_graph.graph.node_indices().len();
         let node_index = self.base_graph.graph.add_node(new_vertex);
 
-        self.track_kmer(Kmer, node_index);
+        self.track_kmer(kmer, node_index);
 
         return node_index
     }
@@ -581,7 +589,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
-    ) -> usize {
+    ) {
         if !self.already_built {
             panic!("recover_dangling_tails requires that graph already be built")
         }
@@ -590,7 +598,6 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         // a ConcurrentModificationException if we do it while iterating over the vertexes)
         let dangling_heads = self.base_graph.graph.node_indices().par_bridge()
             .filter(|v| self.base_graph.in_degree_of(*v) == 0 && !self.base_graph.is_ref_source(*v))
-            .map(|v| *v)
             .collect::<Vec<NodeIndex>>();
 
         // now we can try to recover the dangling heads
@@ -599,7 +606,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         for v in dangling_heads {
             attempted += 1;
             n_recovered += self.recover_dangling_head(
-                v, prune_factor, min_dangling_branch_length, recover_all, aligner
+                v, prune_factor, min_dangling_branch_length, recover_all
             )
         }
 
@@ -678,7 +685,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
                     if self.min_matching_bases_to_dangling_end_recovery >= 0 {
                         self.merge_dangling_head(dangling_head_merge_result)
                     } else {
-                        self.marge_dangling_head_result_legacy(dangling_head_merge_result)
+                        self.merge_dangling_head_result_legacy(dangling_head_merge_result)
                     }
                 }
             }
@@ -729,7 +736,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         // tail is a perfect match to the suffix of the reference path.  In this case we need to push the reference index to merge
         // down one position so that we don't incorrectly cut a base off of the deletion.
         let first_element_is_deletion = CigarUtils::cigar_elements_are_same_type(
-            &dangling_tail_merge_result.cigar.0[0], Cigar::Del(0)
+            &dangling_tail_merge_result.cigar.0[0], &Some(Cigar::Del(0))
         );
         let must_handle_leading_deletion_case = first_element_is_deletion
             && ((&dangling_tail_merge_result.cigar.0[0].len() + matching_suffix as u32) == last_ref_index + 1);
@@ -889,17 +896,17 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         };
 
         // but we can manipulate the dangling path if we need to
-        if indexes_to_merge.0 >= dangling_head_merge_result.dangling_path.len() &&
+        if indexes_to_merge.0 >= dangling_head_merge_result.dangling_path.len() as i64 &&
             !self.extend_dangling_path_against_reference(
                 &mut dangling_head_merge_result,
-                (indexes_to_merge.0 - dangling_head_merge_result.dangling_path.len() + 2) as usize,
+                (indexes_to_merge.0 - dangling_head_merge_result.dangling_path.len() as i64 + 2) as usize,
             ) {
             return 0
         }
 
         self.base_graph.graph.add_edge(
-            dangling_head_merge_result.reference_path[indexes_to_merge.0 + 1 as usize],
-            dangling_head_merge_result.dangling_path[indexes_to_merge.1 as usize],
+            dangling_head_merge_result.reference_path[(indexes_to_merge.0 + 1) as usize],
+            dangling_head_merge_result.dangling_path[(indexes_to_merge.1) as usize],
             MultiSampleEdge::new(false, 1, self.num_pruning_samples)
         );
 
@@ -945,7 +952,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         for i in 0..num_nodes_to_extend {
             sb.push(ref_source_sequence[i] as char)
         }
-        sb.extend(self.base_graph.graph.node_weight(dangling_source).unwrap().get_sequence_string());
+        sb.par_extend(self.base_graph.graph.node_weight(dangling_source).unwrap().get_sequence_string().bytes());
         let mut sequence_to_extend = sb.as_bytes();
 
         // clean up the source and edge
@@ -956,7 +963,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         // extend the path
         // TODO: Make sure there are tests for this
         for i in (1..num_nodes_to_extend+1).rev() {
-            let new_v = MultiDeBruijnVertex::new_with_sequence(sequence_to_extend[i..i+self.base_graph.get_kmer_size()]);
+            let new_v = MultiDeBruijnVertex::new_with_sequence(&sequence_to_extend[i..i+self.base_graph.get_kmer_size()]);
             let new_v_index = self.base_graph.graph.add_node(new_v);
             let new_e = MultiSampleEdge::new(
                 false,
@@ -1062,7 +1069,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         let ref_path = self.get_reference_path(
             alt_path[0],
             TraversalDirection::Downwards,
-            Some(self.get_heaviest_incoming_edge(alt_path[1]))
+            Some(self.get_heaviest_edge(alt_path[1], Direction::Incoming))
         );
 
         // create the Smith-Waterman strings to use
@@ -1071,12 +1078,14 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
 
         // run Smith-Waterman to determine the best alignment
         // (and remove trailing deletions since they aren't interesting)
-        let alignment = SmithWatermanAligner::align(ref_bases, alt_bases, *STANDARD_NGS);
+        let alignment = SmithWatermanAligner::align(
+            ref_bases, alt_bases, *STANDARD_NGS, SWOverhangStrategy::LeadingIndel
+        );
 
         return Some(DanglingChainMergeHelper::new(
             alt_path, ref_path,
             alt_bases, ref_bases,
-            AlignmentUtils::remove_trailing_deletions(CigarString::from_alignment(&alignment, false))))
+            AlignmentUtils::remove_trailing_deletions(alignment.cigar)))
     }
 
     /**
@@ -1104,7 +1113,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         match alt_path {
             None => return None,
             Some(alt_path) => {
-                if self.base_graph.is_ref_sink(alt_path[0]) || alt_path.len() < min_dangling_branch_length = 1 {
+                if self.base_graph.is_ref_sink(alt_path[0]) || alt_path.len() < min_dangling_branch_length + 1 {
                     return None
                 }
             }
@@ -1120,12 +1129,14 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
 
         // run Smith-Waterman to determine the best alignment
         // (and remove trailing deletions since they aren't interesting)
-        let alignment = SmithWatermanAligner::align(ref_bases, alt_bases, *STANDARD_NGS);
+        let alignment = SmithWatermanAligner::align(
+            ref_bases, alt_bases, *STANDARD_NGS, SWOverhangStrategy::LeadingIndel
+        );
 
         return Some(DanglingChainMergeHelper::new(
             alt_path, ref_path,
             alt_bases, ref_bases,
-            AlignmentUtils::remove_trailing_deletions(CigarString::from_alignment(&alignment, false))))
+            AlignmentUtils::remove_trailing_deletions(alignment.cigar)))
 
     }
 
@@ -1267,7 +1278,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
             )
         } else {
             let done = |v: NodeIndex| -> bool {
-                self.has_incident_ref_edge(v) || self.base_graph.in_degree_of(v)
+                self.has_incident_ref_edge(v) || self.base_graph.in_degree_of(v) == 0
             };
 
             let return_path = |v: NodeIndex| -> bool {
@@ -1336,7 +1347,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         path.insert(0, v);
 
         return if return_path(v) {
-            path
+            Some(path)
         } else {
             None
         }
@@ -1346,7 +1357,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         &self,
         v: NodeIndex
     ) -> bool {
-        for edge in self.base_graph.incoming_edge_of(v) {
+        for edge in self.base_graph.graph.edges_directed(v, Direction::Incoming) {
             if self.base_graph.edge_is_ref(edge) {
                 return true
             }
@@ -1359,11 +1370,11 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         return if edges.len() == 1 {
             edges[0]
         } else {
-            let comparator = Extract::new(|edge: EdgeIndex| {
-                self.base_graph.graph.edge_weight(edge).unwrap().multiplicity
+            let comparator = Extract::new(|edge: &EdgeIndex| {
+                self.base_graph.graph.edge_weight(*edge).unwrap().multiplicity
             });
 
-            edges.par_iter().max_by(|l, r| {
+            *edges.par_iter().max_by(|l, r| {
                 comparator.compare(l, r)
             }).unwrap()
         }
@@ -1380,11 +1391,11 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         assert!(!path.is_empty(), "Path cannot be empty");
 
 
-        let sb = path.iter().map(|v| {
-            if expand_source && self.base_graph.is_source(v) {
-                self.base_graph.graph.node_weight(v).unwrap().to_string()
+        let sb = path.par_iter().map(|v| {
+            if expand_source && self.base_graph.is_source(*v) {
+                self.base_graph.graph.node_weight(*v).unwrap().to_string()
             } else {
-                self.base_graph.graph.node_weight(v).unwrap().get_suffix_string()
+                self.base_graph.graph.node_weight(*v).unwrap().get_suffix_string()
             }
         }).collect::<String>();
 

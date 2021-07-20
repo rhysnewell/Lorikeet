@@ -7,17 +7,17 @@ use rayon::prelude::*;
 use assembly::assembly_region::AssemblyRegion;
 use reference::reference_reader::ReferenceReader;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
-use utils::smith_waterman_aligner::SmithWatermanAligner;
-use bio::alignment::pairwise::MatchFunc;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use reads::read_utils::ReadUtils;
 use reads::read_clipper::ReadClipper;
-use bio_types::sequence::SequenceRead;
-use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use std::cmp::{max, min};
 use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+use graphs::chain_pruner::ChainPruner;
+use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use graphs::multi_sample_edge::MultiSampleEdge;
+use haplotype::haplotype::Haplotype;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -135,13 +135,12 @@ impl AssemblyBasedCallerUtils {
      * returning a data structure with the resulting information needed
      * for further HC steps
      */
-    pub fn assemble_reads<'a>(
+    pub fn assemble_reads<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>>(
         region: AssemblyRegion,
         given_alleles: Vec<VariantContext>,
         args: &clap::ArgMatches,
         reference_reader: &mut ReferenceReader<'a>,
-        assembly_engine: &mut ReadThreadingAssembler,
-        aligner: &mut SmithWatermanAligner,
+        assembly_engine: &mut ReadThreadingAssembler<'a, C>,
         correct_overlapping_base_qualities: bool,
     ) {
         Self::finalize_regions(
@@ -228,8 +227,10 @@ impl AssemblyBasedCallerUtils {
      * @param paddedReferenceLoc the interval which includes padding and shows how big the reference haplotype should be
      * @return a non-null haplotype
      */
-    pub fn create_reference_haplotype(region: &AssemblyRegion, padded_reference_loc: &SimpleInterval, reference_reader: &mut ReferenceReader<'_>) -> Haplotype<Locatable> {
-        return ReferenceConfidenceModel::create_reference_haplotype(region, region.get_assembly_region_reference(reference_reader), padded_reference_loc)
+    pub fn create_reference_haplotype<'a, L: Locatable>(
+        region: &'a AssemblyRegion, padded_reference_loc: &'a SimpleInterval, reference_reader: &'a mut ReferenceReader<'a>
+    ) -> Haplotype<'a, L> {
+        return ReferenceConfidenceModel::create_reference_haplotype(region, region.get_assembly_region_reference(reference_reader, 0), padded_reference_loc)
     }
 
     pub fn get_alleles_consistent_with_given_alleles(given_alleles: Vec<VariantContext>, merged_vc: &VariantContext) -> HashSet<Allele> {

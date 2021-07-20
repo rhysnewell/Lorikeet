@@ -3,7 +3,6 @@ use coverm::bam_generator::*;
 use coverm::FlagFilter;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use reference::reference_reader::ReferenceReader;
-use utils::utils::*;
 use estimation::bams::index_bams::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use indicatif::{ProgressBar, ProgressStyle, MultiProgress};

@@ -110,7 +110,7 @@ impl Ord for CountedKmer<'_> {
 }
 
 impl PartialOrd for CountedKmer<'_> {
-    fn cmp(&self, other: &Self) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }

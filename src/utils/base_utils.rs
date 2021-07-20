@@ -4,11 +4,11 @@ use rayon::prelude::*;
 use bio::alphabets::dna::alphabet;
 
 lazy_static! {
-    pub static ref BASES: HashSet<u8> = ['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8].into_par_iter().cloned().collect::<HashSet<u8>>();
-    pub static ref BASE_CHARS: HashSet<char> = ['A', 'C', 'G', 'T'].into_par_iter().cloned().collect::<HashSet<char>>();
+    pub static ref BASES: HashSet<u8> = vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8].into_iter().collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS: HashSet<char> = vec!['A', 'C', 'G', 'T'].into_iter().collect::<HashSet<char>>();
 
-    pub static ref BASES_EXTENDED: HashSet<u8> = ['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8].into_par_iter().cloned().collect::<HashSet<u8>>();
-    pub static ref BASE_CHARS_EXTENDED: HashSet<char> = ['A', 'C', 'G', 'T', 'N', 'D'].into_par_iter().cloned().collect::<HashSet<char>>();
+    pub static ref BASES_EXTENDED: HashSet<u8> = vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8].into_iter().collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS_EXTENDED: HashSet<char> = vec!['A', 'C', 'G', 'T', 'N', 'D'].into_iter().collect::<HashSet<char>>();
 }
 
 pub enum Base {
@@ -30,6 +30,7 @@ impl Base {
             'T' => Base::T(base),
             'N' => Base::N(base),
             'D' => Base::D(base),
+             _ => panic!("Incompatible base char {}", base)
         }
     }
 }

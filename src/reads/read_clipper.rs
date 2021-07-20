@@ -1,5 +1,4 @@
 use reads::bird_tool_reads::BirdToolRead;
-use bio_types::sequence::SequenceRead;
 use reads::read_utils::ReadUtils;
 use reads::clipping_op::ClippingOp;
 use utils::simple_interval::Locatable;
@@ -350,6 +349,54 @@ impl<'a> ReadClipper<'a> {
         } else {
             return self.hard_clip_by_reference_coordinates_right_tail(adaptor_boundary)
         }
+    }
+
+    pub fn hard_clip_low_qual_ends(&mut self, low_qual: u8) -> BirdToolRead {
+        self.clip_low_qual
+    }
+
+    /**
+     * Clips any contiguous tail (left, right or both) with base quality lower than lowQual using the desired algorithm.
+     *
+     * This function will look for low quality tails and hard clip them away. A low quality tail
+     * ends when a base has base quality greater than lowQual.
+     *
+     * @param algorithm the algorithm to use (HardClip, SoftClip, Write N's,...)
+     * @param lowQual every base quality lower than or equal to this in the tail of the read will be hard clipped
+     * @return a new read without low quality tails (Could be an empty, unmapped read if the clip removed all bases).
+     */
+    pub fn clip_low_qual_ends(&mut self, algorithm: ClippingRepresentation, low_qual: u8) -> BirdToolRead {
+        if self.read.read.is_empty() {
+            self.read.clone()
+        }
+
+        let read_length = self.read.read.len();
+        let mut left_clip_index = 0;
+        let mut right_clip_index = read_length - 1;
+
+        let read_quals = self.read.read.qual();
+        // check how far we can clip both sides
+        while right_clip_index >= 0 && read_quals[right_clip_index] <= low_qual {
+            right_clip_index -= 1;
+        }
+        while left_clip_index < read_length && read_quals[left_clip_index] <= low_qual {
+            left_clip_index += 1;
+        }
+
+        // if the entire read should be clipped, then return an empty read.
+        if left_clip_index < read_length - 1 {
+            return ReadUtils::empty_read(&self.read)
+        };
+
+        if right_clip_index < read_length - 1 {
+            self.add_op(ClippingOp::new(right_clip_index + 1, read_length -1));
+        };
+
+        if left_clip_index > 0 {
+            self.add_op(ClippingOp::new(0, left_clip_index - 1));
+        };
+
+        return self.clip_read(algorithm)
     }
 }
 

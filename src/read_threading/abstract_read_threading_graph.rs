@@ -1,26 +1,26 @@
-use linked_hash_map::LinkedHashMap;
 use assembly::kmer::Kmer;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::base_graph::BaseGraph;
-use graphs::multi_sample_edge::MultiSampleEdge;
 use reads::bird_tool_reads::BirdToolRead;
 use petgraph::stable_graph::{NodeIndex, EdgeIndex};
-use utils::smith_waterman_aligner::SmithWatermanAligner;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use petgraph::Direction;
 use graphs::seq_graph::SeqGraph;
-use graphs::base_edge::BaseEdgeStruct;
-use haplotype::haplotype::Haplotype;
+use graphs::base_edge::{BaseEdgeStruct, BaseEdge};
+use graphs::base_vertex::BaseVertex;
+use utils::simple_interval::Locatable;
+
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
  */
 pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
-    const ANONYMOUS_SAMPLE: &'static str = "XXX_UNAMED_XXX";
+    const ANONYMOUS_SAMPLE: &'static str = "XXX_UNNAMED_XXX";
     const WRITE_GRAPH: bool = false;
     const DEBUG_NON_UNIQUE_CALC: bool = false;
     const MAX_CIGAR_COMPLEXITY: usize = 3;
     const INCREASE_COUNTS_BACKWARDS: bool = true;
+
+    fn get_base_graph<V: BaseVertex, E: BaseEdge>(&self) -> &BaseGraph<V, E>;
 
     fn get_kmer_size(&self) -> usize;
 

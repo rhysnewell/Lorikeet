@@ -2,13 +2,12 @@ use rayon::prelude::*;
 use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
-use petgraph::stable_graph::{EdgeIndex, NodeIndex, EdgeReference};
-use petgraph::visit::EdgeRef;
-use utils::smith_waterman_aligner::SmithWatermanAligner;
+use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use rust_htslib::bam::record::CigarString;
 use reads::cigar_utils::CigarUtils;
 use ordered_float::OrderedFloat;
 use std::hash::{Hash, Hasher};
+use smith_waterman::bindings::SWOverhangStrategy;
 
 /**
  * A path thought a BaseGraph
@@ -72,7 +71,6 @@ impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Pat
     pub fn new_add_edges(&self, edges: Vec<EdgeIndex>) -> Path<'a, V, E> {
         assert!(edges.par_iter().all(|edge| self.graph.contains_edge(*edge)),
                 "Graph does not contain an edge that attempted to be added to the path");
-        assert_eq!(self.graph.get_edge_source(edge), self.last_vertex, "Edges added to path must be contiguous.");
 
         let tmp_vertex = self.last_vertex;
         for edge in edges.iter() {
@@ -185,8 +183,8 @@ impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Pat
      * @param aligner
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(&self, ref_seq: &[u8], aligner: SmithWatermanAligner) -> CigarString {
-        return CigarUtils::calculate_cigar(ref_seq, self.get_bases(), aligner).unwrap()
+    pub fn calculate_cigar(&self, ref_seq: &[u8],) -> CigarString {
+        return CigarUtils::calculate_cigar(ref_seq, self.get_bases(), SWOverhangStrategy::SoftClip).unwrap()
     }
 
     /**

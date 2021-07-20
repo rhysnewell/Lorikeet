@@ -1,13 +1,9 @@
-use rust_htslib::bam::Record;
 use utils::simple_interval::SimpleInterval;
 use utils::interval_utils::IntervalUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
 use utils::simple_interval::Locatable;
 use rayon::prelude::*;
-use bio_types::sequence::SequenceRead;
-use bio::io::fasta::IndexedReader;
-use std::fs::File;
 use reference::reference_reader::ReferenceReader;
 
 

@@ -14,12 +14,12 @@ impl ReferenceConfidenceModel {
      * @param paddedReferenceLoc the location spanning of the refBases -- can be longer than activeRegion.getLocation()
      * @return a reference haplotype
      */
-    pub fn create_reference_haplotype<L: Locatable>(active_region: &AssemblyRegion, ref_bases: &[u8], padded_reference_loc: &SimpleInterval) -> Haplotype<L> {
+    pub fn create_reference_haplotype<'a, L: Locatable>(active_region: &'a AssemblyRegion, ref_bases: &'a [u8], padded_reference_loc: &'a SimpleInterval) -> Haplotype<'a, L> {
         let alignment_start = active_region.get_padded_span().get_start().checked_sub(padded_reference_loc.get_start()).unwrap_or(
             panic!("Bad alignment start in create_reference_haplotype")
         );
 
-        let mut ref_haplotype = Haplotype::new(bases, true);
+        let mut ref_haplotype = Haplotype::new(ref_bases, true);
         ref_haplotype.set_alignment_start_hap_wrt_ref(alignment_start);
         let mut c = Vec::new();
         c.push(Cigar::Match(ref_haplotype.get_bases().len() as u32));

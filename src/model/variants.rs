@@ -1,13 +1,9 @@
 use bio::stats::LogProb;
-use itertools::Itertools;
 use ordered_float::NotNan;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
-
-use rayon::prelude::*;
-use model::variant_context::VariantContext;
 use utils::vcf_constants::VCFConstants;
 use rayon::prelude::*;
 

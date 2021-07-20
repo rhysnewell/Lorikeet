@@ -5,9 +5,6 @@ use graphs::base_graph::BaseGraph;
 use petgraph::prelude::NodeIndex;
 use graphs::k_best_haplotype::KBestHaplotype;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use std::cmp::Ordering;
-use ordered_float::OrderedFloat;
-use utils::base_utils::BaseUtils;
 use petgraph::Direction;
 
 /**

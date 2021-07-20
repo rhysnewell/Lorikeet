@@ -269,7 +269,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else {
                 run_pileup(
                     m,
@@ -282,7 +281,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             }
         } else {
             let bam_readers = bam_generator::generate_named_bam_readers_from_bam_files(bam_files);
@@ -302,7 +300,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let long_generators = long_generator_setup(
@@ -323,7 +320,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else {
                 run_pileup(
                     m,
@@ -378,7 +374,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let long_generators = long_generator_setup(
@@ -399,9 +394,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else {
-
                 run_pileup(
                     m,
                     mode,
@@ -449,7 +442,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
                     tmp_dir,
                     concatenated_genomes,
                 )
-
             } else if m.is_present("longreads") {
                 // Perform mapping
                 let long_generators = long_generator_setup(
@@ -486,7 +478,6 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
         }
     }
 }
-
 
 struct EstimatorsAndTaker {
     estimators: Vec<CoverageEstimator>,

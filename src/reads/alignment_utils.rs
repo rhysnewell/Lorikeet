@@ -3,7 +3,6 @@ use reads::cigar_builder::{CigarBuilderResult, CigarBuilder};
 use rust_htslib::bam::record::{Cigar, CigarString};
 use reads::cigar_utils::CigarUtils;
 use std::ops::Range;
-use itertools::Itertools;
 
 pub struct AlignmentUtils {}
 

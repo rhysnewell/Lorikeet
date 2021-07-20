@@ -6,7 +6,8 @@ use assembly::kmer::Kmer;
 use utils::base_utils::BaseUtils;
 use rayon::prelude::*;
 use std::ops::Deref;
-use read_error_corrector::read_error_corrector::ReadErrorCorrector
+use read_error_corrector::read_error_corrector::ReadErrorCorrector;
+use reads::read_clipper::ReadClipper;
 
 /**
  * Utility class that error-corrects reads.
@@ -175,7 +176,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         } else {
             let read_bases = read.read.seq().encoded;
             for offset in 0..(read_bases.len() - self.kmer_length) {
-                self.counts_by_kmer.add_kmer(Kmer::new_with_start_and_length(read_bases, offset, self.kmer_length), 1)
+                self.counts_by_kmer.add_kmer(&Kmer::new_with_start_and_length(read_bases, offset, self.kmer_length), 1)
             }
         }
     }
@@ -248,7 +249,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
                     continue
                 },
                 Some(new_kmer) => {
-                    if new_kmer == &kmer {
+                    if new_kmer == &&kmer {
                         continue
                     } else {
                         let differing_positions = self.kmer_differing_bases.get(&kmer).unwrap();
@@ -289,7 +290,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         for stored_kmer in self.counts_by_kmer.get_counted_kmers() {
             if stored_kmer.get_count() >= self.min_observations_for_kmer_to_be_solid {
                 // this kmer is good: map to itself
-                self.kmer_correction_map.insert(stored_kmer.get_kmer(), stored_kmer.get_kmer().clone());
+                self.kmer_correction_map.insert(stored_kmer.get_kmer(), stored_kmer.get_kmer());
                 self.kmer_differing_bases.insert(stored_kmer.get_kmer(), (vec![0], vec![0]));
                 self.read_error_correction_stats.num_solid_kmers += 1;
             } else if stored_kmer.get_count() <= self.max_observations_for_kmer_to_be_correctable {
@@ -326,7 +327,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         // counts_by_kmer: &KmerCounter<'a>,
         // max_distance: usize,
     ) -> (Option<&'a Kmer<'a>>, (Vec<usize>, Vec<u8>)) {
-        assert!(max_distance >= 1, "max_distance must be >=1, got {}", self.max_mismatches_to_correct);
+        // assert!(max_distance >= 1, "max_distance must be >=1, got {}", self.max_mismatches_to_correct);
         let mut minimum_distance = std::i32::MAX;
         let mut closest_kmer = None;
 
@@ -343,7 +344,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
             }
 
             let hamming_distance = kmer.get_differing_positions(
-                candidate_kmer.get_kmer(), self.max_mismatches_to_correct, differing_indices, differing_bases
+                candidate_kmer.get_kmer(), self.max_mismatches_to_correct, &mut differing_indices, &mut differing_bases
             );
             if hamming_distance < 0 { // can't compare kmer? skip
                 continue
@@ -414,6 +415,11 @@ impl CorrectionSet {
         for k in 0..size {
             corrections.push(Vec::with_capacity(k));
         }
+
+        Self {
+            size,
+            corrections
+        }
     }
 
     /**
@@ -453,7 +459,7 @@ impl CorrectionSet {
             }) {
                 return None
             } else {
-                return Some(last_base)
+                return Some(*last_base)
             }
         }
     }
@@ -468,12 +474,27 @@ impl ReadErrorCorrector for NearbyKmerErrorCorrector<'_> {
         let mut corrected_reads = Vec::with_capacity(reads.len());
 
         if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD {
-            return reads // Can't correct so just return the reads
+            return reads.to_vec() // Can't correct so just return the reads
         } else {
             self.compute_kmer_correction_map();
             for read in reads {
                 let corrected_read = self.correct_read(read);
+                if self.trim_low_quality_bases {
+                    corrected_reads.push(
+                        ReadClipper::new(&corrected_read).hard_clip_low_qual_ends(self.min_tail_quality)
+                    )
+                } else {
+                    corrected_reads.push(corrected_read)
+                }
             }
+            // debug!("Number of corrected bases: {}" self.numBasesCorrected);
+            // debug!("Number of corrected reads:" + readErrorCorrectionStats.numReadsCorrected);
+            // debug!("Number of skipped reads:" + readErrorCorrectionStats.numReadsUncorrected);
+            // debug!("Number of solid kmers:" + readErrorCorrectionStats.numSolidKmers);
+            // debug!("Number of corrected kmers:" + readErrorCorrectionStats.numCorrectedKmers);
+            // debug!("Number of uncorrectable kmers:" + readErrorCorrectionStats.numUncorrectableKmers);
+
+            return corrected_reads
         }
     }
 }
