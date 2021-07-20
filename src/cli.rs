@@ -729,15 +729,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .required(false)
                         .conflicts_with_all(&["assembly"]),
                 )
-                .arg(
-                    Arg::with_name("assembly")
-                        .short("a")
-                        .long("query-assembly")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly-bam-files"]),
-                )
                 .arg(Arg::with_name("gff").long("gff").takes_value(true))
                 .arg(
                     Arg::with_name("prodigal-params")
@@ -1457,23 +1448,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "full-help",
                         ]),
                 )
-                .arg(
-                    Arg::with_name("assembly-bam-files")
-                        .long("query-assembly-bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly"]),
-                )
-                .arg(
-                    Arg::with_name("assembly")
-                        .short("a")
-                        .long("query-assembly")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly-bam-files"]),
-                )
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
@@ -1698,8 +1672,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
                         .default_value("trimmed_mean"),
                 )
-                .arg(Arg::with_name("e-min").long("e-min").default_value("0.1"))
-                .arg(Arg::with_name("e-max").long("e-max").default_value("0.25"))
                 .arg(
                     Arg::with_name("pts-min")
                         .long("pts-min")
@@ -1710,32 +1682,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("pts-max")
                         .default_value("0.1"),
                 )
-                .arg(Arg::with_name("phi").long("phi").default_value("0.0"))
                 .arg(
                     Arg::with_name("min-covered-fraction")
                         .long("min-covered-fraction")
                         .default_value("0.0"),
-                )
-                .arg(
-                    Arg::with_name("coverage-fold")
-                        .long("coverage-fold")
-                        .default_value("1.0"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-depth")
-                        .long("min-variant-depth")
-                        .short("f")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-quality")
-                        .long("min-variant-quality")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("strain-ani")
-                        .long("strain-ani")
-                        .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("mapq-threshold")
@@ -1776,14 +1726,65 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("0.01"),
                 )
                 .arg(
-                    Arg::with_name("heterozygosity")
-                        .long("heterozygosity")
+                    Arg::with_name("heterozygosity-stdev")
+                        .long("heterozygosity-stdev")
                         .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("snp-heterozygosity")
+                        .long("snp-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("indel-heterozygosity")
                         .long("indel-heterozygosity")
-                        .default_value("0.001"),
+                        .default_value("0.000125"),
+                )
+                .arg(
+                    Arg::with_name("standard-min-confidence-threshold-for-calling")
+                        .long("standard-min-confidence-threshold-for-calling")
+                        .short("stand-call-conf")
+                        .default_value("30.0")
+                )
+                .arg(
+                    Arg::with_name("genotype-assignment-method")
+                        .long("genotype-assignment-method")
+                        .default_value("UsePLsToAssign")
+                        .possible_values(&["UsePLsToAssign", "UsePosteriorProbabilities", "BestMatchToOriginal", "DoNotAssignGenotypes"])
+                )
+                .arg(
+                    Arg::with_name("use-posteriors-to-calculate-qual")
+                        .long("use-posteriors-to-calculate-qual")
+                        .short("gp-qual")
+                )
+                .arg(
+                    Arg::with_name("annotate-with-num-discovered-alleles")
+                        .long("annotate-with-num-discovered-alleles")
+                )
+                .arg(
+                    Arg::with_name("max-prob-propagation-distance")
+                        .long("max-prob-propagation-distance")
+                        .default_value("50")
+                )
+                .arg(
+                    Arg::with_name("active-probability-threshold")
+                        .long("active-probability-threshold")
+                        .default_value("0.002")
+                )
+                .arg(
+                    Arg::with_name("assembly-region-padding")
+                        .long("assembly-region-padding")
+                        .default_value("100")
+                )
+                .arg(
+                    Arg::with_name("min-assembly-region-size")
+                        .long("min-assembly-region-size")
+                        .default_value("50")
+                )
+                .arg(
+                    Arg::with_name("max-assembly-region-size")
+                        .long("max-assembly-region-size")
+                        .default_value("50")
                 )
                 .arg(
                     Arg::with_name("kmer-size")
@@ -1808,15 +1809,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-                .arg(
-                    Arg::with_name("window-size")
-                        .long("window-size")
-                        .short("w")
-                        .default_value("1"),
-                )
-                .arg(Arg::with_name("plot").long("plot"))
-                .arg(Arg::with_name("nanopore").long("nanopore"))
-                .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-soft-clipping").long("include-soft-clipping"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
@@ -1826,21 +1818,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("1")
                         .required(false),
                 )
-                .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.3")
-                        .required(false),
-                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet"))
-                .arg(Arg::with_name("freebayes").long("freebayes"))
-                .arg(
-                    Arg::with_name("ulimit")
-                        .long("ulimit")
-                        .default_value("81920"),
-                ),
+                .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
             SubCommand::with_name("kmer")
