@@ -8,19 +8,17 @@ use graphs::seq_graph::SeqGraph;
 use graphs::base_edge::{BaseEdgeStruct, BaseEdge};
 use graphs::base_vertex::BaseVertex;
 use utils::simple_interval::Locatable;
+use read_threading::read_threading_graph::ReadThreadingGraph;
 
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
  */
 pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
-    const ANONYMOUS_SAMPLE: &'static str = "XXX_UNNAMED_XXX";
-    const WRITE_GRAPH: bool = false;
-    const DEBUG_NON_UNIQUE_CALC: bool = false;
-    const MAX_CIGAR_COMPLEXITY: usize = 3;
-    const INCREASE_COUNTS_BACKWARDS: bool = true;
 
     fn get_base_graph<V: BaseVertex, E: BaseEdge>(&self) -> &BaseGraph<V, E>;
+
+    fn get_base_graph_mut<V: BaseVertex, E: BaseEdge>(&mut self) -> &mut BaseGraph<V, E>;
 
     fn get_kmer_size(&self) -> usize;
 
@@ -47,7 +45,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     // get the next kmerVertex for ChainExtension and validate if necessary.
     fn get_next_kmer_vertex_for_chain_extension(
         &self, kmer: &Kmer<'a>, is_ref: bool, prev_vertex: NodeIndex
-    ) -> Option<&NodeIndex>;
+    ) -> Option<NodeIndex>;
 
     /**
      * Add bases in sequence to this graph
@@ -84,7 +82,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         let num_elements = cigar.0.len();
 
         // don't allow more than a couple of different ops
-        if num_elements == 0 || num_elements > Self::MAX_CIGAR_COMPLEXITY {
+        if num_elements == 0 || num_elements > ReadThreadingGraph::MAX_CIGAR_COMPLEXITY {
             return false
         };
 
@@ -165,7 +163,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
      * @param seqForKmers the sequence we want to thread into the graph
      * @return the position of the starting vertex in seqForKmer, or -1 if it cannot find one
      */
-    fn find_start(&self, seq_for_kmers: &SequenceForKmers) -> usize;
+    fn find_start(&self, seq_for_kmers: &SequenceForKmers) -> Option<usize>;
 
     // whether reads are needed after graph construction
     fn should_remove_reads_after_graph_construction(&self) -> bool;
@@ -182,7 +180,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         for len in 1..(kmer.len() as i64 + 1) {
             let seq_i = seq_start - len + 1;
             let kmer_i = kmer.len() as i64 - len;
-            if seq_i < 0 || seq_i[seq_i as usize] != kmer[kmer_i as usize] {
+            if seq_i < 0 || seq[seq_i as usize] != kmer[kmer_i as usize] {
                 return len as usize - 1;
             }
         }
@@ -325,7 +323,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
     /**
      * The minimum number of matches to be considered allowable for recovering dangling ends
      */
-    fn get_min_matching_bases(&self) -> i64;
+    fn get_min_matching_bases(&self) -> i32;
 
     /**
      * Generates the CIGAR string from the Smith-Waterman alignment of the dangling path (where the
@@ -431,7 +429,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
         seqs_for_kmers: &SequenceForKmers,
         vertex: NodeIndex,
         original_kmer: &[u8],
-        offset: usize,
+        offset: Option<usize>,
     );
 
     /**

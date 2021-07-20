@@ -1,6 +1,5 @@
 use std::cmp::{Ordering, min};
 use std::collections::HashSet;
-use rayon::prelude::*;
 use bio::alphabets::dna::alphabet;
 
 lazy_static! {
