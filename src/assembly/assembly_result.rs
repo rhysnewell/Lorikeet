@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use haplotype::haplotype::Haplotype;
 use utils::simple_interval::Locatable;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Status {
     Failed,
     JustAssembledReference,
@@ -15,15 +15,15 @@ pub enum Status {
 /**
  * Result of assembling, with the resulting graph and status
  */
-pub struct AssemblyResult<'a, E: BaseEdge, L: Locatable> {
+pub struct AssemblyResult<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>> {
     pub(crate) status: Status,
-    pub(crate) threading_graph: Option<AbstractReadThreadingGraph<'a>>,
+    pub(crate) threading_graph: Option<A>,
     pub(crate) graph: Option<SeqGraph<'a, E>>,
     pub(crate) discovered_haplotypes: HashSet<Haplotype<'a, L>>,
     pub(crate) contains_suspect_haploptypes: bool,
 }
 
-impl<'a, E: BaseEdge, L: Locatable> AssemblyResult<'a, E, L> {
+impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>> AssemblyResult<'a, E, L, A> {
     /**
      * Create a new assembly result
      * @param status the status, cannot be null
@@ -31,9 +31,9 @@ impl<'a, E: BaseEdge, L: Locatable> AssemblyResult<'a, E, L> {
      */
     pub fn new(
         status: Status,
-        graph: Option<SeqGraph<'a, L>>,
-        threading_graph: Option<AbstractReadThreadingGraph<'a>>
-    ) -> AssemblyResult<'a, E, L> {
+        graph: Option<SeqGraph<'a, E>>,
+        threading_graph: Option<A>
+    ) -> AssemblyResult<'a, E, L, A> {
         AssemblyResult {
             status,
             graph,

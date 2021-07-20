@@ -1,6 +1,7 @@
 /**
  * How overhangs should be treated during Smith-Waterman alignment
  */
+#[derive(Debug, Eq, PartialEq)]
 pub enum SWOverhangStrategy {
     /*
      * Add softclips for the overhangs
@@ -10,7 +11,7 @@ pub enum SWOverhangStrategy {
     /*
      * Treat the overhangs as proper insertions/deletions
      */
-    InDel,
+    Indel,
 
     /*
      * Treat the overhangs as proper insertions/deletions for leading (but not trailing) overhangs.
@@ -18,7 +19,7 @@ pub enum SWOverhangStrategy {
      * expect the dangling tail to reach the end of the reference path we are okay ignoring trailing
      * deletions - but leading indels are still very much relevant.
      */
-    LeadingInDel,
+    LeadingIndel,
 
     /*
      * Just ignore the overhangs
@@ -29,6 +30,7 @@ pub enum SWOverhangStrategy {
 /**
  * a set of parameters to configure Smith-Waterman assembly
  */
+#[derive(Debug, Eq, PartialEq)]
 pub struct SWParameters {
     pub(crate) match_value: i32,
     pub(crate) mismatch_penalty: i32,

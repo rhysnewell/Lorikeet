@@ -1,14 +1,12 @@
 use utils::simple_interval::Locatable;
 use haplotype::event_map::EventMap;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use compare::{Compare, Extract, Then};
-use model::variants::{Allele, Variant};
 use model::byte_array_allele::ByteArrayAllele;
 
 // lazy_static! {
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
-
+#[derive(Debug, Clone)]
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,

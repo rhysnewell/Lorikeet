@@ -1,16 +1,15 @@
 use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
-use utils::smith_waterman_aligner::SmithWatermanAligner;
-use bio::alignment::pairwise::{Scoring, MIN_SCORE, MatchParams};
-use bio_types::alignment::Alignment;
 use reads::alignment_utils::AlignmentUtils;
 use rayon::prelude::*;
+use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
 
 lazy_static! {
     static ref SW_PAD: String = format!("NNNNNNNNNN");
     // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    static ref NEW_SW_PARAMETERS: Scoring<MatchParams> = Scoring::from_scores(-260, -11, 200, -150).xclip(MIN_SCORE).yclip(MIN_SCORE);
+    static ref NEW_SW_PARAMETERS: SWParameters = SWParameters::new(-260, -11, 200, -150);
     // FROM GATK COMMENTS:
     // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
     // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
@@ -18,7 +17,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Scoring<MatchParams> = Scoring::from_scores(-30, -5, 10, -15).xclip(MIN_SCORE).yclip(MIN_SCORE);
+    static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(-30, -5, 10, -15);
 }
 
 pub struct CigarUtils {}
@@ -221,7 +220,7 @@ impl CigarUtils {
      * @param refSeq the reference sequence that all of the bases in this path should align to
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8]) -> Option<CigarString> {
+    pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8], strategy: SWOverhangStrategy) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
             return Some(CigarString::from(vec![Cigar::Del(ref_seq.len() as u32)]))
@@ -249,7 +248,7 @@ impl CigarUtils {
 
         let padded_ref = format!("{}{}{}", *SW_PAD, std::str::from_utf8(ref_seq).unwrap(), *SW_PAD);
         let padded_path = format!("{}{}{}", *SW_PAD, std::str::from_utf8(alt_seq).unwrap(), *SW_PAD);
-        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, *NEW_SW_PARAMETERS);
+        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, *NEW_SW_PARAMETERS, strategy);
 
         if Self::is_s_w_failure(&alignment) {
             return None
@@ -260,7 +259,7 @@ impl CigarUtils {
         let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
 
         let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
-            CigarString::from_alignment(&alignment, false), base_start as u32, base_end as u32
+            alignment.cigar, base_start as u32, base_end as u32
         );
 
         let mut non_standard = trimmed_cigar_and_deletions_removed.cigar.0;
@@ -308,17 +307,18 @@ impl CigarUtils {
     /**
      * Make sure that the SW didn't fail in some terrible way, and throw exception if it did
      */
-    fn is_s_w_failure(alignment: &Alignment) -> bool {
+    fn is_s_w_failure(alignment: &SmithWatermanAlignmentResult) -> bool {
         // check that the alignment starts at the first base, which it should given the padding
-        if alignment.xstart != 0 || alignment.ystart != 0 {
+        if alignment.alignment_offset > 0 {
             return true
         }
 
         // check that we aren't getting any S operators (which would be very bad downstream)
-        for ce in CigarString::from_alignment(alignment, false).iter() {
+        for ce in alignment.cigar.0.iter() {
             match ce {
                 Cigar::SoftClip(_) => {
                     return true
+                    // soft clips at the end of the alignment are really insertions
                 },
                 _ => {
                     continue

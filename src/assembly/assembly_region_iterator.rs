@@ -1,7 +1,3 @@
-use reference::reference_reader_utils::ReferenceReaderUtils;
-use reference::reference_reader::ReferenceReader;
-use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use assembly::assembly_region::AssemblyRegion;
 use activity_profile::activity_profile::Profile;
 use reads::bird_tool_reads::BirdToolRead;

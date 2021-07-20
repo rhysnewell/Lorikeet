@@ -9,10 +9,12 @@ use coverm::FlagFilter;
 use reference::reference_reader::ReferenceReader;
 use estimation::lorikeet_engine::Elem;
 use std::sync::{Arc, Mutex};
-use bio::alignment::pairwise::MatchFunc;
+use graphs::multi_sample_edge::MultiSampleEdge;
+use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use graphs::chain_pruner::ChainPruner;
 
-pub struct AssemblyRegionWalker<'a> {
-    evaluator: HaplotypeCallerEngine,
+pub struct AssemblyRegionWalker<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
+    evaluator: HaplotypeCallerEngine<'a, C>,
     features: Option<Result<IndexedReader, rust_htslib::errors::Error>>,
     shards: HashMap<usize, BandPassActivityProfile>,
     indexed_bam_readers: Vec<String>,
@@ -26,7 +28,7 @@ pub struct AssemblyRegionWalker<'a> {
     n_threads: u32,
 }
 
-impl<'a> AssemblyRegionWalker<'a> {
+impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> AssemblyRegionWalker<'a, C> {
     pub fn start(
         args: &clap::ArgMatches,
         ref_idx: usize,
@@ -39,7 +41,7 @@ impl<'a> AssemblyRegionWalker<'a> {
         tree: &Arc<Mutex<Vec<&Elem>>>,
         mut reference_reader: ReferenceReader<'a>,
         n_threads: usize,
-    ) -> AssemblyRegionWalker<'a> {
+    ) -> AssemblyRegionWalker<'a, C> {
 
         let mut hc_engine = HaplotypeCallerEngine::new(
             args,

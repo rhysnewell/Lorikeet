@@ -5,6 +5,9 @@ use petgraph::prelude::{NodeIndex, EdgeIndex};
 use graphs::base_graph::BaseGraph;
 use haplotype::haplotype::Haplotype;
 use utils::simple_interval::Locatable;
+use std::cmp::Ordering;
+use ordered_float::OrderedFloat;
+use utils::base_utils::BaseUtils;
 
 /**
  * Represents a result from a K-best haplotype search.

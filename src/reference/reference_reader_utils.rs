@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process;
 use external_command_checker;
-use rayon::prelude::*;
 
 pub struct ReferenceReaderUtils {}
 

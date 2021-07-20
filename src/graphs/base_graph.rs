@@ -1,10 +1,10 @@
-use petgraph::stable_graph::{StableDiGraph, NodeIndex, EdgeIndex, Edges};
+use petgraph::stable_graph::{StableDiGraph, NodeIndex, EdgeIndex};
 use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use rayon::prelude::*;
 use petgraph::Direction;
 use petgraph::algo;
-use std::collections::{BTreeSet, BinaryHeap, HashSet, HashMap};
+use std::collections::{BinaryHeap, HashSet, HashMap};
 use graphs::path::Path;
 use std::cmp::Ordering;
 use utils::base_utils::BaseUtils;

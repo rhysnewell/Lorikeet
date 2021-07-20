@@ -3,7 +3,6 @@ use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
 use utils::simple_interval::Locatable;
 use std::cmp::Ordering;
 use reads::cigar_utils::CigarUtils;
-use bio_types::sequence::SequenceRead;
 
 pub struct ReadUtils {}
 

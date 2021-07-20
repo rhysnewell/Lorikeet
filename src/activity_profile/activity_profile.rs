@@ -332,7 +332,7 @@ impl Profile for ActivityProfile {
 
         let regions = Vec::new();
 
-        while true {
+        loop {
             let next_region = self.pop_next_ready_assembly_region(
                 assembly_region_extension,
                 min_region_size,

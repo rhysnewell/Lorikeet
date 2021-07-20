@@ -9,7 +9,6 @@ use model::variants::*;
 use model::variant_context::VariantContext;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use estimation::lorikeet_engine::Elem;
-use reference::reference_reader_utils::ReferenceReaderUtils;
 use reference::reference_reader::ReferenceReader;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use genotype::genotype_builder::Genotype;
@@ -19,30 +18,31 @@ use genotype::genotyping_engine::GenotypingEngine;
 use utils::quality_utils::QualityUtils;
 use utils::math_utils::{MathUtils, RunningAverage};
 use utils::simple_interval::SimpleInterval;
-use activity_profile::activity_profile::{ActivityProfile, Profile};
+use activity_profile::activity_profile::Profile;
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use estimation::lorikeet_engine::ReadType;
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
-use utils::smith_waterman_aligner::SmithWatermanAligner;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use mathru::special::gamma::{digamma, ln_gamma};
 use utils::natural_log_utils::NaturalLogUtils;
-use bio::alignment::pairwise::MatchFunc;
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
+use graphs::multi_sample_edge::MultiSampleEdge;
+use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use graphs::chain_pruner::ChainPruner;
 
-pub struct HaplotypeCallerEngine {
+
+pub struct HaplotypeCallerEngine<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
     genotyping_engine: GenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
     assembly_region_trimmer: AssemblyRegionTrimmer,
-    assembly_engine: ReadThreadingAssembler,
-    aligner: SmithWatermanAligner,
+    assembly_engine: ReadThreadingAssembler<'a, C>,
     ref_idx: usize,
     stand_min_conf: f64,
 }
 
-impl HaplotypeCallerEngine {
+impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> HaplotypeCallerEngine<'a, C> {
     pub const MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION: usize = 6;
     /**
      * Minimum (exclusive) average number of high quality bases per soft-clip to consider that a set of soft-clips is a
@@ -87,7 +87,7 @@ impl HaplotypeCallerEngine {
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
         sample_ploidy: usize
-    ) -> HaplotypeCallerEngine {
+    ) -> HaplotypeCallerEngine<'a, C> {
         HaplotypeCallerEngine {
             genotyping_engine: GenotypingEngine::make(args, samples, do_allele_specific_calcs, sample_ploidy),
             genotype_prior_calculator: GenotypePriorCalculator::make(args),
@@ -534,7 +534,6 @@ impl HaplotypeCallerEngine {
             args,
             reference_reader,
             &mut self.assembly_engine,
-            &mut self.aligner,
             args.is_present("correct-overlapping-quality")
         );
     }
@@ -548,7 +547,7 @@ impl HaplotypeCallerEngine {
      * @return a list of variant contexts (can be empty) to emit for this ref region
      */
     fn reference_model_for_no_variation(
-        &mut self,
+        &self,
         region: &mut AssemblyRegion,
         needs_to_be_finalized: bool,
         vc_priors: &Vec<VariantContext>,
