@@ -7,3 +7,5 @@ pub mod genotype_abundances;
 pub mod linkage;
 pub mod variant_matrix;
 pub mod vcfs;
+pub mod evolve;
+pub mod lorikeet_engine;
