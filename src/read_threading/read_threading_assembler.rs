@@ -25,6 +25,7 @@ use rust_htslib::bam::record::{CigarString, Cigar};
 use smith_waterman::bindings::SWOverhangStrategy;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use rayon::prelude::*;
 
 
 pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
@@ -61,7 +62,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      */
     const PRINT_FILL_GRAPH_FOR_DEBUGGING: bool = true;
     const DEFAULT_MIN_BASE_QUALITY_TO_USE: u8 = 10;
-    const MIN_HAPLOTYPE_REFERENCE_LENGTH: usize = 30;
+    const MIN_HAPLOTYPE_REFERENCE_LENGTH: u32 = 30;
 
     pub fn new(
         max_allowed_paths_for_read_threading_assembler: i32,
@@ -213,7 +214,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                                 ref_haplotype.genome_location.as_ref().unwrap()
                             );
                             // add it to graphs with meaningful non-reference features
-                            non_ref_rt_graphs.push(assembled_result.threading_graph.clone().unwrap());
+                            non_ref_rt_graphs.push(assembled_result.threading_graph.unwrap().clone());
                             // if graph
                             // TODO: Add histogram plotting
                             let graph = assembled_result.threading_graph.as_ref().unwrap();
@@ -270,25 +271,27 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         E: BaseEdge,
         L: Locatable,
     >(graph: &BaseGraph<V, E>, ref_haplotype: &Haplotype<L>) {
-        if graph.get_reference_source_vertex().is_none() {
+        let ref_source_vertex = graph.get_reference_source_vertex();
+        let ref_sink_vertex = graph.get_reference_sink_vertex();
+        if ref_source_vertex.is_none() {
             panic!("All reference graphs must have a reference source vertex");
         };
 
-        if graph.get_reference_sink_vertex().is_none() {
+        if ref_sink_vertex.is_none() {
             panic!("All reference graphs must have a reference sink vertex");
         };
 
         if graph.get_reference_bytes(
-            graph.get_reference_source_vertex(),
-            graph.get_reference_sink_vertex(),
+            ref_source_vertex.unwrap(),
+            ref_sink_vertex,
             true,
             true
         ) == ref_haplotype.get_bases().as_slice() {
             panic!("Mismatch between the reference haplotype and the reference assembly graph path.\
                     for graph = {} compared to haplotype = {}",
                    std::str::from_utf8(graph.get_reference_bytes(
-                        graph.get_reference_source_vertex(),
-                        graph.get_reference_sink_vertex(),
+                        ref_source_vertex.unwrap(),
+                        ref_sink_vertex,
                         true,
                         true
                     )).unwrap(), std::str::from_utf8(ref_haplotype.get_bases().as_slice()).unwrap());
@@ -321,7 +324,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      * @param graph the graph to print
      * @param fileName the name to give the graph file
      */
-    fn print_debug_graph_transform<
+    fn print_debug_graph_transform_abstract<
         A: AbstractReadThreadingGraph<'a>
     >(&self, graph: &A, file_name: String) {
         // if Self::PRINT_FILL_GRAPH_FOR_DEBUGGING {
@@ -330,6 +333,21 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         //     grap
         // }
         graph.print_graph(file_name, self.prune_factor as usize)
+    }
+
+    /**
+     * Print graph to file NOTE this requires that debugGraphTransformations be enabled.
+     *
+     * @param graph the graph to print
+     * @param fileName the name to give the graph file
+     */
+    fn print_debug_graph_transform_seq_graph<E: BaseEdge>(&self, graph: &SeqGraph<E>, file_name: String) {
+        // if Self::PRINT_FILL_GRAPH_FOR_DEBUGGING {
+        //     graph.print_graph(file_name, self.prune_factor as usize)
+        // } else {
+        //     grap
+        // }
+        graph.base_graph.print_graph(file_name, true, self.prune_factor as usize)
     }
 
     /**
@@ -372,7 +390,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                 assembly_result.threading_graph.as_ref().unwrap().get_base_graph(),
                 source.unwrap(),
                 sink.unwrap()
-            ).find_best_haplotypes(self.num_best_haplotypes_per_graph)
+            ).find_best_haplotypes(self.num_best_haplotypes_per_graph as usize)
         } else {
             // TODO: JunctionTreeKBestHaplotype looks munted and I haven't implemented the other
             //       JunctionTree stuff so skipping for now
@@ -453,7 +471,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
 
                         h.cigar = cigar;
                         h.alignment_start_hap_wrt_ref = active_region_start;
-                        h.genome_location = *active_region_window.clone();
+                        h.genome_location = Some(active_region_window.clone());
                         return_haplotypes.insert(h);
                         // result set would get added to here
 
@@ -503,30 +521,30 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      * @param aligner {@link SmithWatermanAligner} used to align dangling ends to the reference sequence
      * @return sequence graph or null if one could not be created (e.g. because it contains cycles or too many paths or is low complexity)
      */
-    fn create_graph<L: Locatable, E: BaseEdge, A: AbstractReadThreadingGraph<'a>>(
+    fn create_graph<L: Locatable>(
         &mut self,
         reads: Vec<BirdToolRead>,
-        ref_haplotype: &Haplotype<'a, L>,
+        ref_haplotype: &'a Haplotype<'a, L>,
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
         sample_names: &Vec<String>
-    ) -> Option<AssemblyResult<'a, E, L, A>> {
+    ) -> Option<AssemblyResult<'a, BaseEdgeStruct, L, ReadThreadingGraph<'a>>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
-            return AssemblyResult::new(Status::Failed, None, None)
+            return Some(AssemblyResult::new(Status::Failed, None, None))
         } else if !self.allow_non_unique_kmers_in_ref && !ReadThreadingGraph::determine_non_unique_kmers(
-            SequenceForKmers::new("ref".to_string(), ref_haplotype.get_bases(), 0, ref_haplotype.get_bases().len(), 1, true),
+            &SequenceForKmers::new("ref".to_string(), ref_haplotype.get_bases(), 0, ref_haplotype.get_bases().len(), 1, true),
             kmer_size
         ).is_empty() {
             return None
         } else {
-            let mut rt_graph: A = if self.generate_seq_graph {
-                ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples, self.min_matching_bases_to_dangling_end_recovery)
+            let mut rt_graph = if self.generate_seq_graph {
+                ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples as usize, self.min_matching_bases_to_dangling_end_recovery)
             } else {
                 // This is where the junction tree debruijn graph would go but considering it is experimental
                 // we will leave it out for now
-                ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples, self.min_matching_bases_to_dangling_end_recovery)
+                ReadThreadingGraph::new(kmer_size, false, self.min_base_quality_to_use_in_assembly, self.num_pruning_samples as usize, self.min_matching_bases_to_dangling_end_recovery)
             };
 
             rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
@@ -534,7 +552,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             // add the reference sequence to the graph
             rt_graph.add_sequence(
                 "ref".to_string(),
-                A::ANONYMOUS_SAMPLE,
+                ReadThreadingGraph::ANONYMOUS_SAMPLE.to_string(),
                 ref_haplotype.get_bases(),
                 0,
                 ref_haplotype.get_bases().len(),
@@ -551,7 +569,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             rt_graph.build_graph_if_necessary();
 
             if self.debug_graph_transformations {
-                self.print_debug_graph_transform(&rt_graph,
+                self.print_debug_graph_transform_abstract(&rt_graph,
                                                  format!(
                                                      "{}_{}-{}-sequenceGraph.{}.0.0.raw_threading_graph.dot",
                                                      ref_haplotype.genome_location.unwrap().tid(),
@@ -565,7 +583,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             // It's also important to prune before checking for cycles so that sequencing errors don't create false cycles
             // and unnecessarily abort assembly
             if self.prune_before_cycle_counting {
-                self.chain_pruner.prune_low_weight_chains(&mut rt_graph);
+                self.chain_pruner.prune_low_weight_chains(rt_graph.get_base_graph_mut());
             }
 
             // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
@@ -592,18 +610,18 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         }
     }
 
-    fn get_assembly_result<L: Locatable, A: AbstractReadThreadingGraph<'a>, E: BaseEdge>(
+    fn get_assembly_result<L: Locatable, A: AbstractReadThreadingGraph<'a>>(
         &self,
         ref_haplotype: &Haplotype<'a, L>,
         kmer_size: usize,
         mut rt_graph: A,
-    ) -> AssemblyResult<'a, E, L, A> {
+    ) -> AssemblyResult<'a, BaseEdgeStruct, L, A> {
         if !self.prune_before_cycle_counting {
-            self.chain_pruner.prune_low_weight_chains(&mut rt_graph)
+            self.chain_pruner.prune_low_weight_chains(rt_graph.get_base_graph_mut())
         }
 
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&rt_graph,
+            self.print_debug_graph_transform_abstract(&rt_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.0.1.chain_pruned_readthreading_graph.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -616,8 +634,16 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         // look at all chains in the graph that terminate in a non-ref node (dangling sources and sinks) and see if
         // we can recover them by merging some N bases from the chain back into the reference
         if self.recover_dangling_branches {
-            rt_graph.recover_dangling_tails(self.prune_factor, self.min_dangling_branch_length, self.recover_all_dangling_branches);
-            rt_graph.recover_dangling_heads(self.prune_factor, self.min_dangling_branch_length, self.recover_all_dangling_branches);
+            rt_graph.recover_dangling_tails(
+                self.prune_factor as usize,
+                self.min_dangling_branch_length as usize,
+                self.recover_all_dangling_branches
+            );
+            rt_graph.recover_dangling_heads(
+                self.prune_factor as usize,
+                self.min_dangling_branch_length as usize,
+                self.recover_all_dangling_branches
+            );
         }
 
         // remove all heading and trailing paths
@@ -626,7 +652,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         }
 
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&rt_graph,
+            self.print_debug_graph_transform_abstract(&rt_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.0.2.cleaned_readthreading_graph.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -662,7 +688,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             debug!("Using kmer size of {} in read threading assembler", &rt_graph.get_kmer_size());
 
             if self.debug_graph_transformations {
-                self.print_debug_graph_transform(&rt_graph,
+                self.print_debug_graph_transform_abstract(&rt_graph,
                                                  format!(
                                                      "{}_{}-{}-sequenceGraph.{}.0.4.initial_seqgraph.dot",
                                                      ref_haplotype.genome_location.unwrap().tid(),
@@ -673,7 +699,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             };
 
             initial_seq_graph.base_graph.clean_non_ref_paths();
-            let cleaned = self.clean_up_seq_graph(initial_seq_graph, &ref_haplotype);
+            let cleaned: AssemblyResult<'a, BaseEdgeStruct, L, ReadThreadingGraph<'a>>
+                = self.clean_up_seq_graph(initial_seq_graph, &ref_haplotype);
             let status = cleaned.status;
             return AssemblyResult::new(status, cleaned.graph, Some(rt_graph))
         } else {
@@ -704,11 +731,11 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
     }
 
     // Performs the various transformations necessary on a sequence graph
-    fn clean_up_seq_graph<E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>(
-        &self, mut seq_graph: SeqGraph<E>, ref_haplotype: &Haplotype<L>
-    ) -> AssemblyResult<'a, E, L, A> {
+    fn clean_up_seq_graph<L: Locatable, A: AbstractReadThreadingGraph<'a>>(
+        &self, mut seq_graph: SeqGraph<'a, BaseEdgeStruct>, ref_haplotype: &Haplotype<L>
+    ) -> AssemblyResult<'a, BaseEdgeStruct, L, A> {
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&seq_graph,
+            self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.1.0.non_ref_removed.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -721,7 +748,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         // the very first thing we need to do is zip up the graph, or pruneGraph will be too aggressive
         seq_graph.zip_linear_chains();
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&seq_graph,
+            self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.1.1.zipped.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -736,7 +763,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         seq_graph.base_graph.remove_vertices_not_connected_to_ref_regardless_of_edge_direction();
 
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&seq_graph,
+            self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.1.2.pruned.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -748,7 +775,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
 
         seq_graph.simplify_graph();
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&seq_graph,
+            self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.1.3.merged.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),
@@ -773,13 +800,13 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             // the code from blowing up.
             // TODO -- ref properties should really be on the vertices, not the graph itself
             let complete = seq_graph.base_graph.graph.node_indices().next().unwrap();
-            let dummy = SeqVertex::new("");
+            let dummy = SeqVertex::new(b"");
             let dummy_index = seq_graph.base_graph.graph.add_node(dummy);
             seq_graph.base_graph.graph.add_edge(complete, dummy_index, BaseEdgeStruct::new(true, 0));
         };
 
         if self.debug_graph_transformations {
-            self.print_debug_graph_transform(&seq_graph,
+            self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
                                                  "{}_{}-{}-sequenceGraph.{}.1.4.final.dot",
                                                  ref_haplotype.genome_location.unwrap().tid(),

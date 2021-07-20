@@ -6,7 +6,7 @@ use model::byte_array_allele::ByteArrayAllele;
 // lazy_static! {
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialOrd, PartialEq, Ord, Eq)]
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,

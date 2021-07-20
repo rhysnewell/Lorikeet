@@ -1,5 +1,7 @@
 use std::cmp::{min, max, Ordering};
 use utils::interval_utils::IntervalUtils;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 /**
 * Minimal immutable class representing a 1-based closed ended genomic interval
@@ -7,7 +9,7 @@ use utils::interval_utils::IntervalUtils;
 *
 *@warning 0 length intervals are NOT currently allowed, but support may be added in the future
 */
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct SimpleInterval {
     start: usize,
     end: usize,
@@ -237,7 +239,7 @@ impl CoordMath {
 }
 
 
-pub trait Locatable {
+pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
     fn tid(&self) -> i32;
 
     fn get_start(&self) -> usize;

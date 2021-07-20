@@ -18,7 +18,7 @@ use reads::read_utils::ReadUtils;
  * respectively. To access positions assigned to unmapped reads for sorting purposes, use {@link #getAssignedContig}
  * and {@link #getAssignedStart}.
  */
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BirdToolRead {
     pub read: Record,
     pub sample_index: usize,
