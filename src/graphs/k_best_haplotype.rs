@@ -75,7 +75,7 @@ impl<'a, V: BaseVertex, E: BaseEdge> KBestHaplotype<'a, V, E> {
         &self
     ) -> Haplotype<'a, L> {
         let mut haplotype = Haplotype::new(self.path.get_bases(), self.is_reference);
-        haplotype.score = self.score;
+        haplotype.score = OrderedFloat(self.score);
         return haplotype
     }
 }

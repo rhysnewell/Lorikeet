@@ -96,7 +96,10 @@ impl BirdToolRead {
 
 impl Hash for BirdToolRead {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.read.qname().hash(state)
+        self.read.qname().hash(state);
+        self.read.qual().hash(state);
+        self.sample_index.hash(state);
+        self.read.seq().encoded.hash(state);
     }
 }
 

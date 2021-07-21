@@ -15,7 +15,6 @@ use std::fs::File;
 use std::io::Write;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
-use itertools::Itertools;
 
 /**
  * Common code for graphs used for local assembly.
@@ -43,7 +42,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      *
      * @return a newly allocated SequenceGraph
      */
-    pub fn to_sequence_graph<e: BaseEdge>(&self) -> SeqGraph<e> {
+    pub fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct> {
         let mut seq_graph = SeqGraph::new(self.kmer_size);
         let mut vertex_map = HashMap::new();
 
@@ -58,14 +57,14 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
         // walk through the nodes and connect them to their equivalent seq vertices
         for e in self.graph.edge_indices() {
-            let seq_in_v = *vertex_map.get(self.get_edge_source(e)).unwrap();
-            let seq_out_v = *vertex_map.get(self.get_edge_target(e)).unwrap();
+            let seq_in_v = *vertex_map.get(&self.get_edge_source(e)).unwrap();
+            let seq_out_v = *vertex_map.get(&self.get_edge_target(e)).unwrap();
             let e_weight = self.graph.edge_weight(e).unwrap();
             seq_graph.base_graph.graph.add_edge(
                 seq_in_v,
                 seq_out_v,
                 BaseEdgeStruct::new(e_weight.is_ref(), e_weight.get_multiplicity())
-            )
+            );
         }
 
         return seq_graph
@@ -237,15 +236,15 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     /**
     * Removes all provided vertices from the graph
     */
-    pub fn remove_all_vertices<I: Itertools + IntoIterator<Item=NodeIndex>>(&mut self, vertices: I) {
-        self.graph.retain_nodes(|gr, v| !vertices.contains(&v));
+    pub fn remove_all_vertices(&mut self, vertices: HashSet<NodeIndex>) {
+        self.graph.retain_nodes(|gr, v| !vertices_iter.contains(&v));
     }
 
     /**
     * Removes all provided edges from the graph
     */
-    pub fn remove_all_edges<I: Itertools + IntoIterator<Item=EdgeIndex>>(&mut self, edges: I) {
-        self.graph.retain_edges(|gr, e| !edges.contains(&e));
+    pub fn remove_all_edges(&mut self, edges: HashSet<EdgeIndex>) {
+        self.graph.retain_edges(|gr, e| !edges_iter.contains(&e));
     }
 
     /**
@@ -292,7 +291,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     pub fn remove_singleton_orphan_vertices(&mut self) {
         // Run through the graph and clean up singular orphaned nodes
         //Note: need to collect nodes to remove first because we can't directly modify the list we're iterating over
-        let to_remove = self.graph.node_indices().par_bridge().filter(|v| self.is_singleton_orphan(*v)).collect::<Vec<NodeIndex>>();
+        let to_remove = self.graph.node_indices().par_bridge().filter(|v| self.is_singleton_orphan(*v)).collect::<HashSet<NodeIndex>>();
         self.remove_all_vertices(to_remove)
     }
 
@@ -498,7 +497,9 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         );
 
         // we want to remove anything that's not in both the sink and source sets
-        let mut vertices_to_remove = on_path_from_ref_source.symmetric_difference(&on_path_from_ref_sink).par_iter().map(|v| *v).collect::<HashSet<NodeIndex>>();
+        let mut vertices_to_remove = on_path_from_ref_source
+            .symmetric_difference(&on_path_from_ref_sink)
+            .par_bridge().map(|v| *v).collect::<HashSet<NodeIndex>>();
         self.remove_all_vertices(vertices_to_remove);
 
         // simple sanity checks that this algorithm is working.

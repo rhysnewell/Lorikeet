@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use assembly::kmer::Kmer;
 use std::cmp::Ordering;
+use rayon::prelude::*;
 
 /**
  * generic utility class that counts kmers
@@ -40,8 +41,8 @@ impl<'a> KmerCounter<'a> {
         }
     }
 
-    pub fn get_counted_kmers(&self) -> &'a Vec<CountedKmer<'a>> {
-        self.counts_by_kmer.values()
+    pub fn get_counted_kmers(&self) -> Vec<&'a CountedKmer<'a>> {
+        self.counts_by_kmer.values().collect::<Vec<&'a CountedKmer<'a>>>()
     }
 
     /**
@@ -105,7 +106,7 @@ impl<'a> CountedKmer<'a> {
 
 impl Ord for CountedKmer<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.count.cmp(other.count)
+        self.count.cmp(&other.count)
     }
 }
 

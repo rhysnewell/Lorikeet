@@ -216,7 +216,9 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
     fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
         let chains = Self::find_all_chains(graph);
         let chains_to_remove = self.chains_to_remove(&chains, graph);
-        chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(chain.edges_in_order));
+        chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(
+            chain.edges_in_order.par_iter().map(|e| *e).collect::<HashSet<EdgeIndex>>())
+        );
         graph.remove_singleton_orphan_vertices();
     }
 

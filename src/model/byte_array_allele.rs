@@ -1,5 +1,6 @@
 use model::variants::Allele;
 
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ByteArrayAllele {
     pub(crate) is_ref: bool,
     is_no_call: bool,

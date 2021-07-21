@@ -15,8 +15,10 @@ use rust_htslib::bcf::header::HeaderView;
 use reference::reference_reader::ReferenceReader;
 use std::ops::Range;
 use itertools::Itertools;
+use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantContext {
     pub loc: SimpleInterval,
     // variant alleles
@@ -27,6 +29,14 @@ pub struct VariantContext {
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
     pub attributes: HashMap<String, Vec<f64>>
+}
+
+impl Hash for VariantContext {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.loc.hash(state);
+        self.alleles.hash(state);
+        self.source.hash(state);
+    }
 }
 
 impl VariantContext {
