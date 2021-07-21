@@ -1,6 +1,7 @@
 use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 lazy_static! {
     static ref HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
@@ -39,6 +40,26 @@ pub struct Genotype {
     pub gq: i64,
     pub is_phased: bool,
     pub attributes: HashMap<String, Vec<f64>>
+}
+
+impl Eq for Genotype {}
+
+impl PartialEq for Genotype {
+    fn eq(&self, other: &Self) -> bool {
+        self.ploidy == other.ploidy && self.alleles == other.alleles && self.ad == other.ad &&
+            self.dp == other.dp && self.gq == other.gq && self.is_phased == other.is_phased
+    }
+}
+
+impl Hash for Genotype {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.ploidy.hash(state);
+        self.alleles.hash(state);
+        self.ad.hash(state);
+        self.dp.hash(state);
+        self.gq.hash(state);
+        self.is_phased.hash(state);
+    }
 }
 
 impl Genotype {
@@ -153,7 +174,7 @@ impl Genotype {
     // fn calculate_genotype_counts_using_tables_and_validate()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct GenotypesContext {
     // sample_names_in_order: Vec<String>,
     genotypes: Vec<Genotype>,

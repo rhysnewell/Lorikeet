@@ -74,10 +74,10 @@ impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Pat
 
         let tmp_vertex = self.last_vertex;
         for edge in edges.iter() {
-            if self.graph.get_edge_source(edge) != tmp_vertex {
+            if self.graph.get_edge_source(*edge) != tmp_vertex {
                 panic!("Edges added to the path must be contiguous")
             };
-            tmp_vertex = self.graph.get_edge_target(edge)
+            tmp_vertex = self.graph.get_edge_target(*edge)
         }
         let mut edges_in_order = self.edges_in_order.clone();
         edges_in_order.par_extend(edges);

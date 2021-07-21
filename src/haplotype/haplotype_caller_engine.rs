@@ -33,16 +33,16 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::chain_pruner::ChainPruner;
 
 
-pub struct HaplotypeCallerEngine<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
+pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
     assembly_region_trimmer: AssemblyRegionTrimmer,
-    assembly_engine: ReadThreadingAssembler<'a, C>,
+    assembly_engine: ReadThreadingAssembler,
     ref_idx: usize,
     stand_min_conf: f64,
 }
 
-impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> HaplotypeCallerEngine<'a, C> {
+impl HaplotypeCallerEngine {
     pub const MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION: usize = 6;
     /**
      * Minimum (exclusive) average number of high quality bases per soft-clip to consider that a set of soft-clips is a
@@ -87,7 +87,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> HaplotypeCall
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
         sample_ploidy: usize
-    ) -> HaplotypeCallerEngine<'a, C> {
+    ) -> HaplotypeCallerEngine {
         HaplotypeCallerEngine {
             genotyping_engine: GenotypingEngine::make(args, samples, do_allele_specific_calcs, sample_ploidy),
             genotype_prior_calculator: GenotypePriorCalculator::make(args),

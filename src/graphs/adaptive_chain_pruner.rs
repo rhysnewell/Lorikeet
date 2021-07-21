@@ -5,7 +5,9 @@ use graphs::base_vertex::BaseVertex;
 use graphs::base_edge::BaseEdge;
 use graphs::path::{Path, Chain};
 use petgraph::Direction;
-use petgraph::stable_graph::EdgeIndex;
+use petgraph::prelude::EdgeIndex;
+use petgraph::stable_graph::IndexType;
+use petgraph::visit::EdgeRef;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use multimap::MultiMap;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -215,7 +217,9 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
     fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
         let chains = Self::find_all_chains(graph);
         let chains_to_remove = self.chains_to_remove(&chains, graph);
-        chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(chain.get_edges()));
+        chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(
+            chain.edges_in_order.par_iter().map(|e| *e).collect::<HashSet<EdgeIndex>>())
+        );
         graph.remove_singleton_orphan_vertices();
     }
 
@@ -248,7 +252,7 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
 
         loop {
             let out_edges = graph.graph
-                .edges_directed(last_vertex_id, Direction::Outgoing).collect_vec();
+                .edges_directed(last_vertex_id, Direction::Outgoing).collect::<Vec<EdgeReference<E, EdgeIndex>>>();
             if out_edges.len() != 1 || graph.in_degree_of(last_vertex_id) > 1 || last_vertex_id == first_vertex_id {
                 break
             }

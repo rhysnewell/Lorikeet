@@ -28,7 +28,7 @@ impl<'a, V: BaseVertex, E: BaseEdge> KBestHaplotypeFinder<'a, V, E> {
         //TODO just the line commented out below if you want to trade early-bug-fail for speed.
         // TODO: Lorikeet shouldn't have the above mentioned bugs, but will test and then implement
         //       above points if needed.
-        if is_cyclic_directed(graph) {
+        if is_cyclic_directed(&graph.graph) {
             panic!("Input graph contains cycles")
         };
 

@@ -10,7 +10,7 @@ use rayon::prelude::*;
 /**
  * A graph that contains base sequence at each node
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SeqGraph<'a, E: BaseEdge> {
     pub(crate) base_graph: BaseGraph<SeqVertex<'a>, E>,
 }
@@ -77,7 +77,7 @@ impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
      */
     fn print_graph_simplification(&self, path: &str) {
         if Self::PRINT_SIMPLIFY_GRAPHS {
-            self.base_graph.subset_to_neighbours(self.base_graph.get_reference_source_vertex(), 5).print_graph(path, true, 0)
+            self.base_graph.subset_to_neighbours(self.base_graph.get_reference_source_vertex().unwrap(), 5).print_graph(path, true, 0)
         }
     }
 
@@ -160,8 +160,8 @@ impl<'a, E: BaseEdge + std::marker::Sync> SeqGraph<'a, E> {
 
             // there can only be one (outgoing edge of last) by contract
             let target = self.base_graph.get_edge_target(
-                match self.base_graph.graph.first_edge(last, Direction::Outgoing) {
-                    Some(edge_index) => edge_index,
+                match self.base_graph.graph.edges_directed(last, Direction::Outgoing).next() {
+                    Some(edge_index) => edge_index.id(),
                     None => break,
                 }
             );

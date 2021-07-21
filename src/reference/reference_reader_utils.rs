@@ -9,6 +9,26 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process;
 use external_command_checker;
+use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
+
+lazy_static! {
+    static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
+        GalahClustererCommandDefinition {
+            dereplication_ani_argument: "ani".to_string(),
+            dereplication_prethreshold_ani_argument: "precluster-ani".to_string(),
+            dereplication_quality_formula_argument: "quality-formula".to_string(),
+            dereplication_precluster_method_argument: "precluster-method".to_string(),
+            dereplication_aligned_fraction_argument: "min-aligned-fraction".to_string(),
+            dereplication_fraglen_argument: "fragment-length".to_string(),
+            dereplication_output_cluster_definition_file: "output-cluster-definition".to_string(),
+            dereplication_output_representative_fasta_directory:
+                "output-representative-fasta-directory".to_string(),
+            dereplication_output_representative_fasta_directory_copy:
+                "output-representative-fasta-directory-copy".to_string(),
+            dereplication_output_representative_list: "output-representative-list".to_string(),
+        }
+    };
+}
 
 pub struct ReferenceReaderUtils {}
 
@@ -165,6 +185,7 @@ impl ReferenceReaderUtils {
                 // TODO: Properly implement dereplication in cli.rs and make sure function works
                 let dereplicated_genomes: Vec<String> = if m.is_present("dereplicate") {
                     Self::dereplicate(&m, &genome_fasta_files_opt.unwrap())
+                    // genome_fasta_files_opt.unwrap()
                 } else {
                     genome_fasta_files_opt.unwrap()
                 };
@@ -259,13 +280,8 @@ impl ReferenceReaderUtils {
     }
 
     pub fn galah_command_line_definition(
-    ) -> galah::cluster_argument_parsing::GalahClustererCommandDefinition {
-        galah::cluster_argument_parsing::GalahClustererCommandDefinition {
-            dereplication_ani_argument: "dereplication-ani".to_string(),
-            dereplication_prethreshold_ani_argument: "dereplication-prethreshold-ani".to_string(),
-            dereplication_quality_formula_argument: "dereplication-quality-formula".to_string(),
-            dereplication_precluster_method_argument: "dereplication-precluster-method".to_string(),
-        }
+    ) -> GalahClustererCommandDefinition {
+        *GALAH_COMMAND_DEFINITION
     }
 
     pub fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Vec<String> {

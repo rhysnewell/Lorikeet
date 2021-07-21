@@ -64,7 +64,7 @@ impl<'a> ReferenceReader<'a> {
     }
 
     pub fn get_contig_length(&self, tid: usize) -> u64 {
-        self.target_lens.get(&tid).unwrap_or(0)
+        *self.target_lens.get(&tid).unwrap_or(&0)
     }
 
     pub fn retrieve_reference_stem(&self, ref_idx: usize) -> String {
