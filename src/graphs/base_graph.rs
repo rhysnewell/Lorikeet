@@ -25,6 +25,22 @@ pub struct BaseGraph<V: BaseVertex, E: BaseEdge> {
     pub graph: StableDiGraph<V, E>,
 }
 
+impl<V: BaseVertex, E: BaseEdge> Eq for BaseGraph<V, E> {}
+
+impl<V: BaseVertex, E: BaseEdge> PartialEq for BaseGraph<V, E> {
+    fn eq(&self, other: &Self) -> bool {
+        let a_ns = self.graph.node_weights();
+        let b_ns = other.graph.node_weights();
+        let a_es = self.graph.edge_indices().par_bridge()
+            .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
+            .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
+        let b_es = other.graph.edge_indices().par_bridge()
+            .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
+            .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
+        self.kmer_size == other.kmer_size && a_ns.eq(b_ns) && a_es.eq(b_es)
+    }
+}
+
 impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
     pub fn new(kmer_size: usize) -> BaseGraph<V, E> {
@@ -237,14 +253,14 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     * Removes all provided vertices from the graph
     */
     pub fn remove_all_vertices(&mut self, vertices: HashSet<NodeIndex>) {
-        self.graph.retain_nodes(|gr, v| !vertices_iter.contains(&v));
+        self.graph.retain_nodes(|gr, v| !vertices.contains(&v));
     }
 
     /**
     * Removes all provided edges from the graph
     */
     pub fn remove_all_edges(&mut self, edges: HashSet<EdgeIndex>) {
-        self.graph.retain_edges(|gr, e| !edges_iter.contains(&e));
+        self.graph.retain_edges(|gr, e| !edges.contains(&e));
     }
 
     /**

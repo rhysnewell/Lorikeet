@@ -18,7 +18,7 @@ use itertools::Itertools;
 use std::hash::{Hash, Hasher};
 
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct VariantContext {
     pub loc: SimpleInterval,
     // variant alleles
@@ -29,6 +29,14 @@ pub struct VariantContext {
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
     pub attributes: HashMap<String, Vec<f64>>
+}
+
+impl Eq for VariantContext {}
+
+impl PartialEq for VariantContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.loc == other.loc && self.alleles == other.alleles
+    }
 }
 
 impl Hash for VariantContext {

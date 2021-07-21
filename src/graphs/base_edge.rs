@@ -5,7 +5,7 @@ use rayon::prelude::*;
  *
  * Works equally well for all graph types (kmer or sequence)
  */
-pub trait BaseEdge: Clone + Send + Sync {
+pub trait BaseEdge: Clone + Send + Sync + Eq + PartialEq {
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;
