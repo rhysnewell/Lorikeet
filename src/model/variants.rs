@@ -6,6 +6,7 @@ use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use utils::vcf_constants::VCFConstants;
 use rayon::prelude::*;
+use model::byte_array_allele::ByteArrayAllele;
 
 pub type AlleleFreq = NotNan<f64>;
 
@@ -220,13 +221,14 @@ impl Allele {
      * @param isRef should we make this a reference allele?
      * @throws IllegalArgumentException if bases contains illegal characters or is otherwise malformated
      */
-    pub fn create(bases: &[u8], is_ref: bool) -> Allele {
-        if bases.len() == 1 {
-            let base = bases[0].to_ascii_uppercase();
-            return Allele::new(Variant::SNV(base), is_ref)
-        } else {
-
-        }
+    pub fn create(bases: &[u8], is_ref: bool) -> ByteArrayAllele {
+        ByteArrayAllele::new(&bases.to_ascii_uppercase(), is_ref)
+        // if bases.len() == 1 {
+        //     let base = bases.to_ascii_uppercase();
+        //     return Allele::new(Variant::SNV(base), is_ref)
+        // } else {
+        //
+        // }
     }
 
     pub fn new(variant: Variant, reference: bool) -> Allele {
@@ -327,7 +329,7 @@ impl Allele {
         if bases.len() <= 1 {
             return false
         } else {
-            return bases[0] as char == Self::SYMBOLIC_ALLELE_START || bases[bases.len() - 1] == Self::SYMBOLIC_ALLELE_END ||
+            return bases[0] == Self::SYMBOLIC_ALLELE_START as u8 || bases[bases.len() - 1] == Self::SYMBOLIC_ALLELE_END as u8 ||
                 Self::would_be_breakpoint(bases) || Self::would_be_single_breakend(bases)
         }
     }
@@ -336,14 +338,14 @@ impl Allele {
         if bases.len() <= 1 {
             return false
         }
-        return bases.iter().par_bridge().any(|base| base as char == Self::BREAKEND_EXTENDING_LEFT || base as char == Self::BREAKEND_EXTENDING_RIGHT);
+        return bases.iter().par_bridge().any(|base| *base as char == Self::BREAKEND_EXTENDING_LEFT || *base as char == Self::BREAKEND_EXTENDING_RIGHT);
     }
 
     pub fn would_be_single_breakend(bases: &[u8]) -> bool {
         if bases.len() <= 1 {
             return false
         } else {
-            return bases[0] == Self::SINGLE_BREAKEND_INDICATOR || bases[bases.len() - 1] == Self::SINGLE_BREAKEND_INDICATOR
+            return bases[0] == Self::SINGLE_BREAKEND_INDICATOR as u8 || bases[bases.len() - 1] == Self::SINGLE_BREAKEND_INDICATOR as u8
         }
     }
 
@@ -357,7 +359,7 @@ impl Allele {
         } else {
             // return true if there are any unacceptable bases, so take conjugate value
             !bases.iter().par_bridge().any(|base| {
-                let base = base as char;
+                let base = *base as char;
                 match base {
                     'A' | 'C' | 'T' | 'G' |
                     'a' | 'c' | 't' | 'g' |

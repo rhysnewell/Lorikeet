@@ -24,11 +24,11 @@ use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{CigarString, Cigar};
 use smith_waterman::bindings::SWOverhangStrategy;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use rayon::prelude::*;
+use graphs::k_best_haplotype::KBestHaplotype;
 
 
-pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
+pub struct ReadThreadingAssembler {
     kmer_sizes: Vec<usize>,
     dont_increase_kmer_sizes_for_cycles: bool,
     allow_non_unique_kmers_in_ref: bool,
@@ -45,14 +45,14 @@ pub struct ReadThreadingAssembler<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, Mu
     min_base_quality_to_use_in_assembly: u8,
     prune_factor: i32,
     min_matching_bases_to_dangling_end_recovery: i32,
-    chain_pruner: C,
+    chain_pruner: AdaptiveChainPruner,
     debug_graph_transformations: bool,
     debug_graph_output_path: String,
     graph_haplotype_histogram_path: Option<String>,
-    phantom: PhantomData<&'a C>
+    graph_output_path: Option<String>,
 }
 
-impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreadingAssembler<'a, C> {
+impl<'a> ReadThreadingAssembler {
     const DEFAULT_NUM_PATHS_PER_GRAPH: usize = 128;
     const KMER_SIZE_ITERATION_INCREASE: usize = 10;
     const MAX_KMER_ITERATIONS_TO_ATTEMPT: usize = 6;
@@ -69,8 +69,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         kmer_sizes: Vec<usize>,
         dont_increase_kmer_sizes_for_cycles: bool,
         allow_non_unique_kmers_in_ref: bool,
-        num_pruning_samples: usize,
-        prune_factor: usize,
+        num_pruning_samples: i32,
+        prune_factor: i32,
         use_adaptive_pruning: bool,
         initial_error_rate_for_pruning: f64,
         pruning_log_odds_threshold: f64,
@@ -79,7 +79,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         use_linked_debruijn_graphs: bool,
         enable_legacy_graph_cycle_detection: bool,
         min_matching_bases_to_dangle_end_recovery: i32,
-    ) -> ReadThreadingAssembler<'a, C> {
+    ) -> ReadThreadingAssembler {
         assert!(max_allowed_paths_for_read_threading_assembler >= 1, "num_best_haplotypes_per_graph should be >= 1 but got {}", max_allowed_paths_for_read_threading_assembler);
         kmer_sizes.sort();
 
@@ -90,6 +90,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             max_unpruned_variants
         );
 
+        // TODO: //!use_linked_debruijn_graphs should be used for generate_seq_graph
+        //      but have not yet implement junction tree method
         ReadThreadingAssembler {
             kmer_sizes,
             dont_increase_kmer_sizes_for_cycles,
@@ -97,7 +99,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             num_pruning_samples,
             prune_factor,
             chain_pruner,
-            generate_seq_graph: !use_linked_debruijn_graphs,
+            generate_seq_graph: true,
             prune_before_cycle_counting: !enable_legacy_graph_cycle_detection,
             remove_paths_not_connected_to_ref: true,
             just_return_raw_graph: false,
@@ -111,7 +113,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             debug_graph_transformations: false,
             debug_graph_output_path: format!("graph_debugging"),
             graph_haplotype_histogram_path: None,
-            phantom: PhantomData,
+            graph_output_path: None,
         }
     }
 
@@ -126,17 +128,15 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      * @return                          the resulting assembly-result-set
      */
     pub fn run_local_assembly<
-        E: BaseEdge,
-        L: Locatable,
-        R: ReadErrorCorrector,
-        A: AbstractReadThreadingGraph<'a>>(
+        R: ReadErrorCorrector,>(
         &mut self,
         assembly_region: &'a AssemblyRegion,
-        mut ref_haplotype: Haplotype<'a, L>,
+        mut ref_haplotype: Haplotype<'a, SimpleInterval>,
         full_reference_with_padding: &'a [u8],
         ref_loc: &'a SimpleInterval,
         read_error_corrector: Option<R>,
-    ) -> AssemblyResultSet<'a, E, L, A> {
+        sample_names: &'a Vec<String>
+    ) -> AssemblyResultSet<'a, SimpleInterval, ReadThreadingGraph<'a>> {
         assert!(full_reference_with_padding.len() == ref_loc.size(), "Reference bases and reference loc must be the same size.");
 
         // Note that error correction does not modify the original reads,
@@ -154,34 +154,153 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                                                              ReadClipper::new(read).hard_clip_soft_clipped_bases()
                                                          }).collect::<Vec<BirdToolRead>>();
 
-        let non_ref_rt_graphs: Vec<dyn AbstractReadThreadingGraph> = Vec::new();
-        let non_ref_seq_graphs: Vec<SeqGraph<E>> = Vec::new();
+        let non_ref_rt_graphs: Vec<ReadThreadingGraph<'a>> = Vec::new();
+        let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
         let active_region_extended_location = assembly_region.get_padded_span();
         ref_haplotype.set_genome_location(active_region_extended_location.clone());
         let mut result_set = AssemblyResultSet::new(assembly_region, full_reference_with_padding, ref_loc, ref_haplotype.clone());
         // either follow the old method for building graphs and then assembling or assemble and haplotype call before expanding kmers
-        // NOTE: We are just going to implement the new method here using kmer expansion heuristics
+
+        if self.generate_seq_graph {
+            // old method
+            self.assemble_kmer_graphs_and_haplotype_call(
+                &ref_haplotype, ref_loc, &corrected_reads, &mut non_ref_seq_graphs,
+                &mut result_set, active_region_extended_location, sample_names
+            )
+        } else {
+            self.assemble_graphs_and_expand_kmers_given_haplotypes(
+                &ref_haplotype, ref_loc, &corrected_reads, &mut non_ref_rt_graphs,
+                &mut result_set, active_region_extended_location, sample_names
+            )
+        }
+
+        // If we get to this point then no graph worked... thats bad and indicates something
+        // horrible happened, in this case we just return a reference haplotype
+        if result_set.haplotypes.is_empty() {
+            debug!("Graph at position {:?} failed to assemble anything informative; emitting just reference here", result_set.padded_reference_loc);
+        };
+
+        // print the graphs if the appropriate debug option has been turned on
+        match self.graph_output_path {
+            Some(path) => {
+                if self.generate_seq_graph {
+                    self.print_seq_graphs(&non_ref_seq_graphs);
+                } else {
+                    // pass for now
+                }
+            },
+            None => {
+                // pass
+            }
+        };
+
+        return result_set
+
     }
+
+    /**
+     * Follow the old behavior, call into {@link #assemble(List, Haplotype, SAMFileHeader, SmithWatermanAligner)} to decide if a graph
+     * is acceptable for haplotype discovery then detect haplotypes.
+     */
+    fn assemble_kmer_graphs_and_haplotype_call<
+        A: AbstractReadThreadingGraph<'a>
+    >(
+        &mut self,
+        ref_haplotype: &'a Haplotype<'a, SimpleInterval>,
+        ref_loc: &'a SimpleInterval,
+        corrected_reads: &'a Vec<BirdToolRead>,
+        non_ref_seq_graphs: &mut Vec<SeqGraph<'a, BaseEdgeStruct>>,
+        result_set: &mut AssemblyResultSet<'a, SimpleInterval, A>,
+        active_region_extended_location: &SimpleInterval,
+        sample_names: &'a Vec<String>,
+    ) {
+        // create the graphs by calling our subclass assemble method
+        for result in self.assemble(&corrected_reads, ref_haplotype, sample_names) {
+            if result.status == Status::AssembledSomeVariation {
+                // do some QC on the graph
+                Self::sanity_check_graph(&result.graph.as_ref().unwrap().base_graph, ref_haplotype);
+                // add it to graphs with meaningful non-reference features
+                self.find_best_path(&mut result, ref_haplotype, ref_loc, active_region_extended_location);
+                non_ref_seq_graphs.push(result.graph.unwrap());
+                // result_set.add_with_assembly_result()
+            }
+        }
+    }
+
+    /**
+     * Given reads and a reference haplotype give us graphs to use for constructing
+     * non-reference haplotypes.
+     *
+     * @param reads the reads we're going to assemble
+     * @param refHaplotype the reference haplotype
+     * @param aligner {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
+     * @return a non-null list of reads
+     */
+    fn assemble(
+        &mut self,
+        reads: &'a Vec<BirdToolRead>,
+        ref_haplotype: &'a Haplotype<'a, SimpleInterval>,
+        sample_names: &'a Vec<String>
+    ) -> Vec<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph<'a>>> {
+        let mut results = Vec::new();
+
+        // first, try using the requested kmer sizes
+        for kmer_size in self.kmer_sizes.iter() {
+            match self.create_graph(
+                reads, ref_haplotype, *kmer_size,
+                self.dont_increase_kmer_sizes_for_cycles,
+                self.allow_non_unique_kmers_in_ref,
+                sample_names) {
+                None => {
+                    continue
+                },
+                Some(assembly_result) => {
+                    results.push(assembly_result)
+                }
+            }
+        }
+
+        if results.is_empty() && !self.dont_increase_kmer_sizes_for_cycles {
+            let mut kmer_size = *self.kmer_sizes.iter().max().unwrap() + Self::KMER_SIZE_ITERATION_INCREASE;
+            let mut num_iterations = 1;
+            while results.is_empty() && num_iterations <= Self::MAX_KMER_ITERATIONS_TO_ATTEMPT {
+                // on the last attempt we will allow low complexity graphs
+                let last_attempt = num_iterations == Self::MAX_KMER_ITERATIONS_TO_ATTEMPT;
+                match self.create_graph(
+                    reads, &ref_haplotype, kmer_size,
+                    last_attempt,
+                    last_attempt,
+                    sample_names) {
+                    None => {
+                        // pass
+                    },
+                    Some(assembly_result) => {
+                        results.push(assembly_result);
+                    }
+                };
+                kmer_size += Self::KMER_SIZE_ITERATION_INCREASE;
+                num_iterations += 1;
+            }
+        }
+
+        return results
+    }
+
 
     /**
      * Follow the kmer expansion heurisics as {@link #assemble(List, Haplotype, SAMFileHeader, SmithWatermanAligner)}, but in this case
      * attempt to recover haplotypes from the kmer graph and use them to assess whether to expand the kmer size.
      */
-    fn assemble_graphs_and_expand_kmers_given_haplotypes<
-        E: BaseEdge,
-        L: Locatable,
-        A: AbstractReadThreadingGraph<'a>
-    >(
+    fn assemble_graphs_and_expand_kmers_given_haplotypes(
         &mut self,
-        ref_haplotype: Haplotype<'a, L>,
+        ref_haplotype: &'a Haplotype<'a, SimpleInterval>,
         ref_loc: &'a SimpleInterval,
-        corrected_reads: Vec<BirdToolRead>,
-        non_ref_rt_graphs: &mut Vec<A>,
-        result_set: &mut AssemblyResultSet<'a, E, L, A>,
+        corrected_reads: &'a Vec<BirdToolRead>,
+        non_ref_rt_graphs: &mut Vec<ReadThreadingGraph<'a>>,
+        result_set: &mut AssemblyResultSet<'a, SimpleInterval, ReadThreadingGraph<'a>>,
         active_region_extended_location: &SimpleInterval,
         sample_names: &Vec<String>,
     ) {
-        let mut assembly_result_by_rt_graph = HashMap::new();
 
         let mut saved_assembly_results = Vec::new();
 
@@ -206,7 +325,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                         if assembled_result.status == Status::AssembledSomeVariation {
                             // do some QC on the graph
                             Self::sanity_check_graph(
-                                assembled_result.threading_graph.as_ref().unwrap(),
+                                assembled_result.threading_graph.as_ref()
+                                    .unwrap().get_base_graph::<MultiDeBruijnVertex<'a>, MultiSampleEdge>(),
                                 &ref_haplotype
                             );
                             assembled_result.threading_graph.as_mut().unwrap().post_process_for_haplotype_finding(
@@ -220,7 +340,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                             let graph = assembled_result.threading_graph.as_ref().unwrap();
                             self.find_best_path(
                                 &mut assembled_result,
-                                ref_haplotype.clone(),
+                                &ref_haplotype,
                                 ref_loc,
                                 active_region_extended_location,
                             );
@@ -235,7 +355,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
                                 // we have found our workable kmer size so lets add the results and finish
                                 if !assembled_result.contains_suspect_haploptypes {
                                     for h in assembled_result.discovered_haplotypes {
-                                        result_set.add(h);
+                                        result_set.add_haplotype(h);
                                     };
 
                                     has_adequately_assembled_graph = true;
@@ -256,6 +376,15 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             // search for the last haplotype set that had any results, if none are found just return me
             // In this case we prefer the last meaningful kmer size if possible
             // for result in saved_assembly_results.
+            saved_assembly_results.reverse();
+            for result in saved_assembly_results {
+                if result.discovered_haplotypes.len() > 1 {
+                    for h in result.discovered_haplotypes.clone() {
+                        result_set.add_haplotype_and_assembly_result(h, result);
+                    }
+                    break;
+                }
+            }
         }
 
     }
@@ -269,8 +398,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
     fn sanity_check_graph<
         V: BaseVertex,
         E: BaseEdge,
-        L: Locatable,
-    >(graph: &BaseGraph<V, E>, ref_haplotype: &Haplotype<L>) {
+    >(graph: &BaseGraph<V, E>, ref_haplotype: &Haplotype<SimpleInterval>) {
         let ref_source_vertex = graph.get_reference_source_vertex();
         let ref_sink_vertex = graph.get_reference_sink_vertex();
         if ref_source_vertex.is_none() {
@@ -347,7 +475,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         // } else {
         //     grap
         // }
-        graph.base_graph.print_graph(file_name, true, self.prune_factor as usize)
+        graph.base_graph.print_graph(&file_name, true, self.prune_factor as usize)
     }
 
     /**
@@ -365,14 +493,14 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      * @param aligner               SmithWaterman aligner to use for aligning the discovered haplotype to the reference haplotype
      * @return A list of discovered haplotyes (note that this is not currently used for anything)
      */
-    fn find_best_path<E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>(
+    fn find_best_path<A: AbstractReadThreadingGraph<'a>>(
         &self,
         // graph: &BaseGraph<V, E>,
-        assembly_result: &mut AssemblyResult<'a, E, L, A>,
-        ref_haplotype: Haplotype<'a, L>,
+        assembly_result: &'a mut AssemblyResult<'a, SimpleInterval, A>,
+        ref_haplotype: &'a Haplotype<'a, SimpleInterval>,
         ref_loc: &SimpleInterval,
         active_region_window: &SimpleInterval,
-        // result_set: &mut Option<HashSet<AssemblyResult<E, L>>>, unused part that is annoying to implement
+        // result_set: &mut Option<HashSet<AssemblyResult<E, SimpleInterval>>>, unused part that is annoying to implement
     ) {
 
         // add the reference haplotype separately from all the others to ensure
@@ -385,7 +513,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         let source = assembly_result.threading_graph.as_ref().unwrap().get_reference_source_vertex();
         let sink = assembly_result.threading_graph.as_ref().unwrap().get_reference_sink_vertex();
         assert!(source.is_some() && sink.is_some(), "Both source and sink cannot be null");
-        let k_best_haplotypes = if self.generate_seq_graph {
+        let k_best_haplotypes: Vec<KBestHaplotype<'a, MultiDeBruijnVertex<'a>, MultiSampleEdge>> = if self.generate_seq_graph {
             GraphBasedKBestHaplotypeFinder::new_from_singletons(
                 assembly_result.threading_graph.as_ref().unwrap().get_base_graph(),
                 source.unwrap(),
@@ -486,7 +614,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         // Make sure that the ref haplotype is amongst the return haplotypes and calculate its score as
         // the first returned by any finder.
         // HERE we want to preserve the signal that assembly failed completely so in this case we don't add anything to the empty list
-        if !return_haplotypes.is_empty() && !return_haplotypes.contains(&ref_haplotype) {
+        if !return_haplotypes.is_empty() && !return_haplotypes.contains(ref_haplotype) {
             return_haplotypes.insert(ref_haplotype.clone());
         };
 
@@ -521,15 +649,15 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
      * @param aligner {@link SmithWatermanAligner} used to align dangling ends to the reference sequence
      * @return sequence graph or null if one could not be created (e.g. because it contains cycles or too many paths or is low complexity)
      */
-    fn create_graph<L: Locatable>(
+    fn create_graph(
         &mut self,
-        reads: Vec<BirdToolRead>,
-        ref_haplotype: &'a Haplotype<'a, L>,
+        reads: &'a Vec<BirdToolRead>,
+        ref_haplotype: &'a Haplotype<'a, SimpleInterval>,
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
         sample_names: &Vec<String>
-    ) -> Option<AssemblyResult<'a, BaseEdgeStruct, L, ReadThreadingGraph<'a>>> {
+    ) -> Option<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph<'a>>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
             return Some(AssemblyResult::new(Status::Failed, None, None))
@@ -583,7 +711,9 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             // It's also important to prune before checking for cycles so that sequencing errors don't create false cycles
             // and unnecessarily abort assembly
             if self.prune_before_cycle_counting {
-                self.chain_pruner.prune_low_weight_chains(rt_graph.get_base_graph_mut());
+                self.chain_pruner.prune_low_weight_chains(
+                    rt_graph.get_base_graph_mut::<MultiDeBruijnVertex<'a>, MultiSampleEdge>()
+                );
             }
 
             // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
@@ -610,14 +740,16 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         }
     }
 
-    fn get_assembly_result<L: Locatable, A: AbstractReadThreadingGraph<'a>>(
+    fn get_assembly_result<A: 'a + AbstractReadThreadingGraph<'a>>(
         &self,
-        ref_haplotype: &Haplotype<'a, L>,
+        ref_haplotype: &Haplotype<'a, SimpleInterval>,
         kmer_size: usize,
         mut rt_graph: A,
-    ) -> AssemblyResult<'a, BaseEdgeStruct, L, A> {
+    ) -> AssemblyResult<'a, SimpleInterval, A> {
         if !self.prune_before_cycle_counting {
-            self.chain_pruner.prune_low_weight_chains(rt_graph.get_base_graph_mut())
+            self.chain_pruner.prune_low_weight_chains(
+                rt_graph.get_base_graph_mut::<MultiDeBruijnVertex<'a>, MultiSampleEdge>()
+            )
         }
 
         if self.debug_graph_transformations {
@@ -699,7 +831,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             };
 
             initial_seq_graph.base_graph.clean_non_ref_paths();
-            let cleaned: AssemblyResult<'a, BaseEdgeStruct, L, ReadThreadingGraph<'a>>
+            let cleaned: AssemblyResult<'a, SimpleInterval, ReadThreadingGraph<'a>>
                 = self.clean_up_seq_graph(initial_seq_graph, &ref_haplotype);
             let status = cleaned.status;
             return AssemblyResult::new(status, cleaned.graph, Some(rt_graph))
@@ -716,9 +848,9 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
 
     }
 
-    fn get_result_set_for_rt_graph<A: AbstractReadThreadingGraph<'a>, E: BaseEdge, L: Locatable>(
+    fn get_result_set_for_rt_graph<A: AbstractReadThreadingGraph<'a>>(
         mut rt_graph: A
-    ) -> AssemblyResult<'a, E, L, A> {
+    ) -> AssemblyResult<'a, SimpleInterval, A> {
         // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
         // happen in cases where for example the reference somehow manages to acquire a cycle, or
         // where the entire assembly collapses back into the reference sequence.
@@ -731,9 +863,9 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
     }
 
     // Performs the various transformations necessary on a sequence graph
-    fn clean_up_seq_graph<L: Locatable, A: AbstractReadThreadingGraph<'a>>(
-        &self, mut seq_graph: SeqGraph<'a, BaseEdgeStruct>, ref_haplotype: &Haplotype<L>
-    ) -> AssemblyResult<'a, BaseEdgeStruct, L, A> {
+    fn clean_up_seq_graph<A: AbstractReadThreadingGraph<'a>>(
+        &self, mut seq_graph: SeqGraph<'a, BaseEdgeStruct>, ref_haplotype: &Haplotype<SimpleInterval>
+    ) -> AssemblyResult<'a, SimpleInterval, A> {
         if self.debug_graph_transformations {
             self.print_debug_graph_transform_seq_graph(&seq_graph,
                                              format!(
@@ -802,7 +934,8 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
             let complete = seq_graph.base_graph.graph.node_indices().next().unwrap();
             let dummy = SeqVertex::new(b"");
             let dummy_index = seq_graph.base_graph.graph.add_node(dummy);
-            seq_graph.base_graph.graph.add_edge(complete, dummy_index, BaseEdgeStruct::new(true, 0));
+            seq_graph.base_graph.graph.add_edge(complete, dummy_index,
+                                                BaseEdgeStruct::new(true, 0));
         };
 
         if self.debug_graph_transformations {
@@ -817,6 +950,18 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> ReadThreading
         };
 
         return AssemblyResult::new(Status::AssembledSomeVariation, Some(seq_graph), None)
+    }
+
+    fn print_seq_graphs(&self, graphs: &Vec<SeqGraph<'a, BaseEdgeStruct>>) {
+        let write_first_graph_with_size_smaller_than = 50;
+
+        for (idx, graph) in graphs.iter().enumerate() {
+            graph.base_graph.print_graph(
+                &(self.graph_output_path.unwrap() + &idx.to_string()),
+                false,
+                self.prune_factor as usize
+            )
+        }
     }
 
 }

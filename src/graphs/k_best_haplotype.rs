@@ -52,7 +52,7 @@ impl<'a, V: BaseVertex, E: BaseEdge> KBestHaplotype<'a, V, E> {
         edges_to_extend: Vec<EdgeIndex>,
         edge_penalty: f64
     ) -> KBestHaplotype<'a, V, E> {
-        let edge_weight = self.path.graph.graph.edge_weight(edges_to_extend.last().unwrap()).unwrap();
+        let edge_weight = self.path.graph.graph.edge_weight(*edges_to_extend.last().unwrap()).unwrap();
         let score = self.score + edge_penalty;
         let is_reference = self.is_reference & edge_weight.is_ref();
         let path = self.path.new_add_edges(edges_to_extend);
@@ -82,7 +82,7 @@ impl<'a, V: BaseVertex, E: BaseEdge> KBestHaplotype<'a, V, E> {
 
 impl<'a, V: BaseVertex, E: BaseEdge> Ord for KBestHaplotype<'a, V, E> {
     fn cmp(&self, other: &Self) -> Ordering {
-        let result = OrderedFloat::from(self.score).cmp(OrderedFloat::from(other.score)).reverse();
+        let result = OrderedFloat::from(self.score).cmp(&OrderedFloat::from(other.score)).reverse();
         if result == Ordering::Equal {
             return BaseUtils::bases_comparator(self.path.get_bases(), other.path.get_bases()).reverse()
         } else {

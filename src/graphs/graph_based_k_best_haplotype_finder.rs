@@ -6,6 +6,8 @@ use petgraph::prelude::NodeIndex;
 use graphs::k_best_haplotype::KBestHaplotype;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use petgraph::Direction;
+use petgraph::visit::EdgeRef;
+use rayon::prelude::*;
 
 /**
  * Efficient algorithm to obtain the list of best haplotypes given the {@link BaseGraph instance}.
@@ -64,7 +66,7 @@ impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
         let mut result = Vec::new();
 
         let mut queue: BinaryHeap<KBestHaplotype<V, E>> = self.k_best_haplotype_finder.sources.par_iter().map(|source| {
-            KBestHaplotype::new(source, self.k_best_haplotype_finder.graph)
+            KBestHaplotype::new(*source, self.k_best_haplotype_finder.graph)
         }).collect::<BinaryHeap<KBestHaplotype<V, E>>>();
 
         let mut vertex_counts = self.k_best_haplotype_finder.graph.graph.node_indices()
@@ -77,9 +79,9 @@ impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
                 result.push(path_to_extend);
             } else {
                 if vertex_counts.contains_key(&vertex_to_extend) {
-                    let vertex_count = vertex_counts.entry(&vertex_to_extend).or_insert(0);
-                    vertex_count += 1;
-                    if vertex_count < max_number_of_haplotypes {
+                    let vertex_count = vertex_counts.entry(vertex_to_extend).or_insert(0);
+                    *vertex_count += 1;
+                    if *vertex_count < max_number_of_haplotypes {
                         let outgoing_edges = self.k_best_haplotype_finder.graph.graph
                             .edges_directed(vertex_to_extend, Direction::Outgoing);
                         let total_outgoing_multiplicity = 0;

@@ -6,7 +6,6 @@ use rayon::prelude::*;
  * Works equally well for all graph types (kmer or sequence)
  */
 pub trait BaseEdge: Clone + Send + Sync {
-
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;
@@ -46,9 +45,15 @@ impl BaseEdgeStruct {
             multiplicity
         }
     }
+
+    pub fn set(&mut self, is_ref: bool, multiplicity: usize) {
+        self.is_ref = is_ref;
+        self.multiplicity = multiplicity;
+    }
 }
 
 impl BaseEdge for BaseEdgeStruct {
+
     /**
      * Get the number of observations of paths connecting two vertices
      * @return a positive integer >= 0
