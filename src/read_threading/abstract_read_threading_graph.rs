@@ -124,7 +124,7 @@ pub trait AbstractReadThreadingGraph<'a>: Sized + Send + Sync {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: BirdToolRead);
+    fn add_read(&mut self, read: &BirdToolRead);
 
     // only add the new kmer to the map if it exists and isn't in our non-unique kmer list
     fn track_kmer(&mut self, kmer: Kmer, new_vertex: NodeIndex);

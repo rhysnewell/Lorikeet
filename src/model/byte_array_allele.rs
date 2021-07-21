@@ -1,14 +1,14 @@
 use model::variants::Allele;
 
 pub struct ByteArrayAllele {
-    is_ref: bool,
+    pub(crate) is_ref: bool,
     is_no_call: bool,
     is_symbolic: bool,
     pub(crate) bases: Vec<u8>
 }
 
 impl ByteArrayAllele {
-    pub fn new(bases: &[u8], is_ref: bool) {
+    pub fn new(bases: &[u8], is_ref: bool) -> ByteArrayAllele {
         if Allele::would_be_null_allele(bases) {
             panic!("Null alleles are not supported")
         }

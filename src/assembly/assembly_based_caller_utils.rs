@@ -135,12 +135,12 @@ impl AssemblyBasedCallerUtils {
      * returning a data structure with the resulting information needed
      * for further HC steps
      */
-    pub fn assemble_reads<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>>(
+    pub fn assemble_reads<'a>(
         region: AssemblyRegion,
         given_alleles: Vec<VariantContext>,
         args: &clap::ArgMatches,
         reference_reader: &mut ReferenceReader<'a>,
-        assembly_engine: &mut ReadThreadingAssembler<'a, C>,
+        assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
     ) {
         Self::finalize_regions(

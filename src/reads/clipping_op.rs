@@ -3,7 +3,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use rayon::prelude::*;
 use num::traits::AsPrimitive;
 use reads::read_utils::ReadUtils;
-use rust_htslib::bam::record::{CigarString, Cigar};
+use rust_htslib::bam::record::{CigarString, Cigar, Record};
 use reads::cigar_utils::CigarUtils;
 use utils::simple_interval::Locatable;
 
@@ -70,13 +70,13 @@ impl ClippingOp {
     fn apply_soft_clip_bases(&self, read: &BirdToolRead) -> BirdToolRead {
         assert!(!read.read.is_unmapped(), "ReadClipper cannot soft clip unmapped reads");
 
-        if read.read.len() <= 2 {
+        if read.read.seq_len() <= 2 {
             return read.clone()
         }
 
-        let stop = std::cmp::min(self.stop, self.start + read.read.len() - 2);
+        let stop = std::cmp::min(self.stop, self.start + read.read.seq_len() - 2);
 
-        assert!(self.start <= 0 || stop == read.read.len() - 1,
+        assert!(self.start <= 0 || stop == read.read.seq_len() - 1,
                 "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname(), self.start, stop);
 
         let old_cigar = read.read.cigar();
@@ -189,7 +189,7 @@ impl ClippingOp {
      * @return a cloned version of read that has been properly trimmed down (Could be an empty, unmapped read)
      */
     fn apply_hard_clip_bases(read: &BirdToolRead, start: usize, stop: usize) -> BirdToolRead {
-        let new_length = read.read.len() - (stop - start + 1);
+        let new_length = read.read.seq_len() - (stop - start + 1);
 
         // If the new read is going to be empty, return an empty read now. This avoids initializing the new
         // read with invalid values below in certain cases (such as a negative alignment start).

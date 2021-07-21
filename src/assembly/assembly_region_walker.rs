@@ -13,8 +13,8 @@ use graphs::multi_sample_edge::MultiSampleEdge;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use graphs::chain_pruner::ChainPruner;
 
-pub struct AssemblyRegionWalker<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> {
-    evaluator: HaplotypeCallerEngine<'a, C>,
+pub struct AssemblyRegionWalker<'a> {
+    evaluator: HaplotypeCallerEngine,
     features: Option<Result<IndexedReader, rust_htslib::errors::Error>>,
     shards: HashMap<usize, BandPassActivityProfile>,
     indexed_bam_readers: Vec<String>,
@@ -28,7 +28,7 @@ pub struct AssemblyRegionWalker<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, Mult
     n_threads: u32,
 }
 
-impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> AssemblyRegionWalker<'a, C> {
+impl<'a> AssemblyRegionWalker<'a> {
     pub fn start(
         args: &clap::ArgMatches,
         ref_idx: usize,
@@ -41,7 +41,7 @@ impl<'a, C: ChainPruner<MultiDeBruijnVertex<'a>, MultiSampleEdge>> AssemblyRegio
         tree: &Arc<Mutex<Vec<&Elem>>>,
         mut reference_reader: ReferenceReader<'a>,
         n_threads: usize,
-    ) -> AssemblyRegionWalker<'a, C> {
+    ) -> AssemblyRegionWalker<'a> {
 
         let mut hc_engine = HaplotypeCallerEngine::new(
             args,

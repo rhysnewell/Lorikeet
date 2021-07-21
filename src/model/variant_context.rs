@@ -383,7 +383,7 @@ impl VariantContext {
         start: u64,
         end: u64
     ) -> Vec<VariantContext> {
-        indexed_vcf.fetch(tid, start, end);
+        indexed_vcf.fetch(tid, start, Some(end));
 
         let variant_contexts = indexed_vcf.records().into_iter().map(|record|{
             let mut vcf_record = record.unwrap();

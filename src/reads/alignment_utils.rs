@@ -276,7 +276,7 @@ impl AlignmentUtils {
     pub fn remove_trailing_deletions(c: CigarString) -> CigarString {
         match c.0[c.len() - 1] {
             Cigar::Del(_) => {
-                CigarString::from(c.0[0..(c.len() - 1)])
+                CigarString::from(c.0[0..(c.len() - 1)].to_vec())
             },
             _ => c
         }

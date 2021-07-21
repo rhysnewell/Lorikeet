@@ -256,7 +256,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: BirdToolRead, sample_names: &Vec<String>) {
+    fn add_read(&mut self, read: &'a BirdToolRead, sample_names: &Vec<String>) {
         let sequence = read.read.seq().encoded;
         let qualities = read.read.qual();
 
@@ -1418,7 +1418,7 @@ impl<'a> AbstractReadThreadingGraph<'a> for ReadThreadingGraph<'a> {
         self.base_graph.remove_paths_not_connected_to_ref()
     }
 
-    fn to_sequence_graph(&self) -> SeqGraph<'a, BaseEdgeStruct> {
+    fn to_sequence_graph(&'a self) -> SeqGraph<'a, BaseEdgeStruct> {
         self.base_graph.to_sequence_graph()
     }
 

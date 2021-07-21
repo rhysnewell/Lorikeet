@@ -33,6 +33,7 @@ pub struct MultiSampleEdge {
 }
 
 impl MultiSampleEdge {
+
     /**
      * Create a new MultiSampleEdge with weight multiplicity and, if isRef == true, indicates a path through the reference
      *
@@ -52,6 +53,17 @@ impl MultiSampleEdge {
             current_single_sample_multiplicity: multiplicity,
             reference_path_indexes: Vec::with_capacity(2),
         }
+    }
+
+    pub fn set(&mut self, is_ref: bool, multiplicity: usize, single_sample_capacity: usize) {
+        let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
+        single_sample_multiplicities.push(multiplicity);
+        self.multiplicity = multiplicity;
+        self.is_ref = is_ref;
+        self.single_sample_capacity = single_sample_capacity;
+        self.single_sample_multiplicities = single_sample_multiplicities;
+        self.current_single_sample_multiplicity = multiplicity;
+        self.reference_path_indexes = Vec::with_capacity(2);
     }
 
     /**
