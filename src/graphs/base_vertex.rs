@@ -7,7 +7,7 @@ use itertools::Itertools;
 /**
  * A graph vertex that holds some sequence information
  */
-pub trait BaseVertex: Clone + Send + Sync {
+pub trait BaseVertex: Clone + Send + Sync + Eq + PartialEq {
     fn is_empty(&self) -> bool;
 
     fn len(&self) -> usize;

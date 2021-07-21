@@ -10,6 +10,7 @@ use model::variant_context::VariantContext;
 /**
  * Extract simple VariantContext events from a single haplotype
  */
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EventMap<'a, L: Locatable> {
     haplotype: Haplotype<'a, L>,
     reference: &'a [u8],
@@ -31,5 +32,7 @@ impl<'a, L: Locatable> EventMap<'a, L> {
             source_name_to_add,
             map: BTreeMap::new(),
         };
+
+        return result
     }
 }

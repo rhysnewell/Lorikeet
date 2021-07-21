@@ -24,23 +24,24 @@ use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
  * @original_author Valentin Ruano-Rubio &lt;valentin@broadinstitute.com&gt;
  * @author Rhys Newell; rhys.newell@hdr.qut.edu.au; Rust re-implementation
  */
-pub struct AssemblyResultSet<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>> {
-    assembly_result_by_kmer_size: LinkedHashMap<usize, AssemblyResult<'a, E, L, A>>,
-    haplotypes: LinkedHashSet<Haplotype<'a, L>>,
-    assembly_result_by_haplotype: LinkedHashMap<Haplotype<'a, L>, AssemblyResult<'a, E, L, A>>,
-    region_for_genotyping: &'a AssemblyRegion,
-    full_reference_with_padding: &'a [u8],
-    padded_reference_loc: &'a SimpleInterval,
-    variation_present: bool,
-    ref_haplotype: Haplotype<'a, L>,
-    kmer_sizes: BTreeSet<usize>,
-    variation_events: BTreeSet<VariantContext>,
-    last_max_mnp_distance_used: Option<usize>,
+pub struct AssemblyResultSet<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> {
+    pub(crate) assembly_result_by_kmer_size: LinkedHashMap<usize, &'a AssemblyResult<'a, L, A>>,
+    pub(crate) haplotypes: LinkedHashSet<Haplotype<'a, L>>,
+    pub(crate) assembly_result_by_haplotype: LinkedHashMap<Haplotype<'a, L>, &'a AssemblyResult<'a, L, A>>,
+    pub(crate) region_for_genotyping: &'a AssemblyRegion,
+    pub(crate) full_reference_with_padding: &'a [u8],
+    pub(crate) padded_reference_loc: &'a SimpleInterval,
+    pub(crate) variation_present: bool,
+    pub(crate) ref_haplotype: Haplotype<'a, L>,
+    pub(crate) kmer_sizes: BTreeSet<usize>,
+    pub(crate) variation_events: BTreeSet<VariantContext>,
+    pub(crate) last_max_mnp_distance_used: Option<usize>,
+    pub(crate) assembly_results: Vec<AssemblyResult<'a, L, A>>
 }
 
 
-impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
-    AssemblyResultSet<'a, E, L, A> {
+impl<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>>
+    AssemblyResultSet<'a, L, A> {
     /**
      * Constructs a new empty assembly result set.
      */
@@ -49,7 +50,7 @@ impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
         full_reference_with_padding: &'a [u8],
         ref_loc: &'a SimpleInterval,
         ref_haplotype: Haplotype<'a, L>
-    ) -> AssemblyResultSet<'a, E, L, A> {
+    ) -> AssemblyResultSet<'a, L, A> {
         let mut haplotypes = LinkedHashSet::new();
         haplotypes.insert(ref_haplotype.clone());
 
@@ -64,7 +65,8 @@ impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
             ref_haplotype: ref_haplotype,
             kmer_sizes: BTreeSet::new(),
             variation_events: BTreeSet::new(),
-            last_max_mnp_distance_used: None
+            last_max_mnp_distance_used: None,
+            assembly_results: Vec::new(),
         }
     }
 
@@ -83,7 +85,7 @@ impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
      *
      * @return {@code true} if the assembly result set has been modified as a result of this call.
      */
-    pub fn add(&mut self, h: Haplotype<'a, L>) -> bool {
+    pub fn add_haplotype(&mut self, h: Haplotype<'a, L>) -> bool {
         if self.haplotypes.contains(&h) {
             return false
         } else {
@@ -109,12 +111,30 @@ impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
      *
      * @return {@code true} iff this called changes the assembly result set.
      */
-    pub fn add_with_assembly_result(
+    pub fn add_haplotype_and_assembly_result(
         &mut self,
         h: Haplotype<'a, L>,
-        ar: AssemblyResult<'a, E, L, A>
+        ar: AssemblyResult<'a, L, A>
     ) -> bool {
-
+        let assembly_result_addition_return = self.add_assembly_result(ar);
+        if self.haplotypes.contains(&h) {
+            let previous_ar = self.assembly_result_by_haplotype.get(&h);
+            if previous_ar.is_none() {
+                self.assembly_result_by_haplotype.insert(h, self.assembly_results.last().unwrap());
+                return true
+            } else if previous_ar.unwrap() != &self.assembly_results.last().unwrap() {
+                panic!("There is already a different assembly result for the input haplotype")
+            } else {
+                return assembly_result_addition_return
+            }
+        } else {
+            if !h.allele.is_ref {
+                self.variation_present = true;
+            };
+            self.haplotypes.insert(h.clone());
+            self.assembly_result_by_haplotype.insert(h, self.assembly_results.last().unwrap());
+            return true
+        }
     }
 
     /**
@@ -126,7 +146,44 @@ impl<'a, E: BaseEdge, L: Locatable, A: AbstractReadThreadingGraph<'a>>
      * @throws IllegalStateException if there is an assembly result with the same kmerSize.
      * @return {@code true} iff this addition changed the assembly result set.
      */
-    fn add_assembly_result(ar: AssemblyResult<'a, E, L, A>) {
+    fn add_assembly_result(&mut self, ar: AssemblyResult<'a, L, A>) -> bool {
+        let kmer_size = ar.get_kmer_size();
 
+        if self.assembly_result_by_kmer_size.contains_key(&kmer_size) {
+            if self.assembly_result_by_kmer_size.get(&kmer_size) != &ar {
+                panic!("a different assembly result with the same kmerSize was already added");
+            } else {
+                return false
+            }
+        } else {
+            self.assembly_results.push(ar);
+            let saved_ar = self.assembly_results.last().unwrap();
+            self.assembly_result_by_kmer_size.insert(kmer_size, saved_ar);
+            self.kmer_sizes.insert(kmer_size);
+            return true
+        }
     }
+
+    // /**
+    //  * Given whether a new haplotype that has been already added to {@link #haplotypes} collection is the
+    //  * reference haplotype and updates {@link #refHaplotype} accordingly.
+    //  *
+    //  * <p>
+    //  *     This method assumes that the colling code has verified that the haplotype was not already in {@link #haplotypes}
+    //  *     I.e. that it is really a new one. Otherwise it will result in an exception if it happen to be a reference
+    //  *     haplotype and this has already be set. This is the case even if the new haplotypes and the current reference
+    //  *     are equal.
+    //  * </p>
+    //  *
+    //  * @param newHaplotype the new haplotype.
+    //  * @throws NullPointerException if {@code newHaplotype} is {@code null}.
+    //  * @throws IllegalStateException if there is already a reference haplotype.
+    //  */
+    // fn update_reference_haplotype(&mut self, new_haplotype: Haplotype<'a, L>) {
+    //     if !new_haplotype.allele.is_ref {
+    //         // pass
+    //     } else {
+    //         if self.ref_haplotype
+    //     }
+    // }
 }

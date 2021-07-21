@@ -3,6 +3,7 @@ use rust_htslib::bam::ext::BamRecordExtensions;
 use utils::simple_interval::Locatable;
 use std::cmp::Ordering;
 use reads::read_utils::ReadUtils;
+use std::hash::{Hasher, Hash};
 
 
 /**
@@ -18,7 +19,7 @@ use reads::read_utils::ReadUtils;
  * respectively. To access positions assigned to unmapped reads for sorting purposes, use {@link #getAssignedContig}
  * and {@link #getAssignedStart}.
  */
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BirdToolRead {
     pub read: Record,
     pub sample_index: usize,
@@ -79,8 +80,28 @@ impl BirdToolRead {
         return ReadUtils::get_adaptor_boundary(&self)
     }
 
+    pub fn name(&self) -> &[u8] {
+        self.read.qname()
+    }
+
+    pub fn len(&self) -> usize {
+        self.read.seq_len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
 }
 
+impl Hash for BirdToolRead {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.read.qname().hash(state);
+        self.read.qual().hash(state);
+        self.sample_index.hash(state);
+        self.read.seq().encoded.hash(state);
+    }
+}
 
 impl Locatable for BirdToolRead {
     fn tid(&self) -> i32 {

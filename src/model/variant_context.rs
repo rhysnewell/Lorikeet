@@ -15,6 +15,8 @@ use rust_htslib::bcf::header::HeaderView;
 use reference::reference_reader::ReferenceReader;
 use std::ops::Range;
 use itertools::Itertools;
+use std::hash::{Hash, Hasher};
+
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -27,6 +29,22 @@ pub struct VariantContext {
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
     pub attributes: HashMap<String, Vec<f64>>
+}
+
+impl Eq for VariantContext {}
+
+impl PartialEq for VariantContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.loc == other.loc && self.alleles == other.alleles
+    }
+}
+
+impl Hash for VariantContext {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.loc.hash(state);
+        self.alleles.hash(state);
+        self.source.hash(state);
+    }
 }
 
 impl VariantContext {
@@ -383,7 +401,7 @@ impl VariantContext {
         start: u64,
         end: u64
     ) -> Vec<VariantContext> {
-        indexed_vcf.fetch(tid, start, end);
+        indexed_vcf.fetch(tid, start, Some(end));
 
         let variant_contexts = indexed_vcf.records().into_iter().map(|record|{
             let mut vcf_record = record.unwrap();

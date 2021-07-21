@@ -2,18 +2,20 @@ use utils::simple_interval::Locatable;
 use haplotype::event_map::EventMap;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use model::byte_array_allele::ByteArrayAllele;
+use ordered_float::{OrderedFloat, NotNan};
+use std::hash::{Hash, Hasher};
 
 // lazy_static! {
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
-#[derive(Debug, Clone, Hash, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,
     pub(crate) event_map: Option<EventMap<'a, L>>,
     pub(crate) cigar: CigarString,
     pub(crate) alignment_start_hap_wrt_ref: usize,
-    pub(crate) score: f64,
+    pub(crate) score: OrderedFloat<f64>,
     // debug information for tracking kmer sizes used in graph construction for debug output
     pub(crate) kmer_size: usize,
 }
@@ -32,7 +34,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
             event_map: None,
             cigar: CigarString::from(vec![Cigar::Match(0)]),
             alignment_start_hap_wrt_ref: 0,
-            score: std::f64::NAN,
+            score: OrderedFloat(std::f64::MIN),
             kmer_size: 0
         }
     }
@@ -42,7 +44,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
     }
 
     pub fn get_bases(&self) -> &Vec<u8> {
-        self.allele.bases
+        &self.allele.bases
     }
 
     pub fn set_cigar(&mut self, cigar_string: Vec<Cigar>) {
@@ -55,5 +57,15 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
 
     pub fn len(&self) -> usize {
         self.allele.len()
+    }
+}
+
+impl<'a, L: Locatable> Hash for Haplotype<'a, L> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.cigar.hash(state);
+        self.allele.hash(state);
+        self.genome_location.hash(state);
+        self.score.hash(state);
+        self.kmer_size.hash(state);
     }
 }
