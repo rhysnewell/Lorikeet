@@ -10,7 +10,7 @@ use rayon::prelude::*;
 /**
  * A graph that contains base sequence at each node
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SeqGraph<'a, E: BaseEdge> {
     pub(crate) base_graph: BaseGraph<SeqVertex<'a>, E>,
 }

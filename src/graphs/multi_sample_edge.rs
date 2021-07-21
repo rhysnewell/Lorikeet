@@ -1,5 +1,6 @@
 use std::collections::BinaryHeap;
 use graphs::base_edge::BaseEdge;
+use std::hash::{Hash, Hasher};
 use rayon::prelude::*;
 
 /**
@@ -31,6 +32,24 @@ pub struct MultiSampleEdge {
     pub(crate) multiplicity: usize,
     pub(crate) is_ref: bool,
 }
+
+impl Hash for MultiSampleEdge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.reference_path_indexes.hash(state);
+        self.multiplicity.hash(state);
+        self.is_ref.hash(state);
+        self.single_sample_capacity.hash(state);
+    }
+}
+
+impl PartialEq for MultiSampleEdge {
+    fn eq(&self, other: &Self) -> bool {
+        self.reference_path_indexes == other.reference_path_indexes && self.is_ref == other.is_ref &&
+            self.multiplicity == other.multiplicity && self.single_sample_capacity == other.single_sample_capacity
+    }
+}
+
+impl Eq for MultiSampleEdge {}
 
 impl MultiSampleEdge {
 

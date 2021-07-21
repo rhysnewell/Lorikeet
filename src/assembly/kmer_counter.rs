@@ -42,7 +42,7 @@ impl<'a> KmerCounter<'a> {
     }
 
     pub fn get_counted_kmers(&self) -> Vec<&'a CountedKmer<'a>> {
-        self.counts_by_kmer.values().collect::<Vec<&'a CountedKmer<'a>>>()
+        self.counts_by_kmer.values().collect::<Vec<&CountedKmer<'a>>>()
     }
 
     /**
@@ -51,8 +51,7 @@ impl<'a> KmerCounter<'a> {
      * @return a non-null collection of kmers
      */
     pub fn get_kmers_with_counts_at_least(&self, min_count: usize) -> Vec<&'a Kmer<'a>> {
-        let mut result = Vec::new();
-        return self.get_counted_kmers().into_par_iter().filter()(|counted_kmer| {
+        return self.get_counted_kmers().into_par_iter().filter(|counted_kmer| {
             counted_kmer.count >= min_count
         }).collect::<Vec<&Kmer>>()
     }

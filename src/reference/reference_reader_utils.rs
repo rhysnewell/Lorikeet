@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process;
 use external_command_checker;
+use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
 
 lazy_static! {
     static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
@@ -279,7 +280,7 @@ impl ReferenceReaderUtils {
     }
 
     pub fn galah_command_line_definition(
-    ) -> galah::cluster_argument_parsing::GalahClustererCommandDefinition {
+    ) -> GalahClustererCommandDefinition {
         *GALAH_COMMAND_DEFINITION
     }
 

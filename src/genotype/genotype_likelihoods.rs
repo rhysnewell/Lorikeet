@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use utils::math_utils::MathUtils;
 use statrs::function::factorial::binomial;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct GenotypeLikelihoods {
     num_likelihood_cache: GenotypeNumLikelihoodsCache,
     //
