@@ -89,7 +89,7 @@ impl AlignmentProperties {
         let mut max_mapq = 0;
         let mut i = 0;
         while i <= 10000 {
-            if !bam.read(&mut record) {
+            if !bam.read(&mut record).is_some() {
                 break;
             }
 

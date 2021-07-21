@@ -26,6 +26,7 @@ use smith_waterman::bindings::SWOverhangStrategy;
 use std::collections::HashMap;
 use rayon::prelude::*;
 use graphs::k_best_haplotype::KBestHaplotype;
+use ordered_float::OrderedFloat;
 
 
 pub struct ReadThreadingAssembler {
@@ -535,7 +536,7 @@ impl<'a> ReadThreadingAssembler {
             if !return_haplotypes.contains(&h) {
                 // TODO this score seems to be irrelevant at this point...
                 if k_best_haplotype.is_reference {
-                    ref_haplotype.score = k_best_haplotype.score;
+                    ref_haplotype.score = OrderedFloat(k_best_haplotype.score);
                 };
 
                 let cigar = CigarUtils::calculate_cigar(

@@ -29,7 +29,7 @@ impl GenotypeAssignmentMethod {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Genotype {
     pub ploidy: usize,
     pub pl: GenotypeLikelihoods,
@@ -153,7 +153,7 @@ impl Genotype {
     // fn calculate_genotype_counts_using_tables_and_validate()
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct GenotypesContext {
     // sample_names_in_order: Vec<String>,
     genotypes: Vec<Genotype>,

@@ -136,8 +136,8 @@ impl AssemblyBasedCallerUtils {
      * for further HC steps
      */
     pub fn assemble_reads<'a>(
-        region: AssemblyRegion,
-        given_alleles: Vec<VariantContext>,
+        region: &mut AssemblyRegion,
+        given_alleles: &Vec<VariantContext>,
         args: &clap::ArgMatches,
         reference_reader: &mut ReferenceReader<'a>,
         assembly_engine: &mut ReadThreadingAssembler,
