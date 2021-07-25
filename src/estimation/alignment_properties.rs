@@ -262,7 +262,7 @@ mod tests {
                 frac_max_softclip: 0.0,
             };
 
-            while bam.read(&mut record) == true {
+            while bam.read(&mut record).is_some() {
                 match AlignmentProperties::estimate_from_record(&mut record, &mut properties) {
                     Some(tlen) => tlens.push(tlen),
                     None => {}

@@ -1,7 +1,7 @@
-use utils::math_utils::MathUtils;
 use num::traits::Float;
 use rayon::prelude::*;
-use std::cmp::{min, max};
+use std::cmp::{max, min};
+use utils::math_utils::MathUtils;
 
 lazy_static! {
     static ref MIN_LOG10_SCALED_QUAL: f64 = (std::f64::MIN).log10();
@@ -11,8 +11,6 @@ lazy_static! {
 pub struct QualityUtils {}
 
 impl QualityUtils {
-
-
     pub const MAX_REASONABLE_Q_SCORE: u8 = 60;
 
     pub const MAX_QUAL: u8 = 254;
@@ -41,11 +39,16 @@ impl QualityUtils {
             0 => std::f64::MAX,
             1 => phreds[0],
             2 => -10.0 * MathUtils::log10_sum_log10_two_values(phreds[0] * -0.1, phreds[1] * -0.1),
-            3 => -10.0 * MathUtils::log10_sum_log10_three_values(phreds[0] * -0.1, phreds[1] * -0.1, phreds[2] * -0.1),
+            3 => {
+                -10.0
+                    * MathUtils::log10_sum_log10_three_values(
+                        phreds[0] * -0.1,
+                        phreds[1] * -0.1,
+                        phreds[2] * -0.1,
+                    )
+            }
             _ => {
-                let log10_vals = phreds.par_iter().map(|p| {
-                    *p * -0.1
-                }).collect::<Vec<f64>>();
+                let log10_vals = phreds.par_iter().map(|p| *p * -0.1).collect::<Vec<f64>>();
                 -10.0 * MathUtils::log10_sum_log10(&log10_vals, 0, log10_vals.len())
             }
         }
@@ -66,7 +69,7 @@ impl QualityUtils {
             panic!("Qual must be >= 0.0 but got {}", qual)
         }
 
-        return 1.0 - QualityUtils::qual_to_error_prob(qual)
+        return 1.0 - QualityUtils::qual_to_error_prob(qual);
     }
 
     /**
@@ -103,7 +106,7 @@ impl QualityUtils {
      * @return a quality score (0-MAX_SAM_QUAL_SCORE)
      */
     pub fn error_prob_to_qual(error_rate: f64) -> u8 {
-        return Self::error_prob_to_qual_with_max_qual(error_rate, Self::MAX_QUAL)
+        return Self::error_prob_to_qual_with_max_qual(error_rate, Self::MAX_QUAL);
     }
 
     /**
@@ -119,9 +122,12 @@ impl QualityUtils {
      * @return a quality score (0-maxQual)
      */
     pub fn error_prob_to_qual_with_max_qual(error_rate: f64, max_qual: u8) -> u8 {
-        assert!(MathUtils::is_valid_probability(error_rate), "Error rate is not a valid probability");
+        assert!(
+            MathUtils::is_valid_probability(error_rate),
+            "Error rate is not a valid probability"
+        );
         let d = (-10.0 * error_rate.log10()).round();
-        return Self::bound_qual(d as u8, max_qual)
+        return Self::bound_qual(d as u8, max_qual);
     }
 
     /**
@@ -137,6 +143,6 @@ impl QualityUtils {
      * @return the bounded quality score
      */
     pub fn bound_qual(qual: u8, max_qual: u8) -> u8 {
-        return max(min(qual, max_qual), 1)
+        return max(min(qual, max_qual), 1);
     }
 }

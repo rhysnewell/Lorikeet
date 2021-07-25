@@ -1,11 +1,10 @@
-use utils::simple_interval::SimpleInterval;
-use utils::interval_utils::IntervalUtils;
+use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
-use utils::simple_interval::Locatable;
-use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
-
+use utils::interval_utils::IntervalUtils;
+use utils::simple_interval::Locatable;
+use utils::simple_interval::SimpleInterval;
 
 /**
  * Region of the genome that gets assembled by the local assembly engine.
@@ -40,11 +39,11 @@ pub struct AssemblyRegion {
     /**
      * The active span in which this AssemblyRegion is responsible for calling variants
      */
-    active_span: SimpleInterval,
+    pub(crate) active_span: SimpleInterval,
     /**
      * The padded span in which we perform assembly etc in order to call variants within the active span
      */
-    padded_span: SimpleInterval,
+    pub(crate) padded_span: SimpleInterval,
     /**
      * Does this region represent an active region (all isActiveProbs above threshold) or
      * an inactive region (all isActiveProbs below threshold)?
@@ -63,9 +62,21 @@ impl AssemblyRegion {
      * @param isActive indicates whether this is an active region, or an inactive one
      * @param padding the active region padding to use for this active region
      */
-    pub fn new(active_span: SimpleInterval, is_active: bool, padding: usize, contig_length: usize, tid: usize, ref_idx: usize) -> AssemblyRegion {
+    pub fn new(
+        active_span: SimpleInterval,
+        is_active: bool,
+        padding: usize,
+        contig_length: usize,
+        tid: usize,
+        ref_idx: usize,
+    ) -> AssemblyRegion {
         AssemblyRegion {
-            padded_span: AssemblyRegion::make_padded_span(&active_span, padding, contig_length, tid),
+            padded_span: AssemblyRegion::make_padded_span(
+                &active_span,
+                padding,
+                contig_length,
+                tid,
+            ),
             active_span,
             is_active,
             contig_length,
@@ -76,7 +87,12 @@ impl AssemblyRegion {
         }
     }
 
-    fn make_padded_span(active_span: &SimpleInterval, padding: usize, contig_length: usize, tid: usize) -> SimpleInterval {
+    fn make_padded_span(
+        active_span: &SimpleInterval,
+        padding: usize,
+        contig_length: usize,
+        tid: usize,
+    ) -> SimpleInterval {
         let mut start = active_span.get_start();
         if padding > start {
             start = 0
@@ -84,7 +100,13 @@ impl AssemblyRegion {
             start = start - padding
         }
 
-        IntervalUtils::trim_interval_to_contig(tid, start, active_span.get_end() + padding, contig_length).unwrap_or(active_span.clone())
+        IntervalUtils::trim_interval_to_contig(
+            tid,
+            start,
+            active_span.get_end() + padding,
+            contig_length,
+        )
+        .unwrap_or(active_span.clone())
     }
 
     pub fn new_with_padded_span(
@@ -143,8 +165,8 @@ impl AssemblyRegion {
      * Get the span of this assembly region including the padding value
      * @return a non-null SimpleInterval
      */
-    pub fn get_padded_span(&self) -> &SimpleInterval {
-        &self.padded_span
+    pub fn get_padded_span(&self) -> SimpleInterval {
+        self.padded_span.clone()
     }
 
     /**
@@ -160,7 +182,7 @@ impl AssemblyRegion {
      *
      * The reads are sorted by their coordinate position.
      * @return an unmodifiable and inmutable copy of the reads in the assembly region.
-    */
+     */
     pub fn get_reads(&self) -> &Vec<BirdToolRead> {
         &self.reads
     }
@@ -172,9 +194,9 @@ impl AssemblyRegion {
      * @param padding the padding size we want for the newly trimmed active region
      * @return a non-null, empty assembly region
      */
-    pub fn trim_with_padding(&self, span: SimpleInterval, padding: usize) -> AssemblyRegion {
+    pub fn trim_with_padding(self, span: SimpleInterval, padding: usize) -> AssemblyRegion {
         let padded_span = span.expand_within_contig(padding, self.contig_length);
-        return self.trim_with_padded_span(span, padded_span)
+        return self.trim_with_padded_span(span, padded_span);
     }
 
     /**
@@ -199,22 +221,41 @@ impl AssemblyRegion {
      * @param span the new extend of the active region we want
      * @return a non-null, empty active region
      */
-    pub fn trim_with_padded_span(&self, span: SimpleInterval, padded_span: SimpleInterval) -> AssemblyRegion {
+    pub fn trim_with_padded_span(
+        self,
+        span: SimpleInterval,
+        padded_span: SimpleInterval,
+    ) -> AssemblyRegion {
         let new_active_span = self.get_span().intersect(&span);
         let new_padded_span = self.get_padded_span().intersect(&padded_span);
 
         let mut result = AssemblyRegion::new_with_padded_span(
-            new_active_span, new_padded_span, self.is_active, self.contig_length, self.tid, self.ref_idx,
+            new_active_span,
+            new_padded_span,
+            self.is_active,
+            self.contig_length,
+            self.tid,
+            self.ref_idx,
         );
 
-        let mut trimmed_reads = self.reads.par_iter().map(|read| ReadClipper::hard_clip_to_region(read, new_padded_span.get_start(), new_padded_span.get_end()))
-            .filter(|read| !read.read.is_empty() && read.overlaps(&result.padded_span)).collect::<Vec<BirdToolRead>>();
+        let mut trimmed_reads = self
+            .reads
+            .into_par_iter()
+            .map(|read| {
+                ReadClipper::hard_clip_to_region(
+                    read,
+                    result.padded_span.get_start(),
+                    result.padded_span.get_end(),
+                )
+            })
+            .filter(|read| !read.is_empty() && read.overlaps(&result.padded_span))
+            .collect::<Vec<BirdToolRead>>();
         trimmed_reads.par_sort_unstable();
 
         result.reads.clear();
         result.reads.par_extend(trimmed_reads);
 
-        return result
+        return result;
     }
 
     /**
@@ -229,16 +270,37 @@ impl AssemblyRegion {
     pub fn add(&mut self, read: BirdToolRead) {
         // let read_loc = SimpleInterval::new(read.get_contig(), read.get_start(), read.get_end());
 
-        assert!(self.padded_span.overlaps(&read), "Read does not overlap with active region padded span");
+        assert!(
+            self.padded_span.overlaps(&read),
+            "Read does not overlap with active region padded span"
+        );
 
         if !self.reads.is_empty() {
             let final_read = &self.reads.last().unwrap();
 
-            assert!(final_read.get_contig() == read.get_contig(), "Attempting to add a read to ActiveRegion not on the same contig as other reads");
-            assert!(read.get_start() >= final_read.get_start(), "Attempting to add a read to ActiveRegion out of order w.r.t. other reads:");
+            assert!(
+                final_read.get_contig() == read.get_contig(),
+                "Attempting to add a read to ActiveRegion not on the same contig as other reads"
+            );
+            assert!(
+                read.get_start() >= final_read.get_start(),
+                "Attempting to add a read to ActiveRegion out of order w.r.t. other reads:"
+            );
         }
 
         self.reads.push(read);
+    }
+
+    pub fn is_valid_read(final_read: &BirdToolRead, new_read: &BirdToolRead) -> bool {
+        return if final_read.get_contig() == new_read.get_contig() {
+            if new_read.get_start() >= final_read.get_start() {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
     }
 
     /**
@@ -253,14 +315,14 @@ impl AssemblyRegion {
      * @param readsToRemove the set of reads we want to remove
      */
     pub fn remove_all(&mut self, reads_to_remove: &Vec<BirdToolRead>) {
-        self.reads = self.reads.into_par_iter().filter(|read| !reads_to_remove.contains(read)).collect::<Vec<BirdToolRead>>()
+        self.reads.retain(|read| !reads_to_remove.contains(read));
     }
 
     /**
      * Add all readsToAdd to this region
      * @param readsToAdd a collection of readsToAdd to add to this active region
      */
-    pub fn add_all(&mut self, reads_to_add: Vec<BirdToolRead>){
+    pub fn add_all(&mut self, reads_to_add: Vec<BirdToolRead>) {
         self.par_extend(reads_to_add)
     }
 
@@ -275,24 +337,39 @@ impl AssemblyRegion {
      * @param genomeLoc a non-null genome loc indicating the base span of the bp we'd like to get the reference for
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    fn get_reference<'a>(&mut self, reference_reader: &'a mut ReferenceReader<'a>, padding: usize, genome_loc: SimpleInterval) -> &'a [u8] {
-        assert!(genome_loc.size() > 0, "genome_loc must have size > 0 but got {:?}", genome_loc);
+    fn get_reference(
+        &self,
+        reference_reader: &mut ReferenceReader,
+        padding: usize,
+        genome_loc: &SimpleInterval,
+    ) -> Vec<u8> {
+        assert!(
+            genome_loc.size() > 0,
+            "genome_loc must have size > 0 but got {:?}",
+            genome_loc
+        );
 
         reference_reader.update_current_sequence_without_capcity();
         // Update all contig information
-        reference_reader.fetch_contig_from_reference_by_tid(
-            self.tid,
-            self.ref_idx,
-        );
+        reference_reader.fetch_contig_from_reference_by_tid(self.tid, self.ref_idx);
         reference_reader.read_sequence_to_vec();
 
         if reference_reader.current_sequence.is_empty() {
-            panic!("Retrieved sequence appears to be empty ref_idx {} tid {}", self.ref_idx, self.tid);
+            panic!(
+                "Retrieved sequence appears to be empty ref_idx {} tid {}",
+                self.ref_idx, self.tid
+            );
         };
 
-        return &reference_reader.current_sequence[
-            std::cmp::max(0, genome_loc.get_start().checked_sub(padding).unwrap_or(0))..
-                std::cmp::min(reference_reader.current_sequence.len(), genome_loc.get_end() + padding)]
+        return reference_reader.current_sequence[std::cmp::max(
+            0,
+            genome_loc.get_start().checked_sub(padding).unwrap_or(0),
+        )
+            ..std::cmp::min(
+                reference_reader.current_sequence.len(),
+                genome_loc.get_end() + padding,
+            )]
+            .to_vec();
     }
 
     /**
@@ -305,20 +382,32 @@ impl AssemblyRegion {
      * @param padding the padding, in BP, we want to add to either side of this active region padded region
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    pub fn get_assembly_region_reference<'a>(&mut self, reference_reader: &'a mut ReferenceReader<'a>, padding: usize) -> &'a [u8] {
-        return self.get_reference(reference_reader, padding, self.padded_span)
+    pub fn get_assembly_region_reference(
+        &self,
+        reference_reader: &mut ReferenceReader,
+        padding: usize,
+    ) -> Vec<u8> {
+        return self.get_reference(reference_reader, padding, &self.padded_span);
     }
 
-    pub fn set_finalized(&mut self, value: bool) { self.has_been_finalized = value }
+    pub fn set_finalized(&mut self, value: bool) {
+        self.has_been_finalized = value
+    }
 
-    pub fn is_finalized(&self) -> bool { self.has_been_finalized }
+    pub fn is_finalized(&self) -> bool {
+        self.has_been_finalized
+    }
 }
 
 impl ParallelExtend<BirdToolRead> for AssemblyRegion {
     fn par_extend<I>(&mut self, par_iter: I)
-        where I: IntoParallelIterator<Item = BirdToolRead>
+    where
+        I: IntoParallelIterator<Item = BirdToolRead>,
     {
-        let par_iter = par_iter.into_par_iter();
-        par_iter.for_each(|read| { self.add(read) });
+        let par_iter = par_iter
+            .into_par_iter()
+            .filter(|read| Self::is_valid_read(&self.reads.last().unwrap(), &read))
+            .collect::<Vec<BirdToolRead>>();
+        self.reads.par_extend(par_iter.into_par_iter());
     }
 }

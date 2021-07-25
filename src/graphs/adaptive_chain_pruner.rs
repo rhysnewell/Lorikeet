@@ -1,28 +1,28 @@
-use rayon::prelude::*;
-use rayon::iter::ParallelBridge;
+use compare::{Compare, Extract};
+use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
-use graphs::base_edge::BaseEdge;
-use graphs::path::{Path, Chain};
-use petgraph::Direction;
-use petgraph::prelude::EdgeIndex;
-use petgraph::stable_graph::IndexType;
-use petgraph::visit::EdgeRef;
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
-use multimap::MultiMap;
-use std::collections::{BinaryHeap, HashMap, HashSet};
-use compare::{Compare, Extract};
-use utils::base_utils::BaseUtils;
-use linked_hash_set::LinkedHashSet;
-use ordered_float::OrderedFloat;
-use std::cmp::Ordering;
 use graphs::chain_pruner::ChainPruner;
+use graphs::path::{Chain, Path};
+use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
+use linked_hash_set::LinkedHashSet;
+use multimap::MultiMap;
+use ordered_float::OrderedFloat;
+use petgraph::prelude::{EdgeIndex, EdgeRef};
+use petgraph::stable_graph::EdgeReference;
+use petgraph::Direction;
+use rayon::iter::ParallelBridge;
+use rayon::prelude::*;
+use std::any::Any;
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap, HashSet};
+use utils::base_utils::BaseUtils;
 
 pub struct AdaptiveChainPruner {
     pub initial_error_probability: f64,
     log_odds_threshold: f64,
     seeding_log_odds_threshold: f64, // threshold for seeding subgraph of good vertices
-    max_unpruned_variants: usize
+    max_unpruned_variants: usize,
 }
 
 // TODO: This whole thing needs some unit tests, I don't trust parts of this code as there might be
@@ -32,25 +32,35 @@ impl AdaptiveChainPruner {
         initial_error_probability: f64,
         log_odds_threshold: f64,
         seeding_log_odds_threshold: f64,
-        max_unpruned_variants: usize
+        max_unpruned_variants: usize,
     ) -> AdaptiveChainPruner {
-
         AdaptiveChainPruner {
             initial_error_probability,
             log_odds_threshold,
             seeding_log_odds_threshold,
-            max_unpruned_variants
+            max_unpruned_variants,
         }
     }
 
-    pub fn likely_error_chains<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync>(
-        &self, chains: &'a Vec<Path<'a, V, E>>, graph: &BaseGraph<V, E>, error_rate: f64
-    ) -> HashSet<&'a Path<'a, V, E>> {
+    pub fn likely_error_chains<
+        'a,
+        V: BaseVertex + std::marker::Sync,
+        E: BaseEdge + std::marker::Sync,
+    >(
+        &self,
+        chains: &'a Vec<Path>,
+        graph: &BaseGraph<V, E>,
+        error_rate: f64,
+    ) -> HashSet<&'a Path> {
         // pre-compute the left and right log odds of each chain
-        let chain_log_odds = chains.iter().par_bridge().map(|chain| {
-            let result = self.chain_log_odds(chain, graph, error_rate);
-            (chain, result)
-        }).collect::<HashMap<&Path<V, E>, (f64, f64)>>();
+        let chain_log_odds = chains
+            .iter()
+            .par_bridge()
+            .map(|chain| {
+                let result = self.chain_log_odds(chain, graph, error_rate);
+                (chain, result)
+            })
+            .collect::<HashMap<&Path, (f64, f64)>>();
 
         // compute correspondence of vertices to incident chains with log odds above the seeding and extending thresholds
         let mut vertex_to_seedable_chains = MultiMap::new();
@@ -59,18 +69,19 @@ impl AdaptiveChainPruner {
 
         for chain in chains.iter() {
             if chain_log_odds.get(chain).unwrap().1 >= self.log_odds_threshold {
-               vertex_to_good_incoming_chains.insert(chain.get_last_vertex(), chain);
+                vertex_to_good_incoming_chains.insert(chain.get_last_vertex(), chain);
             }
 
             if chain_log_odds.get(chain).unwrap().0 >= self.log_odds_threshold {
-                vertex_to_good_outgoing_chains.insert(chain.get_first_vertex(), chain);
+                vertex_to_good_outgoing_chains.insert(chain.get_first_vertex(graph), chain);
             }
 
             // seed-worthy chains must pass the more stringent seeding log odds threshold on both sides
             // in addition to that, we only seed from vertices with multiple such chains incoming or outgoing (see below)
             if chain_log_odds.get(chain).unwrap().1 >= self.seeding_log_odds_threshold
-                && chain_log_odds.get(chain).unwrap().0 >= self.seeding_log_odds_threshold {
-                vertex_to_seedable_chains.insert(chain.get_first_vertex(), chain);
+                && chain_log_odds.get(chain).unwrap().0 >= self.seeding_log_odds_threshold
+            {
+                vertex_to_seedable_chains.insert(chain.get_first_vertex(graph), chain);
                 vertex_to_seedable_chains.insert(chain.get_last_vertex(), chain);
             }
         }
@@ -86,16 +97,31 @@ impl AdaptiveChainPruner {
         // The idea is that a high-multiplicity error chain A that branches into a second error chain B and a continuation-of-the-original-error chain A'
         // may have a high log odds for A'.  However, only in the case of true variation will multiple branches leaving the same vertex have good log odds.
         let max_weight_chain = Self::get_max_weight_chains(&chains, graph);
-        chains_to_add.push(Chain::new(OrderedFloat::from(std::f64::INFINITY), &max_weight_chain));
+        chains_to_add.push(Chain::new(
+            OrderedFloat::from(std::f64::INFINITY),
+            &max_weight_chain,
+        ));
         let mut processed_vertices = LinkedHashSet::new();
         for (vertex, paths) in vertex_to_seedable_chains.iter() {
             if paths.len() > 2 {
-                vertex_to_good_outgoing_chains.get(vertex).into_iter().for_each(|chain| {
-                    chains_to_add.push(Chain::new(OrderedFloat::from(chain_log_odds.get(chain).unwrap().0), chain))
-                });
-                vertex_to_good_incoming_chains.get(vertex).into_iter().for_each(|chain| {
-                    chains_to_add.push(Chain::new(OrderedFloat::from(chain_log_odds.get(chain).unwrap().1), chain))
-                });
+                vertex_to_good_outgoing_chains
+                    .get(vertex)
+                    .into_iter()
+                    .for_each(|chain| {
+                        chains_to_add.push(Chain::new(
+                            OrderedFloat::from(chain_log_odds.get(chain).unwrap().0),
+                            chain,
+                        ))
+                    });
+                vertex_to_good_incoming_chains
+                    .get(vertex)
+                    .into_iter()
+                    .for_each(|chain| {
+                        chains_to_add.push(Chain::new(
+                            OrderedFloat::from(chain_log_odds.get(chain).unwrap().1),
+                            chain,
+                        ))
+                    });
                 processed_vertices.insert(*vertex);
             }
         }
@@ -107,123 +133,184 @@ impl AdaptiveChainPruner {
         // starting from the high-confidence seed vertices, grow the "good" subgraph along chains with above-threshold log odds,
         // discovering good chains as we go.
         while !chains_to_add.is_empty() && variant_count <= self.max_unpruned_variants {
-            let chain = chains_to_add.pop().unwrap().path.clone();
+            let chain = chains_to_add.pop().unwrap();
 
-            if !good_chains.insert(chain) {
-                continue
+            if !good_chains.contains(&chain.path) {
+                good_chains.insert(chain.path);
+                continue;
             }
 
             // When we add an outgoing chain starting from a vertex with other good outgoing chains, we add a variant
-            let new_variant = !vertices_that_already_have_outgoing_good_chains.insert(chain.get_first_vertex());
+            let new_variant = !vertices_that_already_have_outgoing_good_chains
+                .insert(chain.path.get_first_vertex(graph));
             if new_variant {
                 variant_count += 1;
             }
             // check whether we've already added this chain from the other side or we've exceeded the variant count limit
             if new_variant && variant_count > self.max_unpruned_variants {
-                continue
+                continue;
             }
 
-            for vertex in vec![chain.get_first_vertex(), chain.get_last_vertex()] {
+            for vertex in vec![
+                chain.path.get_first_vertex(graph),
+                chain.path.get_last_vertex(),
+            ] {
                 if !processed_vertices.contains(&vertex) {
-                    vertex_to_good_outgoing_chains.get(&vertex).into_iter().for_each(|chain| {
-                        chains_to_add.push(Chain::new(OrderedFloat::from(chain_log_odds.get(chain).unwrap().0), chain))
-                    });
-                    vertex_to_good_incoming_chains.get(&vertex).into_iter().for_each(|chain| {
-                        chains_to_add.push(Chain::new(OrderedFloat::from(chain_log_odds.get(chain).unwrap().1), chain))
-                    });
+                    vertex_to_good_outgoing_chains
+                        .get(&vertex)
+                        .into_iter()
+                        .for_each(|chain| {
+                            chains_to_add.push(Chain::new(
+                                OrderedFloat::from(chain_log_odds.get(chain).unwrap().0),
+                                chain,
+                            ))
+                        });
+                    vertex_to_good_incoming_chains
+                        .get(&vertex)
+                        .into_iter()
+                        .for_each(|chain| {
+                            chains_to_add.push(Chain::new(
+                                OrderedFloat::from(chain_log_odds.get(chain).unwrap().1),
+                                chain,
+                            ))
+                        });
                     processed_vertices.insert(vertex);
                 }
             }
         }
 
-        return chains.iter().par_bridge().filter(|c| {
-            !good_chains.contains(c)
-        }).collect::<HashSet<&Path<V, E>>>()
+        return chains
+            .iter()
+            .par_bridge()
+            .filter(|c| !good_chains.contains(c))
+            .collect::<HashSet<&Path>>();
     }
 
     // left and right chain log odds
     fn chain_log_odds<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync>(
-        &self, chain: &Path<'_, V, E>, graph: &BaseGraph<V, E>, error_rate: f64
+        &self,
+        chain: &Path,
+        graph: &BaseGraph<V, E>,
+        error_rate: f64,
     ) -> (f64, f64) {
-        let left_total_multiplicity = graph.graph.edges_directed(chain.get_first_vertex(), Direction::Outgoing).map(|e| e.weight().get_multiplicity()).sum::<usize>();
-        let right_total_multiplicity = graph.graph.edges_directed(chain.get_last_vertex(), Direction::Incoming).map(|e| e.weight().get_multiplicity()).sum::<usize>();
+        let left_total_multiplicity = graph
+            .graph
+            .edges_directed(chain.get_first_vertex(graph), Direction::Outgoing)
+            .map(|e| e.weight().get_multiplicity())
+            .sum::<usize>();
+        let right_total_multiplicity = graph
+            .graph
+            .edges_directed(chain.get_last_vertex(), Direction::Incoming)
+            .map(|e| e.weight().get_multiplicity())
+            .sum::<usize>();
 
-        let left_multiplicity = graph.graph.edge_weight(chain.get_edges()[0]).unwrap().get_multiplicity();
-        let right_multiplicity = graph.graph.edge_weight(chain.get_last_edge()).unwrap().get_multiplicity();
+        let left_multiplicity = graph
+            .graph
+            .edge_weight(chain.get_edges()[0])
+            .unwrap()
+            .get_multiplicity();
+        let right_multiplicity = graph
+            .graph
+            .edge_weight(chain.get_last_edge())
+            .unwrap()
+            .get_multiplicity();
 
-        let left_log_odds = if graph.is_source(chain.get_first_vertex()) { 0.0 } else {
-            HaplotypeCallerEngine::log_likelihood_ratio_constant_error(left_total_multiplicity - left_multiplicity, left_multiplicity, error_rate)
+        let left_log_odds = if graph.is_source(chain.get_first_vertex(graph)) {
+            0.0
+        } else {
+            HaplotypeCallerEngine::log_likelihood_ratio_constant_error(
+                left_total_multiplicity - left_multiplicity,
+                left_multiplicity,
+                error_rate,
+            )
         };
-        let right_log_odds = if graph.is_source(chain.get_last_vertex()) { 0.0 } else {
-            HaplotypeCallerEngine::log_likelihood_ratio_constant_error(right_total_multiplicity - right_multiplicity, right_multiplicity, error_rate)
+        let right_log_odds = if graph.is_source(chain.get_last_vertex()) {
+            0.0
+        } else {
+            HaplotypeCallerEngine::log_likelihood_ratio_constant_error(
+                right_total_multiplicity - right_multiplicity,
+                right_multiplicity,
+                error_rate,
+            )
         };
 
-        return (left_log_odds, right_log_odds)
+        return (left_log_odds, right_log_odds);
     }
 
     // find the chain containing the edge of greatest weight, taking care to break ties deterministically
-    fn get_max_weight_chains<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync>(
-        chains: &'a Vec<Path<'a, V, E>>, graph: &'a BaseGraph<V, E>
-    ) -> &'a Path<'a, V, E> {
+    fn get_max_weight_chains<
+        'a,
+        V: BaseVertex + std::marker::Sync,
+        E: BaseEdge + std::marker::Sync,
+    >(
+        chains: &'a Vec<Path>,
+        graph: &BaseGraph<V, E>,
+    ) -> &'a Path {
+        let comparator = Extract::new(|chain: &Path| {
+            chain
+                .get_edges()
+                .par_iter()
+                .map(|edge| graph.graph.edge_weight(*edge).unwrap().get_multiplicity())
+                .max()
+        })
+        .then(Extract::new(|l: &Path| l.len()))
+        .then(Extract::new(|l: &Path| l.get_bases(graph)));
 
-        let comparator = Extract::new(|chain: &Path<V, E>| {
-            chain.get_edges().par_iter().map(|edge| {
-                chain.graph.graph.edge_weight(*edge).unwrap().get_multiplicity()
-            }).max()
-        }).then(
-            Extract::new(|l: &Path<V, E>| {
-                l.len()
-            })
-        ).then(
-            Extract::new(|l: &Path<V, E>| {
-                l.get_bases()
-            })
-        );
-
-        chains.iter().par_bridge().max_by(|l, r| {
-            comparator.compare(l, r)
-        }).unwrap()
+        chains
+            .iter()
+            .par_bridge()
+            .max_by(|l, r| comparator.compare(l, r))
+            .unwrap()
     }
 }
 
-impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> PartialEq for Chain<'a, V, E> {
+impl<'a> PartialEq for Chain<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path
     }
 }
 
-impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Eq for Chain<'a, V, E> {}
+impl<'a> Eq for Chain<'a> {}
 
 // The priority queue depends on `Ord`.
 // Explicitly implement the trait so the queue becomes a min-heap
 // instead of a max-heap.
-impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> Ord for Chain<'a, V, E> {
+impl<'a> Ord for Chain<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         // In case of a tie we compare positions - this step is necessary
         // to make implementations of `PartialEq` and `Ord` consistent.
-        (-other.log_odds).cmp(&(-self.log_odds))
-            .then_with(|| BaseUtils::bases_comparator(self.path.get_bases(), other.path.get_bases()))
+        (-other.log_odds)
+            .cmp(&(-self.log_odds))
+            .then_with(|| other.path.edges_in_order.cmp(&self.path.edges_in_order))
     }
 }
 
 // `PartialOrd` needs to be implemented as well.
-impl<'a, V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> PartialOrd for Chain<'a, V, E> {
+impl<'a> PartialOrd for Chain<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPruner<V, E> for AdaptiveChainPruner {
+impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPruner<V, E>
+    for AdaptiveChainPruner
+{
     fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
-        let chains = Self::find_all_chains(graph);
-        let chains_to_remove = self.chains_to_remove(&chains, graph);
-        chains_to_remove.iter().for_each(|chain| graph.remove_all_edges(
-            chain.edges_in_order.par_iter().map(|e| *e).collect::<HashSet<EdgeIndex>>())
-        );
+        let chains = Self::find_all_chains(&graph);
+        let chains_to_remove = self.chains_to_remove(&chains, &graph);
+        chains_to_remove.iter().for_each(|chain| {
+            graph.remove_all_edges(
+                chain
+                    .edges_in_order
+                    .par_iter()
+                    .map(|e| *e)
+                    .collect::<HashSet<EdgeIndex>>(),
+            )
+        });
         graph.remove_singleton_orphan_vertices();
     }
 
-    fn find_all_chains(graph: &BaseGraph<V, E>) -> Vec<Path<'_, V, E>> {
+    fn find_all_chains(graph: &BaseGraph<V, E>) -> Vec<Path> {
         let mut chain_starts = graph.get_sources();
         let mut chains = Vec::new();
         let mut already_seen = HashSet::new();
@@ -240,10 +327,10 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
                 }
             }
         }
-        return chains
+        return chains;
     }
 
-    fn find_chain<'a>(start_edge: EdgeIndex, graph: &'a BaseGraph<V, E>) -> Path<'a, V, E> {
+    fn find_chain(start_edge: EdgeIndex, graph: &BaseGraph<V, E>) -> Path {
         let mut edges = Vec::new();
         edges.push(start_edge);
         let start_edge_endpoints = graph.graph.edge_endpoints(start_edge).unwrap();
@@ -251,35 +338,67 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
         let mut last_vertex_id = start_edge_endpoints.1;
 
         loop {
-            let out_edges = graph.graph
-                .edges_directed(last_vertex_id, Direction::Outgoing).collect::<Vec<EdgeReference<E, EdgeIndex>>>();
-            if out_edges.len() != 1 || graph.in_degree_of(last_vertex_id) > 1 || last_vertex_id == first_vertex_id {
-                break
+            let out_edges = graph
+                .graph
+                .edges_directed(last_vertex_id, Direction::Outgoing)
+                .map(|e| e.id())
+                .collect::<Vec<EdgeIndex>>();
+            if out_edges.len() != 1
+                || graph.in_degree_of(last_vertex_id) > 1
+                || last_vertex_id == first_vertex_id
+            {
+                break;
             }
             let next_edge = out_edges[0];
-            edges.push(next_edge.id());
-            last_vertex_id = graph.graph.edge_endpoints(next_edge.id()).unwrap().1;
+            edges.push(next_edge);
+            last_vertex_id = graph.graph.edge_endpoints(next_edge).unwrap().1;
         }
 
-        return Path::new(last_vertex_id, edges, graph)
+        return Path::new(last_vertex_id, edges);
     }
 
-    fn chains_to_remove<'a>(&self, chains: &'a Vec<Path<'a, V, E>>, graph: &'a BaseGraph<V, E>) -> Vec<&'a Path<'a, V, E>> {
+    fn chains_to_remove<'a>(
+        &self,
+        chains: &'a Vec<Path>,
+        graph: &BaseGraph<V, E>,
+    ) -> Vec<&'a Path> {
         if chains.is_empty() {
-            return Vec::new()
+            return Vec::new();
         }
-        let probable_error_chains = self.likely_error_chains(&chains, graph, self.initial_error_probability);
-        let error_count = probable_error_chains.into_par_iter().map(|chain| {
-            chain.get_edges().par_iter().map(|e| chain.graph.graph.edge_weight(*e).unwrap().get_multiplicity()).sum::<usize>()
-        }).sum::<usize>();
-        let total_bases = chains.par_iter().map(|chain| {
-            chain.get_edges().par_iter().map(|e| chain.graph.graph.edge_weight(*e).unwrap().get_multiplicity()).sum::<usize>()
-        }).sum::<usize>();
+        let probable_error_chains =
+            self.likely_error_chains(&chains, graph, self.initial_error_probability);
+        let error_count = probable_error_chains
+            .into_par_iter()
+            .map(|chain| {
+                chain
+                    .get_edges()
+                    .par_iter()
+                    .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
+        let total_bases = chains
+            .par_iter()
+            .map(|chain| {
+                chain
+                    .get_edges()
+                    .par_iter()
+                    .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
+                    .sum::<usize>()
+            })
+            .sum::<usize>();
 
         let error_rate = error_count as f64 / total_bases as f64;
 
-        return self.likely_error_chains(&chains, graph, error_rate).into_iter().par_bridge().filter(|c| {
-            !c.get_edges().par_iter().any(|e| c.graph.graph.edge_weight(*e).unwrap().is_ref())
-        }).collect::<Vec<&Path<V, E>>>()
+        return self
+            .likely_error_chains(&chains, graph, error_rate)
+            .into_iter()
+            .par_bridge()
+            .filter(|c| {
+                !c.get_edges()
+                    .par_iter()
+                    .any(|e| graph.graph.edge_weight(*e).unwrap().is_ref())
+            })
+            .collect::<Vec<&Path>>();
     }
 }

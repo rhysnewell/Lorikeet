@@ -1,8 +1,8 @@
-use utils::math_utils::MathUtils;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use model::variants::{Allele, Variant};
-use rayon::prelude::*;
 use ordered_float::OrderedFloat;
+use rayon::prelude::*;
+use utils::math_utils::MathUtils;
 
 lazy_static! {
     static ref NUMBER_OF_ALLELE_TYPES: usize = 4;
@@ -38,18 +38,17 @@ enum AlleleType {
 pub struct GenotypePriorCalculator {
     het_values: Vec<f64>,
     hom_values: Vec<f64>,
-    diff_values: Vec<f64>
+    diff_values: Vec<f64>,
 }
 
 impl GenotypePriorCalculator {
-
     fn genotype_prior_calculator(
         snp_het: f64,
         snp_hom: f64,
         indel_het: f64,
         indel_hom: f64,
         other_het: f64,
-        other_hom: f64
+        other_hom: f64,
     ) -> GenotypePriorCalculator {
         let mut het_values = vec![0.; *NUMBER_OF_ALLELE_TYPES];
         let mut hom_values = vec![0.; *NUMBER_OF_ALLELE_TYPES];
@@ -59,8 +58,10 @@ impl GenotypePriorCalculator {
         // so they are already set.
 
         // SNPs: normalized for all possible mutations (number of nucs (4) - 1)
-        het_values[AlleleType::SNP.ordinal() as usize] = snp_het - *LOG10_SNP_NORMALIZATION_CONSTANT;
-        hom_values[AlleleType::SNP.ordinal() as usize] = snp_hom - *LOG10_SNP_NORMALIZATION_CONSTANT;
+        het_values[AlleleType::SNP.ordinal() as usize] =
+            snp_het - *LOG10_SNP_NORMALIZATION_CONSTANT;
+        hom_values[AlleleType::SNP.ordinal() as usize] =
+            snp_hom - *LOG10_SNP_NORMALIZATION_CONSTANT;
         // INDELs:
         het_values[AlleleType::INDEL.ordinal() as usize] = indel_het;
         hom_values[AlleleType::INDEL.ordinal() as usize] = indel_hom;
@@ -73,7 +74,7 @@ impl GenotypePriorCalculator {
         GenotypePriorCalculator {
             het_values,
             hom_values,
-            diff_values
+            diff_values,
         }
     }
 
@@ -90,14 +91,17 @@ impl GenotypePriorCalculator {
         log10_snp_het: f64,
         log10_indel_het: f64,
         log10_other_het: f64,
-        het_hom_ratio: f64
+        het_hom_ratio: f64,
     ) -> GenotypePriorCalculator {
         let log10_ratio = het_hom_ratio.log10();
 
         GenotypePriorCalculator::genotype_prior_calculator(
-            log10_snp_het, log10_snp_het - log10_ratio,
-            log10_indel_het, log10_indel_het - log10_ratio,
-            log10_other_het, log10_other_het - log10_ratio
+            log10_snp_het,
+            log10_snp_het - log10_ratio,
+            log10_indel_het,
+            log10_indel_het - log10_ratio,
+            log10_other_het,
+            log10_other_het - log10_ratio,
         )
     }
 
@@ -111,30 +115,39 @@ impl GenotypePriorCalculator {
     pub fn assuming_hw(
         snp_het: f64,
         indel_het: f64,
-        other_het: Option<f64>
+        other_het: Option<f64>,
     ) -> GenotypePriorCalculator {
         match other_het {
-            Some(other) => {
-                GenotypePriorCalculator::genotype_prior_calculator(
-                    snp_het, snp_het * 2.,
-                    indel_het, indel_het * 2.,
-                    other, other * 2.,
-                )
-            },
-            _ => {
-                GenotypePriorCalculator::genotype_prior_calculator(
-                    snp_het, snp_het * 2.,
-                    indel_het, indel_het * 2.,
-                    std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner(), std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner() * 2.0
-                )
-            }
+            Some(other) => GenotypePriorCalculator::genotype_prior_calculator(
+                snp_het,
+                snp_het * 2.,
+                indel_het,
+                indel_het * 2.,
+                other,
+                other * 2.,
+            ),
+            _ => GenotypePriorCalculator::genotype_prior_calculator(
+                snp_het,
+                snp_het * 2.,
+                indel_het,
+                indel_het * 2.,
+                std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner(),
+                std::cmp::max(OrderedFloat(snp_het), OrderedFloat(indel_het)).into_inner() * 2.0,
+            ),
         }
-
     }
 
     pub fn make(args: &clap::ArgMatches) -> GenotypePriorCalculator {
-        let snp_het = args.value_of("snp-heterozygosity").unwrap().parse::<f64>().unwrap();
-        let ind_het = args.value_of("indel-heterozygosity").unwrap().parse::<f64>().unwrap();
+        let snp_het = args
+            .value_of("snp-heterozygosity")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
+        let ind_het = args
+            .value_of("indel-heterozygosity")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap();
 
         GenotypePriorCalculator::assuming_hw(snp_het, ind_het, None)
     }
@@ -148,7 +161,11 @@ impl GenotypePriorCalculator {
      * @return never {@code null}, the array will have as many positions as necessary to hold the priors of all possible
      * unphased genotypes as per the number of input alleles and the input calculator's ploidy.
      */
-    pub fn get_log10_priors(&self, likelihood_calculator: &mut GenotypeLikelihoodCalculator, alleles: &Vec<Allele>) -> Vec<f64> {
+    pub fn get_log10_priors(
+        &self,
+        likelihood_calculator: &mut GenotypeLikelihoodCalculator,
+        alleles: &Vec<Allele>,
+    ) -> Vec<f64> {
         if likelihood_calculator.allele_count < alleles.len() {
             panic!("the number of alleles in the input calculator must be at least as large as the number of alleles in the input list")
         }
@@ -163,18 +180,17 @@ impl GenotypePriorCalculator {
 
         for g in (1..number_of_genotypes).into_iter() {
             let gac = likelihood_calculator.genotype_allele_counts_at(g);
-            result[g] = gac.sum_over_allele_indices_and_counts(
-                |idx: usize, cnt: usize| {
-                    if cnt == 2 {
-                        self.hom_values[allele_types[idx] as usize]
-                    } else {
-                        self.het_values[allele_types[idx] as usize] + self.diff_values[allele_types[idx] as usize] * (cnt - 1) as f64
-                    }
+            result[g] = gac.sum_over_allele_indices_and_counts(|idx: usize, cnt: usize| {
+                if cnt == 2 {
+                    self.hom_values[allele_types[idx] as usize]
+                } else {
+                    self.het_values[allele_types[idx] as usize]
+                        + self.diff_values[allele_types[idx] as usize] * (cnt - 1) as f64
                 }
-            );
+            });
         }
 
-        return result
+        return result;
     }
 
     fn calculate_allele_types(alleles: &Vec<Allele>) -> Vec<i64> {
@@ -184,28 +200,27 @@ impl GenotypePriorCalculator {
         }
         // let ref_length = ref_allele.length();
 
-        let result = alleles.par_iter().map(|allele| {
-            if allele.is_reference() {
-                return AlleleType::REF.ordinal() as i64
-            } else if allele.is_called() && !allele.is_symbolic() {
-                match allele.variant() {
-                    Variant::Insertion(_) | Variant::Deletion(_) => {
-                        AlleleType::INDEL.ordinal() as i64
-                    },
-                    Variant::SNV(_) => {
-                        AlleleType::SNP.ordinal() as i64
-                    },
-                    _ => AlleleType::OTHER.ordinal() as i64
+        let result = alleles
+            .par_iter()
+            .map(|allele| {
+                if allele.is_reference() {
+                    return AlleleType::REF.ordinal() as i64;
+                } else if allele.is_called() && !allele.is_symbolic() {
+                    match allele.variant() {
+                        Variant::Insertion(_) | Variant::Deletion(_) => {
+                            AlleleType::INDEL.ordinal() as i64
+                        }
+                        Variant::SNV(_) => AlleleType::SNP.ordinal() as i64,
+                        _ => AlleleType::OTHER.ordinal() as i64,
+                    }
+                } else if allele.is_called() && allele.is_symbolic() {
+                    panic!("Cannot handle symbolic structural variants at the moment")
+                } else {
+                    AlleleType::OTHER.ordinal() as i64
                 }
-            } else if allele.is_called() && allele.is_symbolic() {
-                panic!("Cannot handle symbolic structural variants at the moment")
-            } else {
-                AlleleType::OTHER.ordinal() as i64
-            }
-        }).collect::<Vec<i64>>();
+            })
+            .collect::<Vec<i64>>();
 
         result
     }
-
 }
-

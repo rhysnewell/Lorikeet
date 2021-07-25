@@ -1,10 +1,10 @@
-use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
-use graphs::seq_graph::SeqGraph;
 use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
-use std::collections::HashSet;
+use graphs::seq_graph::SeqGraph;
 use haplotype::haplotype::Haplotype;
-use utils::simple_interval::Locatable;
 use linked_hash_set::LinkedHashSet;
+use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use std::collections::HashSet;
+use utils::simple_interval::Locatable;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Status {
@@ -16,16 +16,24 @@ pub enum Status {
 /**
  * Result of assembling, with the resulting graph and status
  */
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct AssemblyResult<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> {
+#[derive(Debug, Clone)]
+pub struct AssemblyResult<L: Locatable, A: AbstractReadThreadingGraph> {
     pub(crate) status: Status,
     pub(crate) threading_graph: Option<A>,
-    pub(crate) graph: Option<SeqGraph<'a, BaseEdgeStruct>>,
-    pub(crate) discovered_haplotypes: LinkedHashSet<Haplotype<'a, L>>,
+    pub(crate) graph: Option<SeqGraph<BaseEdgeStruct>>,
+    pub(crate) discovered_haplotypes: LinkedHashSet<Haplotype<L>>,
     pub(crate) contains_suspect_haploptypes: bool,
 }
 
-impl<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> AssemblyResult<'a, L, A> {
+impl<L: Locatable, A: AbstractReadThreadingGraph> Eq for AssemblyResult<L, A> {}
+
+impl<L: Locatable, A: AbstractReadThreadingGraph> PartialEq for AssemblyResult<L, A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.status == other.status && self.discovered_haplotypes == other.discovered_haplotypes
+    }
+}
+
+impl<L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<L, A> {
     /**
      * Create a new assembly result
      * @param status the status, cannot be null
@@ -33,9 +41,9 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> AssemblyResult<'a, L, 
      */
     pub fn new(
         status: Status,
-        graph: Option<SeqGraph<'a, BaseEdgeStruct>>,
-        threading_graph: Option<A>
-    ) -> AssemblyResult<'a, L, A> {
+        graph: Option<SeqGraph<BaseEdgeStruct>>,
+        threading_graph: Option<A>,
+    ) -> AssemblyResult<L, A> {
         AssemblyResult {
             status,
             graph,
@@ -45,7 +53,10 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> AssemblyResult<'a, L, 
         }
     }
 
-    pub fn set_discovered_haplotypes(&mut self, discovered_haplotypes: LinkedHashSet<Haplotype<'a, L>>) {
+    pub fn set_discovered_haplotypes(
+        &mut self,
+        discovered_haplotypes: LinkedHashSet<Haplotype<L>>,
+    ) {
         self.discovered_haplotypes = discovered_haplotypes
     }
 
@@ -54,16 +65,12 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph<'a>> AssemblyResult<'a, L, 
     }
 
     pub fn get_kmer_size(&self) -> usize {
-        match self.graph {
-            None => {
-                match self.threading_graph {
-                    None => panic!("No established kmer size for assembly result"),
-                    Some(threading_graph) => threading_graph.get_kmer_size()
-                }
+        match &self.graph {
+            None => match &self.threading_graph {
+                None => panic!("No established kmer size for assembly result"),
+                Some(threading_graph) => threading_graph.get_kmer_size(),
             },
-            Some(graph) => {
-                graph.base_graph.get_kmer_size()
-            }
+            Some(graph) => graph.base_graph.get_kmer_size(),
         }
     }
 }

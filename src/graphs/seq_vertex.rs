@@ -1,7 +1,7 @@
 use graphs::base_vertex::BaseVertex;
-use std::hash::{Hash, Hasher};
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /**
  * A graph vertex containing a sequence of bases and a unique ID that
@@ -22,16 +22,16 @@ use std::collections::hash_map::DefaultHasher;
  *
  */
 #[derive(Debug, Clone)]
-pub struct SeqVertex<'a> {
-    pub sequence: &'a [u8],
+pub struct SeqVertex {
+    pub sequence: String,
     pub additional_info: String,
 }
 
-impl<'a> SeqVertex<'a> {
-    pub fn new(sequence: &'a [u8]) -> SeqVertex<'a> {
+impl SeqVertex {
+    pub fn new(sequence: String) -> SeqVertex {
         Self {
             sequence,
-            additional_info: format!("")
+            additional_info: format!(""),
         }
     }
 
@@ -48,7 +48,7 @@ impl<'a> SeqVertex<'a> {
     pub fn to_string(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
-        format!("SeqVertex_id_{}_seq_{}", hasher.finish(), std::str::from_utf8(self.sequence).unwrap())
+        format!("SeqVertex_id_{}_seq_{}", hasher.finish(), self.sequence)
     }
 
     /**
@@ -60,7 +60,15 @@ impl<'a> SeqVertex<'a> {
     pub fn without_suffix(&self, suffix: &[u8]) -> Option<SeqVertex> {
         let prefix_size = self.sequence.len() - suffix.len();
 
-        return if prefix_size > 0 { Some(Self::new(&self.sequence[0..suffix.len()])) } else { None }
+        return if prefix_size > 0 {
+            Some(Self::new(
+                std::str::from_utf8(&self.sequence.as_bytes()[prefix_size..])
+                    .unwrap()
+                    .to_string(),
+            ))
+        } else {
+            None
+        };
     }
 
     /**
@@ -75,12 +83,19 @@ impl<'a> SeqVertex<'a> {
         let length = self.sequence.len() - suffix.len() - prefix.len();
         let stop = start + length;
 
-        return if length > 0 { Some(SeqVertex::new(&self.sequence[start..stop])) } else { None }
+        return if length > 0 {
+            Some(SeqVertex::new(
+                std::str::from_utf8(&self.sequence.as_bytes()[start..stop])
+                    .unwrap()
+                    .to_string(),
+            ))
+        } else {
+            None
+        };
     }
-
 }
 
-impl BaseVertex for SeqVertex<'_> {
+impl BaseVertex for SeqVertex {
     /**
      * Does this vertex have an empty sequence?
      *
@@ -104,7 +119,7 @@ impl BaseVertex for SeqVertex<'_> {
     fn to_string(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
-        return format!("SeqVertex_id_{}_seq_{}", hasher.finish(), String::from_utf8_lossy(self.sequence).to_string())
+        return format!("SeqVertex_id_{}_seq_{}", hasher.finish(), self.sequence);
     }
 
     /**
@@ -115,11 +130,11 @@ impl BaseVertex for SeqVertex<'_> {
      * @return a non-null pointer to the bases contained in this vertex
      */
     fn get_sequence(&self) -> &[u8] {
-        self.sequence
+        self.sequence.as_bytes()
     }
 
-    fn get_sequence_string(&self) -> String {
-        std::str::from_utf8(self.sequence).unwrap().to_string()
+    fn get_sequence_string(&self) -> &String {
+        &self.sequence
     }
 
     /**
@@ -134,7 +149,7 @@ impl BaseVertex for SeqVertex<'_> {
      * @return a byte[] of the sequence added by this vertex to the overall sequence
      */
     fn get_additional_sequence(&self, source: bool) -> &[u8] {
-        self.sequence
+        self.sequence.as_bytes()
     }
 
     /**
@@ -149,7 +164,7 @@ impl BaseVertex for SeqVertex<'_> {
      * @return the additional information for display about this vertex
      */
     fn get_additional_info(&self) -> String {
-        return self.additional_info.clone()
+        return self.additional_info.clone();
     }
 
     /**
@@ -167,27 +182,27 @@ impl BaseVertex for SeqVertex<'_> {
      * @return {@code true} iff so.
      */
     fn has_ambiguous_sequence(&self) -> bool {
-        return self.sequence.par_iter().any(|base|{
+        return self.sequence.as_bytes().par_iter().any(|base| {
             let base = base.to_ascii_uppercase();
             let base = base as char;
             match base {
-                'A' | 'T'| 'C' | 'G' => false,
-                _ => true
+                'A' | 'T' | 'C' | 'G' => false,
+                _ => true,
             }
-        })
+        });
     }
 }
 
-impl Hash for SeqVertex<'_> {
+impl Hash for SeqVertex {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.sequence.hash(state)
     }
 }
 
-impl PartialEq for SeqVertex<'_> {
+impl PartialEq for SeqVertex {
     fn eq(&self, other: &Self) -> bool {
         self.sequence == other.sequence
     }
 }
 
-impl Eq for SeqVertex<'_> {}
+impl Eq for SeqVertex {}

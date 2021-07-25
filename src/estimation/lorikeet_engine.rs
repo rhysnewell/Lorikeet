@@ -1,21 +1,20 @@
-use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
-use coverm::bam_generator::*;
-use coverm::FlagFilter;
-use reference::reference_reader_utils::ReferenceReaderUtils;
-use reference::reference_reader::ReferenceReader;
-use estimation::bams::index_bams::*;
-use coverm::genomes_and_contigs::GenomesAndContigs;
-use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
-use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
-use scoped_threadpool::Pool;
-use rayon::prelude::*;
-use std::path::Path;
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
-use tempfile::NamedTempFile;
+use coverm::bam_generator::*;
+use coverm::genomes_and_contigs::GenomesAndContigs;
+use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
+use coverm::FlagFilter;
+use estimation::bams::index_bams::*;
+use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use rayon::prelude::*;
+use reference::reference_reader::ReferenceReader;
+use reference::reference_reader_utils::ReferenceReaderUtils;
+use scoped_threadpool::Pool;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
-
+use tempfile::NamedTempFile;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReadType {
@@ -41,145 +40,32 @@ pub struct LorikeetEngine<'a> {
     long_read_bam_count: usize,
     coverage_estimators: Vec<CoverageEstimator>,
     flag_filters: FlagFilter,
-    genomes_and_contigs: &'a GenomesAndContigs,
+    genomes_and_contigs: GenomesAndContigs,
     concatenated_genomes: Option<NamedTempFile>,
     tmp_bam_file_cache: Option<TempDir>,
     reference_map: HashMap<usize, String>,
     references: Vec<&'a str>,
     multi: Arc<MultiProgress>,
     multi_inner: Arc<MultiProgress>,
-    progress_bars: Vec<Elem>,
     tree: Arc<Mutex<Vec<&'a Elem>>>,
-    reference_reader: ReferenceReader<'a>,
+    progress_bars: &'a Vec<Elem>,
     threads: usize,
 }
 
 impl<'a> LorikeetEngine<'a> {
-    pub fn start<
-        R: NamedBamReader,
-        S: NamedBamReaderGenerator<R>,
-        T: NamedBamReader,
-        U: NamedBamReaderGenerator<T>,
-    >(
-        m: &'a clap::ArgMatches,
-        bam_readers: Vec<S>,
-        longreads: Option<Vec<U>>,
-        mode: &str,
-        coverage_estimators: Vec<CoverageEstimator>,
-        flag_filters: FlagFilter,
-        genomes_and_contigs: &'a GenomesAndContigs,
-        tmp_bam_file_cache: Option<TempDir>,
-        concatenated_genomes: Option<NamedTempFile>,
-    ) {
-
-        let threads = m.value_of("threads").unwrap().parse().unwrap();
-        let references = ReferenceReaderUtils::parse_references(&m);
-        let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
-
-        ReferenceReaderUtils::retrieve_reference(&Some(
-            concatenated_genomes
-                .as_ref()
-                .unwrap()
-                .path()
-                .to_str()
-                .unwrap()
-                .to_string(),
-        ));
-
-        let reference_reader = ReferenceReader::new(
-            &Some(
-                concatenated_genomes
-                    .as_ref()
-                    .unwrap()
-                    .path()
-                    .to_str()
-                    .unwrap()
-                    .to_string(),
-            ),
-            genomes_and_contigs,
-            genomes_and_contigs.contig_to_genome.len()
-        );
-
-        // All different counts of samples I need. Changes depends on when using concatenated genomes or not
-        let short_read_bam_count = bam_readers.len();
-        let mut long_read_bam_count = 0;
-        let mut reference_count = references.len();
-
-        let longreads = match longreads {
-            Some(vec) => {
-                long_read_bam_count += vec.len();
-                vec
-            }
-            None => vec![],
-        };
-
-        // Finish each BAM source
-        if m.is_present("longreads") || m.is_present("longread-bam-files") {
-            info!("Processing long reads...");
-            finish_bams(longreads, threads);
-        }
-
-        info!("Processing short reads...");
-        finish_bams(bam_readers, threads);
-
-        let mut reference_map = HashMap::new();
-
-
-        // Set up multi progress bars
-        let multi = Arc::new(MultiProgress::new());
-
-        let multi_inner = Arc::clone(&multi);
-        let mut progress_bars = Self::setup_progress_bars(
-            &references,
-            &mut reference_map,
-            &genomes_and_contigs,
-            short_read_bam_count,
-            long_read_bam_count,
-        );
-
-        let tree: Arc<Mutex<Vec<&Elem>>> =
-            Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
-        {
-            let mut tree = tree.lock().unwrap();
-            for pb in progress_bars.iter() {
-                tree.push(pb)
-            }
-        }
-
-        debug!(
-            "{} Longread BAM files, {} Shortread BAM files {} Total BAMs over {} genome(s)",
-            long_read_bam_count,
-            short_read_bam_count,
-            (short_read_bam_count + long_read_bam_count),
-            reference_count
-        );
-
-
-        let mut lorikeet_engine = Self {
-            args: m,
-            short_read_bam_count,
-            long_read_bam_count,
-            coverage_estimators,
-            flag_filters,
-            genomes_and_contigs,
-            concatenated_genomes,
-            tmp_bam_file_cache,
-            reference_map,
-            references,
-            multi,
-            multi_inner,
-            progress_bars,
-            tree,
-            reference_reader,
-            threads,
-        };
-
-        lorikeet_engine.apply_per_reference()
-    }
-
-    fn apply_per_reference(&self) {
-        let alpha: f64 = self.args.value_of("fdr-threshold").unwrap().parse().unwrap();
-        let parallel_genomes = self.args.value_of("parallel-genomes").unwrap().parse().unwrap();
+    pub fn apply_per_reference(&self) {
+        let alpha: f64 = self
+            .args
+            .value_of("fdr-threshold")
+            .unwrap()
+            .parse()
+            .unwrap();
+        let parallel_genomes = self
+            .args
+            .value_of("parallel-genomes")
+            .unwrap()
+            .parse()
+            .unwrap();
         let mut pool = Pool::new(parallel_genomes);
         let n_threads = std::cmp::max(self.threads / parallel_genomes as usize, 2);
         let output_prefix = match self.args.is_present("output-directory") {
@@ -196,12 +82,10 @@ impl<'a> LorikeetEngine<'a> {
         };
 
         pool.scoped(|scope| {
-
             Self::begin_tick(0, &self.progress_bars, &self.multi_inner, "");
             Self::begin_tick(1, &self.progress_bars, &self.multi_inner, "");
 
             for (ref_idx, reference_stem) in self.reference_map.clone().into_iter() {
-
                 let multi_inner = &self.multi_inner;
                 let tree = &self.tree;
                 let progress_bars = &self.progress_bars;
@@ -217,8 +101,7 @@ impl<'a> LorikeetEngine<'a> {
                     None => None,
                 };
                 let mut coverage_estimators = self.coverage_estimators.clone();
-                let mut reference_reader = self.reference_reader;
-                let genomes_and_contigs = &self.genomes_and_contigs;
+                let genomes_and_contigs = self.genomes_and_contigs.clone();
 
                 let output_prefix = format!(
                     "{}/{}",
@@ -229,7 +112,6 @@ impl<'a> LorikeetEngine<'a> {
                         .to_str()
                         .unwrap(),
                 );
-
 
                 if Path::new(&output_prefix).exists() && !self.args.is_present("force") {
                     let cache = glob::glob(&format!("{}/*.vcf", &output_prefix))
@@ -249,7 +131,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
 
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Output already present. Run with --force to overwrite",
                                 &genomes_and_contigs.genomes[ref_idx]
                             ));
@@ -263,15 +145,13 @@ impl<'a> LorikeetEngine<'a> {
                             let len = pb.progress_bar.length();
                             if pos >= len {
                                 pb.progress_bar
-                                    .finish_with_message(&format!("All genomes analyzed {}", "✔",));
+                                    .finish_with_message(format!("All genomes analyzed {}", "✔",));
                             }
                         }
                         {
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(
-                                ((self.short_read_bam_count + self.long_read_bam_count)
-                                    as u64)
-                                    * 2
+                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) * 2
                                     + 1,
                             );
                             pb.progress_bar.reset_eta();
@@ -279,7 +159,7 @@ impl<'a> LorikeetEngine<'a> {
                             let len = pb.progress_bar.length();
                             if pos >= len {
                                 pb.progress_bar
-                                    .finish_with_message(&format!("All steps completed {}", "✔",));
+                                    .finish_with_message(format!("All steps completed {}", "✔",));
                             }
                         }
                         continue;
@@ -288,7 +168,12 @@ impl<'a> LorikeetEngine<'a> {
 
                 scope.execute(move || {
                     let reference = &genomes_and_contigs.genomes[ref_idx];
-                    Self::begin_tick(ref_idx + 2, &progress_bars, &multi_inner, "Preparing variants");
+                    Self::begin_tick(
+                        ref_idx + 2,
+                        &progress_bars,
+                        &multi_inner,
+                        "Preparing variants",
+                    );
 
                     // Read BAMs back in as indexed
                     let mut indexed_bam_readers = recover_bams(
@@ -300,6 +185,13 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads as u32,
                         &tmp_bam_file_cache,
                     );
+
+                    let mut reference_reader = ReferenceReader::new(
+                        &Some(concatenated_genomes.as_ref().unwrap().to_string()),
+                        genomes_and_contigs.clone(),
+                        genomes_and_contigs.contig_to_genome.len(),
+                    );
+
                     let mut per_reference_samples = 0;
                     let mut per_reference_short_samples = 0;
 
@@ -308,22 +200,33 @@ impl<'a> LorikeetEngine<'a> {
                         indexed_bam_readers.len()
                     );
 
-
                     let mut assembly_engine = AssemblyRegionWalker::start(
                         self.args,
                         ref_idx,
                         self.short_read_bam_count,
                         self.long_read_bam_count,
                         &indexed_bam_readers,
-                        genomes_and_contigs,
-                        &concatenated_genomes,
-                        flag_filters,
-                        tree,
-                        reference_reader,
                         n_threads,
                     );
 
-                    assembly_engine.traverse(&self.flag_filters, &self.args);
+                    let mut shards = assembly_engine.collect_shards(
+                        self.args,
+                        &indexed_bam_readers,
+                        &genomes_and_contigs,
+                        &concatenated_genomes,
+                        flag_filters,
+                        n_threads,
+                        tree,
+                        &mut reference_reader,
+                    );
+
+                    assembly_engine.traverse(
+                        &mut shards,
+                        flag_filters,
+                        self.args,
+                        &indexed_bam_readers,
+                        &mut reference_reader,
+                    );
                     // let mut hc_engine = HaplotypeCallerEngine::new(
                     //     &self.args,
                     //     ref_idx,
@@ -348,8 +251,10 @@ impl<'a> LorikeetEngine<'a> {
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(&format!("{}: Initial variant calling complete...", pb.key));
+                        pb.progress_bar.set_message(format!(
+                            "{}: Initial variant calling complete...",
+                            pb.key
+                        ));
                     }
 
                     // Collects info about variants across samples to check whether they are genuine or not
@@ -357,7 +262,7 @@ impl<'a> LorikeetEngine<'a> {
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
-                            .set_message(&format!("{}: Setting FDR threshold...", pb.key));
+                            .set_message(format!("{}: Setting FDR threshold...", pb.key));
                     }
                     // variant_matrix
                     //     .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
@@ -381,7 +286,7 @@ impl<'a> LorikeetEngine<'a> {
                         // Calculate the geometric mean values and CLR for each variant, reference specific
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Generating variant distances...",
                                 &reference,
                             ));
@@ -392,8 +297,10 @@ impl<'a> LorikeetEngine<'a> {
                         // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(&format!("{}: Running UMAP and HDBSCAN...", &reference,));
+                            pb.progress_bar.set_message(format!(
+                                "{}: Running UMAP and HDBSCAN...",
+                                &reference,
+                            ));
                         }
                         // variant_matrix.run_fuzzy_scan(
                         //     e_min,
@@ -415,7 +322,7 @@ impl<'a> LorikeetEngine<'a> {
                         // Get strain abundances
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Calculating genotype abundances...",
                                 &reference,
                             ));
@@ -430,7 +337,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
-                                .set_message(&format!("{}: Generating genotypes...", &reference,));
+                                .set_message(format!("{}: Generating genotypes...", &reference,));
                         }
 
                         // variant_matrix.generate_genotypes(
@@ -443,7 +350,7 @@ impl<'a> LorikeetEngine<'a> {
                         // Get sample distances
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Generating adjacency matrix...",
                                 &reference,
                             ));
@@ -468,13 +375,13 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
-                                .set_message(&format!("{}: Generating VCF file...", &reference,));
+                                .set_message(format!("{}: Generating VCF file...", &reference,));
                         }
                         // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                     } else if mode == "polish" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Generating consensus genomes...",
                                 &reference,
                             ));
@@ -490,7 +397,7 @@ impl<'a> LorikeetEngine<'a> {
                         // Get sample distances
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(&format!(
+                            pb.progress_bar.set_message(format!(
                                 "{}: Generating adjacency matrix...",
                                 &reference,
                             ));
@@ -513,14 +420,14 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
-                                .set_message(&format!("{}: Generating VCF file...", &reference,));
+                                .set_message(format!("{}: Generating VCF file...", &reference,));
                         }
                         // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
                     };
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
-                            .set_message(&format!("{}: All steps completed {}", &reference, "✔",));
+                            .set_message(format!("{}: All steps completed {}", &reference, "✔",));
                         pb.progress_bar.finish_and_clear();
                     }
                     {
@@ -530,7 +437,7 @@ impl<'a> LorikeetEngine<'a> {
                         let len = pb.progress_bar.length();
                         if pos >= len {
                             pb.progress_bar
-                                .finish_with_message(&format!("All genomes analyzed {}", "✔",));
+                                .finish_with_message(format!("All genomes analyzed {}", "✔",));
                         }
                     }
                     {
@@ -540,7 +447,7 @@ impl<'a> LorikeetEngine<'a> {
                         let len = pb.progress_bar.length();
                         if pos >= len {
                             pb.progress_bar
-                                .finish_with_message(&format!("All steps completed {}", "✔",));
+                                .finish_with_message(format!("All steps completed {}", "✔",));
                         }
                     }
                 });
@@ -588,9 +495,7 @@ impl<'a> LorikeetEngine<'a> {
             progress_bars[ref_idx + 2] = Elem {
                 key: genomes_and_contigs.genomes[ref_idx].clone(),
                 index: ref_idx,
-                progress_bar: ProgressBar::new(
-                    (short_sample_count + long_sample_count) as u64,
-                ),
+                progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64),
             };
             debug!("Reference {}", reference,);
             reference_map
@@ -602,8 +507,7 @@ impl<'a> LorikeetEngine<'a> {
             key: "Operations remaining".to_string(),
             index: 0,
             progress_bar: ProgressBar::new(
-                ((references.len() * (short_sample_count + long_sample_count))
-                    * 2
+                ((references.len() * (short_sample_count + long_sample_count)) * 2
                     + references.len()) as u64,
             ),
         };
@@ -618,7 +522,7 @@ impl<'a> LorikeetEngine<'a> {
             .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
         progress_bars[0].progress_bar.set_style(sty_eta.clone());
 
-        return progress_bars
+        return progress_bars;
     }
 
     pub fn begin_tick(
@@ -632,6 +536,112 @@ impl<'a> LorikeetEngine<'a> {
 
         pb.enable_steady_tick(500);
 
-        pb.set_message(&format!("{}: {}...", &elem.key, message));
+        pb.set_message(format!("{}: {}...", &elem.key, message));
+    }
+}
+
+pub fn start_lorikeet_engine<
+    R: NamedBamReader,
+    S: NamedBamReaderGenerator<R>,
+    T: NamedBamReader,
+    U: NamedBamReaderGenerator<T>,
+>(
+    m: &clap::ArgMatches,
+    bam_readers: Vec<S>,
+    longreads: Option<Vec<U>>,
+    mode: &str,
+    coverage_estimators: Vec<CoverageEstimator>,
+    flag_filters: FlagFilter,
+    genomes_and_contigs: GenomesAndContigs,
+    tmp_bam_file_cache: Option<TempDir>,
+    concatenated_genomes: Option<NamedTempFile>,
+) {
+    let threads = m.value_of("threads").unwrap().parse().unwrap();
+    let references = ReferenceReaderUtils::parse_references(&m);
+    let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
+
+    ReferenceReaderUtils::retrieve_reference(&Some(
+        concatenated_genomes
+            .as_ref()
+            .unwrap()
+            .path()
+            .to_str()
+            .unwrap()
+            .to_string(),
+    ));
+
+    // All different counts of samples I need. Changes depends on when using concatenated genomes or not
+    let short_read_bam_count = bam_readers.len();
+    let mut long_read_bam_count = 0;
+    let mut reference_count = references.len();
+
+    let longreads = match longreads {
+        Some(vec) => {
+            long_read_bam_count += vec.len();
+            vec
+        }
+        None => vec![],
+    };
+
+    // Finish each BAM source
+    if m.is_present("longreads") || m.is_present("longread-bam-files") {
+        info!("Processing long reads...");
+        finish_bams(longreads, threads);
+    }
+
+    info!("Processing short reads...");
+    finish_bams(bam_readers, threads);
+
+    let mut reference_map = HashMap::new();
+
+    // Set up multi progress bars
+    let multi = Arc::new(MultiProgress::new());
+
+    let multi_inner = Arc::clone(&multi);
+    let mut progress_bars = LorikeetEngine::setup_progress_bars(
+        &references,
+        &mut reference_map,
+        &genomes_and_contigs,
+        short_read_bam_count,
+        long_read_bam_count,
+    );
+
+    let tree: Arc<Mutex<Vec<&Elem>>> =
+        Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
+    {
+        let mut tree = tree.lock().unwrap();
+        for pb in progress_bars.iter() {
+            tree.push(pb)
+        }
+    }
+
+    debug!(
+        "{} Longread BAM files, {} Shortread BAM files {} Total BAMs over {} genome(s)",
+        long_read_bam_count,
+        short_read_bam_count,
+        (short_read_bam_count + long_read_bam_count),
+        reference_count
+    );
+
+    {
+        let mut lorikeet_engine = LorikeetEngine {
+            args: m,
+            short_read_bam_count,
+            long_read_bam_count,
+            coverage_estimators,
+            flag_filters,
+            genomes_and_contigs,
+            concatenated_genomes,
+            tmp_bam_file_cache,
+            reference_map,
+            references,
+            multi,
+            multi_inner,
+            tree,
+            progress_bars: &progress_bars,
+            threads,
+        };
+
+        lorikeet_engine.apply_per_reference();
     }
 }

@@ -1,5 +1,5 @@
-use rust_htslib::bam::record::{CigarString, Cigar};
 use reads::cigar_utils::CigarUtils;
+use rust_htslib::bam::record::{Cigar, CigarString};
 
 #[derive(Debug, Eq, PartialEq)]
 enum Section {
@@ -47,30 +47,34 @@ impl CigarBuilder {
             section: Section::LeftHardClip,
             leading_deletion_bases_removed: 0,
             trailing_deletion_bases_removed: 0,
-            trailing_deletion_bases_removed_in_make: 0
+            trailing_deletion_bases_removed_in_make: 0,
         }
     }
 
     pub fn add(&mut self, element: Cigar) {
         if element.len() > 0 {
-            if self.remove_deletions_at_ends && match element { Cigar::Del(_) => true, _ => false } {
+            if self.remove_deletions_at_ends
+                && match element {
+                    Cigar::Del(_) => true,
+                    _ => false,
+                }
+            {
                 if match self.last_operator {
                     None => true,
-                    Some(operator) => {
-                        match operator {
-                            Cigar::SoftClip(_)
-                            | Cigar::HardClip(_) => {
+                    Some(operator) => match operator {
+                        Cigar::SoftClip(_) | Cigar::HardClip(_) => true,
+                        Cigar::Ins(length) => {
+                            if self.cigar_elements.len() == 1
+                                || CigarUtils::is_clipping(
+                                    &self.cigar_elements[self.cigar_elements.len() - 2],
+                                )
+                            {
                                 true
-                            },
-                            Cigar::Ins(length) => {
-                                if self.cigar_elements.len() == 1 || CigarUtils::is_clipping(&self.cigar_elements[self.cigar_elements.len() - 2]) {
-                                    true
-                                } else {
-                                    false
-                                }
-                            },
-                            _ => false,
+                            } else {
+                                false
+                            }
                         }
+                        _ => false,
                     },
                 } {
                     self.leading_deletion_bases_removed += element.len();
@@ -81,7 +85,9 @@ impl CigarBuilder {
 
             if CigarUtils::cigar_elements_are_same_type(&element, &self.last_operator) {
                 let n = self.cigar_elements.len() - 1;
-                self.cigar_elements[n] = CigarUtils::combine_cigar_operators(&element, &self.last_operator.unwrap()).unwrap_or(self.cigar_elements[n]);
+                self.cigar_elements[n] =
+                    CigarUtils::combine_cigar_operators(&element, &self.last_operator.unwrap())
+                        .unwrap_or(self.cigar_elements[n]);
                 self.last_operator = Some(element);
             } else {
                 match self.last_operator {
@@ -93,16 +99,25 @@ impl CigarBuilder {
                         if CigarUtils::is_clipping(&element) {
                             // if we have just started clipping on the right and realize the last operator was a deletion, remove it
                             // if we have just started clipping on the right and the last two operators were a deletion and insertion, remove the deletion
+                            let cigar_elements_len = self.cigar_elements.len();
                             if self.remove_deletions_at_ends
-                                && !CigarUtils::cigar_consumes_read_bases(&self.last_operator.unwrap())
-                                && !CigarUtils::is_clipping(&self.last_operator.unwrap()) {
-                                self.trailing_deletion_bases_removed += self.cigar_elements[self.cigar_elements.len() - 1].len();
-                                self.cigar_elements[self.cigar_elements.len() - 1] = element.clone();
+                                && !CigarUtils::cigar_consumes_read_bases(
+                                    &self.last_operator.unwrap(),
+                                )
+                                && !CigarUtils::is_clipping(&self.last_operator.unwrap())
+                            {
+                                self.trailing_deletion_bases_removed +=
+                                    self.cigar_elements[cigar_elements_len - 1].len();
+                                self.cigar_elements[cigar_elements_len - 1] = element.clone();
                                 self.last_operator = Some(element);
-                            } else if self.remove_deletions_at_ends && self.last_two_elements_were_deletion_and_insertion() {
-                                self.trailing_deletion_bases_removed += self.cigar_elements[self.cigar_elements.len() - 2].len();
-                                self.cigar_elements[self.cigar_elements.len() - 2] = self.cigar_elements[self.cigar_elements.len() - 1].clone();
-                                self.cigar_elements[self.cigar_elements.len() - 1] = element.clone();
+                            } else if self.remove_deletions_at_ends
+                                && self.last_two_elements_were_deletion_and_insertion()
+                            {
+                                self.trailing_deletion_bases_removed +=
+                                    self.cigar_elements[cigar_elements_len - 2].len();
+                                self.cigar_elements[cigar_elements_len - 2] =
+                                    self.cigar_elements[cigar_elements_len - 1].clone();
+                                self.cigar_elements[cigar_elements_len - 1] = element.clone();
                                 self.last_operator = Some(element);
                             } else {
                                 self.cigar_elements.push(element.clone());
@@ -110,24 +125,27 @@ impl CigarBuilder {
                             }
                         } else {
                             match element {
-                                Cigar::Del(_)
-                                | Cigar::Ins(_) => {
+                                Cigar::Del(_) | Cigar::Ins(_) => {
                                     // The order of deletion and insertion elements is arbitrary, so to standardize we shift deletions to the left
                                     // that is, we place the deletion before the insertion and shift the insertion right
                                     // if the element before the insertion is another deletion, we merge in the new deletion
                                     // note that the last operator remains an insertion
                                     let size = self.cigar_elements.len();
-                                    if size > 1 && match self.cigar_elements[size - 2] {
-                                        Cigar::Del(_) => true,
-                                        _ => false,
-                                    } {
-                                        self.cigar_elements[size - 2] = Cigar::Del(self.cigar_elements[size - 2].len() + element.len());
+                                    if size > 1
+                                        && match self.cigar_elements[size - 2] {
+                                            Cigar::Del(_) => true,
+                                            _ => false,
+                                        }
+                                    {
+                                        self.cigar_elements[size - 2] = Cigar::Del(
+                                            self.cigar_elements[size - 2].len() + element.len(),
+                                        );
                                         self.last_operator = Some(element);
                                     } else {
                                         self.cigar_elements.insert(size - 1, element.clone());
                                         self.last_operator = Some(element);
                                     }
-                                },
+                                }
                                 _ => {
                                     self.cigar_elements.push(element.clone());
                                     self.last_operator = Some(element);
@@ -152,17 +170,11 @@ impl CigarBuilder {
             Some(operator) => {
                 if self.cigar_elements.len() > 1 {
                     match operator {
-                        Cigar::Ins(_) => {
-                            match self.cigar_elements[self.cigar_elements.len() - 1] {
-                                Cigar::Del(_) => {
-                                    true
-                                },
-                                _ => {
-                                    false
-                                }
-                            }
+                        Cigar::Ins(_) => match self.cigar_elements[self.cigar_elements.len() - 1] {
+                            Cigar::Del(_) => true,
+                            _ => false,
                         },
-                        _ => false
+                        _ => false,
                     }
                 } else {
                     false
@@ -176,42 +188,32 @@ impl CigarBuilder {
         match operator {
             Cigar::HardClip(_) => {
                 match self.section {
-                    Section::LeftSoftClip
-                    | Section::Middle
-                    | Section::RightSoftClip => {
+                    Section::LeftSoftClip | Section::Middle | Section::RightSoftClip => {
                         self.section = Section::RightHardClip
-                    },
+                    }
                     _ => {
                         // Do nothing?
                     }
                 }
-            },
+            }
             Cigar::SoftClip(_) => {
                 match self.section {
                     Section::RightHardClip => {
                         panic!("Cigar has already reached its right hard clip");
-                    },
-                    Section::LeftHardClip => {
-                        self.section = Section::LeftSoftClip
-                    },
-                    Section::Middle => {
-                        self.section = Section::RightSoftClip
-                    },
+                    }
+                    Section::LeftHardClip => self.section = Section::LeftSoftClip,
+                    Section::Middle => self.section = Section::RightSoftClip,
                     _ => {
                         // do nothing
                     }
                 }
-            },
+            }
             _ => {
                 match self.section {
-                    Section::RightSoftClip
-                    | Section::RightHardClip => {
+                    Section::RightSoftClip | Section::RightHardClip => {
                         panic!("Section has alread reached right clip")
-                    },
-                    Section::LeftHardClip
-                    | Section::LeftSoftClip => {
-                        self.section = Section::Middle
-                    },
+                    }
+                    Section::LeftHardClip | Section::LeftSoftClip => self.section = Section::Middle,
                     _ => {
                         // do nothing
                     }
@@ -220,39 +222,56 @@ impl CigarBuilder {
         }
     }
 
-    pub fn make(&mut self, allow_empty: bool) -> CigarString {
-        assert!(!(self.section == Section::LeftSoftClip && match self.cigar_elements[0] {
-            Cigar::SoftClip(_) => true,
-            _ => false,
-        }), "Cigar is completely soft clipped");
+    pub fn make(mut self, allow_empty: bool) -> CigarString {
+        assert!(
+            !(self.section == Section::LeftSoftClip
+                && match self.cigar_elements[0] {
+                    Cigar::SoftClip(_) => true,
+                    _ => false,
+                }),
+            "Cigar is completely soft clipped"
+        );
 
         self.trailing_deletion_bases_removed_in_make = 0;
-        if self.remove_deletions_at_ends && match self.last_operator {
-            Some(element) => {
-                match element {
+        if self.remove_deletions_at_ends
+            && match self.last_operator {
+                Some(element) => match element {
                     Cigar::Del(_) => true,
                     _ => false,
+                },
+                None => {
+                    panic!("Last element cannot be None at this point");
                 }
-            },
-            None => {
-                panic!("Last element cannot be None at this point");
             }
-        } {
-            self.trailing_deletion_bases_removed_in_make = self.cigar_elements[self.cigar_elements.len() - 1].len();
+        {
+            self.trailing_deletion_bases_removed_in_make =
+                self.cigar_elements[self.cigar_elements.len() - 1].len();
             self.cigar_elements.remove(self.cigar_elements.len() - 1);
-        } else if self.remove_deletions_at_ends && self.last_two_elements_were_deletion_and_insertion() {
-            self.trailing_deletion_bases_removed_in_make = self.cigar_elements[self.cigar_elements.len() - 2].len();
+        } else if self.remove_deletions_at_ends
+            && self.last_two_elements_were_deletion_and_insertion()
+        {
+            self.trailing_deletion_bases_removed_in_make =
+                self.cigar_elements[self.cigar_elements.len() - 2].len();
             self.cigar_elements.remove(self.cigar_elements.len() - 2);
         }
 
-        assert!(allow_empty || !self.cigar_elements.is_empty(), "No cigar elements left after removing leading and trainling deletions.");
+        assert!(
+            allow_empty || !self.cigar_elements.is_empty(),
+            "No cigar elements left after removing leading and trainling deletions."
+        );
 
-        return CigarString::from(self.cigar_elements)
+        return CigarString::from(self.cigar_elements);
     }
 
-    pub fn make_and_record_deletions_removed_result(&mut self) -> CigarBuilderResult {
+    pub fn make_and_record_deletions_removed_result(mut self) -> CigarBuilderResult {
+        let leading_deletion_bases_removed = self.leading_deletion_bases_removed;
+        let trailing_deletion_bases_removed = self.get_trailing_deletion_bases_removed();
         let cigar = self.make(false);
-        return CigarBuilderResult::new(cigar, self.leading_deletion_bases_removed, self.get_trailing_deletion_bases_removed())
+        return CigarBuilderResult::new(
+            cigar,
+            leading_deletion_bases_removed,
+            trailing_deletion_bases_removed,
+        );
     }
 
     /**
@@ -285,7 +304,7 @@ impl CigarBuilderResult {
     pub fn new(
         cigar: CigarString,
         leading_deletion_bases_removed: u32,
-        trailing_deletion_bases_removed: u32
+        trailing_deletion_bases_removed: u32,
     ) -> Self {
         Self {
             cigar,

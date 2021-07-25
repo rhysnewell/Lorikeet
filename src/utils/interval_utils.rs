@@ -3,7 +3,6 @@ use utils::simple_interval::SimpleInterval;
 pub struct IntervalUtils {}
 
 impl IntervalUtils {
-
     /**
      * Create a new interval, bounding start and stop by the start and end of contig
      *
@@ -17,15 +16,24 @@ impl IntervalUtils {
      * @param contigLength length of the contig
      * @return a valid interval over contig, or null if a meaningful interval cannot be created
      */
-    pub fn trim_interval_to_contig(tid: usize, start: usize, stop: usize, contig_length: usize) -> Option<SimpleInterval> {
-        assert!(contig_length >= 1, "Contig length should be at least 1 but was {}", contig_length);
+    pub fn trim_interval_to_contig(
+        tid: usize,
+        start: usize,
+        stop: usize,
+        contig_length: usize,
+    ) -> Option<SimpleInterval> {
+        assert!(
+            contig_length >= 1,
+            "Contig length should be at least 1 but was {}",
+            contig_length
+        );
         let bounded_start = std::cmp::max(1, start);
         let bounded_stop = std::cmp::min(contig_length, stop);
 
         if (bounded_start > contig_length) || (bounded_stop < 1) {
-            return None
+            return None;
         } else {
-            return Some(SimpleInterval::new(tid, bounded_start, bounded_stop))
+            return Some(SimpleInterval::new(tid, bounded_start, bounded_stop));
         }
     }
 }

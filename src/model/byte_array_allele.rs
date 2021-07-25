@@ -5,7 +5,7 @@ pub struct ByteArrayAllele {
     pub(crate) is_ref: bool,
     is_no_call: bool,
     is_symbolic: bool,
-    pub(crate) bases: Vec<u8>
+    pub(crate) bases: Vec<u8>,
 }
 
 impl ByteArrayAllele {
@@ -22,8 +22,8 @@ impl ByteArrayAllele {
                     bases: bases.to_ascii_uppercase(),
                     is_ref: false,
                     is_no_call: true,
-                    is_symbolic: false
-                }
+                    is_symbolic: false,
+                };
             }
         }
 
@@ -35,24 +35,31 @@ impl ByteArrayAllele {
                     bases: bases.to_ascii_uppercase(),
                     is_ref: false,
                     is_no_call: false,
-                    is_symbolic: true
-                }
+                    is_symbolic: true,
+                };
             }
         }
 
         if !Allele::acceptable_allele_bases(bases, is_ref) {
-            panic!("Unexpected base in allele bases {} ", String::from_utf8_lossy(bases).to_string())
+            panic!(
+                "Unexpected base in allele bases {} ",
+                String::from_utf8_lossy(bases).to_string()
+            )
         } else {
             return ByteArrayAllele {
                 bases: bases.to_ascii_uppercase(),
                 is_ref,
                 is_no_call: false,
                 is_symbolic: false,
-            }
+            };
         }
     }
 
     pub fn len(&self) -> usize {
-        return if self.is_symbolic { 0 } else { self.bases.len() }
+        return if self.is_symbolic {
+            0
+        } else {
+            self.bases.len()
+        };
     }
 }

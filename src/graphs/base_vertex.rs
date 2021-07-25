@@ -1,8 +1,8 @@
+use itertools::Itertools;
 use rayon::prelude::*;
-use std::hash::{Hash, Hasher};
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use std::collections::hash_map::DefaultHasher;
-use itertools::Itertools;
+use std::hash::{Hash, Hasher};
 
 /**
  * A graph vertex that holds some sequence information
@@ -16,7 +16,7 @@ pub trait BaseVertex: Clone + Send + Sync + Eq + PartialEq {
 
     fn get_sequence(&self) -> &[u8];
 
-    fn get_sequence_string(&self) -> String;
+    fn get_sequence_string(&self) -> &String;
 
     fn get_additional_sequence(&self, source: bool) -> &[u8];
 
@@ -27,7 +27,7 @@ pub trait BaseVertex: Clone + Send + Sync + Eq + PartialEq {
     fn has_ambiguous_sequence(&self) -> bool;
 }
 
-impl BaseVertex for MultiDeBruijnVertex<'_> {
+impl BaseVertex for MultiDeBruijnVertex {
     /**
      * Create a new sequence vertex with sequence
      *
@@ -67,7 +67,11 @@ impl BaseVertex for MultiDeBruijnVertex<'_> {
     fn to_string(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
-        return format!("MultiDeBruijnVertex_id_{}_seq_{}", hasher.finish(), String::from_utf8_lossy(self.sequence).to_string())
+        return format!(
+            "MultiDeBruijnVertex_id_{}_seq_{}",
+            hasher.finish(),
+            self.sequence
+        );
     }
 
     /**
@@ -78,11 +82,11 @@ impl BaseVertex for MultiDeBruijnVertex<'_> {
      * @return a non-null pointer to the bases contained in this vertex
      */
     fn get_sequence(&self) -> &[u8] {
-        self.sequence
+        self.sequence.as_bytes()
     }
 
-    fn get_sequence_string(&self) -> String {
-        std::str::from_utf8(self.sequence).unwrap().to_string()
+    fn get_sequence_string(&self) -> &String {
+        &self.sequence
     }
 
     /**
@@ -97,7 +101,7 @@ impl BaseVertex for MultiDeBruijnVertex<'_> {
      * @return a byte[] of the sequence added by this vertex to the overall sequence
      */
     fn get_additional_sequence(&self, source: bool) -> &[u8] {
-        self.sequence
+        self.sequence.as_bytes()
     }
 
     /**
@@ -113,12 +117,18 @@ impl BaseVertex for MultiDeBruijnVertex<'_> {
      */
     fn get_additional_info(&self) -> String {
         if self.reads.contains(&format!("ref")) {
-            return self.additonal_info.to_string()
+            return self.additonal_info.to_string();
         } else {
-            return format!("{}{}", self.additonal_info,
-                           if Self::KEEP_TRACK_OF_READS { format!("__{}", self.reads.iter().join(",")) } else { "".to_string() } )
+            return format!(
+                "{}{}",
+                self.additonal_info,
+                if Self::KEEP_TRACK_OF_READS {
+                    format!("__{}", self.reads.iter().join(","))
+                } else {
+                    "".to_string()
+                }
+            );
         }
-
     }
 
     /**
@@ -136,13 +146,13 @@ impl BaseVertex for MultiDeBruijnVertex<'_> {
      * @return {@code true} iff so.
      */
     fn has_ambiguous_sequence(&self) -> bool {
-        return self.sequence.par_iter().any(|base|{
+        return self.sequence.as_bytes().par_iter().any(|base| {
             let base = base.to_ascii_uppercase();
             let base = base as char;
             match base {
                 'A' | 'T' | 'C' | 'G' => false,
-                _ => true
+                _ => true,
             }
-        })
+        });
     }
 }

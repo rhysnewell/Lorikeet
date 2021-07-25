@@ -1,13 +1,21 @@
-use std::cmp::{Ordering, min};
-use std::collections::HashSet;
 use bio::alphabets::dna::alphabet;
+use std::cmp::{min, Ordering};
+use std::collections::HashSet;
 
 lazy_static! {
-    pub static ref BASES: HashSet<u8> = vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8].into_iter().collect::<HashSet<u8>>();
-    pub static ref BASE_CHARS: HashSet<char> = vec!['A', 'C', 'G', 'T'].into_iter().collect::<HashSet<char>>();
-
-    pub static ref BASES_EXTENDED: HashSet<u8> = vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8].into_iter().collect::<HashSet<u8>>();
-    pub static ref BASE_CHARS_EXTENDED: HashSet<char> = vec!['A', 'C', 'G', 'T', 'N', 'D'].into_iter().collect::<HashSet<char>>();
+    pub static ref BASES: HashSet<u8> = vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8]
+        .into_iter()
+        .collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS: HashSet<char> = vec!['A', 'C', 'G', 'T']
+        .into_iter()
+        .collect::<HashSet<char>>();
+    pub static ref BASES_EXTENDED: HashSet<u8> =
+        vec!['A' as u8, 'C' as u8, 'G' as u8, 'T' as u8, 'N' as u8, 'D' as u8]
+            .into_iter()
+            .collect::<HashSet<u8>>();
+    pub static ref BASE_CHARS_EXTENDED: HashSet<char> = vec!['A', 'C', 'G', 'T', 'N', 'D']
+        .into_iter()
+        .collect::<HashSet<char>>();
 }
 
 pub enum Base {
@@ -16,12 +24,11 @@ pub enum Base {
     G(char),
     T(char),
     N(char),
-    D(char)
+    D(char),
 }
 
 impl Base {
     pub fn new(base: char) -> Base {
-
         match base {
             'A' => Base::A(base),
             'C' => Base::C(base),
@@ -29,7 +36,7 @@ impl Base {
             'T' => Base::T(base),
             'N' => Base::N(base),
             'D' => Base::D(base),
-             _ => panic!("Incompatible base char {}", base)
+            _ => panic!("Incompatible base char {}", base),
         }
     }
 }
@@ -37,7 +44,6 @@ impl Base {
 pub struct BaseUtils {}
 
 impl BaseUtils {
-
     /**
      * Lexicographical sorting of base arrays {@link Comparator}.
      */
@@ -46,10 +52,10 @@ impl BaseUtils {
         for i in 0..min_length {
             let comparison = o1[i].cmp(&o2[i]);
             if comparison != Ordering::Equal {
-                return comparison
+                return comparison;
             }
         }
-        return o1.len().cmp(&o2.len())
+        return o1.len().cmp(&o2.len());
     }
 
     /**
@@ -66,6 +72,6 @@ impl BaseUtils {
      * Returns true iff the base represented by the byte is a 'regular' base (ACGT or *).
      */
     pub fn is_regular_base(base: u8) -> bool {
-        return alphabet().is_word(&[base])
+        return alphabet().is_word(&[base]);
     }
 }

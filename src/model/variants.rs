@@ -1,12 +1,12 @@
 use bio::stats::LogProb;
+use model::byte_array_allele::ByteArrayAllele;
 use ordered_float::NotNan;
+use rayon::prelude::*;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 use strum_macros::{EnumIter, EnumString, IntoStaticStr};
 use utils::vcf_constants::VCFConstants;
-use rayon::prelude::*;
-use model::byte_array_allele::ByteArrayAllele;
 
 pub type AlleleFreq = NotNan<f64>;
 
@@ -114,95 +114,93 @@ pub enum Variant {
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub struct Allele {
     variant: Variant,
-    reference: bool
+    reference: bool,
 }
 
-
 /**
- * Immutable representation of an allele.
- *<p>
- * Types of alleles:
- *</p>
- *<pre>
- Ref: a t C g a // C is the reference base
- : a t G g a // C base is a G in some individuals
- : a t - g a // C base is deleted w.r.t. the reference
- : a t CAg a // A base is inserted w.r.t. the reference sequence
- </pre>
- *<p> In these cases, where are the alleles?</p>
- *<ul>
- * <li>SNP polymorphism of C/G  -&gt; { C , G } -&gt; C is the reference allele</li>
- * <li>1 base deletion of C     -&gt; { tC , t } -&gt; C is the reference allele and we include the preceding reference base (null alleles are not allowed)</li>
- * <li>1 base insertion of A    -&gt; { C ; CA } -&gt; C is the reference allele (because null alleles are not allowed)</li>
- *</ul>
- *<p>
- * Suppose I see a the following in the population:
- *</p>
- *<pre>
- Ref: a t C g a // C is the reference base
- : a t G g a // C base is a G in some individuals
- : a t - g a // C base is deleted w.r.t. the reference
- </pre>
- * <p>
- * How do I represent this?  There are three segregating alleles:
- * </p>
- *<blockquote>
- *  { C , G , - }
- *</blockquote>
- *<p>and these are represented as:</p>
- *<blockquote>
- *  { tC, tG, t }
- *</blockquote>
- *<p>
- * Now suppose I have this more complex example:
- </p>
- <pre>
- Ref: a t C g a // C is the reference base
- : a t - g a
- : a t - - a
- : a t CAg a
- </pre>
- * <p>
- * There are actually four segregating alleles:
- * </p>
- *<blockquote>
- *   { Cg , -g, --, and CAg } over bases 2-4
- *</blockquote>
- *<p>   represented as:</p>
- *<blockquote>
- *   { tCg, tg, t, tCAg }
- *</blockquote>
- *<p>
- * Critically, it should be possible to apply an allele to a reference sequence to create the
- * correct haplotype sequence:</p>
- *<blockquote>
- * Allele + reference =&gt; haplotype
- *</blockquote>
- *<p>
- * For convenience, we are going to create Alleles where the GenomeLoc of the allele is stored outside of the
- * Allele object itself.  So there's an idea of an A/C polymorphism independent of it's surrounding context.
- *
- * Given list of alleles it's possible to determine the "type" of the variation
- </p>
- <pre>
- A / C @ loc =&gt; SNP
- - / A =&gt; INDEL
- </pre>
- * <p>
- * If you know where allele is the reference, you can determine whether the variant is an insertion or deletion.
- * </p>
- * <p>
- * Alelle also supports is concept of a NO_CALL allele.  This Allele represents a haplotype that couldn't be
- * determined. This is usually represented by a '.' allele.
- * </p>
- * <p>
- * Note that Alleles store all bases as bytes, in **UPPER CASE**.  So 'atc' == 'ATC' from the perspective of an
- * Allele.
- * </p>
- * @author gatk_team.
- */
+* Immutable representation of an allele.
+*<p>
+* Types of alleles:
+*</p>
+*<pre>
+Ref: a t C g a // C is the reference base
+: a t G g a // C base is a G in some individuals
+: a t - g a // C base is deleted w.r.t. the reference
+: a t CAg a // A base is inserted w.r.t. the reference sequence
+</pre>
+*<p> In these cases, where are the alleles?</p>
+*<ul>
+* <li>SNP polymorphism of C/G  -&gt; { C , G } -&gt; C is the reference allele</li>
+* <li>1 base deletion of C     -&gt; { tC , t } -&gt; C is the reference allele and we include the preceding reference base (null alleles are not allowed)</li>
+* <li>1 base insertion of A    -&gt; { C ; CA } -&gt; C is the reference allele (because null alleles are not allowed)</li>
+*</ul>
+*<p>
+* Suppose I see a the following in the population:
+*</p>
+*<pre>
+Ref: a t C g a // C is the reference base
+: a t G g a // C base is a G in some individuals
+: a t - g a // C base is deleted w.r.t. the reference
+</pre>
+* <p>
+* How do I represent this?  There are three segregating alleles:
+* </p>
+*<blockquote>
+*  { C , G , - }
+*</blockquote>
+*<p>and these are represented as:</p>
+*<blockquote>
+*  { tC, tG, t }
+*</blockquote>
+*<p>
+* Now suppose I have this more complex example:
+</p>
+<pre>
+Ref: a t C g a // C is the reference base
+: a t - g a
+: a t - - a
+: a t CAg a
+</pre>
+* <p>
+* There are actually four segregating alleles:
+* </p>
+*<blockquote>
+*   { Cg , -g, --, and CAg } over bases 2-4
+*</blockquote>
+*<p>   represented as:</p>
+*<blockquote>
+*   { tCg, tg, t, tCAg }
+*</blockquote>
+*<p>
+* Critically, it should be possible to apply an allele to a reference sequence to create the
+* correct haplotype sequence:</p>
+*<blockquote>
+* Allele + reference =&gt; haplotype
+*</blockquote>
+*<p>
+* For convenience, we are going to create Alleles where the GenomeLoc of the allele is stored outside of the
+* Allele object itself.  So there's an idea of an A/C polymorphism independent of it's surrounding context.
+*
+* Given list of alleles it's possible to determine the "type" of the variation
+</p>
+<pre>
+A / C @ loc =&gt; SNP
+- / A =&gt; INDEL
+</pre>
+* <p>
+* If you know where allele is the reference, you can determine whether the variant is an insertion or deletion.
+* </p>
+* <p>
+* Alelle also supports is concept of a NO_CALL allele.  This Allele represents a haplotype that couldn't be
+* determined. This is usually represented by a '.' allele.
+* </p>
+* <p>
+* Note that Alleles store all bases as bytes, in **UPPER CASE**.  So 'atc' == 'ATC' from the perspective of an
+* Allele.
+* </p>
+* @author gatk_team.
+*/
 impl Allele {
-
     const SINGLE_BREAKEND_INDICATOR: char = '.';
     const BREAKEND_EXTENDING_RIGHT: char = '[';
     const BREAKEND_EXTENDING_LEFT: char = ']';
@@ -211,7 +209,6 @@ impl Allele {
 
     const NO_CALL: char = '.';
     const SPAND_DEL: char = '*';
-
 
     /**
      * Create a new Allele that includes bases and if tagged as the reference allele if isRef == true.  If bases
@@ -232,16 +229,13 @@ impl Allele {
     }
 
     pub fn new(variant: Variant, reference: bool) -> Allele {
-        Allele {
-            variant,
-            reference,
-        }
+        Allele { variant, reference }
     }
 
     pub fn create_fake_alleles() -> Vec<Allele> {
         let alleles = vec![Allele::fake(true), Allele::fake(false)];
 
-        return alleles
+        return alleles;
     }
 
     pub fn fake(reference: bool) -> Allele {
@@ -264,29 +258,23 @@ impl Allele {
 
     pub fn unwrap(possible_allele: Option<&Allele>) -> Allele {
         let a = match possible_allele {
-            Some(a) => {
-                a.clone()
-            },
-            _ => Allele::fake(false)
+            Some(a) => a.clone(),
+            _ => Allele::fake(false),
         };
         a
     }
 
     pub fn is_no_call(&self) -> bool {
         match &self.variant {
-            Variant::SNV(snp) => {
-                snp == &(Allele::NO_CALL as u8)
-            },
-            _ => false
+            Variant::SNV(snp) => snp == &(Allele::NO_CALL as u8),
+            _ => false,
         }
     }
 
     pub fn is_called(&self) -> bool {
         match &self.variant {
-            Variant::SNV(snp) => {
-                snp != &(Allele::NO_CALL as u8)
-            },
-            _ => true
+            Variant::SNV(snp) => snp != &(Allele::NO_CALL as u8),
+            _ => true,
         }
     }
 
@@ -314,67 +302,70 @@ impl Allele {
     }
 
     pub fn would_be_null_allele(bases: &[u8]) -> bool {
-        return bases.len() == 1 && bases[0] as char == VCFConstants::NULL_ALLELE || bases.len() == 0
+        return bases.len() == 1 && bases[0] as char == VCFConstants::NULL_ALLELE
+            || bases.len() == 0;
     }
 
     pub fn would_be_no_call_allele(bases: &[u8]) -> bool {
-        return bases.len() == 1 && bases[0] as char == VCFConstants::NO_CALL_ALLELE
+        return bases.len() == 1 && bases[0] as char == VCFConstants::NO_CALL_ALLELE;
     }
 
     pub fn would_be_star_allele(bases: &[u8]) -> bool {
-        return bases.len() == 1 && bases[0] as char == VCFConstants::SPANNING_DELETION_ALLELE
+        return bases.len() == 1 && bases[0] as char == VCFConstants::SPANNING_DELETION_ALLELE;
     }
 
     pub fn would_be_symbolic_allele(bases: &[u8]) -> bool {
         if bases.len() <= 1 {
-            return false
+            return false;
         } else {
-            return bases[0] == Self::SYMBOLIC_ALLELE_START as u8 || bases[bases.len() - 1] == Self::SYMBOLIC_ALLELE_END as u8 ||
-                Self::would_be_breakpoint(bases) || Self::would_be_single_breakend(bases)
+            return bases[0] == Self::SYMBOLIC_ALLELE_START as u8
+                || bases[bases.len() - 1] == Self::SYMBOLIC_ALLELE_END as u8
+                || Self::would_be_breakpoint(bases)
+                || Self::would_be_single_breakend(bases);
         }
     }
 
     pub fn would_be_breakpoint(bases: &[u8]) -> bool {
         if bases.len() <= 1 {
-            return false
+            return false;
         }
-        return bases.iter().par_bridge().any(|base| *base as char == Self::BREAKEND_EXTENDING_LEFT || *base as char == Self::BREAKEND_EXTENDING_RIGHT);
+        return bases.iter().par_bridge().any(|base| {
+            *base as char == Self::BREAKEND_EXTENDING_LEFT
+                || *base as char == Self::BREAKEND_EXTENDING_RIGHT
+        });
     }
 
     pub fn would_be_single_breakend(bases: &[u8]) -> bool {
         if bases.len() <= 1 {
-            return false
+            return false;
         } else {
-            return bases[0] == Self::SINGLE_BREAKEND_INDICATOR as u8 || bases[bases.len() - 1] == Self::SINGLE_BREAKEND_INDICATOR as u8
+            return bases[0] == Self::SINGLE_BREAKEND_INDICATOR as u8
+                || bases[bases.len() - 1] == Self::SINGLE_BREAKEND_INDICATOR as u8;
         }
     }
 
     pub fn acceptable_allele_bases(bases: &[u8], is_ref: bool) -> bool {
         if Self::would_be_null_allele(bases) {
-            return false
+            return false;
         } else if Self::would_be_no_call_allele(bases) || Self::would_be_symbolic_allele(bases) {
-            return true
+            return true;
         } else if Self::would_be_star_allele(bases) {
-            return !is_ref
+            return !is_ref;
         } else {
             // return true if there are any unacceptable bases, so take conjugate value
             !bases.iter().par_bridge().any(|base| {
                 let base = *base as char;
                 match base {
-                    'A' | 'C' | 'T' | 'G' |
-                    'a' | 'c' | 't' | 'g' |
-                    'N' | 'n' => false,
-                    _ => true
+                    'A' | 'C' | 'T' | 'G' | 'a' | 'c' | 't' | 'g' | 'N' | 'n' => false,
+                    _ => true,
                 }
             })
         }
     }
 }
 
-
 #[allow(unused)]
 impl Variant {
-
     const SINGLE_BREAKEND_INDICATOR: u8 = '.' as u8;
     const BREAKEND_EXTENDING_RIGHT: u8 = '[' as u8;
     const BREAKEND_EXTENDING_LEFT: u8 = ']' as u8;
@@ -386,38 +377,34 @@ impl Variant {
 
     pub fn is_symbolic(&self) -> bool {
         match self {
-            Variant::Inversion(var)
-            | Variant::Insertion(var)
-            | Variant::MNV(var) => {
+            Variant::Inversion(var) | Variant::Insertion(var) | Variant::MNV(var) => {
                 if var.contains(&Variant::SINGLE_BREAKEND_INDICATOR)
                     | var.contains(&Variant::BREAKEND_EXTENDING_LEFT)
                     | var.contains(&Variant::BREAKEND_EXTENDING_RIGHT)
                     | var.contains(&Variant::SYMBOLIC_ALLELE_START)
                     | var.contains(&Variant::SYMBOLIC_ALLELE_END)
-                    | var.contains(&Variant::NO_CALL) {
+                    | var.contains(&Variant::NO_CALL)
+                {
                     true
                 } else {
                     false
                 }
-            },
+            }
             Variant::SNV(var) => {
                 if (var == &Variant::SINGLE_BREAKEND_INDICATOR)
                     | (var == &Variant::BREAKEND_EXTENDING_LEFT)
                     | (var == &Variant::BREAKEND_EXTENDING_RIGHT)
                     | (var == &Variant::SYMBOLIC_ALLELE_START)
                     | (var == &Variant::SYMBOLIC_ALLELE_END)
-                    | (var == &Variant::NO_CALL) {
+                    | (var == &Variant::NO_CALL)
+                {
                     true
                 } else {
                     false
                 }
-            },
-            Variant::Deletion(_)
-            | Variant::SV(_) => {
-                false
-            },
+            }
+            Variant::Deletion(_) | Variant::SV(_) => false,
             Variant::None => true,
-
         }
     }
 
@@ -524,7 +511,6 @@ pub enum Filter {
 
 impl Filter {
     pub fn from(string: &str) -> Filter {
-
         match string {
             "PASS" => Filter::PASS,
             "LowCov" => Filter::LowCov,
@@ -544,7 +530,6 @@ impl Filter {
         }
     }
 }
-
 
 /// Information about each base position
 #[derive(Clone, Debug, PartialEq)]

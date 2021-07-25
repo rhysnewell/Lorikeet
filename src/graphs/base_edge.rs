@@ -22,11 +22,12 @@ pub trait BaseEdge: Clone + Send + Sync + Eq + PartialEq {
 
     fn add(&mut self, edge: Self);
 
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self where Self: std::marker::Sized;
+    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self
+    where
+        Self: std::marker::Sized;
 
     fn to_string(&self) -> String;
 }
-
 
 /**
 * The most basic implementation of a BaseEdge like object. Only meant as a placeholder for certain
@@ -42,7 +43,7 @@ impl BaseEdgeStruct {
     pub fn new(is_ref: bool, multiplicity: usize) -> Self {
         Self {
             is_ref,
-            multiplicity
+            multiplicity,
         }
     }
 
@@ -53,7 +54,6 @@ impl BaseEdgeStruct {
 }
 
 impl BaseEdge for BaseEdgeStruct {
-
     /**
      * Get the number of observations of paths connecting two vertices
      * @return a positive integer >= 0
@@ -67,7 +67,7 @@ impl BaseEdge for BaseEdgeStruct {
      * @return a non-null string
      */
     fn get_dot_label(&self) -> String {
-        return self.multiplicity.to_string()
+        return self.multiplicity.to_string();
     }
 
     /**
@@ -100,7 +100,7 @@ impl BaseEdge for BaseEdgeStruct {
      * @return true if so
      */
     fn is_ref(&self) -> bool {
-        return self.is_ref
+        return self.is_ref;
     }
 
     /**
@@ -141,6 +141,9 @@ impl BaseEdge for BaseEdgeStruct {
     }
 
     fn to_string(&self) -> String {
-        return format!("BaseEdge{{multiplicity={}, isRef={}}}", self.multiplicity, self.is_ref)
+        return format!(
+            "BaseEdge{{multiplicity={}, isRef={}}}",
+            self.multiplicity, self.is_ref
+        );
     }
 }

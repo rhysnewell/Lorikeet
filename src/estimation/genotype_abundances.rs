@@ -91,5 +91,3 @@ impl GenotypeWeights {
         debug!("EM Algorithm Finished in {} iterations", n);
     }
 }
-
-

@@ -40,6 +40,8 @@ extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
+use lorikeet_genome::estimation::lorikeet_engine::{start_lorikeet_engine, ReadType};
+use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 
 fn main() {
     let mut app = build_cli();
@@ -70,7 +72,7 @@ fn main() {
                     bam::Reader::from_path(bam).expect(&format!("Unable to find BAM file {}", bam));
                 let header = bam::header::Header::from_template(reader.header());
                 let mut writer =
-                    bam::Writer::from_path(output, &header, rust_htslib::bam::Format::BAM)
+                    bam::Writer::from_path(output, &header, rust_htslib::bam::Format::Bam)
                         .expect(&format!("Failed to write BAM file {}", output));
                 writer
                     .set_threads(num_threads as usize)
@@ -88,7 +90,7 @@ fn main() {
                 );
 
                 let mut record = bam::record::Record::new();
-                while filtered.read(&mut record) == true {
+                while filtered.read(&mut record).is_some() {
                     debug!("Writing.. {:?}", record.qname());
                     writer.write(&record).expect("Failed to write BAM record");
                 }
@@ -192,7 +194,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
         .build_global()
         .unwrap();
 
-    let references = parse_references(m);
+    let references = ReferenceReaderUtils::parse_references(m);
     let references = references.iter().map(|p| &**p).collect::<Vec<&str>>();
 
     // Temp directory that will house all cached bams for variant calling
@@ -216,7 +218,8 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) {
         true => None,
     };
 
-    let (concatenated_genomes, genomes_and_contigs_option) = setup_genome_fasta_files(&m);
+    let (concatenated_genomes, genomes_and_contigs_option) =
+        ReferenceReaderUtils::setup_genome_fasta_files(&m);
     debug!("Found genomes_and_contigs {:?}", genomes_and_contigs_option);
     if m.is_present("bam-files") {
         let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
@@ -597,246 +600,19 @@ fn run_pileup<
     tmp_bam_file_cache: Option<tempdir::TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
 ) {
-    match mode {
-        "genotype" => {
-            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
+    let genomes_and_contigs = genomes_and_contigs_option.unwrap();
 
-            let output_prefix = match m.is_present("output-directory") {
-                true => {
-                    match std::fs::create_dir_all(
-                        m.value_of("output-directory").unwrap().to_string(),
-                    ) {
-                        Ok(_) => {}
-                        Err(err) => panic!(format!("Unable to create output directory {:?}", err)),
-                    };
-                    m.value_of("output-directory").unwrap()
-                }
-                false => "./",
-            };
-            let include_indels = m.is_present("include-indels");
-            let include_soft_clipping = m.is_present("include-soft-clipping");
-
-            let threads = m.value_of("threads").unwrap().parse().unwrap();
-
-            let method = m.value_of("method").unwrap();
-
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!(
-                    "error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}",
-                    min, max
-                );
-            }
-            let genomes_and_contigs = genomes_and_contigs_option.unwrap();
-
-            contig::pileup_variants(
-                m,
-                bam_readers,
-                long_readers,
-                mode,
-                &mut estimators.estimators,
-                flag_filters,
-                mapq_threshold,
-                var_fraction,
-                min,
-                max,
-                contig_end_exclusion,
-                output_prefix,
-                threads,
-                method,
-                coverage_fold,
-                include_indels,
-                include_soft_clipping,
-                m.is_present("longread-bam-files"),
-                genomes_and_contigs,
-                tmp_bam_file_cache,
-                concatenated_genomes,
-            );
-        }
-        "summarize" => {
-            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-
-            let output_prefix = match m.is_present("output-directory") {
-                true => {
-                    match std::fs::create_dir_all(
-                        m.value_of("output-directory").unwrap().to_string(),
-                    ) {
-                        Ok(_) => {}
-                        Err(err) => panic!(format!("Unable to create output directory {:?}", err)),
-                    };
-                    m.value_of("output-directory").unwrap()
-                }
-                false => "./",
-            };
-            let include_indels = m.is_present("include-indels");
-
-            let threads = m.value_of("threads").unwrap().parse().unwrap();
-
-            let method = m.value_of("method").unwrap();
-
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!(
-                    "error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}",
-                    min, max
-                );
-            }
-            let genomes_and_contigs = genomes_and_contigs_option.unwrap();
-
-            contig::pileup_variants(
-                m,
-                bam_readers,
-                long_readers,
-                mode,
-                &mut estimators.estimators,
-                flag_filters,
-                mapq_threshold,
-                var_fraction,
-                min,
-                max,
-                contig_end_exclusion,
-                output_prefix,
-                threads,
-                method,
-                coverage_fold,
-                include_indels,
-                m.is_present("include-soft-clipping"),
-                m.is_present("longread-bam-files"),
-                genomes_and_contigs,
-                tmp_bam_file_cache,
-                concatenated_genomes,
-            );
-        }
-        "evolve" => {
-            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-
-            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let method = m.value_of("method").unwrap();
-
-            let output_prefix = match m.is_present("output-directory") {
-                true => {
-                    match std::fs::create_dir_all(
-                        m.value_of("output-directory").unwrap().to_string(),
-                    ) {
-                        Ok(_) => {}
-                        Err(err) => panic!(format!("Unable to create output directory {:?}", err)),
-                    };
-                    m.value_of("output-directory").unwrap()
-                }
-                false => "./",
-            };
-            let include_indels = m.is_present("include-indels");
-
-            let threads = m.value_of("threads").unwrap().parse().unwrap();
-
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!(
-                    "error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}",
-                    min, max
-                );
-            }
-            let genomes_and_contigs = genomes_and_contigs_option.unwrap();
-
-            contig::pileup_variants(
-                m,
-                bam_readers,
-                long_readers,
-                mode,
-                &mut estimators.estimators,
-                flag_filters,
-                mapq_threshold,
-                var_fraction,
-                min,
-                max,
-                contig_end_exclusion,
-                output_prefix,
-                threads,
-                method,
-                coverage_fold,
-                include_indels,
-                m.is_present("include-soft-clipping"),
-                m.is_present("longread-bam-files"),
-                genomes_and_contigs,
-                tmp_bam_file_cache,
-                concatenated_genomes,
-            );
-        }
-        "polish" => {
-            let var_fraction = m.value_of("min-variant-depth").unwrap().parse().unwrap();
-            let output_prefix = match m.is_present("output-directory") {
-                true => {
-                    match std::fs::create_dir_all(
-                        m.value_of("output-directory").unwrap().to_string(),
-                    ) {
-                        Ok(_) => {}
-                        Err(err) => panic!(format!("Unable to create output directory {:?}", err)),
-                    };
-                    m.value_of("output-directory").unwrap()
-                }
-                false => "./",
-            };
-
-            let mapq_threshold = m.value_of("mapq-threshold").unwrap().parse().unwrap();
-            let coverage_fold = m.value_of("coverage-fold").unwrap().parse().unwrap();
-            let method = m.value_of("method").unwrap();
-            let include_indels = m.is_present("include-indels");
-
-            //            let index_path = reference_path.clone().to_owned() + ".fai";
-            let threads = m.value_of("threads").unwrap().parse().unwrap();
-
-            let contig_end_exclusion = value_t!(m.value_of("contig-end-exclusion"), u64).unwrap();
-            let min = value_t!(m.value_of("trim-min"), f32).unwrap();
-            let max = value_t!(m.value_of("trim-max"), f32).unwrap();
-            if min < 0.0 || min > 1.0 || max <= min || max > 1.0 {
-                panic!(
-                    "error: Trim bounds must be between 0 and 1, and \
-                                    min must be less than max, found {} and {}",
-                    min, max
-                );
-            }
-            let genomes_and_contigs = genomes_and_contigs_option.unwrap();
-
-            contig::pileup_variants(
-                m,
-                bam_readers,
-                long_readers,
-                mode,
-                &mut estimators.estimators,
-                flag_filters,
-                mapq_threshold,
-                var_fraction,
-                min,
-                max,
-                contig_end_exclusion,
-                &output_prefix,
-                threads,
-                method,
-                coverage_fold,
-                include_indels,
-                false,
-                m.is_present("longread-bam-files"),
-                genomes_and_contigs,
-                tmp_bam_file_cache,
-                concatenated_genomes,
-            );
-        }
-        _ => panic!("Unknown lorikeet mode"),
-    }
+    start_lorikeet_engine(
+        m,
+        bam_readers,
+        long_readers,
+        mode,
+        estimators.estimators.clone(),
+        flag_filters,
+        genomes_and_contigs,
+        tmp_bam_file_cache,
+        concatenated_genomes,
+    );
 }
 
 fn set_log_level(matches: &clap::ArgMatches, is_last: bool) {

@@ -1,9 +1,9 @@
 use crate::*;
-use estimation::lorikeet_engine::ReadType;
 use coverm::bam_generator::*;
 use coverm::mapping_index_maintenance;
 use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
+use estimation::lorikeet_engine::ReadType;
 
 use nix::{sys::stat, unistd};
 use rayon::prelude::*;
@@ -11,11 +11,9 @@ use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
-
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
 pub const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMAP2_SR;
-
 
 // pub fn log10_binomial_coefficient(n: i64, k: i64) -> i64 {
 //

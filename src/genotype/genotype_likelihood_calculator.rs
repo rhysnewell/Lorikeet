@@ -1,6 +1,6 @@
-use ndarray::Array2;
 use genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use ndarray::Array2;
 use std::collections::BinaryHeap;
 
 #[derive(Clone, Debug)]
@@ -95,8 +95,8 @@ pub struct GenotypeLikelihoodCalculator {
     read_genotype_likelihood_components: Vec<f64>,
 
     /**
-    * Max-heap for integers used for this calculator internally.
-    */
+     * Max-heap for integers used for this calculator internally.
+     */
     allele_heap: BinaryHeap<usize>,
 }
 
@@ -146,21 +146,34 @@ impl GenotypeLikelihoodCalculator {
      */
     pub fn genotype_allele_counts_at(&mut self, index: usize) -> GenotypeAlleleCounts {
         if !(index >= 0 && index < self.genotype_count as usize) {
-            panic!("Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
-                    index, self.genotype_count, self.allele_count, self.ploidy);
+            panic!(
+                "Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
+                index, self.genotype_count, self.allele_count, self.ploidy
+            );
         } else {
-            if index < GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY as usize {
-                return self.genotype_allele_counts[index].clone()
+            if index
+                < GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY as usize
+            {
+                return self.genotype_allele_counts[index].clone();
             } else if self.last_overhead_counts.is_null()
-                || self.last_overhead_counts.index() > index {
-                let mut result = self.genotype_allele_counts[(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1) as usize].clone();
+                || self.last_overhead_counts.index() > index
+            {
+                let mut result = self.genotype_allele_counts
+                    [(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1)
+                        as usize]
+                    .clone();
 
-                result.increase(index as i32 - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY + 1);
+                result.increase(
+                    index as i32
+                        - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
+                        + 1,
+                );
                 self.last_overhead_counts = result.clone();
-                return result
+                return result;
             } else {
-                self.last_overhead_counts.increase(index as i32 - self.last_overhead_counts.index() as i32);
-                return self.last_overhead_counts.clone()
+                self.last_overhead_counts
+                    .increase(index as i32 - self.last_overhead_counts.index() as i32);
+                return self.last_overhead_counts.clone();
             }
         }
     }
@@ -198,7 +211,7 @@ impl GenotypeLikelihoodCalculator {
             }
         }
 
-        return self.allele_heap_to_index()
+        return self.allele_heap_to_index();
     }
 
     /**
@@ -216,8 +229,11 @@ impl GenotypeLikelihoodCalculator {
         }
 
         if self.allele_heap.peek().unwrap() >= &self.allele_count {
-            panic!("Invalid allele {:?} more than the maximum {}",
-                   self.allele_heap.peek(), self.allele_count - 1)
+            panic!(
+                "Invalid allele {:?} more than the maximum {}",
+                self.allele_heap.peek(),
+                self.allele_count - 1
+            )
         }
 
         let mut result = 0;
@@ -228,6 +244,6 @@ impl GenotypeLikelihoodCalculator {
             }
             result += self.allele_first_genotype_offset_by_ploidy[[p, allele]]
         }
-        return result as usize
+        return result as usize;
     }
 }

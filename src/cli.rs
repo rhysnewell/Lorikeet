@@ -1744,47 +1744,52 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("standard-min-confidence-threshold-for-calling")
                         .long("standard-min-confidence-threshold-for-calling")
                         .short("stand-call-conf")
-                        .default_value("30.0")
+                        .default_value("30.0"),
                 )
                 .arg(
                     Arg::with_name("genotype-assignment-method")
                         .long("genotype-assignment-method")
                         .default_value("UsePLsToAssign")
-                        .possible_values(&["UsePLsToAssign", "UsePosteriorProbabilities", "BestMatchToOriginal", "DoNotAssignGenotypes"])
+                        .possible_values(&[
+                            "UsePLsToAssign",
+                            "UsePosteriorProbabilities",
+                            "BestMatchToOriginal",
+                            "DoNotAssignGenotypes",
+                        ]),
                 )
                 .arg(
                     Arg::with_name("use-posteriors-to-calculate-qual")
                         .long("use-posteriors-to-calculate-qual")
-                        .short("gp-qual")
+                        .short("gp-qual"),
                 )
                 .arg(
                     Arg::with_name("annotate-with-num-discovered-alleles")
-                        .long("annotate-with-num-discovered-alleles")
+                        .long("annotate-with-num-discovered-alleles"),
                 )
                 .arg(
                     Arg::with_name("max-prob-propagation-distance")
                         .long("max-prob-propagation-distance")
-                        .default_value("50")
+                        .default_value("50"),
                 )
                 .arg(
                     Arg::with_name("active-probability-threshold")
                         .long("active-probability-threshold")
-                        .default_value("0.002")
+                        .default_value("0.002"),
                 )
                 .arg(
                     Arg::with_name("assembly-region-padding")
                         .long("assembly-region-padding")
-                        .default_value("100")
+                        .default_value("100"),
                 )
                 .arg(
                     Arg::with_name("min-assembly-region-size")
                         .long("min-assembly-region-size")
-                        .default_value("50")
+                        .default_value("50"),
                 )
                 .arg(
                     Arg::with_name("max-assembly-region-size")
                         .long("max-assembly-region-size")
-                        .default_value("50")
+                        .default_value("50"),
                 )
                 .arg(
                     Arg::with_name("kmer-size")

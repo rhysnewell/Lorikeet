@@ -8,15 +8,12 @@ use model::variants::Allele;
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct LocationAndAlleles {
     loc: usize,
-    alleles: Vec<Allele>
+    alleles: Vec<Allele>,
 }
 
 impl LocationAndAlleles {
     pub fn new(loc: usize, alleles: Vec<Allele>) -> LocationAndAlleles {
-        LocationAndAlleles {
-            loc,
-            alleles,
-        }
+        LocationAndAlleles { loc, alleles }
     }
 
     pub fn get_loc(&self) -> usize {

@@ -1,6 +1,6 @@
+use statrs::function::factorial::binomial;
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
-use statrs::function::factorial::binomial;
 
 #[derive(Debug, Clone)]
 pub struct GenotypeLikelihoods {
@@ -35,7 +35,7 @@ impl GenotypeLikelihoods {
     pub fn from_log10_likelihoods(log10_likelihoods: Vec<f64>) -> GenotypeLikelihoods {
         GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
-            log10_likelihoods
+            log10_likelihoods,
         }
     }
 
@@ -44,7 +44,7 @@ impl GenotypeLikelihoods {
 
         for i in (0..self.log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
-                continue
+                continue;
             } else if self.log10_likelihoods[i] >= qual {
                 qual = self.log10_likelihoods[i]
             }
@@ -54,11 +54,8 @@ impl GenotypeLikelihoods {
         qual = self.log10_likelihoods[i_of_chosen_genotype] - qual;
 
         if qual < 0.0 {
-            let normalized = MathUtils::normalize_from_log10(
-                &self.log10_likelihoods[..],
-                false,
-                false
-            );
+            let normalized =
+                MathUtils::normalize_from_log10(&self.log10_likelihoods[..], false, false);
             let chosen_genotype = normalized[i_of_chosen_genotype];
 
             (1.0 - chosen_genotype).log10()
@@ -67,12 +64,15 @@ impl GenotypeLikelihoods {
         }
     }
 
-    pub fn get_gq_log10_from_likelihoods_on_the_fly(i_of_chosen_genotype: usize, log10_likelihoods: &[f64]) -> f64 {
+    pub fn get_gq_log10_from_likelihoods_on_the_fly(
+        i_of_chosen_genotype: usize,
+        log10_likelihoods: &[f64],
+    ) -> f64 {
         let mut qual = std::f64::NEG_INFINITY;
 
         for i in (0..log10_likelihoods.len()).into_iter() {
             if i == i_of_chosen_genotype {
-                continue
+                continue;
             } else if log10_likelihoods[i] >= qual {
                 qual = log10_likelihoods[i]
             }
@@ -82,11 +82,7 @@ impl GenotypeLikelihoods {
         qual = log10_likelihoods[i_of_chosen_genotype] - qual;
 
         if qual < 0. {
-            let normalized = MathUtils::normalize_from_log10(
-                &log10_likelihoods[..],
-                false,
-                false
-            );
+            let normalized = MathUtils::normalize_from_log10(&log10_likelihoods[..], false, false);
             let chosen_genotype = normalized[i_of_chosen_genotype];
 
             (1.0 - chosen_genotype).log10()
@@ -127,7 +123,9 @@ impl GenotypeLikelihoods {
         &mut self.log10_likelihoods
     }
 
-    pub fn get_likelihoods(&self) -> &Vec<f64> { &self.log10_likelihoods }
+    pub fn get_likelihoods(&self) -> &Vec<f64> {
+        &self.log10_likelihoods
+    }
 
     pub fn len(&self) -> usize {
         self.log10_likelihoods.len()
@@ -149,13 +147,12 @@ impl GenotypeNumLikelihoodsCache {
             static_cache: Vec::new(),
             dynamic_cache: HashMap::new(),
         }
-
     }
 
     pub fn default_values(&mut self) {
         self.add(
             GenotypeNumLikelihoodsCache::DEFAULT_N_ALLELES,
-            GenotypeNumLikelihoodsCache::DEFAULT_PLOIDY
+            GenotypeNumLikelihoodsCache::DEFAULT_PLOIDY,
         )
     }
 
@@ -175,7 +172,8 @@ impl GenotypeNumLikelihoodsCache {
     }
 
     fn put(&mut self, num_alleles: i64, ploidy: i64, num_likelihoods: i64) {
-        self.dynamic_cache.insert(CacheKey::build(num_alleles, ploidy), num_likelihoods);
+        self.dynamic_cache
+            .insert(CacheKey::build(num_alleles, ploidy), num_likelihoods);
     }
 
     /**
@@ -187,22 +185,29 @@ impl GenotypeNumLikelihoodsCache {
      */
     fn get(&mut self, num_alleles: i64, ploidy: i64) -> i64 {
         if num_alleles <= 0 || ploidy <= 0 {
-            panic!("num_alleles and ploidy must both exceed 0, but they are numAlleles {}, ploidy {}",
-                   num_alleles, ploidy
+            panic!(
+                "num_alleles and ploidy must both exceed 0, but they are numAlleles {}, ploidy {}",
+                num_alleles, ploidy
             )
         }
         if (num_alleles as usize) < self.static_cache.len()
-            && (ploidy as usize) < self.static_cache[num_alleles as usize].len() {
+            && (ploidy as usize) < self.static_cache[num_alleles as usize].len()
+        {
             self.static_cache[(num_alleles - 1) as usize][(ploidy - 1) as usize]
         } else {
-            let cached_value = self.dynamic_cache.get(&CacheKey::build(num_alleles, ploidy));
+            let cached_value = self
+                .dynamic_cache
+                .get(&CacheKey::build(num_alleles, ploidy));
             match cached_value {
                 Some(value) => return *value,
                 None => {
-                    let new_value = GenotypeLikelihoods::calc_num_likelihoods(num_alleles as usize, ploidy as usize);
+                    let new_value = GenotypeLikelihoods::calc_num_likelihoods(
+                        num_alleles as usize,
+                        ploidy as usize,
+                    );
                     self.put(num_alleles, ploidy, new_value);
 
-                    return new_value
+                    return new_value;
                 }
             }
         }
@@ -219,7 +224,7 @@ impl CacheKey {
     pub fn build(num_alleles: i64, ploidy: i64) -> CacheKey {
         CacheKey {
             num_alleles,
-            ploidy
+            ploidy,
         }
     }
 

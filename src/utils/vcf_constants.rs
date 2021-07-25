@@ -1,4 +1,3 @@
-
 lazy_static! {
     pub static ref GENOTYPE_KEY: String = "GT".to_string();
     pub static ref GENOTYPE_POSTERIORS_KEY: String = "GP".to_string();

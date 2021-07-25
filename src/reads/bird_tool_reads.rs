@@ -1,10 +1,9 @@
-use rust_htslib::bam::record::Record;
-use rust_htslib::bam::ext::BamRecordExtensions;
-use utils::simple_interval::Locatable;
-use std::cmp::Ordering;
 use reads::read_utils::ReadUtils;
-use std::hash::{Hasher, Hash};
-
+use rust_htslib::bam::ext::BamRecordExtensions;
+use rust_htslib::bam::record::Record;
+use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
+use utils::simple_interval::Locatable;
 
 /**
  * Unified read interface for use throughout the Bird Tools.
@@ -27,10 +26,7 @@ pub struct BirdToolRead {
 
 impl BirdToolRead {
     pub fn new(read: Record, sample_index: usize) -> BirdToolRead {
-        BirdToolRead {
-            read,
-            sample_index
-        }
+        BirdToolRead { read, sample_index }
     }
 
     // pub fn get_start(&self) -> usize {
@@ -48,7 +44,7 @@ impl BirdToolRead {
     pub fn get_soft_start(&self) -> Option<usize> {
         let mut start = self.get_start();
         let new_start = start.checked_sub(self.read.cigar().leading_softclips() as usize);
-        return new_start
+        return new_start;
     }
 
     /**
@@ -77,7 +73,7 @@ impl BirdToolRead {
      * CANNOT_COMPUTE_ADAPTOR_BOUNDARY if the read is unmapped or the mate is mapped to another contig.
      */
     pub fn get_adaptor_boundary(&self) -> usize {
-        return ReadUtils::get_adaptor_boundary(&self)
+        return ReadUtils::get_adaptor_boundary(&self);
     }
 
     pub fn name(&self) -> &[u8] {
@@ -91,7 +87,6 @@ impl BirdToolRead {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
 }
 
 impl Hash for BirdToolRead {
@@ -117,7 +112,6 @@ impl Locatable for BirdToolRead {
     }
 }
 
-
 /**
  * Comparator for sorting Reads by coordinate.
  *
@@ -135,44 +129,48 @@ impl Ord for BirdToolRead {
         let result = ReadUtils::compare_coordinates(&self, &other);
 
         if result != Ordering::Equal {
-            return result
+            return result;
         }
 
         if self.read.is_reverse() != other.read.is_reverse() {
-            if self.read.is_reverse() { return Ordering::Greater } else { return Ordering::Less }
+            if self.read.is_reverse() {
+                return Ordering::Greater;
+            } else {
+                return Ordering::Less;
+            }
         }
 
         if !self.read.qname().is_empty() && !other.read.qname().is_empty() {
             let result = self.read.qname().cmp(&other.read.qname());
             if result != Ordering::Equal {
-                return result
+                return result;
             }
         }
 
         let result = self.read.flags().cmp(&other.read.flags());
         if result != Ordering::Equal {
-            return result
+            return result;
         }
 
         let result = self.read.mapq().cmp(&other.read.mapq());
         if result != Ordering::Equal {
-            return result
+            return result;
         }
 
         if self.read.is_paired() && other.read.is_paired() {
             let result = self.read.mtid().cmp(&other.read.mtid());
             if result != Ordering::Equal {
-                return result
+                return result;
             }
 
             let result = self.read.mpos().cmp(&other.read.mpos());
             if result != Ordering::Equal {
-                return result
+                return result;
             }
         }
 
         let result = self.read.seq_len().cmp(&other.read.seq_len());
-        return result
+        return result;
     }
 }
 
