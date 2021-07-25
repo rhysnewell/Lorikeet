@@ -1,13 +1,13 @@
-use assembly::kmer_counter::KmerCounter;
-use std::collections::HashMap;
-use utils::quality_utils::QualityUtils;
-use reads::bird_tool_reads::BirdToolRead;
 use assembly::kmer::Kmer;
-use utils::base_utils::BaseUtils;
+use assembly::kmer_counter::KmerCounter;
 use rayon::prelude::*;
-use std::ops::Deref;
 use read_error_corrector::read_error_corrector::ReadErrorCorrector;
+use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
+use std::collections::HashMap;
+use std::ops::Deref;
+use utils::base_utils::BaseUtils;
+use utils::quality_utils::QualityUtils;
 
 /**
  * Utility class that error-corrects reads.
@@ -48,13 +48,13 @@ use reads::read_clipper::ReadClipper;
  *
  *
  */
-pub struct NearbyKmerErrorCorrector<'a> {
+pub struct NearbyKmerErrorCorrector {
     /**
      * A map of for each kmer to its num occurrences in addKmers
      */
-    counts_by_kmer: KmerCounter<'a>,
-    kmer_correction_map: HashMap<&'a Kmer<'a>, &'a Kmer<'a>>,
-    kmer_differing_bases: HashMap<&'a Kmer<'a>, (Vec<usize>, Vec<u8>)>,
+    pub(crate) counts_by_kmer: KmerCounter,
+    kmer_correction_map: HashMap<Kmer, Kmer>,
+    kmer_differing_bases: HashMap<Kmer, (Vec<usize>, Vec<u8>)>,
     kmer_length: usize,
     trim_low_quality_bases: bool,
     min_tail_quality: u8,
@@ -73,7 +73,7 @@ struct ReadErrorCorrectionStats {
     num_bases_corrected: usize,
     num_solid_kmers: usize,
     num_uncorrectable_kmers: usize,
-    num_corrected_kmers: usize
+    num_corrected_kmers: usize,
 }
 
 impl ReadErrorCorrectionStats {
@@ -84,13 +84,12 @@ impl ReadErrorCorrectionStats {
             num_bases_corrected: 0,
             num_solid_kmers: 0,
             num_uncorrectable_kmers: 0,
-            num_corrected_kmers: 0
+            num_corrected_kmers: 0,
         }
     }
 }
 
-impl<'a> NearbyKmerErrorCorrector<'a> {
-
+impl NearbyKmerErrorCorrector {
     const MAX_MISMATCHES_TO_CORRECT: usize = 2;
     const QUALITY_OF_CORRECTED_BASES: u8 = 30;
     const MAX_OBSERVATIONS_FOR_KMER_TO_BE_CORRECTABLE: usize = 1;
@@ -113,17 +112,20 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         min_observations_for_kmer_to_be_solid: usize,
         trim_low_quality_bases: bool,
         min_tail_quality: u8,
-        full_reference_with_padding: &[u8]
-    ) -> NearbyKmerErrorCorrector<'a> {
+        full_reference_with_padding: &[u8],
+    ) -> NearbyKmerErrorCorrector {
         assert!(
-            quality_of_corrected_bases >= 2 && quality_of_corrected_bases <= QualityUtils::MAX_REASONABLE_Q_SCORE,
-            "Quality of corrected bases must be >= 2 and <= 60 but got {}", quality_of_corrected_bases
+            quality_of_corrected_bases >= 2
+                && quality_of_corrected_bases <= QualityUtils::MAX_REASONABLE_Q_SCORE,
+            "Quality of corrected bases must be >= 2 and <= 60 but got {}",
+            quality_of_corrected_bases
         );
 
         let counts_by_kmer = KmerCounter::new(kmer_length);
         // when region has long homopolymers, we may want not to correct reads, since assessment is complicated,
         // so we may decide to skip error correction in these regions
-        let max_homopolymer_length_in_region = Self::compute_max_hl_len(full_reference_with_padding);
+        let max_homopolymer_length_in_region =
+            Self::compute_max_hl_len(full_reference_with_padding);
 
         Self {
             kmer_length,
@@ -152,8 +154,8 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         kmer_length: usize,
         min_tail_quality: u8,
         min_observations_for_kmer_to_be_solid: usize,
-        full_reference_with_padding: &[u8]
-    ) -> NearbyKmerErrorCorrector<'a> {
+        full_reference_with_padding: &[u8],
+    ) -> NearbyKmerErrorCorrector {
         Self::new(
             kmer_length,
             Self::MAX_MISMATCHES_TO_CORRECT,
@@ -162,7 +164,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
             min_observations_for_kmer_to_be_solid,
             Self::TRIM_LOW_QUAL_TAILS,
             min_tail_quality,
-            full_reference_with_padding
+            full_reference_with_padding,
         )
     }
 
@@ -170,13 +172,18 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
      * Main entry routine to add all kmers in a read to the read map counter
      * @param read                        Read to add bases
      */
-    pub fn add_read_kmers(&mut self, read: &'a BirdToolRead) {
-        if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD {
+    pub fn add_read_kmers(&mut self, read: &BirdToolRead) {
+        if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS
+            && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD
+        {
             // pass
         } else {
             let read_bases = read.read.seq().encoded;
             for offset in 0..(read_bases.len() - self.kmer_length) {
-                self.counts_by_kmer.add_kmer(&Kmer::new_with_start_and_length(read_bases, offset, self.kmer_length), 1)
+                self.counts_by_kmer.add_kmer(
+                    Kmer::new_with_start_and_length(read_bases.to_vec(), offset, self.kmer_length),
+                    1,
+                )
             }
         }
     }
@@ -187,7 +194,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
      * @param inputRead                               Read to correct
      * @return                                        Corrected read (can be same reference as input if doInplaceErrorCorrection is set)
      */
-    fn correct_read(&self, input_read: &BirdToolRead) -> BirdToolRead {
+    fn correct_read(&mut self, input_read: &BirdToolRead) -> BirdToolRead {
         // do actual correction
         let mut corrected = false;
         let mut corrected_bases = input_read.read.seq().as_bytes();
@@ -199,9 +206,7 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         for offset in 0..corrected_bases.len() {
             let b = correction_set.get_consensus_correction(offset);
             match b {
-                None => {
-                    continue
-                },
+                None => continue,
                 Some(b) => {
                     if b != corrected_bases[offset] {
                         corrected_bases[offset] = b;
@@ -217,13 +222,16 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
             self.read_error_correction_stats.num_reads_corrected += 1;
             let mut corrected_read = input_read.clone();
             corrected_read.read.set(
-                corrected_read.read.qname(), Some(corrected_read.read.cigar().deref()), &corrected_bases, &corrected_quals
+                input_read.read.qname(),
+                Some(input_read.read.cigar().deref()),
+                &corrected_bases,
+                &corrected_quals,
             );
 
-            return corrected_read
+            return corrected_read;
         } else {
             self.read_error_correction_stats.num_reads_uncorrected += 1;
-            return input_read.clone()
+            return input_read.clone();
         }
     }
 
@@ -242,29 +250,29 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         let mut correction_set = CorrectionSet::new(corrected_bases.len());
 
         for offset in 0..(corrected_bases.len() - self.kmer_length) {
-            let kmer = Kmer::new_with_start_and_length(corrected_bases, offset, self.kmer_length);
+            let kmer =
+                Kmer::new_with_start_and_length(corrected_bases.to_vec(), offset, self.kmer_length);
             let new_kmer = self.kmer_correction_map.get(&kmer);
             match new_kmer {
-                None => {
-                    continue
-                },
+                None => continue,
                 Some(new_kmer) => {
-                    if new_kmer == &&kmer {
-                        continue
+                    if new_kmer == &kmer {
+                        continue;
                     } else {
                         let differing_positions = self.kmer_differing_bases.get(&kmer).unwrap();
 
                         for k in 0..differing_positions.0.len() {
                             // get list of differing positions for corrected kmer
                             // for each of these, add correction candidate to correction set
-                            correction_set.add(offset + differing_positions.0[k], differing_positions.1[k]);
-                        };
+                            correction_set
+                                .add(offset + differing_positions.0[k], differing_positions.1[k]);
+                        }
                     }
                 }
             }
         }
 
-        return correction_set
+        return correction_set;
     }
 
     /**
@@ -272,10 +280,10 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
      * For each read in list, its constituent kmers will be logged in our kmer table.
      * @param reads
      */
-    pub fn add_reads_to_kmers(&mut self, reads: Vec<&'a BirdToolRead>) {
+    pub fn add_reads_to_kmers(&mut self, reads: Vec<&BirdToolRead>) {
         for read in reads {
             self.add_read_kmers(read);
-        };
+        }
     }
 
     /**
@@ -287,24 +295,28 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
      *
      */
     fn compute_kmer_correction_map(&mut self) {
-        for stored_kmer in self.counts_by_kmer.get_counted_kmers() {
+        for stored_kmer in self.counts_by_kmer.get_counted_kmers().into_iter() {
             if stored_kmer.get_count() >= self.min_observations_for_kmer_to_be_solid {
                 // this kmer is good: map to itself
-                self.kmer_correction_map.insert(stored_kmer.get_kmer(), stored_kmer.get_kmer());
-                self.kmer_differing_bases.insert(stored_kmer.get_kmer(), (vec![0], vec![0]));
+                self.kmer_correction_map.insert(
+                    stored_kmer.get_kmer().clone(),
+                    stored_kmer.get_kmer().clone(),
+                );
+                self.kmer_differing_bases
+                    .insert(stored_kmer.get_kmer().clone(), (vec![0], vec![0]));
                 self.read_error_correction_stats.num_solid_kmers += 1;
             } else if stored_kmer.get_count() <= self.max_observations_for_kmer_to_be_correctable {
                 // loop now thru all other kmers to find nearest neighbor
-                let nearest_neighbour = self.find_nearest_neighbour(
-                    stored_kmer.get_kmer()
-                );
+                let nearest_neighbour = self.find_nearest_neighbour(stored_kmer.get_kmer());
                 match nearest_neighbour.0 {
                     None => {
                         self.read_error_correction_stats.num_uncorrectable_kmers += 1;
-                    },
+                    }
                     Some(neighbour) => {
-                        self.kmer_correction_map.insert(stored_kmer.get_kmer(), neighbour);
-                        self.kmer_differing_bases.insert(stored_kmer.get_kmer(), nearest_neighbour.1);
+                        self.kmer_correction_map
+                            .insert(stored_kmer.get_kmer().clone(), neighbour);
+                        self.kmer_differing_bases
+                            .insert(stored_kmer.get_kmer().clone(), nearest_neighbour.1);
                         self.read_error_correction_stats.num_corrected_kmers += 1;
                     }
                 }
@@ -323,10 +335,10 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
      */
     fn find_nearest_neighbour(
         &self,
-        kmer: &Kmer<'a>,
-        // counts_by_kmer: &KmerCounter<'a>,
+        kmer: &Kmer,
+        // counts_by_kmer: &KmerCounter,
         // max_distance: usize,
-    ) -> (Option<&'a Kmer<'a>>, (Vec<usize>, Vec<u8>)) {
+    ) -> (Option<Kmer>, (Vec<usize>, Vec<u8>)) {
         // assert!(max_distance >= 1, "max_distance must be >=1, got {}", self.max_mismatches_to_correct);
         let mut minimum_distance = std::i32::MAX;
         let mut closest_kmer = None;
@@ -340,25 +352,32 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
         for candidate_kmer in self.counts_by_kmer.get_counted_kmers() {
             // skip if candidate set includes test kmer
             if candidate_kmer.get_kmer() == kmer {
-                continue
+                continue;
             }
 
             let hamming_distance = kmer.get_differing_positions(
-                candidate_kmer.get_kmer(), self.max_mismatches_to_correct, &mut differing_indices, &mut differing_bases
+                candidate_kmer.get_kmer(),
+                self.max_mismatches_to_correct,
+                &mut differing_indices,
+                &mut differing_bases,
             );
-            if hamming_distance < 0 { // can't compare kmer? skip
-                continue
+            if hamming_distance < 0 {
+                // can't compare kmer? skip
+                continue;
             }
 
             if hamming_distance < minimum_distance {
                 minimum_distance = hamming_distance;
-                closest_kmer = Some(candidate_kmer.get_kmer());
+                closest_kmer = Some(candidate_kmer.get_kmer().clone());
                 closest_differing_bases = differing_bases.clone();
                 closest_differing_indices = differing_indices.clone();
             }
         }
 
-        return (closest_kmer, (closest_differing_indices, closest_differing_bases))
+        return (
+            closest_kmer,
+            (closest_differing_indices, closest_differing_bases),
+        );
     }
 
     /**
@@ -382,9 +401,8 @@ impl<'a> NearbyKmerErrorCorrector<'a> {
             max_run = left_run
         }
 
-        return max_run
+        return max_run;
     }
-
 }
 
 /**
@@ -416,10 +434,7 @@ impl CorrectionSet {
             corrections.push(Vec::with_capacity(k));
         }
 
-        Self {
-            size,
-            corrections
-        }
+        Self { size, corrections }
     }
 
     /**
@@ -434,7 +449,7 @@ impl CorrectionSet {
         if !BaseUtils::is_regular_base(base) {
             // pass since no irregular base correction
         } else {
-            let mut stored_bytes = self.corrections[offset];
+            let mut stored_bytes = &mut self.corrections[offset];
             stored_bytes.push(base)
         }
     }
@@ -449,23 +464,21 @@ impl CorrectionSet {
         if offset >= self.size {
             panic!("Bad entry into CorrectionSet: offset > size")
         }
-        let stored_bytes = self.corrections[offset];
+        let stored_bytes = &self.corrections[offset];
         if stored_bytes.len() == 0 {
-            return None
+            return None;
         } else {
             let last_base = stored_bytes.last().unwrap();
-            if stored_bytes.par_iter().any(|b| {
-                b != last_base
-            }) {
-                return None
+            if stored_bytes.par_iter().any(|b| b != last_base) {
+                return None;
             } else {
-                return Some(*last_base)
+                return Some(*last_base);
             }
         }
     }
 }
 
-impl ReadErrorCorrector for NearbyKmerErrorCorrector<'_> {
+impl ReadErrorCorrector for NearbyKmerErrorCorrector {
     /**
      * Correct a collection of reads based on stored k-mer counts
      * @param reads
@@ -473,15 +486,18 @@ impl ReadErrorCorrector for NearbyKmerErrorCorrector<'_> {
     fn correct_reads(&mut self, reads: &Vec<BirdToolRead>) -> Vec<BirdToolRead> {
         let mut corrected_reads = Vec::with_capacity(reads.len());
 
-        if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD {
-            return reads.to_vec() // Can't correct so just return the reads
+        if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS
+            && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD
+        {
+            return reads.to_vec(); // Can't correct so just return the reads
         } else {
             self.compute_kmer_correction_map();
             for read in reads {
                 let corrected_read = self.correct_read(read);
                 if self.trim_low_quality_bases {
                     corrected_reads.push(
-                        ReadClipper::new(&corrected_read).hard_clip_low_qual_ends(self.min_tail_quality)
+                        ReadClipper::new(&corrected_read)
+                            .hard_clip_low_qual_ends(self.min_tail_quality),
                     )
                 } else {
                     corrected_reads.push(corrected_read)
@@ -494,7 +510,7 @@ impl ReadErrorCorrector for NearbyKmerErrorCorrector<'_> {
             // debug!("Number of corrected kmers:" + readErrorCorrectionStats.numCorrectedKmers);
             // debug!("Number of uncorrectable kmers:" + readErrorCorrectionStats.numUncorrectableKmers);
 
-            return corrected_reads
+            return corrected_reads;
         }
     }
 }

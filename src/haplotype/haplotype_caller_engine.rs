@@ -1,37 +1,36 @@
-use rust_htslib::bam::{self, record::Cigar, Record};
-use bio::stats::{LogProb, PHREDProb};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use rayon::prelude::*;
-use coverm::bam_generator::*;
-use coverm::FlagFilter;
-use model::variants::*;
-use model::variant_context::VariantContext;
-use coverm::genomes_and_contigs::GenomesAndContigs;
-use estimation::lorikeet_engine::Elem;
-use reference::reference_reader::ReferenceReader;
-use haplotype::ref_vs_any_result::RefVsAnyResult;
-use genotype::genotype_builder::Genotype;
-use activity_profile::activity_profile_state::{ActivityProfileState, Type};
-use genotype::genotype_prior_calculator::GenotypePriorCalculator;
-use genotype::genotyping_engine::GenotypingEngine;
-use utils::quality_utils::QualityUtils;
-use utils::math_utils::{MathUtils, RunningAverage};
-use utils::simple_interval::SimpleInterval;
 use activity_profile::activity_profile::Profile;
+use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
-use estimation::lorikeet_engine::ReadType;
+use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
-use read_threading::read_threading_assembler::ReadThreadingAssembler;
-use read_orientation::beta_distribution_shape::BetaDistributionShape;
-use mathru::special::gamma::{digamma, ln_gamma};
-use utils::natural_log_utils::NaturalLogUtils;
-use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
-use graphs::multi_sample_edge::MultiSampleEdge;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use bio::stats::{LogProb, PHREDProb};
+use coverm::bam_generator::*;
+use coverm::genomes_and_contigs::GenomesAndContigs;
+use coverm::FlagFilter;
+use estimation::lorikeet_engine::Elem;
+use estimation::lorikeet_engine::ReadType;
+use genotype::genotype_builder::Genotype;
+use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use genotype::genotyping_engine::GenotypingEngine;
 use graphs::chain_pruner::ChainPruner;
-
+use graphs::multi_sample_edge::MultiSampleEdge;
+use haplotype::ref_vs_any_result::RefVsAnyResult;
+use mathru::special::gamma::{digamma, ln_gamma};
+use model::variant_context::VariantContext;
+use model::variants::*;
+use rayon::prelude::*;
+use read_orientation::beta_distribution_shape::BetaDistributionShape;
+use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
+use read_threading::read_threading_assembler::ReadThreadingAssembler;
+use reference::reference_reader::ReferenceReader;
+use rust_htslib::bam::{self, record::Cigar, Record};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use utils::math_utils::{MathUtils, RunningAverage};
+use utils::natural_log_utils::NaturalLogUtils;
+use utils::quality_utils::QualityUtils;
+use utils::simple_interval::SimpleInterval;
 
 pub struct HaplotypeCallerEngine {
     genotyping_engine: GenotypingEngine,
@@ -43,7 +42,7 @@ pub struct HaplotypeCallerEngine {
 }
 
 impl HaplotypeCallerEngine {
-    pub const MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION: usize = 6;
+    pub const MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION: u8 = 6;
     /**
      * Minimum (exclusive) average number of high quality bases per soft-clip to consider that a set of soft-clips is a
      * high quality set.
@@ -86,13 +85,91 @@ impl HaplotypeCallerEngine {
         ref_idx: usize,
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
-        sample_ploidy: usize
+        sample_ploidy: usize,
     ) -> HaplotypeCallerEngine {
+        let mut assembly_engine = ReadThreadingAssembler::new(
+            args.value_of("max-allowed-path-for-read-threading-assembler")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.values_of("kmer-sizes")
+                .unwrap()
+                .map(|k_size| k_size.parse().unwrap())
+                .collect::<Vec<usize>>(),
+            args.is_present("dont-increase-kmer-sizes-for-cycles"),
+            args.is_present("allow-non-unique-kners-in-ref"),
+            args.value_of("num-pruning-samples")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            if args.is_present("use-adaptive-pruning") {
+                0
+            } else {
+                args.value_of("min-prune-factor").unwrap().parse().unwrap()
+            },
+            args.is_present("use-adaptive-pruning"),
+            args.value_of("initial-error-rate-for-pruning")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.value_of("pruning-log-odds-threshold")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.value_of("pruning-seeding-log-odds-threshold")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.value_of("max-unpruned-variants")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.is_present("use-linked-debruijn-graph"),
+            args.is_present("enable-legacy-graph-cycle-detection"),
+            args.value_of("min-matching-bases-to-dangling-end-recovery")
+                .unwrap()
+                .parse()
+                .unwrap(),
+        );
+
+        assembly_engine.debug_graph_transformations =
+            args.is_present("debug-graph-transformations");
+        assembly_engine.recover_dangling_branches =
+            !args.is_present("do-not-recover-dangling-branches");
+        assembly_engine.recover_all_dangling_branches =
+            args.is_present("recover-all-dangling-branches");
+        assembly_engine.min_dangling_branch_length = args
+            .value_of("min-dangling-branch-length")
+            .unwrap()
+            .parse()
+            .unwrap();
+        assembly_engine.graph_output_path = match args.value_of("graph-output") {
+            Some(path) => Some(path.to_string()),
+            None => None,
+        };
+        assembly_engine.debug_graph_output_path = match args.value_of("debug-graph-output") {
+            Some(path) => Some(path.to_string()),
+            None => None,
+        };
+        assembly_engine.min_base_quality_to_use_in_assembly =
+            args.value_of("min-base-quality").unwrap().parse().unwrap();
+
         HaplotypeCallerEngine {
-            genotyping_engine: GenotypingEngine::make(args, samples, do_allele_specific_calcs, sample_ploidy),
+            genotyping_engine: GenotypingEngine::make(
+                args,
+                samples,
+                do_allele_specific_calcs,
+                sample_ploidy,
+            ),
             genotype_prior_calculator: GenotypePriorCalculator::make(args),
-            stand_min_conf: args.value_of("standard-min-confidence-threshold-for-calling").unwrap().parse().unwrap(),
+            stand_min_conf: args
+                .value_of("standard-min-confidence-threshold-for-calling")
+                .unwrap()
+                .parse()
+                .unwrap(),
             ref_idx,
+            assembly_engine: assembly_engine,
+            assembly_region_trimmer: AssemblyRegionTrimmer::new(),
         }
     }
 
@@ -114,8 +191,6 @@ impl HaplotypeCallerEngine {
         tree: &Arc<Mutex<Vec<&Elem>>>,
         reference_reader: &mut ReferenceReader,
     ) -> HashMap<usize, BandPassActivityProfile> {
-
-
         // minimum PHRED base quality
         let bq = m
             .value_of("base-quality-threshold")
@@ -144,39 +219,37 @@ impl HaplotypeCallerEngine {
 
         let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
 
-        let mut genotype_likelihoods = Vec::with_capacity(
-            short_sample_count + long_sample_count
-        );
+        let mut genotype_likelihoods = Vec::with_capacity(short_sample_count + long_sample_count);
 
         let mut per_contig_per_base_hq_soft_clips = HashMap::new();
 
-        indexed_bam_readers.iter().enumerate().for_each(
-            |(sample_idx, bam_generator)| {
+        indexed_bam_readers
+            .iter()
+            .enumerate()
+            .for_each(|(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using
                 let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
                     vec![&bam_generator],
                     n_threads as u32,
                 )
-                    .into_iter()
-                    .next()
-                    .unwrap();
+                .into_iter()
+                .next()
+                .unwrap();
                 if sample_idx < short_sample_count {
-                    genotype_likelihoods.push(
-                        HaplotypeCallerEngine::update_activity_profile(
-                            bam_generator,
-                            n_threads,
-                            ref_idx,
-                            ReadType::Short,
-                            ploidy,
-                            bq,
-                            min_soft_clip_qual,
-                            genomes_and_contigs,
-                            concatenated_genomes,
-                            flag_filters,
-                            &mut per_contig_per_base_hq_soft_clips,
-                            reference_reader,
-                        )
-                    );
+                    genotype_likelihoods.push(HaplotypeCallerEngine::update_activity_profile(
+                        bam_generator,
+                        n_threads,
+                        ref_idx,
+                        ReadType::Short,
+                        ploidy,
+                        bq,
+                        min_soft_clip_qual,
+                        genomes_and_contigs,
+                        concatenated_genomes,
+                        flag_filters,
+                        &mut per_contig_per_base_hq_soft_clips,
+                        reference_reader,
+                    ));
                 } else if (m.is_present("longreads") | m.is_present("longread-bam-files"))
                     && sample_idx >= short_sample_count
                     && sample_idx < (short_sample_count + long_sample_count)
@@ -184,30 +257,27 @@ impl HaplotypeCallerEngine {
                     debug!("Running structural variant detection...");
                     // Get the appropriate sample index based on how many references we are using by tracking
                     // changes in references
-                    genotype_likelihoods.push(
-                        HaplotypeCallerEngine::update_activity_profile(
-                            bam_generator,
-                            n_threads,
-                            ref_idx,
-                            ReadType::Long,
-                            ploidy,
-                            bq,
-                            min_soft_clip_qual,
-                            genomes_and_contigs,
-                            concatenated_genomes,
-                            flag_filters,
-                            &mut per_contig_per_base_hq_soft_clips,
-                            reference_reader,
-                        )
-                    );
+                    genotype_likelihoods.push(HaplotypeCallerEngine::update_activity_profile(
+                        bam_generator,
+                        n_threads,
+                        ref_idx,
+                        ReadType::Long,
+                        ploidy,
+                        bq,
+                        min_soft_clip_qual,
+                        genomes_and_contigs,
+                        concatenated_genomes,
+                        flag_filters,
+                        &mut per_contig_per_base_hq_soft_clips,
+                        reference_reader,
+                    ));
                 }
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
 
-                    pb.progress_bar.set_message(&format!(
+                    pb.progress_bar.set_message(format!(
                         "{}: Variant calling on sample: {}",
-                        pb.key,
-                        &indexed_bam_readers[sample_idx],
+                        pb.key, &indexed_bam_readers[sample_idx],
                     ));
                     pb.progress_bar.inc(1);
                 }
@@ -215,8 +285,7 @@ impl HaplotypeCallerEngine {
                     let pb = &tree.lock().unwrap()[0];
                     pb.progress_bar.inc(1);
                 }
-            },
-        );
+            });
 
         // return genotype_likelihoods for each contig in current genome across samples
         return self.calculate_activity_probabilities(
@@ -227,13 +296,14 @@ impl HaplotypeCallerEngine {
             max_prob_prop,
             active_prob_thresh,
             ref_idx,
-        )
-
+        );
     }
 
-    pub fn update_activity_profile<'b,
+    pub fn update_activity_profile<
+        'b,
         R: IndexedNamedBamReader + Send,
-        G: NamedBamReaderGenerator<R> + Send>(
+        G: NamedBamReaderGenerator<R> + Send,
+    >(
         bam_generator: G,
         split_threads: usize,
         ref_idx: usize,
@@ -246,7 +316,7 @@ impl HaplotypeCallerEngine {
         flag_filters: &'b FlagFilter,
         per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
         reference_reader: &mut ReferenceReader,
-    ) -> HashMap<usize, Vec<RefVsAnyResult>>{
+    ) -> HashMap<usize, Vec<RefVsAnyResult>> {
         let mut bam_generated = bam_generator.start();
 
         bam_generated.set_threads(split_threads);
@@ -258,7 +328,6 @@ impl HaplotypeCallerEngine {
             .collect();
         let target_names = header.target_names();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
-
 
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
@@ -365,16 +434,16 @@ impl HaplotypeCallerEngine {
 
         bam_generated.finish();
 
-        return ref_vs_any_container
+        return ref_vs_any_container;
     }
 
     /**
-    * Create a collection of ActivityProfileState for each position on each contig
-    * Note that the current implementation will always return either 1.0 or 0.0, as it relies on the smoothing in
-    * {@link org.broadinstitute.hellbender.utils.activityprofile.BandPassActivityProfile} to create the full distribution
-    *
-    * @return HashMap<usize, BandPassActivityProfile> - contig id and per base activity
-    */
+     * Create a collection of ActivityProfileState for each position on each contig
+     * Note that the current implementation will always return either 1.0 or 0.0, as it relies on the smoothing in
+     * {@link org.broadinstitute.hellbender.utils.activityprofile.BandPassActivityProfile} to create the full distribution
+     *
+     * @return HashMap<usize, BandPassActivityProfile> - contig id and per base activity
+     */
     pub fn calculate_activity_probabilities(
         &mut self,
         genotype_likelihoods: Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
@@ -385,38 +454,40 @@ impl HaplotypeCallerEngine {
         active_prob_threshold: f64,
         ref_idx: usize,
     ) -> HashMap<usize, BandPassActivityProfile> {
-
-
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
-            let per_contig_activity_profiles: HashMap<usize, BandPassActivityProfile> = genotype_likelihoods[0]
-                .par_iter().map(|(tid, vec_of_ref_vs_any_result)| {
+            let per_contig_activity_profiles: HashMap<usize, BandPassActivityProfile> =
+                genotype_likelihoods[0]
+                    .par_iter()
+                    .map(|(tid, vec_of_ref_vs_any_result)| {
+                        // Create bandpass
+                        let mut activity_profile = BandPassActivityProfile::new(
+                            max_prob_propagation,
+                            active_prob_threshold,
+                            BandPassActivityProfile::MAX_FILTER_SIZE,
+                            BandPassActivityProfile::DEFAULT_SIGMA,
+                            true,
+                            ref_idx,
+                            *tid,
+                            *target_ids_and_lens.get(&tid).unwrap() as usize,
+                        );
 
-                // Create bandpass
-                let mut activity_profile = BandPassActivityProfile::new(
-                    max_prob_propagation,
-                    active_prob_threshold,
-                    BandPassActivityProfile::MAX_FILTER_SIZE,
-                    BandPassActivityProfile::DEFAULT_SIGMA,
-                    true,
-                    ref_idx,
-                    *tid,
-                    *target_ids_and_lens.get(&tid).unwrap() as usize
-                );
+                        // for each position determine per locus activity and add to bandpass
+                        vec_of_ref_vs_any_result.iter().enumerate().for_each(
+                            |(pos, ref_vs_any_result)| {
+                                let is_active_prob = self
+                                    .genotyping_engine
+                                    .allele_frequency_calculator
+                                    .calculate_single_sample_biallelic_non_ref_posterior(
+                                        &ref_vs_any_result.genotype_likelihoods,
+                                        true,
+                                    );
 
-                // for each position determine per locus activity and add to bandpass
-                vec_of_ref_vs_any_result.iter().enumerate().for_each(|(pos, ref_vs_any_result)| {
-                    let is_active_prob =
-                        self.genotyping_engine.allele_frequency_calculator
-                            .calculate_single_sample_biallelic_non_ref_posterior(
-                                &ref_vs_any_result.genotype_likelihoods,
-                                true
-                            );
+                                let per_base_hq_soft_clips =
+                                    per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
-                    let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.get(tid).unwrap();
-
-                    let hq_soft_clips = per_base_hq_soft_clips[pos];
-                    let activity_profile_state = ActivityProfileState::new(
+                                let hq_soft_clips = per_base_hq_soft_clips[pos];
+                                let activity_profile_state = ActivityProfileState::new(
                         ref_vs_any_result.loc.clone(),
                         is_active_prob,
                         Type::new(
@@ -425,19 +496,22 @@ impl HaplotypeCallerEngine {
                         )
                     );
 
-                    activity_profile.add(activity_profile_state);
-                });
+                                activity_profile.add(activity_profile_state);
+                            },
+                        );
 
-                (*tid, activity_profile)
-            }).collect::<HashMap<usize, BandPassActivityProfile>>();
+                        (*tid, activity_profile)
+                    })
+                    .collect::<HashMap<usize, BandPassActivityProfile>>();
 
-            return per_contig_activity_profiles
+            return per_contig_activity_profiles;
         } else {
-
             let mut per_contig_activity_profiles = HashMap::new();
             for (tid, length) in target_ids_and_lens.iter() {
-                let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(*tid)
-                    .or_insert(vec![RunningAverage::new(); target_ids_and_lens[tid] as usize]);
+                let per_base_hq_soft_clips =
+                    per_contig_per_base_hq_soft_clips.entry(*tid).or_insert(
+                        vec![RunningAverage::new(); target_ids_and_lens[tid] as usize],
+                    );
 
                 // Create bandpass
                 let mut activity_profile = BandPassActivityProfile::new(
@@ -448,12 +522,11 @@ impl HaplotypeCallerEngine {
                     true,
                     ref_idx,
                     *tid,
-                    *target_ids_and_lens.get(&tid).unwrap() as usize
+                    *target_ids_and_lens.get(&tid).unwrap() as usize,
                 );
 
                 for pos in 0..(*length as usize) {
                     let mut genotypes = Vec::new();
-
 
                     let hq_soft_clips = per_base_hq_soft_clips[pos];
 
@@ -464,28 +537,21 @@ impl HaplotypeCallerEngine {
 
                     let fake_alleles = Allele::create_fake_alleles();
 
-                    let mut variant_context = VariantContext::build(
-                        *tid, pos, pos, fake_alleles
-                    );
+                    let mut variant_context = VariantContext::build(*tid, pos, pos, fake_alleles);
 
-                    variant_context.add_genotypes(
-                        genotypes
-                    );
-
+                    variant_context.add_genotypes(genotypes);
 
                     let vc_out = self.genotyping_engine.calculate_genotypes(
                         variant_context,
                         ploidy,
                         &self.genotype_prior_calculator,
                         Vec::new(),
-                        self.stand_min_conf
+                        self.stand_min_conf,
                     );
 
                     let is_active_prob = match vc_out {
-                        Some(vc) => {
-                            QualityUtils::qual_to_prob(vc.get_phred_scaled_qual())
-                        },
-                        None => 0.0
+                        Some(vc) => QualityUtils::qual_to_prob(vc.get_phred_scaled_qual()),
+                        None => 0.0,
                     };
 
                     let activity_profile_state = ActivityProfileState::new(
@@ -494,13 +560,13 @@ impl HaplotypeCallerEngine {
                         Type::new(
                             hq_soft_clips.mean(),
                             HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
-                        )
+                        ),
                     );
                     activity_profile.add(activity_profile_state);
                 }
                 per_contig_activity_profiles.insert(*tid, activity_profile);
             }
-            return per_contig_activity_profiles
+            return per_contig_activity_profiles;
         }
     }
 
@@ -513,18 +579,19 @@ impl HaplotypeCallerEngine {
      */
     pub fn call_region(
         &mut self,
-        region: &mut AssemblyRegion,
+        mut region: AssemblyRegion,
         reference_reader: &mut ReferenceReader,
         given_alleles: &Vec<VariantContext>,
-        args: &clap::ArgMatches
+        args: &clap::ArgMatches,
+        sample_names: &Vec<String>,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
         if !region.is_active() {
-            return self.reference_model_for_no_variation(region, true, &vc_priors)
+            return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         if given_alleles.is_empty() && region.len() == 0 {
-            return self.reference_model_for_no_variation(region, true, &vc_priors)
+            return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         // run the local assembler, getting back a collection of information on how we should proceed
@@ -534,8 +601,11 @@ impl HaplotypeCallerEngine {
             args,
             reference_reader,
             &mut self.assembly_engine,
-            args.is_present("correct-overlapping-quality")
+            args.is_present("correct-overlapping-quality"),
+            sample_names,
         );
+
+        return vc_priors;
     }
 
     /**
@@ -556,8 +626,8 @@ impl HaplotypeCallerEngine {
     }
 
     /**
-    * Populates reference and non reference depth vectors
-    */
+     * Populates reference and non reference depth vectors
+     */
     fn alignment_context_creation(
         alignment: &bam::pileup::Alignment,
         result: &mut RefVsAnyResult,
@@ -583,11 +653,13 @@ impl HaplotypeCallerEngine {
                     is_alt = true;
                     result.non_ref_depth += 1;
                     non_ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)));
-                    ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0_f64.log10()))
+                    ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)))
+                        + (-(3.0_f64.log10()))
                 } else {
                     result.ref_depth += 1;
                     ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)));
-                    non_ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64))) + (-(3.0_f64.log10()));
+                    non_ref_likelihood = f64::from(LogProb::from(PHREDProb(record_qual as f64)))
+                        + (-(3.0_f64.log10()));
                 }
 
                 HaplotypeCallerEngine::update_heterozygous_likelihood(
@@ -595,7 +667,7 @@ impl HaplotypeCallerEngine {
                     likelihoodcount,
                     log10ploidy,
                     ref_likelihood,
-                    non_ref_likelihood
+                    non_ref_likelihood,
                 );
             }
 
@@ -606,33 +678,28 @@ impl HaplotypeCallerEngine {
                     // in read
                     if qpos == read_cursor - 1 {
                         match cig {
-                            Cigar::SoftClip(_) => {
-                                hq_soft_clips.add(
-                                    HaplotypeCallerEngine::count_high_quality_soft_clips(
-                                        &cig,
-                                        &record,
-                                        read_cursor,
-                                        min_soft_clip_qual
-                                    )
-                                )
-                            },
+                            Cigar::SoftClip(_) => hq_soft_clips.add(
+                                HaplotypeCallerEngine::count_high_quality_soft_clips(
+                                    &cig,
+                                    &record,
+                                    read_cursor,
+                                    min_soft_clip_qual,
+                                ),
+                            ),
                             _ => {
                                 // Not a soft clip
                             }
                         }
                     } else if qpos == read_cursor + 1 {
                         match cig {
-                            Cigar::SoftClip(_) => {
-                                hq_soft_clips.add(
-                                    HaplotypeCallerEngine::count_high_quality_soft_clips(
-                                        &cig,
-                                        &record,
-                                        read_cursor,
-                                        min_soft_clip_qual
-                                    )
-                                )
-
-                            },
+                            Cigar::SoftClip(_) => hq_soft_clips.add(
+                                HaplotypeCallerEngine::count_high_quality_soft_clips(
+                                    &cig,
+                                    &record,
+                                    read_cursor,
+                                    min_soft_clip_qual,
+                                ),
+                            ),
                             _ => {
                                 // Not a soft clip
                             }
@@ -640,7 +707,7 @@ impl HaplotypeCallerEngine {
                     } else if read_cursor > qpos {
                         // break out of loop since we have passed
                         // the position
-                        break
+                        break;
                     }
                     match cig {
                         // Progress the cigar cursor
@@ -651,23 +718,20 @@ impl HaplotypeCallerEngine {
                         | Cigar::SoftClip(_) => {
                             read_cursor += cig.len() as usize;
                         }
-                        _ => {},
+                        _ => {}
                     }
-
                 }
             }
-
         }
 
         result.read_counts += 1;
     }
 
-
     fn count_high_quality_soft_clips(
         cig: &Cigar,
         record: &Record,
         cigar_cursor: usize,
-        min_soft_clip_qual: i32
+        min_soft_clip_qual: i32,
     ) -> f64 {
         // https://gatk.broadinstitute.org/hc/en-us/articles/360036227652?id=4147
         // If we have high quality soft clips then we want to
@@ -680,7 +744,7 @@ impl HaplotypeCallerEngine {
                 num_high_quality_soft_clips += 1.0
             }
         }
-        return num_high_quality_soft_clips
+        return num_high_quality_soft_clips;
     }
 
     fn update_heterozygous_likelihood(
@@ -688,7 +752,7 @@ impl HaplotypeCallerEngine {
         likelihoodcount: usize,
         log10ploidy: f64,
         ref_likelihood: f64,
-        non_ref_likelihood: f64
+        non_ref_likelihood: f64,
     ) {
         // https://github.com/broadinstitute/gatk/blob/master/src/main/java/org/broadinstitute/hellbender/tools/walkers/haplotypecaller/ReferenceConfidenceModel.java
         // applyPileupElementRefVsNonRefLikelihoodAndCount
@@ -701,7 +765,7 @@ impl HaplotypeCallerEngine {
         while i < (likelihoodcount - 1) {
             result.genotype_likelihoods[i] += MathUtils::approximate_log10_sum_log10(
                 ref_likelihood + (j as f64).log10(),
-                non_ref_likelihood + (i as f64).log10()
+                non_ref_likelihood + (i as f64).log10(),
             );
             i += 1;
             j -= 1;
@@ -718,40 +782,59 @@ impl HaplotypeCallerEngine {
      * @param afPrior       Beta prior on alt allele fraction
      * @return
      */
-    pub fn log_likelihood_ratio(n_ref: usize, alt_quals: Vec<u8>, repeat_factor: usize, af_prior: Option<BetaDistributionShape>) -> f64 {
+    pub fn log_likelihood_ratio(
+        n_ref: usize,
+        alt_quals: Vec<u8>,
+        repeat_factor: usize,
+        af_prior: Option<BetaDistributionShape>,
+    ) -> f64 {
         let n_alt = repeat_factor * alt_quals.len();
         let n = n_ref + n_alt;
 
         let f_tilde_ratio = (digamma(n_ref as f64 + 1.) - digamma(n_alt as f64 + 1.)).exp();
 
-        let read_sum = alt_quals.par_iter().map(|qual|{
-            let epsilon = QualityUtils::qual_to_error_prob(*qual as f64);
-            let z_bar_alt = (1.0 - epsilon) / (1.0 - epsilon + epsilon * f_tilde_ratio);
-            let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(*qual as f64);
-            let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(*qual);
-            z_bar_alt * (log_one_minus_epsilon - log_epsilon) + MathUtils::fast_bernoulli_entropy(z_bar_alt)
-        }).sum::<f64>();
+        let read_sum = alt_quals
+            .par_iter()
+            .map(|qual| {
+                let epsilon = QualityUtils::qual_to_error_prob(*qual as f64);
+                let z_bar_alt = (1.0 - epsilon) / (1.0 - epsilon + epsilon * f_tilde_ratio);
+                let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(*qual as f64);
+                let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(*qual);
+                z_bar_alt * (log_one_minus_epsilon - log_epsilon)
+                    + MathUtils::fast_bernoulli_entropy(z_bar_alt)
+            })
+            .sum::<f64>();
 
         let mut beta_entropy;
         match af_prior {
             Some(af_prior) => {
                 let alpha = af_prior.get_alpha();
                 let beta = af_prior.get_beta();
-                beta_entropy = ln_gamma(alpha + beta) - ln_gamma(alpha) - ln_gamma(beta)
-                    - ln_gamma(alpha + beta + n as f64) + ln_gamma(alpha + n_alt as f64) + ln_gamma(beta + n_ref as f64);
-            },
+                beta_entropy = ln_gamma(alpha + beta)
+                    - ln_gamma(alpha)
+                    - ln_gamma(beta)
+                    - ln_gamma(alpha + beta + n as f64)
+                    + ln_gamma(alpha + n_alt as f64)
+                    + ln_gamma(beta + n_ref as f64);
+            }
             None => {
                 beta_entropy = MathUtils::log10_to_log(
-                    -MathUtils::log10_factorial(n as f64 + 1.0) + MathUtils::log10_factorial(n_alt as f64) + MathUtils::log10_factorial(n_ref as f64)
+                    -MathUtils::log10_factorial(n as f64 + 1.0)
+                        + MathUtils::log10_factorial(n_alt as f64)
+                        + MathUtils::log10_factorial(n_ref as f64),
                 );
             }
         }
 
-        return beta_entropy + read_sum * repeat_factor as f64
+        return beta_entropy + read_sum * repeat_factor as f64;
     }
 
-    pub fn log_likelihood_ratio_constant_error(ref_count: usize, alt_count: usize, error_probability: f64) -> f64 {
+    pub fn log_likelihood_ratio_constant_error(
+        ref_count: usize,
+        alt_count: usize,
+        error_probability: f64,
+    ) -> f64 {
         let qual = QualityUtils::error_prob_to_qual(error_probability);
-        return Self::log_likelihood_ratio(ref_count, vec![qual], alt_count, None)
+        return Self::log_likelihood_ratio(ref_count, vec![qual], alt_count, None);
     }
 }

@@ -1,8 +1,8 @@
 use model::variants::Allele;
+use rayon::prelude::*;
+use std::collections::HashMap;
 use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
-use std::collections::HashMap;
-use rayon::prelude::*;
 
 /**
  * Describes the results of the AFCalc
@@ -30,7 +30,7 @@ impl AFCalculationResult {
         allele_counts_of_mle: Vec<i64>,
         alleles_used_in_genotyping: Vec<Allele>,
         log10_posterior_of_no_variant: f64,
-        log10_p_ref_by_allele: HashMap<Allele, f64>
+        log10_p_ref_by_allele: HashMap<Allele, f64>,
     ) -> AFCalculationResult {
         if !MathUtils::is_valid_log10_probability(log10_posterior_of_no_variant) {
             panic!("log10 posterior must be a valid log probability")
@@ -50,7 +50,7 @@ impl AFCalculationResult {
             log10_p_ref_by_allele,
             log10_posterior_of_no_variant,
             alleles_used_in_genotyping,
-            allele_counts_of_mle
+            allele_counts_of_mle,
         }
     }
 
@@ -79,11 +79,18 @@ impl AFCalculationResult {
      */
     pub fn get_allele_count_at_mle(&self, allele: &Allele) -> i64 {
         if allele.is_reference() {
-            panic!("Cannot get the alt allele index for reference allele {:?}", allele)
+            panic!(
+                "Cannot get the alt allele index for reference allele {:?}",
+                allele
+            )
         }
-        let index_in_all_alleles_including_ref = self.alleles_used_in_genotyping.par_iter().position_first(|a| a == allele).unwrap();
+        let index_in_all_alleles_including_ref = self
+            .alleles_used_in_genotyping
+            .par_iter()
+            .position_first(|a| a == allele)
+            .unwrap();
         let index_in_alt_alleles = index_in_all_alleles_including_ref - 1;
-        return self.allele_counts_of_mle[index_in_alt_alleles]
+        return self.allele_counts_of_mle[index_in_alt_alleles];
     }
 
     /**
@@ -104,7 +111,8 @@ impl AFCalculationResult {
     }
 
     pub fn passes_threshold(&self, allele: &Allele, phred_scale_qual_threshold: f64) -> bool {
-        (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON) < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold)
+        (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON)
+            < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold)
     }
 
     /**
@@ -130,6 +138,6 @@ impl AFCalculationResult {
      */
     pub fn get_log10_posterior_of_allele_absent(&self, allele: &Allele) -> f64 {
         let log10_p_non_ref = self.log10_p_ref_by_allele.get(allele).unwrap();
-        return *log10_p_non_ref
+        return *log10_p_non_ref;
     }
 }

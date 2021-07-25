@@ -1,20 +1,19 @@
 pub mod activity_profile;
 pub mod assembly;
 pub mod cli;
-pub mod dbscan;
 pub mod estimation;
 pub mod external_command_checker;
-pub mod haplotype;
 pub mod genotype;
 pub mod graphs;
+pub mod haplotype;
 pub mod model;
-pub mod utils;
-pub mod reads;
-pub mod reference;
+pub mod read_error_corrector;
 pub mod read_orientation;
 pub mod read_threading;
-pub mod read_error_corrector;
+pub mod reads;
+pub mod reference;
 pub mod smith_waterman;
+pub mod utils;
 
 // HTS and bio files
 extern crate bio;
@@ -32,9 +31,9 @@ extern crate kodama;
 extern crate linregress;
 #[macro_use]
 extern crate ndarray;
+extern crate mathru;
 extern crate ndarray_npy;
 extern crate statrs;
-extern crate mathru;
 
 // Utilities
 extern crate clap;
@@ -43,19 +42,19 @@ extern crate csv;
 extern crate env_logger;
 extern crate glob;
 extern crate itertools;
+extern crate libm;
+extern crate linked_hash_map;
+extern crate linked_hash_set;
+extern crate multimap;
 extern crate nix;
+extern crate num;
 extern crate ordered_float;
+extern crate petgraph;
 extern crate rand;
 extern crate rayon;
 extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
-extern crate multimap;
-extern crate num;
-extern crate libm;
-extern crate linked_hash_set;
-extern crate linked_hash_map;
-extern crate petgraph;
 //extern crate plotly;
 extern crate strum;
 

@@ -1,7 +1,7 @@
 /**
  * How overhangs should be treated during Smith-Waterman alignment
  */
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum SWOverhangStrategy {
     /*
      * Add softclips for the overhangs
@@ -24,13 +24,13 @@ pub enum SWOverhangStrategy {
     /*
      * Just ignore the overhangs
      */
-    Ignore
+    Ignore,
 }
 
 /**
  * a set of parameters to configure Smith-Waterman assembly
  */
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct SWParameters {
     pub(crate) match_value: i32,
     pub(crate) mismatch_penalty: i32,
@@ -47,8 +47,10 @@ impl SWParameters {
      * @param gapExtendPenalty how much to penalize extending an already open gap in the alignment <= 0
      */
     pub fn new(
-        match_value: i32, mismatch_penalty: i32,
-        gap_open_penalty: i32, gap_extend_penalty: i32,
+        match_value: i32,
+        mismatch_penalty: i32,
+        gap_open_penalty: i32,
+        gap_extend_penalty: i32,
     ) -> Self {
         assert!(match_value >= 0, "matchValue must be >= 0");
         assert!(mismatch_penalty <= 0, "mismatchPenalty must be <= 0");
@@ -61,5 +63,4 @@ impl SWParameters {
             gap_extend_penalty,
         }
     }
-
 }

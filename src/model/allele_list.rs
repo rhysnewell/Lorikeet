@@ -3,13 +3,13 @@ use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub struct AlleleList<T> {
-    list: Vec<T>
+    list: Vec<T>,
 }
 
 impl AlleleList<Allele> {
     pub fn new(input_list: &Vec<Allele>) -> AlleleList<Allele> {
         AlleleList {
-            list: input_list.clone()
+            list: input_list.clone(),
         }
     }
 
@@ -52,9 +52,7 @@ impl AlleleList<Allele> {
      * @return never {@code null}.
      */
     pub fn empty_allele_list() -> AlleleList<Allele> {
-        AlleleList {
-            list: Vec::new()
-        }
+        AlleleList { list: Vec::new() }
     }
 
     /**
@@ -84,7 +82,10 @@ impl AlleleList<Allele> {
      * @return -1 if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
      */
     pub fn index_of_reference(&self) -> usize {
-        self.list.par_iter().position_first(|p| p.is_reference()).unwrap()
+        self.list
+            .par_iter()
+            .position_first(|p| p.is_reference())
+            .unwrap()
     }
 
     /**
@@ -105,8 +106,7 @@ impl AlleleList<Allele> {
      *
      * @return never {@code null}
      */
-    pub fn permuation(self, target: AlleleList<Allele>)
-        -> Permutation<Allele> {
+    pub fn permuation(self, target: AlleleList<Allele>) -> Permutation<Allele> {
         Permutation::new(self, target)
     }
 }
@@ -139,7 +139,7 @@ pub trait AlleleListPermutation<T> {
 
 pub enum Permutation<T> {
     NonPermutation {
-        allele_list: AlleleList<T>
+        allele_list: AlleleList<T>,
     },
     ActualPermutation {
         from: AlleleList<T>,
@@ -148,16 +148,15 @@ pub enum Permutation<T> {
         kept_from_indices: Vec<bool>,
         non_permuted: bool,
         is_partial: bool,
-    }
+    },
 }
 
 impl Permutation<Allele> {
-    pub fn new(original: AlleleList<Allele>, target: AlleleList<Allele>)
-        -> Permutation<Allele> {
+    pub fn new(original: AlleleList<Allele>, target: AlleleList<Allele>) -> Permutation<Allele> {
         if AlleleList::equals(&original, &target) {
             return Permutation::NonPermutation {
-                allele_list: original
-            }
+                allele_list: original,
+            };
         } else {
             let mut kept_from_indices = vec![false; original.number_of_alleles()];
             let to_size = target.number_of_alleles();
@@ -188,7 +187,7 @@ impl Permutation<Allele> {
                 kept_from_indices,
                 is_partial,
                 non_permuted,
-            }
+            };
         }
     }
 }
@@ -196,146 +195,89 @@ impl Permutation<Allele> {
 impl AlleleListPermutation<Allele> for Permutation<Allele> {
     fn is_partial(&self) -> bool {
         match self {
-            Permutation::NonPermutation {
-                ..
-            } => { false }
-            Permutation::ActualPermutation {
-                is_partial,
-                ..
-            } => { *is_partial }
+            Permutation::NonPermutation { .. } => false,
+            Permutation::ActualPermutation { is_partial, .. } => *is_partial,
         }
     }
 
     fn is_non_permuted(&self) -> bool {
         match self {
-            Permutation::NonPermutation {
-                ..
-            } => { true }
-            Permutation::ActualPermutation {
-                non_permuted,
-                ..
-            } => { *non_permuted }
+            Permutation::NonPermutation { .. } => true,
+            Permutation::ActualPermutation { non_permuted, .. } => *non_permuted,
         }
     }
 
     fn to_index(&self, from_index: usize) -> usize {
         match self {
-            Permutation::NonPermutation {
-                ..
-            } => { from_index }
-            Permutation::ActualPermutation {
-                to,
-                from,
-                ..
-            } => { to.index_of_allele(from.get_allele(from_index)) }
+            Permutation::NonPermutation { .. } => from_index,
+            Permutation::ActualPermutation { to, from, .. } => {
+                to.index_of_allele(from.get_allele(from_index))
+            }
         }
     }
 
     fn from_index(&self, to_index: usize) -> usize {
         match self {
-            Permutation::NonPermutation {
-                ..
-            } => { to_index }
-            Permutation::ActualPermutation {
-                from_index,
-                ..
-            } => { from_index[to_index] }
+            Permutation::NonPermutation { .. } => to_index,
+            Permutation::ActualPermutation { from_index, .. } => from_index[to_index],
         }
     }
 
     fn is_kept(&self, from_index: usize) -> bool {
         match self {
-            Permutation::NonPermutation {
-                ..
-            } => { true }
+            Permutation::NonPermutation { .. } => true,
             Permutation::ActualPermutation {
-                kept_from_indices,
-                ..
-            } => { kept_from_indices[from_index] }
+                kept_from_indices, ..
+            } => kept_from_indices[from_index],
         }
     }
 
     fn from_size(&self) -> usize {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.number_of_alleles() }
-            Permutation::ActualPermutation {
-                from,
-                ..
-            } => { from.number_of_alleles() }
+            Permutation::NonPermutation { allele_list } => allele_list.number_of_alleles(),
+            Permutation::ActualPermutation { from, .. } => from.number_of_alleles(),
         }
     }
 
     fn to_size(&self) -> usize {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.number_of_alleles() }
-            Permutation::ActualPermutation {
-                to,
-                ..
-            } => { to.number_of_alleles() }
+            Permutation::NonPermutation { allele_list } => allele_list.number_of_alleles(),
+            Permutation::ActualPermutation { to, .. } => to.number_of_alleles(),
         }
     }
 
     fn from_list(&self) -> &Vec<Allele> {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.as_list_of_alleles() }
-            Permutation::ActualPermutation {
-                from,
-                ..
-            } => { from.as_list_of_alleles() }
+            Permutation::NonPermutation { allele_list } => allele_list.as_list_of_alleles(),
+            Permutation::ActualPermutation { from, .. } => from.as_list_of_alleles(),
         }
     }
 
     fn to_list(&self) -> &Vec<Allele> {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.as_list_of_alleles() }
-            Permutation::ActualPermutation {
-                to,
-                ..
-            } => { to.as_list_of_alleles() }
+            Permutation::NonPermutation { allele_list } => allele_list.as_list_of_alleles(),
+            Permutation::ActualPermutation { to, .. } => to.as_list_of_alleles(),
         }
     }
 
     fn number_of_alleles(&self) -> usize {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.number_of_alleles() }
-            Permutation::ActualPermutation {
-                to,
-                ..
-            } => { to.number_of_alleles() }
+            Permutation::NonPermutation { allele_list } => allele_list.number_of_alleles(),
+            Permutation::ActualPermutation { to, .. } => to.number_of_alleles(),
         }
     }
 
     fn index_of_allele(&self, allele: &Allele) -> usize {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.index_of_allele(allele) }
-            Permutation::ActualPermutation {
-                to,
-                ..
-            } => { to.index_of_allele(allele) }
+            Permutation::NonPermutation { allele_list } => allele_list.index_of_allele(allele),
+            Permutation::ActualPermutation { to, .. } => to.index_of_allele(allele),
         }
     }
 
     fn get_allele(&self, index: usize) -> &Allele {
         match self {
-            Permutation::NonPermutation {
-                allele_list,
-            } => { allele_list.get_allele(index) }
-            Permutation::ActualPermutation {
-                to,
-                ..
-            } => { to.get_allele(index) }
+            Permutation::NonPermutation { allele_list } => allele_list.get_allele(index),
+            Permutation::ActualPermutation { to, .. } => to.get_allele(index),
         }
     }
 }

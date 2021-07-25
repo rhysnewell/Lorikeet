@@ -1,28 +1,28 @@
 use bio::io::fasta::IndexedReader;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use std::fs::File;
-use std::collections::HashMap;
 use rayon::prelude::*;
 use reference::reference_reader_utils::ReferenceReaderUtils;
+use std::collections::HashMap;
+use std::fs::File;
 
 /**
 * Struct handling methods to read and handle information for references
 */
 #[derive(Debug)]
-pub struct ReferenceReader<'a> {
+pub struct ReferenceReader {
     indexed_reader: IndexedReader<File>,
     pub current_sequence: Vec<u8>,
-    pub genomes_and_contigs: &'a GenomesAndContigs,
+    pub genomes_and_contigs: GenomesAndContigs,
     target_names: HashMap<usize, Vec<u8>>,
     pub target_lens: HashMap<usize, u64>,
 }
 
-impl<'a> ReferenceReader<'a> {
+impl ReferenceReader {
     pub fn new(
         concatenated_genomes: &Option<String>,
-        genomes_and_contigs: &'a GenomesAndContigs,
+        genomes_and_contigs: GenomesAndContigs,
         number_of_contigs: usize,
-    ) -> ReferenceReader<'a> {
+    ) -> ReferenceReader {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
         ReferenceReader {
@@ -36,16 +36,19 @@ impl<'a> ReferenceReader<'a> {
 
     pub fn new_with_target_names(
         concatenated_genomes: &Option<String>,
-        genomes_and_contigs: &'a GenomesAndContigs,
+        genomes_and_contigs: GenomesAndContigs,
         target_names: Vec<&[u8]>,
-    ) -> ReferenceReader<'a> {
+    ) -> ReferenceReader {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
         ReferenceReader {
             indexed_reader,
             current_sequence: Vec::new(),
-            target_names: target_names.into_par_iter().enumerate()
-                .map(|(tid, target)| (tid, target.to_vec())).collect::<HashMap<usize, Vec<u8>>>(),
+            target_names: target_names
+                .into_par_iter()
+                .enumerate()
+                .map(|(tid, target)| (tid, target.to_vec()))
+                .collect::<HashMap<usize, Vec<u8>>>(),
             genomes_and_contigs: genomes_and_contigs,
             target_lens: HashMap::new(),
         }
@@ -87,7 +90,7 @@ impl<'a> ReferenceReader<'a> {
     }
 
     pub fn retrieve_contig_name_from_tid(&self, tid: usize) -> Option<&Vec<u8>> {
-        return self.target_names.get(&tid)
+        return self.target_names.get(&tid);
     }
 
     pub fn fetch_contig_from_reference_by_contig_name(
@@ -95,7 +98,10 @@ impl<'a> ReferenceReader<'a> {
         contig_name: &[u8],
         ref_idx: usize,
     ) {
-        match self.indexed_reader.fetch_all(std::str::from_utf8(contig_name).unwrap()) {
+        match self
+            .indexed_reader
+            .fetch_all(std::str::from_utf8(contig_name).unwrap())
+        {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
                 "{}~{}",
@@ -119,12 +125,11 @@ impl<'a> ReferenceReader<'a> {
         };
     }
 
-    pub fn fetch_contig_from_reference_by_tid(
-        &mut self,
-        tid: usize,
-        ref_idx: usize,
-    ) {
-        match self.indexed_reader.fetch_all(std::str::from_utf8(&self.target_names[&tid]).unwrap()) {
+    pub fn fetch_contig_from_reference_by_tid(&mut self, tid: usize, ref_idx: usize) {
+        match self
+            .indexed_reader
+            .fetch_all(std::str::from_utf8(&self.target_names[&tid]).unwrap())
+        {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
                 "{}~{}",
@@ -148,32 +153,26 @@ impl<'a> ReferenceReader<'a> {
         };
     }
 
-    pub fn read_sequence_to_vec(
-        &mut self,
-    ) {
+    pub fn read_sequence_to_vec(&mut self) {
         match self.indexed_reader.read(&mut self.current_sequence) {
             Ok(reference) => reference,
             Err(e) => {
-                println!(
-                    "Cannot read sequence from reference {:?}",
-                    e,
-                );
+                println!("Cannot read sequence from reference {:?}", e,);
                 std::process::exit(1)
             }
         };
     }
 
     /**
-    * Takes a contig name &[u8] and splits around a suspected separator character
-    */
+     * Takes a contig name &[u8] and splits around a suspected separator character
+     */
     pub fn split_contig_name<'b>(contig_name: &'b [u8], separator: u8) -> &'b [u8] {
-        match contig_name.into_par_iter().position_first(|&x| x == separator) {
-            Some(position) => {
-                return &contig_name[position..contig_name.len()]
-            },
-            None => {
-                return contig_name
-            }
+        match contig_name
+            .into_par_iter()
+            .position_first(|&x| x == separator)
+        {
+            Some(position) => return &contig_name[position..contig_name.len()],
+            None => return contig_name,
         }
     }
 }

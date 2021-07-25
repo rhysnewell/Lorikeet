@@ -23,7 +23,7 @@ default-run = "lorikeet"
 [dependencies]
 ansi_term = "0.12.1"
 bio = "0.35"
-bio-types = "0.11"
+bio-types = "0.12.0"
 bird_tool_utils = "0.3.0"
 clap = "2"
 compare = "0.1.0"

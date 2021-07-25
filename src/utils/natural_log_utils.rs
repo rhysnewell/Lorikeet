@@ -1,24 +1,22 @@
-use utils::quality_utils::QualityUtils;
+use libm;
 use num::traits::Float;
 use rayon::prelude::*;
-use libm;
+use utils::quality_utils::QualityUtils;
 
 lazy_static! {
     pub static ref LOG_ONE_HALF: f64 = 0.5.ln();
-    pub static ref LOG_ONE_THIRD: f64 = (1.0/3.0).ln();
+    pub static ref LOG_ONE_THIRD: f64 = (1.0 / 3.0).ln();
     static ref LOG1MEXP_THRESHOLD: f64 = 0.5.ln();
-    static ref PHRED_TO_ERROR_PROB_FACTOR: f64 = -(10.0.ln())/10.0;
-
-    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL as usize).into_par_iter().map(|n| {
-        NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n as f64))
-    }).collect::<Vec<f64>>();
+    static ref PHRED_TO_ERROR_PROB_FACTOR: f64 = -(10.0.ln()) / 10.0;
+    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL as usize)
+        .into_par_iter()
+        .map(|n| { NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n as f64)) })
+        .collect::<Vec<f64>>();
 }
 
 pub struct NaturalLogUtils {}
 
 impl NaturalLogUtils {
-
-
     /**
      * Calculates {@code log(1-exp(a))} without losing precision.
      *
@@ -37,10 +35,10 @@ impl NaturalLogUtils {
      */
     pub fn log1mexp(a: f64) -> f64 {
         if a > 0.0 {
-            return std::f64::NAN
+            return std::f64::NAN;
         }
         if a == 0.0 {
-            return std::f64::NEG_INFINITY
+            return std::f64::NEG_INFINITY;
         }
 
         if a < *LOG1MEXP_THRESHOLD {
@@ -70,10 +68,10 @@ impl NaturalLogUtils {
             panic!("Qual must be >= 0 but got {}", qual)
         }
 
-        return qual * *PHRED_TO_ERROR_PROB_FACTOR
+        return qual * *PHRED_TO_ERROR_PROB_FACTOR;
     }
 
     pub fn qual_to_log_prob(qual: u8) -> f64 {
-        return qual_to_log_prob_cache[qual as usize] // Map: 127 -> 127; -128 -> 128; -1 -> 255; etc.
+        return qual_to_log_prob_cache[qual as usize]; // Map: 127 -> 127; -128 -> 128; -1 -> 255; etc.
     }
 }

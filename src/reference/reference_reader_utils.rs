@@ -1,15 +1,15 @@
 use bio::io::fasta::IndexedReader;
 use coverm::genomes_and_contigs::GenomesAndContigs;
-use process::Stdio;
-use std::fs::File;
-use glob::glob;
 use coverm::genomes_and_contigs::*;
-use tempfile::NamedTempFile;
-use std::collections::HashMap;
-use std::io::Write;
-use std::process;
 use external_command_checker;
 use galah::cluster_argument_parsing::GalahClustererCommandDefinition;
+use glob::glob;
+use process::Stdio;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
+use std::process;
+use tempfile::NamedTempFile;
 
 lazy_static! {
     static ref GALAH_COMMAND_DEFINITION: GalahClustererCommandDefinition = {
@@ -33,7 +33,6 @@ lazy_static! {
 pub struct ReferenceReaderUtils {}
 
 impl ReferenceReaderUtils {
-
     pub fn retrieve_reference(concatenated_genomes: &Option<String>) -> IndexedReader<File> {
         let reference = match concatenated_genomes {
             Some(reference_path) => match IndexedReader::from_file(&reference_path) {
@@ -45,7 +44,6 @@ impl ReferenceReaderUtils {
 
         reference
     }
-
 
     pub fn extract_genome<'a>(tid: u32, target_names: &'a Vec<&[u8]>, split_char: u8) -> &'a [u8] {
         let target_name = target_names[tid as usize];
@@ -74,7 +72,11 @@ impl ReferenceReaderUtils {
         // Concatenated references have the reference file name in front of the contig name
         // separated by the "~" symbol by default.
         // TODO: Parse as a separator value to this function
-        let reference_stem = match std::str::from_utf8(&target_name).unwrap().splitn(2, "~").next() {
+        let reference_stem = match std::str::from_utf8(&target_name)
+            .unwrap()
+            .splitn(2, "~")
+            .next()
+        {
             Some(ref_stem) => ref_stem,
             None => genome_from_contig(),
         };
@@ -140,7 +142,7 @@ impl ReferenceReaderUtils {
                                 &m,
                                 &Self::galah_command_line_definition(),
                             )
-                                .expect("Error parsing CheckM-related options");
+                            .expect("Error parsing CheckM-related options");
                         info!(
                             "After filtering by CheckM, {} genomes remained",
                             genomes_after_filtering.len()
@@ -275,13 +277,11 @@ impl ReferenceReaderUtils {
             .output()
             .expect("Unable to execute bash");
 
-        return IndexedReader::from_file(&reference_path)
-            .expect("Unable to generate index");
+        return IndexedReader::from_file(&reference_path).expect("Unable to generate index");
     }
 
-    pub fn galah_command_line_definition(
-    ) -> GalahClustererCommandDefinition {
-        *GALAH_COMMAND_DEFINITION
+    pub fn galah_command_line_definition() -> &'static GalahClustererCommandDefinition {
+        &*GALAH_COMMAND_DEFINITION
     }
 
     pub fn dereplicate(m: &clap::ArgMatches, genome_fasta_files: &Vec<String>) -> Vec<String> {
@@ -294,9 +294,9 @@ impl ReferenceReaderUtils {
         let clusterer = galah::cluster_argument_parsing::generate_galah_clusterer(
             genome_fasta_files,
             &m,
-            &Self::galah_command_line_definition(),
+            Self::galah_command_line_definition(),
         )
-            .expect("Failed to parse galah clustering arguments correctly");
+        .expect("Failed to parse galah clustering arguments correctly");
         galah::external_command_checker::check_for_dependencies();
         info!("Dereplicating genome at {}% ANI ..", clusterer.ani * 100.);
 
@@ -315,8 +315,8 @@ impl ReferenceReaderUtils {
         if m.is_present("output-dereplication-clusters") {
             let path = m.value_of("output-dereplication-clusters").unwrap();
             info!("Writing dereplication cluster memberships to {}", path);
-            let mut f =
-                std::fs::File::create(path).expect("Error creating dereplication cluster output file");
+            let mut f = std::fs::File::create(path)
+                .expect("Error creating dereplication cluster output file");
             for cluster in cluster_indices.iter() {
                 let rep = cluster[0];
                 for member in cluster {
@@ -325,7 +325,7 @@ impl ReferenceReaderUtils {
                         "{}\t{}",
                         genome_fasta_files[rep], genome_fasta_files[*member]
                     )
-                        .expect("Failed to write a specific line to dereplication cluster file");
+                    .expect("Failed to write a specific line to dereplication cluster file");
                 }
             }
         }

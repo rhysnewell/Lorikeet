@@ -1,9 +1,9 @@
 use reads::bird_tool_reads::BirdToolRead;
-use reads::read_utils::ReadUtils;
-use reads::clipping_op::ClippingOp;
-use utils::simple_interval::Locatable;
 use reads::cigar_utils::CigarUtils;
+use reads::clipping_op::ClippingOp;
+use reads::read_utils::ReadUtils;
 use rust_htslib::bam::record::Cigar;
+use utils::simple_interval::Locatable;
 
 /**
  * A comprehensive clipping tool.
@@ -40,11 +40,10 @@ use rust_htslib::bam::record::Cigar;
 pub struct ReadClipper<'a> {
     read: &'a BirdToolRead,
     was_clipped: bool,
-    ops: Vec<ClippingOp>
+    ops: Vec<ClippingOp>,
 }
 
 impl<'a> ReadClipper<'a> {
-
     pub fn new(read: &'a BirdToolRead) -> ReadClipper {
         ReadClipper {
             read,
@@ -62,28 +61,42 @@ impl<'a> ReadClipper<'a> {
      * @return the read hard clipped to the variant region (Could return an empty, unmapped read)
      */
     pub fn hard_clip_to_region(
-        read: BirdToolRead, ref_start: usize, ref_stop: usize
+        read: BirdToolRead,
+        ref_start: usize,
+        ref_stop: usize,
     ) -> BirdToolRead {
         let start = read.get_start();
         let stop = read.get_end();
-        return Self::hard_clip_to_region_with_alignment_interval(read, ref_start, ref_stop, start, stop)
+        return Self::hard_clip_to_region_with_alignment_interval(
+            read, ref_start, ref_stop, start, stop,
+        );
     }
 
     fn hard_clip_to_region_with_alignment_interval(
-        read: BirdToolRead, ref_start: usize, ref_stop: usize, alignment_start: usize, alignment_stop: usize
+        read: BirdToolRead,
+        ref_start: usize,
+        ref_stop: usize,
+        alignment_start: usize,
+        alignment_stop: usize,
     ) -> BirdToolRead {
         if alignment_start <= ref_stop && alignment_stop >= ref_start {
             if alignment_start < ref_start && alignment_stop > ref_stop {
-                return ReadClipper::new(&read).hard_clip_both_ends_by_reference_coordinates(ref_start.checked_sub(1).unwrap_or(0), ref_start + 1)
+                return ReadClipper::new(&read).hard_clip_both_ends_by_reference_coordinates(
+                    ref_start.checked_sub(1).unwrap_or(0),
+                    ref_start + 1,
+                );
             } else if alignment_start < ref_start {
-                return ReadClipper::new(&read).hard_clip_by_reference_coordinates_left_tail(ref_start.checked_sub(1).unwrap_or(0))
+                return ReadClipper::new(&read).hard_clip_by_reference_coordinates_left_tail(
+                    ref_start.checked_sub(1).unwrap_or(0),
+                );
             } else if alignment_stop > ref_stop {
-                return ReadClipper::new(&read).hard_clip_by_reference_coordinates_right_tail(ref_stop + 1)
+                return ReadClipper::new(&read)
+                    .hard_clip_by_reference_coordinates_right_tail(ref_stop + 1);
             }
 
-            return read
+            return read;
         } else {
-            return ReadUtils::empty_read(&read)
+            return ReadUtils::empty_read(&read);
         }
     }
 
@@ -100,13 +113,19 @@ impl<'a> ReadClipper<'a> {
      * @return a new read, without the clipped bases (May return empty, unclipped reads)
      */
     fn clip_by_reference_coordinates(
-        &mut self, ref_start: Option<usize>, ref_stop: Option<usize>, clipping_op: ClippingRepresentation
+        &mut self,
+        ref_start: Option<usize>,
+        ref_stop: Option<usize>,
+        clipping_op: ClippingRepresentation,
     ) -> BirdToolRead {
         if self.read.is_empty() {
-            return ReadUtils::empty_read(&self.read)
+            return ReadUtils::empty_read(&self.read);
         }
         if clipping_op == ClippingRepresentation::SoftclipBases && self.read.read.is_unmapped() {
-            panic!("Cannot soft-clip read {:?} by reference coordinates because it is unmapped", self.read)
+            panic!(
+                "Cannot soft-clip read {:?} by reference coordinates because it is unmapped",
+                self.read
+            )
         }
 
         let mut start;
@@ -114,40 +133,50 @@ impl<'a> ReadClipper<'a> {
 
         // Determine the read coordinate to start and stop hard clipping
         match ref_start {
-            None => {
-                match ref_stop {
-                    None => {
-                        panic!("Only one of ref_start or ref_stop can be None, not both.")
-                    },
-                    Some(ref_stop) => {
-                        start = Some(0);
-                        let stop_pos_and_operator = ReadUtils::get_read_index_for_reference_coordinate_from_read(&self.read, ref_stop);
-                        match stop_pos_and_operator.0 {
-                            Some(pos) => {
-                                stop = Some(pos - (if CigarUtils::cigar_consumes_read_bases(&stop_pos_and_operator.1.unwrap()) { 0 } else { 1 }));
-                            },
-                            None => {
-                                stop = None;
-                            }
+            None => match ref_stop {
+                None => {
+                    panic!("Only one of ref_start or ref_stop can be None, not both.")
+                }
+                Some(ref_stop) => {
+                    start = Some(0);
+                    let stop_pos_and_operator =
+                        ReadUtils::get_read_index_for_reference_coordinate_from_read(
+                            &self.read, ref_stop,
+                        );
+                    match stop_pos_and_operator.0 {
+                        Some(pos) => {
+                            stop = Some(
+                                pos - (if CigarUtils::cigar_consumes_read_bases(
+                                    &stop_pos_and_operator.1.unwrap(),
+                                ) {
+                                    0
+                                } else {
+                                    1
+                                }),
+                            );
+                        }
+                        None => {
+                            stop = None;
                         }
                     }
                 }
             },
-            Some(ref_start) => {
-                match ref_stop {
-                    None => {
-                        start = ReadUtils::get_read_index_for_reference_coordinate_from_read(&self.read, ref_start).0;
-                        stop = (self.read.read.seq_len() as usize).checked_sub(1);
-                    },
-                    Some(ref_stop) => {
-                        panic!("Either ref_start or ref_stop needs to be None")
-                    }
+            Some(ref_start) => match ref_stop {
+                None => {
+                    start = ReadUtils::get_read_index_for_reference_coordinate_from_read(
+                        &self.read, ref_start,
+                    )
+                    .0;
+                    stop = (self.read.read.seq_len() as usize).checked_sub(1);
                 }
-            }
+                Some(ref_stop) => {
+                    panic!("Either ref_start or ref_stop needs to be None")
+                }
+            },
         }
 
         if start.is_none() || stop.is_none() {
-            return self.read.clone()
+            return self.read.clone();
         };
 
         if stop.unwrap_or(0) > self.read.read.seq_len() - 1 {
@@ -167,7 +196,7 @@ impl<'a> ReadClipper<'a> {
         let clipped_read = self.clip_read(clipping_op);
         self.ops = Vec::new();
 
-        return clipped_read
+        return clipped_read;
     }
 
     /**
@@ -179,21 +208,29 @@ impl<'a> ReadClipper<'a> {
      * @param right the coordinate of the first base to be clipped in the right tail (inclusive)
      * @return a new read, without the clipped bases (Could return an empty, unmapped read)
      */
-    fn hard_clip_both_ends_by_reference_coordinates(&mut self, left: usize, right: usize) -> BirdToolRead {
+    fn hard_clip_both_ends_by_reference_coordinates(
+        &mut self,
+        left: usize,
+        right: usize,
+    ) -> BirdToolRead {
         if self.read.is_empty() || left == right {
-            return ReadUtils::empty_read(&self.read)
+            return ReadUtils::empty_read(&self.read);
         }
 
-        let left_tail_read = self.clip_by_reference_coordinates(Some(right), None, ClippingRepresentation::HardclipBases);
+        let left_tail_read = self.clip_by_reference_coordinates(
+            Some(right),
+            None,
+            ClippingRepresentation::HardclipBases,
+        );
 
         // after clipping one tail, it is possible that the consequent hard clipping of adjacent deletions
         // make the left cut index no longer part of the read. In that case, clip the read entirely.
         if left > left_tail_read.get_end() {
-            return ReadUtils::empty_read(&self.read)
+            return ReadUtils::empty_read(&self.read);
         }
 
         let mut clipper = ReadClipper::new(&left_tail_read);
-        return clipper.hard_clip_by_reference_coordinates_left_tail(left)
+        return clipper.hard_clip_by_reference_coordinates_left_tail(left);
     }
 
     /**
@@ -204,7 +241,11 @@ impl<'a> ReadClipper<'a> {
      * @return a new read, without the left tail (Could be an empty, unmapped read if the clip removed all bases).
      */
     fn hard_clip_by_reference_coordinates_left_tail(&mut self, ref_stop: usize) -> BirdToolRead {
-        return self.clip_by_reference_coordinates(None, Some(ref_stop), ClippingRepresentation::HardclipBases)
+        return self.clip_by_reference_coordinates(
+            None,
+            Some(ref_stop),
+            ClippingRepresentation::HardclipBases,
+        );
     }
 
     /**
@@ -215,7 +256,11 @@ impl<'a> ReadClipper<'a> {
      * @return a new read, without the right tail (Could be an empty, unmapped read if the clip removed all bases).
      */
     fn hard_clip_by_reference_coordinates_right_tail(&mut self, ref_start: usize) -> BirdToolRead {
-        return self.clip_by_reference_coordinates(Some(ref_start), None, ClippingRepresentation::HardclipBases)
+        return self.clip_by_reference_coordinates(
+            Some(ref_start),
+            None,
+            ClippingRepresentation::HardclipBases,
+        );
     }
 
     /**
@@ -243,7 +288,7 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn clip_read(&mut self, algorithm: ClippingRepresentation) -> BirdToolRead {
         if self.ops.is_empty() {
-            return self.read.clone()
+            return self.read.clone();
         }
 
         let mut clipped_read = self.read.clone();
@@ -256,17 +301,17 @@ impl<'a> ReadClipper<'a> {
                     op.stop = read_length - 1;
                 }
 
-                clipped_read = op.apply(algorithm, &clipped_read);
+                clipped_read = op.apply(&algorithm, &clipped_read);
             }
         }
 
         self.was_clipped = true;
         self.ops.clear();
         if clipped_read.is_empty() {
-            return ReadUtils::empty_read(&clipped_read)
+            return ReadUtils::empty_read(&clipped_read);
         }
 
-        return clipped_read
+        return clipped_read;
     }
 
     /**
@@ -276,7 +321,7 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn hard_clip_soft_clipped_bases(&mut self) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone()
+            return self.read.clone();
         }
 
         let mut read_index = 0;
@@ -292,7 +337,7 @@ impl<'a> ReadClipper<'a> {
                     } else {
                         cut_left = read_index + *length as i32 - 1;
                     }
-                },
+                }
                 Cigar::HardClip(_) => right_tail = true,
                 _ => {
                     // Do nothing
@@ -306,14 +351,17 @@ impl<'a> ReadClipper<'a> {
 
         // It is extremely important that we cut the end first otherwise the read coordinates change.
         if cut_right >= 0 {
-            self.add_op(ClippingOp::new(cut_right as usize, self.read.read.seq_len() - 1));
+            self.add_op(ClippingOp::new(
+                cut_right as usize,
+                self.read.read.seq_len() - 1,
+            ));
         }
 
         if cut_left >= 0 {
             self.add_op(ClippingOp::new(0, cut_left as usize));
         }
 
-        return self.clip_read(ClippingRepresentation::HardclipBases)
+        return self.clip_read(ClippingRepresentation::HardclipBases);
     }
 
     /**
@@ -322,12 +370,12 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn revert_soft_clipped_bases(&mut self) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone()
+            return self.read.clone();
         }
 
         self.add_op(ClippingOp::new(0, 0));
 
-        return self.clip_read(ClippingRepresentation::RevertSoftclippedBases)
+        return self.clip_read(ClippingRepresentation::RevertSoftclippedBases);
     }
 
     /**
@@ -340,14 +388,16 @@ impl<'a> ReadClipper<'a> {
     pub fn hard_clip_adaptor_sequence(&mut self) -> BirdToolRead {
         let adaptor_boundary = self.read.get_adaptor_boundary();
 
-        if adaptor_boundary == ReadUtils::CANNOT_COMPUTE_ADAPTOR_BOUNDARY || !ReadUtils::is_inside_read(self.read, adaptor_boundary) {
-            return self.read.clone()
+        if adaptor_boundary == ReadUtils::CANNOT_COMPUTE_ADAPTOR_BOUNDARY
+            || !ReadUtils::is_inside_read(self.read, adaptor_boundary)
+        {
+            return self.read.clone();
         };
 
         if self.read.read.is_reverse() {
-            return self.hard_clip_by_reference_coordinates_left_tail(adaptor_boundary)
+            return self.hard_clip_by_reference_coordinates_left_tail(adaptor_boundary);
         } else {
-            return self.hard_clip_by_reference_coordinates_right_tail(adaptor_boundary)
+            return self.hard_clip_by_reference_coordinates_right_tail(adaptor_boundary);
         }
     }
 
@@ -365,7 +415,11 @@ impl<'a> ReadClipper<'a> {
      * @param lowQual every base quality lower than or equal to this in the tail of the read will be hard clipped
      * @return a new read without low quality tails (Could be an empty, unmapped read if the clip removed all bases).
      */
-    pub fn clip_low_qual_ends(&mut self, algorithm: ClippingRepresentation, low_qual: u8) -> BirdToolRead {
+    pub fn clip_low_qual_ends(
+        &mut self,
+        algorithm: ClippingRepresentation,
+        low_qual: u8,
+    ) -> BirdToolRead {
         if self.read.is_empty() {
             self.read.clone();
         };
@@ -385,21 +439,20 @@ impl<'a> ReadClipper<'a> {
 
         // if the entire read should be clipped, then return an empty read.
         if left_clip_index < read_length - 1 {
-            return ReadUtils::empty_read(&self.read)
+            return ReadUtils::empty_read(&self.read);
         };
 
         if right_clip_index < read_length - 1 {
-            self.add_op(ClippingOp::new(right_clip_index + 1, read_length -1));
+            self.add_op(ClippingOp::new(right_clip_index + 1, read_length - 1));
         };
 
         if left_clip_index > 0 {
             self.add_op(ClippingOp::new(0, left_clip_index - 1));
         };
 
-        return self.clip_read(algorithm)
+        return self.clip_read(algorithm);
     }
 }
-
 
 /**
  * How should we represent a clipped bases in a read?

@@ -1,10 +1,9 @@
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
-use utils::simple_interval::{Locatable, SimpleInterval};
-use ordered_float::OrderedFloat;
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 use rayon::prelude::*;
-
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Class holding information about per-base activity scores for
@@ -22,7 +21,6 @@ pub struct ActivityProfile {
 }
 
 pub trait Profile {
-
     fn get_max_prob_propagation_distance(&self) -> usize;
 
     fn size(&self) -> usize;
@@ -37,7 +35,11 @@ pub trait Profile {
 
     fn get_state_list(&self) -> &Vec<ActivityProfileState>;
 
-    fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval>;
+    fn get_loc_for_offset(
+        &self,
+        relative_loc: &SimpleInterval,
+        offset: i64,
+    ) -> Option<SimpleInterval>;
 
     fn get_current_contig_length(&self) -> usize;
 
@@ -71,17 +73,10 @@ pub trait Profile {
         force_conversion: bool,
     ) -> Option<usize>;
 
-    fn find_best_cut_site(
-        &self,
-        end_of_active_region: usize,
-        min_region_size: usize
-    ) -> usize;
+    fn find_best_cut_site(&self, end_of_active_region: usize, min_region_size: usize) -> usize;
 
-    fn find_first_activity_boundary(
-        &self,
-        is_active_region: bool,
-        max_region_size: usize,
-    ) -> usize;
+    fn find_first_activity_boundary(&self, is_active_region: bool, max_region_size: usize)
+        -> usize;
 
     fn get_prob(&self, index: usize) -> f64;
 
@@ -94,7 +89,13 @@ impl ActivityProfile {
      * @param maxProbPropagationDistance region probability propagation distance beyond its maximum size
      * @param activeProbThreshold threshold for the probability of a profile state being active
      */
-    pub fn new(max_prob_propagation_distance: usize, active_prob_threshold: f64, ref_idx: usize, tid: usize, contig_len: usize) -> ActivityProfile {
+    pub fn new(
+        max_prob_propagation_distance: usize,
+        active_prob_threshold: f64,
+        ref_idx: usize,
+        tid: usize,
+        contig_len: usize,
+    ) -> ActivityProfile {
         ActivityProfile {
             state_list: Vec::new(),
             max_prob_propagation_distance,
@@ -109,7 +110,6 @@ impl ActivityProfile {
 }
 
 impl Profile for ActivityProfile {
-
     /**
      * How far away can probability mass be moved around in this profile?
      *
@@ -148,16 +148,21 @@ impl Profile for ActivityProfile {
         if self.is_empty() {
             None
         } else {
-            Some(self.region_start_loc.unwrap().span_with(&self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0))))
+            Some(
+                self.region_start_loc
+                    .as_ref()
+                    .unwrap()
+                    .span_with(&self.region_stop_loc.as_ref().unwrap()),
+            )
         }
     }
 
     fn get_contig(&self) -> usize {
-        self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_contig()
+        self.region_start_loc.as_ref().unwrap().get_contig()
     }
 
     fn get_end(&self) -> usize {
-        self.region_stop_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_end()
+        self.region_stop_loc.as_ref().unwrap().get_end()
     }
 
     /**
@@ -172,12 +177,20 @@ impl Profile for ActivityProfile {
      * Get the probabilities of the states as a single linear array of doubles
      * @return a non-null array
      */
-    fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval> {
+    fn get_loc_for_offset(
+        &self,
+        relative_loc: &SimpleInterval,
+        offset: i64,
+    ) -> Option<SimpleInterval> {
         let start = relative_loc.get_start() as i64 + offset;
         if start < 1 || start > self.contig_len as i64 {
-            return None
+            return None;
         } else {
-            return Some(SimpleInterval::new(self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)).get_contig(), start as usize, start as usize))
+            return Some(SimpleInterval::new(
+                self.region_start_loc.as_ref().unwrap().get_contig(),
+                start as usize,
+                start as usize,
+            ));
         }
     }
 
@@ -209,8 +222,11 @@ impl Profile for ActivityProfile {
             self.region_start_loc = Some(loc.clone());
             self.region_stop_loc = Some(loc.clone());
         } else {
-            if self.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
-                panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.region_stop_loc)
+            if self.region_stop_loc.as_ref().unwrap().get_start() != loc.get_start() - 1 {
+                panic!(
+                    "Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}",
+                    loc, self.region_stop_loc
+                )
             }
             self.region_stop_loc = Some(loc.clone());
         }
@@ -232,17 +248,25 @@ impl Profile for ActivityProfile {
      * @param stateToAdd the state we want to add to the states list
      */
     fn incorporate_single_state(&mut self, state_to_add: ActivityProfileState) {
-        let position = state_to_add.get_offset(self.region_start_loc.unwrap_or(SimpleInterval::new(0, 0, 0)));
+        let position = state_to_add.get_offset(self.region_start_loc.as_ref().unwrap());
         if position > self.size() as i64 {
-            panic!("Must add state contiguous to existing states: adding {:?}", state_to_add)
+            panic!(
+                "Must add state contiguous to existing states: adding {:?}",
+                state_to_add
+            )
         }
 
         if position >= 0 {
             if position < self.size() as i64 {
-                self.state_list[position as usize].set_is_active_prob(self.state_list[position as usize].is_active_prob() + state_to_add.is_active_prob());
+                let current_prob = self.state_list[position as usize].is_active_prob();
+                self.state_list[position as usize]
+                    .set_is_active_prob(current_prob + state_to_add.is_active_prob());
             } else {
                 if position != self.size() as i64 {
-                    panic!("Position is meant to == size, but it did not {:?}", state_to_add)
+                    panic!(
+                        "Position is meant to == size, but it did not {:?}",
+                        state_to_add
+                    )
                 }
                 self.state_list.push(state_to_add)
             }
@@ -272,20 +296,26 @@ impl Profile for ActivityProfile {
                 // special code to deal with the problem that high quality soft clipped bases aren't added to pileups
                 let mut states = Vec::new();
                 // add no more than the max prob propagation distance num HQ clips
-                let num_hq_clips = std::cmp::min(OrderedFloat(*num_hq_clips), OrderedFloat(self.max_prob_propagation_distance as f64)).into_inner() as i64;
+                let num_hq_clips = std::cmp::min(
+                    OrderedFloat(*num_hq_clips),
+                    OrderedFloat(self.max_prob_propagation_distance as f64),
+                )
+                .into_inner() as i64;
                 for i in (-num_hq_clips..num_hq_clips).into_iter() {
                     let loc = self.get_loc_for_offset(just_added_state.get_loc(), i);
                     match loc {
-                        Some(loc) => {
-                            states.push(ActivityProfileState::new(loc, just_added_state.is_active_prob(), Type::None))
-                        },
+                        Some(loc) => states.push(ActivityProfileState::new(
+                            loc,
+                            just_added_state.is_active_prob(),
+                            Type::None,
+                        )),
                         _ => {
                             // Do nothing
                         }
                     }
                 }
-                return states
-            },
+                return states;
+            }
             Type::None => {
                 vec![just_added_state]
             }
@@ -330,7 +360,7 @@ impl Profile for ActivityProfile {
         assert!(min_region_size > 0, "min_region_size must be >= 1");
         assert!(max_region_size > 0, "max_region_size must be >= 1");
 
-        let regions = Vec::new();
+        let mut regions = Vec::new();
 
         loop {
             let next_region = self.pop_next_ready_assembly_region(
@@ -341,16 +371,10 @@ impl Profile for ActivityProfile {
             );
 
             match next_region {
-                Some(region) => {
-                    regions.push(region)
-                },
-                None => {
-                    return regions
-                }
+                Some(region) => regions.push(region),
+                None => return regions,
             }
         }
-
-        return regions
     }
 
     /**
@@ -376,7 +400,7 @@ impl Profile for ActivityProfile {
         force_conversion: bool,
     ) -> Option<AssemblyRegion> {
         if self.state_list.is_empty() {
-            return None
+            return None;
         }
         // If we are flushing the activity profile we need to trim off the excess
         // states so that we don't create regions outside of our current processing interval
@@ -384,23 +408,31 @@ impl Profile for ActivityProfile {
             let span = self.get_span();
             match span {
                 Some(span) => {
-                    let states_to_trim_away = &self.state_list[span.size()..self.state_list.len()];
-                    self.state_list.retain(|state| !states_to_trim_away.contains(state));
-                },
+                    // let states_to_trim_away = &self.state_list[span.size()..self.state_list.len()];
+                    // self.state_list.retain(|state| !states_to_trim_away.contains(state));
+                    self.state_list = self.state_list[0..span.size() + 1].to_vec();
+                }
                 None => {
                     // Do nothing I guess?
                 }
             }
         }
 
-        let first = &self.state_list[0];
-        let is_active_region = first.is_active_prob() > self.active_prob_threshold;
-        let offset_of_next_region_end = self.find_end_of_region(is_active_region, min_region_size, max_region_size, force_conversion);
+        let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
+        let offset_of_next_region_end = self.find_end_of_region(
+            is_active_region,
+            min_region_size,
+            max_region_size,
+            force_conversion,
+        );
 
         match offset_of_next_region_end {
             Some(offset_of_next_region_end) => {
                 // we need to create the active region, and clip out the states we're extracting from this profile
-                let mut sub = self.state_list.drain(0..offset_of_next_region_end + 1).collect_vec();
+                let mut sub = self
+                    .state_list
+                    .drain(0..offset_of_next_region_end + 1)
+                    .collect_vec();
                 sub.clear();
 
                 // update the start and stop locations as necessary
@@ -411,12 +443,22 @@ impl Profile for ActivityProfile {
                     self.region_start_loc = Some(self.state_list[0].get_loc().clone());
                 }
 
-                let region_loc = SimpleInterval::new(first.get_loc().get_contig(), first.get_loc().get_start(), first.get_loc().get_start() + offset_of_next_region_end);
-                return Some(AssemblyRegion::new(region_loc, is_active_region, assembly_region_extension, self.contig_len, self.tid, self.ref_idx))
-            },
-            None => {
-                None
+                let first = &self.state_list[0];
+                let region_loc = SimpleInterval::new(
+                    first.get_loc().get_contig(),
+                    first.get_loc().get_start(),
+                    first.get_loc().get_start() + offset_of_next_region_end,
+                );
+                return Some(AssemblyRegion::new(
+                    region_loc,
+                    is_active_region,
+                    assembly_region_extension,
+                    self.contig_len,
+                    self.tid,
+                    self.ref_idx,
+                ));
             }
+            None => None,
         }
     }
 
@@ -447,19 +489,22 @@ impl Profile for ActivityProfile {
         max_region_size: usize,
         force_conversion: bool,
     ) -> Option<usize> {
-        if !force_conversion && self.state_list.len() < max_region_size + self.max_prob_propagation_distance {
+        if !force_conversion
+            && self.state_list.len() < max_region_size + self.max_prob_propagation_distance
+        {
             // we really haven't finalized at the probability mass that might affect our decision, so keep
             // waiting until we do before we try to make any decisions
-            return None
+            return None;
         }
 
-        let mut end_of_active_region = self.find_first_activity_boundary(is_active_region, max_region_size);
+        let mut end_of_active_region =
+            self.find_first_activity_boundary(is_active_region, max_region_size);
 
         if is_active_region && (end_of_active_region == max_region_size) {
             end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
         }
 
-        return end_of_active_region.checked_sub(1)
+        return end_of_active_region.checked_sub(1);
     }
 
     /**
@@ -474,7 +519,10 @@ impl Profile for ActivityProfile {
      * @return the index of state after the cut site (just like endOfActiveRegion)
      */
     fn find_best_cut_site(&self, end_of_active_region: usize, min_region_size: usize) -> usize {
-        assert!(end_of_active_region >= min_region_size, "end_of_active_region must be >= min_region_size");
+        assert!(
+            end_of_active_region >= min_region_size,
+            "end_of_active_region must be >= min_region_size"
+        );
 
         let mut min_i = end_of_active_region - 1;
         let mut min_p = std::f64::MAX;
@@ -487,7 +535,7 @@ impl Profile for ActivityProfile {
             }
         }
 
-        return min_i + 1
+        return min_i + 1;
     }
 
     /**
@@ -514,13 +562,15 @@ impl Profile for ActivityProfile {
         let mut end_of_active_region = 0;
 
         while end_of_active_region < n_states && end_of_active_region < max_region_size {
-            if (self.get_prob(end_of_active_region) > self.active_prob_threshold) != is_active_region {
-                break
+            if (self.get_prob(end_of_active_region) > self.active_prob_threshold)
+                != is_active_region
+            {
+                break;
             }
             end_of_active_region += 1;
         }
 
-        return end_of_active_region
+        return end_of_active_region;
     }
 
     /**
@@ -529,7 +579,7 @@ impl Profile for ActivityProfile {
      * @return the isActiveProb of the state at index
      */
     fn get_prob(&self, index: usize) -> f64 {
-        return self.state_list[0].is_active_prob()
+        return self.state_list[0].is_active_prob();
     }
 
     /**
@@ -544,28 +594,28 @@ impl Profile for ActivityProfile {
     fn is_minimum(&self, index: usize) -> bool {
         if index == self.state_list.len() - 1 {
             // we cannot be at a minimum if the current position is the last in the state list
-            return false
+            return false;
         } else if index < 1 {
-            return false
+            return false;
         } else {
             let index_p = self.get_prob(index);
-            return index_p <= self.get_prob(index + 1) && index_p < self.get_prob(index - 1)
+            return index_p <= self.get_prob(index + 1) && index_p < self.get_prob(index - 1);
         }
     }
 }
 
-/**
-* Implement the parallel extend method for ActivityProfile when
-* given a parallel iterator of ActivityProfileState
-*/
-impl ParallelExtend<ActivityProfileState> for ActivityProfile {
-    fn par_extend<I>(&mut self, par_iter: I)
-        where I: IntoParallelIterator<Item = ActivityProfileState>
-    {
-        let par_iter = par_iter.into_par_iter();
-        par_iter.for_each(|state| { self.add(state) });
-    }
-}
+// /**
+// * Implement the parallel extend method for ActivityProfile when
+// * given a parallel iterator of ActivityProfileState
+// */
+// impl ParallelExtend<ActivityProfileState> for ActivityProfile {
+//     fn par_extend<I>(&mut self, par_iter: I)
+//         where I: IntoParallelIterator<Item = ActivityProfileState>
+//     {
+//         let par_iter = par_iter.into_par_iter();
+//         par_iter.for_each(|state| { self.add(state) });
+//     }
+// }
 
 /**
 * Implement the extend method for ActivityProfile when
@@ -573,9 +623,10 @@ impl ParallelExtend<ActivityProfileState> for ActivityProfile {
 */
 impl Extend<ActivityProfileState> for ActivityProfile {
     fn extend<I>(&mut self, iter: I)
-        where I: IntoIterator<Item = ActivityProfileState>
+    where
+        I: IntoIterator<Item = ActivityProfileState>,
     {
         let iter = iter.into_iter();
-        iter.for_each(|state| { self.add(state) });
+        iter.for_each(|state| self.add(state));
     }
 }

@@ -1,10 +1,9 @@
 use activity_profile::activity_profile::{ActivityProfile, Profile};
-use utils::math_utils::MathUtils;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
-use utils::simple_interval::{SimpleInterval, Locatable};
 use rayon::prelude::*;
-
+use utils::math_utils::MathUtils;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * A band pass filtering version of the activity profile
@@ -16,14 +15,13 @@ pub struct BandPassActivityProfile {
     filter_size: usize,
     sigma: f64,
     gaussian_kernel: Vec<f64>,
-    activity_profile: ActivityProfile
+    activity_profile: ActivityProfile,
 }
 
 impl BandPassActivityProfile {
     pub const MAX_FILTER_SIZE: usize = 50;
     pub const MIN_PROB_TO_KEEP_IN_FILTER: f64 = 1e-5;
     pub const DEFAULT_SIGMA: f64 = 17.0;
-
 
     /**
      * Create an activity profile that implements a band pass filter on the states
@@ -43,7 +41,13 @@ impl BandPassActivityProfile {
         tid: usize,
         contig_len: usize,
     ) -> BandPassActivityProfile {
-        let activity_profile = ActivityProfile::new(max_prob_propagation_distance, active_prob_threshold, ref_idx, tid, contig_len);
+        let activity_profile = ActivityProfile::new(
+            max_prob_propagation_distance,
+            active_prob_threshold,
+            ref_idx,
+            tid,
+            contig_len,
+        );
         let mut full_kernel = Self::make_kernel(max_filter_size, sigma);
 
         let filter_size = if adaptive_filter_size {
@@ -51,7 +55,6 @@ impl BandPassActivityProfile {
         } else {
             max_filter_size
         };
-
 
         BandPassActivityProfile {
             activity_profile,
@@ -64,11 +67,12 @@ impl BandPassActivityProfile {
     fn make_kernel(filter_size: usize, sigma: f64) -> Vec<f64> {
         let band_size = 2 * filter_size + 1;
         // let mut kernel = vec![0.0; band_size];
-        let mut kernel = (0..band_size).into_par_iter().map(|iii| {
-            MathUtils::normal_distribution(filter_size as f64, sigma, iii as f64)
-        }).collect::<Vec<f64>>();
+        let mut kernel = (0..band_size)
+            .into_par_iter()
+            .map(|iii| MathUtils::normal_distribution(filter_size as f64, sigma, iii as f64))
+            .collect::<Vec<f64>>();
 
-        return MathUtils::normalize_sum_to_one(kernel)
+        return MathUtils::normalize_sum_to_one(kernel);
     }
 
     fn determine_filter_size(kernel: &Vec<f64>, min_prob_to_keep_in_filter: f64) -> usize {
@@ -82,7 +86,7 @@ impl BandPassActivityProfile {
             filter_end -= 1
         }
 
-        return middle - filter_end
+        return middle - filter_end;
     }
 
     /**
@@ -155,20 +159,30 @@ impl Profile for BandPassActivityProfile {
         if self.is_empty() {
             None
         } else {
-            Some(self.activity_profile.region_start_loc.unwrap()
-                .span_with(&self.activity_profile.region_stop_loc
-                    .unwrap_or(SimpleInterval::new(0, 0, 0))))
+            Some(
+                self.activity_profile
+                    .region_start_loc
+                    .as_ref()
+                    .unwrap()
+                    .span_with(&self.activity_profile.region_stop_loc.as_ref().unwrap()),
+            )
         }
     }
 
     fn get_contig(&self) -> usize {
-        self.activity_profile.region_start_loc
-            .unwrap_or(SimpleInterval::new(0, 0, 0)).get_contig()
+        self.activity_profile
+            .region_start_loc
+            .as_ref()
+            .unwrap()
+            .get_contig()
     }
 
     fn get_end(&self) -> usize {
-        self.activity_profile.region_stop_loc
-            .unwrap_or(SimpleInterval::new(0, 0, 0)).get_end()
+        self.activity_profile
+            .region_stop_loc
+            .as_ref()
+            .unwrap()
+            .get_end()
     }
 
     /**
@@ -199,8 +213,18 @@ impl Profile for BandPassActivityProfile {
             self.activity_profile.region_start_loc = Some(loc.clone());
             self.activity_profile.region_stop_loc = Some(loc.clone());
         } else {
-            if self.activity_profile.region_stop_loc.unwrap().get_start() != loc.get_start() - 1 {
-                panic!("Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}", loc, self.activity_profile.region_stop_loc)
+            if self
+                .activity_profile
+                .region_stop_loc
+                .as_ref()
+                .unwrap()
+                .get_start()
+                != loc.get_start() - 1
+            {
+                panic!(
+                    "Bad add call to ActivityProfile: loc {:?} not immediately after last loc {:?}",
+                    loc, self.activity_profile.region_stop_loc
+                )
             }
             self.activity_profile.region_stop_loc = Some(loc.clone());
         }
@@ -218,18 +242,20 @@ impl Profile for BandPassActivityProfile {
     fn process_state(&self, just_added_state: ActivityProfileState) -> Vec<ActivityProfileState> {
         let mut states = Vec::new();
 
-        for super_state in self.activity_profile.process_state(just_added_state.clone()) {
+        for super_state in self
+            .activity_profile
+            .process_state(just_added_state.clone())
+        {
             if super_state.is_active_prob() > 0.0 {
                 for i in (-(self.filter_size as i64)..(self.filter_size as i64 + 1)).into_iter() {
                     let loc = self.get_loc_for_offset(&just_added_state.get_loc(), i);
                     match loc {
                         Some(loc) => {
-                            let new_prob = super_state.is_active_prob() * self.gaussian_kernel[(i as usize) + self.filter_size];
+                            let new_prob = super_state.is_active_prob()
+                                * self.gaussian_kernel[(i as usize) + self.filter_size];
                             states.push(ActivityProfileState::new(loc, new_prob, Type::None))
-                        },
-                        None => {
-                            continue
                         }
+                        None => continue,
                     }
                 }
             } else {
@@ -237,7 +263,7 @@ impl Profile for BandPassActivityProfile {
             }
         }
 
-        return states
+        return states;
     }
 
     /**
@@ -258,8 +284,13 @@ impl Profile for BandPassActivityProfile {
      * Get the probabilities of the states as a single linear array of doubles
      * @return a non-null array
      */
-    fn get_loc_for_offset(&self, relative_loc: &SimpleInterval, offset: i64) -> Option<SimpleInterval> {
-        self.activity_profile.get_loc_for_offset(relative_loc, offset)
+    fn get_loc_for_offset(
+        &self,
+        relative_loc: &SimpleInterval,
+        offset: i64,
+    ) -> Option<SimpleInterval> {
+        self.activity_profile
+            .get_loc_for_offset(relative_loc, offset)
     }
 
     /**
@@ -316,7 +347,8 @@ impl Profile for BandPassActivityProfile {
     }
 
     fn find_best_cut_site(&self, end_of_active_region: usize, min_region_size: usize) -> usize {
-        self.activity_profile.find_best_cut_site(end_of_active_region, min_region_size)
+        self.activity_profile
+            .find_best_cut_site(end_of_active_region, min_region_size)
     }
 
     fn find_first_activity_boundary(
@@ -324,10 +356,8 @@ impl Profile for BandPassActivityProfile {
         is_active_region: bool,
         max_region_size: usize,
     ) -> usize {
-        self.activity_profile.find_first_activity_boundary(
-            is_active_region,
-            max_region_size,
-        )
+        self.activity_profile
+            .find_first_activity_boundary(is_active_region, max_region_size)
     }
 
     fn get_prob(&self, index: usize) -> f64 {
@@ -339,19 +369,18 @@ impl Profile for BandPassActivityProfile {
     }
 }
 
-
-/**
-* Implement the parallel extend method for ActivityProfile when
-* given a parallel iterator of ActivityProfileState
-*/
-impl ParallelExtend<ActivityProfileState> for BandPassActivityProfile {
-    fn par_extend<I>(&mut self, par_iter: I)
-        where I: IntoParallelIterator<Item = ActivityProfileState>
-    {
-        let par_iter = par_iter.into_par_iter();
-        par_iter.for_each(|state| { self.add(state) });
-    }
-}
+// /**
+// * Implement the parallel extend method for ActivityProfile when
+// * given a parallel iterator of ActivityProfileState
+// */
+// impl ParallelExtend<ActivityProfileState> for BandPassActivityProfile {
+//     fn par_extend<I>(&mut self, par_iter: I)
+//         where I: IntoParallelIterator<Item = ActivityProfileState>
+//     {
+//         let par_iter = par_iter.into_par_iter();
+//         par_iter.for_each(|state| { self.add(state) });
+//     }
+// }
 
 /**
 * Implement the extend method for ActivityProfile when
@@ -359,9 +388,10 @@ impl ParallelExtend<ActivityProfileState> for BandPassActivityProfile {
 */
 impl Extend<ActivityProfileState> for BandPassActivityProfile {
     fn extend<I>(&mut self, iter: I)
-        where I: IntoIterator<Item = ActivityProfileState>
+    where
+        I: IntoIterator<Item = ActivityProfileState>,
     {
         let iter = iter.into_iter();
-        iter.for_each(|state| { self.add(state) });
+        iter.for_each(|state| self.add(state));
     }
 }

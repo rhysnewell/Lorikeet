@@ -32,14 +32,14 @@ impl RefVsAnyResult {
      * @return Get the DP (sum of AD values)
      */
     pub fn get_dp(&self) -> i32 {
-        return self.ref_depth + self.non_ref_depth
+        return self.ref_depth + self.non_ref_depth;
     }
 
     /**
      * Return the AD fields. Returns a newly allocated array every time.
      */
     pub fn get_ad(&self) -> Vec<i32> {
-        return vec![self.ref_depth, self.non_ref_depth]
+        return vec![self.ref_depth, self.non_ref_depth];
     }
 
     /**
@@ -63,9 +63,13 @@ impl RefVsAnyResult {
         let mut output = vec![0.0; self.genotype_likelihoods.len()];
 
         for i in 0..self.genotype_likelihoods.len() {
-            output[i] = std::cmp::min(OrderedFloat(self.genotype_likelihoods[i]), OrderedFloat(self.genotype_likelihoods[0])).into()
+            output[i] = std::cmp::min(
+                OrderedFloat(self.genotype_likelihoods[i]),
+                OrderedFloat(self.genotype_likelihoods[0]),
+            )
+            .into()
         }
 
-        return output
+        return output;
     }
 }

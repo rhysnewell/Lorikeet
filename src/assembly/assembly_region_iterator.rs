@@ -1,9 +1,10 @@
 use assembly::assembly_region::AssemblyRegion;
-use activity_profile::activity_profile::Profile;
-use reads::bird_tool_reads::BirdToolRead;
-use coverm::bam_generator::{generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader};
-use rust_htslib::bam::Record;
+use coverm::bam_generator::{
+    generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
+};
 use coverm::FlagFilter;
+use reads::bird_tool_reads::BirdToolRead;
+use rust_htslib::bam::Record;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -20,34 +21,17 @@ use coverm::FlagFilter;
 #[derive(Debug)]
 pub struct AssemblyRegionIterator<'a> {
     indexed_bam_readers: &'a Vec<String>,
-    pub pending_regions: Vec<AssemblyRegion>,
     n_threads: u32,
     // previous_regions_reads: Vec<BirdToolRead>,
 }
 
 impl<'a> AssemblyRegionIterator<'a> {
-    pub fn new<P: Profile>(
-        activity_profile: &'a mut P,
-        indexed_bam_readers: &'a Vec<String>,
-        assembly_region_padding: usize,
-        min_assembly_region_size: usize,
-        max_assembly_region_size: usize,
-        n_threads: u32
-    ) -> AssemblyRegionIterator<'a> {
-
+    pub fn new(indexed_bam_readers: &'a Vec<String>, n_threads: u32) -> AssemblyRegionIterator<'a> {
         // Assume no forced conversion here since we have already traverse the entire
         // activity profile prior to reaching here. This is quite different to how
         // GATK handles it but I assume it ends up working the same?
-
-        let mut pending_regions = activity_profile.pop_ready_assembly_regions(
-            assembly_region_padding,
-            min_assembly_region_size,
-            max_assembly_region_size,
-            false
-        );
         AssemblyRegionIterator {
             indexed_bam_readers,
-            pending_regions,
             n_threads,
         }
     }
@@ -56,20 +40,22 @@ impl<'a> AssemblyRegionIterator<'a> {
         &self,
         region: &mut AssemblyRegion,
         flag_filters: &FlagFilter,
-        n_threads: u32
+        n_threads: u32,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
         let mut record = Record::new(); // Empty bam record
-        self.indexed_bam_readers.iter().enumerate().for_each(
-            |(sample_idx, bam_generator)| {
-                let bam_generated = generate_indexed_named_bam_readers_from_bam_files(
+        self.indexed_bam_readers
+            .iter()
+            .enumerate()
+            .for_each(|(sample_idx, bam_generator)| {
+                let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
                     vec![&bam_generator],
                     n_threads,
                 )
-                    .into_iter()
-                    .next()
-                    .unwrap();
+                .into_iter()
+                .next()
+                .unwrap();
 
                 bam_generated.fetch((
                     region.get_contig() as i32,
@@ -88,14 +74,10 @@ impl<'a> AssemblyRegionIterator<'a> {
                     {
                         continue;
                     } else {
-                        region.add(BirdToolRead::new(record.clone()))
-                    }
+                        region.add(BirdToolRead::new(record.clone(), sample_idx));
+                    };
                 }
             });
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<AssemblyRegion> {
-        self.pending_regions.iter()
     }
 }
 

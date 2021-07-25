@@ -1,5 +1,5 @@
-use model::variants::Allele;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use model::variants::Allele;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
@@ -7,7 +7,6 @@ lazy_static! {
     static ref HAPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false)];
     static ref DIPLOID_NO_CALL: Vec<Allele> = vec![Allele::fake(false); 2];
 }
-
 
 #[derive(Debug, Clone)]
 pub enum GenotypeAssignmentMethod {
@@ -39,15 +38,19 @@ pub struct Genotype {
     pub dp: i64,
     pub gq: i64,
     pub is_phased: bool,
-    pub attributes: HashMap<String, Vec<f64>>
+    pub attributes: HashMap<String, Vec<f64>>,
 }
 
 impl Eq for Genotype {}
 
 impl PartialEq for Genotype {
     fn eq(&self, other: &Self) -> bool {
-        self.ploidy == other.ploidy && self.alleles == other.alleles && self.ad == other.ad &&
-            self.dp == other.dp && self.gq == other.gq && self.is_phased == other.is_phased
+        self.ploidy == other.ploidy
+            && self.alleles == other.alleles
+            && self.ad == other.ad
+            && self.dp == other.dp
+            && self.gq == other.gq
+            && self.is_phased == other.is_phased
     }
 }
 
@@ -63,8 +66,6 @@ impl Hash for Genotype {
 }
 
 impl Genotype {
-
-
     pub fn build(default_ploidy: usize, likelihoods: Vec<f64>) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
@@ -91,7 +92,9 @@ impl Genotype {
         }
     }
 
-    pub fn get_ploidy(&self) -> usize { self.ploidy }
+    pub fn get_ploidy(&self) -> usize {
+        self.ploidy
+    }
 
     pub fn get_likelihoods(&self) -> &GenotypeLikelihoods {
         &self.pl
@@ -162,14 +165,15 @@ impl Genotype {
     }
 
     pub fn get_attribute_mut(&mut self, attribute: &String) -> &mut Vec<f64> {
-        self.attributes.entry(attribute.clone()).or_insert(vec![std::f64::NAN; self.alleles.len()])
+        self.attributes
+            .entry(attribute.clone())
+            .or_insert(vec![std::f64::NAN; self.alleles.len()])
     }
 
     pub fn alleles(&mut self, alleles: Vec<Allele>) {
         self.alleles = alleles
     }
     // pub fn genotype_likelihood_calculator(&self,)
-
 
     // fn calculate_genotype_counts_using_tables_and_validate()
 }
@@ -243,7 +247,7 @@ impl GenotypesContext {
                 self.max_ploidy = default_ploidy as i32
             }
         }
-        return self.max_ploidy
+        return self.max_ploidy;
     }
 
     pub fn len(&self) -> usize {

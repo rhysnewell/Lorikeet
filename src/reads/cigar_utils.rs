@@ -1,6 +1,6 @@
-use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
-use reads::alignment_utils::AlignmentUtils;
 use rayon::prelude::*;
+use reads::alignment_utils::AlignmentUtils;
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
 
@@ -23,8 +23,6 @@ lazy_static! {
 pub struct CigarUtils {}
 
 impl CigarUtils {
-
-
     pub fn cigar_consumes_read_bases(cig: &Cigar) -> bool {
         // Consumes read bases
         match cig {
@@ -33,7 +31,7 @@ impl CigarUtils {
             | Cigar::Diff(_)
             | Cigar::Ins(_)
             | Cigar::SoftClip(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -45,7 +43,7 @@ impl CigarUtils {
             | Cigar::RefSkip(_)
             | Cigar::Equal(_)
             | Cigar::Diff(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -62,7 +60,12 @@ impl CigarUtils {
      * @param stop final index to clip within read bases exclusive
      * @param clippingOperator      type of clipping -- must be either hard clip or soft clip
      */
-    pub fn clip_cigar(cigar: &CigarStringView, start: u32, stop: u32, clipping_operator: Cigar) -> CigarString {
+    pub fn clip_cigar(
+        cigar: &CigarStringView,
+        start: u32,
+        stop: u32,
+        clipping_operator: Cigar,
+    ) -> CigarString {
         let clip_left = start == 0;
 
         let mut new_cigar = Vec::new();
@@ -71,9 +74,7 @@ impl CigarUtils {
         for element in cigar.iter() {
             match element {
                 // copy hard clips
-                Cigar::HardClip(len) => {
-                    new_cigar.push(Cigar::HardClip(*len))
-                },
+                Cigar::HardClip(len) => new_cigar.push(Cigar::HardClip(*len)),
                 Cigar::SoftClip(len)
                 | Cigar::Diff(len)
                 | Cigar::Equal(len)
@@ -82,32 +83,55 @@ impl CigarUtils {
                 | Cigar::Match(len)
                 | Cigar::Ins(len)
                 | Cigar::Pad(len) => {
-                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { *len } else { 0 };
+                    let element_end = element_start
+                        + if CigarUtils::cigar_consumes_read_bases(element) {
+                            *len
+                        } else {
+                            0
+                        };
 
                     // element precedes start or follows end of clip, copy it to new cigar
                     if element_end <= start || element_start >= stop {
                         // edge case: deletions at edge of clipping are meaningless and we skip them
-                        if CigarUtils::cigar_consumes_read_bases(element) ||
-                            (element_start != start && element_start != stop) {
+                        if CigarUtils::cigar_consumes_read_bases(element)
+                            || (element_start != start && element_start != stop)
+                        {
                             new_cigar.push(element.clone())
                         }
-                    } else { // otherwise, some or all of the element is soft-clipped
-                        let unclipped_length = if clip_left { element_end.checked_sub(stop) } else { start.checked_sub(element_start) };
+                    } else {
+                        // otherwise, some or all of the element is soft-clipped
+                        let unclipped_length = if clip_left {
+                            element_end.checked_sub(stop)
+                        } else {
+                            start.checked_sub(element_start)
+                        };
                         match unclipped_length {
                             None => {
                                 // Totally clipped
                                 if CigarUtils::cigar_consumes_read_bases(element) {
                                     new_cigar.push(element.clone())
                                 }
-                            },
+                            }
                             Some(unclipped_length) => {
                                 let clipped_length = len.checked_sub(unclipped_length).unwrap();
                                 if clip_left {
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(&clipping_operator, clipped_length));
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(element, unclipped_length));
+                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                        &clipping_operator,
+                                        clipped_length,
+                                    ));
+                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                        element,
+                                        unclipped_length,
+                                    ));
                                 } else {
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(element, unclipped_length));
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(&clipping_operator, clipped_length));
+                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                        element,
+                                        unclipped_length,
+                                    ));
+                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                        &clipping_operator,
+                                        clipped_length,
+                                    ));
                                 }
                             }
                         }
@@ -116,7 +140,7 @@ impl CigarUtils {
                 }
             }
         }
-        return CigarString(new_cigar)
+        return CigarString(new_cigar);
     }
 
     /**
@@ -127,12 +151,11 @@ impl CigarUtils {
         let mut builder = Vec::new();
         for element in cigar.iter() {
             match element {
-                Cigar::SoftClip(length) => {
-                    builder.push(CigarUtils::cigar_from_element_and_length(&Cigar::Match(0), *length))
-                },
-                _ => {
-                    builder.push(element.clone())
-                }
+                Cigar::SoftClip(length) => builder.push(CigarUtils::cigar_from_element_and_length(
+                    &Cigar::Match(0),
+                    *length,
+                )),
+                _ => builder.push(element.clone()),
             }
         }
         CigarString::from(builder)
@@ -142,15 +165,13 @@ impl CigarUtils {
      * How many bases to the right does a read's alignment start shift given its cigar and the number of left soft clips
      */
     pub fn alignment_start_shift(cigar: &CigarStringView, num_clipped: i64) -> i64 {
-        let ref_bases_clipped = 0;
+        let mut ref_bases_clipped = 0;
 
-        let element_start = 0; // this and elementEnd are indices in the read's bases
+        let mut element_start = 0; // this and elementEnd are indices in the read's bases
         for element in cigar.iter() {
             match element {
                 // copy hard clips
-                Cigar::HardClip(len) => {
-                    continue
-                },
+                Cigar::HardClip(len) => continue,
                 Cigar::SoftClip(len)
                 | Cigar::Diff(len)
                 | Cigar::Equal(len)
@@ -159,50 +180,49 @@ impl CigarUtils {
                 | Cigar::Match(len)
                 | Cigar::Ins(len)
                 | Cigar::Pad(len) => {
-                    let element_end = element_start + if CigarUtils::cigar_consumes_read_bases(element) { *len as i64 } else { 0 };
+                    let element_end = element_start
+                        + if CigarUtils::cigar_consumes_read_bases(element) {
+                            *len as i64
+                        } else {
+                            0
+                        };
 
-                    if element_end <= num_clipped { // totally within clipped span -- this includes deletions immediately following clipping
-                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element) { *len as i64 } else { 0 };
-                    } else if element_start < num_clipped { // clip in middle of element, which means the element necessarily consumes read bases
+                    if element_end <= num_clipped {
+                        // totally within clipped span -- this includes deletions immediately following clipping
+                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element)
+                        {
+                            *len as i64
+                        } else {
+                            0
+                        };
+                    } else if element_start < num_clipped {
+                        // clip in middle of element, which means the element necessarily consumes read bases
                         let clipped_length = num_clipped - element_start;
-                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element) { clipped_length } else { 0 };
+                        ref_bases_clipped += if CigarUtils::cigar_consumes_reference_bases(element)
+                        {
+                            clipped_length
+                        } else {
+                            0
+                        };
                     }
                     element_start = element_end;
                 }
             }
         }
-        return ref_bases_clipped
+        return ref_bases_clipped;
     }
 
     pub fn cigar_from_element_and_length(cigar: &Cigar, length: u32) -> Cigar {
         match cigar {
-            Cigar::Pad(_) => {
-                return Cigar::Pad(length)
-            },
-            Cigar::Ins(_) => {
-                return Cigar::Ins(length)
-            },
-            Cigar::Match(_) => {
-                return Cigar::Match(length)
-            },
-            Cigar::Del(_) => {
-                return Cigar::Del(length)
-            },
-            Cigar::RefSkip(_) => {
-                return Cigar::RefSkip(length)
-            },
-            Cigar::Equal(_) => {
-                return Cigar::Equal(length)
-            },
-            Cigar::Diff(_) => {
-                return Cigar::Diff(length)
-            },
-            Cigar::SoftClip(_) => {
-                return Cigar::SoftClip(length)
-            },
-            Cigar::HardClip(_) => {
-                return Cigar::HardClip(length)
-            }
+            Cigar::Pad(_) => return Cigar::Pad(length),
+            Cigar::Ins(_) => return Cigar::Ins(length),
+            Cigar::Match(_) => return Cigar::Match(length),
+            Cigar::Del(_) => return Cigar::Del(length),
+            Cigar::RefSkip(_) => return Cigar::RefSkip(length),
+            Cigar::Equal(_) => return Cigar::Equal(length),
+            Cigar::Diff(_) => return Cigar::Diff(length),
+            Cigar::SoftClip(_) => return Cigar::SoftClip(length),
+            Cigar::HardClip(_) => return Cigar::HardClip(length),
         }
     }
 
@@ -220,10 +240,14 @@ impl CigarUtils {
      * @param refSeq the reference sequence that all of the bases in this path should align to
      * @return a Cigar mapping this path to refSeq, or null if no reasonable alignment could be found
      */
-    pub fn calculate_cigar(ref_seq: &[u8], alt_seq: &[u8], strategy: SWOverhangStrategy) -> Option<CigarString> {
+    pub fn calculate_cigar(
+        ref_seq: &[u8],
+        alt_seq: &[u8],
+        strategy: SWOverhangStrategy,
+    ) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
-            return Some(CigarString::from(vec![Cigar::Del(ref_seq.len() as u32)]))
+            return Some(CigarString::from(vec![Cigar::Del(ref_seq.len() as u32)]));
         }
 
         //Note: this is a performance optimization.
@@ -232,26 +256,33 @@ impl CigarUtils {
         // it's also a trivial M-only CIGAR, because in order to have equal length one would need at least one insertion and
         // one deletion, in which case two substitutions is a better alignment.
         if alt_seq.len() == ref_seq.len() {
-            let mismatch_count = (0..ref_seq.len()).into_par_iter().map(|n| {
-                if alt_seq[n] == ref_seq[n] {
-                    0
-                } else {
-                    1
-                }
-            }).sum::<usize>();
+            let mismatch_count = (0..ref_seq.len())
+                .into_par_iter()
+                .map(|n| if alt_seq[n] == ref_seq[n] { 0 } else { 1 })
+                .sum::<usize>();
 
             if mismatch_count <= 2 {
                 let matching = CigarString::from(vec![Cigar::Match(ref_seq.len() as u32)]);
-                return Some(matching)
+                return Some(matching);
             }
         }
 
-        let padded_ref = format!("{}{}{}", *SW_PAD, std::str::from_utf8(ref_seq).unwrap(), *SW_PAD);
-        let padded_path = format!("{}{}{}", *SW_PAD, std::str::from_utf8(alt_seq).unwrap(), *SW_PAD);
+        let padded_ref = format!(
+            "{}{}{}",
+            *SW_PAD,
+            std::str::from_utf8(ref_seq).unwrap(),
+            *SW_PAD
+        );
+        let padded_path = format!(
+            "{}{}{}",
+            *SW_PAD,
+            std::str::from_utf8(alt_seq).unwrap(),
+            *SW_PAD
+        );
         let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, *NEW_SW_PARAMETERS, strategy);
 
         if Self::is_s_w_failure(&alignment) {
-            return None
+            return None;
         }
 
         // cut off the padding bases
@@ -259,29 +290,36 @@ impl CigarUtils {
         let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
 
         let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
-            alignment.cigar, base_start as u32, base_end as u32
+            alignment.cigar,
+            base_start as u32,
+            base_end as u32,
         );
 
         let mut non_standard = trimmed_cigar_and_deletions_removed.cigar.0;
 
         if trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed > 0 {
-            non_standard.push(Cigar::Del(trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed));
+            non_standard.push(Cigar::Del(
+                trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed,
+            ));
         }
 
         let mut left_alignment_result = AlignmentUtils::left_align_indels(
             CigarString::from(non_standard),
             ref_seq,
             alt_seq,
-            trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed
+            trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed,
         );
 
         // we must account for possible leading deletions removed when trimming the padding and when left-aligning
         // trailing deletions removed when trimming have already been restored for left-alignment, but left-alingment may have removed them again.
-        let total_leading_deletions_removed = trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed + left_alignment_result.leading_deletion_bases_removed;
-        let total_trailing_deletions_removed = left_alignment_result.trailing_deletion_bases_removed;
+        let total_leading_deletions_removed = trimmed_cigar_and_deletions_removed
+            .leading_deletion_bases_removed
+            + left_alignment_result.leading_deletion_bases_removed;
+        let total_trailing_deletions_removed =
+            left_alignment_result.trailing_deletion_bases_removed;
 
         if total_leading_deletions_removed == 0 && total_trailing_deletions_removed == 0 {
-            return Some(left_alignment_result.cigar)
+            return Some(left_alignment_result.cigar);
         } else {
             let mut result_elements = Vec::new();
             if total_leading_deletions_removed > 0 {
@@ -298,8 +336,7 @@ impl CigarUtils {
 
     pub fn is_indel(cigar: &Cigar) -> bool {
         match cigar {
-            Cigar::Del(_)
-            | Cigar::Ins(_) => true,
+            Cigar::Del(_) | Cigar::Ins(_) => true,
             _ => false,
         }
     }
@@ -310,231 +347,136 @@ impl CigarUtils {
     fn is_s_w_failure(alignment: &SmithWatermanAlignmentResult) -> bool {
         // check that the alignment starts at the first base, which it should given the padding
         if alignment.alignment_offset > 0 {
-            return true
+            return true;
         }
 
         // check that we aren't getting any S operators (which would be very bad downstream)
         for ce in alignment.cigar.0.iter() {
             match ce {
                 Cigar::SoftClip(_) => {
-                    return true
+                    return true;
                     // soft clips at the end of the alignment are really insertions
-                },
-                _ => {
-                    continue
                 }
+                _ => continue,
             }
         }
 
-        return false
+        return false;
     }
 
     /**
-    * Check to see if two cigar operators are of the same type regardless of length
-    */
+     * Check to see if two cigar operators are of the same type regardless of length
+     */
     pub fn cigar_elements_are_same_type(this: &Cigar, other: &Option<Cigar>) -> bool {
         match other {
             None => false,
-            Some(element) => {
-                match element {
-                    Cigar::SoftClip(_) => {
-                        match this {
-                            Cigar::SoftClip(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::HardClip(_) => {
-                        match this {
-                            Cigar::HardClip(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Match(_) => {
-                        match this {
-                            Cigar::Match(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Diff(_) => {
-                        match this {
-                            Cigar::Diff(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Equal(_) => {
-                        match this {
-                            Cigar::Equal(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::RefSkip(_) => {
-                        match this {
-                            Cigar::RefSkip(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Ins(_) => {
-                        match this {
-                            Cigar::Ins(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Del(_) => {
-                        match this {
-                            Cigar::Del(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                    Cigar::Pad(_) => {
-                        match this {
-                            Cigar::Pad(_) => {
-                                true
-                            },
-                            _ => false,
-                        }
-                    },
-                }
-            }
+            Some(element) => match element {
+                Cigar::SoftClip(_) => match this {
+                    Cigar::SoftClip(_) => true,
+                    _ => false,
+                },
+                Cigar::HardClip(_) => match this {
+                    Cigar::HardClip(_) => true,
+                    _ => false,
+                },
+                Cigar::Match(_) => match this {
+                    Cigar::Match(_) => true,
+                    _ => false,
+                },
+                Cigar::Diff(_) => match this {
+                    Cigar::Diff(_) => true,
+                    _ => false,
+                },
+                Cigar::Equal(_) => match this {
+                    Cigar::Equal(_) => true,
+                    _ => false,
+                },
+                Cigar::RefSkip(_) => match this {
+                    Cigar::RefSkip(_) => true,
+                    _ => false,
+                },
+                Cigar::Ins(_) => match this {
+                    Cigar::Ins(_) => true,
+                    _ => false,
+                },
+                Cigar::Del(_) => match this {
+                    Cigar::Del(_) => true,
+                    _ => false,
+                },
+                Cigar::Pad(_) => match this {
+                    Cigar::Pad(_) => true,
+                    _ => false,
+                },
+            },
         }
     }
 
     pub fn is_clipping(element: &Cigar) -> bool {
         match element {
-            Cigar::SoftClip(_)
-            | Cigar::HardClip(_) => true,
+            Cigar::SoftClip(_) | Cigar::HardClip(_) => true,
             _ => false,
         }
     }
 
     /**
-    * Combine two cigar operators of equal type and add their lengths creating new operator
-    */
+     * Combine two cigar operators of equal type and add their lengths creating new operator
+     */
     pub fn combine_cigar_operators(this: &Cigar, other: &Cigar) -> Option<Cigar> {
         match other {
-            Cigar::SoftClip(other_len) => {
-                match this {
-                    Cigar::SoftClip(this_len) => {
-                        Some(Cigar::SoftClip(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::SoftClip(other_len) => match this {
+                Cigar::SoftClip(this_len) => Some(Cigar::SoftClip(other_len + this_len)),
+                _ => None,
             },
-            Cigar::HardClip(other_len) => {
-                match this {
-                    Cigar::HardClip(this_len) => {
-                        Some(Cigar::HardClip(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::HardClip(other_len) => match this {
+                Cigar::HardClip(this_len) => Some(Cigar::HardClip(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Match(other_len) => {
-                match this {
-                    Cigar::Match(this_len) => {
-                        Some(Cigar::Match(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Match(other_len) => match this {
+                Cigar::Match(this_len) => Some(Cigar::Match(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Equal(other_len) => {
-                match this {
-                    Cigar::Equal(this_len) => {
-                        Some(Cigar::Equal(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Equal(other_len) => match this {
+                Cigar::Equal(this_len) => Some(Cigar::Equal(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Diff(other_len) => {
-                match this {
-                    Cigar::Diff(this_len) => {
-                        Some(Cigar::Diff(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Diff(other_len) => match this {
+                Cigar::Diff(this_len) => Some(Cigar::Diff(other_len + this_len)),
+                _ => None,
             },
-            Cigar::RefSkip(other_len) => {
-                match this {
-                    Cigar::RefSkip(this_len) => {
-                        Some(Cigar::RefSkip(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::RefSkip(other_len) => match this {
+                Cigar::RefSkip(this_len) => Some(Cigar::RefSkip(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Ins(other_len) => {
-                match this {
-                    Cigar::Ins(this_len) => {
-                        Some(Cigar::Ins(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Ins(other_len) => match this {
+                Cigar::Ins(this_len) => Some(Cigar::Ins(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Del(other_len) => {
-                match this {
-                    Cigar::Del(this_len) => {
-                        Some(Cigar::Del(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Del(other_len) => match this {
+                Cigar::Del(this_len) => Some(Cigar::Del(other_len + this_len)),
+                _ => None,
             },
-            Cigar::Pad(other_len) => {
-                match this {
-                    Cigar::Pad(this_len) => {
-                        Some(Cigar::Pad(other_len + this_len))
-                    },
-                    _ => None,
-                }
+            Cigar::Pad(other_len) => match this {
+                Cigar::Pad(this_len) => Some(Cigar::Pad(other_len + this_len)),
+                _ => None,
             },
         }
     }
 
     /**
-    * Creates a new cigar element using the same operator as the provided cigar but with the new
-    * provided length
-    */
+     * Creates a new cigar element using the same operator as the provided cigar but with the new
+     * provided length
+     */
     pub fn new_cigar_from_operator_and_length(old_cigar: &Cigar, new_length: u32) -> Cigar {
         match old_cigar {
-            Cigar::SoftClip(_) => {
-                Cigar::SoftClip(new_length)
-            },
-            Cigar::HardClip(_) => {
-                Cigar::HardClip(new_length)
-            },
-            Cigar::Match(_) => {
-                Cigar::Match(new_length)
-            },
-            Cigar::Equal(_) => {
-                Cigar::Equal(new_length)
-            },
-            Cigar::Diff(_) => {
-                Cigar::Diff(new_length)
-            },
-            Cigar::RefSkip(_) => {
-                Cigar::RefSkip(new_length)
-            },
-            Cigar::Ins(_) => {
-                Cigar::Ins(new_length)
-            },
-            Cigar::Del(_) => {
-                Cigar::Del(new_length)
-            },
-            Cigar::Pad(_) => {
-                Cigar::Pad(new_length)
-            },
+            Cigar::SoftClip(_) => Cigar::SoftClip(new_length),
+            Cigar::HardClip(_) => Cigar::HardClip(new_length),
+            Cigar::Match(_) => Cigar::Match(new_length),
+            Cigar::Equal(_) => Cigar::Equal(new_length),
+            Cigar::Diff(_) => Cigar::Diff(new_length),
+            Cigar::RefSkip(_) => Cigar::RefSkip(new_length),
+            Cigar::Ins(_) => Cigar::Ins(new_length),
+            Cigar::Del(_) => Cigar::Del(new_length),
+            Cigar::Pad(_) => Cigar::Pad(new_length),
         }
     }
 
@@ -542,61 +484,62 @@ impl CigarUtils {
      * @return The number of reference bases that the read covers, excluding padding.
      */
     pub fn get_reference_length(cigar: &CigarString) -> u32 {
-        let length = cigar.0.par_iter().map(|elem|{
-            match elem {
+        let length = cigar
+            .0
+            .par_iter()
+            .map(|elem| match elem {
                 Cigar::Match(len)
                 | Cigar::Del(len)
                 | Cigar::RefSkip(len)
                 | Cigar::Equal(len)
-                | Cigar::Diff(len) => {
-                    *len
-                },
-                _ => 0
-            }
-        }).sum::<u32>();
+                | Cigar::Diff(len) => *len,
+                _ => 0,
+            })
+            .sum::<u32>();
 
-        return length
+        return length;
     }
 
     /**
      * @return The number of reference bases that the read covers, including padding.
      */
     pub fn get_padded_reference_length(cigar: &CigarString) -> u32 {
-        let length = cigar.0.par_iter().map(|elem|{
-            match elem {
+        let length = cigar
+            .0
+            .par_iter()
+            .map(|elem| match elem {
                 Cigar::Match(len)
                 | Cigar::Del(len)
                 | Cigar::RefSkip(len)
                 | Cigar::Equal(len)
                 | Cigar::Diff(len)
-                | Cigar::Pad(len) => {
-                    *len
-                },
-                _ => 0
-            }
-        }).sum::<u32>();
+                | Cigar::Pad(len) => *len,
+                _ => 0,
+            })
+            .sum::<u32>();
 
-        return length
+        return length;
     }
 
     /**
      * @return The number of read bases that the read covers.
      */
     pub fn get_read_length(cigar: &CigarString) -> u32 {
-        let length = cigar.0.par_iter().filter(|elem|{
-            CigarUtils::cigar_consumes_read_bases(elem)
-        }).map(|elem| elem.len()).sum::<u32>();
+        let length = cigar
+            .0
+            .par_iter()
+            .filter(|elem| CigarUtils::cigar_consumes_read_bases(elem))
+            .map(|elem| elem.len())
+            .sum::<u32>();
 
-        return length
+        return length;
     }
 
     /** Returns true if the operator is a M, a X or a EQ */
     pub fn is_alignment(cigar: &Cigar) -> bool {
         match cigar {
-            Cigar::Match(_)
-            | Cigar::Equal(_)
-            | Cigar::Diff(_) => true,
-            _ => false
+            Cigar::Match(_) | Cigar::Equal(_) | Cigar::Diff(_) => true,
+            _ => false,
         }
     }
 }

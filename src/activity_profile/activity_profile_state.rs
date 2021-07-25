@@ -1,6 +1,5 @@
-use utils::simple_interval::{Locatable, SimpleInterval};
 use num::traits::Float;
-
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Captures the probability that a specific locus in the genome represents an "active" site containing
@@ -43,15 +42,22 @@ impl ActivityProfileState {
      * @param loc the position of the result profile (for debugging purposes)
      * @param activeProb the probability of being active (between 0 and 1)
      */
-    pub fn new(loc: SimpleInterval, active_prob: f64, result_state: Type<f64>) -> ActivityProfileState {
+    pub fn new(
+        loc: SimpleInterval,
+        active_prob: f64,
+        result_state: Type<f64>,
+    ) -> ActivityProfileState {
         if loc.size() != 1 {
-            panic!("Location for an ActivityProfileState must have to size 1 bp but saw {:?}", loc)
+            panic!(
+                "Location for an ActivityProfileState must have to size 1 bp but saw {:?}",
+                loc
+            )
         };
 
         ActivityProfileState {
             loc,
             active_prob,
-            result_state
+            result_state,
         }
     }
 
@@ -79,12 +85,8 @@ impl ActivityProfileState {
 
     pub fn get_result_value(&self) -> f64 {
         match self.result_state {
-            Type::None => {
-                0.0
-            },
-            Type::HighQualitySoftClips(count) => {
-                count
-            }
+            Type::None => 0.0,
+            Type::HighQualitySoftClips(count) => count,
         }
     }
 
@@ -93,12 +95,11 @@ impl ActivityProfileState {
      * @param regionStartLoc the start of the region, as a Locatable
      * @return the position of this profile relative to the start of this region
      */
-    pub fn get_offset(&self, region_start_loc: SimpleInterval) -> i64 {
+    pub fn get_offset(&self, region_start_loc: &SimpleInterval) -> i64 {
         (self.loc.get_start() as i64) - (region_start_loc.get_start() as i64)
     }
 
     pub fn get_loc(&self) -> &SimpleInterval {
         &self.loc
     }
-
 }

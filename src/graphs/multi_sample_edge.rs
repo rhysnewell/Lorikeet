@@ -1,7 +1,7 @@
-use std::collections::BinaryHeap;
 use graphs::base_edge::BaseEdge;
-use std::hash::{Hash, Hasher};
 use rayon::prelude::*;
+use std::collections::BinaryHeap;
+use std::hash::{Hash, Hasher};
 
 /**
  * Edge class for connecting nodes in the graph that tracks some per-sample information.
@@ -44,15 +44,16 @@ impl Hash for MultiSampleEdge {
 
 impl PartialEq for MultiSampleEdge {
     fn eq(&self, other: &Self) -> bool {
-        self.reference_path_indexes == other.reference_path_indexes && self.is_ref == other.is_ref &&
-            self.multiplicity == other.multiplicity && self.single_sample_capacity == other.single_sample_capacity
+        self.reference_path_indexes == other.reference_path_indexes
+            && self.is_ref == other.is_ref
+            && self.multiplicity == other.multiplicity
+            && self.single_sample_capacity == other.single_sample_capacity
     }
 }
 
 impl Eq for MultiSampleEdge {}
 
 impl MultiSampleEdge {
-
     /**
      * Create a new MultiSampleEdge with weight multiplicity and, if isRef == true, indicates a path through the reference
      *
@@ -60,7 +61,11 @@ impl MultiSampleEdge {
      * @param multiplicity the number of observations of this edge in this sample
      * @param singleSampleCapacity the max number of samples to track edge multiplicities
      */
-    pub fn new(is_ref: bool, multiplicity: usize, single_sample_capacity: usize) -> MultiSampleEdge {
+    pub fn new(
+        is_ref: bool,
+        multiplicity: usize,
+        single_sample_capacity: usize,
+    ) -> MultiSampleEdge {
         let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
         single_sample_multiplicities.push(multiplicity);
 
@@ -90,11 +95,15 @@ impl MultiSampleEdge {
      * reset the current single sample multiplicity to 0.
      */
     pub fn flush_single_sample_multiplicity(&mut self) {
-        self.single_sample_multiplicities.push(self.current_single_sample_multiplicity);
+        self.single_sample_multiplicities
+            .push(self.current_single_sample_multiplicity);
         if self.single_sample_multiplicities.len() == self.single_sample_capacity + 1 {
             self.single_sample_multiplicities.pop();
         } else if self.single_sample_multiplicities.len() > self.single_sample_capacity + 1 {
-            panic!("Somehow the per sample multiplicity list has grown too big: {:?}", self.single_sample_multiplicities);
+            panic!(
+                "Somehow the per sample multiplicity list has grown too big: {:?}",
+                self.single_sample_multiplicities
+            );
         }
 
         self.current_single_sample_multiplicity = 0;
@@ -119,7 +128,6 @@ impl MultiSampleEdge {
 }
 
 impl BaseEdge for MultiSampleEdge {
-
     /**
      * Get the number of observations of paths connecting two vertices
      * @return a positive integer >= 0
@@ -133,7 +141,11 @@ impl BaseEdge for MultiSampleEdge {
      * @return a non-null string
      */
     fn get_dot_label(&self) -> String {
-        return format!("{}/{}", self.multiplicity.to_string(), self.get_pruning_multiplicity())
+        return format!(
+            "{}/{}",
+            self.multiplicity.to_string(),
+            self.get_pruning_multiplicity()
+        );
     }
 
     /**
@@ -166,7 +178,7 @@ impl BaseEdge for MultiSampleEdge {
      * @return true if so
      */
     fn is_ref(&self) -> bool {
-        return self.is_ref
+        return self.is_ref;
     }
 
     /**
@@ -207,6 +219,9 @@ impl BaseEdge for MultiSampleEdge {
     }
 
     fn to_string(&self) -> String {
-        return format!("BaseEdge{{multiplicity={}, isRef={}}}", self.multiplicity, self.is_ref)
+        return format!(
+            "BaseEdge{{multiplicity={}, isRef={}}}",
+            self.multiplicity, self.is_ref
+        );
     }
 }

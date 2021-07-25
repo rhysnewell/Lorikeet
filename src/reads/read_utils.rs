@@ -1,13 +1,12 @@
 use reads::bird_tool_reads::BirdToolRead;
-use rust_htslib::bam::record::{CigarStringView, Cigar, CigarString};
-use utils::simple_interval::Locatable;
-use std::cmp::Ordering;
 use reads::cigar_utils::CigarUtils;
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use std::cmp::Ordering;
+use utils::simple_interval::Locatable;
 
 pub struct ReadUtils {}
 
 impl ReadUtils {
-
     pub const CANNOT_COMPUTE_ADAPTOR_BOUNDARY: usize = std::usize::MIN;
 
     /**
@@ -24,10 +23,12 @@ impl ReadUtils {
      *                              a deletion (which isn't meaningful), it returns {@code CLIPPING_GOAL_NOT_REACHED}.
      */
     pub fn get_read_index_for_reference_coordinate(
-        alignment_start: usize, cigar: CigarStringView, ref_coord: usize
+        alignment_start: usize,
+        cigar: CigarStringView,
+        ref_coord: usize,
     ) -> (Option<usize>, Option<Cigar>) {
         if ref_coord < alignment_start {
-            return (None, None)
+            return (None, None);
         }
 
         let mut first_read_pos_of_element = 0;
@@ -38,17 +39,32 @@ impl ReadUtils {
         for cig in cigar.iter() {
             first_read_pos_of_element = last_read_pos_of_element;
             first_ref_pos_of_element = last_ref_pos_of_element;
-            last_read_pos_of_element += if CigarUtils::cigar_consumes_read_bases(cig) { cig.len() as usize } else { 0 };
-            last_ref_pos_of_element += if CigarUtils::cigar_consumes_reference_bases(cig) || CigarUtils::cigar_is_soft_clip(cig) { cig.len() as usize } else { 0 };
+            last_read_pos_of_element += if CigarUtils::cigar_consumes_read_bases(cig) {
+                cig.len() as usize
+            } else {
+                0
+            };
+            last_ref_pos_of_element += if CigarUtils::cigar_consumes_reference_bases(cig)
+                || CigarUtils::cigar_is_soft_clip(cig)
+            {
+                cig.len() as usize
+            } else {
+                0
+            };
 
-            if first_ref_pos_of_element <= ref_coord && ref_coord < last_ref_pos_of_element { // refCoord falls within this cigar element
-                let read_pos_at_ref_coord = first_read_pos_of_element +
-                    (if CigarUtils::cigar_consumes_read_bases(cig) { ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0) } else { 0 });
-                return (Some(read_pos_at_ref_coord), Some(cig.clone()))
+            if first_ref_pos_of_element <= ref_coord && ref_coord < last_ref_pos_of_element {
+                // refCoord falls within this cigar element
+                let read_pos_at_ref_coord = first_read_pos_of_element
+                    + (if CigarUtils::cigar_consumes_read_bases(cig) {
+                        ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0)
+                    } else {
+                        0
+                    });
+                return (Some(read_pos_at_ref_coord), Some(cig.clone()));
             }
         }
 
-        return (None, None)
+        return (None, None);
     }
 
     /**
@@ -56,9 +72,14 @@ impl ReadUtils {
      * a deletion in which the reference coordinate falls -- along with the cigar operator in which the reference coordinate occurs.
      */
     pub fn get_read_index_for_reference_coordinate_from_read(
-        read: &BirdToolRead, ref_coord: usize
+        read: &BirdToolRead,
+        ref_coord: usize,
     ) -> (Option<usize>, Option<Cigar>) {
-        Self::get_read_index_for_reference_coordinate(read.get_soft_start().unwrap_or(0), read.read.cigar(), ref_coord)
+        Self::get_read_index_for_reference_coordinate(
+            read.get_soft_start().unwrap_or(0),
+            read.read.cigar(),
+            ref_coord,
+        )
     }
 
     pub fn empty_read(read: &BirdToolRead) -> BirdToolRead {
@@ -67,9 +88,14 @@ impl ReadUtils {
         empty_read.read.set_mate_unmapped();
         empty_read.read.set_unmapped();
         empty_read.read.set_mapq(0);
-        empty_read.read.set(read.read.qname(), Some(&CigarString(vec![Cigar::Match(0)])), &[0], &[0]);
+        empty_read.read.set(
+            read.read.qname(),
+            Some(&CigarString(vec![Cigar::Match(0)])),
+            &[0],
+            &[0],
+        );
 
-        return empty_read
+        return empty_read;
     }
 
     pub fn compare_coordinates(first: &BirdToolRead, second: &BirdToolRead) -> Ordering {
@@ -78,18 +104,18 @@ impl ReadUtils {
 
         if first_ref_index == -1 {
             if second_ref_index == -1 {
-                return Ordering::Equal
+                return Ordering::Equal;
             } else {
-                return Ordering::Greater
+                return Ordering::Greater;
             }
         } else if second_ref_index == -1 {
-            return Ordering::Less
+            return Ordering::Less;
         }
 
         if first_ref_index != second_ref_index {
-            return first_ref_index.cmp(&second_ref_index)
+            return first_ref_index.cmp(&second_ref_index);
         } else {
-            return first.get_start().cmp(&second.get_start())
+            return first.get_start().cmp(&second.get_start());
         }
     }
 
@@ -101,22 +127,24 @@ impl ReadUtils {
      * @return true if it can, false otherwise
      */
     pub fn has_well_defined_fragment_size(read: &BirdToolRead) -> bool {
-        if read.read.insert_size() == 0 { // no adaptors in reads with mates in another chromosome or unmapped pai
-            return false
+        if read.read.insert_size() == 0 {
+            // no adaptors in reads with mates in another chromosome or unmapped pai
+            return false;
         }
 
-        if !read.read.is_paired() { // only reads that are paired can be adaptor trimmed
-            return false
+        if !read.read.is_paired() {
+            // only reads that are paired can be adaptor trimmed
+            return false;
         }
 
         if read.read.is_unmapped() || read.read.is_mate_unmapped() {
             // only reads when both reads are mapped can be trimmed
-            return false
+            return false;
         }
 
         if read.read.is_reverse() == read.read.is_mate_reverse() {
             // sanity check on isProperlyPaired to ensure that read1 and read2 aren't on the same strand
-            return false
+            return false;
         }
 
         if read.read.is_reverse() {
@@ -124,7 +152,7 @@ impl ReadUtils {
             return read.get_end() as i64 > read.read.mpos();
         } else {
             // we're on the positive strand, so our mate should be to our right (his start + insert size should be past our start)
-            return  read.get_start() as i64 <= read.read.mpos() + read.read.insert_size()
+            return read.get_start() as i64 <= read.read.mpos() + read.read.insert_size();
         }
     }
 
@@ -156,12 +184,12 @@ impl ReadUtils {
      */
     pub fn get_adaptor_boundary(read: &BirdToolRead) -> usize {
         if Self::has_well_defined_fragment_size(read) {
-            return Self::CANNOT_COMPUTE_ADAPTOR_BOUNDARY
+            return Self::CANNOT_COMPUTE_ADAPTOR_BOUNDARY;
         } else if read.read.is_reverse() {
-            return read.read.mpos() as usize - 1
+            return read.read.mpos() as usize - 1;
         } else {
             let insert_size = read.read.insert_size().abs() as usize;
-            return read.get_start() + insert_size
+            return read.get_start() + insert_size;
         }
     }
 
@@ -173,6 +201,6 @@ impl ReadUtils {
      * @return true if it is inside the read, false otherwise.
      */
     pub fn is_inside_read(read: &BirdToolRead, reference_coordinate: usize) -> bool {
-        return reference_coordinate >= read.get_start() && reference_coordinate <= read.get_end()
+        return reference_coordinate >= read.get_start() && reference_coordinate <= read.get_end();
     }
 }
