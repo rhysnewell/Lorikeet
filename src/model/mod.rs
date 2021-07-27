@@ -5,4 +5,5 @@ pub mod allele_subsetting_utils;
 pub mod byte_array_allele;
 pub mod location_and_alleles;
 pub mod variant_context;
+pub mod variant_context_utils;
 pub mod variants;

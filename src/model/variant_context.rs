@@ -29,6 +29,17 @@ pub struct VariantContext {
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
     pub attributes: HashMap<String, Vec<f64>>,
+    pub variant_type: Option<VariantType>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VariantType {
+    NoVariation,
+    Snp,
+    Mnp,
+    Indel,
+    Symbolic,
+    Mixed,
 }
 
 // The priority queue depends on `Ord`.
@@ -39,7 +50,12 @@ impl Ord for VariantContext {
         other
             .loc
             .cmp(&self.loc)
-            .then_with(|| self.alleles.cmp(&other.alleles))
+            .then_with(|| {
+                self.get_reference()
+                    .length()
+                    .cmp(&other.get_reference().length())
+            })
+            .then_with(|| self.alleles[0].cmp(&other.alleles[0]))
     }
 }
 
@@ -79,6 +95,7 @@ impl VariantContext {
             log10_p_error: 0.0,
             filters: HashSet::new(),
             attributes: HashMap::new(),
+            variant_type: None,
         }
     }
 
@@ -91,6 +108,7 @@ impl VariantContext {
             log10_p_error: 0.0,
             filters: HashSet::new(),
             attributes: HashMap::new(),
+            variant_type: None,
         }
     }
 
@@ -103,6 +121,7 @@ impl VariantContext {
             log10_p_error: 0.0,
             filters: HashSet::new(),
             attributes: HashMap::new(),
+            variant_type: None,
         }
     }
 
@@ -672,5 +691,84 @@ impl VariantContext {
                 }
             }
         }
+    }
+
+    pub fn is_snp(&mut self) -> bool {
+        return self.get_type() == &VariantType::Snp;
+    }
+
+    pub fn is_indel(&mut self) -> bool {
+        return self.get_type() == &VariantType::Indel;
+    }
+
+    pub fn get_type(&mut self) -> &VariantType {
+        if self.variant_type.is_none() {
+            self.determine_type()
+        };
+
+        return self.variant_type.as_ref().unwrap();
+    }
+
+    pub fn determine_type(&mut self) {
+        if self.variant_type.is_none() {
+            match self.alleles.len() {
+                0 => {
+                    panic!("Unexpected error: requested type of VariantContext with no alleles")
+                }
+                1 => {
+                    // note that this doesn't require a reference allele.  You can be monomorphic independent of having a
+                    // reference allele
+                    self.variant_type = Some(VariantType::NoVariation);
+                }
+                _ => self.determine_polymorphic_type(),
+            }
+        }
+    }
+
+    pub fn determine_polymorphic_type(&mut self) {
+        // do a pairwise comparison of all alleles against the reference allele
+        for allele in self.alleles.iter() {
+            if allele.is_reference() {
+                continue;
+            }
+
+            // find the type of this allele relative to the reference
+            let biallelic_type = Self::type_of_biallelic_variant(self.get_reference(), allele);
+
+            if self.variant_type.is_none() {
+                self.variant_type = Some(biallelic_type);
+            } else if &biallelic_type != self.variant_type.as_ref().unwrap() {
+                self.variant_type = Some(VariantType::Mixed);
+                break;
+            }
+        }
+    }
+
+    fn type_of_biallelic_variant(reference: &Allele, allele: &Allele) -> VariantType {
+        if reference.is_symbolic() {
+            panic!("Unexpected error: Encountered a record with a symbolic reference allele")
+        };
+
+        if allele.is_symbolic() {
+            return VariantType::Symbolic;
+        }
+
+        if reference.length() == allele.length() {
+            if allele.length() == 1 {
+                return VariantType::Snp;
+            } else {
+                return VariantType::Mnp;
+            }
+        }
+
+        // Important note: previously we were checking that one allele is the prefix of the other.  However, that's not an
+        // appropriate check as can be seen from the following example:
+        // REF = CTTA and ALT = C,CT,CA
+        // This should be assigned the INDEL type but was being marked as a MIXED type because of the prefix check.
+        // In truth, it should be absolutely impossible to return a MIXED type from this method because it simply
+        // performs a pairwise comparison of a single alternate allele against the reference allele (whereas the MIXED type
+        // is reserved for cases of multiple alternate alleles of different types).  Therefore, if we've reached this point
+        // in the code (so we're not a SNP, MNP, or symbolic allele), we absolutely must be an INDEL.
+        return VariantType::Indel;
     }
 }

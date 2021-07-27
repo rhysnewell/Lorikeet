@@ -131,15 +131,15 @@ impl ReadThreadingAssembler {
      * @param aligner                   {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return                          the resulting assembly-result-set
      */
-    pub fn run_local_assembly<'a, R: ReadErrorCorrector>(
+    pub fn run_local_assembly<R: ReadErrorCorrector>(
         &mut self,
         assembly_region: AssemblyRegion,
         ref_haplotype: &mut Haplotype<SimpleInterval>,
-        full_reference_with_padding: &'a [u8],
+        full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
         read_error_corrector: Option<R>,
         sample_names: &Vec<String>,
-    ) -> AssemblyResultSet<'a, SimpleInterval, ReadThreadingGraph> {
+    ) -> AssemblyResultSet<ReadThreadingGraph> {
         assert!(
             full_reference_with_padding.len() == ref_loc.size(),
             "Reference bases and reference loc must be the same size."
@@ -228,7 +228,7 @@ impl ReadThreadingAssembler {
         ref_loc: &SimpleInterval,
         corrected_reads: &Vec<BirdToolRead>,
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
-        result_set: &mut AssemblyResultSet<SimpleInterval, A>,
+        result_set: &mut AssemblyResultSet<A>,
         active_region_extended_location: &SimpleInterval,
         sample_names: &Vec<String>,
     ) {
@@ -324,7 +324,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &mut Haplotype<SimpleInterval>,
         ref_loc: &SimpleInterval,
         corrected_reads: &Vec<BirdToolRead>,
-        result_set: &mut AssemblyResultSet<SimpleInterval, ReadThreadingGraph>,
+        result_set: &mut AssemblyResultSet<ReadThreadingGraph>,
         active_region_extended_location: &SimpleInterval,
         sample_names: &Vec<String>,
     ) {

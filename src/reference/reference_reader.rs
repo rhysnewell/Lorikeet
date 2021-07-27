@@ -4,6 +4,7 @@ use rayon::prelude::*;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use std::collections::HashMap;
 use std::fs::File;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
 * Struct handling methods to read and handle information for references
@@ -144,6 +145,40 @@ impl ReferenceReader {
                             "{}~{}",
                             &self.genomes_and_contigs.genomes[ref_idx],
                             std::str::from_utf8(&self.target_names[&tid]).unwrap()
+                        ),
+                        e,
+                    );
+                    std::process::exit(1);
+                }
+            },
+        };
+    }
+
+    pub fn fetch_reference_context(&mut self, ref_idx: usize, interval: &SimpleInterval) {
+        match self.indexed_reader.fetch(
+            std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap(),
+            interval.get_start() as u64,
+            interval.get_end() as u64,
+        ) {
+            Ok(reference) => reference,
+            Err(_e) => match self.indexed_reader.fetch(
+                &format!(
+                    "{}~{}",
+                    self.genomes_and_contigs.genomes[ref_idx],
+                    std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap()
+                ),
+                interval.get_start() as u64,
+                interval.get_end() as u64,
+            ) {
+                Ok(reference) => reference,
+                Err(e) => {
+                    println!(
+                        "Cannot read sequence from reference {} {:?}",
+                        format!(
+                            "{}~{}",
+                            &self.genomes_and_contigs.genomes[ref_idx],
+                            std::str::from_utf8(&self.target_names[&interval.get_contig()])
+                                .unwrap()
                         ),
                         e,
                     );

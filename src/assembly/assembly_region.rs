@@ -26,7 +26,7 @@ use utils::simple_interval::SimpleInterval;
  * and a new padded interval.  The amount of padding of the new padded interval around the variants depends on the needs of local realignment
  * and as such need not equal the original padding that was used for assembly.
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AssemblyRegion {
     ref_idx: usize,
     tid: usize,
@@ -35,7 +35,7 @@ pub struct AssemblyRegion {
      * The reads included in this assembly region.  May be empty upon creation, and expand / contract
      * as reads are added or removed from this region.
      */
-    reads: Vec<BirdToolRead>,
+    pub(crate) reads: Vec<BirdToolRead>,
     /**
      * The active span in which this AssemblyRegion is responsible for calling variants
      */
@@ -84,6 +84,19 @@ impl AssemblyRegion {
             ref_idx,
             reads: Vec::new(),
             has_been_finalized: false,
+        }
+    }
+
+    pub fn clone_without_reads(&self) -> AssemblyRegion {
+        AssemblyRegion {
+            padded_span: self.padded_span.clone(),
+            active_span: self.active_span.clone(),
+            is_active: self.is_active,
+            contig_length: self.contig_length,
+            tid: self.tid,
+            ref_idx: self.ref_idx,
+            reads: Vec::new(),
+            has_been_finalized: self.has_been_finalized,
         }
     }
 

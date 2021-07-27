@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
 use reads::cigar_utils::CigarUtils;
-use rust_htslib::bam::record::{Cigar, CigarString};
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::ops::Range;
 
 pub struct AlignmentUtils {}
@@ -397,5 +397,108 @@ impl AlignmentUtils {
         }
 
         return None;
+    }
+
+    /**
+     * Get the byte[] from bases that cover the reference interval refStart -> refEnd given the
+     * alignment of bases to the reference (basesToRefCigar) and the start offset of the bases on the reference
+     *
+     * refStart and refEnd are 0 based offsets that we want to obtain.  In the client code, if the reference
+     * bases start at position X and you want Y -> Z, refStart should be Y - X and refEnd should be Z - X.
+     *
+     * If refStart or refEnd would start or end the new bases within a deletion, this function will return null
+     *
+     * If the cigar starts with an insertion, the inserted bases are considered as coming before the start position and
+     * are therefore excluded from the result.  That is getBasesCoveringRefInterval(0, 3, "ACTTGT", 0, 2I4M) should yield "TTGT".
+     *
+     * @param bases
+     * @param refStart
+     * @param refEnd
+     * @param basesStartOnRef where does the bases array start w.r.t. the reference start?  For example, bases[0] of
+     *                        could be at refStart == 0 if basesStartOnRef == 0, but it could just as easily be at
+     *                        10 (meaning bases doesn't fully span the reference), which would be indicated by basesStartOnRef == 10.
+     *                        It's not trivial to eliminate this parameter because it's tied up with the cigar
+     * @param basesToRefCigar the cigar that maps the bases to the reference genome
+     * @return a byte[] containing the bases covering this interval, or null if we would start or end within a deletion
+     */
+    pub fn get_bases_covering_ref_interval(
+        ref_start: usize,
+        ref_end: usize,
+        bases: &Vec<u8>,
+        bases_start_on_ref: usize,
+        bases_to_ref_cigar: &CigarString,
+    ) -> Option<Vec<u8>> {
+        assert!(
+            ref_end >= ref_start,
+            "Bad start or stop: start {} stop {}",
+            ref_start,
+            ref_end
+        );
+        if bases.len() != CigarUtils::get_read_length(bases_to_ref_cigar) as usize {
+            panic!("Mismatch between length in reference bases and cigar length");
+        };
+
+        let mut ref_pos = bases_start_on_ref;
+        let mut bases_pos = 0;
+        let mut bases_start = None;
+        let mut bases_stop = None;
+        let mut done = false;
+
+        let mut iii = 0;
+        while iii < bases_to_ref_cigar.0.len() && !done {
+            let ce = &bases_to_ref_cigar.0[iii];
+            match ce {
+                &Cigar::Ins(len) => {
+                    bases_pos += len;
+                }
+                &Cigar::Match(len) | &Cigar::Diff(len) | &Cigar::Equal(len) => {
+                    for i in 0..len {
+                        if ref_pos == ref_start {
+                            bases_start = Some(bases_pos);
+                        };
+                        if ref_pos == ref_end {
+                            bases_stop = Some(bases_pos);
+                            done = true;
+                        }
+                        ref_pos += 1;
+                        bases_pos += 1;
+                    }
+                }
+                &Cigar::Del(len) => {
+                    for i in 0..len {
+                        if ref_pos == ref_end || ref_pos == ref_start {
+                            // if we ever reach a ref position that is either a start or an end, we fail
+                            return None;
+                        }
+                        ref_pos += 1;
+                    }
+                }
+                _ => {
+                    panic!("Unsupported operator {:?}", ce)
+                }
+            }
+        }
+
+        if bases_start.is_none() || bases_stop.is_none() {
+            panic!(
+                "Mever found start {:?} or stop {:?} given cigar {:?}",
+                bases_start, bases_stop, bases_to_ref_cigar
+            );
+        };
+        return Some(
+            bases[bases_start.unwrap() as usize..bases_stop.unwrap() as usize + 1].to_vec(),
+        );
+    }
+
+    /**
+     * Trim cigar down to one that starts at start reference on the left and extends to end on the reference
+     *
+     * @param cigar a non-null Cigar to trim down
+     * @param start Where should we start keeping bases on the reference?  The first position is 0
+     * @param end Where should we stop keeping bases on the reference?  The maximum value is cigar.getReferenceLength()
+     * @return a new Cigar with reference length == start - end + 1
+     */
+    pub fn trim_cigar_by_reference(cigar: CigarString, start: u32, end: u32) -> CigarBuilderResult {
+        return Self::trim_cigar(cigar, start, end, true);
     }
 }

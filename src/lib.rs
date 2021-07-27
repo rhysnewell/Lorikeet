@@ -1,4 +1,5 @@
 pub mod activity_profile;
+pub mod annotator;
 pub mod assembly;
 pub mod cli;
 pub mod estimation;

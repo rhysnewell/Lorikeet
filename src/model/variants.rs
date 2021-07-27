@@ -16,6 +16,7 @@ lazy_static! {
         Variant::MNV((&(*NON_REF_STRING)).clone().into_bytes().to_vec()),
         false
     );
+    pub static ref EMPTY_ALLELE_BASES: Vec<u8> = vec!['N' as u8];
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Debug, Ord)]
@@ -117,89 +118,6 @@ pub struct Allele {
     reference: bool,
 }
 
-/**
-* Immutable representation of an allele.
-*<p>
-* Types of alleles:
-*</p>
-*<pre>
-Ref: a t C g a // C is the reference base
-: a t G g a // C base is a G in some individuals
-: a t - g a // C base is deleted w.r.t. the reference
-: a t CAg a // A base is inserted w.r.t. the reference sequence
-</pre>
-*<p> In these cases, where are the alleles?</p>
-*<ul>
-* <li>SNP polymorphism of C/G  -&gt; { C , G } -&gt; C is the reference allele</li>
-* <li>1 base deletion of C     -&gt; { tC , t } -&gt; C is the reference allele and we include the preceding reference base (null alleles are not allowed)</li>
-* <li>1 base insertion of A    -&gt; { C ; CA } -&gt; C is the reference allele (because null alleles are not allowed)</li>
-*</ul>
-*<p>
-* Suppose I see a the following in the population:
-*</p>
-*<pre>
-Ref: a t C g a // C is the reference base
-: a t G g a // C base is a G in some individuals
-: a t - g a // C base is deleted w.r.t. the reference
-</pre>
-* <p>
-* How do I represent this?  There are three segregating alleles:
-* </p>
-*<blockquote>
-*  { C , G , - }
-*</blockquote>
-*<p>and these are represented as:</p>
-*<blockquote>
-*  { tC, tG, t }
-*</blockquote>
-*<p>
-* Now suppose I have this more complex example:
-</p>
-<pre>
-Ref: a t C g a // C is the reference base
-: a t - g a
-: a t - - a
-: a t CAg a
-</pre>
-* <p>
-* There are actually four segregating alleles:
-* </p>
-*<blockquote>
-*   { Cg , -g, --, and CAg } over bases 2-4
-*</blockquote>
-*<p>   represented as:</p>
-*<blockquote>
-*   { tCg, tg, t, tCAg }
-*</blockquote>
-*<p>
-* Critically, it should be possible to apply an allele to a reference sequence to create the
-* correct haplotype sequence:</p>
-*<blockquote>
-* Allele + reference =&gt; haplotype
-*</blockquote>
-*<p>
-* For convenience, we are going to create Alleles where the GenomeLoc of the allele is stored outside of the
-* Allele object itself.  So there's an idea of an A/C polymorphism independent of it's surrounding context.
-*
-* Given list of alleles it's possible to determine the "type" of the variation
-</p>
-<pre>
-A / C @ loc =&gt; SNP
-- / A =&gt; INDEL
-</pre>
-* <p>
-* If you know where allele is the reference, you can determine whether the variant is an insertion or deletion.
-* </p>
-* <p>
-* Alelle also supports is concept of a NO_CALL allele.  This Allele represents a haplotype that couldn't be
-* determined. This is usually represented by a '.' allele.
-* </p>
-* <p>
-* Note that Alleles store all bases as bytes, in **UPPER CASE**.  So 'atc' == 'ATC' from the perspective of an
-* Allele.
-* </p>
-* @author gatk_team.
-*/
 impl Allele {
     const SINGLE_BREAKEND_INDICATOR: char = '.';
     const BREAKEND_EXTENDING_RIGHT: char = '[';
@@ -230,6 +148,21 @@ impl Allele {
 
     pub fn new(variant: Variant, reference: bool) -> Allele {
         Allele { variant, reference }
+    }
+
+    pub fn get_bases(&self) -> &Vec<u8> {
+        if self.is_symbolic() {
+            return &*EMPTY_ALLELE_BASES;
+        } else {
+            match &self.variant {
+                Variant::Insertion(bases) | Variant::Inversion(bases) | Variant::MNV(bases) => {
+                    return bases
+                }
+                Variant::Deletion(_) | Variant::None | Variant::SV(_) | Variant::SNV(_) => {
+                    return &*EMPTY_ALLELE_BASES
+                }
+            }
+        }
     }
 
     pub fn create_fake_alleles() -> Vec<Allele> {
