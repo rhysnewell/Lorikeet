@@ -1,4 +1,5 @@
 use assembly::assembly_region::AssemblyRegion;
+use assembly::assembly_result_set::AssemblyResultSet;
 use graphs::chain_pruner::ChainPruner;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use haplotype::haplotype::Haplotype;
@@ -11,6 +12,7 @@ use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
+use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
@@ -144,15 +146,15 @@ impl AssemblyBasedCallerUtils {
      * returning a data structure with the resulting information needed
      * for further HC steps
      */
-    pub fn assemble_reads(
+    pub fn assemble_reads<'a>(
         mut region: AssemblyRegion,
         given_alleles: &Vec<VariantContext>,
         args: &clap::ArgMatches,
-        reference_reader: &mut ReferenceReader,
+        reference_reader: &'a mut ReferenceReader,
         assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
         sample_names: &Vec<String>,
-    ) {
+    ) -> AssemblyResultSet<ReadThreadingGraph> {
         Self::finalize_regions(
             &mut region,
             args.is_present("error-correct-reads"),
@@ -212,11 +214,13 @@ impl AssemblyBasedCallerUtils {
         let assembly_result_set = assembly_engine.run_local_assembly(
             region,
             &mut ref_haplotype,
-            full_reference_with_padding.as_slice(),
+            full_reference_with_padding,
             padded_reference_loc,
             read_error_corrector,
             sample_names,
         );
+
+        return assembly_result_set;
     }
 
     pub fn get_variant_contexts_from_given_alleles(

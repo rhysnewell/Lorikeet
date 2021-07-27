@@ -1,3 +1,4 @@
+use model::variants;
 use model::variants::Allele;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -60,6 +61,14 @@ impl ByteArrayAllele {
             0
         } else {
             self.bases.len()
+        };
+    }
+
+    pub fn get_bases(&self) -> &Vec<u8> {
+        return if self.is_symbolic {
+            &*variants::EMPTY_ALLELE_BASES
+        } else {
+            &self.bases
         };
     }
 }

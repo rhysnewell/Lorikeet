@@ -162,15 +162,30 @@ impl SimpleInterval {
         );
     }
 
-    // /**
-    //  * Determines whether this interval overlaps the provided locatable.
-    //  *
-    //  * @param other interval to check
-    //  * @return true if this interval overlaps other, otherwise false
-    //  */
-    // pub fn overlaps(&self, other: &Self) -> bool {
-    //     self.overlaps_with_margin(other, 0)
-    // }
+    /**
+     * Returns a new SimpleInterval that represents the entire span of this and that.  Requires that
+     * this and that SimpleInterval are contiguous.
+     */
+    pub fn merge_with_contiguous(&self, that: &Self) -> SimpleInterval {
+        if !self.contiguous(that) {
+            panic!(
+                "The two intervals need to be contiguous: {:?} {:?}",
+                &self, that
+            )
+        };
+
+        return SimpleInterval::new(
+            self.get_contig(),
+            min(self.get_start(), that.get_start()),
+            max(self.get_end(), that.get_end()),
+        );
+    }
+
+    fn contiguous(&self, that: &Self) -> bool {
+        return self.get_contig() == that.get_contig()
+            && self.get_start() <= that.get_end() + 1
+            && that.get_start() <= self.get_end() + 1;
+    }
 
     /**
      * Determines whether this interval comes within "margin" of overlapping the provided locatable.
@@ -276,7 +291,7 @@ pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
 
     fn get_end(&self) -> usize;
 
-    fn overlaps<T: Locatable>(&self, other: &T) -> bool {
+    fn overlaps<L: Locatable>(&self, other: &L) -> bool {
         (other.get_start() >= self.get_start() && other.get_start() <= self.get_end())
             || (other.get_end() >= self.get_start() && other.get_end() <= self.get_end())
             || CoordMath::encloses(
@@ -285,6 +300,12 @@ pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
                 self.get_start(),
                 self.get_end(),
             )
+    }
+
+    fn contains<L: Locatable>(&self, other: &L) -> bool {
+        return self.tid() == other.tid()
+            && self.get_start() <= other.get_start()
+            && self.get_end() >= other.get_end();
     }
 }
 

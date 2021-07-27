@@ -238,10 +238,15 @@ impl NearbyKmerErrorCorrector {
     /**
      * Build correction map for each of the bases in read.
      * For each of the constituent kmers in read:
+     *
      * a) See whether the kmer has been mapped to a corrected kmer.
+     *
      * b) If so, get list of differing positions and corresponding bases.
+     *
      * c) Add then list of new bases to index in correction list.
+     *
      * Correction list is of read size, and holds a list of bases to correct.
+     *
      * @param correctedBases                        Bases to attempt to correct
      * @return                                      CorrectionSet object.
      */

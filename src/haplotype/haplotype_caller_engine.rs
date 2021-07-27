@@ -16,6 +16,7 @@ use genotype::genotyping_engine::GenotypingEngine;
 use graphs::chain_pruner::ChainPruner;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
+use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use mathru::special::gamma::{digamma, ln_gamma};
 use model::variant_context::VariantContext;
 use model::variants::*;
@@ -169,7 +170,28 @@ impl HaplotypeCallerEngine {
                 .unwrap(),
             ref_idx,
             assembly_engine: assembly_engine,
-            assembly_region_trimmer: AssemblyRegionTrimmer::new(),
+            assembly_region_trimmer: AssemblyRegionTrimmer::new(
+                args.value_of("assembly-region-padding")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+                args.value_of("indel-padding-for-genotyping")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+                args.value_of("snp-padding-for-genotyping")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+                args.value_of("str-padding-for-genotyping")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+                args.value_of("max-extension-into-region-padding")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+            ),
         }
     }
 
@@ -594,8 +616,10 @@ impl HaplotypeCallerEngine {
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
+        let mut region_without_reads = region.clone_without_reads();
+
         // run the local assembler, getting back a collection of information on how we should proceed
-        let untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
+        let mut untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
             region,
             given_alleles,
             args,
@@ -604,6 +628,33 @@ impl HaplotypeCallerEngine {
             args.is_present("correct-overlapping-quality"),
             sample_names,
         );
+
+        debug!(
+            "There were {} haplotypes found",
+            untrimmed_assembly_result.haplotypes.len()
+        );
+        let all_variation_events = untrimmed_assembly_result
+            .get_variation_events(args.value_of("max-mnp=distance").unwrap().parse().unwrap());
+
+        let mut trimming_result = self.assembly_region_trimmer.trim(
+            self.ref_idx,
+            region_without_reads,
+            all_variation_events,
+            args.is_present("enable-legacy-assembly-region-trimming"),
+            &reference_reader,
+            &untrimmed_assembly_result.full_reference_with_padding,
+        );
+
+        if !trimming_result.is_variation_present() && args.is_present("disable-optimizations") {
+            return self.reference_model_for_no_variation(
+                &mut trimming_result.original_region,
+                false,
+                &vc_priors,
+            );
+        }
+
+        let mut assembly_result =
+            untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
 
         return vc_priors;
     }
