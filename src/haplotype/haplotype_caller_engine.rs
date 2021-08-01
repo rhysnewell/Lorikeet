@@ -4,6 +4,7 @@ use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
+use assembly::assembly_result_set::AssemblyResultSet;
 use bio::stats::{LogProb, PHREDProb};
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
@@ -20,10 +21,14 @@ use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use mathru::special::gamma::{digamma, ln_gamma};
 use model::variant_context::VariantContext;
 use model::variants::*;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMLikelihoodCalculationEngine;
 use rayon::prelude::*;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
+use read_threading::read_threading_graph::ReadThreadingGraph;
+use reads::alignment_utils::AlignmentUtils;
+use reads::bird_tool_reads::BirdToolRead;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::{self, record::Cigar, Record};
 use std::collections::HashMap;
@@ -38,8 +43,10 @@ pub struct HaplotypeCallerEngine {
     genotype_prior_calculator: GenotypePriorCalculator,
     assembly_region_trimmer: AssemblyRegionTrimmer,
     assembly_engine: ReadThreadingAssembler,
+    likelihood_calculation_engine: PairHMMLikelihoodCalculationEngine,
     ref_idx: usize,
     stand_min_conf: f64,
+    mapping_quality_threshold: u8,
 }
 
 impl HaplotypeCallerEngine {
@@ -192,6 +199,16 @@ impl HaplotypeCallerEngine {
                     .parse()
                     .unwrap(),
             ),
+            likelihood_calculation_engine:
+                AssemblyBasedCallerUtils::create_likelihood_calculation_engine(
+                    args,
+                    !args.is_present("soft-clip-low-quality-ends"),
+                ),
+            mapping_quality_threshold: args
+                .value_of("mapping-quality-threshold")
+                .unwrap()
+                .parse()
+                .unwrap(),
         }
     }
 
@@ -572,7 +589,7 @@ impl HaplotypeCallerEngine {
                     );
 
                     let is_active_prob = match vc_out {
-                        Some(vc) => QualityUtils::qual_to_prob(vc.get_phred_scaled_qual()),
+                        Some(vc) => QualityUtils::qual_to_prob(vc.get_phred_scaled_qual() as u8),
                         None => 0.0,
                     };
 
@@ -656,7 +673,82 @@ impl HaplotypeCallerEngine {
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
 
+        let read_stubs = assembly_result
+            .region_for_genotyping
+            .reads
+            .par_iter()
+            .filter(|r| {
+                AlignmentUtils::unclipped_read_length(r)
+                    < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
+            })
+            .cloned()
+            .collect::<Vec<BirdToolRead>>();
+        let mut assembly_result = assembly_result.remove_all(&read_stubs);
+
+        // filter out reads from genotyping which fail mapping quality based criteria
+        //TODO - why don't do this before any assembly is done? Why not just once at the beginning of this method
+        //TODO - on the originalActiveRegion?
+        //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
+        //TODO - that does also filter reads.
+        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result);
+        let per_sample_filtered_read_list =
+            AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
+
+        if !assembly_result.variation_present || assembly_result.region_for_genotyping.len() == 0 {
+            return self.reference_model_for_no_variation(
+                &mut assembly_result.region_for_genotyping,
+                false,
+                &vc_priors,
+            );
+        };
+
+        debug!("==========================================================================");
+        debug!(
+            "              Assembly region {:?}",
+            &assembly_result.region_for_genotyping
+        );
+        debug!("==========================================================================");
+        let reads = AssemblyBasedCallerUtils::split_reads_by_sample(
+            assembly_result.region_for_genotyping.get_reads_cloned(),
+        );
+
+        let read_likelihoods = self.likelihood_calculation_engine.compute_read_likelihoods(
+            assembly_result,
+            sample_names.clone(),
+            reads,
+        );
+
+        // Realign reads to their best haplotype.
+
+        // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there
+        //  was a bad interaction between that selection and the marginalization that happens over each event when computing
+        //  GLs.  In particular, for samples that are heterozygous non-reference (B/C) the marginalization for B treats the
+        //  haplotype containing C as reference (and vice versa).  Now this is fine if all possible haplotypes are included
+        //  in the genotyping, but we lose information if we select down to a few haplotypes.  [EB]
+
         return vc_priors;
+    }
+
+    fn filter_non_passing_reads(
+        &self,
+        mut assembly_result: AssemblyResultSet<ReadThreadingGraph>,
+    ) -> (AssemblyResultSet<ReadThreadingGraph>, Vec<BirdToolRead>) {
+        let reads_to_remove = assembly_result
+            .region_for_genotyping
+            .reads
+            .par_iter()
+            .filter(|r| {
+                AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
+                    || r.read.mapq() < self.mapping_quality_threshold
+                    || !r.read.is_proper_pair()
+            })
+            .cloned()
+            .collect::<Vec<BirdToolRead>>();
+
+        return (
+            assembly_result.remove_all(&reads_to_remove),
+            reads_to_remove,
+        );
     }
 
     /**
@@ -847,9 +939,9 @@ impl HaplotypeCallerEngine {
         let read_sum = alt_quals
             .par_iter()
             .map(|qual| {
-                let epsilon = QualityUtils::qual_to_error_prob(*qual as f64);
+                let epsilon = QualityUtils::qual_to_error_prob(*qual);
                 let z_bar_alt = (1.0 - epsilon) / (1.0 - epsilon + epsilon * f_tilde_ratio);
-                let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(*qual as f64);
+                let log_epsilon = NaturalLogUtils::qual_to_log_error_prob(*qual);
                 let log_one_minus_epsilon = NaturalLogUtils::qual_to_log_prob(*qual);
                 z_bar_alt * (log_one_minus_epsilon - log_epsilon)
                     + MathUtils::fast_bernoulli_entropy(z_bar_alt)

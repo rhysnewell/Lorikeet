@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
     Short,
     Long,

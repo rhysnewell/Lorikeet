@@ -153,6 +153,8 @@ impl AssemblyRegionWalker {
                         &mut assembly_region,
                         flag_filters,
                         self.n_threads,
+                        self.short_read_bam_count,
+                        self.long_read_bam_count,
                     );
 
                     let vcf_rid = VariantContext::get_contig_vcf_tid(
@@ -188,6 +190,8 @@ impl AssemblyRegionWalker {
                         &mut assembly_region,
                         flag_filters,
                         self.n_threads,
+                        self.short_read_bam_count,
+                        self.long_read_bam_count,
                     );
 
                     self.evaluator.call_region(

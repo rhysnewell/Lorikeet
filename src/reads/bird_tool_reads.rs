@@ -1,7 +1,9 @@
+use estimation::lorikeet_engine::ReadType;
 use reads::read_utils::ReadUtils;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::bam::record::Record;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use utils::simple_interval::Locatable;
 
@@ -22,11 +24,18 @@ use utils::simple_interval::Locatable;
 pub struct BirdToolRead {
     pub read: Record,
     pub sample_index: usize,
+    pub read_type: ReadType,
+    pub transient_attributes: HashMap<String, Vec<u8>>,
 }
 
 impl BirdToolRead {
-    pub fn new(read: Record, sample_index: usize) -> BirdToolRead {
-        BirdToolRead { read, sample_index }
+    pub fn new(read: Record, sample_index: usize, read_type: ReadType) -> BirdToolRead {
+        BirdToolRead {
+            read,
+            sample_index,
+            read_type,
+            transient_attributes: HashMap::new(),
+        }
     }
 
     // pub fn get_start(&self) -> usize {
@@ -86,6 +95,10 @@ impl BirdToolRead {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn set_transient_attribute(&mut self, tag: String, val: Vec<u8>) {
+        self.transient_attributes.insert(tag, val);
     }
 }
 

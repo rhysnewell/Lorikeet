@@ -1,6 +1,6 @@
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
 use utils::simple_interval::Locatable;
 
@@ -8,6 +8,12 @@ pub struct ReadUtils {}
 
 impl ReadUtils {
     pub const CANNOT_COMPUTE_ADAPTOR_BOUNDARY: usize = std::usize::MIN;
+
+    /**
+     * The default quality score for an insertion or deletion, if
+     * none are provided for this read.
+     */
+    pub const DEFAULT_INSERTION_DELETION_QUAL: u8 = 45;
 
     /**
      * Find the 0-based index within a read base array corresponding to a given 1-based position in the reference, along with the cigar operator of
@@ -98,6 +104,36 @@ impl ReadUtils {
         return empty_read;
     }
 
+    pub fn empty_read_with_quals_and_bases(
+        read: &BirdToolRead,
+        quals: &[u8],
+        bases: &[u8],
+    ) -> BirdToolRead {
+        let mut empty_read = read.clone();
+
+        empty_read.read.set_mate_unmapped();
+        empty_read.read.set_unmapped();
+        empty_read.read.set_mapq(0);
+        empty_read.read.set(
+            read.read.qname(),
+            Some(&CigarString(read.read.cigar().0.clone())),
+            bases,
+            quals,
+        );
+
+        return empty_read;
+    }
+
+    pub fn set_insertion_base_qualities(read: &mut BirdToolRead, base_ins_quals: &Vec<u8>) {
+        read.read
+            .push_aux(b"BI", Aux::ArrayU8(AuxArray::from(base_ins_quals)));
+    }
+
+    pub fn set_deletion_base_qualities(read: &mut BirdToolRead, base_del_quals: &Vec<u8>) {
+        read.read
+            .push_aux(b"BD", Aux::ArrayU8(AuxArray::from(base_del_quals)));
+    }
+
     pub fn compare_coordinates(first: &BirdToolRead, second: &BirdToolRead) -> Ordering {
         let first_ref_index = first.read.tid();
         let second_ref_index = second.read.tid();
@@ -183,7 +219,7 @@ impl ReadUtils {
      * CANNOT_COMPUTE_ADAPTOR_BOUNDARY if the read is unmapped or the mate is mapped to another contig.
      */
     pub fn get_adaptor_boundary(read: &BirdToolRead) -> usize {
-        if Self::has_well_defined_fragment_size(read) {
+        if !Self::has_well_defined_fragment_size(read) {
             return Self::CANNOT_COMPUTE_ADAPTOR_BOUNDARY;
         } else if read.read.is_reverse() {
             return read.read.mpos() as usize - 1;
@@ -202,5 +238,57 @@ impl ReadUtils {
      */
     pub fn is_inside_read(read: &BirdToolRead, reference_coordinate: usize) -> bool {
         return reference_coordinate >= read.get_start() && reference_coordinate <= read.get_end();
+    }
+
+    /**
+     * Default utility to query the base insertion quality of a read. If the read doesn't have one, it creates an array of default qualities (currently Q45)
+     * and assigns it to the read.
+     *
+     * @return the base insertion quality array
+     */
+    pub fn get_base_insertion_qualities(read: &BirdToolRead) -> Vec<u8> {
+        match read.read.aux(b"BI") {
+            Ok(tag) => {
+                match tag {
+                    Aux::ArrayU8(quals) => return quals.iter().collect::<Vec<u8>>(),
+                    _ => {
+                        // Some day in the future when base insertion and base deletion quals exist the samtools API will
+                        // be updated and the original quals will be pulled here, but for now we assume the original quality is a flat Q45
+                        vec![Self::DEFAULT_INSERTION_DELETION_QUAL; read.read.qual().len()]
+                    }
+                }
+            }
+            _ => {
+                // Some day in the future when base insertion and base deletion quals exist the samtools API will
+                // be updated and the original quals will be pulled here, but for now we assume the original quality is a flat Q45
+                vec![Self::DEFAULT_INSERTION_DELETION_QUAL; read.read.qual().len()]
+            }
+        }
+    }
+
+    /**
+     * Default utility to query the base Deletion quality of a read. If the read doesn't have one, it creates an array of default qualities (currently Q45)
+     * and assigns it to the read.
+     *
+     * @return the base insertion quality array
+     */
+    pub fn get_base_deletion_qualities(read: &BirdToolRead) -> Vec<u8> {
+        match read.read.aux(b"BD") {
+            Ok(tag) => {
+                match tag {
+                    Aux::ArrayU8(quals) => return quals.iter().collect::<Vec<u8>>(),
+                    _ => {
+                        // Some day in the future when base insertion and base deletion quals exist the samtools API will
+                        // be updated and the original quals will be pulled here, but for now we assume the original quality is a flat Q45
+                        vec![Self::DEFAULT_INSERTION_DELETION_QUAL; read.read.qual().len()]
+                    }
+                }
+            }
+            _ => {
+                // Some day in the future when base insertion and base deletion quals exist the samtools API will
+                // be updated and the original quals will be pulled here, but for now we assume the original quality is a flat Q45
+                vec![Self::DEFAULT_INSERTION_DELETION_QUAL; read.read.qual().len()]
+            }
+        }
     }
 }

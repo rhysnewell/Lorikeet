@@ -8,6 +8,7 @@ pub mod genotype;
 pub mod graphs;
 pub mod haplotype;
 pub mod model;
+pub mod pair_hmm;
 pub mod read_error_corrector;
 pub mod read_orientation;
 pub mod read_threading;

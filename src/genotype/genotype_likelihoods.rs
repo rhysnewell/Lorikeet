@@ -1,3 +1,4 @@
+use ndarray::Array2;
 use statrs::function::factorial::binomial;
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
@@ -134,7 +135,7 @@ impl GenotypeLikelihoods {
 
 #[derive(Debug, Clone)]
 pub struct GenotypeNumLikelihoodsCache {
-    static_cache: Vec<Vec<i64>>,
+    static_cache: Array2<i64>,
     dynamic_cache: HashMap<CacheKey, i64>,
 }
 
@@ -144,7 +145,7 @@ impl GenotypeNumLikelihoodsCache {
 
     pub fn new_empty() -> GenotypeNumLikelihoodsCache {
         GenotypeNumLikelihoodsCache {
-            static_cache: Vec::new(),
+            static_cache: Array2::zeros((1, 1)),
             dynamic_cache: HashMap::new(),
         }
     }
@@ -157,15 +158,14 @@ impl GenotypeNumLikelihoodsCache {
     }
 
     pub fn add(&mut self, num_alleles: i64, ploidy: i64) {
-        self.static_cache = vec![vec![0; ploidy as usize]; num_alleles as usize];
-
+        self.static_cache = Array2::zeros((ploidy as usize, num_alleles as usize));
         self.fill_cache();
     }
 
     fn fill_cache(&mut self) {
-        for num_alleles in (0..self.static_cache.len()).into_iter() {
-            for ploidy in (0..self.static_cache[num_alleles].len()).into_iter() {
-                self.static_cache[num_alleles][ploidy] =
+        for num_alleles in (0..self.static_cache.shape()[0]).into_iter() {
+            for ploidy in (0..self.static_cache.shape()[1]).into_iter() {
+                self.static_cache[[num_alleles, ploidy]] =
                     GenotypeLikelihoods::calc_num_likelihoods(num_alleles + 1, ploidy + 1);
             }
         }
@@ -190,10 +190,10 @@ impl GenotypeNumLikelihoodsCache {
                 num_alleles, ploidy
             )
         }
-        if (num_alleles as usize) < self.static_cache.len()
-            && (ploidy as usize) < self.static_cache[num_alleles as usize].len()
+        if (num_alleles as usize) < self.static_cache.shape()[0]
+            && (ploidy as usize) < self.static_cache.row(num_alleles as usize).len()
         {
-            self.static_cache[(num_alleles - 1) as usize][(ploidy - 1) as usize]
+            self.static_cache[[(num_alleles - 1) as usize, (ploidy - 1) as usize]]
         } else {
             let cached_value = self
                 .dynamic_cache

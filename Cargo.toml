@@ -28,6 +28,7 @@ bird_tool_utils = "0.3.0"
 clap = "2"
 compare = "0.1.0"
 coverm = {git = "https://github.com/rhysnewell/CoverM"}
+criterion = "0.3.5"
 galah = "0.3.0"
 csv = "1"
 derive_builder = "0.9"
@@ -47,7 +48,7 @@ libm = "0.2.1"
 mathru = "0.9.1"
 multimap = "0.8.3"
 ndarray-npy = "0.8.0"
-ndarray = "0.15.3"
+ndarray = {version = "0.15.3", features = ["rayon"]}
 nix = "0.13"
 num = "0.4.0"
 ordered-float = "1"
@@ -72,6 +73,13 @@ term = "0.7.0"
 indicatif = {version = "*"}
 scoped_threadpool = "*"
 
+
+[lib]
+bench = false
+
+[[bench]]
+name = "benchmarks"
+harness = false
 
 [dev-dependencies]
 assert_cli = "0.6.*"
