@@ -1,7 +1,7 @@
 extern crate lorikeet_genome;
 
 use lorikeet_genome::cli::*;
-use lorikeet_genome::estimation::contig;
+
 use lorikeet_genome::external_command_checker;
 use lorikeet_genome::utils::utils::*;
 use lorikeet_genome::*;
