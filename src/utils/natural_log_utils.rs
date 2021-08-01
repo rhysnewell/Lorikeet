@@ -8,9 +8,9 @@ lazy_static! {
     pub static ref LOG_ONE_THIRD: f64 = (1.0 / 3.0).ln();
     static ref LOG1MEXP_THRESHOLD: f64 = 0.5.ln();
     static ref PHRED_TO_ERROR_PROB_FACTOR: f64 = -(10.0.ln()) / 10.0;
-    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL as usize)
-        .into_par_iter()
-        .map(|n| { NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n as f64)) })
+    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL)
+        .into_iter()
+        .map(|n| { NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n)) })
         .collect::<Vec<f64>>();
 }
 
@@ -63,12 +63,8 @@ impl NaturalLogUtils {
      * @param qual a phred-scaled quality score encoded as a double
      * @return log of probability (0.0-1.0)
      */
-    pub fn qual_to_log_error_prob(qual: f64) -> f64 {
-        if qual < 0.0 {
-            panic!("Qual must be >= 0 but got {}", qual)
-        }
-
-        return qual * *PHRED_TO_ERROR_PROB_FACTOR;
+    pub fn qual_to_log_error_prob(qual: u8) -> f64 {
+        return (qual as f64) * *PHRED_TO_ERROR_PROB_FACTOR;
     }
 
     pub fn qual_to_log_prob(qual: u8) -> f64 {

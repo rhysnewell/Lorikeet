@@ -1,4 +1,5 @@
 use rayon::prelude::*;
+use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
@@ -356,6 +357,25 @@ impl AlignmentUtils {
                 true
             }
         });
+    }
+
+    /**
+     * Returns the number of bases in a read minus the number of softclipped bases.
+     */
+    pub fn unclipped_read_length(read: &BirdToolRead) -> usize {
+        let mut soft_clipped_bases = 0;
+        for element in read.read.cigar().iter() {
+            match element {
+                Cigar::SoftClip(len) => {
+                    soft_clipped_bases += len;
+                }
+                _ => {
+                    // pass
+                }
+            };
+        }
+
+        return read.len() - soft_clipped_bases as usize;
     }
 
     /**

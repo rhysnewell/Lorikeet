@@ -201,6 +201,26 @@ impl AssemblyRegion {
     }
 
     /**
+     * Get an mutable reference of the list of reads currently in this assembly region.
+     *
+     * The reads are sorted by their coordinate position.
+     * @return an unmodifiable and inmutable copy of the reads in the assembly region.
+     */
+    pub fn get_reads_mut(&mut self) -> &mut Vec<BirdToolRead> {
+        &mut self.reads
+    }
+
+    /**
+     * Get a clone of the list of reads currently in this assembly region.
+     *
+     * The reads are sorted by their coordinate position.
+     * @return an unmodifiable and inmutable copy of the reads in the assembly region.
+     */
+    pub fn get_reads_cloned(&self) -> Vec<BirdToolRead> {
+        self.reads.clone()
+    }
+
+    /**
      * Trim this region to just the span, producing a new assembly region without any reads that has only
      * the extent of newExtend intersected with the current extent
      * @param span the new extend of the active region we want
@@ -327,8 +347,27 @@ impl AssemblyRegion {
      * Remove all of the reads in readsToRemove from this region
      * @param readsToRemove the set of reads we want to remove
      */
-    pub fn remove_all(&mut self, reads_to_remove: &Vec<BirdToolRead>) {
-        self.reads.retain(|read| !reads_to_remove.contains(read));
+    pub fn remove_all(mut self, reads_to_remove: &Vec<BirdToolRead>) -> AssemblyRegion {
+        self.reads = self
+            .reads
+            .into_par_iter()
+            .filter(|read| !reads_to_remove.contains(read))
+            .collect::<Vec<BirdToolRead>>();
+
+        return self;
+    }
+
+    pub fn remove_all_by_reference(
+        mut self,
+        reads_to_remove: Vec<&BirdToolRead>,
+    ) -> AssemblyRegion {
+        self.reads = self
+            .reads
+            .into_par_iter()
+            .filter(|read| !reads_to_remove.contains(&read))
+            .collect::<Vec<BirdToolRead>>();
+
+        return self;
     }
 
     /**

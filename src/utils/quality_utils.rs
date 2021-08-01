@@ -12,7 +12,11 @@ pub struct QualityUtils {}
 
 impl QualityUtils {
     pub const MAX_REASONABLE_Q_SCORE: u8 = 60;
-
+    /**
+     * The lowest quality score for a base that is considered reasonable for statistical analysis.  This is
+     * because Q 6 => you stand a 25% of being right, which means all bases are equally likely
+     */
+    pub const MIN_USABLE_Q_SCORE: u8 = 6;
     pub const MAX_QUAL: u8 = 254;
 
     /**
@@ -25,8 +29,12 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double
      * @return log of probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob_log10(qual: f64) -> f64 {
-        qual * -0.1
+    pub fn qual_to_error_prob_log10(qual: u8) -> f64 {
+        (qual as f64) * -0.1
+    }
+
+    pub fn qual_to_prob_log10(qual: u8) -> f64 {
+        (1.0 - 10.0.powf((qual as f64) / -10.0)).log10()
     }
 
     /**
@@ -64,8 +72,8 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)
      */
-    pub fn qual_to_prob(qual: f64) -> f64 {
-        if qual < 0.0 {
+    pub fn qual_to_prob(qual: u8) -> f64 {
+        if (qual as f64) < 0.0 {
             panic!("Qual must be >= 0.0 but got {}", qual)
         }
 
@@ -82,12 +90,12 @@ impl QualityUtils {
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)
      */
-    pub fn qual_to_error_prob(qual: f64) -> f64 {
-        if qual < 0.0 {
+    pub fn qual_to_error_prob(qual: u8) -> f64 {
+        if (qual as f64) < 0.0 {
             panic!("Qual must be >= 0.0 but got {}", qual)
         }
 
-        10.0.powf(qual / -10.0)
+        10.0.powf((qual as f64) / -10.0)
     }
 
     // ----------------------------------------------------------------------

@@ -8,17 +8,22 @@ use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use model::location_and_alleles::LocationAndAlleles;
 use model::variant_context::VariantContext;
 use model::variants::Allele;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    PCRErrorModel, PairHMMLikelihoodCalculationEngine,
+};
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
 use read_threading::read_threading_graph::ReadThreadingGraph;
+use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use std::cmp::{max, min};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 lazy_static! {
@@ -52,6 +57,10 @@ pub struct AssemblyBasedCallerUtils {}
 
 impl AssemblyBasedCallerUtils {
     const REFERENCE_PADDING_FOR_ASSEMBLY: usize = 500;
+    // After trimming to fit the assembly window, throw away read stubs shorter than this length
+    // if we don't, the several bases left of reads that end just within the assembly window can
+    // get realigned incorrectly.  See https://github.com/broadinstitute/gatk/issues/5060
+    pub const MINIMUM_READ_LENGTH_AFTER_TRIMMING: usize = 10;
 
     pub fn finalize_regions(
         region: &mut AssemblyRegion,
@@ -379,5 +388,70 @@ impl AssemblyBasedCallerUtils {
 
             alt_and_ref_1 == alt_and_ref_2
         }
+    }
+
+    pub fn split_reads_by_sample(reads: Vec<BirdToolRead>) -> HashMap<usize, Vec<BirdToolRead>> {
+        let mut return_map = HashMap::new();
+
+        for read in reads.into_iter() {
+            let read_vec = return_map.entry(read.sample_index).or_insert(Vec::new());
+            read_vec.push(read);
+        }
+
+        return return_map;
+    }
+
+    /**
+     * Instantiates the appropriate likelihood calculation engine.
+     *
+     * @return never {@code null}.
+     */
+    pub fn create_likelihood_calculation_engine(
+        args: &clap::ArgMatches,
+        handle_soft_clips: bool,
+    ) -> PairHMMLikelihoodCalculationEngine {
+        //AlleleLikelihoods::normalizeLikelihoods uses Double.NEGATIVE_INFINITY as a flag to disable capping
+        let log10_global_read_mismapping_rate = if args
+            .value_of("phred-scaled-global-read-mismapping-rate")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap()
+            < 0.0
+        {
+            std::f64::NEG_INFINITY
+        } else {
+            QualityUtils::qual_to_error_prob_log10(
+                args.value_of("phred-scaled-global-read-mismapping-rate")
+                    .unwrap()
+                    .parse::<u8>()
+                    .unwrap(),
+            )
+        };
+
+        PairHMMLikelihoodCalculationEngine::new(
+            args.value_of("pair-hmm-gap-continuation-penalty")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args,
+            log10_global_read_mismapping_rate,
+            PCRErrorModel::new(args),
+            args.value_of("base-quality-score-threshold")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.is_present("enable-dynamic-read-disqualification-for-genotyping"),
+            args.value_of("dynamic-read-disqualification-threshold")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            args.value_of("expected-mismatch-rate-for-read-disqualification")
+                .unwrap()
+                .parse()
+                .unwrap(),
+            !args.is_present("disable-symmetric-hmm-normalizing"),
+            !args.is_present("disable-cap-base-qualities-to-map-quality"),
+            handle_soft_clips,
+        )
     }
 }

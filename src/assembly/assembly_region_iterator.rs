@@ -3,6 +3,7 @@ use coverm::bam_generator::{
     generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
 };
 use coverm::FlagFilter;
+use estimation::lorikeet_engine::ReadType;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::Record;
 
@@ -41,6 +42,8 @@ impl<'a> AssemblyRegionIterator<'a> {
         region: &mut AssemblyRegion,
         flag_filters: &FlagFilter,
         n_threads: u32,
+        short_read_bam_count: usize,
+        long_read_bam_count: usize,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
@@ -63,10 +66,17 @@ impl<'a> AssemblyRegionIterator<'a> {
                     region.get_end() as i64,
                 ));
 
+                let read_type = if sample_idx < short_read_bam_count {
+                    ReadType::Short
+                } else {
+                    ReadType::Long
+                };
+
                 while bam_generated.read(&mut record) == true {
                     // TODO: Implement read filtering here
                     if (!flag_filters.include_supplementary
-                        && record.is_supplementary()) // We want supp alignments for longreads
+                        && record.is_supplementary()
+                        && read_type != ReadType::Long) // We want supp alignments for longreads
                         || (!flag_filters.include_secondary
                         && record.is_secondary())
                         || record.is_unmapped()
@@ -74,7 +84,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                     {
                         continue;
                     } else {
-                        region.add(BirdToolRead::new(record.clone(), sample_idx));
+                        region.add(BirdToolRead::new(record.clone(), sample_idx, read_type));
                     };
                 }
             });

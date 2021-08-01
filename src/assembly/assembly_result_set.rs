@@ -8,6 +8,7 @@ use linked_hash_set::LinkedHashSet;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use reads::bird_tool_reads::BirdToolRead;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use utils::simple_interval::{Locatable, SimpleInterval};
 
@@ -240,6 +241,11 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             .collect::<BTreeSet<VariantContext>>();
 
         return vcs;
+    }
+
+    pub fn remove_all(mut self, reads: &Vec<BirdToolRead>) -> Self {
+        self.region_for_genotyping = self.region_for_genotyping.remove_all(reads);
+        return self;
     }
 
     /**
