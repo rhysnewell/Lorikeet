@@ -1,4 +1,4 @@
-use model::variants::Allele;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
@@ -15,9 +15,9 @@ use utils::quality_utils::QualityUtils;
  */
 pub struct AFCalculationResult {
     log10_posterior_of_no_variant: f64,
-    log10_p_ref_by_allele: HashMap<Allele, f64>,
+    log10_p_ref_by_allele: HashMap<ByteArrayAllele, f64>,
     allele_counts_of_mle: Vec<i64>,
-    alleles_used_in_genotyping: Vec<Allele>,
+    alleles_used_in_genotyping: Vec<ByteArrayAllele>,
 }
 
 impl AFCalculationResult {
@@ -28,9 +28,9 @@ impl AFCalculationResult {
      */
     pub fn new(
         allele_counts_of_mle: Vec<i64>,
-        alleles_used_in_genotyping: Vec<Allele>,
+        alleles_used_in_genotyping: Vec<ByteArrayAllele>,
         log10_posterior_of_no_variant: f64,
-        log10_p_ref_by_allele: HashMap<Allele, f64>,
+        log10_p_ref_by_allele: HashMap<ByteArrayAllele, f64>,
     ) -> AFCalculationResult {
         if !MathUtils::is_valid_log10_probability(log10_posterior_of_no_variant) {
             panic!("log10 posterior must be a valid log probability")
@@ -77,7 +77,7 @@ impl AFCalculationResult {
      * @throws IllegalStateException if allele isn't in allelesUsedInGenotyping
      * @return the AC of allele
      */
-    pub fn get_allele_count_at_mle(&self, allele: &Allele) -> i64 {
+    pub fn get_allele_count_at_mle(&self, allele: &ByteArrayAllele) -> i64 {
         if allele.is_reference() {
             panic!(
                 "Cannot get the alt allele index for reference allele {:?}",
@@ -98,7 +98,7 @@ impl AFCalculationResult {
      *
      * @return a non-empty list of alleles used during genotyping, the first of which is the reference allele
      */
-    pub fn get_alleles_used_in_genotyping(&self) -> &Vec<Allele> {
+    pub fn get_alleles_used_in_genotyping(&self) -> &Vec<ByteArrayAllele> {
         &self.alleles_used_in_genotyping
     }
 
@@ -110,7 +110,11 @@ impl AFCalculationResult {
         MathUtils::log10_one_minus_pow10(self.log10_posterior_of_no_variant)
     }
 
-    pub fn passes_threshold(&self, allele: &Allele, phred_scale_qual_threshold: f64) -> bool {
+    pub fn passes_threshold(
+        &self,
+        allele: &ByteArrayAllele,
+        phred_scale_qual_threshold: f64,
+    ) -> bool {
         (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON)
             < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold as u8)
     }
@@ -136,7 +140,7 @@ impl AFCalculationResult {
      * @param allele the allele we're interested in, must be in getAllelesUsedInGenotyping
      * @return the log10 probability that allele is not segregating at this site
      */
-    pub fn get_log10_posterior_of_allele_absent(&self, allele: &Allele) -> f64 {
+    pub fn get_log10_posterior_of_allele_absent(&self, allele: &ByteArrayAllele) -> f64 {
         let log10_p_non_ref = self.log10_p_ref_by_allele.get(allele).unwrap();
         return *log10_p_non_ref;
     }

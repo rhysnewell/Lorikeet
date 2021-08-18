@@ -1,6 +1,6 @@
 use assembly::kmer::Kmer;
 use compare::{Compare, Extract};
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
+use graphs::base_edge::BaseEdgeStruct;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
@@ -18,7 +18,7 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
-use rust_htslib::bam::record::{Cigar, CigarString};
+use rust_htslib::bam::record::Cigar;
 use smith_waterman::bindings::SWOverhangStrategy;
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};

@@ -6,7 +6,6 @@ use haplotype::haplotype::Haplotype;
 use ordered_float::OrderedFloat;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use std::cmp::Ordering;
-use utils::base_utils::BaseUtils;
 use utils::simple_interval::Locatable;
 
 /**
@@ -91,7 +90,7 @@ impl KBestHaplotype {
     pub fn haplotype<L: Locatable, V: BaseVertex, E: BaseEdge>(
         &self,
         graph: &BaseGraph<V, E>,
-    ) -> Haplotype<L> {
+    ) -> Haplotype<'static, L> {
         let mut haplotype = Haplotype::new(&self.path.get_bases(graph), self.is_reference);
         haplotype.score = OrderedFloat(self.score);
         return haplotype;

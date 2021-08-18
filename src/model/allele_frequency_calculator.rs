@@ -3,8 +3,9 @@ use genotype::genotype_builder::Genotype;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use model::allele_frequency_calculator_result::AFCalculationResult;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
-use model::variants::Allele;
+use model::variants::SPAN_DEL_ALLELE;
 use num::traits::Float;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
@@ -197,7 +198,8 @@ impl AlleleFrequencyCalculator {
         let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
         let mut log10_p_no_variant = 0.0;
 
-        let spanning_deletion_present = alleles.par_iter().any(|allele| allele.is_del());
+        let spanning_deletion_present =
+            alleles.par_iter().any(|allele| allele == &*SPAN_DEL_ALLELE);
 
         let mut non_variant_indices_by_ploidy = BTreeMap::new();
 
@@ -229,7 +231,7 @@ impl AlleleFrequencyCalculator {
             } else {
                 let non_variant_indices = non_variant_indices_by_ploidy.entry(ploidy).or_insert(
                     AlleleFrequencyCalculator::genotype_indices_with_only_ref_and_span_del(
-                        ploidy, &alleles,
+                        ploidy, alleles,
                     ),
                 );
 
@@ -309,7 +311,7 @@ impl AlleleFrequencyCalculator {
                     log10_p_of_zero_counts_by_allele[a].clone(),
                 )
             })
-            .collect::<HashMap<Allele, f64>>();
+            .collect::<HashMap<ByteArrayAllele, f64>>();
 
         return AFCalculationResult::new(
             int_alt_allele_counts,
@@ -321,18 +323,18 @@ impl AlleleFrequencyCalculator {
 
     fn genotype_indices_with_only_ref_and_span_del(
         ploidy: usize,
-        alleles: &Vec<Allele>,
+        alleles: &Vec<ByteArrayAllele>,
     ) -> Vec<usize> {
         let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
 
-        let spanning_deletion_present = alleles.par_iter().any(|allele| allele.is_del());
+        let spanning_deletion_present = alleles.contains(&*SPAN_DEL_ALLELE);
 
         if !spanning_deletion_present {
             vec![AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX]
         } else {
             let span_del_index = alleles
                 .par_iter()
-                .position_first(|allele| allele.is_del())
+                .position_first(|allele| allele == &*SPAN_DEL_ALLELE)
                 .unwrap();
             let result = (0..ploidy + 1)
                 .into_iter()

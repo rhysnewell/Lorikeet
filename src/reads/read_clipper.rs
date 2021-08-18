@@ -421,7 +421,7 @@ impl<'a> ReadClipper<'a> {
         low_qual: u8,
     ) -> BirdToolRead {
         if self.read.is_empty() {
-            self.read.clone();
+            return self.read.clone();
         };
 
         let read_length = self.read.read.seq_len();

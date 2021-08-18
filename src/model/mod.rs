@@ -1,5 +1,6 @@
 pub mod allele_frequency_calculator;
 pub mod allele_frequency_calculator_result;
+pub mod allele_likelihood_matrix_mapper;
 pub mod allele_likelihoods;
 pub mod allele_list;
 pub mod allele_subsetting_utils;

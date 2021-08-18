@@ -14,17 +14,16 @@ use estimation::lorikeet_engine::ReadType;
 use genotype::genotype_builder::Genotype;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
-use graphs::chain_pruner::ChainPruner;
-use graphs::multi_sample_edge::MultiSampleEdge;
+use haplotype::haplotype::Haplotype;
+use haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
-use haplotype::reference_confidence_model::ReferenceConfidenceModel;
 use mathru::special::gamma::{digamma, ln_gamma};
+use model::byte_array_allele::ByteArrayAllele;
 use model::variant_context::VariantContext;
 use model::variants::*;
 use pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMLikelihoodCalculationEngine;
 use rayon::prelude::*;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::alignment_utils::AlignmentUtils;
@@ -39,7 +38,8 @@ use utils::quality_utils::QualityUtils;
 use utils::simple_interval::SimpleInterval;
 
 pub struct HaplotypeCallerEngine {
-    genotyping_engine: GenotypingEngine,
+    active_region_evaluation_genotyper_engine: GenotypingEngine,
+    genotyping_engine: HaplotypeCallerGenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
     assembly_region_trimmer: AssemblyRegionTrimmer,
     assembly_engine: ReadThreadingAssembler,
@@ -163,10 +163,16 @@ impl HaplotypeCallerEngine {
             args.value_of("min-base-quality").unwrap().parse().unwrap();
 
         HaplotypeCallerEngine {
-            genotyping_engine: GenotypingEngine::make(
+            active_region_evaluation_genotyper_engine: GenotypingEngine::make(
+                args,
+                samples.clone(),
+                do_allele_specific_calcs,
+                sample_ploidy,
+            ),
+            genotyping_engine: HaplotypeCallerGenotypingEngine::new(
                 args,
                 samples,
-                do_allele_specific_calcs,
+                !args.is_present("do-not-run-physical-phasing"),
                 sample_ploidy,
             ),
             genotype_prior_calculator: GenotypePriorCalculator::make(args),
@@ -335,6 +341,7 @@ impl HaplotypeCallerEngine {
             max_prob_prop,
             active_prob_thresh,
             ref_idx,
+            indexed_bam_readers,
         );
     }
 
@@ -492,6 +499,7 @@ impl HaplotypeCallerEngine {
         max_prob_propagation: usize,
         active_prob_threshold: f64,
         ref_idx: usize,
+        sample_names: &Vec<String>,
     ) -> HashMap<usize, BandPassActivityProfile> {
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
@@ -515,7 +523,7 @@ impl HaplotypeCallerEngine {
                         vec_of_ref_vs_any_result.iter().enumerate().for_each(
                             |(pos, ref_vs_any_result)| {
                                 let is_active_prob = self
-                                    .genotyping_engine
+                                    .active_region_evaluation_genotyper_engine
                                     .allele_frequency_calculator
                                     .calculate_single_sample_biallelic_non_ref_posterior(
                                         &ref_vs_any_result.genotype_likelihoods,
@@ -546,6 +554,7 @@ impl HaplotypeCallerEngine {
             return per_contig_activity_profiles;
         } else {
             let mut per_contig_activity_profiles = HashMap::new();
+            let placeholder_vec = Vec::new();
             for (tid, length) in target_ids_and_lens.iter() {
                 let per_base_hq_soft_clips =
                     per_contig_per_base_hq_soft_clips.entry(*tid).or_insert(
@@ -569,24 +578,26 @@ impl HaplotypeCallerEngine {
 
                     let hq_soft_clips = per_base_hq_soft_clips[pos];
 
-                    for sample_likelihoods in genotype_likelihoods.iter() {
+                    for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
                         let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
-                        genotypes.push(Genotype::build(ploidy, result))
+                        genotypes.push(Genotype::build(ploidy, result, sample_names[idx].clone()))
                     }
 
-                    let fake_alleles = Allele::create_fake_alleles();
+                    let fake_alleles = ByteArrayAllele::create_fake_alleles();
 
                     let mut variant_context = VariantContext::build(*tid, pos, pos, fake_alleles);
 
                     variant_context.add_genotypes(genotypes);
 
-                    let vc_out = self.genotyping_engine.calculate_genotypes(
-                        variant_context,
-                        ploidy,
-                        &self.genotype_prior_calculator,
-                        Vec::new(),
-                        self.stand_min_conf,
-                    );
+                    let vc_out = self
+                        .active_region_evaluation_genotyper_engine
+                        .calculate_genotypes(
+                            variant_context,
+                            ploidy,
+                            &self.genotype_prior_calculator,
+                            &placeholder_vec,
+                            self.stand_min_conf,
+                        );
 
                     let is_active_prob = match vc_out {
                         Some(vc) => QualityUtils::qual_to_prob(vc.get_phred_scaled_qual() as u8),
@@ -616,14 +627,14 @@ impl HaplotypeCallerEngine {
      * @param features Features overlapping the assembly region
      * @return List of variants discovered in the region (may be empty)
      */
-    pub fn call_region(
-        &mut self,
+    pub fn call_region<'a, 'b>(
+        &'a mut self,
         mut region: AssemblyRegion,
-        reference_reader: &mut ReferenceReader,
-        given_alleles: &Vec<VariantContext>,
-        args: &clap::ArgMatches,
-        sample_names: &Vec<String>,
-    ) -> Vec<VariantContext> {
+        reference_reader: &'b mut ReferenceReader,
+        given_alleles: Vec<VariantContext<'a>>,
+        args: &'b clap::ArgMatches,
+        sample_names: &'b Vec<String>,
+    ) -> Vec<VariantContext<'a>> {
         let vc_priors = Vec::new();
         if !region.is_active() {
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
@@ -638,7 +649,7 @@ impl HaplotypeCallerEngine {
         // run the local assembler, getting back a collection of information on how we should proceed
         let mut untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
             region,
-            given_alleles,
+            &given_alleles,
             args,
             reference_reader,
             &mut self.assembly_engine,
@@ -712,27 +723,57 @@ impl HaplotypeCallerEngine {
             assembly_result.region_for_genotyping.get_reads_cloned(),
         );
 
-        let read_likelihoods = self.likelihood_calculation_engine.compute_read_likelihoods(
-            assembly_result,
+        let mut read_likelihoods = self.likelihood_calculation_engine.compute_read_likelihoods(
+            &mut assembly_result,
             sample_names.clone(),
             reads,
         );
 
         // Realign reads to their best haplotype.
+        let read_alignments = AssemblyBasedCallerUtils::realign_reads_to_their_best_haplotype(
+            &mut read_likelihoods,
+            &assembly_result.ref_haplotype,
+            &assembly_result.padded_reference_loc,
+        );
+        read_likelihoods.change_evidence(read_alignments);
 
         // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there
         //  was a bad interaction between that selection and the marginalization that happens over each event when computing
         //  GLs.  In particular, for samples that are heterozygous non-reference (B/C) the marginalization for B treats the
         //  haplotype containing C as reference (and vice versa).  Now this is fine if all possible haplotypes are included
         //  in the genotyping, but we lose information if we select down to a few haplotypes.  [EB]
+        let called_haplotypes = self.genotyping_engine.assign_genotype_likelihoods(
+            assembly_result
+                .haplotypes
+                .iter()
+                .cloned()
+                .collect::<Vec<Haplotype<SimpleInterval>>>(),
+            read_likelihoods,
+            per_sample_filtered_read_list,
+            assembly_result.full_reference_with_padding.as_slice(),
+            &assembly_result.padded_reference_loc,
+            &assembly_result.region_for_genotyping.active_span,
+            given_alleles,
+            false,
+            args.value_of("max-mnp-distance").unwrap().parse().unwrap(),
+            sample_names,
+            args.value_of("ploidy").unwrap().parse().unwrap(),
+            args,
+            &reference_reader,
+            self.stand_min_conf,
+        );
 
-        return vc_priors;
+        // TODO: Bam writing? Don't think
+        //       Emit reference confidence? Maybe
+        //
+
+        return called_haplotypes.calls;
     }
 
-    fn filter_non_passing_reads(
+    fn filter_non_passing_reads<'a>(
         &self,
-        mut assembly_result: AssemblyResultSet<ReadThreadingGraph>,
-    ) -> (AssemblyResultSet<ReadThreadingGraph>, Vec<BirdToolRead>) {
+        mut assembly_result: AssemblyResultSet<'a, ReadThreadingGraph>,
+    ) -> (AssemblyResultSet<'a, ReadThreadingGraph>, Vec<BirdToolRead>) {
         let reads_to_remove = assembly_result
             .region_for_genotyping
             .reads

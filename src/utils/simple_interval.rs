@@ -11,9 +11,9 @@ use utils::interval_utils::IntervalUtils;
 */
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct SimpleInterval {
-    start: usize,
-    end: usize,
-    tid: usize,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) tid: usize,
 }
 
 impl SimpleInterval {

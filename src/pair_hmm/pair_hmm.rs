@@ -149,7 +149,7 @@ impl PairHMM {
                 let mut is_first_haplotype = true;
                 for a in 0..allele_count {
                     let allele = &allele_likelihoods.alleles[a];
-                    let allele_bases = &allele.bases;
+                    let allele_bases = &allele.allele.bases;
                     let next_allele_bases = if a == allele_count - 1 {
                         None
                     } else {

@@ -2,7 +2,6 @@ use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-use rayon::prelude::*;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**

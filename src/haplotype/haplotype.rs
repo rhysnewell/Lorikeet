@@ -1,6 +1,6 @@
 use haplotype::event_map::EventMap;
 use model::byte_array_allele::ByteArrayAllele;
-use ordered_float::{NotNan, OrderedFloat};
+use ordered_float::OrderedFloat;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
 use reads::cigar_utils::CigarUtils;
@@ -13,10 +13,10 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Haplotype<L: Locatable> {
+pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,
-    pub(crate) event_map: Option<EventMap>,
+    pub(crate) event_map: Option<EventMap<'a>>,
     pub(crate) cigar: CigarString,
     pub(crate) alignment_start_hap_wrt_ref: usize,
     pub(crate) score: OrderedFloat<f64>,
@@ -24,14 +24,14 @@ pub struct Haplotype<L: Locatable> {
     pub(crate) kmer_size: usize,
 }
 
-impl<L: Locatable> Haplotype<L> {
+impl<'a, L: Locatable> Haplotype<'a, L> {
     /**
      * Main constructor
      *
      * @param bases a non-null array of bases
      * @param isRef is this the reference haplotype?
      */
-    pub fn new(bases: &[u8], is_ref: bool) -> Haplotype<L> {
+    pub fn new(bases: &[u8], is_ref: bool) -> Haplotype<'a, L> {
         Haplotype {
             allele: ByteArrayAllele::new(bases, is_ref),
             genome_location: None,
@@ -75,7 +75,7 @@ impl<L: Locatable> Haplotype<L> {
      * @param loc a location completely contained within this Haplotype's location
      * @return a new Haplotype within only the bases spanning the provided location, or null for some reason the haplotype would be malformed if
      */
-    pub fn trim(&self, loc: SimpleInterval) -> Option<Haplotype<SimpleInterval>> {
+    pub fn trim<'b>(&'b self, loc: SimpleInterval) -> Option<Haplotype<'a, SimpleInterval>> {
         assert!(
             self.genome_location.as_ref().unwrap().contains(&loc),
             "Can only trim a Haplotype to a containing span."
@@ -150,9 +150,22 @@ impl<L: Locatable> Haplotype<L> {
     pub fn is_ref(&self) -> bool {
         self.allele.is_ref
     }
+
+    /**
+     * Get the haplotype cigar extended by padSize M at the tail, consolidated into a clean cigar
+     *
+     * @param padSize how many additional Ms should be appended to the end of this cigar.  Must be >= 0
+     * @return a newly allocated Cigar that consolidate(getCigar + padSize + M)
+     */
+    pub fn get_consolidated_padded_ciagr(&self, pad_size: usize) -> CigarString {
+        let mut builder = CigarBuilder::new(true);
+        builder.add_all(self.cigar.0.clone());
+        builder.add(Cigar::Match(pad_size as u32));
+        return builder.make(false);
+    }
 }
 
-impl<L: Locatable> Hash for Haplotype<L> {
+impl<'a, L: Locatable> Hash for Haplotype<'a, L> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.cigar.hash(state);
         self.allele.hash(state);
@@ -162,7 +175,7 @@ impl<L: Locatable> Hash for Haplotype<L> {
     }
 }
 
-impl<L: Locatable> Ord for Haplotype<L> {
+impl<'a, L: Locatable> Ord for Haplotype<'a, L> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.get_bases()
             .len()
@@ -171,7 +184,7 @@ impl<L: Locatable> Ord for Haplotype<L> {
     }
 }
 
-impl<L: Locatable> PartialOrd for Haplotype<L> {
+impl<'a, L: Locatable> PartialOrd for Haplotype<'a, L> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }

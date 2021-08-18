@@ -1,16 +1,13 @@
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_result::AssemblyResult;
-use graphs::base_edge::BaseEdge;
 use haplotype::event_map::EventMap;
 use haplotype::haplotype::Haplotype;
-use linked_hash_map::LinkedHashMap;
-use linked_hash_set::LinkedHashSet;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use utils::simple_interval::{Locatable, SimpleInterval};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use utils::simple_interval::SimpleInterval;
 
 /**
  * Collection of read assembly using several kmerSizes.
@@ -27,24 +24,24 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  * @original_author Valentin Ruano-Rubio &lt;valentin@broadinstitute.com&gt;
  * @author Rhys Newell; rhys.newell@hdr.qut.edu.au; Rust re-implementation
  */
-pub struct AssemblyResultSet<A: AbstractReadThreadingGraph> {
+pub struct AssemblyResultSet<'a, A: AbstractReadThreadingGraph> {
     // kmer size and assembly_results index hashmap
-    pub(crate) assembly_result_by_kmer_size: LinkedHashMap<usize, usize>,
-    pub(crate) haplotypes: LinkedHashSet<Haplotype<SimpleInterval>>,
+    pub(crate) assembly_result_by_kmer_size: HashMap<usize, usize>,
+    pub(crate) haplotypes: HashSet<Haplotype<'a, SimpleInterval>>,
     // haplotype and assembly_results index hashmap
-    pub(crate) assembly_result_by_haplotype: LinkedHashMap<Haplotype<SimpleInterval>, usize>,
+    pub(crate) assembly_result_by_haplotype: HashMap<Haplotype<'a, SimpleInterval>, usize>,
     pub(crate) region_for_genotyping: AssemblyRegion,
     pub(crate) full_reference_with_padding: Vec<u8>,
     pub(crate) padded_reference_loc: SimpleInterval,
     pub(crate) variation_present: bool,
-    pub(crate) ref_haplotype: Haplotype<SimpleInterval>,
+    pub(crate) ref_haplotype: Haplotype<'a, SimpleInterval>,
     pub(crate) kmer_sizes: BTreeSet<usize>,
-    pub(crate) variation_events: BTreeSet<VariantContext>,
+    pub(crate) variation_events: BTreeSet<VariantContext<'a>>,
     pub(crate) last_max_mnp_distance_used: Option<usize>,
-    pub(crate) assembly_results: Vec<AssemblyResult<SimpleInterval, A>>,
+    pub(crate) assembly_results: Vec<AssemblyResult<'a, SimpleInterval, A>>,
 }
 
-impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
+impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
     /**
      * Constructs a new empty assembly result set.
      */
@@ -52,15 +49,15 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         assembly_region: AssemblyRegion,
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
-        ref_haplotype: Haplotype<SimpleInterval>,
-    ) -> AssemblyResultSet<A> {
-        let mut haplotypes = LinkedHashSet::new();
+        ref_haplotype: Haplotype<'a, SimpleInterval>,
+    ) -> AssemblyResultSet<'a, A> {
+        let mut haplotypes = HashSet::new();
         haplotypes.insert(ref_haplotype.clone());
 
         AssemblyResultSet {
-            assembly_result_by_kmer_size: LinkedHashMap::new(),
+            assembly_result_by_kmer_size: HashMap::new(),
             haplotypes: haplotypes,
-            assembly_result_by_haplotype: LinkedHashMap::new(),
+            assembly_result_by_haplotype: HashMap::new(),
             region_for_genotyping: assembly_region,
             full_reference_with_padding: full_reference_with_padding,
             padded_reference_loc: ref_loc,
@@ -88,7 +85,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *
      * @return {@code true} if the assembly result set has been modified as a result of this call.
      */
-    pub fn add_haplotype(&mut self, h: Haplotype<SimpleInterval>) -> bool {
+    pub fn add_haplotype(&mut self, h: Haplotype<'a, SimpleInterval>) -> bool {
         if self.haplotypes.contains(&h) {
             return false;
         } else {
@@ -116,7 +113,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      */
     pub fn add_haplotype_and_assembly_result(
         &mut self,
-        h: Haplotype<SimpleInterval>,
+        h: Haplotype<'a, SimpleInterval>,
         ar: usize,
     ) -> bool {
         let assembly_result_addition_return = (self.assembly_results.len() - 1) <= ar;
@@ -150,7 +147,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      * @throws IllegalStateException if there is an assembly result with the same kmerSize.
      * @return {@code usize} return index in assembly result array that this assembly result belongs
      */
-    pub fn add_assembly_result(&mut self, ar: AssemblyResult<SimpleInterval, A>) -> usize {
+    pub fn add_assembly_result(&mut self, ar: AssemblyResult<'a, SimpleInterval, A>) -> usize {
         let kmer_size = ar.get_kmer_size();
 
         if self.assembly_result_by_kmer_size.contains_key(&kmer_size) {
@@ -184,7 +181,10 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *                       at 10-12, a MNP at 14-15, and a SNP at 17.  May not be negative.
      * @return never {@code null}, but perhaps an empty collection.
      */
-    pub fn get_variation_events(&mut self, max_mnp_distance: usize) -> BTreeSet<VariantContext> {
+    pub fn get_variation_events(
+        &mut self,
+        max_mnp_distance: usize,
+    ) -> BTreeSet<VariantContext<'a>> {
         let same_mnp_distance = if self.last_max_mnp_distance_used.is_some() {
             if &max_mnp_distance == self.last_max_mnp_distance_used.as_ref().unwrap() {
                 true
@@ -200,7 +200,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             || !same_mnp_distance
             || self
                 .haplotypes
-                .iter()
+                .par_iter()
                 .any(|hap| !hap.allele.is_ref && hap.event_map.is_none())
         {
             self.regenerate_variation_events(max_mnp_distance);
@@ -212,12 +212,13 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
     pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) {
         let mut haplotype_list = self
             .haplotypes
-            .iter()
+            .par_iter()
             .cloned()
             .collect::<Vec<Haplotype<SimpleInterval>>>();
         EventMap::build_event_maps_for_haplotypes(
             &mut haplotype_list,
-            self.padded_reference_loc.clone(),
+            self.full_reference_with_padding.as_slice(),
+            &self.padded_reference_loc,
             max_mnp_distance,
         );
         self.variation_events = self.get_all_variant_contexts(&haplotype_list);
@@ -232,13 +233,13 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      */
     fn get_all_variant_contexts(
         &self,
-        haplotypes: &Vec<Haplotype<SimpleInterval>>,
-    ) -> BTreeSet<VariantContext> {
+        haplotypes: &Vec<Haplotype<'a, SimpleInterval>>,
+    ) -> BTreeSet<VariantContext<'a>> {
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let vcs = haplotypes
             .iter()
             .flat_map(|h| h.event_map.as_ref().unwrap().map.values().cloned())
-            .collect::<BTreeSet<VariantContext>>();
+            .collect::<BTreeSet<VariantContext<'a>>>();
 
         return vcs;
     }
@@ -247,6 +248,15 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         self.region_for_genotyping = self.region_for_genotyping.remove_all(reads);
         return self;
     }
+
+    // /**
+    //  * Determines the VariantContext type for each haplotype
+    //  */
+    // pub fn determine_type(&mut self) {
+    //     self.haplotypes.iter().for_each(|h| {
+    //         h.
+    //     })
+    // }
 
     /**
      * Trims an assembly result set down based on a new set of trimmed haplotypes.
@@ -259,12 +269,15 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *
      * @return never {@code null}, a new trimmed assembly result set.
      */
-    pub fn trim_to(mut self, mut trimmed_assembly_region: AssemblyRegion) -> AssemblyResultSet<A> {
+    pub fn trim_to(
+        mut self,
+        mut trimmed_assembly_region: AssemblyRegion,
+    ) -> AssemblyResultSet<'a, A> {
         let mut original_by_trimmed_haplotypes =
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 
-        let mut new_assembly_result_by_haplotype = LinkedHashMap::new();
-        let mut new_haplotypes = LinkedHashSet::new();
+        let mut new_assembly_result_by_haplotype = HashMap::new();
+        let mut new_haplotypes = HashSet::new();
 
         for (trimmed, original) in original_by_trimmed_haplotypes {
             let ass = self.assembly_result_by_haplotype.get(&original);
@@ -292,10 +305,10 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         return self;
     }
 
-    fn calculate_original_by_trimmed_haplotypes(
-        &mut self,
+    fn calculate_original_by_trimmed_haplotypes<'b>(
+        &'b mut self,
         span: &SimpleInterval,
-    ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
+    ) -> BTreeMap<Haplotype<'a, SimpleInterval>, Haplotype<'a, SimpleInterval>> {
         debug!(
             "Trimming active region {:?} with {} hapotypes",
             &self.region_for_genotyping,
@@ -303,7 +316,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         );
         let mut haplotype_list = self
             .haplotypes
-            .iter()
+            .par_iter()
             .cloned()
             .collect::<Vec<Haplotype<SimpleInterval>>>();
         // trim down the haplotypes
@@ -315,8 +328,8 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
 
     fn trim_down_haplotypes(
         span: &SimpleInterval,
-        haplotype_list: Vec<Haplotype<SimpleInterval>>,
-    ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
+        haplotype_list: Vec<Haplotype<'a, SimpleInterval>>,
+    ) -> BTreeMap<Haplotype<'a, SimpleInterval>, Haplotype<'a, SimpleInterval>> {
         let mut original_by_trimmed_haplotypes = BTreeMap::new();
 
         for h in haplotype_list {
@@ -348,11 +361,11 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
 
     fn map_original_to_trimmed(
         original_by_trimmed_haplotypes: HashMap<
-            Haplotype<SimpleInterval>,
-            Haplotype<SimpleInterval>,
+            Haplotype<'a, SimpleInterval>,
+            Haplotype<'a, SimpleInterval>,
         >,
-        trimmed_haplotypes: Vec<Haplotype<SimpleInterval>>,
-    ) -> BTreeMap<Haplotype<SimpleInterval>, Haplotype<SimpleInterval>> {
+        trimmed_haplotypes: Vec<Haplotype<'a, SimpleInterval>>,
+    ) -> BTreeMap<Haplotype<'a, SimpleInterval>, Haplotype<'a, SimpleInterval>> {
         let mut sorted_original_by_trimmed_haplotypes = BTreeMap::new();
 
         for trimmed in trimmed_haplotypes {

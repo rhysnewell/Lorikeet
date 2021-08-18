@@ -1,4 +1,4 @@
-use model::variants::Allele;
+use model::byte_array_allele::ByteArrayAllele;
 use rayon::prelude::*;
 /**
 The following code is adapted from the broadinstitute GATK HaplotypeCaller program
@@ -9,7 +9,7 @@ use utils::math_utils::MathUtils;
 pub struct GenotypeAlleleCounts {
     ploidy: usize,
     distinct_allele_count: usize,
-    sorted_allele_counts: Vec<usize>,
+    pub(crate) sorted_allele_counts: Vec<usize>,
     index: usize,
     log10_combination_count: f64,
 }
@@ -600,29 +600,32 @@ impl GenotypeAlleleCounts {
      *
      * @return never null, but it might be restricted (unmodifiable or non-expandable).
      */
-    pub fn as_allele_list(&self, alleles_to_use: &Vec<Allele>) -> Vec<Allele> {
+    pub fn as_allele_list(&self, alleles_to_use: &Vec<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
         if (alleles_to_use.len() as i64) < self.maximum_allele_index() {
             panic!("the provided alleles to use does not contain an element for the maximum allele")
         }
 
         if self.distinct_allele_count == 1 {
-            let mut result = vec![alleles_to_use.get(self.sorted_allele_counts[0]); self.ploidy];
-            let result = result
-                .par_iter_mut()
-                .map(|allele| Allele::unwrap(*allele).clone())
-                .collect::<Vec<Allele>>();
+            let mut result = vec![
+                alleles_to_use
+                    .get(self.sorted_allele_counts[0])
+                    .unwrap()
+                    .clone();
+                self.ploidy
+            ];
             result
         } else {
             let result = (0..self.distinct_allele_count)
                 .into_par_iter()
                 .flat_map(|distinct_allele_count| {
-                    let mut allele =
-                        alleles_to_use.get(self.sorted_allele_counts[2 * distinct_allele_count]);
-                    let allele = Allele::unwrap(allele).clone();
+                    let mut allele = alleles_to_use
+                        .get(self.sorted_allele_counts[2 * distinct_allele_count])
+                        .unwrap();
+
                     let repeats = self.sorted_allele_counts[2 * distinct_allele_count + 1];
-                    vec![allele; repeats]
+                    vec![allele.clone(); repeats]
                 })
-                .collect::<Vec<Allele>>();
+                .collect::<Vec<ByteArrayAllele>>();
             result
         }
     }

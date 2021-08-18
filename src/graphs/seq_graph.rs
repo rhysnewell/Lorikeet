@@ -5,7 +5,6 @@ use graphs::seq_vertex::SeqVertex;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use rayon::prelude::*;
 
 /**
  * A graph that contains base sequence at each node

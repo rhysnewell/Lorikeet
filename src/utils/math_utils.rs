@@ -294,6 +294,40 @@ impl MathUtils {
         }
     }
 
+    /**
+     * Calculate the approximate log10 sum of an array range.
+     * @param vals the input values.
+     * @param fromIndex the first inclusive index in the input array.
+     * @param toIndex index following the last element to sum in the input array (exclusive).
+     * @return the approximate sum.
+     * @throws IllegalArgumentException if {@code vals} is {@code null} or  {@code fromIndex} is out of bounds
+     * or if {@code toIndex} is larger than
+     * the length of the input array or {@code fromIndex} is larger than {@code toIndex}.
+     */
+    pub fn approximate_log10_sum_log10_vec(
+        vals: &[f64],
+        from_index: usize,
+        to_index: usize,
+    ) -> f64 {
+        if from_index == to_index {
+            return std::f64::NEG_INFINITY;
+        };
+        let max_element_index = Self::max_element_index(vals, from_index, to_index);
+        let mut approx_sum = vals[max_element_index];
+
+        for (i, val) in vals[from_index..to_index].iter().enumerate() {
+            if i == max_element_index || val == &std::f64::NEG_INFINITY {
+                continue;
+            };
+            let diff = approx_sum - val;
+            if diff < JacobianLogTable::MAX_TOLERANCE {
+                approx_sum += JacobianLogTable::get(diff);
+            };
+        }
+
+        return approx_sum;
+    }
+
     pub fn well_formed_f64(val: f64) -> bool {
         return !val.is_nan() && !val.is_infinite();
     }

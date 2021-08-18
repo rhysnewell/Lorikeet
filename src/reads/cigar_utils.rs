@@ -17,7 +17,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(-30, -5, 10, -15);
+    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(-30, -5, 10, -15);
 }
 
 pub struct CigarUtils {}

@@ -5,7 +5,6 @@ use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 use estimation::lorikeet_engine::ReadType;
 
-use nix::{sys::stat, unistd};
 use rayon::prelude::*;
 use std::str;
 use tempdir::TempDir;

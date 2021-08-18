@@ -14,11 +14,11 @@ impl ReferenceConfidenceModel {
      * @param paddedReferenceLoc the location spanning of the refBases -- can be longer than activeRegion.getLocation()
      * @return a reference haplotype
      */
-    pub fn create_reference_haplotype<L: Locatable>(
+    pub fn create_reference_haplotype<'a, L: Locatable>(
         active_region: &AssemblyRegion,
         ref_bases: &[u8],
         padded_reference_loc: &SimpleInterval,
-    ) -> Haplotype<L> {
+    ) -> Haplotype<'a, L> {
         let alignment_start = active_region
             .get_padded_span()
             .get_start()

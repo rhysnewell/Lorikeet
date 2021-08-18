@@ -1,6 +1,7 @@
 use genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use ndarray::{Array, Array2};
+use utils::math_utils::MathUtils;
 
 pub struct GenotypeLikelihoodCalculators {
     pub ploidy: usize,
@@ -10,7 +11,7 @@ pub struct GenotypeLikelihoodCalculators {
 }
 
 impl GenotypeLikelihoodCalculators {
-    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: i32 = 1000;
+    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: usize = 1000;
 
     pub fn build_empty() -> GenotypeLikelihoodCalculators {
         GenotypeLikelihoodCalculators {
@@ -19,6 +20,28 @@ impl GenotypeLikelihoodCalculators {
             allele_first_genotype_offset_by_ploidy: Array2::zeros([0, 0]),
             genotype_table_by_ploidy: Vec::new(),
         }
+    }
+
+    pub fn default() -> GenotypeLikelihoodCalculator {
+        let ploidy = 2;
+        let allele_count = 1;
+        let allele_first_offset_by_ploidy =
+            GenotypeLikelihoodCalculators::calculate_genotype_counts_using_table_and_validate(
+                ploidy,
+                allele_count,
+            );
+        let genotype_table_by_ploidy: Vec<Vec<GenotypeAlleleCounts>> =
+            GenotypeLikelihoodCalculators::build_genotype_allele_counts_table(
+                ploidy,
+                allele_count,
+                &allele_first_offset_by_ploidy,
+            );
+        return GenotypeLikelihoodCalculator::new(
+            ploidy,
+            allele_count,
+            allele_first_offset_by_ploidy,
+            genotype_table_by_ploidy,
+        );
     }
 
     pub fn get_instance(ploidy: usize, allele_count: usize) -> GenotypeLikelihoodCalculator {
@@ -257,7 +280,7 @@ impl GenotypeLikelihoodCalculators {
             GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
         } else {
             std::cmp::min(
-                length,
+                length as usize,
                 GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY,
             )
         };
@@ -265,10 +288,51 @@ impl GenotypeLikelihoodCalculators {
         let mut result = vec![GenotypeAlleleCounts::build_empty()];
         result[0] = GenotypeAlleleCounts::first(ploidy);
 
-        for genotype_index in 0..strong_ref_length as usize {
+        for genotype_index in 0..strong_ref_length {
             result[genotype_index] = result[genotype_index - 1].next();
         }
 
         return result;
+    }
+
+    /**
+     * Compute the maximally acceptable allele count (ref allele included) given the maximally acceptable genotype count.
+     * @param ploidy            sample ploidy
+     * @param maxGenotypeCount  maximum number of genotype count used to calculate upper bound on number of alleles given ploidy
+     * @throws IllegalArgumentException if {@code ploidy} or {@code alleleCount} is negative.
+     * @return                  the maximally acceptable allele count given ploidy and maximum number of genotypes acceptable
+     */
+    pub fn compute_max_acceptable_allele_count(ploidy: usize, max_genotype_count: usize) -> usize {
+        Self::check_ploidy_and_allele(ploidy, ploidy); // a hack to check ploidy makes sense (could duplicate code but choice must be made)
+
+        if ploidy == 1 {
+            return max_genotype_count;
+        } else {
+            let log_10_max_genotype_count = (max_genotype_count as f64).log10();
+
+            // Math explanation: genotype count is determined by ${P+A-1 \choose A-1}$, this leads to constraint
+            // $\log(\frac{(P+A-1)!}{(A-1)!}) \le \log(P!G)$,
+            // where $P$ is ploidy, $A$ is allele count, and $G$ is maxGenotypeCount
+            // The upper and lower bounds of the left hand side of the constraint are $P \log(A-1+P)$ and $P \log(A)$
+            // which require $A$ to be searched in interval $[10^{\log(P!G)/P} - (P-1), 10^{\log(P!G)/P}]$
+            // Denote $[10^{\log(P!G)/P}$ as $x$ in the code.
+            let x = 10_f64.powf(
+                (MathUtils::log10_factorial(ploidy as f64) + log_10_max_genotype_count)
+                    / ploidy as f64,
+            );
+            let lower = (x.floor() - ploidy as f64 - 1.0) as i64;
+            let upper = x.ceil() as i64;
+            for a in (lower..=upper).rev() {
+                let log_10_gt_cnt = MathUtils::log10_binomial_coeffecient(
+                    (ploidy as i64 + a - 1) as f64,
+                    (a - 1) as f64,
+                );
+                if log_10_max_genotype_count >= log_10_gt_cnt {
+                    return a as usize;
+                }
+            }
+
+            panic!("Code should never reach here")
+        }
     }
 }
