@@ -12,11 +12,11 @@ pub type AlleleFreq = NotNan<f64>;
 
 lazy_static! {
     static ref NON_REF_STRING: String = "<NON_REF>".to_string();
-    pub static ref NON_REF_ALLELE: Allele = Allele::new(
-        Variant::MNV((&(*NON_REF_STRING)).clone().into_bytes().to_vec()),
-        false
-    );
+    pub static ref NON_REF_ALLELE: ByteArrayAllele =
+        ByteArrayAllele::new(&*NON_REF_STRING.as_bytes(), false);
     pub static ref EMPTY_ALLELE_BASES: Vec<u8> = vec!['N' as u8];
+    pub static ref SPAN_DEL_ALLELE: ByteArrayAllele =
+        AbstractAllele::create(&[AbstractAllele::SPAN_DEL as u8], false);
 }
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Debug, Ord)]
@@ -113,24 +113,24 @@ pub enum Variant {
 }
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
-pub struct Allele {
+pub struct AbstractAllele {
     variant: Variant,
     reference: bool,
 }
 
-impl Allele {
+impl AbstractAllele {
     const SINGLE_BREAKEND_INDICATOR: char = '.';
     const BREAKEND_EXTENDING_RIGHT: char = '[';
     const BREAKEND_EXTENDING_LEFT: char = ']';
     const SYMBOLIC_ALLELE_START: char = '<';
     const SYMBOLIC_ALLELE_END: char = '>';
 
-    const NO_CALL: char = '.';
-    const SPAND_DEL: char = '*';
+    pub const NO_CALL: char = '.';
+    pub const SPAN_DEL: char = '*';
 
     /**
-     * Create a new Allele that includes bases and if tagged as the reference allele if isRef == true.  If bases
-     * == '-', a Null allele is created.  If bases ==  '.', a no call Allele is created. If bases ==  '*', a spanning deletions Allele is created.
+     * Create a new AbstractAllele that includes bases and if tagged as the reference allele if isRef == true.  If bases
+     * == '-', a Null allele is created.  If bases ==  '.', a no call AbstractAllele is created. If bases ==  '*', a spanning deletions AbstractAllele is created.
      *
      * @param bases the DNA sequence of this variation, '-', '.', or '*'
      * @param isRef should we make this a reference allele?
@@ -146,8 +146,20 @@ impl Allele {
         // }
     }
 
-    pub fn new(variant: Variant, reference: bool) -> Allele {
-        Allele { variant, reference }
+    pub fn extend(left: &ByteArrayAllele, right: &[u8]) -> ByteArrayAllele {
+        if left.is_symbolic {
+            panic!("Cannot extend a symbolic allele");
+        };
+
+        let mut bases = vec![0; left.len() + right.len()];
+        bases[0..left.len()].clone_from_slice(&left.get_bases()[0..left.len()]);
+        bases[left.len()..].clone_from_slice(right);
+
+        return Self::create(&bases, left.is_ref);
+    }
+
+    pub fn new(variant: Variant, reference: bool) -> AbstractAllele {
+        AbstractAllele { variant, reference }
     }
 
     pub fn get_bases(&self) -> &Vec<u8> {
@@ -165,22 +177,22 @@ impl Allele {
         }
     }
 
-    pub fn create_fake_alleles() -> Vec<Allele> {
-        let alleles = vec![Allele::fake(true), Allele::fake(false)];
+    pub fn create_fake_alleles() -> Vec<AbstractAllele> {
+        let alleles = vec![AbstractAllele::fake(true), AbstractAllele::fake(false)];
 
         return alleles;
     }
 
-    pub fn fake(reference: bool) -> Allele {
-        Allele {
+    pub fn fake(reference: bool) -> AbstractAllele {
+        AbstractAllele {
             variant: Variant::None,
             reference,
         }
     }
 
-    pub fn no_call() -> Allele {
-        Allele {
-            variant: Variant::SNV(Allele::NO_CALL as u8),
+    pub fn no_call() -> AbstractAllele {
+        AbstractAllele {
+            variant: Variant::SNV(AbstractAllele::NO_CALL as u8),
             reference: false,
         }
     }
@@ -189,24 +201,24 @@ impl Allele {
         self.reference
     }
 
-    pub fn unwrap(possible_allele: Option<&Allele>) -> Allele {
+    pub fn unwrap(possible_allele: Option<&AbstractAllele>) -> AbstractAllele {
         let a = match possible_allele {
             Some(a) => a.clone(),
-            _ => Allele::fake(false),
+            _ => AbstractAllele::fake(false),
         };
         a
     }
 
     pub fn is_no_call(&self) -> bool {
         match &self.variant {
-            Variant::SNV(snp) => snp == &(Allele::NO_CALL as u8),
+            Variant::SNV(snp) => snp == &(AbstractAllele::NO_CALL as u8),
             _ => false,
         }
     }
 
     pub fn is_called(&self) -> bool {
         match &self.variant {
-            Variant::SNV(snp) => snp != &(Allele::NO_CALL as u8),
+            Variant::SNV(snp) => snp != &(AbstractAllele::NO_CALL as u8),
             _ => true,
         }
     }

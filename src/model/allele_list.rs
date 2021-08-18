@@ -1,16 +1,20 @@
-use model::variants::Allele;
+use model::byte_array_allele::Allele;
 use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
-pub struct AlleleList<T> {
-    list: Vec<T>,
+pub struct AlleleList<A: Allele> {
+    list: Vec<A>,
 }
 
-impl AlleleList<Allele> {
-    pub fn new(input_list: &Vec<Allele>) -> AlleleList<Allele> {
+impl<A: Allele> AlleleList<A> {
+    pub fn new(input_list: &Vec<A>) -> AlleleList<A> {
         AlleleList {
-            list: input_list.clone(),
+            list: input_list.to_vec(),
         }
+    }
+
+    pub fn new_from_vec(input_list: Vec<A>) -> AlleleList<A> {
+        AlleleList { list: input_list }
     }
 
     /**
@@ -25,8 +29,8 @@ impl AlleleList<Allele> {
      * Returns a negative number if the given allele is not present in this AlleleList.
      * @throws IllegalArgumentException if allele is null.
      */
-    pub fn index_of_allele(&self, input: &Allele) -> usize {
-        self.list.par_iter().position_first(|p| p == input).unwrap()
+    pub fn index_of_allele(&self, input: &A) -> usize {
+        self.list.iter().position(|p| p == input).unwrap()
     }
 
     /**
@@ -34,7 +38,7 @@ impl AlleleList<Allele> {
      * @throws IllegalArgumentException if index is negative or equal
      * to or higher than the number of elements in this AlleleList {@link AlleleList#numberOfAlleles()}).
      */
-    pub fn get_allele(&self, index: usize) -> &Allele {
+    pub fn get_allele(&self, index: usize) -> &A {
         &self.list[index]
     }
 
@@ -42,7 +46,7 @@ impl AlleleList<Allele> {
      * Returns <code>true</code> if this AlleleList contains the specified allele
      * and <code>false</code> otherwise.
      */
-    pub fn contains_allele(&self, input: &Allele) -> bool {
+    pub fn contains_allele(&self, input: &A) -> bool {
         self.list.contains(input)
     }
 
@@ -51,7 +55,7 @@ impl AlleleList<Allele> {
      * @param <A> the allele class.
      * @return never {@code null}.
      */
-    pub fn empty_allele_list() -> AlleleList<Allele> {
+    pub fn empty_allele_list() -> AlleleList<A> {
         AlleleList { list: Vec::new() }
     }
 
@@ -64,7 +68,7 @@ impl AlleleList<Allele> {
      *
      * @return {@code true} iff both list are equal.
      */
-    pub fn equals(first: &AlleleList<Allele>, second: &AlleleList<Allele>) -> bool {
+    pub fn equals(first: &AlleleList<A>, second: &AlleleList<A>) -> bool {
         first == second
     }
 
@@ -82,10 +86,7 @@ impl AlleleList<Allele> {
      * @return -1 if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
      */
     pub fn index_of_reference(&self) -> usize {
-        self.list
-            .par_iter()
-            .position_first(|p| p.is_reference())
-            .unwrap()
+        self.list.iter().position(|p| p.is_reference()).unwrap()
     }
 
     /**
@@ -93,7 +94,7 @@ impl AlleleList<Allele> {
      *
      * @return never {@code null}.
      */
-    pub fn as_list_of_alleles(&self) -> &Vec<Allele> {
+    pub fn as_list_of_alleles(&self) -> &Vec<A> {
         &self.list
     }
 
@@ -106,12 +107,16 @@ impl AlleleList<Allele> {
      *
      * @return never {@code null}
      */
-    pub fn permuation(self, target: AlleleList<Allele>) -> Permutation<Allele> {
+    pub fn permutation(self, target: AlleleList<A>) -> Permutation<A> {
         Permutation::new(self, target)
+    }
+
+    pub fn len(&self) -> usize {
+        self.list.len()
     }
 }
 
-pub trait AlleleListPermutation<T> {
+pub trait AlleleListPermutation<A: Allele> {
     fn is_partial(&self) -> bool;
 
     fn is_non_permuted(&self) -> bool;
@@ -126,24 +131,24 @@ pub trait AlleleListPermutation<T> {
 
     fn to_size(&self) -> usize;
 
-    fn from_list(&self) -> &Vec<T>;
+    fn from_list(&self) -> &Vec<A>;
 
-    fn to_list(&self) -> &Vec<T>;
+    fn to_list(&self) -> &Vec<A>;
 
     fn number_of_alleles(&self) -> usize;
 
-    fn index_of_allele(&self, allele: &T) -> usize;
+    fn index_of_allele(&self, allele: &A) -> usize;
 
-    fn get_allele(&self, index: usize) -> &T;
+    fn get_allele(&self, index: usize) -> &A;
 }
 
-pub enum Permutation<T> {
+pub enum Permutation<A: Allele> {
     NonPermutation {
-        allele_list: AlleleList<T>,
+        allele_list: AlleleList<A>,
     },
     ActualPermutation {
-        from: AlleleList<T>,
-        to: AlleleList<T>,
+        from: AlleleList<A>,
+        to: AlleleList<A>,
         from_index: Vec<usize>,
         kept_from_indices: Vec<bool>,
         non_permuted: bool,
@@ -151,8 +156,8 @@ pub enum Permutation<T> {
     },
 }
 
-impl Permutation<Allele> {
-    pub fn new(original: AlleleList<Allele>, target: AlleleList<Allele>) -> Permutation<Allele> {
+impl<T: Allele> Permutation<T> {
+    pub fn new(original: AlleleList<T>, target: AlleleList<T>) -> Permutation<T> {
         if AlleleList::equals(&original, &target) {
             return Permutation::NonPermutation {
                 allele_list: original,
@@ -192,7 +197,7 @@ impl Permutation<Allele> {
     }
 }
 
-impl AlleleListPermutation<Allele> for Permutation<Allele> {
+impl<T: Allele> AlleleListPermutation<T> for Permutation<T> {
     fn is_partial(&self) -> bool {
         match self {
             Permutation::NonPermutation { .. } => false,
@@ -246,14 +251,14 @@ impl AlleleListPermutation<Allele> for Permutation<Allele> {
         }
     }
 
-    fn from_list(&self) -> &Vec<Allele> {
+    fn from_list(&self) -> &Vec<T> {
         match self {
             Permutation::NonPermutation { allele_list } => allele_list.as_list_of_alleles(),
             Permutation::ActualPermutation { from, .. } => from.as_list_of_alleles(),
         }
     }
 
-    fn to_list(&self) -> &Vec<Allele> {
+    fn to_list(&self) -> &Vec<T> {
         match self {
             Permutation::NonPermutation { allele_list } => allele_list.as_list_of_alleles(),
             Permutation::ActualPermutation { to, .. } => to.as_list_of_alleles(),
@@ -267,14 +272,14 @@ impl AlleleListPermutation<Allele> for Permutation<Allele> {
         }
     }
 
-    fn index_of_allele(&self, allele: &Allele) -> usize {
+    fn index_of_allele(&self, allele: &T) -> usize {
         match self {
             Permutation::NonPermutation { allele_list } => allele_list.index_of_allele(allele),
             Permutation::ActualPermutation { to, .. } => to.index_of_allele(allele),
         }
     }
 
-    fn get_allele(&self, index: usize) -> &Allele {
+    fn get_allele(&self, index: usize) -> &T {
         match self {
             Permutation::NonPermutation { allele_list } => allele_list.get_allele(index),
             Permutation::ActualPermutation { to, .. } => to.get_allele(index),

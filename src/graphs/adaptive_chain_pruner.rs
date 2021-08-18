@@ -9,14 +9,11 @@ use linked_hash_set::LinkedHashSet;
 use multimap::MultiMap;
 use ordered_float::OrderedFloat;
 use petgraph::prelude::{EdgeIndex, EdgeRef};
-use petgraph::stable_graph::EdgeReference;
 use petgraph::Direction;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use utils::base_utils::BaseUtils;
 
 pub struct AdaptiveChainPruner {
     pub initial_error_probability: f64,

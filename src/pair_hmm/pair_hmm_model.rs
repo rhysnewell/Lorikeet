@@ -1,6 +1,4 @@
-use itertools::min;
 use ndarray::parallel::prelude::*;
-use ndarray::prelude::*;
 use ndarray::{Array2, ArrayViewMut1, Axis};
 use num::traits::real::Real;
 use ordered_float::OrderedFloat;

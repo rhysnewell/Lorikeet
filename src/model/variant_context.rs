@@ -1,9 +1,12 @@
-use genotype::genotype_builder::{Genotype, GenotypeAssignmentMethod, GenotypesContext};
+use genotype::genotype_builder::{
+    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
+};
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use itertools::Itertools;
-use model::variants::{Allele, Filter, Variant, NON_REF_ALLELE};
+use model::byte_array_allele::{Allele, ByteArrayAllele};
+use model::variants::{Filter, Variant, NON_REF_ALLELE};
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
@@ -19,16 +22,16 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
 
 #[derive(Debug, Clone)]
-pub struct VariantContext {
+pub struct VariantContext<'a> {
     pub loc: SimpleInterval,
     // variant alleles
-    pub alleles: Vec<Allele>,
+    pub alleles: Vec<ByteArrayAllele>,
     // per sample likelihoods
-    pub genotypes: GenotypesContext,
+    pub genotypes: GenotypesContext<'a>,
     pub source: String,
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
-    pub attributes: HashMap<String, Vec<f64>>,
+    pub attributes: HashMap<&'a str, AttributeObject>,
     pub variant_type: Option<VariantType>,
 }
 
@@ -45,7 +48,7 @@ pub enum VariantType {
 // The priority queue depends on `Ord`.
 // Explicitly implement the trait so the queue becomes a min-heap
 // instead of a max-heap.
-impl Ord for VariantContext {
+impl<'a> Ord for VariantContext<'a> {
     fn cmp(&self, other: &Self) -> Ordering {
         other
             .loc
@@ -60,21 +63,21 @@ impl Ord for VariantContext {
 }
 
 // `PartialOrd` needs to be implemented as well.
-impl PartialOrd for VariantContext {
+impl<'a> PartialOrd for VariantContext<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Eq for VariantContext {}
+impl<'a> Eq for VariantContext<'a> {}
 
-impl PartialEq for VariantContext {
+impl<'a> PartialEq for VariantContext<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.loc == other.loc && self.alleles == other.alleles
     }
 }
 
-impl Hash for VariantContext {
+impl<'a> Hash for VariantContext<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.loc.hash(state);
         self.alleles.hash(state);
@@ -82,11 +85,11 @@ impl Hash for VariantContext {
     }
 }
 
-impl VariantContext {
+impl<'a> VariantContext<'a> {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
     pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
 
-    pub fn empty(tid: usize, start: usize, end: usize) -> VariantContext {
+    pub fn empty(tid: usize, start: usize, end: usize) -> VariantContext<'a> {
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles: Vec::new(),
@@ -99,7 +102,12 @@ impl VariantContext {
         }
     }
 
-    pub fn build(tid: usize, start: usize, end: usize, alleles: Vec<Allele>) -> VariantContext {
+    pub fn build(
+        tid: usize,
+        start: usize,
+        end: usize,
+        alleles: Vec<ByteArrayAllele>,
+    ) -> VariantContext<'a> {
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -112,25 +120,42 @@ impl VariantContext {
         }
     }
 
-    pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
+    pub fn build_from_vc<'b>(vc: &'b VariantContext<'a>) -> VariantContext<'a> {
         VariantContext {
             loc: vc.loc.clone(),
-            alleles: Vec::new(),
-            genotypes: GenotypesContext::empty(),
-            source: "".to_string(),
-            log10_p_error: 0.0,
-            filters: HashSet::new(),
-            attributes: HashMap::new(),
+            alleles: vc.alleles.clone(),
+            genotypes: vc.genotypes.clone(),
+            source: vc.source.clone(),
+            log10_p_error: vc.log10_p_error.clone(),
+            filters: vc.filters.clone(),
+            attributes: vc.attributes.clone(),
             variant_type: None,
         }
     }
 
-    pub fn attributes(&mut self, attributes: HashMap<String, Vec<f64>>) {
+    pub fn is_filtered(&self) -> bool {
+        !self.filters.is_empty()
+    }
+
+    pub fn is_not_filtered(&self) -> bool {
+        !self.is_filtered()
+    }
+
+    /**
+     * convenience method for variants
+     *
+     * @return true if this is a variant allele, false if it's reference
+     */
+    pub fn is_variant(&mut self) -> bool {
+        self.get_type() != &VariantType::NoVariation
+    }
+
+    pub fn attributes(&mut self, attributes: HashMap<&'a str, AttributeObject>) {
         self.attributes.par_extend(attributes);
     }
 
-    pub fn set_attribute<S: Into<String>>(&mut self, tag: S, value: Vec<f64>) {
-        self.attributes.insert(tag.into(), value);
+    pub fn set_attribute(&mut self, tag: &'a str, value: AttributeObject) {
+        self.attributes.insert(tag, value);
     }
 
     pub fn filter(&mut self, filter: Filter) {
@@ -149,7 +174,7 @@ impl VariantContext {
         self.log10_p_error = error
     }
 
-    pub fn add_alleles(&mut self, alleles: Vec<Allele>) {
+    pub fn add_alleles(&mut self, alleles: Vec<ByteArrayAllele>) {
         self.alleles = alleles
     }
 
@@ -165,7 +190,7 @@ impl VariantContext {
         self.alleles.len()
     }
 
-    pub fn add_genotypes(&mut self, genotypes: Vec<Genotype>) {
+    pub fn add_genotypes(&mut self, genotypes: Vec<Genotype<'a>>) {
         for genotype in genotypes.iter() {
             if genotype.pl.len() != self.alleles.len() {
                 panic!(
@@ -217,8 +242,8 @@ impl VariantContext {
         gb: &mut Genotype,
         assignment_method: &GenotypeAssignmentMethod,
         genotype_likelihoods: Option<Vec<f64>>,
-        alleles_to_use: &Vec<Allele>,
-        original_gt: &Vec<Allele>,
+        alleles_to_use: &Vec<ByteArrayAllele>,
+        original_gt: &Vec<ByteArrayAllele>,
         gpc: &GenotypePriorCalculator,
     ) {
         match genotype_likelihoods {
@@ -297,26 +322,30 @@ impl VariantContext {
                             );
                         // Update GP and PG annotations:
                         gb.attribute(
-                            (&(*GENOTYPE_POSTERIORS_KEY)).to_string(),
-                            normalized_log10_posteriors
-                                .par_iter()
-                                .map(|v| {
-                                    if *v == 0.0 {
-                                        // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
-                                        0.0
-                                    } else {
-                                        v * -10.
-                                    }
-                                })
-                                .collect::<Vec<f64>>(),
+                            GENOTYPE_POSTERIORS_KEY,
+                            AttributeObject::Vecf64(
+                                normalized_log10_posteriors
+                                    .par_iter()
+                                    .map(|v| {
+                                        if *v == 0.0 {
+                                            // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
+                                            0.0
+                                        } else {
+                                            v * -10.
+                                        }
+                                    })
+                                    .collect::<Vec<f64>>(),
+                            ),
                         );
 
                         gb.attribute(
-                            (&(*GENOTYPE_PRIOR_KEY)).to_string(),
-                            log10_priors
-                                .par_iter()
-                                .map(|v| if *v == 0.0 { 0.0 } else { v * -10. })
-                                .collect::<Vec<f64>>(),
+                            GENOTYPE_PRIOR_KEY,
+                            AttributeObject::Vecf64(
+                                log10_priors
+                                    .par_iter()
+                                    .map(|v| if *v == 0.0 { 0.0 } else { v * -10. })
+                                    .collect::<Vec<f64>>(),
+                            ),
                         );
                         // Set the GQ accordingly
                         let max_posterior_index = MathUtils::max_element_index(
@@ -409,7 +438,10 @@ impl VariantContext {
      * @param defaultPloidy defaultPloidy to use if a genotype doesn't have any alleles
      * @return a GenotypesContext
      */
-    pub fn subset_to_ref_only(vc: &mut VariantContext, default_ploidy: usize) -> GenotypesContext {
+    pub fn subset_to_ref_only<'b>(
+        vc: &'b mut VariantContext<'a>,
+        default_ploidy: usize,
+    ) -> GenotypesContext<'a> {
         if default_ploidy < 1 {
             panic!("default_ploidy must be >= 1, got {}", default_ploidy)
         } else {
@@ -436,7 +468,7 @@ impl VariantContext {
                     vec![ref_allele.clone(); g_ploidy]
                 };
 
-                let genotype = Genotype::build_from_alleles(ref_alleles);
+                let genotype = Genotype::build_from_alleles(ref_alleles, vc.source.clone());
                 new_gts.add(genotype);
             }
 
@@ -444,19 +476,23 @@ impl VariantContext {
         }
     }
 
-    pub fn get_genotypes(&self) -> &GenotypesContext {
+    pub fn get_genotypes<'b>(&'b self) -> &'b GenotypesContext<'a> {
         &self.genotypes
     }
 
-    pub fn get_genotypes_mut(&mut self) -> &mut GenotypesContext {
+    pub fn get_genotypes_mut<'b>(&'b mut self) -> &'b mut GenotypesContext<'a> {
         &mut self.genotypes
     }
 
-    pub fn get_alleles(&self) -> &Vec<Allele> {
+    pub fn get_alleles(&self) -> &Vec<ByteArrayAllele> {
         &self.alleles
     }
 
-    pub fn get_reference(&self) -> &Allele {
+    pub fn get_alleles_ref(&self) -> Vec<&ByteArrayAllele> {
+        self.alleles.par_iter().collect::<Vec<&ByteArrayAllele>>()
+    }
+
+    pub fn get_reference(&self) -> &ByteArrayAllele {
         &self.alleles[0]
     }
 
@@ -464,16 +500,23 @@ impl VariantContext {
         self.genotypes.get_dp()
     }
 
-    pub fn get_alternate_alleles(&self) -> Vec<Allele> {
-        self.alleles[1..].to_vec()
+    pub fn get_alternate_alleles(&self) -> &[ByteArrayAllele] {
+        &self.alleles[1..]
     }
 
-    pub fn process_vcf_in_region(
-        indexed_vcf: &mut IndexedReader,
+    pub fn get_alternate_alleles_vec(&self) -> Vec<&ByteArrayAllele> {
+        self.alleles
+            .iter()
+            .skip(1)
+            .collect::<Vec<&ByteArrayAllele>>()
+    }
+
+    pub fn process_vcf_in_region<'b>(
+        indexed_vcf: &'b mut IndexedReader,
         tid: u32,
         start: u64,
         end: u64,
-    ) -> Vec<VariantContext> {
+    ) -> Vec<VariantContext<'a>> {
         indexed_vcf.fetch(tid, start, Some(end));
 
         let variant_contexts = indexed_vcf
@@ -489,7 +532,7 @@ impl VariantContext {
         return variant_contexts;
     }
 
-    pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext> {
+    pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext<'a>> {
         let mut vcf_reader = Reader::from_path(vcf_path);
         match vcf_reader {
             Ok(ref mut reader) => {
@@ -512,7 +555,7 @@ impl VariantContext {
         }
     }
 
-    pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext> {
+    pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext<'a>> {
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() > 0 {
             // Get elements from record
@@ -549,7 +592,7 @@ impl VariantContext {
         omit_snvs: bool,
         omit_indels: bool,
         indel_len_range: Option<Range<u32>>,
-    ) -> Vec<Allele> {
+    ) -> Vec<ByteArrayAllele> {
         let pos = record.pos();
         let svlens = match record.info(b"SVLEN").integer() {
             // Gets value from SVLEN tag in VCF record
@@ -615,34 +658,34 @@ impl VariantContext {
                 if alt_allele == b"<*>" {
                     // dummy non-ref allele, signifying potential homozygous reference site
                     if omit_snvs {
-                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     } else {
-                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     }
                 } else if alt_allele == b"<DEL>" {
                     if let Some(ref svlens) = svlens {
                         if let Some(svlen) = svlens[i] {
-                            variant_vec.push(Allele::new(Variant::Deletion(svlen), is_reference))
+                            variant_vec.push(ByteArrayAllele::new("*".as_bytes(), is_reference))
                         } else {
                             // TODO fail with an error in this case
-                            variant_vec.push(Allele::new(Variant::None, is_reference))
+                            variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                         }
                     } else {
                         // TODO fail with an error in this case
-                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     }
                 } else if alt_allele[0] == b'<' {
                     // TODO Catch <DUP> structural variants here
                     // skip any other special alleles
-                    variant_vec.push(Allele::new(Variant::None, is_reference))
+                    variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
                     // SNV
                     if omit_snvs {
-                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     } else if alt_allele == &ref_allele {
-                        variant_vec.push(Allele::new(Variant::None, is_reference))
+                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     } else {
-                        variant_vec.push(Allele::new(Variant::SNV(alt_allele[0]), is_reference))
+                        variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     }
                 } else {
                     let indel_len =
@@ -653,22 +696,17 @@ impl VariantContext {
                         && is_valid_mnv(ref_allele, alt_allele)
                     {
                         // println!("MNV 1 {:?} {:?}", ref_allele, alt_allele);
-                        variant_vec
-                            .push(Allele::new(Variant::MNV(alt_allele.to_vec()), is_reference))
+                        variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
-                        variant_vec.push(Allele::new(
-                            Variant::Deletion((ref_allele.len() - alt_allele.len()) as u32),
-                            is_reference,
-                        ))
+                        variant_vec.push(ByteArrayAllele::new("*".as_bytes(), is_reference))
                     } else if is_valid_insertion_alleles(ref_allele, alt_allele) {
-                        variant_vec.push(Allele::new(
-                            Variant::Insertion(alt_allele[ref_allele.len()..].to_owned()),
+                        variant_vec.push(ByteArrayAllele::new(
+                            &alt_allele[ref_allele.len()..],
                             is_reference,
                         ))
                     } else if is_valid_mnv(ref_allele, alt_allele) {
                         // println!("MNV 2 {:?} {:?}", ref_allele, alt_allele);
-                        variant_vec
-                            .push(Allele::new(Variant::MNV(alt_allele.to_vec()), is_reference))
+                        variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     }
                 }
             });
@@ -728,7 +766,7 @@ impl VariantContext {
     pub fn determine_polymorphic_type(&mut self) {
         // do a pairwise comparison of all alleles against the reference allele
         for allele in self.alleles.iter() {
-            if allele.is_reference() {
+            if allele.is_ref {
                 continue;
             }
 
@@ -744,17 +782,20 @@ impl VariantContext {
         }
     }
 
-    fn type_of_biallelic_variant(reference: &Allele, allele: &Allele) -> VariantType {
-        if reference.is_symbolic() {
+    fn type_of_biallelic_variant(
+        reference: &ByteArrayAllele,
+        allele: &ByteArrayAllele,
+    ) -> VariantType {
+        if reference.is_symbolic {
             panic!("Unexpected error: Encountered a record with a symbolic reference allele")
         };
 
-        if allele.is_symbolic() {
+        if allele.is_symbolic {
             return VariantType::Symbolic;
         }
 
-        if reference.length() == allele.length() {
-            if allele.length() == 1 {
+        if reference.len() == allele.len() {
+            if allele.len() == 1 {
                 return VariantType::Snp;
             } else {
                 return VariantType::Mnp;
@@ -770,5 +811,54 @@ impl VariantContext {
         // is reserved for cases of multiple alternate alleles of different types).  Therefore, if we've reached this point
         // in the code (so we're not a SNP, MNP, or symbolic allele), we absolutely must be an INDEL.
         return VariantType::Indel;
+    }
+
+    /**
+     * @return true if the alleles indicate a simple insertion (i.e., the reference allele is Null)
+     */
+    pub fn is_simple_insertion(&mut self) -> bool {
+        // can't just call !isSimpleDeletion() because of complex indels
+        return self.is_simple_indel() && self.get_reference().length() == 1;
+    }
+
+    /**
+     * @return true if the alleles indicate a simple deletion (i.e., a single alt allele that is Null)
+     */
+    pub fn is_simple_deletion(&mut self) -> bool {
+        // can't just call !isSimpleInsertion() because of complex indels
+        return self.is_simple_indel() && self.get_alternate_alleles()[0].length() == 1;
+    }
+
+    /**
+     * convenience method for indels
+     *
+     * @return true if this is an indel, false otherwise
+     */
+    pub fn is_simple_indel(&mut self) -> bool {
+        return self.is_indel() && // allelic lengths differ
+            self.is_biallelic() && // exactly 2 alleles
+            self.get_reference().len() > 0 && // ref is not null or symbolic
+            self.get_alternate_alleles()[0].len() > 0 && // alt is not null or symbolic
+            self.get_reference().get_bases()[0] == self.get_alternate_alleles()[0].get_bases()[0] && // leading bases match for both alleles
+            (self.get_reference().len() == 1 || self.get_alternate_alleles()[0].len() == 1);
+    }
+
+    /**
+     * @return true if the context is strictly bi-allelic
+     */
+    pub fn is_biallelic(&self) -> bool {
+        self.alleles.len() == 2
+    }
+
+    /**
+     * Returns the maximum ploidy of all samples in this VC, or default if there are no genotypes
+     *
+     * This function is caching, so it's only expensive on the first call
+     *
+     * @param defaultPloidy the default ploidy, if all samples are no-called
+     * @return default, or the max ploidy
+     */
+    pub fn get_max_ploidy(&mut self, default_ploidy: usize) -> i32 {
+        self.genotypes.get_max_ploidy(default_ploidy)
     }
 }

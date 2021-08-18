@@ -4,11 +4,8 @@ use assembly::assembly_region_iterator::AssemblyRegionIterator;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
 use estimation::lorikeet_engine::Elem;
-use graphs::chain_pruner::ChainPruner;
-use graphs::multi_sample_edge::MultiSampleEdge;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use model::variant_context::VariantContext;
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::{IndexedReader, Read};
 use std::collections::HashMap;
@@ -177,14 +174,13 @@ impl AssemblyRegionWalker {
                     self.evaluator.call_region(
                         assembly_region,
                         reference_reader,
-                        &feature_variants,
+                        feature_variants,
                         args,
                         sample_names,
                     );
                 }
             }
             None => {
-                let placeholder = Vec::new();
                 for mut assembly_region in pending_regions.into_iter() {
                     assembly_region_iter.fill_next_assembly_region_with_reads(
                         &mut assembly_region,
@@ -197,7 +193,7 @@ impl AssemblyRegionWalker {
                     self.evaluator.call_region(
                         assembly_region,
                         reference_reader,
-                        &placeholder,
+                        Vec::new(),
                         args,
                         sample_names,
                     );

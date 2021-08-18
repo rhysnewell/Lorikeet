@@ -4,8 +4,9 @@ use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use itertools::Itertools;
 use model::allele_list::{AlleleList, AlleleListPermutation};
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
-use model::variants::{Allele, NON_REF_ALLELE};
+use model::variants::NON_REF_ALLELE;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -29,7 +30,7 @@ impl AlleleSubsettingUtils {
         vc: &mut VariantContext,
         ploidy: usize,
         num_alt_alleles_to_keep: usize,
-    ) -> Vec<Allele> {
+    ) -> Vec<ByteArrayAllele> {
         let has_symbolic_non_ref = vc.has_non_ref_allele();
         let number_of_alleles_that_arent_proper_alt = if has_symbolic_non_ref { 2 } else { 1 };
         let number_of_proper_alts = vc.get_n_alleles() - number_of_alleles_that_arent_proper_alt;
@@ -55,9 +56,9 @@ impl AlleleSubsettingUtils {
      */
     pub fn filter_to_max_number_of_alt_alleles_based_on_scores(
         num_alt_alleles_to_keep: usize,
-        alleles: Vec<Allele>,
+        alleles: Vec<ByteArrayAllele>,
         likelihood_sums: Vec<f64>,
-    ) -> Vec<Allele> {
+    ) -> Vec<ByteArrayAllele> {
         let non_ref_alt_allele_index = alleles
             .par_iter()
             .position_first(|a| a == &*NON_REF_ALLELE)
@@ -81,7 +82,7 @@ impl AlleleSubsettingUtils {
                 *i == 0 || *i == non_ref_alt_allele_index || proper_alt_indexes_to_keep.contains(i)
             })
             .map(|i| alleles[i].clone())
-            .collect::<Vec<Allele>>();
+            .collect::<Vec<ByteArrayAllele>>();
 
         return result;
     }
@@ -138,15 +139,15 @@ impl AlleleSubsettingUtils {
      * @param depth                    the original variant DP or 0 if there was no DP
      * @return                         a new non-null GenotypesContext
      */
-    pub fn subset_alleles(
-        mut original_gs: GenotypesContext,
+    pub fn subset_alleles<'a, 'b>(
+        mut original_gs: GenotypesContext<'a>,
         default_ploidy: usize,
-        original_alleles: &Vec<Allele>,
-        alleles_to_keep: &Vec<Allele>,
-        gpc: &GenotypePriorCalculator,
-        assignment_method: &GenotypeAssignmentMethod,
+        original_alleles: &'b Vec<ByteArrayAllele>,
+        alleles_to_keep: &'b Vec<ByteArrayAllele>,
+        gpc: &'b GenotypePriorCalculator,
+        assignment_method: &'b GenotypeAssignmentMethod,
         depth: i64,
-    ) -> GenotypesContext {
+    ) -> GenotypesContext<'a> {
         if alleles_to_keep.len() == 0 {
             panic!("alleles_to_keep is empty")
         }
@@ -156,7 +157,7 @@ impl AlleleSubsettingUtils {
 
         let mut new_gts = GenotypesContext::create(original_gs.size());
         let allele_permutation =
-            AlleleList::new(&original_alleles).permuation(AlleleList::new(&alleles_to_keep));
+            AlleleList::new(&original_alleles).permutation(AlleleList::new(&alleles_to_keep));
         let mut subsetted_likelihood_indices_by_ploidy = BTreeMap::new();
 
         for g in original_gs.genotypes_mut().iter_mut() {
@@ -170,8 +171,8 @@ impl AlleleSubsettingUtils {
                 .entry(ploidy)
                 .or_insert(AlleleSubsettingUtils::subsetted_pl_indices(
                     ploidy,
-                    &original_alleles,
-                    &alleles_to_keep,
+                    original_alleles,
+                    alleles_to_keep,
                     g,
                 ));
 
@@ -225,7 +226,7 @@ impl AlleleSubsettingUtils {
                 &mut gb,
                 &assignment_method,
                 new_likelihoods,
-                &alleles_to_keep,
+                alleles_to_keep,
                 &g.alleles,
                 &gpc,
             );
@@ -271,15 +272,15 @@ impl AlleleSubsettingUtils {
      */
     pub fn subsetted_pl_indices(
         ploidy: usize,
-        original_alleles: &Vec<Allele>,
-        new_alleles: &Vec<Allele>,
+        original_alleles: &Vec<ByteArrayAllele>,
+        new_alleles: &Vec<ByteArrayAllele>,
         g: &mut Genotype,
     ) -> Vec<usize> {
         let mut result =
             vec![0; g.num_likelihoods(new_alleles.len() as i64, ploidy as i64) as usize];
 
         let allele_permutation =
-            AlleleList::new(original_alleles).permuation(AlleleList::new(new_alleles));
+            AlleleList::new(original_alleles).permutation(AlleleList::new(new_alleles));
 
         let mut gl_calc =
             GenotypeLikelihoodCalculators::get_instance(ploidy, original_alleles.len());

@@ -1,7 +1,14 @@
 use genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
+use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
+use model::allele_list::AlleleListPermutation;
+use model::byte_array_allele::Allele;
 use ndarray::Array2;
+use rayon::prelude::*;
+use std::cmp::max;
 use std::collections::BinaryHeap;
+use utils::math_utils::MathUtils;
 
 #[derive(Clone, Debug)]
 pub struct GenotypeLikelihoodCalculator {
@@ -60,7 +67,7 @@ pub struct GenotypeLikelihoodCalculator {
      *     genotype supported by the calculator, value stored in {@link #maximumDistinctAllelesInGenotype}.
      * </p>
      */
-    pub genotype_alleles_and_counts: Vec<i32>,
+    pub genotype_alleles_and_counts: Vec<usize>,
     /**
      * Maximum number of components (or distinct alleles) for any genotype with this calculator ploidy and allele count.
      */
@@ -70,6 +77,24 @@ pub struct GenotypeLikelihoodCalculator {
      * goes beyond the maximum genotype-allele-count static capacity. Check on that method documentation for details.
      */
     pub last_overhead_counts: GenotypeAlleleCounts,
+    /**
+     * Buffer used as a temporary container for likelihood components for genotypes stratified by alleles, allele frequency and reads.
+     *
+     * <p>To improve performance we use a 1-dimensional array to implement a 3-dimensional one as some of those dimension
+     * have typically very low depths (allele and allele frequency)</p>
+     *
+     * <p>
+     *     The value contained in position <code>[a][f][r] == log10Lk(read[r] | allele[a]) + log10(f) </code>. Exception is
+     *     for f == 0 whose value is undefined (in practice 0.0) and never used.
+     * </p>
+     *
+     * <p>
+     *     It is indexed by read, then by allele and then by the number of copies of the allele. For the latter
+     *     there are as many entries as the ploidy of the calculator + 1 (to accommodate zero copies although is
+     *     never used in practice).
+     * </p>
+     */
+    pub(crate) read_allele_likelihood_by_allele_count: Vec<f64>,
     /**
      * Indicates how many reads the calculator supports.
      *
@@ -122,6 +147,7 @@ impl GenotypeLikelihoodCalculator {
             allele_first_genotype_offset_by_ploidy,
             read_genotype_likelihood_components: vec![],
             allele_heap: BinaryHeap::with_capacity(ploidy),
+            read_allele_likelihood_by_allele_count: Vec::new(),
         }
     }
 
@@ -166,6 +192,7 @@ impl GenotypeLikelihoodCalculator {
                 result.increase(
                     index as i32
                         - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
+                            as i32
                         + 1,
                 );
                 self.last_overhead_counts = result.clone();
@@ -245,5 +272,335 @@ impl GenotypeLikelihoodCalculator {
             result += self.allele_first_genotype_offset_by_ploidy[[p, allele]]
         }
         return result as usize;
+    }
+
+    /**
+     * Calculate the likelihoods given the list of alleles and the likelihood map.
+     *
+     * @param likelihoods the likelihood matrix all alleles vs all reads.
+     *
+     * @throws IllegalArgumentException if {@code alleleList} is {@code null} or {@code likelihoods} is {@code null}
+     *     or the alleleList size does not match the allele-count of this calculator, or there are missing allele vs
+     *     read combinations in {@code likelihoods}.
+     *
+     * @return never {@code null}.
+     */
+    pub fn genotype_likelihoods<A: Allele>(
+        &mut self,
+        likelihoods: &Array2<f64>,
+        permutation: &AlleleLikelihoodMatrixMapper<A>,
+    ) -> GenotypeLikelihoods {
+        let read_likelihoods_by_genotype_index =
+            self.get_read_raw_read_likelihoods_by_genotype_index(likelihoods, permutation);
+        return GenotypeLikelihoods::from_log10_likelihoods(read_likelihoods_by_genotype_index);
+    }
+
+    /**
+     * A helper method that actually does the matrix operations but returns the raw values.
+     *
+     * @return the raw array (in log10 likelihoods space) of the GL for each genotype
+     */
+    fn get_read_raw_read_likelihoods_by_genotype_index<A: Allele>(
+        &mut self,
+        likelihoods: &Array2<f64>,
+        permutation: &AlleleLikelihoodMatrixMapper<A>,
+    ) -> Vec<f64> {
+        assert!(
+            likelihoods.nrows() == self.allele_count,
+            "Mismatch between likelihood matrix and allele_count"
+        );
+
+        let read_count = likelihoods.ncols();
+        self.ensure_read_capcity(read_count);
+
+        // [x][y][z] = z * LnLk(Read_x | Allele_y)
+        self.read_likelihood_components_by_allele_count(likelihoods, permutation);
+        self.genotype_likelihood_by_read(read_count);
+
+        return self.genotype_likelihoods_private(read_count);
+    }
+
+    /**
+     * Calculates the final genotype likelihood array out of the likelihoods for each genotype per read.
+     *
+     * @param readLikelihoodsByGenotypeIndex <i>[g][r]</i> likelihoods for each genotype <i>g</i> and <i>r</i>.
+     * @param readCount number of reads in the input likelihood arrays in {@code genotypeLikelihoodByRead}.
+     * @return never {@code null}, one position per genotype where the <i>i</i> entry is the likelihood of the ith
+     *   genotype (0-based).
+     */
+    fn genotype_likelihoods_private(&self, read_count: usize) -> Vec<f64> {
+        let mut result = vec![0.0; self.genotype_count as usize];
+        let denominator = (read_count as f64) * (self.ploidy as f64).log10();
+
+        // instead of dividing each read likelihood by ploidy ( so subtract log10(ploidy) )
+        // we multiply them all and the divide by ploidy^readCount (so substract readCount * log10(ploidy) )
+        for g in 0..self.genotype_count as usize {
+            result[g] = self.read_likelihoods_by_genotype_index[g][0..read_count]
+                .par_iter()
+                .sum::<f64>()
+                - denominator;
+        }
+
+        return result;
+    }
+
+    /**
+     * Calculates the likelihood component of each read on each genotype.
+     *
+     * NOTE: this is not actually the read likelihood component for each genotype, it is the sum of the log read likelihoods components
+     *       for each genotype without having been normalized by the the denominator of the ploidy, that happens in the final step
+     *
+     * @param readLikelihoodComponentsByAlleleCount [a][f][r] likelihood stratified by allele <i>a</i>, frequency in genotype <i>f</i> and
+     *                                              read <i>r</i>.
+     * @param readCount number of reads in {@code readLikelihoodComponentsByAlleleCount}.
+     * @return never {@code null}.
+     */
+    fn genotype_likelihood_by_read(
+        &mut self,
+        // equivalent vec of self.allele_count
+        read_count: usize,
+    ) {
+        // Here we don't use the convenience of {@link #genotypeAlleleCountsAt(int)} within the loop to spare instantiations of
+        // GenotypeAlleleCounts class when we are dealing with many genotypes.
+
+        let mut allele_counts_index = 0;
+        // let mut allele_counts = &mut self.genotype_allele_counts[allele_counts_index];
+        for genotype_index in 0..(self.genotype_count as usize) {
+            // let mut read_likelihoods = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+            let component_count =
+                self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
+            match component_count {
+                1 => {
+                    self.single_component_genotype_likelihood_by_read(
+                        genotype_index,
+                        allele_counts_index,
+                        read_count,
+                    );
+                }
+                2 => {
+                    self.two_component_genotype_likelihood_by_read(
+                        genotype_index,
+                        allele_counts_index,
+                        read_count,
+                    );
+                }
+                _ => {
+                    self.many_component_genotype_likelihood_by_read(
+                        genotype_index,
+                        allele_counts_index,
+                        read_count,
+                    );
+                }
+            }
+            if genotype_index < (self.genotype_count - 1) as usize {
+                allele_counts_index = self.next_genotype_allele_counts(allele_counts_index);
+                // allele_counts = &mut self.genotype_allele_counts[allele_counts_index];
+            }
+        }
+    }
+
+    fn next_genotype_allele_counts(
+        &mut self,
+        // allele_counts: &mut GenotypeAlleleCounts,
+        index: usize,
+    ) -> usize {
+        // let index = allele_counts.index();
+        let mut result;
+        let cmp = (index + 1)
+            .checked_sub(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY);
+        match cmp {
+            None => {
+                // result = &mut self.genotype_allele_counts[index + 1];
+                return index + 1;
+            }
+            Some(cmp) => {
+                if cmp == 0 {
+                    result = &mut self.genotype_allele_counts[index];
+                    result.increase(1);
+                    return result.index();
+                } else {
+                    // allele_counts.increase(1);
+                    // result = allele_counts;
+                    // return result
+                    result = &mut self.genotype_allele_counts[index];
+                    result.increase(1);
+                    return result.index();
+                }
+            }
+        }
+    }
+
+    /**
+     * Calculates the likelihood component by read for a given genotype allele count assuming that there are
+     * exactly one allele present in the genotype.
+     */
+    fn single_component_genotype_likelihood_by_read(
+        &mut self,
+        genotype_index: usize,
+        genotype_allele_counts_index: usize,
+        read_count: usize,
+    ) {
+        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+        let mut genotype_allele_counts =
+            &mut self.genotype_allele_counts[genotype_allele_counts_index];
+        let allele = genotype_allele_counts.allele_index_at(0);
+        // the count of the only component must be = ploidy.
+        let mut offset = (allele * (self.ploidy + 1) + self.ploidy) * read_count;
+        for r in 0..read_count {
+            likelihood_by_read[r] = self.read_allele_likelihood_by_allele_count[offset];
+            offset += 1;
+        }
+    }
+
+    /**
+     * Calculates the likelihood component by read for a given genotype allele count assuming that there are
+     * exactly two alleles present in the genotype (with arbitrary non-zero counts each).
+     */
+    fn two_component_genotype_likelihood_by_read(
+        &mut self,
+        genotype_index: usize,
+        genotype_allele_counts_index: usize,
+        read_count: usize,
+    ) {
+        let mut genotype_allele_counts =
+            &mut self.genotype_allele_counts[genotype_allele_counts_index];
+        let allele_0 = genotype_allele_counts.allele_index_at(0);
+        let freq_0 = genotype_allele_counts.allele_count_at(0);
+        let allele_1 = genotype_allele_counts.allele_index_at(1);
+        let freq_1 = self.ploidy - freq_0; // no need to get it from genotypeAlleleCounts.
+
+        let mut allele_0_LnL_offset = read_count * ((self.ploidy + 1) * allele_0 + freq_0);
+        let mut allele_1_LnL_offset = read_count * ((self.ploidy + 1) * allele_1 + freq_1);
+        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+
+        for r in 0..read_count {
+            let ln_lk_0 = self.read_allele_likelihood_by_allele_count[allele_0_LnL_offset];
+            allele_0_LnL_offset += 1;
+            let ln_lk_1 = self.read_allele_likelihood_by_allele_count[allele_1_LnL_offset];
+            allele_1_LnL_offset += 1;
+            likelihood_by_read[r] = MathUtils::approximate_log10_sum_log10(ln_lk_0, ln_lk_1);
+        }
+    }
+
+    /**
+     * General genotype likelihood component by read calculator. It does not make any assumption in the exact
+     * number of alleles present in the genotype.
+     */
+    fn many_component_genotype_likelihood_by_read(
+        &mut self,
+        genotype_index: usize,
+        genotype_allele_counts_index: usize,
+        read_count: usize,
+    ) {
+        // First we collect the allele likelihood component for all reads and place it
+        // in readGenotypeLikelihoodComponents for the final calculation per read.
+        let mut genotype_allele_counts =
+            &mut self.genotype_allele_counts[genotype_allele_counts_index];
+        self.genotype_alleles_and_counts = genotype_allele_counts.sorted_allele_counts.clone();
+        let component_count = genotype_allele_counts.distinct_allele_count();
+        let allele_data_size = (self.ploidy + 1) * read_count;
+
+        let mut cc = 0;
+        for c in 0..component_count {
+            let allele_index = self.genotype_alleles_and_counts[cc];
+            cc += 1;
+            let allele_count = self.genotype_alleles_and_counts[cc];
+            cc += 1;
+            // alleleDataOffset will point to the index of the first read likelihood for that allele and allele count.
+            let mut allele_data_offset =
+                allele_data_size * allele_index + allele_count * read_count;
+
+            let mut read_data_offset = c;
+            for r in 0..read_count {
+                self.read_genotype_likelihood_components[read_data_offset] =
+                    self.read_allele_likelihood_by_allele_count[allele_data_offset];
+                allele_data_offset += 1;
+                read_data_offset += self.maximum_distinct_alleles_in_genotype;
+            }
+        }
+
+        let mut likelihood_by_read = &mut self.read_likelihoods_by_genotype_index[genotype_index];
+        // Calculate the likelihood per read.
+        let mut read_data_offset = 0;
+        for r in 0..read_count {
+            likelihood_by_read[r] = MathUtils::approximate_log10_sum_log10_vec(
+                &self.read_genotype_likelihood_components,
+                read_data_offset,
+                read_data_offset + component_count,
+            );
+            read_data_offset += self.maximum_distinct_alleles_in_genotype;
+        }
+    }
+
+    /**
+     * Makes sure that temporal arrays and matrices are prepared for a number of reads to process.
+     * @param requestedCapacity number of read that need to be processed.
+     */
+    pub fn ensure_read_capcity(&mut self, requested_capacity: usize) {
+        if self.read_capacity == -1 {
+            let minimum_capacity = max(requested_capacity, 10); // Never go too small, 10 is the minimum.
+            self.read_allele_likelihood_by_allele_count =
+                vec![0.0; minimum_capacity * self.allele_count * (self.ploidy + 1)];
+            for i in 0..self.genotype_count as usize {
+                self.read_likelihoods_by_genotype_index[i] = vec![0.0; minimum_capacity];
+            }
+            self.read_genotype_likelihood_components = vec![0.0; self.ploidy * minimum_capacity];
+            self.read_capacity = minimum_capacity as i32;
+        } else if (self.read_capacity as usize) < requested_capacity {
+            let double_capacity = (requested_capacity as usize) << 1;
+            self.read_allele_likelihood_by_allele_count =
+                vec![0.0; double_capacity * self.allele_count * (self.ploidy + 1)];
+            for i in 0..self.genotype_count as usize {
+                self.read_likelihoods_by_genotype_index[i] = vec![0.0; double_capacity];
+            }
+            self.read_genotype_likelihood_components =
+                vec![0.0; self.maximum_distinct_alleles_in_genotype * double_capacity];
+            self.read_capacity = double_capacity as i32;
+        }
+    }
+
+    /**
+     * Returns a 3rd matrix with the likelihood components.
+     *
+     * <pre>
+     *     result[y][z][x] :=  z * lnLk ( read_x | allele_y ).
+     * </pre>
+     *
+     * @return never {@code null}.
+     */
+    fn read_likelihood_components_by_allele_count<A: Allele>(
+        &mut self,
+        likelihoods: &Array2<f64>,
+        permutation: &AlleleLikelihoodMatrixMapper<A>,
+    ) {
+        let read_count = likelihoods.ncols();
+        let allele_data_size = read_count * (self.ploidy + 1);
+
+        // frequency1Offset = readCount to skip the useless frequency == 0. So now we are at the start frequency == 1
+        // frequency1Offset += alleleDataSize to skip to the next allele index data location (+ readCount) at each iteration.
+        let mut frequency_1_offset = read_count;
+        for a in 0..self.allele_count {
+            self.read_allele_likelihood_by_allele_count[frequency_1_offset..].clone_from_slice(
+                &likelihoods
+                    .row(permutation.permutation.from_index(a))
+                    .as_slice()
+                    .unwrap(),
+            );
+
+            // p = 2 because the frequency == 1 we already have it.
+            let mut destination_offset = frequency_1_offset + read_count;
+            for frequency in 2..=self.ploidy {
+                let log10_frequency = (frequency as f64).log10();
+                let mut source_offset = frequency_1_offset;
+                for r in 0..read_count {
+                    self.read_allele_likelihood_by_allele_count[destination_offset] = self
+                        .read_allele_likelihood_by_allele_count[source_offset]
+                        + log10_frequency;
+                    destination_offset += 1;
+                    source_offset += 1;
+                }
+            }
+            frequency_1_offset += allele_data_size;
+        }
     }
 }

@@ -4,7 +4,6 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
 use estimation::bams::index_bams::*;
-use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;

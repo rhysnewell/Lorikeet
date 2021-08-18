@@ -1,5 +1,5 @@
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
-use model::variants::{Allele, Variant};
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use utils::math_utils::MathUtils;
@@ -164,7 +164,7 @@ impl GenotypePriorCalculator {
     pub fn get_log10_priors(
         &self,
         likelihood_calculator: &mut GenotypeLikelihoodCalculator,
-        alleles: &Vec<Allele>,
+        alleles: &Vec<ByteArrayAllele>,
     ) -> Vec<f64> {
         if likelihood_calculator.allele_count < alleles.len() {
             panic!("the number of alleles in the input calculator must be at least as large as the number of alleles in the input list")
@@ -193,7 +193,7 @@ impl GenotypePriorCalculator {
         return result;
     }
 
-    fn calculate_allele_types(alleles: &Vec<Allele>) -> Vec<i64> {
+    fn calculate_allele_types(alleles: &Vec<ByteArrayAllele>) -> Vec<i64> {
         let ref_allele = &alleles[0];
         if !ref_allele.is_reference() {
             panic!("The first allele must be a valid reference")
@@ -204,14 +204,12 @@ impl GenotypePriorCalculator {
             .par_iter()
             .map(|allele| {
                 if allele.is_reference() {
-                    return AlleleType::REF.ordinal() as i64;
+                    AlleleType::REF.ordinal() as i64
                 } else if allele.is_called() && !allele.is_symbolic() {
-                    match allele.variant() {
-                        Variant::Insertion(_) | Variant::Deletion(_) => {
-                            AlleleType::INDEL.ordinal() as i64
-                        }
-                        Variant::SNV(_) => AlleleType::SNP.ordinal() as i64,
-                        _ => AlleleType::OTHER.ordinal() as i64,
+                    if allele.len() == ref_allele.len() {
+                        AlleleType::SNP.ordinal() as i64
+                    } else {
+                        AlleleType::INDEL.ordinal() as i64
                     }
                 } else if allele.is_called() && allele.is_symbolic() {
                     panic!("Cannot handle symbolic structural variants at the moment")

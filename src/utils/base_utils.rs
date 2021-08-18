@@ -1,4 +1,5 @@
 use bio::alphabets::dna::alphabet;
+use rayon::prelude::*;
 use std::cmp::{min, Ordering};
 use std::collections::HashSet;
 
@@ -73,5 +74,9 @@ impl BaseUtils {
      */
     pub fn is_regular_base(base: u8) -> bool {
         return alphabet().is_word(&[base]);
+    }
+
+    pub fn is_all_regular_base(bases: &[u8]) -> bool {
+        bases.par_iter().all(|base| Self::is_regular_base(*base))
     }
 }

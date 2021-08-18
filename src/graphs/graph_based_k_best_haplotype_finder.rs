@@ -4,7 +4,6 @@ use graphs::base_vertex::BaseVertex;
 use graphs::k_best_haplotype::KBestHaplotype;
 use graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
 use petgraph::prelude::NodeIndex;
-use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use rayon::prelude::*;
 use std::collections::{BinaryHeap, HashMap, HashSet};

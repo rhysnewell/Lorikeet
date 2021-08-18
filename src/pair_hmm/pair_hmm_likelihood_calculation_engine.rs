@@ -1,9 +1,7 @@
 use assembly::assembly_result_set::AssemblyResultSet;
 use haplotype::haplotype::Haplotype;
 use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::ByteArrayAllele;
 use model::variant_context_utils::VariantContextUtils;
-use ndarray::Array2;
 use ordered_float::OrderedFloat;
 use pair_hmm::pair_hmm::PairHMM;
 use rayon::prelude::*;
@@ -13,7 +11,6 @@ use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use std::cmp::{max, min};
 use std::collections::HashMap;
-use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::SimpleInterval;
 
@@ -70,13 +67,13 @@ pub enum PCRErrorModel {
 }
 
 impl PCRErrorModel {
+    /**
+     * When calculating the likelihood of variants, we can try to correct for PCR errors that cause indel artifacts.
+     * The correction is based on the reference context, and acts specifically around repetitive sequences that tend
+     * to cause PCR errors). The variant likelihoods are penalized in increasing scale as the context around a
+     * putative indel is more repetitive (e.g. long homopolymer).
+     */
     pub fn new(args: &clap::ArgMatches) -> PCRErrorModel {
-        /**
-         * When calculating the likelihood of variants, we can try to correct for PCR errors that cause indel artifacts.
-         * The correction is based on the reference context, and acts specifically around repetitive sequences that tend
-         * to cause PCR errors). The variant likelihoods are penalized in increasing scale as the context around a
-         * putative indel is more repetitive (e.g. long homopolymer).
-         */
         let pcr_error_model_arg = args
             .value_of("pcr-indel-model")
             .unwrap()
@@ -191,18 +188,17 @@ impl PairHMMLikelihoodCalculationEngine {
         ) as u8;
     }
 
-    pub fn compute_read_likelihoods<A: AbstractReadThreadingGraph>(
+    pub fn compute_read_likelihoods<'a, 'b, A: AbstractReadThreadingGraph>(
         &mut self,
-        assembly_result_set: AssemblyResultSet<A>,
+        assembly_result_set: &'b mut AssemblyResultSet<'a, A>,
         samples: Vec<String>,
         per_sample_read_list: HashMap<usize, Vec<BirdToolRead>>,
-    ) -> AlleleLikelihoods {
-        let haplotypes: Vec<ByteArrayAllele> = assembly_result_set
+    ) -> AlleleLikelihoods<'a> {
+        let haplotypes: Vec<Haplotype<SimpleInterval>> = assembly_result_set
             .haplotypes
             .iter()
             .cloned()
-            .map(|hap| hap.allele)
-            .collect::<Vec<ByteArrayAllele>>();
+            .collect::<Vec<Haplotype<SimpleInterval>>>();
         self.initialize_pair_hmm(&haplotypes, &per_sample_read_list);
         // Add likelihoods for each sample's reads to our result
         let sample_count = samples.len();
@@ -603,7 +599,7 @@ impl PairHMMLikelihoodCalculationEngine {
 
     fn initialize_pair_hmm(
         &mut self,
-        haplotypes: &Vec<ByteArrayAllele>,
+        haplotypes: &Vec<Haplotype<SimpleInterval>>,
         per_sample_read_list: &HashMap<usize, Vec<BirdToolRead>>,
     ) {
         let read_max_length = per_sample_read_list
@@ -615,7 +611,7 @@ impl PairHMMLikelihoodCalculationEngine {
             .unwrap_or(0);
         let max_haplotype_length: usize = haplotypes
             .par_iter()
-            .map(|hap| hap.len())
+            .map(|hap| hap.allele.len())
             .max()
             .unwrap_or(0);
 

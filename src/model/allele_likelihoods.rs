@@ -1,12 +1,13 @@
+use haplotype::haplotype::Haplotype;
+use model::allele_list::AlleleList;
 use model::byte_array_allele::ByteArrayAllele;
-use model::variants::Allele;
-use ndarray::{Array2, Array3};
+use ndarray::Array2;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use std::collections::HashMap;
 use std::hash::Hash;
 use utils::math_utils::MathUtils;
-use utils::simple_interval::{Locatable, SimpleInterval};
+use utils::simple_interval::SimpleInterval;
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -23,7 +24,7 @@ lazy_static! {
  *
  * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
  */
-pub struct AlleleLikelihoods {
+pub struct AlleleLikelihoods<'a> {
     /**
      * Evidence by sample index. Each sub array contains reference to the evidence of the ith sample.
      */
@@ -55,7 +56,7 @@ pub struct AlleleLikelihoods {
     /**
      * Allele list.
      */
-    pub(crate) alleles: Vec<ByteArrayAllele>,
+    pub(crate) alleles: Vec<Haplotype<'a, SimpleInterval>>,
     /**
      * Index of the reference allele if any, otherwise {@link #MISSING_INDEX}.
      */
@@ -65,14 +66,16 @@ pub struct AlleleLikelihoods {
     //  */
     // pub(crate) sample_matrices: Vec<Array2<f64>>,
     pub(crate) is_natural_log: bool,
+
+    pub(crate) subsetted_genomic_loc: Option<SimpleInterval>,
 }
 
-impl AlleleLikelihoods {
+impl<'a> AlleleLikelihoods<'a> {
     pub fn new(
-        alleles: Vec<ByteArrayAllele>,
+        alleles: Vec<Haplotype<'a, SimpleInterval>>,
         samples: Vec<String>,
         evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
-    ) -> AlleleLikelihoods {
+    ) -> AlleleLikelihoods<'a> {
         let sample_count = samples.len();
         let allele_count = alleles.len();
 
@@ -102,19 +105,37 @@ impl AlleleLikelihoods {
             alleles,
             reference_allele_index,
             is_natural_log: false,
+            subsetted_genomic_loc: None,
             // sample_matrices
         }
     }
 
-    fn new_private(
-        alleles: Vec<ByteArrayAllele>,
-        samples: Vec<String>,
-        evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
-        filtered_evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
-        values: Vec<Vec<Vec<f64>>>,
-    ) {
-        let sample_count = samples.len();
+    pub fn number_of_samples(&self) -> usize {
+        self.samples.len()
     }
+
+    pub fn number_of_alleles(&self) -> usize {
+        self.alleles.len()
+    }
+
+    pub fn get_allele_list(&self) -> AlleleList<ByteArrayAllele> {
+        AlleleList::new_from_vec(
+            self.alleles
+                .iter()
+                .map(|a| a.allele.clone())
+                .collect::<Vec<ByteArrayAllele>>(),
+        )
+    }
+
+    // fn new_private(
+    //     alleles: Vec<ByteArrayAllele>,
+    //     samples: Vec<String>,
+    //     evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
+    //     filtered_evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
+    //     values: Vec<Vec<Vec<f64>>>,
+    // ) {
+    //     let sample_count = samples.len();
+    // }
 
     fn get_informative_threshold(&self) -> f64 {
         if self.is_natural_log {
@@ -124,8 +145,8 @@ impl AlleleLikelihoods {
         }
     }
 
-    fn find_reference_allele_index(alleles: &Vec<ByteArrayAllele>) -> Option<usize> {
-        alleles.par_iter().position_first(|a| a.is_ref)
+    fn find_reference_allele_index(alleles: &Vec<Haplotype<'a, SimpleInterval>>) -> Option<usize> {
+        alleles.par_iter().position_first(|a| a.allele.is_ref)
     }
 
     fn setup_indexes(
@@ -151,6 +172,24 @@ impl AlleleLikelihoods {
         }
     }
 
+    pub fn set_variant_calling_subset_used(&mut self, loc: SimpleInterval) {
+        self.subsetted_genomic_loc = Some(loc)
+    }
+
+    /**
+     * Returns the location used for subsetting. May be null.
+     */
+    pub fn get_variant_calling_subset_applied(&self) -> &Option<SimpleInterval> {
+        &self.subsetted_genomic_loc
+    }
+
+    pub fn evidence_count(&self) -> usize {
+        self.evidence_by_sample_index
+            .values()
+            .flat_map(|reads| reads.iter())
+            .count()
+    }
+
     /**
      * Adjusts likelihoods so that for each unit of evidence, the best allele likelihood is 0 and caps the minimum likelihood
      * of any allele for each unit of evidence based on the maximum alternative allele likelihood.
@@ -169,26 +208,30 @@ impl AlleleLikelihoods {
             let allele_count = self.alleles.len();
             if !(allele_count == 0 || allele_count == 1) {
                 for s in 0..self.values_by_sample_index.len() {
-                    let mut sample_values = &mut self.values_by_sample_index[s];
                     let evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
-                    for r in 0..evidence_count {}
+                    for r in 0..evidence_count {
+                        self.normalize_likelihoods_per_evidence(
+                            maximum_likelihood_difference_cap,
+                            s,
+                            r,
+                            symmetrically_normalize_alleles_to_reference,
+                        );
+                    }
                 }
-            }
-        }
+            };
+        };
     }
 
     // Does the normalizeLikelihoods job for each piece of evidence.
     fn normalize_likelihoods_per_evidence(
         &mut self,
         maximum_best_alt_likelihood_difference: f64,
-        sample_values: &mut Array2<f64>,
         sample_index: usize,
         evidence_index: usize,
         symmetrically_normalize_alleles_to_reference: bool,
     ) {
         //allow the best allele to be the reference because asymmetry leads to strange artifacts like het calls with >90% alt reads
         let best_allele = self.search_best_allele(
-            sample_values,
             sample_index,
             evidence_index,
             symmetrically_normalize_alleles_to_reference,
@@ -198,6 +241,8 @@ impl AlleleLikelihoods {
         let worst_likelihood_cap = best_allele.likelihood + maximum_best_alt_likelihood_difference;
 
         let allele_count = self.alleles.len();
+
+        let mut sample_values = &mut self.values_by_sample_index[sample_index];
 
         sample_values
             .column_mut(evidence_index)
@@ -223,11 +268,10 @@ impl AlleleLikelihoods {
      */
     fn search_best_allele(
         &self,
-        sample_values: &mut Array2<f64>,
         sample_index: usize,
         evidence_index: usize,
         can_be_reference: bool,
-        priorities: &Option<Vec<f64>>,
+        priorities: &Option<Vec<i32>>,
     ) -> BestAllele {
         let allele_count = self.alleles.len();
         if allele_count == 0
@@ -242,6 +286,7 @@ impl AlleleLikelihoods {
             );
         };
 
+        let sample_values = &self.values_by_sample_index[sample_index];
         let mut best_allele_index = if can_be_reference || self.reference_allele_index.unwrap() != 0
         {
             0
@@ -317,6 +362,158 @@ impl AlleleLikelihoods {
             best_likelihood,
             second_best_likelihood,
         );
+    }
+
+    /**
+     * Perform marginalization from an allele set to another (smaller one) taking the maximum value
+     * for each evidence in the original allele subset.
+     *
+     * @param newToOldAlleleMap map where the keys are the new alleles and the value list the original
+     *                          alleles that correspond to the new one.
+     * @return never {@code null}. The result will have the requested set of new alleles (keys in {@code newToOldAlleleMap}, and
+     * the same set of samples and evidence as the original.
+     *
+     * @throws IllegalArgumentException is {@code newToOldAlleleMap} is {@code null} or contains {@code null} values,
+     *  or its values contain reference to non-existing alleles in this evidence-likelihood collection. Also no new allele
+     *  can have zero old alleles mapping nor two new alleles can make reference to the same old allele.
+     */
+    pub fn marginalize<'b>(
+        &mut self,
+        new_to_old_allele_map: &'b HashMap<usize, Vec<&'b Haplotype<'a, SimpleInterval>>>,
+    ) {
+        let new_alleles = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
+        let old_allele_count = self.alleles.len();
+        let new_allele_count = new_alleles.len();
+
+        // we get the index correspondence between new old -> new allele, None entries mean that the old
+        // allele does not map to any new; supported but typically not the case.
+        let old_to_new_allele_index_map =
+            self.old_to_new_allele_index_map(new_to_old_allele_map, old_allele_count, new_alleles);
+
+        // We calculate the marginal likelihoods.
+        let new_likelihood_values = self.marginal_likelihoods(
+            old_allele_count,
+            new_allele_count,
+            old_to_new_allele_index_map,
+        );
+
+        let sample_count = self.samples.len();
+
+        // GATK returns a whole new AlleleLikelihood Object here, but that would require
+        // a lot of cloning, so we will mutate the current object and pay attention downstream
+        self.values_by_sample_index = new_likelihood_values;
+    }
+
+    // Calculate the marginal likelihoods considering the old -> new allele index mapping.
+    fn marginal_likelihoods(
+        &self,
+        old_allele_count: usize,
+        new_allele_count: usize,
+        old_to_new_allele_index_map: Vec<Option<usize>>,
+    ) -> Vec<Array2<f64>> {
+        let sample_count = self.samples.len();
+        let mut result = vec![Array2::zeros((1, 1)); sample_count];
+
+        for s in 0..sample_count {
+            let sample_evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
+            let old_sample_values = &self.values_by_sample_index[s];
+
+            let mut new_sample_values = Array2::zeros((new_allele_count, sample_evidence_count));
+            // We initiate all likelihoods to -Inf.
+            new_sample_values.fill(f64::NEG_INFINITY);
+
+            // For each old allele and read we update the new table keeping the maximum likelihood.
+            for r in 0..sample_evidence_count {
+                for a in 0..old_allele_count {
+                    let new_allele_index = old_to_new_allele_index_map[a];
+                    match new_allele_index {
+                        None => continue,
+                        Some(new_allele_index) => {
+                            let likelihood = old_sample_values[[a, r]];
+                            if likelihood > new_sample_values[[new_allele_index, r]] {
+                                new_sample_values[[new_allele_index, r]] = likelihood;
+                            };
+                        }
+                    }
+                }
+            }
+
+            result[s] = new_sample_values;
+        }
+
+        return result;
+    }
+
+    /**
+     * Remove those reads that do not comply with a requirement.
+     *
+     * @param predicate the predicate representing the requirement.
+     *
+     * <p>
+     *     This method modifies the current read-likelihoods collection.
+     * </p>
+     * <p>
+     *     Any exception thrown by the predicate will be propagated to the calling code.
+     * </p>
+     *
+     * @throws IllegalArgumentException if {@code predicate} is {@code null}.
+     */
+    pub fn retain_evidence(
+        &mut self,
+        predicate: &Box<dyn Fn(&BirdToolRead, &SimpleInterval) -> bool>,
+        interval: &SimpleInterval,
+    ) {
+        let sample_count = self.samples.len();
+
+        for s in 0..sample_count {
+            // Remove evidence from the primary data
+            let sample_evidence = self.evidence_by_sample_index.get(&s).unwrap();
+            let remove_indices = (0..sample_evidence.len())
+                .into_iter()
+                .filter(|i| !predicate(&sample_evidence[*i], interval))
+                .collect::<Vec<usize>>();
+
+            self.remove_evidence_by_index(s, remove_indices);
+
+            // If applicable also apply the predicate to the filters
+            self.filtered_evidence_by_sample_index
+                .get_mut(&s)
+                .unwrap()
+                .retain(|r| predicate(r, interval));
+        }
+    }
+
+    // calculates an old to new allele index map array.
+    fn old_to_new_allele_index_map<'b>(
+        &self,
+        new_to_old_allele_map: &'b HashMap<usize, Vec<&'b Haplotype<'a, SimpleInterval>>>,
+        old_allele_count: usize,
+        new_alleles: Vec<&'b usize>,
+    ) -> Vec<Option<usize>> {
+        let mut old_to_new_allele_index_map = vec![None; old_allele_count];
+
+        for new_index in 0..new_alleles.len() {
+            let new_allele = new_alleles[new_index];
+            for old_allele in new_to_old_allele_map.get(new_allele).unwrap() {
+                let old_allele_index = self.alleles.iter().position(|a| a == *old_allele);
+                match old_allele_index {
+                    None => {
+                        panic!(
+                            "Missing old allele {:?} in likelihood collection",
+                            old_allele
+                        );
+                    }
+                    Some(old_allele_index) => {
+                        if old_to_new_allele_index_map[old_allele_index] != None {
+                            panic!("Collision detected: Two new alleles refer to same old allele");
+                        };
+                        old_to_new_allele_index_map[old_allele_index] = Some(new_index);
+                    }
+                };
+            }
+        }
+
+        return old_to_new_allele_index_map;
     }
 
     /**
@@ -420,6 +617,64 @@ impl AlleleLikelihoods {
 
         return result;
     }
+
+    pub fn best_alleles_breaking_ties_main(
+        &self,
+        tie_breaking_priority: Box<dyn Fn(&Haplotype<'a, SimpleInterval>) -> i32>,
+    ) -> Vec<BestAllele> {
+        return (0..self.number_of_samples())
+            .into_iter()
+            .flat_map(|n| self.best_alleles_tie_breaking(n, &tie_breaking_priority))
+            .collect::<Vec<BestAllele>>();
+    }
+
+    /**
+     * Returns the collection of best allele estimates for one sample's evidence based on the evidence-likelihoods.
+     * "Ties" where the ref likelihood is within {@code AlleleLikelihoods.INFORMATIVE_THRESHOLD} of the greatest likelihood
+     * are broken by the {@code tieBreakingPriority} function.
+     *
+     * @throws IllegalStateException if there is no alleles.
+     *
+     * @return never {@code null}, one element per unit of evidence in the evidence-likelihoods collection.
+     */
+    fn best_alleles_tie_breaking(
+        &self,
+        sample_index: usize,
+        tie_breaking_priority: &Box<dyn Fn(&Haplotype<'a, SimpleInterval>) -> i32>,
+    ) -> Vec<BestAllele> {
+        //TODO: this currently just does ref vs alt.  Really we want CIGAR complexity.
+        let priorities = Some(
+            self.alleles
+                .iter()
+                .map(|a| (tie_breaking_priority)(a))
+                .collect::<Vec<i32>>(),
+        );
+        let evidence_count = self
+            .evidence_by_sample_index
+            .get(&sample_index)
+            .unwrap()
+            .len();
+
+        return (0..evidence_count)
+            .into_par_iter()
+            .map(|r| self.search_best_allele(sample_index, r, true, &priorities))
+            .collect::<Vec<BestAllele>>();
+    }
+
+    pub fn change_evidence(&mut self, evidence_replacements: HashMap<ReadIndexer, BirdToolRead>) {
+        for (read_indexer, replacement_read) in evidence_replacements {
+            let mut sample_evidence = self
+                .evidence_by_sample_index
+                .get_mut(&read_indexer.sample_index);
+
+            match sample_evidence {
+                Some(sample_evidence) => {
+                    sample_evidence[read_indexer.evidence_index] = replacement_read;
+                }
+                None => continue,
+            };
+        }
+    }
 }
 
 // pub struct LikelihoodMatrix<L: Locatable> {
@@ -429,24 +684,24 @@ impl AlleleLikelihoods {
 // }
 
 pub struct BestAllele {
-    allele_index: Option<usize>,
+    pub(crate) allele_index: Option<usize>,
     /**
      * The containing sample.
      */
-    sample_index: usize,
+    pub(crate) sample_index: usize,
     /**
      * The query evidence.
      */
-    evidence_index: usize,
+    pub(crate) evidence_index: usize,
     /**
      * If allele != null, the indicates the likelihood of the evidence.
      */
-    likelihood: f64,
+    pub(crate) likelihood: f64,
     /**
      * Confidence that the evidence actually was generated under that likelihood.
      * This is equal to the difference between this and the second best allele match.
      */
-    confidence: f64,
+    pub(crate) confidence: f64,
 }
 
 impl BestAllele {
@@ -473,5 +728,20 @@ impl BestAllele {
 
     pub fn is_informative(&self) -> bool {
         return self.confidence > *LOG_10_INFORMATIVE_THRESHOLD;
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, Ord, PartialOrd, PartialEq, Eq)]
+pub struct ReadIndexer {
+    sample_index: usize,
+    evidence_index: usize,
+}
+
+impl ReadIndexer {
+    pub fn new(sample_index: usize, evidence_index: usize) -> ReadIndexer {
+        Self {
+            sample_index,
+            evidence_index,
+        }
     }
 }

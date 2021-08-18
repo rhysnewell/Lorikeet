@@ -8,7 +8,6 @@ use graphs::base_vertex::BaseVertex;
 use graphs::chain_pruner::ChainPruner;
 use graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
 use graphs::k_best_haplotype::KBestHaplotype;
-use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
 use haplotype::haplotype::Haplotype;
@@ -18,14 +17,12 @@ use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
 use read_error_corrector::read_error_corrector::ReadErrorCorrector;
 use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
-use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use smith_waterman::bindings::SWOverhangStrategy;
-use std::collections::HashMap;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct ReadThreadingAssembler {
@@ -131,15 +128,15 @@ impl ReadThreadingAssembler {
      * @param aligner                   {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return                          the resulting assembly-result-set
      */
-    pub fn run_local_assembly<R: ReadErrorCorrector>(
+    pub fn run_local_assembly<'a, 'b, R: ReadErrorCorrector>(
         &mut self,
         assembly_region: AssemblyRegion,
-        ref_haplotype: &mut Haplotype<SimpleInterval>,
+        ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
         read_error_corrector: Option<R>,
-        sample_names: &Vec<String>,
-    ) -> AssemblyResultSet<ReadThreadingGraph> {
+        sample_names: &'b Vec<String>,
+    ) -> AssemblyResultSet<'a, ReadThreadingGraph> {
         assert!(
             full_reference_with_padding.len() == ref_loc.size(),
             "Reference bases and reference loc must be the same size."
@@ -222,15 +219,15 @@ impl ReadThreadingAssembler {
      * Follow the old behavior, call into {@link #assemble(List, Haplotype, SAMFileHeader, SmithWatermanAligner)} to decide if a graph
      * is acceptable for haplotype discovery then detect haplotypes.
      */
-    fn assemble_kmer_graphs_and_haplotype_call<A: AbstractReadThreadingGraph>(
+    fn assemble_kmer_graphs_and_haplotype_call<'a, 'b, A: AbstractReadThreadingGraph>(
         &mut self,
-        ref_haplotype: &mut Haplotype<SimpleInterval>,
-        ref_loc: &SimpleInterval,
-        corrected_reads: &Vec<BirdToolRead>,
+        ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
+        ref_loc: &'b SimpleInterval,
+        corrected_reads: &'b Vec<BirdToolRead>,
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
-        result_set: &mut AssemblyResultSet<A>,
-        active_region_extended_location: &SimpleInterval,
-        sample_names: &Vec<String>,
+        result_set: &'b mut AssemblyResultSet<'a, A>,
+        active_region_extended_location: &'b SimpleInterval,
+        sample_names: &'b Vec<String>,
     ) {
         // create the graphs by calling our subclass assemble method
         for result in self
@@ -262,12 +259,12 @@ impl ReadThreadingAssembler {
      * @param aligner {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return a non-null list of reads
      */
-    fn assemble(
+    fn assemble<'a, 'b>(
         &mut self,
-        reads: &Vec<BirdToolRead>,
-        ref_haplotype: &Haplotype<SimpleInterval>,
-        sample_names: &Vec<String>,
-    ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
+        reads: &'b Vec<BirdToolRead>,
+        ref_haplotype: &'b Haplotype<'a, SimpleInterval>,
+        sample_names: &'b Vec<String>,
+    ) -> Vec<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph>> {
         let mut results = Vec::new();
 
         // first, try using the requested kmer sizes
@@ -319,14 +316,14 @@ impl ReadThreadingAssembler {
      * Follow the kmer expansion heurisics as {@link #assemble(List, Haplotype, SAMFileHeader, SmithWatermanAligner)}, but in this case
      * attempt to recover haplotypes from the kmer graph and use them to assess whether to expand the kmer size.
      */
-    fn assemble_graphs_and_expand_kmers_given_haplotypes(
+    fn assemble_graphs_and_expand_kmers_given_haplotypes<'a, 'b>(
         &mut self,
-        ref_haplotype: &mut Haplotype<SimpleInterval>,
-        ref_loc: &SimpleInterval,
-        corrected_reads: &Vec<BirdToolRead>,
-        result_set: &mut AssemblyResultSet<ReadThreadingGraph>,
-        active_region_extended_location: &SimpleInterval,
-        sample_names: &Vec<String>,
+        ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
+        ref_loc: &'b SimpleInterval,
+        corrected_reads: &'b Vec<BirdToolRead>,
+        result_set: &'b mut AssemblyResultSet<'a, ReadThreadingGraph>,
+        active_region_extended_location: &'b SimpleInterval,
+        sample_names: &'b Vec<String>,
     ) {
         let mut saved_assembly_results = Vec::new();
 
@@ -437,9 +434,9 @@ impl ReadThreadingAssembler {
      * @param graph the graph to check
      * @param refHaplotype the reference haplotype
      */
-    fn sanity_check_graph<V: BaseVertex, E: BaseEdge>(
-        graph: &BaseGraph<V, E>,
-        ref_haplotype: &Haplotype<SimpleInterval>,
+    fn sanity_check_graph<'a, 'b, V: BaseVertex, E: BaseEdge>(
+        graph: &'b BaseGraph<V, E>,
+        ref_haplotype: &'b Haplotype<'a, SimpleInterval>,
     ) {
         let ref_source_vertex = graph.get_reference_source_vertex();
         let ref_sink_vertex = graph.get_reference_sink_vertex();
@@ -549,13 +546,13 @@ impl ReadThreadingAssembler {
      * @param aligner               SmithWaterman aligner to use for aligning the discovered haplotype to the reference haplotype
      * @return A list of discovered haplotyes (note that this is not currently used for anything)
      */
-    fn find_best_path<A: AbstractReadThreadingGraph>(
+    fn find_best_path<'a, 'b, A: AbstractReadThreadingGraph>(
         &self,
         // graph: &BaseGraph<V, E>,
-        assembly_result: &mut AssemblyResult<SimpleInterval, A>,
-        ref_haplotype: &mut Haplotype<SimpleInterval>,
-        ref_loc: &SimpleInterval,
-        active_region_window: &SimpleInterval,
+        assembly_result: &'b mut AssemblyResult<'a, SimpleInterval, A>,
+        ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
+        ref_loc: &'b SimpleInterval,
+        active_region_window: &'b SimpleInterval,
         // result_set: &mut Option<HashSet<AssemblyResult<E, SimpleInterval>>>, unused part that is annoying to implement
     ) {
         // add the reference haplotype separately from all the others to ensure
@@ -749,15 +746,15 @@ impl ReadThreadingAssembler {
      * @param aligner {@link SmithWatermanAligner} used to align dangling ends to the reference sequence
      * @return sequence graph or null if one could not be created (e.g. because it contains cycles or too many paths or is low complexity)
      */
-    fn create_graph(
+    fn create_graph<'a, 'b>(
         &mut self,
-        reads: &Vec<BirdToolRead>,
-        ref_haplotype: &Haplotype<SimpleInterval>,
+        reads: &'b Vec<BirdToolRead>,
+        ref_haplotype: &'b Haplotype<'a, SimpleInterval>,
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
-        sample_names: &Vec<String>,
-    ) -> Option<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
+        sample_names: &'b Vec<String>,
+    ) -> Option<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
             return Some(AssemblyResult::new(Status::Failed, None, None));
@@ -871,12 +868,12 @@ impl ReadThreadingAssembler {
         }
     }
 
-    fn get_assembly_result<A: AbstractReadThreadingGraph>(
+    fn get_assembly_result<'a, A: AbstractReadThreadingGraph>(
         &self,
-        ref_haplotype: &Haplotype<SimpleInterval>,
+        ref_haplotype: &Haplotype<'a, SimpleInterval>,
         kmer_size: usize,
         mut rt_graph: A,
-    ) -> AssemblyResult<SimpleInterval, A> {
+    ) -> AssemblyResult<'a, SimpleInterval, A> {
         if !self.prune_before_cycle_counting {
             self.chain_pruner
                 .prune_low_weight_chains(rt_graph.get_base_graph_mut())
@@ -993,9 +990,9 @@ impl ReadThreadingAssembler {
         }
     }
 
-    fn get_result_set_for_rt_graph<A: AbstractReadThreadingGraph>(
+    fn get_result_set_for_rt_graph<'a, A: AbstractReadThreadingGraph>(
         mut rt_graph: A,
-    ) -> AssemblyResult<SimpleInterval, A> {
+    ) -> AssemblyResult<'a, SimpleInterval, A> {
         // The graph has degenerated in some way, so the reference source and/or sink cannot be id'd.  Can
         // happen in cases where for example the reference somehow manages to acquire a cycle, or
         // where the entire assembly collapses back into the reference sequence.

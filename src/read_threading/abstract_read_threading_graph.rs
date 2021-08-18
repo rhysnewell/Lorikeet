@@ -1,7 +1,6 @@
 use assembly::kmer::Kmer;
-use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
+use graphs::base_edge::BaseEdgeStruct;
 use graphs::base_graph::BaseGraph;
-use graphs::base_vertex::BaseVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};

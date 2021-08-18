@@ -4,7 +4,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ClippingRepresentation;
 use reads::read_utils::ReadUtils;
-use rust_htslib::bam::record::{Cigar, CigarString, Record};
+use rust_htslib::bam::record::{Cigar, CigarString};
 use utils::simple_interval::Locatable;
 
 pub struct ClippingOp {
