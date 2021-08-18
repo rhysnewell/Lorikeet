@@ -730,13 +730,13 @@ impl AlignmentUtils {
      * @param basesToRefCigar the cigar that maps the bases to the reference genome
      * @return a byte[] containing the bases covering this interval, or null if we would start or end within a deletion
      */
-    pub fn get_bases_covering_ref_interval(
+    pub fn get_bases_covering_ref_interval<'a>(
         ref_start: usize,
         ref_end: usize,
-        bases: &Vec<u8>,
+        bases: &'a Vec<u8>,
         bases_start_on_ref: usize,
         bases_to_ref_cigar: &CigarString,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<&'a [u8]> {
         assert!(
             ref_end >= ref_start,
             "Bad start or stop: start {} stop {}",
@@ -768,6 +768,7 @@ impl AlignmentUtils {
                         if ref_pos == ref_end {
                             bases_stop = Some(bases_pos);
                             done = true;
+                            break;
                         }
                         ref_pos += 1;
                         bases_pos += 1;
@@ -786,17 +787,16 @@ impl AlignmentUtils {
                     panic!("Unsupported operator {:?}", ce)
                 }
             }
+            iii += 1;
         }
 
         if bases_start.is_none() || bases_stop.is_none() {
             panic!(
-                "Mever found start {:?} or stop {:?} given cigar {:?}",
+                "Never found start {:?} or stop {:?} given cigar {:?}",
                 bases_start, bases_stop, bases_to_ref_cigar
             );
         };
-        return Some(
-            bases[bases_start.unwrap() as usize..bases_stop.unwrap() as usize + 1].to_vec(),
-        );
+        return Some(&bases[bases_start.unwrap() as usize..bases_stop.unwrap() as usize + 1]);
     }
 
     /**

@@ -86,9 +86,8 @@ impl CigarBuilder {
             if CigarUtils::cigar_elements_are_same_type(&element, &self.last_operator) {
                 let n = self.cigar_elements.len() - 1;
                 self.cigar_elements[n] =
-                    CigarUtils::combine_cigar_operators(&element, &self.last_operator.unwrap())
+                    CigarUtils::combine_cigar_operators(&element, &self.cigar_elements[n])
                         .unwrap_or(self.cigar_elements[n]);
-                self.last_operator = Some(element);
             } else {
                 match self.last_operator {
                     None => {
@@ -117,33 +116,51 @@ impl CigarBuilder {
                                     self.cigar_elements[cigar_elements_len - 2].len();
                                 self.cigar_elements[cigar_elements_len - 2] =
                                     self.cigar_elements[cigar_elements_len - 1].clone();
-                                self.cigar_elements[cigar_elements_len - 1] = element.clone();
-                                self.last_operator = Some(element);
+                                self.cigar_elements[cigar_elements_len - 1] = element;
+                                // self.last_operator = Some(element);
                             } else {
                                 self.cigar_elements.push(element.clone());
                                 self.last_operator = Some(element);
                             }
                         } else {
                             match element {
-                                Cigar::Del(_) | Cigar::Ins(_) => {
-                                    // The order of deletion and insertion elements is arbitrary, so to standardize we shift deletions to the left
-                                    // that is, we place the deletion before the insertion and shift the insertion right
-                                    // if the element before the insertion is another deletion, we merge in the new deletion
-                                    // note that the last operator remains an insertion
-                                    let size = self.cigar_elements.len();
-                                    if size > 1
-                                        && match self.cigar_elements[size - 2] {
-                                            Cigar::Del(_) => true,
-                                            _ => false,
+                                Cigar::Del(_) => {
+                                    match self.last_operator {
+                                        None => {
+                                            self.cigar_elements.push(element.clone());
+                                            self.last_operator = Some(element);
                                         }
-                                    {
-                                        self.cigar_elements[size - 2] = Cigar::Del(
-                                            self.cigar_elements[size - 2].len() + element.len(),
-                                        );
-                                        self.last_operator = Some(element);
-                                    } else {
-                                        self.cigar_elements.insert(size - 1, element.clone());
-                                        self.last_operator = Some(element);
+                                        Some(last_operator) => {
+                                            match last_operator {
+                                                Cigar::Ins(_) => {
+                                                    // The order of deletion and insertion elements is arbitrary, so to standardize we shift deletions to the left
+                                                    // that is, we place the deletion before the insertion and shift the insertion right
+                                                    // if the element before the insertion is another deletion, we merge in the new deletion
+                                                    // note that the last operator remains an insertion
+                                                    let size = self.cigar_elements.len();
+                                                    if size > 1
+                                                        && match self.cigar_elements[size - 2] {
+                                                            Cigar::Del(_) => true,
+                                                            _ => false,
+                                                        }
+                                                    {
+                                                        self.cigar_elements[size - 2] = Cigar::Del(
+                                                            self.cigar_elements[size - 2].len()
+                                                                + element.len(),
+                                                        );
+                                                        // self.last_operator = Some(element);
+                                                    } else {
+                                                        self.cigar_elements
+                                                            .insert(size - 1, element);
+                                                        // self.last_operator = Some(element);
+                                                    }
+                                                }
+                                                _ => {
+                                                    self.cigar_elements.push(element.clone());
+                                                    self.last_operator = Some(element);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                                 _ => {
@@ -170,7 +187,7 @@ impl CigarBuilder {
             Some(operator) => {
                 if self.cigar_elements.len() > 1 {
                     match operator {
-                        Cigar::Ins(_) => match self.cigar_elements[self.cigar_elements.len() - 1] {
+                        Cigar::Ins(_) => match self.cigar_elements[self.cigar_elements.len() - 2] {
                             Cigar::Del(_) => true,
                             _ => false,
                         },
@@ -257,7 +274,7 @@ impl CigarBuilder {
 
         assert!(
             allow_empty || !self.cigar_elements.is_empty(),
-            "No cigar elements left after removing leading and trainling deletions."
+            "No cigar elements left after removing leading and trailing deletions."
         );
 
         return CigarString::from(self.cigar_elements);

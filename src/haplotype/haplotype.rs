@@ -4,7 +4,7 @@ use ordered_float::OrderedFloat;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
 use reads::cigar_utils::CigarUtils;
-use rust_htslib::bam::record::{Cigar, CigarString};
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use utils::simple_interval::{Locatable, SimpleInterval};
@@ -49,6 +49,22 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
 
     pub fn get_bases(&self) -> &Vec<u8> {
         &self.allele.bases
+    }
+
+    pub fn get_start_position(&self) -> usize {
+        self.genome_location.as_ref().unwrap().get_start()
+    }
+
+    pub fn get_cigar(&self) -> &CigarString {
+        &self.cigar
+    }
+
+    pub fn get_stop_position(&self) -> usize {
+        self.genome_location.as_ref().unwrap().get_end()
+    }
+
+    pub fn get_alignment_start_hap_wrt_ref(&self) -> usize {
+        self.alignment_start_hap_wrt_ref
     }
 
     pub fn set_cigar(&mut self, cigar_string: Vec<Cigar>) {
@@ -135,7 +151,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
                     tmp.make(false)
                 };
 
-                let mut ret = Haplotype::new(&new_bases, self.is_ref());
+                let mut ret = Haplotype::new(new_bases, self.is_ref());
                 ret.cigar = leading_indel_trimmed_new_cigar;
                 ret.set_genome_location(loc);
                 ret.score = self.score;

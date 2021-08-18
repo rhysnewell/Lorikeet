@@ -423,40 +423,40 @@ impl CigarUtils {
      */
     pub fn combine_cigar_operators(this: &Cigar, other: &Cigar) -> Option<Cigar> {
         match other {
-            Cigar::SoftClip(other_len) => match this {
-                Cigar::SoftClip(this_len) => Some(Cigar::SoftClip(other_len + this_len)),
+            &Cigar::SoftClip(other_len) => match this {
+                &Cigar::SoftClip(this_len) => Some(Cigar::SoftClip(other_len + this_len)),
                 _ => None,
             },
-            Cigar::HardClip(other_len) => match this {
-                Cigar::HardClip(this_len) => Some(Cigar::HardClip(other_len + this_len)),
+            &Cigar::HardClip(other_len) => match this {
+                &Cigar::HardClip(this_len) => Some(Cigar::HardClip(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Match(other_len) => match this {
-                Cigar::Match(this_len) => Some(Cigar::Match(other_len + this_len)),
+            &Cigar::Match(other_len) => match this {
+                &Cigar::Match(this_len) => Some(Cigar::Match(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Equal(other_len) => match this {
-                Cigar::Equal(this_len) => Some(Cigar::Equal(other_len + this_len)),
+            &Cigar::Equal(other_len) => match this {
+                &Cigar::Equal(this_len) => Some(Cigar::Equal(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Diff(other_len) => match this {
-                Cigar::Diff(this_len) => Some(Cigar::Diff(other_len + this_len)),
+            &Cigar::Diff(other_len) => match this {
+                &Cigar::Diff(this_len) => Some(Cigar::Diff(other_len + this_len)),
                 _ => None,
             },
-            Cigar::RefSkip(other_len) => match this {
-                Cigar::RefSkip(this_len) => Some(Cigar::RefSkip(other_len + this_len)),
+            &Cigar::RefSkip(other_len) => match this {
+                &Cigar::RefSkip(this_len) => Some(Cigar::RefSkip(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Ins(other_len) => match this {
-                Cigar::Ins(this_len) => Some(Cigar::Ins(other_len + this_len)),
+            &Cigar::Ins(other_len) => match this {
+                &Cigar::Ins(this_len) => Some(Cigar::Ins(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Del(other_len) => match this {
-                Cigar::Del(this_len) => Some(Cigar::Del(other_len + this_len)),
+            &Cigar::Del(other_len) => match this {
+                &Cigar::Del(this_len) => Some(Cigar::Del(other_len + this_len)),
                 _ => None,
             },
-            Cigar::Pad(other_len) => match this {
-                Cigar::Pad(this_len) => Some(Cigar::Pad(other_len + this_len)),
+            &Cigar::Pad(other_len) => match this {
+                &Cigar::Pad(this_len) => Some(Cigar::Pad(other_len + this_len)),
                 _ => None,
             },
         }
