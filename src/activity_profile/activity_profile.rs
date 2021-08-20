@@ -2,14 +2,16 @@ use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use assembly::assembly_region::AssemblyRegion;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
+use rayon::prelude::*;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Class holding information about per-base activity scores for
  * assembly region traversal
  */
+#[derive(Debug)]
 pub struct ActivityProfile {
-    state_list: Vec<ActivityProfileState>,
+    pub state_list: Vec<ActivityProfileState>,
     max_prob_propagation_distance: usize,
     active_prob_threshold: f64,
     pub region_start_loc: Option<SimpleInterval>,
@@ -80,6 +82,8 @@ pub trait Profile {
     fn get_prob(&self, index: usize) -> f64;
 
     fn is_minimum(&self, index: usize) -> bool;
+
+    fn get_probabilities_as_array(&self) -> Vec<f64>;
 }
 
 impl ActivityProfile {
@@ -300,7 +304,7 @@ impl Profile for ActivityProfile {
                     OrderedFloat(self.max_prob_propagation_distance as f64),
                 )
                 .into_inner() as i64;
-                for i in (-num_hq_clips..num_hq_clips).into_iter() {
+                for i in (-num_hq_clips..=num_hq_clips).into_iter() {
                     let loc = self.get_loc_for_offset(just_added_state.get_loc(), i);
                     match loc {
                         Some(loc) => states.push(ActivityProfileState::new(
@@ -432,7 +436,7 @@ impl Profile for ActivityProfile {
                     .state_list
                     .drain(0..offset_of_next_region_end + 1)
                     .collect_vec();
-                sub.clear();
+                // sub.clear();
 
                 // update the start and stop locations as necessary
                 if self.state_list.is_empty() {
@@ -442,7 +446,7 @@ impl Profile for ActivityProfile {
                     self.region_start_loc = Some(self.state_list[0].get_loc().clone());
                 }
 
-                let first = &self.state_list[0];
+                let first = &sub[0]; // first is the first active state BEFORe draining
                 let region_loc = SimpleInterval::new(
                     first.get_loc().get_contig(),
                     first.get_loc().get_start(),
@@ -493,11 +497,14 @@ impl Profile for ActivityProfile {
         {
             // we really haven't finalized at the probability mass that might affect our decision, so keep
             // waiting until we do before we try to make any decisions
+            // println!("Undecided");
             return None;
         }
 
         let mut end_of_active_region =
             self.find_first_activity_boundary(is_active_region, max_region_size);
+
+        // println!("End of active region {}, is_active {}, max_region_size {}", end_of_active_region, is_active_region, max_region_size);
 
         if is_active_region && (end_of_active_region == max_region_size) {
             end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
@@ -526,8 +533,10 @@ impl Profile for ActivityProfile {
         let mut min_i = end_of_active_region - 1;
         let mut min_p = std::f64::MAX;
 
-        for i in (min_i..(min_region_size - 1)).into_iter() {
+        // for i in (min_i..=(min_region_size - 1)).into_iter().rev() {
+        for i in ((min_region_size - 1)..=min_i).into_iter().rev() {
             let cur = self.get_prob(i);
+            // println!("Current {} prob {} prev min {}", i, cur, min_p);
             if cur < min_p && self.is_minimum(i) {
                 min_p = cur;
                 min_i = i;
@@ -578,7 +587,7 @@ impl Profile for ActivityProfile {
      * @return the isActiveProb of the state at index
      */
     fn get_prob(&self, index: usize) -> f64 {
-        return self.state_list[0].is_active_prob();
+        return self.state_list[index].is_active_prob();
     }
 
     /**
@@ -600,6 +609,15 @@ impl Profile for ActivityProfile {
             let index_p = self.get_prob(index);
             return index_p <= self.get_prob(index + 1) && index_p < self.get_prob(index - 1);
         }
+    }
+
+    fn get_probabilities_as_array(&self) -> Vec<f64> {
+        let probs = self
+            .get_state_list()
+            .into_par_iter()
+            .map(|state| state.is_active_prob())
+            .collect::<Vec<f64>>();
+        return probs;
     }
 }
 

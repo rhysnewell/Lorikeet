@@ -11,11 +11,12 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  * Applies a band pass filter with a Gaussian kernel to the input state probabilities to smooth
  * them out of an interval
  */
+#[derive(Debug)]
 pub struct BandPassActivityProfile {
     filter_size: usize,
     sigma: f64,
-    gaussian_kernel: Vec<f64>,
-    activity_profile: ActivityProfile,
+    pub gaussian_kernel: Vec<f64>,
+    pub activity_profile: ActivityProfile,
 }
 
 impl BandPassActivityProfile {
@@ -247,12 +248,13 @@ impl Profile for BandPassActivityProfile {
             .process_state(just_added_state.clone())
         {
             if super_state.is_active_prob() > 0.0 {
-                for i in (-(self.filter_size as i64)..(self.filter_size as i64 + 1)).into_iter() {
+                for i in (-(self.filter_size as i64)..=(self.filter_size as i64)).into_iter() {
                     let loc = self.get_loc_for_offset(&just_added_state.get_loc(), i);
                     match loc {
                         Some(loc) => {
+                            // println!("Super state {} i {} filter size {} gauss {}", super_state.is_active_prob(), i, self.filter_size, self.gaussian_kernel[(i + self.filter_size as i64) as usize]);
                             let new_prob = super_state.is_active_prob()
-                                * self.gaussian_kernel[(i as usize) + self.filter_size];
+                                * self.gaussian_kernel[(i + self.filter_size as i64) as usize];
                             states.push(ActivityProfileState::new(loc, new_prob, Type::None))
                         }
                         None => continue,
@@ -366,6 +368,10 @@ impl Profile for BandPassActivityProfile {
 
     fn is_minimum(&self, index: usize) -> bool {
         self.activity_profile.is_minimum(index)
+    }
+
+    fn get_probabilities_as_array(&self) -> Vec<f64> {
+        self.activity_profile.get_probabilities_as_array()
     }
 }
 

@@ -1,5 +1,7 @@
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Cigar, CigarString};
+use std::io::Error;
+use utils::errors::BirdToolError;
 
 #[derive(Debug, Eq, PartialEq)]
 enum Section {
@@ -36,6 +38,7 @@ pub struct CigarBuilder {
     leading_deletion_bases_removed: u32,
     trailing_deletion_bases_removed: u32,
     trailing_deletion_bases_removed_in_make: u32,
+    error: Result<(), BirdToolError>,
 }
 
 impl CigarBuilder {
@@ -48,10 +51,11 @@ impl CigarBuilder {
             leading_deletion_bases_removed: 0,
             trailing_deletion_bases_removed: 0,
             trailing_deletion_bases_removed_in_make: 0,
+            error: Ok(()),
         }
     }
 
-    pub fn add(&mut self, element: Cigar) {
+    pub fn add(&mut self, element: Cigar) -> Result<(), BirdToolError> {
         if element.len() > 0 {
             if self.remove_deletions_at_ends
                 && match element {
@@ -78,10 +82,14 @@ impl CigarBuilder {
                     },
                 } {
                     self.leading_deletion_bases_removed += element.len();
+                    return Ok(());
                 };
             }
 
-            self.advance_section_and_validate_cigar_order(&element);
+            let advance_result = self.advance_section_and_validate_cigar_order(&element);
+            if advance_result.is_err() {
+                return advance_result;
+            };
 
             if CigarUtils::cigar_elements_are_same_type(&element, &self.last_operator) {
                 let n = self.cigar_elements.len() - 1;
@@ -173,12 +181,19 @@ impl CigarBuilder {
                 }
             }
         }
+        return Ok(());
     }
 
-    pub fn add_all(&mut self, elements: Vec<Cigar>) {
+    pub fn add_all(&mut self, elements: Vec<Cigar>) -> Result<(), BirdToolError> {
         for element in elements {
-            self.add(element)
+            if self.add(element).is_err() {
+                return Err(BirdToolError::InvalidClip(format!(
+                    "Cigar has already reached its right hard clip"
+                )));
+            }
         }
+
+        return Ok(());
     }
 
     fn last_two_elements_were_deletion_and_insertion(&self) -> bool {
@@ -201,7 +216,10 @@ impl CigarBuilder {
     }
 
     // validate that cigar structure is hard clip, soft clip, unclipped, soft clip, hard clip
-    fn advance_section_and_validate_cigar_order(&mut self, operator: &Cigar) {
+    fn advance_section_and_validate_cigar_order(
+        &mut self,
+        operator: &Cigar,
+    ) -> Result<(), BirdToolError> {
         match operator {
             Cigar::HardClip(_) => {
                 match self.section {
@@ -216,7 +234,12 @@ impl CigarBuilder {
             Cigar::SoftClip(_) => {
                 match self.section {
                     Section::RightHardClip => {
-                        panic!("Cigar has already reached its right hard clip");
+                        self.error = Err(BirdToolError::InvalidClip(format!(
+                            "Cigar has already reached its right hard clip"
+                        )));
+                        return Err(BirdToolError::InvalidClip(format!(
+                            "Cigar has already reached its right hard clip"
+                        )));
                     }
                     Section::LeftHardClip => self.section = Section::LeftSoftClip,
                     Section::Middle => self.section = Section::RightSoftClip,
@@ -228,7 +251,12 @@ impl CigarBuilder {
             _ => {
                 match self.section {
                     Section::RightSoftClip | Section::RightHardClip => {
-                        panic!("Section has alread reached right clip")
+                        self.error = Err(BirdToolError::InvalidClip(format!(
+                            "Section has alread reached right clip"
+                        )));
+                        return Err(BirdToolError::InvalidClip(format!(
+                            "Section has alread reached right clip"
+                        )));
                     }
                     Section::LeftHardClip | Section::LeftSoftClip => self.section = Section::Middle,
                     _ => {
@@ -237,17 +265,25 @@ impl CigarBuilder {
                 }
             }
         }
+        return Ok(());
     }
 
-    pub fn make(mut self, allow_empty: bool) -> CigarString {
-        assert!(
-            !(self.section == Section::LeftSoftClip
-                && match self.cigar_elements[0] {
-                    Cigar::SoftClip(_) => true,
-                    _ => false,
-                }),
-            "Cigar is completely soft clipped"
-        );
+    pub fn make(&mut self, allow_empty: bool) -> Result<CigarString, BirdToolError> {
+        // Check if there was an error during the adding process that has not yet been handled
+        if self.error.is_err() {
+            return Err(self.error.clone().err().unwrap());
+        }
+
+        if self.section == Section::LeftSoftClip
+            && match self.cigar_elements[0] {
+                Cigar::SoftClip(_) => true,
+                _ => false,
+            }
+        {
+            return Err(BirdToolError::InvalidClip(format!(
+                "Cigar is completely soft clipped"
+            )));
+        }
 
         self.trailing_deletion_bases_removed_in_make = 0;
         if self.remove_deletions_at_ends
@@ -257,7 +293,9 @@ impl CigarBuilder {
                     _ => false,
                 },
                 None => {
-                    panic!("Last element cannot be None at this point");
+                    return Err(BirdToolError::InvalidClip(format!(
+                        "Last element cannot be None at this point"
+                    )))
                 }
             }
         {
@@ -272,18 +310,21 @@ impl CigarBuilder {
             self.cigar_elements.remove(self.cigar_elements.len() - 2);
         }
 
-        assert!(
-            allow_empty || !self.cigar_elements.is_empty(),
-            "No cigar elements left after removing leading and trailing deletions."
-        );
+        if !allow_empty && self.cigar_elements.is_empty() {
+            return Err(BirdToolError::InvalidClip(format!(
+                "No cigar elements left after removing leading and trailing deletions."
+            )));
+        }
 
-        return CigarString::from(self.cigar_elements);
+        return Ok(CigarString::from(self.cigar_elements.clone()));
     }
 
     pub fn make_and_record_deletions_removed_result(mut self) -> CigarBuilderResult {
         let leading_deletion_bases_removed = self.leading_deletion_bases_removed;
         let trailing_deletion_bases_removed = self.get_trailing_deletion_bases_removed();
-        let cigar = self.make(false);
+        let cigar = self
+            .make(false)
+            .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
         return CigarBuilderResult::new(
             cigar,
             leading_deletion_bases_removed,

@@ -307,6 +307,14 @@ pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
             && self.get_start() <= other.get_start()
             && self.get_end() >= other.get_end();
     }
+
+    fn distance<L: Locatable>(&self, other: &L) -> usize {
+        if self.tid() == other.tid() {
+            max(self.get_start(), other.get_start()) - min(self.get_start(), other.get_start())
+        } else {
+            usize::MAX
+        }
+    }
 }
 
 impl Locatable for SimpleInterval {

@@ -336,23 +336,26 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             let trimmed = h.trim(span.clone());
 
             match trimmed {
-                Some(trimmed) => {
-                    if original_by_trimmed_haplotypes.contains_key(&trimmed) {
-                        if trimmed.is_ref() {
-                            original_by_trimmed_haplotypes.remove(&trimmed);
+                Err(_) => panic!("Unhandled Trimming error"),
+                Ok(trimmed) => match trimmed {
+                    Some(trimmed) => {
+                        if original_by_trimmed_haplotypes.contains_key(&trimmed) {
+                            if trimmed.is_ref() {
+                                original_by_trimmed_haplotypes.remove(&trimmed);
+                                original_by_trimmed_haplotypes.insert(trimmed, h);
+                            }
+                        } else {
                             original_by_trimmed_haplotypes.insert(trimmed, h);
-                        }
-                    } else {
-                        original_by_trimmed_haplotypes.insert(trimmed, h);
-                    };
-                }
-                None => {
-                    if h.is_ref() {
-                        panic!("Trimming eliminated the reference haplotype");
-                    };
-                    debug!("Throwing out haplotype {:?} with cigar {:?} becuase it starts with or ends \
+                        };
+                    }
+                    None => {
+                        if h.is_ref() {
+                            panic!("Trimming eliminated the reference haplotype");
+                        };
+                        debug!("Throwing out haplotype {:?} with cigar {:?} becuase it starts with or ends \
                     with an insertion or deletion when trimmed to {:?}", &h, &h.cigar, span);
-                }
+                    }
+                },
             }
         }
 

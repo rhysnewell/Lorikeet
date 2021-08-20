@@ -62,8 +62,12 @@ impl AlignmentUtils {
         }
 
         let mut sw_cigar_builder = CigarBuilder::new(true);
-        sw_cigar_builder.add_all(read_to_haplotype_sw_alignment.cigar.0);
-        let sw_cigar = sw_cigar_builder.make(false);
+        sw_cigar_builder
+            .add_all(read_to_haplotype_sw_alignment.cigar.0)
+            .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
+        let sw_cigar = sw_cigar_builder
+            .make(false)
+            .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
 
         // since we're modifying the read we need to clone it
         let mut copied_read = original_read.clone();
@@ -74,7 +78,9 @@ impl AlignmentUtils {
         // }
 
         // compute here the read starts w.r.t. the reference from the SW result and the hap -> ref cigar
-        let right_padded_haplotype_vs_ref_cigar = haplotype.get_consolidated_padded_ciagr(1000);
+        let right_padded_haplotype_vs_ref_cigar = haplotype
+            .get_consolidated_padded_ciagr(1000)
+            .unwrap_or_else(|_| panic!("Unhandled error in haplotype"));
 
         // this computes the number of reference bases before the read starts, based on the haplotype vs ref cigar
         // This cigar corresponds exactly to the readToRefCigarRaw, below.  One might wonder whether readToRefCigarRaw and
@@ -264,7 +270,9 @@ impl AlignmentUtils {
             };
         }
 
-        return new_elements.make(false);
+        return new_elements
+            .make(false)
+            .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
     }
 
     fn read_start_on_reference_haplotype(

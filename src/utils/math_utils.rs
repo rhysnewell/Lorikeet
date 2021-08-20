@@ -2,7 +2,7 @@ use ordered_float::{NotNan, OrderedFloat};
 use rayon::prelude::*;
 use statrs::function::gamma::ln_gamma;
 use std::clone::Clone;
-use std::ops::{Add, AddAssign, Sub};
+use std::ops::{Add, AddAssign, Mul, Sub};
 use utils::natural_log_utils::NaturalLogUtils;
 
 lazy_static! {
@@ -46,30 +46,56 @@ impl MathUtils {
     /**
      * Element by elemnt addition of two vectors in place
      */
-    pub fn ebe_add_in_place<T: Add + Copy + AddAssign>(a: &mut [T], b: &[T]) {
+    pub fn ebe_add_in_place<T: Send + Sync + Add + Copy + AddAssign>(a: &mut [T], b: &[T]) {
         a.iter_mut().enumerate().for_each(|(i, val)| *val += b[i]);
     }
 
     /**
      * Element by elemnt addition of two vectors
      */
-    pub fn ebe_add<T: Add + Copy + Add<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
-        let mut z = Vec::with_capacity(a.len());
-        for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
-            z[i] = *aval + *bval;
-        }
+    pub fn ebe_add<T: Send + Sync + Add + Copy + Add<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
+        let z = a
+            .par_iter()
+            .zip(b.par_iter())
+            .map(|(aval, bval)| *aval + *bval)
+            .collect::<Vec<T>>();
         z
     }
 
     /**
      * Element by elemnt subtraction of two vectors
      */
-    pub fn ebe_subtract<T: Sub + Copy + Sub<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
-        let mut z = Vec::with_capacity(a.len());
-        for (i, (aval, bval)) in a.iter().zip(b).enumerate() {
-            z[i] = *aval - *bval;
-        }
+    pub fn ebe_subtract<T: Send + Sync + Sub + Copy + Sub<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
+        let z = a
+            .par_iter()
+            .zip(b.par_iter())
+            .map(|(aval, bval)| *aval - *bval)
+            .collect::<Vec<T>>();
         z
+    }
+
+    /**
+     * Element by elemnt multiplication of two vectors
+     */
+    pub fn ebe_multiply<T: Send + Sync + Mul + Copy + Mul<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
+        let z = a
+            .into_par_iter()
+            .zip(b.par_iter())
+            .map(|(aval, bval)| *aval * *bval)
+            .collect::<Vec<T>>();
+        z
+    }
+
+    /**
+     * calculates the dot product of two vectors
+     */
+    pub fn dot_product<
+        T: Send + Sync + Mul + Add + Copy + Mul<Output = T> + Add<Output = T> + std::iter::Sum,
+    >(
+        a: &[T],
+        b: &[T],
+    ) -> T {
+        Self::ebe_multiply(a, b).into_par_iter().sum::<T>()
     }
 
     /**
@@ -346,7 +372,7 @@ impl MathUtils {
             "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
         );
 
-        return ((-((x - mean).powf(2.0))) / (2.0 * sd.powf(2.0))).exp() / (sd * *ROOT_TWO_PI);
+        return (-((x - mean).powf(2.0)) / (2.0 * sd.powf(2.0))).exp() / (sd * *ROOT_TWO_PI);
     }
 
     /**

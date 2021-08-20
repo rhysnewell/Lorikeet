@@ -1,5 +1,6 @@
 pub mod base_utils;
 pub mod dirichlet;
+pub mod errors;
 pub mod interval_utils;
 pub mod math_utils;
 pub mod natural_log_utils;

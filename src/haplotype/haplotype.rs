@@ -7,6 +7,7 @@ use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use utils::errors::BirdToolError;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 // lazy_static! {
@@ -91,11 +92,21 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
      * @param loc a location completely contained within this Haplotype's location
      * @return a new Haplotype within only the bases spanning the provided location, or null for some reason the haplotype would be malformed if
      */
-    pub fn trim<'b>(&'b self, loc: SimpleInterval) -> Option<Haplotype<'a, SimpleInterval>> {
-        assert!(
-            self.genome_location.as_ref().unwrap().contains(&loc),
-            "Can only trim a Haplotype to a containing span."
-        );
+    pub fn trim<'b>(
+        &'b self,
+        loc: SimpleInterval,
+    ) -> Result<Option<Haplotype<'a, SimpleInterval>>, BirdToolError> {
+        if self.genome_location.is_none() {
+            return Err(BirdToolError::InvalidLocation(format!(
+                "Attempting to trim haplotype with no genome location"
+            )));
+        }
+
+        if !self.genome_location.as_ref().unwrap().contains(&loc) {
+            return Err(BirdToolError::InvalidLocation(format!(
+                "Can only trim a Haplotype to a containing span."
+            )));
+        }
 
         let new_start = loc.get_start() - self.genome_location.as_ref().unwrap().get_start();
         let new_stop = new_start + loc.get_end() - loc.get_start();
@@ -110,10 +121,10 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
         );
 
         match new_bases {
-            None => return None,
+            None => return Ok(None),
             Some(new_bases) => {
                 if new_bases.len() == 0 {
-                    return None;
+                    return Ok(None);
                 };
 
                 // note: trimCigarByReference does not remove leading or trailing indels, while getBasesCoveringRefInterval does remove bases
@@ -136,7 +147,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
 
                 if last_index_to_keep_exclusive <= first_index_to_keep_inclusive {
                     // edge case of entire cigar is insertion
-                    return None;
+                    return Ok(None);
                 };
 
                 let leading_indel_trimmed_new_cigar = if !(leading_insertion || trailing_insertion)
@@ -148,7 +159,14 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
                         new_cigar.0[first_index_to_keep_inclusive..last_index_to_keep_exclusive]
                             .to_vec(),
                     );
-                    tmp.make(false)
+                    match tmp.make(false) {
+                        Ok(cigar_string) => cigar_string,
+                        _ => {
+                            return Err(BirdToolError::CigarBuilderError(format!(
+                                "Cigar builder failed"
+                            )))
+                        }
+                    }
                 };
 
                 let mut ret = Haplotype::new(new_bases, self.is_ref());
@@ -158,7 +176,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
                 ret.kmer_size = self.kmer_size;
                 ret.alignment_start_hap_wrt_ref = new_start + self.alignment_start_hap_wrt_ref;
 
-                return Some(ret);
+                return Ok(Some(ret));
             }
         }
     }
@@ -173,7 +191,10 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
      * @param padSize how many additional Ms should be appended to the end of this cigar.  Must be >= 0
      * @return a newly allocated Cigar that consolidate(getCigar + padSize + M)
      */
-    pub fn get_consolidated_padded_ciagr(&self, pad_size: usize) -> CigarString {
+    pub fn get_consolidated_padded_ciagr(
+        &self,
+        pad_size: usize,
+    ) -> Result<CigarString, BirdToolError> {
         let mut builder = CigarBuilder::new(true);
         builder.add_all(self.cigar.0.clone());
         builder.add(Cigar::Match(pad_size as u32));

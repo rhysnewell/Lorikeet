@@ -24,7 +24,7 @@ impl<T: Float + Copy> Type<T> {
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct ActivityProfileState {
     loc: SimpleInterval,
-    active_prob: f64,
+    pub active_prob: f64,
     result_state: Type<f64>,
 }
 
