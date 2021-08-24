@@ -324,7 +324,6 @@ impl<'a> ReadClipper<'a> {
                 if op.stop >= read_length {
                     op.stop = read_length - 1;
                 }
-
                 op.apply(&algorithm, &mut clipped_read);
             }
         }
