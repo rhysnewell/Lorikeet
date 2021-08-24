@@ -16,7 +16,7 @@ impl ReadUtils {
     pub const DEFAULT_INSERTION_DELETION_QUAL: u8 = 45;
 
     /**
-     * Find the 0-based index within a read base array corresponding to a given 1-based position in the reference, along with the cigar operator of
+     * Find the 0-based index within a read base array corresponding to a given 0-based position in the reference, along with the cigar operator of
      * the element containing that base.  If the reference coordinate occurs within a deletion, the first index after the deletion is returned.
      * Note that this treats soft-clipped bases as if they align with the reference, which is useful for hard-clipping reads with soft clips.
      *
@@ -37,11 +37,12 @@ impl ReadUtils {
             return (None, None);
         }
 
-        let mut first_read_pos_of_element = 0;
-        let mut first_ref_pos_of_element = alignment_start;
-        let mut last_read_pos_of_element = 0;
-        let mut last_ref_pos_of_element = alignment_start;
+        let mut first_read_pos_of_element = 0; // inclusive
+        let mut first_ref_pos_of_element = alignment_start; // inclusive
+        let mut last_read_pos_of_element = 0; // exclusive
+        let mut last_ref_pos_of_element = alignment_start; // exclusive
 
+        // advance forward through all the cigar elements until we bracket the reference coordinate
         for cig in cigar.iter() {
             first_read_pos_of_element = last_read_pos_of_element;
             first_ref_pos_of_element = last_ref_pos_of_element;
@@ -60,13 +61,15 @@ impl ReadUtils {
 
             if first_ref_pos_of_element <= ref_coord && ref_coord < last_ref_pos_of_element {
                 // refCoord falls within this cigar element
-                let read_pos_at_ref_coord = first_read_pos_of_element
+                let read_pos_at_ref_coord = first_read_pos_of_element as i64
                     + (if CigarUtils::cigar_consumes_read_bases(cig) {
-                        ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0)
+                        (ref_coord) as i64 - first_ref_pos_of_element as i64
+                    // ref_coord.checked_sub(first_ref_pos_of_element).unwrap_or(0)
                     } else {
                         0
                     });
-                return (Some(read_pos_at_ref_coord), Some(cig.clone()));
+
+                return (Some(read_pos_at_ref_coord as usize), Some(cig.clone()));
             }
         }
 
@@ -82,7 +85,7 @@ impl ReadUtils {
         ref_coord: usize,
     ) -> (Option<usize>, Option<Cigar>) {
         Self::get_read_index_for_reference_coordinate(
-            read.get_soft_start().unwrap_or(0),
+            read.get_soft_start().unwrap(),
             read.read.cigar(),
             ref_coord,
         )
@@ -94,14 +97,38 @@ impl ReadUtils {
         empty_read.read.set_mate_unmapped();
         empty_read.read.set_unmapped();
         empty_read.read.set_mapq(0);
-        empty_read.read.set(
-            read.read.qname(),
-            Some(&CigarString(vec![Cigar::Match(0)])),
-            &[0],
-            &[0],
-        );
+        empty_read
+            .read
+            .set(read.read.qname(), Some(&CigarString(Vec::new())), &[], &[]);
 
         return empty_read;
+    }
+
+    pub fn empty_read_mut(empty_read: &mut BirdToolRead) {
+        let qname = empty_read.read.qname().to_vec();
+        empty_read.read.set_mate_unmapped();
+        empty_read.read.set_unmapped();
+        empty_read.read.set_mapq(0);
+        empty_read
+            .read
+            .set(&qname[..], Some(&CigarString(Vec::new())), &[], &[]);
+    }
+
+    pub fn empty_read_with_quals_and_bases_mut(
+        empty_read: &mut BirdToolRead,
+        quals: &[u8],
+        bases: &[u8],
+    ) {
+        let qname = empty_read.read.qname().to_vec();
+        empty_read.read.set_mate_unmapped();
+        empty_read.read.set_unmapped();
+        empty_read.read.set_mapq(0);
+        empty_read.read.set(
+            &qname[..],
+            Some(&CigarString(empty_read.read.cigar().0.clone())),
+            bases,
+            quals,
+        );
     }
 
     pub fn empty_read_with_quals_and_bases(

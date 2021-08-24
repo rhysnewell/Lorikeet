@@ -79,7 +79,7 @@ impl ReferenceReader {
         self.current_sequence = Vec::with_capacity(size);
     }
 
-    pub fn update_current_sequence_without_capcity(&mut self) {
+    pub fn update_current_sequence_without_capacity(&mut self) {
         self.current_sequence = Vec::new();
     }
 

@@ -345,7 +345,7 @@ impl PairHMMLikelihoodCalculationEngine {
 
         for read in reads.iter_mut() {
             if self.modify_soft_clipped_bases {
-                let bases = read.read.seq().encoded.to_vec();
+                let bases = read.read.seq().as_bytes();
                 let mut read_quals = read.read.qual().to_vec();
                 let mut read_ins_quals = ReadUtils::get_base_insertion_qualities(read);
                 let mut read_del_quals = ReadUtils::get_base_deletion_qualities(read);
@@ -372,7 +372,7 @@ impl PairHMMLikelihoodCalculationEngine {
                 ));
             } else {
                 let maybe_unclipped = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
-                let bases = maybe_unclipped.read.seq().encoded.to_vec();
+                let bases = maybe_unclipped.read.seq().as_bytes();
                 let mut read_quals = maybe_unclipped.read.qual().to_vec();
                 let mut read_ins_quals = ReadUtils::get_base_insertion_qualities(&maybe_unclipped);
                 let mut read_del_quals = ReadUtils::get_base_deletion_qualities(&maybe_unclipped);

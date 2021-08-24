@@ -17,6 +17,7 @@ pub struct Kmer {
     length: usize,
 }
 
+// TODO: Change Kmer to take a reference to a sequence and have a lifetime
 impl Kmer {
     /**
      * Create a new kmer using all bases in kmer

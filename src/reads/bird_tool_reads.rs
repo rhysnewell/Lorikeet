@@ -1,10 +1,13 @@
 use estimation::lorikeet_engine::ReadType;
+use reads::cigar_utils::CigarUtils;
 use reads::read_utils::ReadUtils;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::Record;
+use rust_htslib::bam::record::{Cigar, Record};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use utils::simple_interval::Locatable;
 
 /**
@@ -49,11 +52,56 @@ impl BirdToolRead {
     // pub fn get_end(&self) -> usize {
     //     self.read.reference_end() as usize
     // }
+    /**
+     * Calculates the reference coordinate for the beginning of the read taking into account soft clips but not hard clips.
+     *
+     * Note: getUnclippedStart() adds soft and hard clips, this function only adds soft clips.
+     *
+     * @return the unclipped start of the read taking soft clips (but not hard clips) into account
+     */
+    pub fn get_soft_start(&self) -> Result<usize, <usize as TryFrom<i64>>::Error> {
+        let mut start = self.get_start() as i64;
+        // let new_start = start.checked_sub(self.read.cigar().leading_softclips() as usize);
+        for cig in self.read.cigar().iter() {
+            match cig {
+                &Cigar::SoftClip(len) => {
+                    start -= len as i64;
+                }
+                &Cigar::HardClip(_) => continue,
+                _ => break,
+            }
+        }
+        return start.try_into();
+    }
 
-    pub fn get_soft_start(&self) -> Option<usize> {
-        let mut start = self.get_start();
-        let new_start = start.checked_sub(self.read.cigar().leading_softclips() as usize);
-        return new_start;
+    /**
+     * Calculates the reference coordinate for the end of the read taking into account soft clips but not hard clips.
+     *
+     * Note: getUnclippedEnd() adds soft and hard clips, this function only adds soft clips.
+     *
+     * @return the unclipped end of the read taking soft clips (but not hard clips) into account
+     */
+    pub fn get_soft_end(&self) -> usize {
+        let mut found_aligned_base = false;
+        let mut soft_end = self.get_end();
+        let cigs = self.read.cigar();
+
+        for cig in cigs.iter().rev() {
+            match cig {
+                &Cigar::SoftClip(len) => soft_end += len as usize,
+                &Cigar::HardClip(_) => continue,
+                _ => {
+                    found_aligned_base = true;
+                    break;
+                }
+            }
+        }
+
+        if !found_aligned_base {
+            soft_end = self.get_end();
+        }
+
+        return soft_end;
     }
 
     /**
@@ -100,6 +148,49 @@ impl BirdToolRead {
     pub fn set_transient_attribute(&mut self, tag: String, val: Vec<u8>) {
         self.transient_attributes.insert(tag, val);
     }
+
+    /**
+     * @return the alignment start (0-based, inclusive) adjusted for clipped bases.  For example if the read
+     * has an alignment start of 100 but the first 4 bases were clipped (hard or soft clipped)
+     * then this method will return 96.
+     *
+     * Invalid to call on an unmapped read.
+     */
+    pub fn get_unclipped_start(&self) -> usize {
+        let mut unclipped_start = self.get_start();
+        for cig in self.read.cigar().iter() {
+            match cig {
+                &Cigar::HardClip(len) | &Cigar::SoftClip(len) => unclipped_start -= len as usize,
+                _ => break,
+            }
+        }
+
+        return unclipped_start;
+    }
+
+    /**
+     * @param alignmentEnd The end (1-based) of the alignment
+     * @param cigar        The cigar containing the alignment information
+     * @return the alignment end (1-based, inclusive) adjusted for clipped bases.  For example if the read
+     * has an alignment end of 100 but the last 7 bases were clipped (hard or soft clipped)
+     * then this method will return 107.
+     * <p/>
+     * Invalid to call on an unmapped read.
+     * Invalid to call with cigar = null
+     */
+    pub fn get_unclipped_end(&self) -> usize {
+        let mut unclipped_end = self.get_end();
+        for cig in self.read.cigar().iter().rev() {
+            match cig {
+                &Cigar::HardClip(len) | &Cigar::SoftClip(len) => {
+                    unclipped_end += len as usize;
+                }
+                _ => break,
+            }
+        }
+
+        return unclipped_end;
+    }
 }
 
 impl Hash for BirdToolRead {
@@ -117,11 +208,12 @@ impl Locatable for BirdToolRead {
     }
 
     fn get_start(&self) -> usize {
-        self.read.reference_start() as usize
+        self.read.pos() as usize // because it is 0-based whereas SimpleInterval should be 1-based?
     }
 
     fn get_end(&self) -> usize {
-        self.read.reference_end() as usize
+        self.get_start() + CigarUtils::get_reference_length(self.read.cigar().deref()) as usize - 1
+        // because it is 0-based whereas SimpleInterval should be 1-based?
     }
 }
 

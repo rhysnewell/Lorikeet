@@ -15,6 +15,7 @@ pub mod read_threading;
 pub mod reads;
 pub mod reference;
 pub mod smith_waterman;
+pub mod test_utils;
 pub mod utils;
 
 // HTS and bio files

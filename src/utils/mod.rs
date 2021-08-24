@@ -1,3 +1,4 @@
+pub mod artificial_read_utils;
 pub mod base_utils;
 pub mod dirichlet;
 pub mod errors;

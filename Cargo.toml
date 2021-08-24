@@ -21,6 +21,7 @@ default-run = "lorikeet"
 #cargo-features = ["resolver"]
 
 [dependencies]
+approx = "0.5.0"
 ansi_term = "0.12.1"
 bio = "0.35"
 bio-types = "0.12.0"
@@ -49,6 +50,7 @@ mathru = "0.9.1"
 multimap = "0.8.3"
 ndarray-npy = "0.8.0"
 ndarray = {version = "0.15.3", features = ["rayon"]}
+needletail = "0.4.1"
 nix = "0.13"
 num = "0.4.0"
 ordered-float = "1"

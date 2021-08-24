@@ -178,10 +178,15 @@ impl NearbyKmerErrorCorrector {
         {
             // pass
         } else {
-            let read_bases = read.read.seq().encoded;
+            // TODO: Change KMER to be a refernce to a sequence to avoid cloning
+            let read_bases = read.read.seq();
             for offset in 0..(read_bases.len() - self.kmer_length) {
                 self.counts_by_kmer.add_kmer(
-                    Kmer::new_with_start_and_length(read_bases.to_vec(), offset, self.kmer_length),
+                    Kmer::new_with_start_and_length(
+                        read_bases.as_bytes(),
+                        offset,
+                        self.kmer_length,
+                    ),
                     1,
                 )
             }

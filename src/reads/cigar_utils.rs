@@ -105,33 +105,47 @@ impl CigarUtils {
                         } else {
                             start.checked_sub(element_start)
                         };
+
                         match unclipped_length {
                             None => {
                                 // Totally clipped
                                 if CigarUtils::cigar_consumes_read_bases(element) {
-                                    new_cigar.push(element.clone())
+                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                        &clipping_operator,
+                                        element.len(),
+                                    ))
                                 }
                             }
                             Some(unclipped_length) => {
-                                let clipped_length = len.checked_sub(unclipped_length).unwrap();
-                                if clip_left {
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                        &clipping_operator,
-                                        clipped_length,
-                                    ));
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                        element,
-                                        unclipped_length,
-                                    ));
+                                if unclipped_length == 0 {
+                                    // Totally clipped
+                                    if CigarUtils::cigar_consumes_read_bases(element) {
+                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                            &clipping_operator,
+                                            element.len(),
+                                        ))
+                                    }
                                 } else {
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                        element,
-                                        unclipped_length,
-                                    ));
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                        &clipping_operator,
-                                        clipped_length,
-                                    ));
+                                    let clipped_length = len.checked_sub(unclipped_length).unwrap();
+                                    if clip_left {
+                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                            &clipping_operator,
+                                            clipped_length,
+                                        ));
+                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                            element,
+                                            unclipped_length,
+                                        ));
+                                    } else {
+                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                            element,
+                                            unclipped_length,
+                                        ));
+                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
+                                            &clipping_operator,
+                                            clipped_length,
+                                        ));
+                                    }
                                 }
                             }
                         }
@@ -541,5 +555,72 @@ impl CigarUtils {
             Cigar::Match(_) | Cigar::Equal(_) | Cigar::Diff(_) => true,
             _ => false,
         }
+    }
+
+    /**
+     * A good Cigar object obeys the following rules:
+     *  - is valid as per SAM spec {@link Cigar#isValid(String, long)}.
+     *  - has no consecutive I/D elements
+     *  - does not start or end with deletions (with or without preceding clips).
+     */
+    pub fn is_good(c: &CigarString) -> bool {
+        return !Self::has_consecutive_indels(&c.0)
+            || Self::starts_or_ends_with_deletion_ignoring_clips(&c.0);
+    }
+
+    /**
+     * Checks if cigar has consecutive I/D elements.
+     */
+    pub fn has_consecutive_indels(elems: &Vec<Cigar>) -> bool {
+        let mut prev_indel = false;
+        for elem in elems {
+            match elem {
+                &Cigar::Ins(_) | &Cigar::Del(_) => {
+                    let is_indel = true;
+                    if prev_indel && is_indel {
+                        return true;
+                    };
+                    prev_indel = is_indel;
+                }
+                _ => {
+                    prev_indel = false;
+                }
+            };
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if cigar starts with a deletion (ignoring any clips at the beginning).
+     */
+    fn starts_or_ends_with_deletion_ignoring_clips(elems: &Vec<Cigar>) -> bool {
+        for left_side in vec![true, false] {
+            if left_side {
+                for elem in elems.iter() {
+                    match elem {
+                        &Cigar::Del(_) => return true,
+                        _ => {
+                            if !Self::is_clipping(elem) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else {
+                for elem in elems.iter().rev() {
+                    match elem {
+                        &Cigar::Del(_) => return true,
+                        _ => {
+                            if !Self::is_clipping(elem) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }

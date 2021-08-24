@@ -324,16 +324,25 @@ impl AssemblyRegion {
         self.reads.push(read);
     }
 
-    pub fn is_valid_read(final_read: &BirdToolRead, new_read: &BirdToolRead) -> bool {
-        return if final_read.get_contig() == new_read.get_contig() {
-            if new_read.get_start() >= final_read.get_start() {
-                true
-            } else {
-                false
+    pub fn is_valid_read(
+        final_read: Option<&BirdToolRead>,
+        new_read: &BirdToolRead,
+        contig: usize,
+    ) -> bool {
+        match final_read {
+            None => new_read.get_contig() == contig,
+            Some(final_read) => {
+                return if final_read.get_contig() == new_read.get_contig() {
+                    if new_read.get_start() >= final_read.get_start() {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
             }
-        } else {
-            false
-        };
+        }
     }
 
     /**
@@ -401,7 +410,7 @@ impl AssemblyRegion {
             genome_loc
         );
 
-        reference_reader.update_current_sequence_without_capcity();
+        reference_reader.update_current_sequence_without_capacity();
         // Update all contig information
         reference_reader.fetch_contig_from_reference_by_tid(self.tid, self.ref_idx);
         reference_reader.read_sequence_to_vec();
@@ -458,7 +467,7 @@ impl ParallelExtend<BirdToolRead> for AssemblyRegion {
     {
         let par_iter = par_iter
             .into_par_iter()
-            .filter(|read| Self::is_valid_read(&self.reads.last().unwrap(), &read))
+            .filter(|read| Self::is_valid_read(self.reads.last(), &read, self.tid))
             .collect::<Vec<BirdToolRead>>();
         self.reads.par_extend(par_iter.into_par_iter());
     }

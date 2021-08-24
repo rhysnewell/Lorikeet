@@ -135,7 +135,7 @@ impl SimpleInterval {
     pub fn expand_within_contig(&self, padding: usize, contig_length: usize) -> SimpleInterval {
         let mut start = self.get_start();
         if start < padding {
-            start = 0
+            start = 1
         } else {
             start = start - padding
         }
@@ -226,11 +226,11 @@ pub struct CoordMath {}
 
 impl CoordMath {
     pub fn get_length(start: usize, end: usize) -> usize {
-        return (end - start) + 1;
+        return ((end + 1).checked_sub(start).unwrap_or(0));
     }
 
     pub fn get_start(end: usize, length: usize) -> usize {
-        return (end - length) + 1;
+        return (end + 1).checked_sub(length).unwrap_or(0);
     }
 
     pub fn get_end(start: usize, length: usize) -> usize {
@@ -314,6 +314,10 @@ pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
         } else {
             usize::MAX
         }
+    }
+
+    fn get_length_on_reference(&self) -> usize {
+        return CoordMath::get_length(self.get_start(), self.get_end());
     }
 }
 

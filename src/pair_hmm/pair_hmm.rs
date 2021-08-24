@@ -5,6 +5,7 @@ use pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator
 use pair_hmm::pair_hmm_model::PairHMMModel;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
+use rust_htslib::bam::record::Seq;
 use utils::quality_utils::QualityUtils;
 
 lazy_static! {
@@ -140,7 +141,7 @@ impl PairHMM {
             let mut idx = 0;
             let mut read_index = 0;
             for read in processed_reads {
-                let read_bases = read.read.seq().encoded;
+                let read_bases = read.read.seq();
                 let read_quals = read.read.qual();
                 let read_ins_quals = input_score_imputator.ins_open_penalties(&read);
                 let read_del_quals = input_score_imputator.del_open_penalties(&read);
@@ -202,7 +203,7 @@ impl PairHMM {
     fn compute_read_likelihood_given_haplotype_log10(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: &[u8],
+        read_bases: Seq,
         read_quals: &[u8],
         insertion_gop: &[u8],
         deletion_gop: &[u8],
@@ -298,7 +299,7 @@ impl PairHMM {
     pub fn sub_compute_read_likelihood_given_haplotype_log10(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: &[u8],
+        read_bases: Seq,
         read_quals: &[u8],
         insertion_gop: &[u8],
         deletion_gop: &[u8],
@@ -396,7 +397,7 @@ impl PairHMM {
     fn initialize_priors(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: &[u8],
+        read_bases: Seq,
         read_quals: &[u8],
         start_index: usize,
     ) {
