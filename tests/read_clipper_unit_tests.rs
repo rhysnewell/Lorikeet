@@ -236,7 +236,6 @@ fn test_hard_clip_soft_clipped_bases() {
         let clipped_read = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
 
         if !clipped_read.is_empty() {
-            println!("Made it inside");
             let original = CigarCounter::new(&read);
             let clipped = CigarCounter::new(&clipped_read);
 
