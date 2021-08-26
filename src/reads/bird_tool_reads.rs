@@ -74,6 +74,21 @@ impl BirdToolRead {
         return start.try_into();
     }
 
+    pub fn get_soft_start_i64(&self) -> i64 {
+        let mut start = self.get_start() as i64;
+        // let new_start = start.checked_sub(self.read.cigar().leading_softclips() as usize);
+        for cig in self.read.cigar().iter() {
+            match cig {
+                &Cigar::SoftClip(len) => {
+                    start -= len as i64;
+                }
+                &Cigar::HardClip(_) => continue,
+                _ => break,
+            }
+        }
+        return start;
+    }
+
     /**
      * Calculates the reference coordinate for the end of the read taking into account soft clips but not hard clips.
      *
@@ -212,8 +227,15 @@ impl Locatable for BirdToolRead {
     }
 
     fn get_end(&self) -> usize {
-        self.get_start() + CigarUtils::get_reference_length(self.read.cigar().deref()) as usize - 1
+        self.get_start()
+            + (CigarUtils::get_reference_length(self.read.cigar().deref()) as usize)
+                .checked_sub(1)
+                .unwrap_or(0)
         // because it is 0-based whereas SimpleInterval should be 1-based?
+    }
+
+    fn get_length_on_reference(&self) -> usize {
+        CigarUtils::get_reference_length(self.read.cigar().deref()) as usize
     }
 }
 

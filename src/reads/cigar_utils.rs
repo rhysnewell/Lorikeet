@@ -1,5 +1,6 @@
 use rayon::prelude::*;
 use reads::alignment_utils::AlignmentUtils;
+use reads::cigar_builder::CigarBuilder;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
@@ -68,13 +69,13 @@ impl CigarUtils {
     ) -> CigarString {
         let clip_left = start == 0;
 
-        let mut new_cigar = Vec::new();
+        let mut new_cigar = CigarBuilder::new(true);
 
         let mut element_start = 0;
         for element in cigar.iter() {
             match element {
                 // copy hard clips
-                Cigar::HardClip(len) => new_cigar.push(Cigar::HardClip(*len)),
+                Cigar::HardClip(len) => new_cigar.add(Cigar::HardClip(*len)).unwrap(),
                 Cigar::SoftClip(len)
                 | Cigar::Diff(len)
                 | Cigar::Equal(len)
@@ -96,7 +97,7 @@ impl CigarUtils {
                         if CigarUtils::cigar_consumes_read_bases(element)
                             || (element_start != start && element_start != stop)
                         {
-                            new_cigar.push(element.clone())
+                            new_cigar.add(element.clone()).unwrap()
                         }
                     } else {
                         // otherwise, some or all of the element is soft-clipped
@@ -110,41 +111,53 @@ impl CigarUtils {
                             None => {
                                 // Totally clipped
                                 if CigarUtils::cigar_consumes_read_bases(element) {
-                                    new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                        &clipping_operator,
-                                        element.len(),
-                                    ))
+                                    new_cigar
+                                        .add(CigarUtils::cigar_from_element_and_length(
+                                            &clipping_operator,
+                                            element.len(),
+                                        ))
+                                        .unwrap()
                                 }
                             }
                             Some(unclipped_length) => {
                                 if unclipped_length == 0 {
                                     // Totally clipped
                                     if CigarUtils::cigar_consumes_read_bases(element) {
-                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                            &clipping_operator,
-                                            element.len(),
-                                        ))
+                                        new_cigar
+                                            .add(CigarUtils::cigar_from_element_and_length(
+                                                &clipping_operator,
+                                                element.len(),
+                                            ))
+                                            .unwrap()
                                     }
                                 } else {
                                     let clipped_length = len.checked_sub(unclipped_length).unwrap();
                                     if clip_left {
-                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                            &clipping_operator,
-                                            clipped_length,
-                                        ));
-                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                            element,
-                                            unclipped_length,
-                                        ));
+                                        new_cigar
+                                            .add(CigarUtils::cigar_from_element_and_length(
+                                                &clipping_operator,
+                                                clipped_length,
+                                            ))
+                                            .unwrap();
+                                        new_cigar
+                                            .add(CigarUtils::cigar_from_element_and_length(
+                                                element,
+                                                unclipped_length,
+                                            ))
+                                            .unwrap();
                                     } else {
-                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                            element,
-                                            unclipped_length,
-                                        ));
-                                        new_cigar.push(CigarUtils::cigar_from_element_and_length(
-                                            &clipping_operator,
-                                            clipped_length,
-                                        ));
+                                        new_cigar
+                                            .add(CigarUtils::cigar_from_element_and_length(
+                                                element,
+                                                unclipped_length,
+                                            ))
+                                            .unwrap();
+                                        new_cigar
+                                            .add(CigarUtils::cigar_from_element_and_length(
+                                                &clipping_operator,
+                                                clipped_length,
+                                            ))
+                                            .unwrap();
                                     }
                                 }
                             }
@@ -154,7 +167,7 @@ impl CigarUtils {
                 }
             }
         }
-        return CigarString(new_cigar);
+        return new_cigar.make(false).unwrap();
     }
 
     /**
@@ -162,17 +175,19 @@ impl CigarUtils {
      * merging consecutive identical operators and removing zero-length elements.  For example 10S10M -> 20M and 10S10M10I10I -> 20M20I.
      */
     pub fn revert_soft_clips(cigar: &CigarStringView) -> CigarString {
-        let mut builder = Vec::new();
+        let mut builder = CigarBuilder::new(true);
         for element in cigar.iter() {
             match element {
-                Cigar::SoftClip(length) => builder.push(CigarUtils::cigar_from_element_and_length(
-                    &Cigar::Match(0),
-                    *length,
-                )),
-                _ => builder.push(element.clone()),
+                Cigar::SoftClip(length) => builder
+                    .add(CigarUtils::cigar_from_element_and_length(
+                        &Cigar::Match(0),
+                        *length,
+                    ))
+                    .unwrap(),
+                _ => builder.add(element.clone()).unwrap(),
             }
         }
-        CigarString::from(builder)
+        return builder.make(false).unwrap();
     }
 
     /**
@@ -218,6 +233,7 @@ impl CigarUtils {
                         } else {
                             0
                         };
+                        break;
                     }
                     element_start = element_end;
                 }
@@ -564,8 +580,8 @@ impl CigarUtils {
      *  - does not start or end with deletions (with or without preceding clips).
      */
     pub fn is_good(c: &CigarString) -> bool {
-        return !Self::has_consecutive_indels(&c.0)
-            || Self::starts_or_ends_with_deletion_ignoring_clips(&c.0);
+        return !(Self::has_consecutive_indels(&c.0)
+            || Self::starts_or_ends_with_deletion_ignoring_clips(&c.0));
     }
 
     /**

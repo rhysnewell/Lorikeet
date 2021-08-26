@@ -28,7 +28,7 @@ enum Section {
  * All of this is achieved simply by invoking add() repeatedly, followed by make().
  */
 pub struct CigarBuilder {
-    cigar_elements: Vec<Cigar>,
+    pub cigar_elements: Vec<Cigar>,
     // track the last operator so we can merge consecutive elements with the same operator
     // for example, adding 3M and 4M is equivalent to adding 7M
     // also we ignore leading deletions so for example 10S + 5D = 10S

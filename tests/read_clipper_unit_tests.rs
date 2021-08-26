@@ -1,3 +1,11 @@
+#![allow(
+    non_upper_case_globals,
+    unused_parens,
+    unused_mut,
+    unused_imports,
+    non_snake_case
+)]
+
 extern crate lorikeet_genome;
 extern crate rust_htslib;
 
@@ -7,7 +15,7 @@ use lorikeet_genome::reads::read_clipper::ReadClipper;
 use lorikeet_genome::test_utils::read_clipper_test_utils::ReadClipperTestUtils;
 use lorikeet_genome::utils::simple_interval::Locatable;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, CigarString};
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -50,18 +58,26 @@ fn test_hard_clip_both_ends_by_reference() {
                 );
             assert!(
                 clipped_read.get_start() >= (aln_start + i) as usize,
-                "Clipped alignment is less than original read (minus {}): {:?} -> {:?}",
+                "Clipped alignment is less than original read (minus {}): {:?} -> {:?} {} > {}",
                 i,
                 read.read.cigar().to_string(),
-                clipped_read.read.cigar().to_string()
+                clipped_read.read.cigar().to_string(),
+                aln_start + 1,
+                clipped_read.get_start()
             );
             assert!(
                 clipped_read.get_end() <= (aln_end - i) as usize,
-                "Clipped alignment is greater than original read (minus {}): {:?} -> {:?}",
+                "Clipped alignment is greater than original read (minus {}): {:?} -> {:?} {} < {}, start {} ref length {} original ref length {}",
                 i,
                 read.read.cigar().to_string(),
-                clipped_read.read.cigar().to_string()
+                clipped_read.read.cigar().to_string(),
+                aln_end + i,
+                clipped_read.get_end(),
+                clipped_read.get_start(),
+                CigarUtils::get_reference_length(clipped_read.read.cigar().deref()),
+                CigarUtils::get_reference_length(read.read.cigar().deref())
             );
+            // assert_unclipped_limits(&read, &clipped_read);
         }
     }
 }
@@ -74,13 +90,13 @@ fn test_hard_clip_by_reference_coordinates() {
         let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
         let start = read.get_soft_start().unwrap_or(0);
         let stop = read.get_soft_end();
-
         for i in start..=stop {
             let clip_left =
                 ReadClipper::new(&read).hard_clip_by_reference_coordinates(None, Some(i));
+
             if !clip_left.is_empty() {
                 assert!(
-                    clip_left.get_start() >= min(read.get_end(), i + 1),
+                    clip_left.get_start() >= min(read.get_end(), i),
                     "Clipped alignment start ({}) is less the expected ({}): {} -> {}",
                     clip_left.get_start(),
                     min(read.get_end(), i + 1),
@@ -96,7 +112,7 @@ fn test_hard_clip_by_reference_coordinates() {
             if !clip_right.is_empty() && clip_right.get_start() <= clip_right.get_end() {
                 // alnStart > alnEnd if the entire read is a soft clip now. We can't test those.
                 assert!(
-                    clip_right.get_end() <= max(read.get_start(), i - 1),
+                    clip_right.get_end() <= max(read.get_start(), i),
                     "Clipped alignment end ({}) is greater than expected ({}): {} -> {}",
                     clip_right.get_end(),
                     max(read.get_start(), i - 1),
@@ -124,10 +140,10 @@ fn test_hard_clip_by_reference_coordinates_left_tail() {
                     ReadClipper::new(&read).hard_clip_by_reference_coordinates(None, Some(i));
                 if !clip_left.is_empty() {
                     assert!(
-                        clip_left.get_start() >= i + 1,
+                        clip_left.get_start() >= i,
                         "Clipped alignment start ({}) is less the expected ({}): {} -> {}",
                         clip_left.get_start(),
-                        i + 1,
+                        i,
                         read.read.cigar().to_string(),
                         clip_left.read.cigar().to_string()
                     );
@@ -153,7 +169,7 @@ fn test_hard_clip_by_reference_coordinates_right_tail() {
                     ReadClipper::new(&read).hard_clip_by_reference_coordinates(Some(i), None);
                 if !clip_right.is_empty() && clip_right.get_start() <= clip_right.get_end() {
                     assert!(
-                        clip_right.get_end() <= i - 1,
+                        clip_right.get_end() <= i,
                         "Clipped alignment end ({}) is greater than the expected ({}): {} -> {}",
                         clip_right.get_start(),
                         i - 1,
@@ -245,6 +261,126 @@ fn test_hard_clip_soft_clipped_bases() {
     }
 }
 
+#[test]
+fn test_revert_soft_clipped_bases() {
+    // create a read for every cigar permutation
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+
+    for cigar in read_clipper_unit_test.cigar_list {
+        let leading_soft_clips = leading_cigar_element_length(&cigar, Some(Cigar::SoftClip(0)));
+        let tail_soft_clips = leading_cigar_element_length(
+            &CigarString(cigar.0.iter().cloned().rev().collect::<Vec<Cigar>>()),
+            Some(Cigar::SoftClip(0)),
+        );
+        let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
+        let unclipped = ReadClipper::new(&read).revert_soft_clipped_bases();
+
+        assert_unclipped_limits(&read, &unclipped);
+
+        if leading_soft_clips > 0 || tail_soft_clips > 0 {
+            let expected_start = read.get_start() as i64 - leading_soft_clips as i64;
+            let expected_end = read.get_end() + tail_soft_clips as usize;
+            assert_eq!(unclipped.get_start() as i64, expected_start);
+            assert_eq!(
+                unclipped.get_end(),
+                expected_end,
+                "{} -> {}",
+                read.read.cigar().to_string(),
+                unclipped.read.cigar().to_string()
+            );
+        } else {
+            assert_eq!(
+                read.read.cigar().to_string(),
+                unclipped.read.cigar().to_string()
+            );
+        }
+    }
+}
+
+#[test]
+fn test_revert_entirely_soft_clipped_reads() {
+    let read = ReadClipperTestUtils::make_read_from_str("2H1S3H", 0);
+    let clipped_read = ReadClipper::new(&read).revert_soft_clipped_bases();
+
+    assert_eq!(clipped_read.get_start(), read.get_soft_start().unwrap());
+}
+
+#[test]
+fn test_soft_clip_both_ends_by_reference_coordinates() {
+    // create a read for every cigar permutation
+    let mut read_clipper_unit_test = ReadClipperUnitTest::new();
+
+    for cigar in read_clipper_unit_test.cigar_list {
+        let read = ReadClipperTestUtils::make_read_from_cigar(cigar, 0);
+        let aln_start = read.get_start() as i64;
+        let aln_end = read.get_end() as i64;
+        let read_length = aln_start - aln_end;
+        for i in (read_length / 2) + 1..=0 {
+            let clipped_read = ReadClipper::new(&read)
+                .soft_clip_both_ends_by_reference_coordinates(
+                    (aln_start + i) as usize,
+                    (aln_end - i) as usize,
+                );
+            assert!(
+                clipped_read.get_start() >= (aln_start + i) as usize,
+                "Clipped alignment is less than original read (minus {}): {:?} -> {:?}",
+                i,
+                read.read.cigar().to_string(),
+                clipped_read.read.cigar().to_string()
+            );
+            assert!(
+                clipped_read.get_end() <= (aln_end - i) as usize,
+                "Clipped alignment is greater than original read (minus {}): {:?} -> {:?}",
+                i,
+                read.read.cigar().to_string(),
+                clipped_read.read.cigar().to_string()
+            );
+            // assert_unclipped_limits(&read, &clipped_read);
+        }
+    }
+}
+
+#[test]
+fn make_revert_soft_clips_before_contig() {
+    for soft_start in vec![-10, -1, 0] {
+        for alignment_start in vec![1, 10] {
+            test_revert_soft_clipped_bases_before_start_of_contig(soft_start, alignment_start)
+        }
+    }
+}
+
+fn test_revert_soft_clipped_bases_before_start_of_contig(soft_start: i64, alignment_start: i64) {
+    let n_matches = 10;
+    let n_soft = -1 * (soft_start - alignment_start);
+    let cigar = format!("{}S{}M", n_soft, n_matches);
+    let mut read = ReadClipperTestUtils::make_read_from_str(cigar.as_str(), 0);
+    read.read.set_pos(alignment_start);
+    assert_eq!(read.get_soft_start_i64(), soft_start);
+    assert_eq!(read.get_start() as i64, alignment_start);
+    assert_eq!(read.read.cigar().to_string(), cigar);
+
+    let reverted = ReadClipper::new(&read).revert_soft_clipped_bases();
+    let expected_alignment_start = 0;
+    let expected_cigar = format!("{}H{}M", 1 - soft_start, read.get_end());
+    assert_eq!(reverted.get_soft_start_i64(), expected_alignment_start);
+    assert_eq!(reverted.get_start() as i64, expected_alignment_start);
+    assert_eq!(reverted.read.cigar().to_string(), expected_cigar);
+}
+
+fn leading_cigar_element_length(cigar: &CigarString, operator: Option<Cigar>) -> u32 {
+    for cigar_element in cigar.iter() {
+        if CigarUtils::cigar_elements_are_same_type(cigar_element, &operator) {
+            return cigar_element.len();
+        }
+
+        match cigar_element {
+            Cigar::HardClip(_) => continue,
+            _ => return 0,
+        }
+    }
+    return 0;
+}
+
 fn assert_no_low_qual_bases(read: &BirdToolRead, low_qual: u8) {
     if !read.is_empty() {
         let quals = read.read.qual();
@@ -275,9 +411,18 @@ fn assert_unclipped_limits(original: &BirdToolRead, clipped: &BirdToolRead) {
     {
         assert_eq!(
             original.get_unclipped_start(),
-            clipped.get_unclipped_start()
+            clipped.get_unclipped_start(),
+            "Unclipped start locations did not match {} -> {}",
+            original.read.cigar().to_string(),
+            clipped.read.cigar().to_string()
         );
-        assert_eq!(original.get_unclipped_end(), clipped.get_unclipped_end());
+        assert_eq!(
+            original.get_unclipped_end(),
+            clipped.get_unclipped_end(),
+            "Unclipped end locations did not match {} -> {}",
+            original.read.cigar().to_string(),
+            clipped.read.cigar().to_string()
+        );
     }
 }
 
@@ -295,7 +440,15 @@ fn assert_ref_alignment_consistent(clipped_read: &BirdToolRead) {
         clipped_read.get_length_on_reference()
     };
 
-    assert_eq!(cigar_ref_length, read_ref_length as u32);
+    assert_eq!(
+        cigar_ref_length,
+        read_ref_length as u32,
+        "cigar {}, start {} end {} unmapped? {}",
+        clipped_read.read.cigar().to_string(),
+        clipped_read.get_start(),
+        clipped_read.get_end(),
+        clipped_read.read.is_unmapped()
+    );
 }
 
 /**

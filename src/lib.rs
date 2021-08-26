@@ -1,3 +1,11 @@
+#![allow(
+    non_upper_case_globals,
+    unused_parens,
+    unused_mut,
+    unused_imports,
+    non_snake_case,
+    unused
+)]
 pub mod activity_profile;
 pub mod annotator;
 pub mod assembly;

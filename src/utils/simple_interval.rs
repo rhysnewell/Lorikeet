@@ -230,7 +230,7 @@ impl CoordMath {
     }
 
     pub fn get_start(end: usize, length: usize) -> usize {
-        return (end + 1).checked_sub(length).unwrap_or(0);
+        return (end).checked_sub(length).unwrap_or(0);
     }
 
     pub fn get_end(start: usize, length: usize) -> usize {

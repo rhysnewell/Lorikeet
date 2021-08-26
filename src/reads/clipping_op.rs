@@ -1,3 +1,4 @@
+use bio_types::sequence::SequenceRead;
 use num::traits::AsPrimitive;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
@@ -19,7 +20,7 @@ impl ClippingOp {
     }
 
     pub fn get_length(&self) -> usize {
-        self.stop.checked_sub(self.start).unwrap_or(0) + 1
+        (self.stop + 1).checked_sub(self.start).unwrap_or(0)
     }
 
     /**
@@ -62,7 +63,8 @@ impl ClippingOp {
             "ReadClipper cannot soft clip unmapped reads"
         );
 
-        if read.read.seq_len() <= 2 {
+        let new_length = read.len() - (self.stop - self.start + 1);
+        if read.read.seq_len() <= 2 || new_length == 0 {
             // pass
         } else {
             let stop = std::cmp::min(self.stop, self.start + read.read.seq_len() - 2);
@@ -86,23 +88,20 @@ impl ClippingOp {
                 .set(&qname[..], Some(&new_cigar), &bases[..], &quals[..]);
 
             let alignment_start_shift = if self.start == 0 {
-                CigarUtils::alignment_start_shift(&old_cigar, (stop + 1) as i64)
+                CigarUtils::alignment_start_shift(&old_cigar, (self.stop + 1) as i64)
             } else {
                 0
             };
             let new_start = read.get_start() as i64 + alignment_start_shift;
 
-            read.read.set_pos(new_start - 1);
+            read.read.set_pos(new_start);
         }
     }
 
     fn apply_revert_soft_clipped_bases(&self, read: &mut BirdToolRead) {
         if read.read.cigar().is_empty()
-            || !(((read.read.cigar().leading_hardclips() + read.read.cigar().leading_softclips())
-                > 0)
-                || (read.read.cigar().trailing_hardclips()
-                    + read.read.cigar().trailing_softclips()
-                    > 0))
+            || !(CigarUtils::is_clipping(read.read.cigar().first().unwrap())
+                || CigarUtils::is_clipping(read.read.cigar().last().unwrap()))
         {
             // pass
         } else {
@@ -110,39 +109,32 @@ impl ClippingOp {
             let qname = read.read.qname().to_vec();
             let bases = read.read.seq().as_bytes();
             let quals = read.read.qual().to_vec();
+            let new_start = read.get_soft_start_i64();
 
             read.read
                 .set(&qname[..], Some(&unclipped_cigar), &bases[..], &quals[..]);
 
-            let new_start = read.get_soft_start();
+            if new_start <= 0 {
+                // if the start of the unclipped read occurs before the contig,
+                // we must hard clip away the bases since we cannot represent reads with
+                // negative or 0 alignment start values in the SAMRecord (e.g., 0 means unaligned)
 
-            match new_start {
-                Err(_) => {
-                    // if the start of the unclipped read occurs before the contig,
-                    // we must hard clip away the bases since we cannot represent reads with
-                    // negative or 0 alignment start values in the SAMRecord (e.g., 0 means unaligned)
+                // We cannot set the read to temporarily have a negative start position, as our Read
+                // interface will not allow it. Instead, since we know that the final start position will
+                // be 0 after the hard clip operation, set it to 0 explicitly. We have to set it twice:
+                // once before the hard clip (to reset the alignment stop / read length in read implementations
+                // that cache these values, such as SAMRecord), and again after the hard clip.
 
-                    // We cannot set the read to temporarily have a negative start position, as our Read
-                    // interface will not allow it. Instead, since we know that the final start position will
-                    // be 0 after the hard clip operation, set it to 0 explicitly. We have to set it twice:
-                    // once before the hard clip (to reset the alignment stop / read length in read implementations
-                    // that cache these values, such as SAMRecord), and again after the hard clip.
-                    let new_start =
-                        (read.get_start() as i64) - (read.read.cigar().leading_softclips() as i64);
+                read.read.set_pos(0);
+                ClippingOp::apply_hard_clip_bases(read, 0, -new_start as usize);
 
-                    let new_end = if new_start < 0 { -new_start } else { 0 };
+                // Reset the position to 0 again only if we didn't end up with an empty, unmapped read after hard clipping.
+                // See https://github.com/broadinstitute/gatk/issues/3845
+                if !read.read.is_unmapped() {
                     read.read.set_pos(0);
-                    ClippingOp::apply_hard_clip_bases(read, 0, new_end as usize);
-
-                    // Reset the position to 1 again only if we didn't end up with an empty, unmapped read after hard clipping.
-                    // See https://github.com/broadinstitute/gatk/issues/3845
-                    if !read.read.is_unmapped() {
-                        read.read.set_pos(0);
-                    }
                 }
-                Ok(new_start) => {
-                    read.read.set_pos(new_start as i64);
-                }
+            } else {
+                read.read.set_pos(new_start as i64);
             }
         }
     }
