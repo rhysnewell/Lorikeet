@@ -23,7 +23,9 @@ use std::convert::TryFrom;
 fn test_simple_concatenation(cigar_element_strings: Vec<&str>) {
     let mut builder = CigarBuilder::new(true);
     for element_str in cigar_element_strings.iter() {
-        builder.add(CigarString::try_from(*element_str).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(*element_str).unwrap().0[0])
+            .unwrap();
     }
 
     let expected = cigar_element_strings.join("");
@@ -64,7 +66,9 @@ fn cigar_algebra() {
 fn test_initial_and_final_deletion(cigar_elements_strings: Vec<&str>, expected: &str) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(element_string).unwrap().0[0])
+            .unwrap();
     }
 
     assert_eq!(
@@ -91,7 +95,9 @@ fn initial_and_final_deletion() {
 fn test_retain_deletions(cigar_elements_strings: Vec<&str>, expected: &str) {
     let mut builder = CigarBuilder::new(false);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(element_string).unwrap().0[0])
+            .unwrap();
     }
 
     assert_eq!(
@@ -209,7 +215,9 @@ fn test_removed_deletions(
 ) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(element_string).unwrap().0[0])
+            .unwrap();
     }
 
     builder.make(false);
@@ -258,13 +266,17 @@ fn test_removed_deletions_two_makes(
 ) {
     let mut builder = CigarBuilder::new(true);
     for element_string in cigar_elements_strings1 {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(element_string).unwrap().0[0])
+            .unwrap();
     }
 
     builder.make(false);
 
     for element_string in cigar_elements_strings2 {
-        builder.add(CigarString::try_from(element_string).unwrap().0[0]);
+        builder
+            .add(CigarString::try_from(element_string).unwrap().0[0])
+            .unwrap();
     }
 
     builder.make(false);

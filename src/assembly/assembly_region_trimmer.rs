@@ -188,7 +188,8 @@ impl AssemblyRegionTrimmer {
             .expand_within_contig(self.max_extension_into_region_padding, target_length);
         let final_span = maximum_span
             .intersect(&ideal_span)
-            .merge_with_contiguous(variant_span.as_ref().unwrap());
+            .merge_with_contiguous(variant_span.as_ref().unwrap())
+            .unwrap();
 
         //      TODO disable this code with ERC
         //        // Make double sure that, if we are emitting GVCF we won't call non-variable positions beyond the target active region span.

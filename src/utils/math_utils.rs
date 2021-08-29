@@ -117,7 +117,7 @@ impl MathUtils {
     }
 
     pub fn log10_factorial(n: f64) -> f64 {
-        ln_gamma(n) * *LOG10_E
+        ln_gamma(n + 1.0) * *LOG10_E
     }
 
     /**

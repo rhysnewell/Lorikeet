@@ -1,6 +1,7 @@
 use std::cmp::{max, min, Ordering};
 use std::fmt::Debug;
 use std::hash::Hash;
+use utils::errors::BirdToolError;
 use utils::interval_utils::IntervalUtils;
 
 /**
@@ -50,8 +51,8 @@ impl SimpleInterval {
      *
      * @return true iff this.getContig().equals(other.getContig())
      */
-    pub fn contigs_match(&self, other: &SimpleInterval) -> bool {
-        self.get_contig() == other.get_contig()
+    pub fn contigs_match<L: Locatable>(&self, other: &L) -> bool {
+        self.get_contig() == other.tid() as usize
     }
 
     /**
@@ -166,19 +167,19 @@ impl SimpleInterval {
      * Returns a new SimpleInterval that represents the entire span of this and that.  Requires that
      * this and that SimpleInterval are contiguous.
      */
-    pub fn merge_with_contiguous(&self, that: &Self) -> SimpleInterval {
+    pub fn merge_with_contiguous(&self, that: &Self) -> Result<SimpleInterval, BirdToolError> {
         if !self.contiguous(that) {
-            panic!(
+            return Err(BirdToolError::NonContiguousIntervals(format!(
                 "The two intervals need to be contiguous: {:?} {:?}",
                 &self, that
-            )
+            )));
         };
 
-        return SimpleInterval::new(
+        return Ok(SimpleInterval::new(
             self.get_contig(),
             min(self.get_start(), that.get_start()),
             max(self.get_end(), that.get_end()),
-        );
+        ));
     }
 
     fn contiguous(&self, that: &Self) -> bool {
@@ -196,10 +197,10 @@ impl SimpleInterval {
      * @return true if this interval overlaps other, otherwise false
      * @throws IllegalArgumentException if margin is negative
      */
-    pub fn overlaps_with_margin(&self, other: &Self, margin: usize) -> bool {
+    pub fn overlaps_with_margin<L: Locatable>(&self, other: &L, margin: usize) -> bool {
         self.contigs_match(other)
-            && self.start <= other.end + margin
-            && other.start.checked_sub(margin).unwrap_or(0) <= self.end
+            && self.start <= other.get_end() + margin
+            && other.get_start().checked_sub(margin).unwrap_or(0) <= self.end
     }
 }
 
@@ -332,5 +333,9 @@ impl Locatable for SimpleInterval {
 
     fn get_end(&self) -> usize {
         self.end
+    }
+
+    fn overlaps<L: Locatable>(&self, other: &L) -> bool {
+        self.overlaps_with_margin(other, 0)
     }
 }

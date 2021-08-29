@@ -48,13 +48,13 @@ fn test_finalize_region() {
     let org_read2 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t163\t1\t42596891\t39\t101M\t=\t42596803\t7\tCTCGAATGGAATCATTTTCTACTGGAAAGGAATGGAATCATCGCATAGAATCGAATGGAATTAACATGGAATGGAATCGAATGTAATCATCATCAAATGGA\t>@>:ABCDECCCEDCBBBDDBDDEBCCBEBBCBEBCBCDDCD>DECBGCDCF>CCCFCDDCBABDEDFCDCDFFDDDG?DDEGDDFDHFEGDDGECB@BAA".as_bytes()).unwrap();
 
     // let org_read1 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "ali1\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tFFFF".as_bytes()).unwrap();
-    println!(
-        "Seq {:?}, len {}, quals {:?} qual len {}",
-        org_read1.seq().as_bytes(),
-        org_read1.seq().len(),
-        org_read1.qual(),
-        org_read1.qual().len()
-    );
+    // println!(
+    //     "Seq {:?}, len {}, quals {:?} qual len {}",
+    //     org_read1.seq().as_bytes(),
+    //     org_read1.seq().len(),
+    //     org_read1.qual(),
+    //     org_read1.qual().len()
+    // );
     // println!("Seq {:?}, len {}, quals {:?} qual len {}", org_read2.seq(), org_read2.seq().len(), org_read2.qual(), org_read2.qual().len());
 
     let mut reads = vec![

@@ -1,15 +1,16 @@
 use model::byte_array_allele::ByteArrayAllele;
 use rayon::prelude::*;
+use std::cmp::Ordering;
 /**
 The following code is adapted from the broadinstitute GATK HaplotypeCaller program
 */
 use utils::math_utils::MathUtils;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GenotypeAlleleCounts {
     ploidy: usize,
     distinct_allele_count: usize,
-    pub(crate) sorted_allele_counts: Vec<usize>,
+    pub sorted_allele_counts: Vec<usize>,
     index: usize,
     log10_combination_count: f64,
 }
@@ -169,7 +170,9 @@ impl GenotypeAlleleCounts {
             self.log10_combination_count = MathUtils::log10_factorial(self.ploidy as f64) as f64
                 - (0..self.distinct_allele_count)
                     .into_par_iter()
-                    .map(|i| self.sorted_allele_counts[i] as f64)
+                    .map(|i| {
+                        MathUtils::log10_factorial(self.sorted_allele_counts[2 * i + 1] as f64)
+                    })
                     .sum::<f64>()
         }
         return self.log10_combination_count;
@@ -258,23 +261,31 @@ impl GenotypeAlleleCounts {
                     // The rest of the sorted allele counts array contains junk
                     let sorted_allele_counts_length = self.distinct_allele_count << 1;
                     if freq0 == 1 {
-                        // in this case allele0 wont be present in the result and all is frequency should go to allele0 + 1.
-                        let previous_counts = self.sorted_allele_counts
-                            [0..((sorted_allele_counts_length - 2) as usize)]
-                            .to_vec();
-                        self.sorted_allele_counts[0..((sorted_allele_counts_length - 2) as usize)]
-                            .par_iter_mut()
-                            .zip(previous_counts.par_iter())
-                            .for_each(|(count, old_count)| *count = *old_count);
-                        self.sorted_allele_counts[1] += 1;
-                        self.distinct_allele_count -= 1;
+                        if allele0_and_1_are_consecutive {
+                            // in this case allele0 wont be present in the result and all is frequency should go to allele0 + 1.
+                            let previous_counts = self.sorted_allele_counts
+                                [2..2 + ((sorted_allele_counts_length - 2) as usize)]
+                                .to_vec();
+                            // self.sorted_allele_counts[0..((sorted_allele_counts_length - 2) as usize)]
+                            //     .par_iter_mut()
+                            //     .zip(previous_counts.par_iter())
+                            //     .for_each(|(count, old_count)| *count = *old_count);
+                            self.sorted_allele_counts = previous_counts;
+                            self.sorted_allele_counts[1] += 1;
+                            self.distinct_allele_count -= 1;
+                        } else {
+                            // just need to mutate allele0 to allele0 + 1.
+                            self.sorted_allele_counts[0] = allele0_plus1;
+                        }
                     } else {
+                        // && freq0 > 1 as per sortedAlleleCounts format restrictions. In this case allele0 will mutated to '0' with frequency decreased by 1.
                         if allele0_and_1_are_consecutive {
                             // we don't need to add a component for allele0 + 1 since it already exists.
                             self.sorted_allele_counts[0] = 0;
                             self.sorted_allele_counts[1] = freq0 - 1;
                             self.sorted_allele_counts[3] += 1;
                         } else {
+                            // we need to insert allele0 + 1 in the sorted-allele-counts array and give it frequency 1.
                             // we need to insert allele0 + 1 in the sorted-allele-counts array and give it frequency 1.
                             if self.sorted_allele_counts.len()
                                 < (sorted_allele_counts_length + 2) as usize
@@ -284,10 +295,10 @@ impl GenotypeAlleleCounts {
                                     .resize((sorted_allele_counts_length + 2) as usize, 0)
                             }
                             let previous_counts = self.sorted_allele_counts
-                                [2..((sorted_allele_counts_length - 2) as usize)]
+                                [2..2 + ((sorted_allele_counts_length - 2) as usize)]
                                 .to_vec();
                             self.sorted_allele_counts
-                                [4..((sorted_allele_counts_length - 2) as usize)]
+                                [4..4 + ((sorted_allele_counts_length - 2) as usize)]
                                 .par_iter_mut()
                                 .zip(previous_counts.par_iter())
                                 .for_each(|(count, old_count)| *count = *old_count);
@@ -352,6 +363,7 @@ impl GenotypeAlleleCounts {
                 new_sorted_allele_counts[0] = allele0_plus1;
             }
         } else {
+            // && freq0 > 1 as per sortedAlleleCounts format restrictions. In this case allele0 will mutated to '0' with frequency decreased by 1.
             if allele0_and_1_are_consecutive {
                 // we don't need to add a component for allele0 + 1 since it already exists.
                 new_sorted_allele_counts = self.sorted_allele_counts.clone();
@@ -365,22 +377,21 @@ impl GenotypeAlleleCounts {
                 new_sorted_allele_counts[1] = freq0 - 1;
                 new_sorted_allele_counts[2] = allele0_plus1;
                 new_sorted_allele_counts[3] += 1; // = 1 as the array was freshly created with 0s.
-                for (count, old_count) in new_sorted_allele_counts
-                    [4..((sorted_allele_count_lengths - 2) as usize)]
-                    .iter_mut()
-                    .zip(
-                        self.sorted_allele_counts[2..((sorted_allele_count_lengths - 2) as usize)]
-                            .iter(),
-                    )
-                {
+
+                for (count, old_count) in new_sorted_allele_counts[4..].iter_mut().zip(
+                    self.sorted_allele_counts[2..(2 + (sorted_allele_count_lengths - 2) as usize)]
+                        .iter(),
+                ) {
                     *count = *old_count
                 }
             }
         }
-        return GenotypeAlleleCounts::build(
+        let distinct_allele_count = new_sorted_allele_counts.len() >> 1;
+        return GenotypeAlleleCounts::build_with_count(
             self.ploidy,
             self.index + 1,
-            &new_sorted_allele_counts[..],
+            new_sorted_allele_counts,
+            distinct_allele_count,
         );
     }
 
@@ -457,15 +468,15 @@ impl GenotypeAlleleCounts {
         // If the min or max allele index are absent (returned rank < 0) we note where the would be inserted; that
         // way we avoid going through the rest of positions in the sortedAlleleCounts array.
         // The range of interest is then [startRank,endRank].
-        let start_rank = if minimum_allele_index < 0 {
-            (-minimum_allele_rank - 1) as usize
+        let start_rank = if minimum_allele_rank < 0 {
+            ((-minimum_allele_rank) - 1)
         } else {
-            minimum_allele_rank as usize
+            minimum_allele_rank
         };
         let end_rank = if maximum_allele_rank < 0 {
-            (-maximum_allele_rank - 2) as usize
+            ((-maximum_allele_rank) - 2)
         } else {
-            maximum_allele_rank as usize
+            maximum_allele_rank
         };
 
         let mut next_index = minimum_allele_index; // next index that we want to output the count for.
@@ -475,10 +486,11 @@ impl GenotypeAlleleCounts {
 
         while next_rank <= end_rank {
             next_rank += 1;
-            let allele_index = self.sorted_allele_counts[next_sorted_allele_counts_offset];
+            let allele_index =
+                self.sorted_allele_counts[next_sorted_allele_counts_offset as usize] as i64;
             next_sorted_allele_counts_offset += 1;
             // fill non-present allele counts with 0s.
-            while allele_index > next_index {
+            while allele_index > next_index as i64 {
                 dest[next_dest_offset] = 0;
                 next_dest_offset += 1;
                 next_index += 1;
@@ -488,7 +500,7 @@ impl GenotypeAlleleCounts {
             // thanks to the condition of the enclosing while: there must be at least one index of interest that
             // is present in the remaining (nextRank,endRank] interval as otherwise endRank would be less than nextRank.
             dest[next_dest_offset] =
-                self.sorted_allele_counts[next_sorted_allele_counts_offset] as i32;
+                self.sorted_allele_counts[next_sorted_allele_counts_offset as usize] as i32;
             next_dest_offset += 1;
             next_sorted_allele_counts_offset += 1;
             next_index += 1;
@@ -500,6 +512,35 @@ impl GenotypeAlleleCounts {
             dest[next_dest_offset] = 0;
             next_dest_offset += 1;
         }
+    }
+
+    /**
+     * Copies the sorted allele counts into an array.
+     *
+     * <p>
+     *     Sorted allele counts are disposed as an even-sized array where even positions indicate the allele index and
+     *     the following odd positions the number of copies of that allele in this genotype allele count:
+     * </p>
+     * <p><pre>
+     *     [ allele_0, freq_0, allele_1, freq_1 ... ]
+     * </pre></p>
+     *
+     * <p>
+     *     With {@code offset} you can indicate an alternative first position in the destination array.
+     * </p>
+     *
+     * @param dest where to copy the counts.
+     * @param offset starting position.
+     *
+     * @throws IllegalArgumentException if {@code dest} is {@code null}, {@code offset} is less than 0
+     *   or {@code dest} is not large enough considering the number of alleles present in this genotype
+     *   allele counts and the {@code offset} provided. A total of
+     *   <code>{@link #distinctAlleleCount()} * 2 positions</code>
+     *   are required for the job.
+     */
+    pub fn copy_allele_counts(&self, dest: &mut Vec<usize>, offset: usize) {
+        let sorted_allele_counts_length = self.distinct_allele_count << 1;
+        dest.clone_from_slice(&self.sorted_allele_counts[offset..sorted_allele_counts_length]);
     }
 
     /**
@@ -644,6 +685,19 @@ impl GenotypeAlleleCounts {
     }
 
     /**
+     * Returns the smallest allele index present in the genotype.
+     *
+     * @return -1 if there is no allele (ploidy == 0), 0 or greater otherwise.
+     */
+    pub fn minimum_allele_index(&self) -> i64 {
+        if self.distinct_allele_count == 0 {
+            return -1;
+        } else {
+            self.sorted_allele_counts[0] as i64
+        }
+    }
+
+    /**
      * Perform an action for every allele index not represented in this genotype.  For example if the total allele count
      * is 4 and {@code sortedAlleleCounts} is [0,1,2,1] then alleles 0 and 2 are present, each with a count of 1, while
      * alleles 1 and 3 are absent, so we perform {@code action} on 1 and 3.
@@ -671,4 +725,51 @@ impl GenotypeAlleleCounts {
             f(n);
         }
     }
+
+    /**
+     * Checks whether this genotype contain at least one call on a particular allele index.
+     *
+     * @param index the target allele.
+     *
+     * @throws IllegalArgumentException if {@code index} is negative.
+     *
+     * @return {@code true} iff the genotype contains that allele index.
+     */
+    pub fn contains_allele(&self, index: usize) -> bool {
+        return self.allele_rank_for(index) >= 0;
+    }
 }
+
+/**
+ * Compares to genotypes.
+ *
+ * <p>A genotype with larger ploidy is considered greater than one with a lower ploidy. If both genotypes have
+ * the same ploidy, then the genotype with the largest allele index or largest count if these are the same</p>.
+ *
+ * @param other genotype to compare to.
+ *
+ * @throws IllegalArgumentException if {@code other} is {@code null}.
+ *
+ * @return 0 if both genotypes are equivalent, < 0 if this genotype is less than {@code other} and > 0
+ * if this genotype is greater than {@code other}.
+ */
+impl Ord for GenotypeAlleleCounts {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self == other {
+            return Ordering::Equal;
+        }
+        if other.ploidy == self.ploidy {
+            return self.index.cmp(&other.index);
+        } else {
+            return self.ploidy.cmp(&other.ploidy);
+        }
+    }
+}
+
+impl PartialOrd for GenotypeAlleleCounts {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        return Some(self.cmp(other));
+    }
+}
+
+impl Eq for GenotypeAlleleCounts {}
