@@ -1,4 +1,5 @@
 use bio::stats::LogProb;
+use model::byte_array_allele::Allele;
 use model::byte_array_allele::ByteArrayAllele;
 use ordered_float::NotNan;
 use rayon::prelude::*;

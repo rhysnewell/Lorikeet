@@ -68,7 +68,7 @@ impl GenotypeLikelihoodCalculators {
         ploidy: usize,
         allele_count: usize,
     ) -> Array2<i32> {
-        GenotypeLikelihoodCalculators::check_ploidy_and_allele(ploidy, allele_count);
+        // GenotypeLikelihoodCalculators::check_ploidy_and_allele(ploidy, allele_count);
 
         let result = GenotypeLikelihoodCalculators::build_allele_first_genotype_offset_table(
             ploidy,
@@ -85,15 +85,15 @@ impl GenotypeLikelihoodCalculators {
         return result;
     }
 
-    fn check_ploidy_and_allele(ploidy: usize, allele_count: usize) {
-        if ploidy < 0 {
-            panic!("Ploidy cannot be negative");
-        }
-
-        if allele_count < 0 {
-            panic!("The allele count cannot be negative")
-        }
-    }
+    // fn check_ploidy_and_allele(ploidy: usize, allele_count: usize) {
+    //     if ploidy < 0 {
+    //         panic!("Ploidy cannot be negative");
+    //     }
+    //
+    //     if allele_count < 0 {
+    //         panic!("The allele count cannot be negative")
+    //     }
+    // }
 
     fn calculate_genotype_count_using_tables(ploidy: usize, allele_count: usize) -> Array2<i32> {
         let result = GenotypeLikelihoodCalculators::build_allele_first_genotype_offset_table(
@@ -227,11 +227,11 @@ impl GenotypeLikelihoodCalculators {
         allele_count: usize,
         offset_table: &Array2<i32>,
     ) -> Vec<Vec<GenotypeAlleleCounts>> {
-        GenotypeLikelihoodCalculators::check_ploidy_and_allele(ploidy, allele_count);
+        // GenotypeLikelihoodCalculators::check_ploidy_and_allele(ploidy, allele_count);
 
         let row_count = ploidy + 1;
         let mut result = vec![Vec::new(); row_count as usize]; // each row has a different number of columns.
-        for p in 0..ploidy {
+        for p in 0..=ploidy {
             result[p] = GenotypeLikelihoodCalculators::build_genotype_allele_counts_array(
                 p,
                 allele_count,
@@ -285,10 +285,10 @@ impl GenotypeLikelihoodCalculators {
             )
         };
 
-        let mut result = vec![GenotypeAlleleCounts::build_empty()];
+        let mut result = vec![GenotypeAlleleCounts::build_empty(); strong_ref_length];
         result[0] = GenotypeAlleleCounts::first(ploidy);
 
-        for genotype_index in 0..strong_ref_length {
+        for genotype_index in 1..strong_ref_length {
             result[genotype_index] = result[genotype_index - 1].next();
         }
 
@@ -303,7 +303,7 @@ impl GenotypeLikelihoodCalculators {
      * @return                  the maximally acceptable allele count given ploidy and maximum number of genotypes acceptable
      */
     pub fn compute_max_acceptable_allele_count(ploidy: usize, max_genotype_count: usize) -> usize {
-        Self::check_ploidy_and_allele(ploidy, ploidy); // a hack to check ploidy makes sense (could duplicate code but choice must be made)
+        // Self::check_ploidy_and_allele(ploidy, ploidy); // a hack to check ploidy makes sense (could duplicate code but choice must be made)
 
         if ploidy == 1 {
             return max_genotype_count;

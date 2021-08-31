@@ -1,5 +1,5 @@
 use haplotype::event_map::EventMap;
-use model::byte_array_allele::ByteArrayAllele;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use ordered_float::OrderedFloat;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
@@ -48,9 +48,9 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
         self.alignment_start_hap_wrt_ref = value
     }
 
-    pub fn get_bases(&self) -> &Vec<u8> {
-        &self.allele.bases
-    }
+    // pub fn get_bases(&self) -> &[u8] {
+    //     &self.allele.bases[..]
+    // }
 
     pub fn get_start_position(&self) -> usize {
         self.genome_location.as_ref().unwrap().get_start()
@@ -224,5 +224,43 @@ impl<'a, L: Locatable> Ord for Haplotype<'a, L> {
 impl<'a, L: Locatable> PartialOrd for Haplotype<'a, L> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<'a, L: Locatable> Allele for Haplotype<'a, L> {
+    fn is_reference(&self) -> bool {
+        self.allele.is_ref
+    }
+
+    fn length(&self) -> usize {
+        self.allele.len()
+    }
+
+    fn is_symbolic(&self) -> bool {
+        self.allele.is_symbolic
+    }
+
+    fn is_called(&self) -> bool {
+        !self.allele.is_no_call
+    }
+
+    fn is_no_call(&self) -> bool {
+        self.allele.is_no_call
+    }
+
+    fn get_bases(&self) -> &[u8] {
+        self.allele.get_bases()
+    }
+
+    fn no_call() -> Self {
+        Self {
+            allele: ByteArrayAllele::no_call(),
+            genome_location: None,
+            event_map: None,
+            cigar: CigarString::from(vec![Cigar::Match(0)]),
+            alignment_start_hap_wrt_ref: 0,
+            score: OrderedFloat(std::f64::MIN),
+            kmer_size: 0,
+        }
     }
 }

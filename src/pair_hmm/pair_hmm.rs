@@ -1,4 +1,5 @@
 use model::allele_likelihoods::AlleleLikelihoods;
+use model::byte_array_allele::Allele;
 use ndarray::prelude::*;
 use ndarray::{Array2, Zip};
 use pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
@@ -107,10 +108,10 @@ impl PairHMM {
      * @param logLikelihoods where to store the log likelihoods where position [a][r] is reserved for the log likelihood of {@code reads[r]}
      *             conditional to {@code alleles[a]}.
      */
-    pub fn compute_log10_likelihoods(
+    pub fn compute_log10_likelihoods<A: Allele>(
         &mut self,
         sample_index: usize,
-        allele_likelihoods: &mut AlleleLikelihoods,
+        allele_likelihoods: &mut AlleleLikelihoods<A>,
         processed_reads: Vec<BirdToolRead>,
         input_score_imputator: &PairHMMInputScoreImputator,
     ) {
@@ -123,8 +124,9 @@ impl PairHMM {
                 .unwrap_or(0);
             let max_haplotype_length = allele_likelihoods
                 .alleles
-                .par_iter()
-                .map(|hap| hap.len())
+                .list
+                .iter()
+                .map(|hap| hap.length())
                 .max()
                 .unwrap_or(0);
             if !self.initialized
@@ -149,12 +151,12 @@ impl PairHMM {
                 // peek at the next haplotype in the list (necessary to get nextHaplotypeBases, which is required for caching in the array implementation)
                 let mut is_first_haplotype = true;
                 for a in 0..allele_count {
-                    let allele = &allele_likelihoods.alleles[a];
-                    let allele_bases = &allele.allele.bases;
+                    let allele = &allele_likelihoods.alleles.get_allele(a);
+                    let allele_bases = allele.get_bases();
                     let next_allele_bases = if a == allele_count - 1 {
                         None
                     } else {
-                        Some(allele_likelihoods.alleles[a + 1].get_bases())
+                        Some(allele_likelihoods.alleles.get_allele(a + 1).get_bases())
                     };
                     let lk = self.compute_read_likelihood_given_haplotype_log10(
                         allele_bases,
@@ -209,7 +211,7 @@ impl PairHMM {
         deletion_gop: &[u8],
         overall_gcp: &[u8],
         recache_read_values: bool,
-        next_haplotype_bases: Option<&Vec<u8>>,
+        next_haplotype_bases: Option<&[u8]>,
         current_allele_index: usize,
     ) -> f64 {
         assert!(

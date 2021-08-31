@@ -11,7 +11,7 @@ extern crate rust_htslib;
 
 use lorikeet_genome::haplotype::event_map::EventMap;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
+use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::variant_context_utils::VariantContextUtils;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
@@ -95,10 +95,7 @@ fn test_trim_leading_and_trailing_insertions(
         trimmed.get_cigar().to_string(),
         expected_trimmed_cigar.to_string()
     );
-    assert_eq!(
-        trimmed.get_bases().as_slice(),
-        expected_trimmed_bases.as_bytes()
-    );
+    assert_eq!(trimmed.get_bases(), expected_trimmed_bases.as_bytes());
 }
 
 #[test]

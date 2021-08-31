@@ -12,6 +12,7 @@ use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
 use haplotype::haplotype::Haplotype;
 use linked_hash_set::LinkedHashSet;
+use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
@@ -449,7 +450,7 @@ impl ReadThreadingAssembler {
         };
 
         if graph.get_reference_bytes(ref_source_vertex.unwrap(), ref_sink_vertex, true, true)
-            == ref_haplotype.get_bases().as_slice()
+            == ref_haplotype.get_bases()
         {
             panic!(
                 "Mismatch between the reference haplotype and the reference assembly graph path.\
@@ -465,7 +466,7 @@ impl ReadThreadingAssembler {
                         .as_slice()
                 )
                 .unwrap(),
-                std::str::from_utf8(ref_haplotype.get_bases().as_slice()).unwrap()
+                std::str::from_utf8(ref_haplotype.get_bases()).unwrap()
             );
         };
     }

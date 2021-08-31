@@ -3,7 +3,7 @@ use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
 pub struct AlleleList<A: Allele> {
-    list: Vec<A>,
+    pub list: Vec<A>,
 }
 
 impl<A: Allele> AlleleList<A> {
@@ -29,8 +29,8 @@ impl<A: Allele> AlleleList<A> {
      * Returns a negative number if the given allele is not present in this AlleleList.
      * @throws IllegalArgumentException if allele is null.
      */
-    pub fn index_of_allele(&self, input: &A) -> usize {
-        self.list.iter().position(|p| p == input).unwrap()
+    pub fn index_of_allele(&self, input: &A) -> Option<usize> {
+        self.list.iter().position(|p| p == input)
     }
 
     /**
@@ -83,10 +83,10 @@ impl<A: Allele> AlleleList<A> {
      *
      * @throws IllegalArgumentException if {@code list} is {@code null}.
      *
-     * @return -1 if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
+     * @return None if there is no reference allele, or a values in [0,{@code list.alleleCount()}).
      */
-    pub fn index_of_reference(&self) -> usize {
-        self.list.iter().position(|p| p.is_reference()).unwrap()
+    pub fn index_of_reference(&self) -> Option<usize> {
+        self.list.iter().position(|p| p.is_reference())
     }
 
     /**
@@ -176,7 +176,7 @@ impl<T: Allele> Permutation<T> {
             let is_partial = !non_permuted;
 
             for i in 0..to_size {
-                let original_index = original.index_of_allele(target.get_allele(i));
+                let original_index = original.index_of_allele(target.get_allele(i)).unwrap();
                 if original_index < 0 {
                     panic!("Target allele is not a permutation of the original allele list")
                 }
@@ -216,7 +216,7 @@ impl<T: Allele> AlleleListPermutation<T> for Permutation<T> {
         match self {
             Permutation::NonPermutation { .. } => from_index,
             Permutation::ActualPermutation { to, from, .. } => {
-                to.index_of_allele(from.get_allele(from_index))
+                to.index_of_allele(from.get_allele(from_index)).unwrap()
             }
         }
     }
@@ -274,8 +274,10 @@ impl<T: Allele> AlleleListPermutation<T> for Permutation<T> {
 
     fn index_of_allele(&self, allele: &T) -> usize {
         match self {
-            Permutation::NonPermutation { allele_list } => allele_list.index_of_allele(allele),
-            Permutation::ActualPermutation { to, .. } => to.index_of_allele(allele),
+            Permutation::NonPermutation { allele_list } => {
+                allele_list.index_of_allele(allele).unwrap()
+            }
+            Permutation::ActualPermutation { to, .. } => to.index_of_allele(allele).unwrap(),
         }
     }
 

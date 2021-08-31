@@ -80,7 +80,7 @@ impl<P: PloidyModel, A: Allele> GenotypingLikelihoods<P, A> {
         self.alleles.len()
     }
 
-    pub fn index_of_allele(&self, allele: &A) -> usize {
+    pub fn index_of_allele(&self, allele: &A) -> Option<usize> {
         self.alleles.index_of_allele(allele)
     }
 

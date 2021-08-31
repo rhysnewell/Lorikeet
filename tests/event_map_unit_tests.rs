@@ -11,7 +11,7 @@ extern crate rust_htslib;
 
 use lorikeet_genome::haplotype::event_map::EventMap;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
+use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::variant_context_utils::VariantContextUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
@@ -50,11 +50,11 @@ fn test_mnps(
         for i in 0..events.get_number_of_events() {
             let actual = found_alleles[i];
             assert_eq!(
-                actual.get_reference().get_bases().as_slice(),
+                actual.get_reference().get_bases(),
                 expected_alleles[i][0].as_bytes()
             );
             assert_eq!(
-                actual.get_alternate_alleles()[0].get_bases().as_slice(),
+                actual.get_alternate_alleles()[0].get_bases(),
                 expected_alleles[i][1].as_bytes()
             );
         }

@@ -100,7 +100,7 @@ impl HaplotypeCallerGenotypingEngine {
     pub fn assign_genotype_likelihoods<'a, 'b>(
         &'a mut self,
         mut haplotypes: Vec<Haplotype<'a, SimpleInterval>>,
-        mut read_likelihoods: AlleleLikelihoods<'a>,
+        mut read_likelihoods: AlleleLikelihoods<Haplotype<'a, SimpleInterval>>,
         per_sample_filtered_read_list: HashMap<usize, Vec<BirdToolRead>>,
         ref_bases: &'b [u8],
         ref_loc: &'b SimpleInterval,
@@ -345,18 +345,19 @@ impl HaplotypeCallerGenotypingEngine {
      */
     fn calculate_gls_for_this_event<'a, 'b>(
         &'b mut self,
-        read_likelihoods: &'b AlleleLikelihoods<'a>,
+        read_likelihoods: &'b AlleleLikelihoods<Haplotype<SimpleInterval>>,
         merged_vc: &'b VariantContext<'a>,
         no_call_alleles: &'b Vec<ByteArrayAllele>,
         padded_reference: &'b [u8],
         offset_for_ref_into_event: usize,
     ) -> GenotypesContext<'a> {
         let vc_alleles = &merged_vc.alleles;
-        let allele_list = if read_likelihoods.number_of_alleles() == vc_alleles.len() {
-            read_likelihoods.get_allele_list()
-        } else {
-            AlleleList::new(vc_alleles)
-        };
+        // let allele_list: AlleleList<ByteArrayAllele> = if read_likelihoods.number_of_alleles() == vc_alleles.len() {
+        //     read_likelihoods.get_allele_list()
+        // } else {
+        //     AlleleList::new(vc_alleles)
+        // }; Old version
+        let allele_list = AlleleList::new(vc_alleles);
 
         let likelihoods = self.genotyping_model.calculate_likelihoods(
             &allele_list,
@@ -563,7 +564,7 @@ impl HaplotypeCallerGenotypingEngine {
      * @param hcArgs configuration that may affect the criteria use to retain or filter-out reads.
      * @return never {@code null}.
      */
-    fn compose_read_qualifies_for_genotyping_predicate(
+    pub fn compose_read_qualifies_for_genotyping_predicate(
     ) -> Box<dyn Fn(&BirdToolRead, &SimpleInterval) -> bool> {
         // TODO: DRAGEN has a check here usign args
         return Box::new(|read: &BirdToolRead, target: &SimpleInterval| -> bool {

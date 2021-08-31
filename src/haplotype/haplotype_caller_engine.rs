@@ -18,6 +18,7 @@ use haplotype::haplotype::Haplotype;
 use haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use mathru::special::gamma::{digamma, ln_gamma};
+use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::ByteArrayAllele;
 use model::variant_context::VariantContext;
 use model::variants::*;
@@ -723,11 +724,9 @@ impl HaplotypeCallerEngine {
             assembly_result.region_for_genotyping.get_reads_cloned(),
         );
 
-        let mut read_likelihoods = self.likelihood_calculation_engine.compute_read_likelihoods(
-            &mut assembly_result,
-            sample_names.clone(),
-            reads,
-        );
+        let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
+            .likelihood_calculation_engine
+            .compute_read_likelihoods(&mut assembly_result, sample_names.clone(), reads);
 
         // Realign reads to their best haplotype.
         let read_alignments = AssemblyBasedCallerUtils::realign_reads_to_their_best_haplotype(

@@ -170,8 +170,8 @@ impl GenotypeLikelihoodCalculator {
      * @param index query likelihood-index.
      * @return never {@code null}.
      */
-    pub fn genotype_allele_counts_at(&mut self, index: usize) -> GenotypeAlleleCounts {
-        if !(index >= 0 && index < self.genotype_count as usize) {
+    pub fn genotype_allele_counts_at(&mut self, index: usize) -> &mut GenotypeAlleleCounts {
+        if !(index < self.genotype_count as usize) {
             panic!(
                 "Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
                 index, self.genotype_count, self.allele_count, self.ploidy
@@ -180,14 +180,13 @@ impl GenotypeLikelihoodCalculator {
             if index
                 < GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY as usize
             {
-                return self.genotype_allele_counts[index].clone();
+                return &mut self.genotype_allele_counts[index];
             } else if self.last_overhead_counts.is_null()
                 || self.last_overhead_counts.index() > index
             {
-                let mut result = self.genotype_allele_counts
+                let mut result = &mut self.genotype_allele_counts
                     [(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1)
-                        as usize]
-                    .clone();
+                        as usize];
 
                 result.increase(
                     index as i32
@@ -200,9 +199,30 @@ impl GenotypeLikelihoodCalculator {
             } else {
                 self.last_overhead_counts
                     .increase(index as i32 - self.last_overhead_counts.index() as i32);
-                return self.last_overhead_counts.clone();
+                return &mut self.last_overhead_counts;
             }
         }
+    }
+
+    /**
+     * Give a list of alleles, returns the likelihood array index.
+     * @param alleleIndices the indices of the alleles in the genotype, there should be as many repetition of an
+     *                      index as copies of that allele in the genotype. Allele indices do not need to be sorted in
+     *                      any particular way.
+     *
+     * @return never {@code null}.
+     */
+    pub fn alleles_to_index(&mut self, allele_indices: &[usize]) -> usize {
+        if self.ploidy == 0 {
+            return 0;
+        }
+
+        self.allele_heap.clear();
+        for i in 0..allele_indices.len() {
+            self.allele_heap.push(allele_indices[i]);
+        }
+
+        return self.allele_heap_to_index();
     }
 
     /**

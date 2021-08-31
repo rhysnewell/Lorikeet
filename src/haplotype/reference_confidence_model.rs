@@ -1,5 +1,6 @@
 use assembly::assembly_region::AssemblyRegion;
 use haplotype::haplotype::Haplotype;
+use model::byte_array_allele::Allele;
 use rust_htslib::bam::record::Cigar;
 use utils::simple_interval::{Locatable, SimpleInterval};
 

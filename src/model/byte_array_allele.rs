@@ -74,13 +74,13 @@ impl ByteArrayAllele {
         };
     }
 
-    pub fn get_bases(&self) -> &Vec<u8> {
-        return if self.is_symbolic {
-            &*variants::EMPTY_ALLELE_BASES
-        } else {
-            &self.bases
-        };
-    }
+    // pub fn get_bases(&self) -> &Vec<u8> {
+    //     return if self.is_symbolic {
+    //         &*variants::EMPTY_ALLELE_BASES
+    //     } else {
+    //         &self.bases
+    //     };
+    // }
 
     pub fn fake(is_ref: bool) -> ByteArrayAllele {
         Self::new(".".as_bytes(), is_ref)
@@ -176,7 +176,7 @@ impl ByteArrayAllele {
     }
 }
 
-pub trait Allele: Eq + PartialEq + Clone {
+pub trait Allele: Eq + PartialEq + Clone + std::fmt::Debug + Send + Sync {
     fn is_reference(&self) -> bool;
 
     fn length(&self) -> usize;
@@ -186,6 +186,10 @@ pub trait Allele: Eq + PartialEq + Clone {
     fn is_called(&self) -> bool;
 
     fn is_no_call(&self) -> bool;
+
+    fn get_bases(&self) -> &[u8];
+
+    fn no_call() -> Self;
 }
 
 impl Allele for ByteArrayAllele {
@@ -207,5 +211,22 @@ impl Allele for ByteArrayAllele {
 
     fn is_no_call(&self) -> bool {
         self.is_no_call
+    }
+
+    fn get_bases(&self) -> &[u8] {
+        return if self.is_symbolic {
+            variants::EMPTY_ALLELE_BASES.as_slice()
+        } else {
+            self.bases.as_slice()
+        };
+    }
+
+    fn no_call() -> Self {
+        Self {
+            bases: vec![Self::NO_CALL as u8],
+            is_ref: false,
+            is_no_call: true,
+            is_symbolic: false,
+        }
     }
 }

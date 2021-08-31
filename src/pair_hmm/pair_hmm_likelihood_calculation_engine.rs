@@ -1,6 +1,7 @@
 use assembly::assembly_result_set::AssemblyResultSet;
 use haplotype::haplotype::Haplotype;
 use model::allele_likelihoods::AlleleLikelihoods;
+use model::byte_array_allele::Allele;
 use model::variant_context_utils::VariantContextUtils;
 use ordered_float::OrderedFloat;
 use pair_hmm::pair_hmm::PairHMM;
@@ -193,7 +194,7 @@ impl PairHMMLikelihoodCalculationEngine {
         assembly_result_set: &'b mut AssemblyResultSet<'a, A>,
         samples: Vec<String>,
         per_sample_read_list: HashMap<usize, Vec<BirdToolRead>>,
-    ) -> AlleleLikelihoods<'a> {
+    ) -> AlleleLikelihoods<Haplotype<'a, SimpleInterval>> {
         let haplotypes: Vec<Haplotype<SimpleInterval>> = assembly_result_set
             .haplotypes
             .iter()
@@ -310,10 +311,10 @@ impl PairHMMLikelihoodCalculationEngine {
         })
     }
 
-    fn compute_read_likelihoods_in_matrix(
+    fn compute_read_likelihoods_in_matrix<A: Allele>(
         &mut self,
         sample_index: usize,
-        likelihoods: &mut AlleleLikelihoods,
+        likelihoods: &mut AlleleLikelihoods<A>,
     ) {
         // Modify the read qualities by applying the PCR error model and capping the minimum base,
         // insertion,deletion qualities

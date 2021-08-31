@@ -285,7 +285,9 @@ impl CoordMath {
     }
 }
 
-pub trait Locatable: Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd {
+pub trait Locatable:
+    Clone + Debug + Hash + Eq + PartialEq + Ord + PartialOrd + Send + Sync
+{
     fn tid(&self) -> i32;
 
     fn get_start(&self) -> usize;

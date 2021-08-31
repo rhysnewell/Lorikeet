@@ -1,4 +1,5 @@
 use haplotype::haplotype::Haplotype;
+use model::byte_array_allele::Allele;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
@@ -741,7 +742,7 @@ impl AlignmentUtils {
     pub fn get_bases_covering_ref_interval<'a>(
         ref_start: usize,
         ref_end: usize,
-        bases: &'a Vec<u8>,
+        bases: &'a [u8],
         bases_start_on_ref: usize,
         bases_to_ref_cigar: &CigarString,
     ) -> Option<&'a [u8]> {

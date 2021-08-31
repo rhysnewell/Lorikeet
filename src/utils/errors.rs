@@ -6,4 +6,5 @@ pub enum BirdToolError {
     CigarBuilderError(String),
     InvalidLocation(String),
     NonContiguousIntervals(String),
+    SkipException(String),
 }

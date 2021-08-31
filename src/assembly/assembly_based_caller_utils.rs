@@ -165,7 +165,7 @@ impl AssemblyBasedCallerUtils {
      * @return never {@code null}
      */
     pub fn realign_reads_to_their_best_haplotype(
-        original_read_likelihoods: &AlleleLikelihoods,
+        original_read_likelihoods: &AlleleLikelihoods<Haplotype<SimpleInterval>>,
         ref_haplotype: &Haplotype<SimpleInterval>,
         padded_reference_loc: &SimpleInterval,
     ) -> HashMap<ReadIndexer, BirdToolRead> {
@@ -175,8 +175,9 @@ impl AssemblyBasedCallerUtils {
         return best_alleles
             .iter()
             .map(|best_allele| {
-                let best_haplotype =
-                    &original_read_likelihoods.alleles[best_allele.allele_index.unwrap()];
+                let best_haplotype = &original_read_likelihoods
+                    .alleles
+                    .get_allele(best_allele.allele_index.unwrap());
                 let original_read = &original_read_likelihoods
                     .evidence_by_sample_index
                     .get(&best_allele.sample_index)
