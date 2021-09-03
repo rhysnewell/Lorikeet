@@ -740,6 +740,54 @@ fn test_marginalization(
     }
 }
 
+fn test_normalize_cap_worst_lk(
+    samples: Vec<String>,
+    alleles: Vec<ByteArrayAllele>,
+    reads: HashMap<usize, Vec<BirdToolRead>>,
+) {
+    let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+    let mut result = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
+
+    let original_likelihoods =
+        fill_two_with_random_likelihoods(&samples, &alleles, &mut original, &mut result);
+    result.normalize_likelihoods(-0.001, true);
+    test_allele_queries(&alleles, &result);
+
+    let number_of_alleles = alleles.len();
+    let mut new_likelihoods = Vec::new();
+    for s in 0..samples.len() {
+        let sample_read_count = original.sample_evidence_count(s);
+        let mut new_likelihood = Array2::zeros((number_of_alleles, sample_read_count));
+
+        for r in 0..sample_read_count {
+            let mut best_allele_lk = std::f64::NEG_INFINITY;
+            //best likelihood can be alt OR reference
+            for a in 0..number_of_alleles {
+                best_allele_lk = max(
+                    OrderedFloat(best_allele_lk),
+                    OrderedFloat(original_likelihoods[s][[a, r]]),
+                )
+                .into();
+            }
+            if best_allele_lk == std::f64::NEG_INFINITY {
+                for a in 0..number_of_alleles {
+                    new_likelihood[[a, r]] = original_likelihoods[s][[a, r]];
+                }
+            } else {
+                for a in 0..number_of_alleles {
+                    new_likelihood[[a, r]] = max(
+                        OrderedFloat(best_allele_lk - 0.001),
+                        OrderedFloat(original_likelihoods[s][[a, r]]),
+                    )
+                    .into();
+                }
+            }
+        }
+        new_likelihoods.push(new_likelihood);
+    }
+    test_likelihood_matrix_queries(&samples, &mut result, Some(&new_likelihoods));
+}
+
 #[test]
 fn data_for_test_instantiation_and_query() {
     let mut rnd = ThreadRng::default();
@@ -816,6 +864,20 @@ fn data_for_test_filter_poorly_modeled_reads_to_overlap() {
     for sample_set in SAMPLE_SETS.iter() {
         for allele_set in ALLELE_SETS.iter() {
             test_filter_poorly_modeled_reads_to_overlap(
+                sample_set.clone(),
+                allele_set.clone(),
+                data_set_reads(sample_set, &mut rnd),
+            )
+        }
+    }
+}
+
+#[test]
+fn data_for_test_normalize_cap_worst_lk() {
+    let mut rnd = ThreadRng::default();
+    for sample_set in SAMPLE_SETS.iter() {
+        for allele_set in ALLELE_SETS.iter() {
+            test_normalize_cap_worst_lk(
                 sample_set.clone(),
                 allele_set.clone(),
                 data_set_reads(sample_set, &mut rnd),

@@ -6,11 +6,12 @@ use std::ops::{Add, AddAssign, Mul, Sub};
 use utils::natural_log_utils::NaturalLogUtils;
 
 lazy_static! {
-    static ref cache: Vec<f64> =
-        (0..((JacobianLogTable::MAX_TOLERANCE / JacobianLogTable::TABLE_STEP) + 1.0) as usize)
-            .into_par_iter()
-            .map(|k| { 1.0 + (10.0_f64).powf(-(k as f64) * JacobianLogTable::INV_STEP) })
-            .collect::<Vec<f64>>();
+    static ref cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE
+        / JacobianLogTable::TABLE_STEP)
+        + 1.0) as usize)
+        .into_par_iter()
+        .map(|k| { (1.0 + (10.0_f64).powf(-(k as f64) * JacobianLogTable::TABLE_STEP)).log10() })
+        .collect::<Vec<f64>>();
     pub static ref LOG10_ONE_HALF: f64 = (0.5 as f64).log10();
     pub static ref LOG10_ONE_THIRD: f64 = -((3.0 as f64).log10());
     pub static ref LOG_ONE_THIRD: f64 = -((3.0 as f64).ln());
@@ -125,20 +126,14 @@ impl MathUtils {
      * Rather convoluted due to Rust not allowing proper comparisons between floats
      */
     pub fn max_element_index(array: &[f64], start: usize, finish: usize) -> usize {
-        let non_nan_floats: Vec<_> = array[start..finish]
-            .par_iter()
-            .cloned()
-            .map(NotNan::new)
-            .filter_map(Result::ok)
-            .collect::<Vec<_>>();
+        let mut max_i = start;
+        for i in (start + 1)..finish {
+            if array[i] > array[max_i] {
+                max_i = i;
+            }
+        }
 
-        let max = non_nan_floats.par_iter().max().unwrap();
-        let index = non_nan_floats
-            .par_iter()
-            .position_first(|f| f == max)
-            .unwrap();
-
-        return index;
+        return max_i;
     }
 
     pub fn normalize_log10(mut array: Vec<f64>, take_log10_of_output: bool) -> Vec<f64> {
@@ -341,14 +336,18 @@ impl MathUtils {
         let max_element_index = Self::max_element_index(vals, from_index, to_index);
         let mut approx_sum = vals[max_element_index];
 
-        for (i, val) in vals[from_index..to_index].iter().enumerate() {
+        let mut i = from_index;
+        for val in vals[from_index..to_index].iter() {
             if i == max_element_index || val == &std::f64::NEG_INFINITY {
+                i += 1;
                 continue;
             };
             let diff = approx_sum - val;
             if diff < JacobianLogTable::MAX_TOLERANCE {
                 approx_sum += JacobianLogTable::get(diff);
             };
+
+            i += 1;
         }
 
         return approx_sum;
@@ -435,7 +434,7 @@ impl RunningAverage {
         self.obs_count += 1;
         let old_mean = self.mean;
         self.mean += (obs - self.mean) / self.obs_count as f64;
-        self.s += (obs - old_mean) * (obs - old_mean)
+        self.s += (obs - old_mean) * (obs - self.mean)
     }
 
     pub fn add_all(&mut self, col: &[f64]) {
@@ -478,7 +477,15 @@ impl JacobianLogTable {
     pub const INV_STEP: f64 = (1.0) / JacobianLogTable::TABLE_STEP;
 
     pub fn get(difference: f64) -> f64 {
-        let index = (difference * JacobianLogTable::INV_STEP).abs() as usize;
+        let index = (difference * JacobianLogTable::INV_STEP).round() as usize;
         return cache[index];
     }
+
+    // pub fn fast_round(d: f64) -> usize {
+    //     if d > 0.0 {
+    //         (d + 0.5) as usize
+    //     } else {
+    //         (d - 0.5) as usize
+    //     }
+    // }
 }

@@ -66,6 +66,7 @@ impl IndependentSamplesGenotypesModel {
         for i in 0..sample_count {
             let sample_ploidy = ploidy_model.sample_ploidy(i);
             let sample_likelihoods = &read_likelihoods.values_by_sample_index[i];
+            let number_of_evidences = read_likelihoods.sample_evidence_count(i);
 
             match likelihoods_calculator {
                 None => {
@@ -74,12 +75,14 @@ impl IndependentSamplesGenotypesModel {
                     genotype_likelihoods.push(likelihoods_calculator.genotype_likelihoods(
                         sample_likelihoods,
                         &allele_likelihood_matrix_mapper,
+                        number_of_evidences,
                     ));
                 }
                 Some(ref mut likelihoods_calculator) => {
                     genotype_likelihoods.push(likelihoods_calculator.genotype_likelihoods(
                         sample_likelihoods,
                         &allele_likelihood_matrix_mapper,
+                        number_of_evidences,
                     ));
                 }
             };

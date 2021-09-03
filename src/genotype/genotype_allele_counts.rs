@@ -378,10 +378,15 @@ impl GenotypeAlleleCounts {
                 new_sorted_allele_counts[2] = allele0_plus1;
                 new_sorted_allele_counts[3] += 1; // = 1 as the array was freshly created with 0s.
 
-                for (count, old_count) in new_sorted_allele_counts[4..].iter_mut().zip(
-                    self.sorted_allele_counts[2..(2 + (sorted_allele_count_lengths - 2) as usize)]
-                        .iter(),
-                ) {
+                for (count, old_count) in new_sorted_allele_counts
+                    [4..4 + (sorted_allele_count_lengths - 2)]
+                    .iter_mut()
+                    .zip(
+                        self.sorted_allele_counts
+                            [2..(2 + (sorted_allele_count_lengths - 2) as usize)]
+                            .iter(),
+                    )
+                {
                     *count = *old_count
                 }
             }
@@ -540,7 +545,11 @@ impl GenotypeAlleleCounts {
      */
     pub fn copy_allele_counts(&self, dest: &mut Vec<usize>, offset: usize) {
         let sorted_allele_counts_length = self.distinct_allele_count << 1;
-        dest.clone_from_slice(&self.sorted_allele_counts[offset..sorted_allele_counts_length]);
+        if dest.len() <= offset + sorted_allele_counts_length {
+            dest.resize(offset + sorted_allele_counts_length, 0);
+        }
+        dest[offset..offset + sorted_allele_counts_length]
+            .copy_from_slice(&self.sorted_allele_counts[0..sorted_allele_counts_length])
     }
 
     /**

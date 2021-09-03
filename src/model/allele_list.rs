@@ -2,11 +2,11 @@ use model::byte_array_allele::Allele;
 use rayon::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Ord, PartialOrd, Hash, Eq)]
-pub struct AlleleList<A: Allele> {
+pub struct AlleleList<A: Allele + Send + Sync> {
     pub list: Vec<A>,
 }
 
-impl<A: Allele> AlleleList<A> {
+impl<A: Allele + Send + Sync> AlleleList<A> {
     pub fn new(input_list: &Vec<A>) -> AlleleList<A> {
         AlleleList {
             list: input_list.to_vec(),
@@ -116,7 +116,7 @@ impl<A: Allele> AlleleList<A> {
     }
 }
 
-pub trait AlleleListPermutation<A: Allele> {
+pub trait AlleleListPermutation<A: Allele + Send + Sync> {
     fn is_partial(&self) -> bool;
 
     fn is_non_permuted(&self) -> bool;
@@ -142,7 +142,7 @@ pub trait AlleleListPermutation<A: Allele> {
     fn get_allele(&self, index: usize) -> &A;
 }
 
-pub enum Permutation<A: Allele> {
+pub enum Permutation<A: Allele + Send + Sync> {
     NonPermutation {
         allele_list: AlleleList<A>,
     },
@@ -156,7 +156,7 @@ pub enum Permutation<A: Allele> {
     },
 }
 
-impl<T: Allele> Permutation<T> {
+impl<T: Allele + Send + Sync> Permutation<T> {
     pub fn new(original: AlleleList<T>, target: AlleleList<T>) -> Permutation<T> {
         if AlleleList::equals(&original, &target) {
             return Permutation::NonPermutation {
@@ -197,7 +197,7 @@ impl<T: Allele> Permutation<T> {
     }
 }
 
-impl<T: Allele> AlleleListPermutation<T> for Permutation<T> {
+impl<T: Allele + Send + Sync> AlleleListPermutation<T> for Permutation<T> {
     fn is_partial(&self) -> bool {
         match self {
             Permutation::NonPermutation { .. } => false,

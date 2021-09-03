@@ -180,7 +180,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
      * Returns the quantity of evidence that belongs to a sample in the evidence-likelihood collection.
      * @param sampleIndex the query sample index.
      *
-     * @throws IllegalArgumentException if {@code sampleIndex} is not a valid sample index.
+     *
      * @return 0 or greater.
      */
     pub fn sample_evidence_count(&self, sample_index: usize) -> usize {
@@ -194,7 +194,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
      * Returns the units of evidence that belong to a sample sorted by their index (within that sample).
      *
      * @param sampleIndex the requested sample.
-     * @return never {@code null} but perhaps a zero-length array if there is no evidence in sample. No element in
+     * @return None or perhaps a zero-length array if there is no evidence in sample. No element in
      *   the array will be null.
      */
     pub fn sample_evidence(&self, sample_index: usize) -> Option<&Vec<BirdToolRead>> {

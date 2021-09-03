@@ -130,12 +130,13 @@ impl GenotypeLikelihoodCalculator {
         ploidy: usize,
         allele_count: usize,
         allele_first_genotype_offset_by_ploidy: Array2<i32>,
-        genotype_table_by_ploidy: Vec<Vec<GenotypeAlleleCounts>>,
+        mut genotype_table_by_ploidy: Vec<Vec<GenotypeAlleleCounts>>,
     ) -> GenotypeLikelihoodCalculator {
         let genotype_count = allele_first_genotype_offset_by_ploidy[[ploidy, allele_count]];
         let maximum_distinct_alleles_in_genotype = std::cmp::min(ploidy, allele_count);
+
         GenotypeLikelihoodCalculator {
-            genotype_allele_counts: genotype_table_by_ploidy[ploidy].clone(),
+            genotype_allele_counts: genotype_table_by_ploidy.remove(ploidy),
             read_likelihoods_by_genotype_index: vec![Vec::new(); genotype_count as usize],
             genotype_alleles_and_counts: vec![0; maximum_distinct_alleles_in_genotype as usize * 2],
             maximum_distinct_alleles_in_genotype,
@@ -171,35 +172,42 @@ impl GenotypeLikelihoodCalculator {
      * @return never {@code null}.
      */
     pub fn genotype_allele_counts_at(&mut self, index: usize) -> &mut GenotypeAlleleCounts {
-        if !(index < self.genotype_count as usize) {
+        if index >= self.genotype_count as usize {
             panic!(
                 "Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
                 index, self.genotype_count, self.allele_count, self.ploidy
             );
         } else {
-            if index
-                < GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY as usize
-            {
+            if index < self.genotype_allele_counts.len() {
+                // println!("index {}", index);
                 return &mut self.genotype_allele_counts[index];
             } else if self.last_overhead_counts.is_null()
                 || self.last_overhead_counts.index() > index
             {
-                let mut result = &mut self.genotype_allele_counts
-                    [(GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1)
-                        as usize];
+                let mut result = self.genotype_allele_counts
+                    [GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1]
+                    .clone();
 
+                // let mut result = &mut self.genotype_allele_counts[index];
+                //
                 result.increase(
                     index as i32
                         - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
                             as i32
                         + 1,
                 );
-                self.last_overhead_counts = result.clone();
-                return result;
+
+                // self.genotype_allele_counts.push(result);
+                // result.increase(1);
+                //
+                self.last_overhead_counts = result;
+                // return result;
+                return &mut self.last_overhead_counts;
             } else {
                 self.last_overhead_counts
                     .increase(index as i32 - self.last_overhead_counts.index() as i32);
                 return &mut self.last_overhead_counts;
+                // return &mut self.genotype_allele_counts[index]
             }
         }
     }
@@ -309,9 +317,14 @@ impl GenotypeLikelihoodCalculator {
         &mut self,
         likelihoods: &Array2<f64>,
         permutation: &AlleleLikelihoodMatrixMapper<A>,
+        number_of_evidences: usize,
     ) -> GenotypeLikelihoods {
-        let read_likelihoods_by_genotype_index =
-            self.get_read_raw_read_likelihoods_by_genotype_index(likelihoods, permutation);
+        let read_likelihoods_by_genotype_index = self
+            .get_read_raw_read_likelihoods_by_genotype_index(
+                likelihoods,
+                permutation,
+                number_of_evidences,
+            );
         return GenotypeLikelihoods::from_log10_likelihoods(read_likelihoods_by_genotype_index);
     }
 
@@ -324,20 +337,24 @@ impl GenotypeLikelihoodCalculator {
         &mut self,
         likelihoods: &Array2<f64>,
         permutation: &AlleleLikelihoodMatrixMapper<A>,
+        number_of_evidences: usize,
     ) -> Vec<f64> {
         assert!(
             likelihoods.nrows() == self.allele_count,
             "Mismatch between likelihood matrix and allele_count"
         );
 
-        let read_count = likelihoods.ncols();
-        self.ensure_read_capcity(read_count);
+        self.ensure_read_capcity(number_of_evidences);
 
         // [x][y][z] = z * LnLk(Read_x | Allele_y)
-        self.read_likelihood_components_by_allele_count(likelihoods, permutation);
-        self.genotype_likelihood_by_read(read_count);
+        self.read_likelihood_components_by_allele_count(
+            likelihoods,
+            permutation,
+            number_of_evidences,
+        );
+        self.genotype_likelihood_by_read(number_of_evidences);
 
-        return self.genotype_likelihoods_private(read_count);
+        return self.genotype_likelihoods_private(number_of_evidences);
     }
 
     /**
@@ -389,6 +406,7 @@ impl GenotypeLikelihoodCalculator {
             // let mut read_likelihoods = &mut self.read_likelihoods_by_genotype_index[genotype_index];
             let component_count =
                 self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
+
             match component_count {
                 1 => {
                     self.single_component_genotype_likelihood_by_read(
@@ -435,16 +453,18 @@ impl GenotypeLikelihoodCalculator {
             }
             Some(cmp) => {
                 if cmp == 0 {
-                    result = &mut self.genotype_allele_counts[index];
+                    result = self.genotype_allele_counts[index].clone();
                     result.increase(1);
-                    return result.index();
+                    self.genotype_allele_counts.push(result);
+                    return index + 1;
                 } else {
                     // allele_counts.increase(1);
                     // result = allele_counts;
                     // return result
-                    result = &mut self.genotype_allele_counts[index];
+                    result = self.genotype_allele_counts[index].clone();
                     result.increase(1);
-                    return result.index();
+                    self.genotype_allele_counts.push(result);
+                    return index + 1;
                 }
             }
         }
@@ -516,10 +536,11 @@ impl GenotypeLikelihoodCalculator {
         // in readGenotypeLikelihoodComponents for the final calculation per read.
         let mut genotype_allele_counts =
             &mut self.genotype_allele_counts[genotype_allele_counts_index];
-        self.genotype_alleles_and_counts = genotype_allele_counts.sorted_allele_counts.clone();
+
+        genotype_allele_counts.copy_allele_counts(&mut self.genotype_alleles_and_counts, 0);
+
         let component_count = genotype_allele_counts.distinct_allele_count();
         let allele_data_size = (self.ploidy + 1) * read_count;
-
         let mut cc = 0;
         for c in 0..component_count {
             let allele_index = self.genotype_alleles_and_counts[cc];
@@ -592,6 +613,7 @@ impl GenotypeLikelihoodCalculator {
         &mut self,
         likelihoods: &Array2<f64>,
         permutation: &AlleleLikelihoodMatrixMapper<A>,
+        number_of_evidences: usize,
     ) {
         let read_count = likelihoods.ncols();
         let allele_data_size = read_count * (self.ploidy + 1);
@@ -600,12 +622,14 @@ impl GenotypeLikelihoodCalculator {
         // frequency1Offset += alleleDataSize to skip to the next allele index data location (+ readCount) at each iteration.
         let mut frequency_1_offset = read_count;
         for a in 0..self.allele_count {
-            self.read_allele_likelihood_by_allele_count[frequency_1_offset..].clone_from_slice(
-                &likelihoods
-                    .row(permutation.permutation.from_index(a))
-                    .as_slice()
-                    .unwrap(),
-            );
+            self.read_allele_likelihood_by_allele_count
+                [frequency_1_offset..frequency_1_offset + number_of_evidences]
+                .clone_from_slice(
+                    &likelihoods
+                        .row(permutation.permutation.from_index(a))
+                        .as_slice()
+                        .unwrap(),
+                );
 
             // p = 2 because the frequency == 1 we already have it.
             let mut destination_offset = frequency_1_offset + read_count;

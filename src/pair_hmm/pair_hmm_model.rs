@@ -58,16 +58,16 @@ impl PairHMMModel {
         ];
         let mut offset = 0;
         for i in 0..=(QualityUtils::MAX_QUAL as usize) {
-            offset += i + 1;
             for j in 0..=i {
                 let log10_sum =
                     MathUtils::approximate_log10_sum_log10(-0.1 * (i as f64), -0.1 * (j as f64));
-                let log10_sum_pow = 10.0.powf(log10_sum);
+                let log10_sum_pow: f64 = 10.0.powf(log10_sum);
                 match_to_match_log10[offset + j] =
-                    (std::cmp::min(OrderedFloat(1.0), OrderedFloat(log10_sum_pow))).ln_1p();
-                match_to_match_prob[offset + j] = 10.0
-                    .powf((std::cmp::min(OrderedFloat(1.0), OrderedFloat(log10_sum_pow))).ln_1p());
+                    (-std::cmp::min(OrderedFloat(1.0), OrderedFloat(log10_sum_pow))).ln_1p()
+                        * *INV_LN10;
+                match_to_match_prob[offset + j] = 10.0.powf(match_to_match_log10[offset + j]);
             }
+            offset += i + 1;
         }
 
         PairHMMModel {
@@ -216,6 +216,7 @@ impl PairHMMModel {
         let model = &self;
         dest.axis_iter_mut(Axis(0))
             .into_par_iter()
+            .skip(1)
             .enumerate()
             .for_each(|(i, mut row)| {
                 model.qual_to_trans_probs_with_array1(
@@ -461,6 +462,24 @@ impl PairHMMModel {
         }
     }
 
+    pub fn match_to_match_prob_static(ins_qual: u8, del_qual: u8) -> f64 {
+        let mut min_qual;
+        let mut max_qual;
+        if ins_qual <= del_qual {
+            min_qual = ins_qual;
+            max_qual = del_qual;
+        } else {
+            min_qual = del_qual;
+            max_qual = ins_qual;
+        }
+
+        return 1.0
+            - 10.0.powf(MathUtils::approximate_log10_sum_log10(
+                -0.1 * min_qual as f64,
+                -0.1 * max_qual as f64,
+            ));
+    }
+
     /**
      * Returns the log-probability that neither of two events takes place.
      * <p/>
@@ -487,13 +506,15 @@ impl PairHMMModel {
         }
 
         if (QualityUtils::MAX_QUAL as usize) < max_qual {
-            return *(-std::cmp::min(
+            return -std::cmp::min(
                 OrderedFloat(1.0),
                 OrderedFloat(10.0.powf(MathUtils::approximate_log10_sum_log10(
                     -0.1 * min_qual as f64,
                     -0.1 * max_qual as f64,
                 ))),
-            )) * *INV_LN10;
+            )
+            .into_inner()
+                * *INV_LN10;
         } else {
             return self.match_to_match_log10[((max_qual * (max_qual + 1)) >> 1) + min_qual];
         }

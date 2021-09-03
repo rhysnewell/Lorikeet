@@ -84,6 +84,13 @@ impl PairHMM {
         }
     }
 
+    /**
+     * Only used for debugging purposes
+     */
+    pub fn do_not_use_tristate_correction(&mut self) {
+        self.do_not_use_tristate_correction = true
+    }
+
     fn reinitialize(&mut self, max_read_length: usize, haplotype_max_length: usize) {
         let padded_max_read_length = max_read_length + 1;
         let padded_max_haplotype_length = haplotype_max_length + 1;
@@ -125,7 +132,7 @@ impl PairHMM {
             let max_haplotype_length = allele_likelihoods
                 .alleles
                 .list
-                .iter()
+                .par_iter()
                 .map(|hap| hap.length())
                 .max()
                 .unwrap_or(0);
@@ -139,11 +146,11 @@ impl PairHMM {
             let read_count = processed_reads.len();
             let allele_count = allele_likelihoods.alleles.len();
 
-            let mut m_log_likelihood_array = vec![0.0; read_count * allele_count];
+            self.m_log_likelihood_array = vec![0.0; read_count * allele_count];
             let mut idx = 0;
             let mut read_index = 0;
             for read in processed_reads {
-                let read_bases = read.read.seq();
+                let read_bases = read.read.seq().as_bytes();
                 let read_quals = read.read.qual();
                 let read_ins_quals = input_score_imputator.ins_open_penalties(&read);
                 let read_del_quals = input_score_imputator.del_open_penalties(&read);
@@ -160,22 +167,25 @@ impl PairHMM {
                     };
                     let lk = self.compute_read_likelihood_given_haplotype_log10(
                         allele_bases,
-                        read_bases,
+                        read_bases.as_slice(),
                         read_quals,
                         &read_ins_quals,
                         &read_del_quals,
                         &overall_gcp,
                         is_first_haplotype,
                         next_allele_bases,
-                        a,
                     );
                     allele_likelihoods.values_by_sample_index[sample_index][[a, read_index]] = lk;
-                    m_log_likelihood_array[idx] = lk;
+                    self.m_log_likelihood_array[idx] = lk;
                     idx += 1;
                 }
                 read_index += 1;
             }
         }
+    }
+
+    pub fn get_log_likelihood_array(&self) -> &Vec<f64> {
+        &self.m_log_likelihood_array
     }
 
     /**
@@ -202,17 +212,17 @@ impl PairHMM {
      * @throws IllegalArgumentException readBases, readQuals, insertionGOP, deletionGOP and overallGCP are not the same size
      * @return the log10 probability of read coming from the haplotype under the provided error model
      */
-    fn compute_read_likelihood_given_haplotype_log10(
+    pub fn compute_read_likelihood_given_haplotype_log10(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: Seq,
+        read_bases: &[u8],
         read_quals: &[u8],
         insertion_gop: &[u8],
         deletion_gop: &[u8],
         overall_gcp: &[u8],
         recache_read_values: bool,
         next_haplotype_bases: Option<&[u8]>,
-        current_allele_index: usize,
+        // current_allele_index: usize,
     ) -> f64 {
         assert!(
             self.initialized,
@@ -295,13 +305,15 @@ impl PairHMM {
             }
         };
 
+        self.previous_haplotype_length = Some(haplotype_bases.len());
+
         return result;
     }
 
     pub fn sub_compute_read_likelihood_given_haplotype_log10(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: Seq,
+        read_bases: &[u8],
         read_quals: &[u8],
         insertion_gop: &[u8],
         deletion_gop: &[u8],
@@ -332,17 +344,40 @@ impl PairHMM {
 
         self.initialize_priors(haplotype_bases, read_bases, read_quals, hap_start_index);
 
-        // +1 here is because hapStartIndex is 0-based, but our matrices are 1 based
+        // let padded_haplotype_length = self.padded_haplotype_length.unwrap();
+        // // +1 here is because hapStartIndex is 0-based, but our matrices are 1 based
+        // let prior = &self.prior;
+        // let transition = &self.transition;
+        // let mut match_matrix = &self.match_matrix;
+        // let mut insertion_matrix = &self.insertion_matrix;
+        // let mut deletion_matrix = &self.deletion_matrix;
         // Zip::indexed(&mut self.match_matrix)
         //     .and(&mut self.insertion_matrix)
         //     .and(&mut self.deletion_matrix)
-        //     .and(&self.prior)
-        //     .and(&self.transition)
-        //     .par_apply(|(i, j), match_matrix, insertion_matrix, deletion_matrix, prior, transition| {
-        //         *match_matrix = prior * ()
-        //     })
-        // TODO: Parallelize this block of code, the above code shows a start on how to use Zip
-        //       but index back seems difficult
+        //     .apply(|(i, j), match_val, insertion_val, deletion_val| {
+        //         if i > 0 && (j > hap_start_index && j < padded_haplotype_length) {
+        //             *match_val = prior[[i, j]]
+        //                 * (match_matrix[[i - 1, j - 1]]
+        //                 * transition[[i, PairHMMModel::match_to_match]]
+        //                 + insertion_matrix[[i - 1, j - 1]]
+        //                 * transition[[i, PairHMMModel::indel_to_match]]
+        //                 + deletion_matrix[[i - 1, j - 1]]
+        //                 * transition[[i, PairHMMModel::indel_to_match]]);
+        //
+        //             *insertion_val = match_matrix[[i - 1, j]]
+        //                 * transition[[i, PairHMMModel::match_to_insertion]]
+        //                 + insertion_matrix[[i - 1, j]]
+        //                 * transition[[i, PairHMMModel::insertion_to_insertion]];
+        //
+        //             *deletion_val = match_matrix[[i, j - 1]]
+        //                 * transition[[i, PairHMMModel::match_to_deletion]]
+        //                 + deletion_matrix[[i, j - 1]]
+        //                 * transition[[i, PairHMMModel::deletion_to_deletion]];
+        //         }
+        //     });
+        // TODO: This part is slow for large reads and haplotypes. It cannot be parallelized due to
+        //       requiring previous cells be populated with values before the next cell can be calculated
+        //       Unsure what to do to speed this up?
         // +1 here is because hapStartIndex is 0-based, but our matrices are 1 based
         for i in 1..self.padded_read_length.unwrap() {
             for j in (hap_start_index + 1)..self.padded_haplotype_length.unwrap() {
@@ -370,7 +405,7 @@ impl PairHMM {
         // this way we ignore all paths that ended in deletions! (huge)
         // but we have to sum all the paths ending in the M and I matrices, because they're no longer extended.
         let end_i = self.padded_read_length.unwrap() - 1;
-        let mut final_sum_probabilities = 0.0;
+        // let mut final_sum_probabilities = 0.0;
         // for j in 1..self.padded_haplotype_length.unwrap() {
         //     final_sum_probabilities += self.match_matrix[[end_i, j]] + self.insertion_matrix[[end_i, j]];
         // };
@@ -399,7 +434,7 @@ impl PairHMM {
     fn initialize_priors(
         &mut self,
         haplotype_bases: &[u8],
-        read_bases: Seq,
+        read_bases: &[u8],
         read_quals: &[u8],
         start_index: usize,
     ) {
@@ -409,31 +444,35 @@ impl PairHMM {
 
         // Potential parallel implementation
         Zip::indexed(&mut self.prior).par_for_each(|(i, j), value| {
-            let x = read_bases[i];
-            let qual = read_bases[i];
-            let y = haplotype_bases[j];
-            *value = if x == y || x == 'N' as u8 || y == 'N' as u8 {
-                QualityUtils::qual_to_prob(qual)
-            } else {
-                QualityUtils::qual_to_error_prob(qual)
-                    / (if do_not_use_tristate_correction {
-                        1.0
-                    } else {
-                        Self::TRISTATE_CORRECTION
-                    })
+            if (i > 0 && i <= read_bases.len())
+                && (j >= start_index + 1 && j <= haplotype_bases.len())
+            {
+                let x = read_bases[i - 1];
+                let qual = read_quals[i - 1];
+                let y = haplotype_bases[j - 1];
+                *value = if x == y || x == b'N' || y == b'N' {
+                    QualityUtils::qual_to_prob(qual)
+                } else {
+                    QualityUtils::qual_to_error_prob(qual)
+                        / (if do_not_use_tristate_correction {
+                            1.0
+                        } else {
+                            Self::TRISTATE_CORRECTION
+                        })
+                }
             }
         });
 
-        // Non parallel implementation
+        // // Non parallel implementation
         // for i in 0..read_bases.len() {
         //     let x = read_bases[i];
         //     let qual = read_quals[i];
         //     for j in start_index..haplotype_bases.len() {
         //         let y = haplotype_bases[j];
-        //         self.prior[[i, j]] = if x == y || x == 'N' as u8 || y == 'N' as u8 {
+        //         self.prior[[i + 1, j + 1]] = if x == y || x == 'N' as u8 || y == 'N' as u8 {
         //             QualityUtils::qual_to_prob(qual)
         //         } else {
-        //             QualityUtils::qual_to_error_prob(qual) / (if do_not_use_tristate_correction {
+        //             QualityUtils::qual_to_error_prob(qual) / (if self.do_not_use_tristate_correction {
         //                 1.0
         //             } else {
         //                 Self::TRISTATE_CORRECTION

@@ -12,11 +12,13 @@ extern crate rust_htslib;
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
+extern crate rand;
 
 use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use lorikeet_genome::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use lorikeet_genome::model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
+use lorikeet_genome::model::allele_list::AlleleList;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
@@ -26,6 +28,7 @@ use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUn
 use lorikeet_genome::utils::math_utils::MathUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use lorikeet_genome::GenomeExclusionTypes::GenomesAndContigsType;
+use rand::rngs::ThreadRng;
 use rust_htslib::bam::ext::BamRecordExtensions;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::{max, min, Ordering};
@@ -88,39 +91,82 @@ fn test_ploidy_and_maximum_allele(ploidy: usize, allele_count: usize) {
     }
 }
 
-// fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &[usize]) {
-//     let mut read_likelihoods = ReadLikelihoodsUnitTester::read_likelihoods(allele_count, read_count);
+fn test_likelihood_calculation(ploidy: usize, allele_count: usize, read_count: &[usize]) {
+    let mut read_likelihoods =
+        ReadLikelihoodsUnitTester::read_likelihoods(allele_count, read_count);
+
+    let mut calculator = GenotypeLikelihoodCalculators::get_instance(ploidy, allele_count);
+    let genotype_count = calculator.genotype_count;
+    let test_genotype_count = min(30000, genotype_count);
+    let sample_count = read_count.len();
+    // println!("ploidy {} allele count {} read count {:?}", ploidy, allele_count, &read_count);
+    let permutation = AlleleLikelihoodMatrixMapper::new(
+        read_likelihoods
+            .get_allele_list()
+            .permutation(read_likelihoods.get_allele_list()),
+    );
+    for s in 0..sample_count {
+        let number_of_evidences = read_likelihoods.sample_evidence_count(s);
+        let mut sample_likelihoods = read_likelihoods.sample_matrix(s);
+
+        let mut genotype_likelihoods =
+            calculator.genotype_likelihoods(&sample_likelihoods, &permutation, number_of_evidences);
+        let genotype_likelihoods_doubles = genotype_likelihoods.get_likelihoods();
+        assert_eq!(genotype_likelihoods_doubles.len(), genotype_count as usize);
+        // println!("sample {}", s);
+        for i in 0..test_genotype_count {
+            let mut genotype_allele_counts = calculator.genotype_allele_counts_at(i as usize);
+            // println!("i {} distinct {} genotype count {}", i, genotype_allele_counts.distinct_allele_count(), genotype_count);
+            let mut read_genotype_likelihoods = vec![0.0; number_of_evidences];
+            for r in 0..number_of_evidences {
+                let mut components = vec![0.0; genotype_allele_counts.distinct_allele_count()];
+                for ar in 0..genotype_allele_counts.distinct_allele_count() {
+                    let a = genotype_allele_counts.allele_index_at(ar);
+                    let a_count = genotype_allele_counts.allele_count_at(ar);
+                    let read_lk = sample_likelihoods[[a, r]];
+                    components[ar] = read_lk + (a_count as f64).log10();
+                }
+                read_genotype_likelihoods[r] = MathUtils::approximate_log10_sum_log10_vec(
+                    components.as_slice(),
+                    0,
+                    components.len(),
+                ) - (ploidy as f64).log10();
+            }
+            let genotype_likelihood = read_genotype_likelihoods.iter().sum::<f64>();
+            // println!("likelihoods {:?} sum {} log 10 ploidy {} ", &read_genotype_likelihoods, genotype_likelihood,(ploidy as f64).log10());
+
+            assert!(
+                relative_eq!(
+                    genotype_likelihoods_doubles[i as usize],
+                    genotype_likelihood,
+                    epsilon = 1e-4
+                ),
+                "Expected {} Actual {} index {}",
+                genotype_likelihood,
+                genotype_likelihoods_doubles[i as usize],
+                i
+            );
+        }
+    }
+}
+
+// Don't use genotypeIndexMap in code? Its only used in ReferenceConfidenceVariantContextMerger
+// fn test_genotype_index_map(ploidy: usize, old_allele_count: usize, new_allele_count: usize) {
+//     let mut rnd = ThreadRng::default();
+//     let max_allele_count = max(old_allele_count, new_allele_count);
+//     let mut allele_map = Vec::new();
+//     let mut reverse_map = HashMap::new();
 //
-//     let mut calculator = GenotypeLikelihoodCalculators::get_instance(ploidy, allele_count);
-//     let genotype_count = calculator.genotype_count;
-//     let test_genotype_count = min(30000, genotype_count);
-//     let sample_count = read_count.len();
+//     for i in 0..new_allele_count {
+//         allele_map[i] = rnd.gen_range(0, old_allele_count);
+//         let reverse_map_entry = reverse_map.entry(allele_map[i]).or_insert(HashSet::new());
+//         reverse_map_entry.insert(i);
+//     };
 //
-//     let permutation = AlleleLikelihoodMatrixMapper::new(read_likelihoods.get_allele_list().permutation(read_likelihoods.get_allele_list()));
-//     // println!("Read Counts {:?} read likelihoods {:?}", read_count, &read_likelihoods);
-//     for s in 0..sample_count {
-//         let mut sample_likelihoods = read_likelihoods.sample_matrix(sample_count);
-//         let mut genotype_likelihoods = calculator.genotype_likelihoods(&sample_likelihoods, &permutation);
-//         let genotype_likelihoods_doubles = genotype_likelihoods.get_likelihoods();
-//         assert_eq!(genotype_likelihoods_doubles.len(), genotype_count as usize);
-//         for i in 0..test_genotype_count {
-//             let mut genotype_allele_counts = calculator.genotype_allele_counts_at(i as usize);
-//             let mut read_genotype_likelihoods = vec![0.0; sample_likelihoods.ncols()];
-//             for r in 0..sample_likelihoods.ncols() {
-//                 let mut components = vec![0.0; genotype_allele_counts.distinct_allele_count()];
-//                 for ar in 0..genotype_allele_counts.distinct_allele_count() {
-//                     let a = genotype_allele_counts.allele_index_at(ar);
-//                     let a_count = genotype_allele_counts.allele_count_at(ar);
-//                     let read_lk = sample_likelihoods[[a, r]];
-//                     components[ar] = read_lk + (a_count as f64).log10();
-//                 }
-//                 read_genotype_likelihoods[r] = MathUtils::approximate_log10_sum_log10_vec(components.as_slice(), 0, components.len()) - (ploidy as f64).log10();
-//             }
-//             let genotype_likelihood = read_genotype_likelihoods.iter().sum::<f64>();
-//             assert!(relative_eq!(genotype_likelihoods_doubles[i as usize], genotype_likelihood, epsilon=1e-4));
-//         }
+//     let mut calculators = GenotypeLikelihoodCalculators::default();
+//     let mut calculator = GenotypeLikelihoodCalculators::get_instance(ploidy, max_allele_count);
 //
-//     }
+//     let mut
 // }
 
 fn calculate_genotype_count(ploidy: usize, allele_count: usize) -> usize {
@@ -147,13 +193,13 @@ fn ploidy_and_maximum_allele_data() {
     }
 }
 
-// #[test]
-// fn ploidy_and_maximum_allele_and_read_counts_data() {
-//     for i in PLOIDY.iter() {
-//         for j in MAXIMUM_ALLELE.iter() {
-//             for k in READ_COUNTS.iter() {
-//                 test_likelihood_calculation(*i, *j, k)
-//             }
-//         }
-//     }
-// }
+#[test]
+fn ploidy_and_maximum_allele_and_read_counts_data() {
+    for i in PLOIDY.iter() {
+        for j in MAXIMUM_ALLELE.iter() {
+            for k in READ_COUNTS.iter() {
+                test_likelihood_calculation(*i, *j, k)
+            }
+        }
+    }
+}

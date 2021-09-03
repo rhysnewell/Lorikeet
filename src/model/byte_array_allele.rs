@@ -53,7 +53,7 @@ impl ByteArrayAllele {
 
         if !Self::acceptable_allele_bases(bases, is_ref) {
             panic!(
-                "Unexpected base in allele bases {} ",
+                "Unexpected base in allele bases {}",
                 String::from_utf8_lossy(bases).to_string()
             )
         } else {

@@ -11,7 +11,7 @@ pub struct GenotypeLikelihoodCalculators {
 }
 
 impl GenotypeLikelihoodCalculators {
-    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: usize = 1000;
+    pub const MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY: usize = 50000;
 
     pub fn build_empty() -> GenotypeLikelihoodCalculators {
         GenotypeLikelihoodCalculators {
@@ -270,6 +270,7 @@ impl GenotypeLikelihoodCalculators {
      *
      * @return never {@code null}, follows the specification above.
      */
+
     fn build_genotype_allele_counts_array(
         ploidy: usize,
         allele_count: usize,
