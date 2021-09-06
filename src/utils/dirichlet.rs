@@ -2,31 +2,29 @@ use rayon::prelude::*;
 use statrs::function::gamma;
 use utils::math_utils::LOG10_E;
 
-pub struct Dirichlet {
-    alpha: Vec<f64>,
+pub struct Dirichlet<'a> {
+    alpha: &'a [f64],
 }
 
-impl Dirichlet {
-    pub fn new(alpha: &[f64]) -> Dirichlet {
-        Dirichlet {
-            alpha: alpha.to_vec(),
-        }
+impl<'a> Dirichlet<'a> {
+    pub fn new(alpha: &'a [f64]) -> Dirichlet<'a> {
+        Dirichlet { alpha: alpha }
     }
 
     /**
      * Create a symmetric distribution Dir(a/K, a/K, a/K . . .) where K is the number of states and
      * a is the concentration.
      */
-    pub fn symmetric_dirichlet(num_states: usize, concentration: f64) -> Dirichlet {
-        if num_states <= 0 {
-            panic!("Must have at least one state")
-        }
-        if concentration <= 0.0 {
-            panic!("Concentration must be positive")
-        }
-
-        Dirichlet::new(&vec![concentration / (num_states as f64); num_states])
-    }
+    // pub fn symmetric_dirichlet(num_states: usize, concentration: f64) -> Dirichlet<'a> {
+    //     if num_states <= 0 {
+    //         panic!("Must have at least one state")
+    //     }
+    //     if concentration <= 0.0 {
+    //         panic!("Concentration must be positive")
+    //     }
+    //
+    //     Dirichlet::new(&vec![concentration / (num_states as f64); num_states])
+    // }
 
     // in variational Bayes one often needs the effective point estimate of a multinomial distribution with a
     // Dirichlet prior.  This value is not the mode or mean of the Dirichlet but rather the exp of the expected log weights.

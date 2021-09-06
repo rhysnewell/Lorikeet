@@ -132,7 +132,7 @@ overflow-checks = false
 # The testing profile, used for `cargo test` (for `cargo test --release` see
 # the `release` and `bench` profiles).
 [profile.test]
-opt-level = 0
+opt-level = 3
 debug = 2
 rpath = false
 lto = false

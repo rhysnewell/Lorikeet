@@ -173,7 +173,7 @@ impl<'a> Genotype<'a> {
     }
 
     pub fn log10_p_error(&mut self, p_log10_error: f64) {
-        self.gq((p_log10_error * -10.0) as i64)
+        self.gq((p_log10_error * -10.0).round() as i64)
     }
 
     pub fn gq(&mut self, gq: i64) {

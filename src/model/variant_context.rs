@@ -191,14 +191,14 @@ impl<'a> VariantContext<'a> {
     }
 
     pub fn add_genotypes(&mut self, genotypes: Vec<Genotype<'a>>) {
-        for genotype in genotypes.iter() {
-            if genotype.pl.len() != self.alleles.len() {
-                panic!(
-                    "Number of likelihoods does not match number of alleles at position {} on tid {}",
-                    self.loc.get_start(), self.loc.get_contig()
-                )
-            }
-        }
+        // for genotype in genotypes.iter() {
+        //     if genotype.pl.len() != self.alleles.len() {
+        //         panic!(
+        //             "Number of likelihoods does not match number of alleles at position {} on tid {}",
+        //             self.loc.get_start(), self.loc.get_contig()
+        //         )
+        //     }
+        // }
         self.genotypes = GenotypesContext::new(genotypes);
     }
 

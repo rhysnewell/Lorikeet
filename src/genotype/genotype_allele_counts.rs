@@ -156,25 +156,22 @@ impl GenotypeAlleleCounts {
     pub fn index(&self) -> usize {
         self.index
     }
+
     /**
-     * Gets the log10 combination count, computing it if uninitialized.  Note that the invoked MathUtils method uses fast cached
-     * log10 values of integers for any reasonable ploidy.
-     *
-     * This method should be invoked on instances of {@link GenotypeAlleleCounts} cached in {@link GenotypeLikelihoodCalculators::genotypeTableByPloidy}.
-     * Such usage allows the result of this computation to be cached once for an entire run of HaplotypeCaller.
-     * @return
+     * Gets the log10 combination count, computing it if uninitialized.
      */
     pub fn log10_combination_count(&mut self) -> f64 {
         if self.log10_combination_count == GenotypeAlleleCounts::UNCOMPUTED_LOG_10_COMBINATION_COUNT
         {
-            self.log10_combination_count = MathUtils::log10_factorial(self.ploidy as f64) as f64
+            self.log10_combination_count = MathUtils::log10_factorial(self.ploidy as f64)
                 - (0..self.distinct_allele_count)
                     .into_par_iter()
                     .map(|i| {
                         MathUtils::log10_factorial(self.sorted_allele_counts[2 * i + 1] as f64)
                     })
-                    .sum::<f64>()
+                    .sum::<f64>();
         }
+
         return self.log10_combination_count;
     }
 

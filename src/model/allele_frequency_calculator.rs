@@ -81,11 +81,13 @@ impl AlleleFrequencyCalculator {
             .into_iter()
             .map(|genotype_index| {
                 let mut gac = gl_calc.genotype_allele_counts_at(genotype_index);
+
                 let result = gac.log10_combination_count()
                     + log10_likelihoods[genotype_index]
                     + gac.sum_over_allele_indices_and_counts(|index: usize, count: usize| {
                         (count as f64) * &log10_allele_frequencies[index]
                     });
+
                 result
             })
             .collect::<Vec<f64>>();
@@ -151,9 +153,10 @@ impl AlleleFrequencyCalculator {
      */
     pub fn calculate(&mut self, vc: VariantContext, default_ploidy: usize) -> AFCalculationResult {
         let num_alleles = vc.get_n_alleles();
+
         let alleles = vc.get_alleles();
         if num_alleles <= 1 {
-            panic!("Variant context has only a dingle reference allele, but get_log10_p_non_ref requires at least one at all {:?}", vc);
+            panic!("Variant context has only a single reference allele, but get_log10_p_non_ref requires at least one at all {:?}", vc);
         }
         let prior_pseudo_counts = alleles
             .par_iter()
@@ -180,14 +183,13 @@ impl AlleleFrequencyCalculator {
                 self.effective_allele_counts(&vc, &mut log10_allele_frequencies);
             allele_counts_maximum_difference =
                 MathUtils::ebe_subtract(&allele_counts, &new_allele_counts)
-                    .par_iter_mut()
+                    .into_par_iter()
                     .map(|x| x.abs())
                     .max_by_key(|x| OrderedFloat(*x))
                     .unwrap_or(std::f64::NAN);
             allele_counts = new_allele_counts;
 
             let posterior_pseudo_counts = MathUtils::ebe_add(&prior_pseudo_counts, &allele_counts);
-
             // first iteration uses flat prior in order to avoid local minimum where the prior + no pseudocounts gives such a low
             // effective allele frequency that it overwhelms the genotype likelihood of a real variant
             // basically, we want a chance to get non-zero pseudocounts before using a prior that's biased against a variant
@@ -204,9 +206,9 @@ impl AlleleFrequencyCalculator {
         let mut non_variant_indices_by_ploidy = BTreeMap::new();
 
         // re-usable buffers of the log10 genotype posteriors of genotypes missing each allele
-        let mut log10_absent_posteriors = vec![Vec::new(); num_alleles];
+        let mut log10_absent_posteriors = Arc::new(Mutex::new(vec![Vec::new(); num_alleles]));
 
-        for g in vc.get_genotypes().genotypes().iter() {
+        for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
             if !g.has_likelihoods() {
                 continue;
             }
@@ -260,11 +262,12 @@ impl AlleleFrequencyCalculator {
 
             // for each allele, we collect the log10 probabilities of genotypes in which the allele is absent, then add (in log space)
             // to get the log10 probability that the allele is absent in this sample
-            log10_absent_posteriors
-                .par_iter_mut()
-                .for_each(|arr| arr.clear());
-
-            let log10_absent_posteriors = Arc::new(Mutex::new(log10_absent_posteriors.clone()));
+            {
+                let mut log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
+                log10_absent_posteriors
+                    .par_iter_mut()
+                    .for_each(|arr| arr.clear());
+            }
             for genotype in (0..gl_calc.genotype_count as usize).into_iter() {
                 let log10_genotype_posterior = log10_genotype_posteriors[genotype];
                 gl_calc
@@ -300,8 +303,9 @@ impl AlleleFrequencyCalculator {
 
         let int_allele_counts = allele_counts
             .par_iter()
-            .map(|n| *n as i64)
+            .map(|n| n.round() as i64)
             .collect::<Vec<i64>>();
+
         let int_alt_allele_counts = int_allele_counts[1..].to_vec();
         let log10_p_ref_by_allele = (1..num_alleles)
             .into_par_iter()
@@ -358,7 +362,7 @@ impl AlleleFrequencyCalculator {
     ) -> Vec<f64> {
         let num_alleles = vc.get_n_alleles();
         let log10_result = Arc::new(Mutex::new(vec![std::f64::NEG_INFINITY; num_alleles]));
-        for g in vc.get_genotypes().genotypes().iter() {
+        for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
             if !g.has_likelihoods() {
                 continue;
             }
@@ -379,7 +383,7 @@ impl AlleleFrequencyCalculator {
                         log10_result[allele_index] = MathUtils::log10_sum_log10_two_values(
                             log10_result[allele_index],
                             log10_genotype_posteriors[genotype_index] + (count as f64).log10(),
-                        )
+                        );
                     });
             }
         }
@@ -388,6 +392,7 @@ impl AlleleFrequencyCalculator {
         log10_result
             .par_iter_mut()
             .for_each(|x| *x = (10.0).powf(*x));
-        return log10_result.clone();
+
+        return log10_result.to_vec();
     }
 }

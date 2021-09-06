@@ -1,4 +1,5 @@
 use ndarray::Array2;
+use rayon::prelude::*;
 use statrs::function::factorial::binomial;
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
@@ -38,6 +39,20 @@ impl GenotypeLikelihoods {
             num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
             log10_likelihoods,
         }
+    }
+
+    pub fn from_pls(pls: Vec<usize>) -> GenotypeLikelihoods {
+        GenotypeLikelihoods {
+            num_likelihood_cache: GenotypeNumLikelihoodsCache::new_empty(),
+            log10_likelihoods: Self::pls_to_gls(pls),
+        }
+    }
+
+    pub fn pls_to_gls(pls: Vec<usize>) -> Vec<f64> {
+        return pls
+            .into_par_iter()
+            .map(|p| (p as f64) / (-10.0))
+            .collect::<Vec<f64>>();
     }
 
     pub fn get_gq_log10_from_likelihoods(&self, i_of_chosen_genotype: usize) -> f64 {

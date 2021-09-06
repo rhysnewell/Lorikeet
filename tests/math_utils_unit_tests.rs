@@ -180,3 +180,125 @@ fn test_approximate_log_sum_log_on_slice() {
         )
     );
 }
+
+#[test]
+fn test_log_10_sum_log10() {
+    let required_precision = 1e-14;
+
+    let log3 = 0.477121254719662;
+    assert!(relative_eq!(
+        MathUtils::log10_sum_log10(&vec![0.0, 0.0, 0.0], 0, 3),
+        log3,
+        epsilon = required_precision
+    ));
+
+    assert!(relative_eq!(
+        MathUtils::log10_sum_log10(&vec![-5.15], 0, 1),
+        -5.15,
+        epsilon = required_precision
+    ));
+    assert!(relative_eq!(
+        MathUtils::log10_sum_log10(&vec![130.0], 0, 1),
+        130.0,
+        epsilon = required_precision
+    ));
+
+    assert!(relative_eq!(
+        MathUtils::log10_sum_log10(&vec![0.0, 0.0], 0, 2),
+        (10.0_f64.powf(0.0) + 10.0_f64.powf(0.0)).log10(),
+        epsilon = required_precision
+    ));
+
+    let mult_partition_factor = vec![0.999, 0.98, 0.95, 0.90, 0.8, 0.5, 0.3, 0.1, 0.05, 0.001];
+    let n_partitions = vec![2, 4, 8, 16, 32, 64, 128, 256, 512, 1028];
+
+    for alpha in mult_partition_factor {
+        let log_alpha = (alpha as f64).log10();
+        let log_one_minus_alpha = (1.0 - alpha as f64).log10();
+        for n_part in n_partitions.clone() {
+            let mut multiplicative = vec![0.0; n_part];
+            let mut equal = vec![0.0; n_part];
+
+            let mut remaining_log = 0.0; // realspace = 1
+            for i in 0..n_part - 1 {
+                equal[i] = -((n_part as f64).log10());
+                let piece = remaining_log + log_alpha; // take a*remaining, leaving remaining-a*remaining = (1-a)*remaining
+                multiplicative[i] = piece;
+                remaining_log = remaining_log + log_one_minus_alpha;
+            }
+            equal[n_part - 1] = -((n_part as f64).log10());
+            multiplicative[n_part - 1] = remaining_log;
+            assert!(relative_eq!(
+                MathUtils::log10_sum_log10(&equal, 0, equal.len()),
+                0.0,
+                epsilon = required_precision
+            ));
+            assert!(relative_eq!(
+                MathUtils::log10_sum_log10(&multiplicative, 0, multiplicative.len()),
+                0.0,
+                epsilon = required_precision
+            ));
+        }
+    }
+}
+
+#[test]
+fn test_normalize() {
+    let error = 1e-6;
+
+    let normalized_log10 = MathUtils::normalize_log10(
+        vec![3.0_f64.log10(), 2.0_f64.log10(), 1.0_f64.log10()],
+        true,
+    );
+
+    let normalized_log10_expected = vec![
+        (3.0_f64 / 6.0_f64).log10(),
+        (2.0_f64 / 6.0_f64).log10(),
+        (1.0_f64 / 6.0_f64).log10(),
+    ];
+
+    assert_equals_double_array(&normalized_log10, &normalized_log10_expected, error);
+}
+
+#[test]
+fn test_log10_factorial() {
+    assert!(relative_eq!(
+        MathUtils::log10_factorial(4.0),
+        1.3802112,
+        epsilon = 1e-6
+    ));
+    assert!(relative_eq!(
+        MathUtils::log10_factorial(10.0),
+        6.559763,
+        epsilon = 1e-6
+    ));
+    assert!(relative_eq!(
+        MathUtils::log10_factorial(200.0),
+        374.896888,
+        epsilon = 1e-6
+    ));
+    assert!(relative_eq!(
+        MathUtils::log10_factorial(12342.0),
+        45138.2626503,
+        epsilon = 1e-6
+    ));
+}
+
+fn assert_equals_double_array(actual: &[f64], expected: &[f64], tolerance: f64) {
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "Arrays of differing lengths actual {} -> expected {}",
+        actual.len(),
+        expected.len()
+    );
+    for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+        assert!(
+            relative_eq!(a, e, epsilon = tolerance),
+            "Actual {}, Expected {} at index {}",
+            a,
+            e,
+            i
+        );
+    }
+}

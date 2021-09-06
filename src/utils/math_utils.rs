@@ -139,7 +139,7 @@ impl MathUtils {
     pub fn normalize_log10(mut array: Vec<f64>, take_log10_of_output: bool) -> Vec<f64> {
         let log10_sum = MathUtils::log10_sum_log10(&array, 0, array.len());
         array.par_iter_mut().for_each(|x| *x = *x - log10_sum);
-        if take_log10_of_output {
+        if !take_log10_of_output {
             array.par_iter_mut().for_each(|x| *x = 10.0_f64.powf(*x))
         }
         return array;
@@ -158,14 +158,18 @@ impl MathUtils {
             return max_value;
         }
 
-        let sum_tot = log10_values[start..finish]
-            .par_iter()
-            .enumerate()
-            .filter(|(index, value)| {
-                *index != max_element_index || **value != std::f64::NEG_INFINITY
-            })
-            .map(|(_, value)| value)
-            .sum::<f64>();
+        let sum_tot = 1.0
+            + log10_values[start..finish]
+                .par_iter()
+                .enumerate()
+                .filter(|(index, value)| {
+                    *index != max_element_index && **value != std::f64::NEG_INFINITY
+                })
+                .map(|(_, value)| {
+                    let scaled_val = value - max_value;
+                    10.0_f64.powf(scaled_val)
+                })
+                .sum::<f64>();
 
         if sum_tot == std::f64::NAN || sum_tot == std::f64::INFINITY {
             panic!("log10 p: Values must be non-infinite and non-NAN")
@@ -176,9 +180,9 @@ impl MathUtils {
 
     pub fn log10_sum_log10_two_values(a: f64, b: f64) -> f64 {
         if a > b {
-            a + (1. + 10.0_f64.powf(b - a))
+            a + (1. + 10.0_f64.powf(b - a)).log10()
         } else {
-            b + (1. + 10.0_f64.powf(a - b))
+            b + (1. + 10.0_f64.powf(a - b)).log10()
         }
     }
 
@@ -191,11 +195,11 @@ impl MathUtils {
      */
     pub fn log10_sum_log10_three_values(a: f64, b: f64, c: f64) -> f64 {
         if a >= b && a >= c {
-            return a + (1.0 + 10.0_f64.powf(b - a)).log10() + 10.0_f64.powf(c - a);
+            return a + (1.0 + 10.0_f64.powf(b - a) + 10.0_f64.powf(c - a)).log10();
         } else if b >= c {
-            return b + (1.0 + 10.0_f64.powf(a - b)).log10() + 10.0_f64.powf(c - b);
+            return b + (1.0 + 10.0_f64.powf(a - b) + 10.0_f64.powf(c - b)).log10();
         } else {
-            return c + (1.0 + 10.0_f64.powf(a - c)).log10() + 10.0_f64.powf(b - c);
+            return c + (1.0 + 10.0_f64.powf(a - c) + 10.0_f64.powf(b - c)).log10();
         }
     }
 

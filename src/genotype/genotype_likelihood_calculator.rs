@@ -152,11 +152,10 @@ impl GenotypeLikelihoodCalculator {
         }
     }
 
-    /**
-     * Makes sure that temporal arrays and matrices are prepared for a number of reads to process.
-     * @param requestedCapacity number of read that need to be processed.
-     */
-
+    // /**
+    //  * Makes sure that temporal arrays and matrices are prepared for a number of reads to process.
+    //  * @param requestedCapacity number of read that need to be processed.
+    //  */
     /**
      * Returns the genotype associated to a particular likelihood index.
      *
@@ -179,7 +178,6 @@ impl GenotypeLikelihoodCalculator {
             );
         } else {
             if index < self.genotype_allele_counts.len() {
-                // println!("index {}", index);
                 return &mut self.genotype_allele_counts[index];
             } else if self.last_overhead_counts.is_null()
                 || self.last_overhead_counts.index() > index
@@ -258,9 +256,6 @@ impl GenotypeLikelihoodCalculator {
         for i in (0..allele_count_array.len()).step_by(2) {
             let index = allele_count_array[i];
             let count = allele_count_array[i + 1];
-            if count < 0 {
-                panic!("No allele count can be less than 0")
-            }
             for _ in (0..count).into_iter() {
                 self.allele_heap.push(index)
             }
@@ -292,11 +287,11 @@ impl GenotypeLikelihoodCalculator {
         }
 
         let mut result = 0;
-        for p in (1..self.ploidy + 1).into_iter().rev() {
+        for p in (0..=self.ploidy).into_iter().rev() {
+            if p == 0 {
+                continue;
+            };
             let allele = self.allele_heap.pop().unwrap();
-            if allele < 0 {
-                panic!("Invalid allele {} must be >= 0", allele)
-            }
             result += self.allele_first_genotype_offset_by_ploidy[[p, allele]]
         }
         return result as usize;
