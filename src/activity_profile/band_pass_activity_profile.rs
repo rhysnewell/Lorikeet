@@ -252,7 +252,6 @@ impl Profile for BandPassActivityProfile {
                     let loc = self.get_loc_for_offset(&just_added_state.get_loc(), i);
                     match loc {
                         Some(loc) => {
-                            // println!("Super state {} i {} filter size {} gauss {}", super_state.is_active_prob(), i, self.filter_size, self.gaussian_kernel[(i + self.filter_size as i64) as usize]);
                             let new_prob = super_state.is_active_prob()
                                 * self.gaussian_kernel[(i + self.filter_size as i64) as usize];
                             states.push(ActivityProfileState::new(loc, new_prob, Type::None))

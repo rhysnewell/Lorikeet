@@ -142,7 +142,6 @@ fn test_symmetries() {
     ];
 
     for (i, pair) in switch_b_with_c_pairs.into_iter().enumerate() {
-        println!("i {}", i);
         let vc1 = pair.0;
         let vc2 = pair.1;
         let result1 = af_calc.calculate(vc1, DEFAULT_PLOIDY);
@@ -264,7 +263,6 @@ fn test_MLE_counts() {
     for (i, pair) in vc_with_expected_counts.into_iter().enumerate() {
         let vc = pair.0;
         let expected = pair.1;
-        println!("index {}", i);
         let actual = af_calc
             .calculate(vc, DEFAULT_PLOIDY)
             .get_allele_counts_of_mle();
@@ -299,11 +297,9 @@ fn test_many_samples_with_low_confidence() {
         .into_iter()
         .map(|vc| {
             let result = af_calc.calculate(vc, DEFAULT_PLOIDY);
-            println!("result {:?}", result.get_allele_counts_of_mle());
             result.get_allele_count_at_mle(&B)
         })
         .collect::<Vec<i64>>();
-    println!("counts {:?}", &counts);
     assert_eq!(counts[0], 0);
     assert_eq!(counts[1], 0);
     assert_eq!(counts[4], 2);

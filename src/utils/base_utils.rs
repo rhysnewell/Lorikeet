@@ -1,4 +1,5 @@
 use bio::alphabets::dna::alphabet;
+use rand::{rngs::ThreadRng, Rng};
 use rayon::prelude::*;
 use std::cmp::{min, Ordering};
 use std::collections::HashSet;
@@ -78,5 +79,46 @@ impl BaseUtils {
 
     pub fn is_all_regular_base(bases: &[u8]) -> bool {
         bases.par_iter().all(|base| Self::is_regular_base(*base))
+    }
+
+    /**
+     * Fill an array section with random bases.
+     *
+     * @param dest array to fill.
+     * @param fromIndex first index to be filled (inclusive).
+     * @param toIndex index after last to be filled (exclusive).
+     *
+     * @throws IllegalArgumentException if {@code dest} is {@code null},
+     *              {@code fromIndex} or {@code toIndex} is negative,
+     *              {@code fromIndex} or {@code toIndex} are greater than {@code dest} length,
+     *              or {@code fromIndex} greater than {@code toIndex}.
+     */
+    pub fn fill_with_random_bases(dest: &mut Vec<u8>, from_index: usize, to_index: usize) {
+        let mut rnd = ThreadRng::default();
+        assert!(
+            to_index <= dest.len(),
+            "both indices must be less or equal to dest length from {} to {} dest length {}",
+            from_index,
+            to_index,
+            dest.len()
+        );
+        (from_index..to_index)
+            .for_each(|i| dest[i] = Self::base_index_to_simple_base(rnd.gen_range(0, 4)))
+    }
+
+    /**
+     * Converts a base index to a simple base
+     *
+     * @param baseIndex 0, 1, 2, 3
+     * @return A, C, G, T, or '.' if the index can't be understood
+     */
+    pub fn base_index_to_simple_base(base_index: usize) -> u8 {
+        match base_index {
+            0 => return b'A',
+            1 => return b'C',
+            2 => return b'G',
+            3 => return b'T',
+            _ => return b'.',
+        }
     }
 }

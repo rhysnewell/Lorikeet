@@ -6,9 +6,10 @@ use reads::cigar_builder::{CigarBuilder, CigarBuilderResult};
 use reads::cigar_utils::CigarUtils;
 use reads::cigar_utils::ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS;
 use reads::read_clipper::ReadClipper;
-use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
+use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
 use smith_waterman::bindings::SWOverhangStrategy;
 use smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
+use std::hash::Hash;
 use std::ops::Range;
 use utils::simple_interval::SimpleInterval;
 
@@ -42,17 +43,18 @@ impl AlignmentUtils {
         is_informative: bool,
     ) -> BirdToolRead {
         assert!(
-            reference_start >= 1,
-            "Reference start must be >= 1, but got {}",
+            reference_start >= 0,
+            "Reference start must be >= 0, but got {}",
             reference_start
         );
 
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
         let read_minus_soft_clips = ReadClipper::new(original_read).hard_clip_soft_clipped_bases();
+
         let soft_clipped_bases = original_read.len() - read_minus_soft_clips.len();
         let read_to_haplotype_sw_alignment = SmithWatermanAligner::align(
             haplotype.get_bases(),
-            read_minus_soft_clips.read.seq().encoded,
+            read_minus_soft_clips.read.seq().as_bytes().as_slice(),
             *ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
             SWOverhangStrategy::SoftClip,
         );
@@ -69,20 +71,21 @@ impl AlignmentUtils {
         let sw_cigar = sw_cigar_builder
             .make(false)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
-
         // since we're modifying the read we need to clone it
         let mut copied_read = original_read.clone();
 
         // TODO: Figure out best way to add HashCode to read
-        // if is_informative {
-        //     copied_read.read.push_aux(b"HC", Aux::)
-        // }
+        if is_informative {
+            copied_read
+                .read
+                .push_aux(b"HC", Aux::U32(haplotype.hash_code() as u32))
+                .unwrap();
+        };
 
         // compute here the read starts w.r.t. the reference from the SW result and the hap -> ref cigar
         let right_padded_haplotype_vs_ref_cigar = haplotype
             .get_consolidated_padded_ciagr(1000)
             .unwrap_or_else(|_| panic!("Unhandled error in haplotype"));
-
         // this computes the number of reference bases before the read starts, based on the haplotype vs ref cigar
         // This cigar corresponds exactly to the readToRefCigarRaw, below.  One might wonder whether readToRefCigarRaw and
         // readToRefCigarClean ever imply different starts, which could occur if if the former has a leading deletion.  However,
@@ -117,10 +120,11 @@ impl AlignmentUtils {
         let left_aligned_read_to_ref_cigar_result = Self::left_align_indels(
             read_to_ref_cigar,
             ref_haplotype.get_bases(),
-            read_minus_soft_clips.read.seq().encoded,
+            read_minus_soft_clips.read.seq().as_bytes().as_slice(),
             read_start_on_reference_haplotype,
         );
         let left_aligned_read_to_ref_cigar = &left_aligned_read_to_ref_cigar_result.cigar;
+
         // it's possible that left-alignment shifted a deletion to the beginning of a read and
         // removed it, shifting the first aligned base to the right
         copied_read.read.set_pos(
@@ -140,7 +144,7 @@ impl AlignmentUtils {
         copied_read.read.set(
             original_read.read.qname(),
             Some(&new_cigar),
-            original_read.read.seq().encoded,
+            original_read.read.seq().as_bytes().as_slice(),
             original_read.read.qual(),
         );
 
@@ -166,7 +170,7 @@ impl AlignmentUtils {
      * @param originalClippedCigar cigar to check for clipped bases
      * @return a new cigar that has had the clipped elements from the original appended to either end
      */
-    fn append_clipped_elements_from_cigar_to_cigar(
+    pub fn append_clipped_elements_from_cigar_to_cigar(
         cigar_to_have_clipped_elements_added: CigarString,
         original_clipped_cigar: CigarStringView,
     ) -> CigarString {
@@ -276,7 +280,7 @@ impl AlignmentUtils {
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
     }
 
-    fn read_start_on_reference_haplotype(
+    pub fn read_start_on_reference_haplotype(
         haplotype_vs_ref_cigar: &CigarString,
         read_start_on_haplotype: u32,
     ) -> u32 {
@@ -333,14 +337,18 @@ impl AlignmentUtils {
         end: u32,
         by_reference: bool,
     ) -> CigarBuilderResult {
-        assert!(end >= start, "End position cannot be before start position");
+        assert!(
+            end >= start,
+            "End position cannot be before start position start {} end {}",
+            start,
+            end
+        );
 
         let mut new_elements = CigarBuilder::new(true);
 
         // these variables track the inclusive start and exclusive end of the current cigar element in reference (if byReference) or read (otherwise) coordinates
         let mut element_start; // inclusive
         let mut element_end = 0; // exclusive -- start of next element
-
         for elt in cigar.iter() {
             element_start = element_end;
             element_end = element_start
@@ -458,6 +466,8 @@ impl AlignmentUtils {
             } else if ref_indel_range.len() == 0 && read_indel_range.len() == 0 {
                 ref_indel_range.start -= Self::length_on_reference(&element) as i32;
                 read_indel_range.start -= Self::length_on_read(&element) as i32;
+                ref_indel_range.end -= Self::length_on_reference(&element) as i32;
+                read_indel_range.end -= Self::length_on_read(&element) as i32;
                 result_right_to_left.push(element);
             } else {
                 let max_shift = if CigarUtils::is_alignment(&element) {
@@ -605,8 +615,7 @@ impl AlignmentUtils {
 
         // we shift left as long as the last bases on the right are equal among all sequences and the next bases on the left are all equal.
         // if a sequence is empty (eg the reference relative to an insertion alt allele) the last base on the right is the next base on the left
-        while trim
-            && min_size > 0
+        while start_shift < max_shift as i32
             && Self::next_base_on_left_is_same(sequences, &bounds)
             && Self::last_base_on_right_is_same(sequences, &bounds)
         {
@@ -700,17 +709,17 @@ impl AlignmentUtils {
     pub fn last_index_of(reference: &[u8], query: &[u8]) -> Option<usize> {
         let query_length = query.len();
         // start search from the last possible matching position and search to the left
-        for r in (0..(reference.len().checked_sub(query_length).unwrap_or(0) + 1))
+        for r in (0..=(reference.len() as i64 - query_length as i64))
             .into_iter()
             .rev()
         {
             let mut q = 0;
-            while q < query_length && reference[r + q] == query[q] {
+            while q < query_length && reference[(r + q as i64) as usize] == query[q] {
                 q += 1;
             }
 
             if q == query_length {
-                return Some(r);
+                return Some(r as usize);
             }
         }
 
@@ -818,6 +827,89 @@ impl AlignmentUtils {
      */
     pub fn trim_cigar_by_reference(cigar: CigarString, start: u32, end: u32) -> CigarBuilderResult {
         return Self::trim_cigar(cigar, start, end, true);
+    }
+
+    /**
+     * Count how many bases mismatch the reference.  Indels are not considered mismatching.
+     *
+     * @param r                   the sam record to check against
+     * @param refSeq              the byte array representing the reference sequence
+     * @param refIndex            the index in the reference byte array of the read's first base (the reference index
+     *                            is matching the alignment start, there may be tons of soft-clipped bases before/after
+     *                            that so it's wrong to compare with getLength() here.).  Note that refIndex is
+     *                            zero based, not 1 based
+     * @param startOnRead         the index in the read's bases from which we start counting
+     * @param nReadBases          the number of bases after (but including) startOnRead that we check
+     * @return non-null object representing the mismatch count
+     */
+    pub fn get_mismatch_count(
+        r: &BirdToolRead,
+        ref_seq: &[u8],
+        mut ref_index: usize,
+        start_on_read: usize,
+        n_read_bases: usize,
+    ) -> MismatchCount {
+        let mut mc = MismatchCount::new(0, 0);
+
+        let mut read_idx = 0;
+        let end_on_read = start_on_read + n_read_bases - 1; // index of the last base on read we want to count (note we are including soft-clipped bases with this math)
+        let read_seq = r.read.seq().as_bytes();
+        let c = r.read.cigar();
+        let read_quals = r.read.qual();
+
+        for ce in c.0.iter() {
+            if read_idx > end_on_read {
+                break;
+            } else {
+                match ce {
+                    Cigar::Diff(element_length) => {
+                        mc.num_mismatches += *element_length as usize;
+                        for j in 0..*element_length as usize {
+                            mc.mismatch_qualities += read_quals[read_idx + j] as usize;
+                        }
+                        // ref_index += *element_length as usize;
+                        // read_idx += *element_length as usize;
+                    }
+                    Cigar::Equal(element_length) => {
+                        ref_index += *element_length as usize;
+                        read_idx += *element_length as usize;
+                    }
+                    Cigar::Match(element_length) => {
+                        for j in 0..*element_length as usize {
+                            if ref_index >= ref_seq.len() {
+                                // pass
+                            } else if read_idx < start_on_read {
+                                // pass
+                            } else if read_idx > end_on_read {
+                                break;
+                            } else {
+                                let ref_chr = ref_seq[ref_index];
+                                let read_chr = read_seq[read_idx];
+
+                                if read_chr != ref_chr {
+                                    mc.num_mismatches += 1;
+                                    mc.mismatch_qualities += read_quals[read_idx] as usize;
+                                };
+
+                                read_idx += 1;
+                                ref_index += 1;
+                            }
+                        }
+                    }
+                    Cigar::Ins(element_length) | Cigar::SoftClip(element_length) => {
+                        read_idx += *element_length as usize
+                    }
+                    Cigar::Del(element_length) | Cigar::RefSkip(element_length) => {
+                        ref_index += *element_length as usize
+                    }
+                    _ => {
+                        // do nothing
+                    }
+                }
+            }
+        }
+
+        return mc;
     }
 }
 
@@ -938,6 +1030,20 @@ impl CigarPairTransform {
             op_13,
             advance_12,
             advance_23,
+        }
+    }
+}
+
+pub struct MismatchCount {
+    pub num_mismatches: usize,
+    pub mismatch_qualities: usize,
+}
+
+impl MismatchCount {
+    pub fn new(num_mismatches: usize, mismatch_qualities: usize) -> Self {
+        Self {
+            num_mismatches,
+            mismatch_qualities,
         }
     }
 }

@@ -24,6 +24,50 @@ pub const DEFAULT_MAPPING_SOFTWARE_ENUM: MappingProgram = MappingProgram::MINIMA
 
 // pub fn finish_and_clear()
 
+/**
+ * Make all combinations of N size of objects
+ *
+ * if objects = [A, B, C]
+ * if N = 1 => [[A], [B], [C]]
+ * if N = 2 => [[A, A], [B, A], [C, A], [A, B], [B, B], [C, B], [A, C], [B, C], [C, C]]
+ *
+ * @param objects         list of objects
+ * @param n               size of each combination
+ * @param withReplacement if false, the resulting permutations will only contain unique objects from objects
+ * @return a list with all combinations with size n of objects.
+ */
+pub fn make_permutations<T: Clone + PartialEq>(
+    objects: &[T],
+    n: usize,
+    with_replacement: bool,
+) -> Vec<Vec<T>> {
+    let mut combinations = Vec::new();
+
+    if n == 1 {
+        for o in objects {
+            combinations.push(vec![o.clone()]);
+        }
+    } else if n > 1 {
+        let sub = make_permutations(objects, n - 1, with_replacement);
+        for sub_i in sub {
+            for a in objects {
+                if with_replacement || !sub_i.contains(a) {
+                    combinations.push(cons(a.clone(), sub_i.clone()));
+                }
+            }
+        }
+    }
+
+    return combinations;
+}
+
+pub fn cons<T>(elt: T, l: Vec<T>) -> Vec<T> {
+    let mut l2 = Vec::new();
+    l2.push(elt);
+    l2.extend(l);
+    return l2;
+}
+
 pub fn get_streamed_bam_readers<'a>(
     m: &'a clap::ArgMatches,
     mapping_program: MappingProgram,

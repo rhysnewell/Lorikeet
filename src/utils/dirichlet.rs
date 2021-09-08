@@ -11,10 +11,10 @@ impl<'a> Dirichlet<'a> {
         Dirichlet { alpha: alpha }
     }
 
-    /**
-     * Create a symmetric distribution Dir(a/K, a/K, a/K . . .) where K is the number of states and
-     * a is the concentration.
-     */
+    // /**
+    //  * Create a symmetric distribution Dir(a/K, a/K, a/K . . .) where K is the number of states and
+    //  * a is the concentration.
+    //  */
     // pub fn symmetric_dirichlet(num_states: usize, concentration: f64) -> Dirichlet<'a> {
     //     if num_states <= 0 {
     //         panic!("Must have at least one state")

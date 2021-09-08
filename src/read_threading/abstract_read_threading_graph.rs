@@ -14,6 +14,8 @@ use utils::simple_interval::Locatable;
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
  */
+
+// TODO: Change this to an enum with two options, ReadThreadGraph & JunctionTreeLinkedDeBruijnGraph
 pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
     fn get_base_graph(&self) -> &BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>;
 

@@ -715,7 +715,6 @@ fn test_marginalization(
             for r in 0..sample_read_count {
                 let mut old_best_lk = std::f64::NEG_INFINITY;
                 for old_allele in old_alleles {
-                    // println!("index of allele {}", original.alleles().index_of_allele(*old_allele).unwrap());
                     old_best_lk = max(
                         OrderedFloat(
                             old_sample_likelihoods
@@ -957,7 +956,6 @@ fn random_allele_map<'a, A: Allele>(
     from_alleles: &'a Vec<A>,
     to_alleles: &Vec<A>,
 ) -> HashMap<usize, Vec<&'a A>> {
-    println!("from {:?} to {:?}", from_alleles.len(), to_alleles.len());
     let mut result = HashMap::new();
     let mut remaining = from_alleles.iter().collect::<Vec<&'a A>>();
     let mut rnd = ThreadRng::default();
@@ -967,13 +965,7 @@ fn random_allele_map<'a, A: Allele>(
         let result_entry = result.entry(next_to_index).or_insert(Vec::new());
         result_entry.push(remaining.remove(from_index_of_allele));
         next_to_index = (next_to_index + 1) % to_alleles.len();
-        println!("next to index {}", next_to_index);
     }
-
-    println!(
-        "Value lengths {:?}",
-        result.values().map(|v| v.len()).collect::<Vec<usize>>()
-    );
 
     return result;
 }

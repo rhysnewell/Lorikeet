@@ -497,14 +497,11 @@ impl Profile for ActivityProfile {
         {
             // we really haven't finalized at the probability mass that might affect our decision, so keep
             // waiting until we do before we try to make any decisions
-            // println!("Undecided");
             return None;
         }
 
         let mut end_of_active_region =
             self.find_first_activity_boundary(is_active_region, max_region_size);
-
-        // println!("End of active region {}, is_active {}, max_region_size {}", end_of_active_region, is_active_region, max_region_size);
 
         if is_active_region && (end_of_active_region == max_region_size) {
             end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
@@ -533,10 +530,8 @@ impl Profile for ActivityProfile {
         let mut min_i = end_of_active_region - 1;
         let mut min_p = std::f64::MAX;
 
-        // for i in (min_i..=(min_region_size - 1)).into_iter().rev() {
         for i in ((min_region_size - 1)..=min_i).into_iter().rev() {
             let cur = self.get_prob(i);
-            // println!("Current {} prob {} prev min {}", i, cur, min_p);
             if cur < min_p && self.is_minimum(i) {
                 min_p = cur;
                 min_i = i;

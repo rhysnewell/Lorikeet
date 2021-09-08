@@ -1,6 +1,6 @@
 use ndarray::{Array2, Axis};
 use reads::alignment_utils::AlignmentUtils;
-use rust_htslib::bam::record::{Cigar, CigarString};
+use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use smith_waterman::bindings::*;
 use std::cmp::max;
 
@@ -116,13 +116,29 @@ impl SmithWatermanAligner {
             let current_value = parameters.gap_open_penalty;
 
             // initialize the first row
-            sw.row_mut(0)
-                .accumulate_axis_inplace(Axis(1), |&prev, curr| *curr = prev + current_value);
+            {
+                let mut top_row = sw.row_mut(0);
+                // .accumulate_axis_inplace(Axis(1), |&prev, curr| *curr = prev + current_value);
+                let mut current_value = parameters.gap_open_penalty;
+                top_row[1] = current_value;
+                for i in 2..top_row.len() {
+                    current_value += parameters.gap_extend_penalty;
+                    top_row[i] = current_value;
+                }
+            }
             debug!("Top row values {:?}", &sw.row(0));
 
             // initialize the first column
-            sw.column_mut(0)
-                .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
+            {
+                sw[[1, 0]] = parameters.gap_open_penalty;
+                let mut current_value = parameters.gap_open_penalty;
+                for i in 2..sw.nrows() {
+                    current_value += parameters.gap_extend_penalty;
+                    sw[[i, 0]] = current_value;
+                }
+            }
+            // sw.column_mut(0)
+            //     .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
             debug!("first column values {:?}", &sw.column(0));
         }
 
@@ -254,8 +270,8 @@ impl SmithWatermanAligner {
 
             // now look for a larger score on the bottom-most row
             if overhang_strategy != &SWOverhangStrategy::LeadingIndel {
-                let bottom_row = sw.row(sw.nrows() - 1);
-                for j in 1..sw.ncols() {
+                let bottom_row = sw.row(ref_length);
+                for j in 1..bottom_row.len() {
                     let cur_score = bottom_row[j];
                     // data_offset is the offset of [n][j]
                     if cur_score > max_score
@@ -272,7 +288,7 @@ impl SmithWatermanAligner {
         }
 
         let mut lce = Vec::new();
-        if segment_length > 0 && overhang_strategy == &SWOverhangStrategy::Indel {
+        if segment_length > 0 && overhang_strategy == &SWOverhangStrategy::SoftClip {
             lce.push(Cigar::SoftClip(segment_length as u32));
             segment_length = 0;
         };
@@ -284,9 +300,10 @@ impl SmithWatermanAligner {
         let mut state = State::Match;
         loop {
             let btr = btrack[[p1 as usize, p2 as usize]];
-            let new_state;
+            let mut new_state;
             let mut step_length = 1;
             if btr > 0 {
+                new_state = State::Deletion;
                 new_state = State::Deletion;
                 step_length = btr;
             } else if btr < 0 {
@@ -355,7 +372,7 @@ impl SmithWatermanAligner {
             // take care of the actual alignment
             lce.push(Self::make_element(state, segment_length as u32));
             // take care of overhangs at the beginning of the alignment
-            if p2 > 0 {
+            if p1 > 0 {
                 lce.push(Self::make_element(State::Deletion, p1 as u32));
             } else if p2 > 0 {
                 lce.push(Self::make_element(State::Insertion, p2 as u32));
@@ -379,7 +396,7 @@ impl SmithWatermanAligner {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmithWatermanAlignmentResult {
     pub(crate) cigar: CigarString,
     pub(crate) alignment_offset: i32,
@@ -391,6 +408,14 @@ impl SmithWatermanAlignmentResult {
             cigar,
             alignment_offset,
         }
+    }
+
+    pub fn get_alignment_offset(&self) -> i32 {
+        self.alignment_offset
+    }
+
+    pub fn get_cigar(&self) -> CigarString {
+        self.cigar.clone()
     }
 }
 

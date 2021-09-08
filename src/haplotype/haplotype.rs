@@ -6,6 +6,7 @@ use reads::cigar_builder::CigarBuilder;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use utils::errors::BirdToolError;
 use utils::simple_interval::{Locatable, SimpleInterval};
@@ -46,6 +47,12 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
 
     pub fn set_alignment_start_hap_wrt_ref(&mut self, value: usize) {
         self.alignment_start_hap_wrt_ref = value
+    }
+
+    pub fn hash_code(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.get_bases().hash(&mut hasher);
+        hasher.finish()
     }
 
     // pub fn get_bases(&self) -> &[u8] {
