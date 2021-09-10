@@ -205,12 +205,8 @@ fn assert_alignment_matches_expected(
     weights: SWParameters,
     strategy: SWOverhangStrategy,
 ) {
-    let alignment = SmithWatermanAligner::align(
-        reference.as_bytes(),
-        read.as_bytes(),
-        weights,
-        strategy.clone(),
-    );
+    let alignment =
+        SmithWatermanAligner::align(reference.as_bytes(), read.as_bytes(), &weights, strategy);
     print_alignment(
         reference.as_bytes(),
         read.as_bytes(),
@@ -339,13 +335,13 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
     let mut padded_alignment = SmithWatermanAligner::align(
         paddeds_ref.as_bytes(),
         paddeds_hap.as_bytes(),
-        *NEW_SW_PARAMETERS,
+        &*NEW_SW_PARAMETERS,
         SWOverhangStrategy::SoftClip,
     );
     let mut not_padded_alignment = SmithWatermanAligner::align(
         not_paddeds_ref.as_bytes(),
         not_paddeds_hap.as_bytes(),
-        *NEW_SW_PARAMETERS,
+        &*NEW_SW_PARAMETERS,
         SWOverhangStrategy::SoftClip,
     );
 

@@ -3,12 +3,11 @@ use graphs::base_vertex::BaseVertex;
 use graphs::path::Path;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
-use linked_hash_set::LinkedHashSet;
-use petgraph::algo;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
-use petgraph::stable_graph::StableDiGraph;
+use petgraph::stable_graph::{Externals, IndexType, StableDiGraph};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use petgraph::{algo, Directed, EdgeType};
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -158,6 +157,16 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @return number of incoming edges
      */
     pub fn in_degree_of(&self, vertex_index: NodeIndex) -> usize {
+        if NodeIndex::new(6) == vertex_index {
+            println!(
+                "Node in degree {:?}",
+                self.graph
+                    .edges_directed(vertex_index, Direction::Incoming)
+                    .into_iter()
+                    .map(|e| e.id())
+                    .collect::<Vec<EdgeIndex>>()
+            );
+        }
         self.graph
             .edges_directed(vertex_index, Direction::Incoming)
             .count()
@@ -168,6 +177,16 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @return number of outgoing edges
      */
     pub fn out_degree_of(&self, vertex_index: NodeIndex) -> usize {
+        if NodeIndex::new(6) == vertex_index {
+            println!(
+                "Node out degree {:?}",
+                self.graph
+                    .edges_directed(vertex_index, Direction::Outgoing)
+                    .into_iter()
+                    .map(|e| e.id())
+                    .collect::<Vec<EdgeIndex>>()
+            );
+        }
         self.graph
             .edges_directed(vertex_index, Direction::Outgoing)
             .count()
@@ -182,11 +201,12 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     pub fn get_sources(&self) -> BinaryHeap<NodeIndex> {
         return self
             .graph
-            .node_indices()
-            .into_iter()
-            .par_bridge()
-            .filter(|v_index| self.is_source(*v_index))
+            .externals(Direction::Incoming)
             .collect::<BinaryHeap<NodeIndex>>();
+    }
+
+    pub fn get_sources_generic(&self) -> Externals<'_, V, Directed, u32> {
+        return self.graph.externals(Direction::Incoming);
     }
 
     /**
@@ -198,11 +218,12 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     pub fn get_sinks(&self) -> BinaryHeap<NodeIndex> {
         return self
             .graph
-            .node_indices()
-            .into_iter()
-            .par_bridge()
-            .filter(|v_index| self.is_sink(*v_index))
+            .externals(Direction::Outgoing)
             .collect::<BinaryHeap<NodeIndex>>();
+    }
+
+    pub fn get_sinks_generic(&self) -> Externals<'_, V, Directed, u32> {
+        return self.graph.externals(Direction::Outgoing);
     }
 
     pub fn compare_paths(&self, first_path: &Path, second_path: &Path) -> Ordering {
@@ -214,30 +235,30 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
     /**
      * Get the set of vertices connected to v by incoming edges
-     * NOTE: We return a LinkedHashSet here in order to preserve the determinism in the output order of VertexSet(),
-     *       which is deterministic in output due to the underlying sets all being LinkedHashSets.
+     * NOTE: We return a HashSet here in order to preserve the determinism in the output order of VertexSet(),
+     *       which is deterministic in output due to the underlying sets all being HashSets.
      * @param v a non-null vertex
      * @return a set of vertices {X} connected X -> v
      */
-    pub fn incoming_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
+    pub fn incoming_vertices_of(&self, v: NodeIndex) -> HashSet<NodeIndex> {
         return self
             .graph
             .neighbors_directed(v, Direction::Incoming)
-            .collect::<LinkedHashSet<NodeIndex>>();
+            .collect::<HashSet<NodeIndex>>();
     }
 
     /**
      * Get the set of vertices connected to v by outgoing edges
-     * NOTE: We return a LinkedHashSet here in order to preserve the determinism in the output order of VertexSet(),
-     *       which is deterministic in output due to the underlying sets all being LinkedHashSets.
+     * NOTE: We return a HashSet here in order to preserve the determinism in the output order of VertexSet(),
+     *       which is deterministic in output due to the underlying sets all being HashSets.
      * @param v a non-null vertex
      * @return a set of vertices {X} connected X -> v
      */
-    pub fn outgoing_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
+    pub fn outgoing_vertices_of(&self, v: NodeIndex) -> HashSet<NodeIndex> {
         return self
             .graph
             .neighbors_directed(v, Direction::Outgoing)
-            .collect::<LinkedHashSet<NodeIndex>>();
+            .collect::<HashSet<NodeIndex>>();
     }
 
     /**
@@ -552,6 +573,14 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         return v.get_additional_sequence(self.is_source(index));
     }
 
+    pub fn get_sequence_from_index<'a>(&'a self, index: NodeIndex) -> &'a [u8] {
+        return self
+            .graph
+            .node_weight(index)
+            .unwrap()
+            .get_additional_sequence(self.is_source(index));
+    }
+
     /**
      * Get the set of vertices within distance edges of source, regardless of edge direction
      *
@@ -808,5 +837,22 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         };
 
         return bytes;
+    }
+
+    pub fn add_vertices(&mut self, vertices: Vec<V>) -> Vec<NodeIndex> {
+        let node_indices = vertices
+            .into_iter()
+            .map(|v| self.graph.add_node(v))
+            .collect::<Vec<NodeIndex>>();
+
+        return node_indices;
+    }
+
+    pub fn add_edges(&mut self, start: NodeIndex, remaining: Vec<NodeIndex>, template: E) {
+        let mut prev = start;
+        for next in remaining {
+            self.graph.add_edge(prev, next, template.clone());
+            prev = next;
+        }
     }
 }

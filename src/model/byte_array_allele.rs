@@ -190,6 +190,10 @@ pub trait Allele: Eq + PartialEq + Clone + std::fmt::Debug + Send + Sync {
     fn get_bases(&self) -> &[u8];
 
     fn no_call() -> Self;
+
+    fn bases_match(&self, other: &[u8]) -> bool {
+        self.get_bases() == other
+    }
 }
 
 impl Allele for ByteArrayAllele {

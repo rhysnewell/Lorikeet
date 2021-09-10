@@ -274,6 +274,7 @@ impl CigarUtils {
         ref_seq: &[u8],
         alt_seq: &[u8],
         strategy: SWOverhangStrategy,
+        sw_parameters: &SWParameters,
     ) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
@@ -309,7 +310,7 @@ impl CigarUtils {
             std::str::from_utf8(alt_seq).unwrap(),
             *SW_PAD
         );
-        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, *NEW_SW_PARAMETERS, strategy);
+        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, sw_parameters, strategy);
 
         if Self::is_s_w_failure(&alignment) {
             return None;

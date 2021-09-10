@@ -9,6 +9,7 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
+use smith_waterman::bindings::SWParameters;
 use utils::simple_interval::Locatable;
 
 /**
@@ -220,6 +221,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_end_sw_parameters: &SWParameters,
     );
 
     /**
@@ -235,6 +237,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_end_sw_parameters: &SWParameters,
     );
 
     /**
@@ -252,6 +255,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_tail_sw_parameters: &SWParameters,
     ) -> usize;
 
     /**
@@ -270,6 +274,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_head_sw_parameters: &SWParameters,
     ) -> usize;
 
     /**
@@ -370,6 +375,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_tail_sw_parameters: &SWParameters,
     ) -> Option<DanglingChainMergeHelper>;
 
     /**
@@ -388,6 +394,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         prune_factor: usize,
         min_dangling_branch_length: usize,
         recover_all: bool,
+        dangling_head_sw_parameters: &SWParameters,
     ) -> Option<DanglingChainMergeHelper>;
 
     /**

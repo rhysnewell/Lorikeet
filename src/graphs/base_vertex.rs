@@ -2,12 +2,13 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 /**
  * A graph vertex that holds some sequence information
  */
-pub trait BaseVertex: Clone + Send + Sync + Eq + PartialEq {
+pub trait BaseVertex: Debug + Clone + Send + Sync + Eq + PartialEq {
     fn is_empty(&self) -> bool;
 
     fn len(&self) -> usize;

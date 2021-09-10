@@ -52,7 +52,7 @@ pub struct NearbyKmerErrorCorrector {
     /**
      * A map of for each kmer to its num occurrences in addKmers
      */
-    pub(crate) counts_by_kmer: KmerCounter,
+    pub counts_by_kmer: KmerCounter,
     kmer_correction_map: HashMap<Kmer, Kmer>,
     kmer_differing_bases: HashMap<Kmer, (Vec<usize>, Vec<u8>)>,
     kmer_length: usize,
@@ -90,12 +90,12 @@ impl ReadErrorCorrectionStats {
 }
 
 impl NearbyKmerErrorCorrector {
-    const MAX_MISMATCHES_TO_CORRECT: usize = 2;
-    const QUALITY_OF_CORRECTED_BASES: u8 = 30;
-    const MAX_OBSERVATIONS_FOR_KMER_TO_BE_CORRECTABLE: usize = 1;
-    const TRIM_LOW_QUAL_TAILS: bool = false;
-    const DONT_CORRECT_IN_LONG_HOMOPOLYMERS: bool = false;
-    const MAX_HOMOPOLYMER_THRESHOLD: usize = 12;
+    pub const MAX_MISMATCHES_TO_CORRECT: usize = 2;
+    pub const QUALITY_OF_CORRECTED_BASES: u8 = 30;
+    pub const MAX_OBSERVATIONS_FOR_KMER_TO_BE_CORRECTABLE: usize = 1;
+    pub const TRIM_LOW_QUAL_TAILS: bool = false;
+    pub const DONT_CORRECT_IN_LONG_HOMOPOLYMERS: bool = false;
+    pub const MAX_HOMOPOLYMER_THRESHOLD: usize = 12;
 
     /**
      * Create a new kmer corrector
@@ -180,7 +180,7 @@ impl NearbyKmerErrorCorrector {
         } else {
             // TODO: Change KMER to be a refernce to a sequence to avoid cloning
             let read_bases = read.read.seq();
-            for offset in 0..(read_bases.len() - self.kmer_length) {
+            for offset in 0..=(read_bases.len() - self.kmer_length) {
                 self.counts_by_kmer.add_kmer(
                     Kmer::new_with_start_and_length(
                         read_bases.as_bytes(),
@@ -428,9 +428,9 @@ impl NearbyKmerErrorCorrector {
  * By default, only strict consensus is allowed right now.
  *
  */
-struct CorrectionSet {
+pub struct CorrectionSet {
     size: usize,
-    corrections: Vec<Vec<u8>>,
+    pub corrections: Vec<Vec<u8>>,
 }
 
 impl CorrectionSet {

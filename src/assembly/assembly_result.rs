@@ -3,6 +3,7 @@ use graphs::seq_graph::SeqGraph;
 use haplotype::haplotype::Haplotype;
 use linked_hash_set::LinkedHashSet;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
+use std::collections::HashSet;
 use utils::simple_interval::Locatable;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -20,7 +21,7 @@ pub struct AssemblyResult<'a, L: Locatable, A: AbstractReadThreadingGraph> {
     pub(crate) status: Status,
     pub(crate) threading_graph: Option<A>,
     pub(crate) graph: Option<SeqGraph<BaseEdgeStruct>>,
-    pub(crate) discovered_haplotypes: LinkedHashSet<Haplotype<'a, L>>,
+    pub(crate) discovered_haplotypes: HashSet<Haplotype<'a, L>>,
     pub(crate) contains_suspect_haploptypes: bool,
 }
 
@@ -47,15 +48,12 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<'a, L, A> {
             status,
             graph,
             threading_graph,
-            discovered_haplotypes: LinkedHashSet::new(),
+            discovered_haplotypes: HashSet::new(),
             contains_suspect_haploptypes: false,
         }
     }
 
-    pub fn set_discovered_haplotypes(
-        &mut self,
-        discovered_haplotypes: LinkedHashSet<Haplotype<'a, L>>,
-    ) {
+    pub fn set_discovered_haplotypes(&mut self, discovered_haplotypes: HashSet<Haplotype<'a, L>>) {
         self.discovered_haplotypes = discovered_haplotypes
     }
 

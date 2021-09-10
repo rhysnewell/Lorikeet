@@ -9,11 +9,13 @@ use linked_hash_set::LinkedHashSet;
 use multimap::MultiMap;
 use ordered_float::OrderedFloat;
 use petgraph::prelude::{EdgeIndex, EdgeRef};
+use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use utils::base_utils::BaseUtils;
 
 pub struct AdaptiveChainPruner {
     pub initial_error_probability: f64,
@@ -97,8 +99,9 @@ impl AdaptiveChainPruner {
         chains_to_add.push(Chain::new(
             OrderedFloat::from(std::f64::INFINITY),
             &max_weight_chain,
+            graph,
         ));
-        let mut processed_vertices = LinkedHashSet::new();
+        let mut processed_vertices = HashSet::new();
         for (vertex, paths) in vertex_to_seedable_chains.iter() {
             if paths.len() > 2 {
                 vertex_to_good_outgoing_chains
@@ -108,6 +111,7 @@ impl AdaptiveChainPruner {
                         chains_to_add.push(Chain::new(
                             OrderedFloat::from(chain_log_odds.get(chain).unwrap().0),
                             chain,
+                            graph,
                         ))
                     });
                 vertex_to_good_incoming_chains
@@ -117,13 +121,14 @@ impl AdaptiveChainPruner {
                         chains_to_add.push(Chain::new(
                             OrderedFloat::from(chain_log_odds.get(chain).unwrap().1),
                             chain,
+                            graph,
                         ))
                     });
                 processed_vertices.insert(*vertex);
             }
         }
 
-        let mut good_chains = LinkedHashSet::new();
+        let mut good_chains = HashSet::new();
         let mut vertices_that_already_have_outgoing_good_chains = HashSet::new();
         let mut variant_count = 0;
 
@@ -132,8 +137,7 @@ impl AdaptiveChainPruner {
         while !chains_to_add.is_empty() && variant_count <= self.max_unpruned_variants {
             let chain = chains_to_add.pop().unwrap();
 
-            if !good_chains.contains(&chain.path) {
-                good_chains.insert(chain.path);
+            if !good_chains.insert(chain.path) {
                 continue;
             }
 
@@ -154,21 +158,25 @@ impl AdaptiveChainPruner {
             ] {
                 if !processed_vertices.contains(&vertex) {
                     vertex_to_good_outgoing_chains
-                        .get(&vertex)
+                        .get_vec(&vertex)
+                        .unwrap_or(&vec![])
                         .into_iter()
                         .for_each(|chain| {
                             chains_to_add.push(Chain::new(
                                 OrderedFloat::from(chain_log_odds.get(chain).unwrap().0),
                                 chain,
+                                graph,
                             ))
                         });
                     vertex_to_good_incoming_chains
-                        .get(&vertex)
+                        .get_vec(&vertex)
+                        .unwrap_or(&vec![])
                         .into_iter()
                         .for_each(|chain| {
                             chains_to_add.push(Chain::new(
                                 OrderedFloat::from(chain_log_odds.get(chain).unwrap().1),
                                 chain,
+                                graph,
                             ))
                         });
                     processed_vertices.insert(vertex);
@@ -221,7 +229,7 @@ impl AdaptiveChainPruner {
                 error_rate,
             )
         };
-        let right_log_odds = if graph.is_source(chain.get_last_vertex()) {
+        let right_log_odds = if graph.is_sink(chain.get_last_vertex()) {
             0.0
         } else {
             HaplotypeCallerEngine::log_likelihood_ratio_constant_error(
@@ -243,51 +251,57 @@ impl AdaptiveChainPruner {
         chains: &'a Vec<Path>,
         graph: &BaseGraph<V, E>,
     ) -> &'a Path {
-        let comparator = Extract::new(|chain: &Path| {
-            chain
-                .get_edges()
-                .par_iter()
-                .map(|edge| graph.graph.edge_weight(*edge).unwrap().get_multiplicity())
-                .max()
-        })
-        .then(Extract::new(|l: &Path| l.len()))
-        .then(Extract::new(|l: &Path| l.get_bases(graph)));
+        // let comparator = Extract::new(|chain: &Path| {
+        //     chain
+        //         .get_edges()
+        //         .par_iter()
+        //         .map(|edge| graph.graph.edge_weight(*edge).unwrap().get_multiplicity())
+        //         .max().unwrap_or(0)
+        // })
+        // .then(Extract::new(|l: &Path| l.len()))
+        // .then(Extract::new(|l: &Path| l.get_bases(graph)));
 
         chains
             .iter()
             .par_bridge()
-            .max_by(|l, r| comparator.compare(l, r))
+            // .max_by(|l, r| comparator.compare(l, r))
+            .max_by(|l, r| {
+                l.get_max_multiplicity(graph)
+                    .cmp(&r.get_max_multiplicity(graph))
+                    .then_with(|| l.len().cmp(&r.len()))
+                    .then_with(|| {
+                        BaseUtils::bases_comparator(&l.get_bases(graph), &r.get_bases(graph))
+                    })
+            })
             .unwrap()
     }
 }
 
-impl<'a> PartialEq for Chain<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path
-    }
-}
-
-impl<'a> Eq for Chain<'a> {}
-
-// The priority queue depends on `Ord`.
-// Explicitly implement the trait so the queue becomes a min-heap
-// instead of a max-heap.
-impl<'a> Ord for Chain<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // In case of a tie we compare positions - this step is necessary
-        // to make implementations of `PartialEq` and `Ord` consistent.
-        (-other.log_odds)
-            .cmp(&(-self.log_odds))
-            .then_with(|| other.path.edges_in_order.cmp(&self.path.edges_in_order))
-    }
-}
-
-// `PartialOrd` needs to be implemented as well.
-impl<'a> PartialOrd for Chain<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+// impl<'a> PartialEq for Chain<'a> {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.path == other.path
+//     }
+// }
+//
+// impl<'a> Eq for Chain<'a> {}
+//
+// // The priority queue depends on `Ord`.
+// impl<'a> Ord for Chain<'a> {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         // In case of a tie we compare positions - this step is necessary
+//         // to make implementations of `PartialEq` and `Ord` consistent.
+//         (-self.log_odds)
+//             .cmp(&(-other.log_odds))
+//             .then_with(|| self.path.edges_in_order.cmp(&other.path.edges_in_order))
+//     }
+// }
+//
+// // `PartialOrd` needs to be implemented as well.
+// impl<'a> PartialOrd for Chain<'a> {
+//     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
 
 impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPruner<V, E>
     for AdaptiveChainPruner
@@ -295,6 +309,7 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
     fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
         let chains = Self::find_all_chains(&graph);
         let chains_to_remove = self.chains_to_remove(&chains, &graph);
+
         chains_to_remove.iter().for_each(|chain| {
             graph.remove_all_edges(
                 chain
@@ -304,14 +319,18 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
                     .collect::<HashSet<EdgeIndex>>(),
             )
         });
+
         graph.remove_singleton_orphan_vertices();
     }
 
     fn find_all_chains(graph: &BaseGraph<V, E>) -> Vec<Path> {
         let mut chain_starts = graph.get_sources();
         let mut chains = Vec::new();
-        let mut already_seen = HashSet::new();
-
+        let mut already_seen = chain_starts
+            .clone()
+            .into_vec()
+            .into_iter()
+            .collect::<HashSet<NodeIndex>>();
         while !chain_starts.is_empty() {
             let chain_start = chain_starts.pop().unwrap();
             for out_edge in graph.graph.edges_directed(chain_start, Direction::Outgoing) {
@@ -327,6 +346,10 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
         return chains;
     }
 
+    /**
+     *
+     * @return a fully extended linear path
+     */
     fn find_chain(start_edge: EdgeIndex, graph: &BaseGraph<V, E>) -> Path {
         let mut edges = Vec::new();
         edges.push(start_edge);
@@ -335,6 +358,8 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
         let mut last_vertex_id = start_edge_endpoints.1;
 
         loop {
+            // chain ends if: 1) no out edges; 2) multiple out edges;
+            // 3) multiple in edges; 4) cycle back to start of chain
             let out_edges = graph
                 .graph
                 .edges_directed(last_vertex_id, Direction::Outgoing)
@@ -367,11 +392,16 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
         let error_count = probable_error_chains
             .into_par_iter()
             .map(|chain| {
-                chain
-                    .get_edges()
-                    .par_iter()
-                    .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
-                    .sum::<usize>()
+                // chain
+                //     .get_edges()
+                //     .par_iter()
+                //     .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
+                //     .sum::<usize>()
+                graph
+                    .graph
+                    .edge_weight(chain.get_last_edge())
+                    .unwrap()
+                    .get_multiplicity()
             })
             .sum::<usize>();
         let total_bases = chains
@@ -386,7 +416,6 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
             .sum::<usize>();
 
         let error_rate = error_count as f64 / total_bases as f64;
-
         return self
             .likely_error_chains(&chains, graph, error_rate)
             .into_iter()

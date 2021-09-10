@@ -7,7 +7,11 @@ use rayon::prelude::*;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::CigarString;
 use smith_waterman::bindings::SWOverhangStrategy;
+use smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
+use std::cmp::Ordering;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use utils::base_utils::BaseUtils;
 
 /**
  * A path thought a BaseGraph
@@ -239,6 +243,17 @@ impl Path {
         return bases;
     }
 
+    pub fn get_max_multiplicity<V: BaseVertex, E: BaseEdge>(
+        &self,
+        graph: &BaseGraph<V, E>,
+    ) -> usize {
+        self.get_edges()
+            .iter()
+            .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
+            .max()
+            .unwrap_or(0)
+    }
+
     /**
      * Calculate the cigar elements for this path against the reference sequence
      *
@@ -255,6 +270,7 @@ impl Path {
             ref_seq,
             &self.get_bases(graph),
             SWOverhangStrategy::SoftClip,
+            &*NEW_SW_PARAMETERS,
         )
         .unwrap();
     }
@@ -284,14 +300,47 @@ impl Hash for Path {
     }
 }
 
-#[derive(Debug)]
-pub struct Chain<'a> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Chain<'a, V: BaseVertex + Sync + std::fmt::Debug, E: BaseEdge + Sync + std::fmt::Debug> {
     pub log_odds: OrderedFloat<f64>,
     pub path: &'a Path,
+    pub graph: &'a BaseGraph<V, E>,
 }
 
-impl<'a> Chain<'a> {
-    pub fn new(log_odds: OrderedFloat<f64>, path: &'a Path) -> Chain<'a> {
-        Chain { log_odds, path }
+impl<'a, V: BaseVertex + Sync + std::fmt::Debug, E: BaseEdge + Sync + std::fmt::Debug>
+    Chain<'a, V, E>
+{
+    pub fn new(
+        log_odds: OrderedFloat<f64>,
+        path: &'a Path,
+        graph: &'a BaseGraph<V, E>,
+    ) -> Chain<'a, V, E> {
+        Chain {
+            log_odds,
+            path,
+            graph,
+        }
+    }
+}
+
+impl<'a, V: BaseVertex + Sync + std::fmt::Debug, E: BaseEdge + Sync + std::fmt::Debug> Ord
+    for Chain<'a, V, E>
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        (-self.log_odds).cmp(&-other.log_odds).then_with(|| {
+            BaseUtils::bases_comparator(
+                self.graph
+                    .get_sequence_from_index(self.path.get_first_vertex(self.graph)),
+                other
+                    .graph
+                    .get_sequence_from_index(other.path.get_first_vertex(other.graph)),
+            )
+        })
+    }
+}
+
+impl<'a, V: BaseVertex, E: BaseEdge> PartialOrd for Chain<'a, V, E> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }

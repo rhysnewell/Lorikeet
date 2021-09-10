@@ -410,7 +410,7 @@ impl MathUtils {
      */
     pub fn fast_bernoulli_entropy(p: f64) -> f64 {
         let product = p * (1.0 - p);
-        return product * (11.0 + 33.0 * product) / (2.0 + 20.0 * product);
+        return product * ((11.0 + 33.0 * product) / (2.0 + 20.0 * product));
     }
 
     pub fn is_valid_probability(result: f64) -> bool {

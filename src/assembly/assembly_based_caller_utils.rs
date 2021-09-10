@@ -27,6 +27,7 @@ use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
+use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use utils::quality_utils::QualityUtils;
@@ -298,6 +299,8 @@ impl AssemblyBasedCallerUtils {
             padded_reference_loc,
             read_error_corrector,
             sample_names,
+            *STANDARD_NGS,
+            *NEW_SW_PARAMETERS,
         );
 
         return assembly_result_set;

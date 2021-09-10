@@ -1,11 +1,12 @@
 use rayon::prelude::*;
+use std::fmt::Debug;
 
 /**
  * Simple edge class for connecting nodes in the graph.
  *
  * Works equally well for all graph types (kmer or sequence)
  */
-pub trait BaseEdge: Clone + Send + Sync + Eq + PartialEq {
+pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq {
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;

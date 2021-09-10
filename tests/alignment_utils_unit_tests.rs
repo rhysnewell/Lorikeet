@@ -490,7 +490,7 @@ fn make_complex_read_aligned_to_ref() {
         let align = SmithWatermanAligner::align(
             padded_reference.as_bytes(),
             hap.seq.as_bytes(),
-            *ORIGINAL_DEFAULT,
+            &*ORIGINAL_DEFAULT,
             SWOverhangStrategy::SoftClip,
         );
         haplotype.set_alignment_start_hap_wrt_ref(align.get_alignment_offset() as usize);

@@ -93,6 +93,13 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             return true;
         }
     }
+    pub fn get_haplotype_list(&self) -> Vec<Haplotype<SimpleInterval>> {
+        return self
+            .haplotypes
+            .iter()
+            .cloned()
+            .collect::<Vec<Haplotype<SimpleInterval>>>();
+    }
 
     /**
      * Adds simultaneously a haplotype and the generating assembly-result.

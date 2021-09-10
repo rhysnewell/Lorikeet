@@ -55,7 +55,7 @@ impl AlignmentUtils {
         let read_to_haplotype_sw_alignment = SmithWatermanAligner::align(
             haplotype.get_bases(),
             read_minus_soft_clips.read.seq().as_bytes().as_slice(),
-            *ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
+            &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
             SWOverhangStrategy::SoftClip,
         );
 

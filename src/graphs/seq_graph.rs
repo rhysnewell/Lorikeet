@@ -11,7 +11,7 @@ use petgraph::Direction;
  */
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SeqGraph<E: BaseEdge> {
-    pub(crate) base_graph: BaseGraph<SeqVertex, E>,
+    pub base_graph: BaseGraph<SeqVertex, E>,
 }
 
 impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
@@ -49,7 +49,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
         // start off with one round of zipping of chains for performance reasons
         self.zip_linear_chains();
 
-        // let prev_graph = None;
+        let mut prev_graph = None;
         for i in 0..max_cycles {
             if i > Self::MAX_REASONABLE_SIMPLIFICATION_CYCLES {
                 warn!("Infinite loop detected in simpliciation routines.  Writing current graph to debugMeRhys.dot");
@@ -60,7 +60,28 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
                 );
             }
 
-            // let did_some_work = self.sim
+            let did_some_work = self.simplify_graph_once(i);
+            if !did_some_work {
+                // no simplification algorithm could be run so break
+                break;
+            }
+
+            // we get five cycles before we start looking for changes in the graph
+            // by cloning ourselves and then checking for any changes
+            if i > 5 {
+                // the previous graph and this graph have the same structure, so the simplification
+                // algorithms are looping endless between states.  Just break and consider ourselves done
+                prev_graph = match prev_graph {
+                    None => Some(self.base_graph.clone()),
+                    Some(prev_graph) => {
+                        if prev_graph == self.base_graph {
+                            break;
+                        } else {
+                            Some(self.base_graph.clone())
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -68,8 +89,12 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      * Run one full cycle of the graph simplification algorithms
      * @return true if any algorithms said they did some simplification
      */
-    fn simplify_graph_once(&mut self, iteration: usize) {
+    fn simplify_graph_once(&mut self, iteration: usize) -> bool {
         // iterate until we haven't don't anything useful
+        self.print_graph_simplification(&format!("simplify_graph.{}.1.dot", iteration));
+        let mut did_some_work = false;
+        // did_some_work |=
+        return false;
     }
 
     /**

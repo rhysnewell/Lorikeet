@@ -15,10 +15,10 @@ use utils::simple_interval::Locatable;
  */
 #[derive(Debug, Clone)]
 pub struct KBestHaplotype {
-    pub(crate) score: f64,
-    pub(crate) is_reference: bool,
-    pub(crate) path: Path,
-    pub(crate) kmer_size: usize,
+    pub score: f64,
+    pub is_reference: bool,
+    pub path: Path,
+    pub kmer_size: usize,
 }
 
 impl KBestHaplotype {

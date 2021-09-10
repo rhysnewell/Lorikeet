@@ -16,6 +16,7 @@ use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
+use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_error_corrector::read_error_corrector::ReadErrorCorrector;
 use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
 use read_threading::read_threading_graph::ReadThreadingGraph;
@@ -23,7 +24,8 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use smith_waterman::bindings::SWOverhangStrategy;
+use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use std::collections::HashSet;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct ReadThreadingAssembler {
@@ -119,6 +121,25 @@ impl ReadThreadingAssembler {
         }
     }
 
+    pub fn default() -> Self {
+        Self::new(
+            Self::DEFAULT_NUM_PATHS_PER_GRAPH as i32,
+            vec![25],
+            true,
+            true,
+            1,
+            2,
+            false,
+            0.001,
+            2.0,
+            2.0,
+            std::usize::MAX,
+            false,
+            false,
+            3,
+        )
+    }
+
     /**
      * Main entry point into the assembly engine. Build a set of deBruijn graphs out of the provided reference sequence and list of reads
      * @param assemblyRegion              AssemblyRegion object holding the reads which are to be used during assembly
@@ -129,18 +150,22 @@ impl ReadThreadingAssembler {
      * @param aligner                   {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return                          the resulting assembly-result-set
      */
-    pub fn run_local_assembly<'a, 'b, R: ReadErrorCorrector>(
+    pub fn run_local_assembly<'a, 'b>(
         &mut self,
         assembly_region: AssemblyRegion,
         ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
-        read_error_corrector: Option<R>,
+        read_error_corrector: Option<NearbyKmerErrorCorrector>,
         sample_names: &'b Vec<String>,
+        dangling_end_sw_parameters: SWParameters,
+        reference_to_haplotype_sw_parameters: SWParameters,
     ) -> AssemblyResultSet<'a, ReadThreadingGraph> {
         assert!(
             full_reference_with_padding.len() == ref_loc.size(),
-            "Reference bases and reference loc must be the same size."
+            "Reference bases and reference loc must be the same size. {} -> {}",
+            full_reference_with_padding.len(),
+            ref_loc.size()
         );
 
         // Note that error correction does not modify the original reads,
@@ -181,6 +206,8 @@ impl ReadThreadingAssembler {
                 &mut result_set,
                 &active_region_extended_location,
                 sample_names,
+                &dangling_end_sw_parameters,
+                &reference_to_haplotype_sw_parameters,
             )
         } else {
             self.assemble_graphs_and_expand_kmers_given_haplotypes(
@@ -190,6 +217,8 @@ impl ReadThreadingAssembler {
                 &mut result_set,
                 &active_region_extended_location,
                 sample_names,
+                &dangling_end_sw_parameters,
+                &reference_to_haplotype_sw_parameters,
             )
         }
 
@@ -229,10 +258,17 @@ impl ReadThreadingAssembler {
         result_set: &'b mut AssemblyResultSet<'a, A>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
+        dangling_end_sw_parameters: &SWParameters,
+        reference_to_haplotype_sw_parameters: &SWParameters,
     ) {
         // create the graphs by calling our subclass assemble method
         for result in self
-            .assemble(&corrected_reads, ref_haplotype, sample_names)
+            .assemble(
+                &corrected_reads,
+                ref_haplotype,
+                sample_names,
+                dangling_end_sw_parameters,
+            )
             .iter_mut()
         {
             if result.status == Status::AssembledSomeVariation {
@@ -244,6 +280,7 @@ impl ReadThreadingAssembler {
                     ref_haplotype,
                     ref_loc,
                     active_region_extended_location,
+                    reference_to_haplotype_sw_parameters,
                 );
                 // non_ref_seq_graphs.push(result.graph.unwrap());
                 // result_set.add_with_assembly_result()
@@ -265,6 +302,7 @@ impl ReadThreadingAssembler {
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<'a, SimpleInterval>,
         sample_names: &'b Vec<String>,
+        dangling_end_sw_parameters: &SWParameters,
     ) -> Vec<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph>> {
         let mut results = Vec::new();
 
@@ -277,6 +315,7 @@ impl ReadThreadingAssembler {
                 self.dont_increase_kmer_sizes_for_cycles,
                 self.allow_non_unique_kmers_in_ref,
                 sample_names,
+                dangling_end_sw_parameters,
             ) {
                 None => continue,
                 Some(assembly_result) => results.push(assembly_result),
@@ -297,6 +336,7 @@ impl ReadThreadingAssembler {
                     last_attempt,
                     last_attempt,
                     sample_names,
+                    dangling_end_sw_parameters,
                 ) {
                     None => {
                         // pass
@@ -325,6 +365,8 @@ impl ReadThreadingAssembler {
         result_set: &'b mut AssemblyResultSet<'a, ReadThreadingGraph>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
+        dangling_end_sw_parameters: &SWParameters,
+        reference_to_haplotype_sw_parameters: &SWParameters,
     ) {
         let mut saved_assembly_results = Vec::new();
 
@@ -342,6 +384,7 @@ impl ReadThreadingAssembler {
                     is_last_cycle || self.dont_increase_kmer_sizes_for_cycles,
                     is_last_cycle || self.allow_non_unique_kmers_in_ref,
                     &sample_names,
+                    dangling_end_sw_parameters,
                 );
                 match assembled_result {
                     None => {} //pass
@@ -374,6 +417,7 @@ impl ReadThreadingAssembler {
                                 ref_haplotype,
                                 ref_loc,
                                 active_region_extended_location,
+                                reference_to_haplotype_sw_parameters,
                             );
 
                             saved_assembly_results.push(assembled_result);
@@ -554,11 +598,12 @@ impl ReadThreadingAssembler {
         ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
+        haplotype_to_reference_sw_parameters: &SWParameters,
         // result_set: &mut Option<HashSet<AssemblyResult<E, SimpleInterval>>>, unused part that is annoying to implement
     ) {
         // add the reference haplotype separately from all the others to ensure
         // that it is present in the list of haplotypes
-        let mut return_haplotypes = LinkedHashSet::new();
+        let mut return_haplotypes = HashSet::new();
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut failed_cigars = 0;
         {
@@ -620,6 +665,7 @@ impl ReadThreadingAssembler {
                         ref_haplotype.get_bases(),
                         h.get_bases(),
                         SWOverhangStrategy::SoftClip,
+                        haplotype_to_reference_sw_parameters,
                     );
 
                     match cigar {
@@ -658,6 +704,7 @@ impl ReadThreadingAssembler {
                                     ref_haplotype.get_bases(),
                                     h.get_bases(),
                                     SWOverhangStrategy::Indel,
+                                    haplotype_to_reference_sw_parameters,
                                 );
 
                                 match cigar_with_indel_strategy {
@@ -755,6 +802,7 @@ impl ReadThreadingAssembler {
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
         sample_names: &'b Vec<String>,
+        dangling_end_sw_parameters: &SWParameters,
     ) -> Option<AssemblyResult<'a, SimpleInterval, ReadThreadingGraph>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
@@ -857,7 +905,12 @@ impl ReadThreadingAssembler {
                 return None;
             }
 
-            let result = self.get_assembly_result(ref_haplotype, kmer_size, rt_graph);
+            let result = self.get_assembly_result(
+                ref_haplotype,
+                kmer_size,
+                rt_graph,
+                dangling_end_sw_parameters,
+            );
             // check whether recovering dangling ends created cycles
             if self.recover_all_dangling_branches
                 && result.threading_graph.as_ref().unwrap().has_cycles()
@@ -874,6 +927,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &Haplotype<'a, SimpleInterval>,
         kmer_size: usize,
         mut rt_graph: A,
+        dangling_end_sw_parameters: &SWParameters,
     ) -> AssemblyResult<'a, SimpleInterval, A> {
         if !self.prune_before_cycle_counting {
             self.chain_pruner
@@ -900,11 +954,13 @@ impl ReadThreadingAssembler {
                 self.prune_factor as usize,
                 self.min_dangling_branch_length as usize,
                 self.recover_all_dangling_branches,
+                dangling_end_sw_parameters,
             );
             rt_graph.recover_dangling_heads(
                 self.prune_factor as usize,
                 self.min_dangling_branch_length as usize,
                 self.recover_all_dangling_branches,
+                dangling_end_sw_parameters,
             );
         }
 

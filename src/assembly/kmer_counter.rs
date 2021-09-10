@@ -2,6 +2,7 @@ use assembly::kmer::Kmer;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 /**
  * generic utility class that counts kmers
@@ -86,7 +87,7 @@ impl KmerCounter {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CountedKmer {
     kmer: Kmer,
     count: usize,
@@ -123,5 +124,11 @@ impl Ord for CountedKmer {
 impl PartialOrd for CountedKmer {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl Hash for CountedKmer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kmer.hash(state)
     }
 }

@@ -7,6 +7,18 @@ use std::cmp::max;
 lazy_static! {
     pub static ref ORIGINAL_DEFAULT: SWParameters = SWParameters::new(3, -1, -4, -3);
     pub static ref STANDARD_NGS: SWParameters = SWParameters::new(25, -50, -110, -6);
+        // FROM GATK COMMENTS:
+    // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
+    // these values were chosen via optimization against the NA12878 knowledge base
+    pub static ref NEW_SW_PARAMETERS: SWParameters = SWParameters::new(200, -150, -260, -11);
+    // FROM GATK COMMENTS:
+    // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
+    // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
+    // Suppose, for example, that a read has a single substitution error, say C -> T, on its last base.  Those parameters
+    // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
+    // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
+    // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
+    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(10, -15, -30, -5);
 }
 
 pub struct SmithWatermanAligner {}
@@ -31,7 +43,7 @@ impl SmithWatermanAligner {
     pub fn align(
         reference: &[u8],
         alternate: &[u8],
-        parameters: SWParameters,
+        parameters: &SWParameters,
         overhang_strategy: SWOverhangStrategy,
     ) -> SmithWatermanAlignmentResult {
         assert!(

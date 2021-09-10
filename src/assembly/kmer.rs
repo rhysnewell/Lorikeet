@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 /**
  * Fast wrapper for byte[] kmers
  *
@@ -8,10 +10,10 @@
  * -- can get actual byte[] of the kmer, even if it's from a larger byte[], and this operation
  *    only does the work of that operation once, updating its internal state
  */
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Kmer {
     // this values may be updated in the course of interacting with this kmer
-    bases: Vec<u8>,
+    pub bases: Vec<u8>,
     start: usize,
     // two constants
     length: usize,
@@ -134,5 +136,20 @@ impl Kmer {
                 self.length
             )
         );
+    }
+}
+
+impl PartialEq for Kmer {
+    fn eq(&self, other: &Self) -> bool {
+        self.bases[self.start..(self.start + self.length)]
+            == other.bases[other.start..(other.start + other.length)]
+    }
+}
+
+impl Eq for Kmer {}
+
+impl Hash for Kmer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.bases[self.start..(self.start + self.length)].hash(state)
     }
 }

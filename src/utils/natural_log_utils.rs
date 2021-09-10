@@ -8,7 +8,7 @@ lazy_static! {
     pub static ref LOG_ONE_THIRD: f64 = (1.0 / 3.0).ln();
     static ref LOG1MEXP_THRESHOLD: f64 = 0.5.ln();
     static ref PHRED_TO_ERROR_PROB_FACTOR: f64 = -(10.0.ln()) / 10.0;
-    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL)
+    static ref qual_to_log_prob_cache: Vec<f64> = (0..QualityUtils::MAX_QUAL + 1)
         .into_iter()
         .map(|n| { NaturalLogUtils::log1mexp(NaturalLogUtils::qual_to_log_error_prob(n)) })
         .collect::<Vec<f64>>();
