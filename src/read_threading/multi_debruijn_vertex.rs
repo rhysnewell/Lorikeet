@@ -1,12 +1,14 @@
 use graphs::base_vertex::BaseVertex;
 use itertools::Itertools;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use rayon::prelude::*;
 use std::hash::{Hash, Hasher};
 
 lazy_static! {
-    static ref suffices_as_byte_array: Vec<Vec<u8>> = (0..=std::u8::MAX as u16)
+    static ref suffices_as_byte_array: Vec<Vec<u8>> = (0..=std::u8::MAX)
         .into_par_iter()
-        .map(|i| { i.to_be_bytes().iter().cloned().collect::<Vec<u8>>() })
+        .map(|i| { vec![i] })
         .collect::<Vec<Vec<u8>>>();
 }
 
@@ -16,9 +18,10 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct MultiDeBruijnVertex {
     pub(crate) reads: Vec<String>,
-    merge_identical_nodes: bool,
+    pub(crate) merge_identical_nodes: bool,
     pub(crate) additonal_info: String,
-    pub sequence: String,
+    pub sequence: Vec<u8>,
+    identity_code: usize,
 }
 
 /**
@@ -34,12 +37,15 @@ impl MultiDeBruijnVertex {
      * @param mergeIdenticalNodes should nodes with the same sequence be treated as equal?
      * @param sequence the kmer sequence
      */
-    pub fn new(sequence: String, merge_identical_nodes: bool) -> MultiDeBruijnVertex {
+    pub fn new(sequence: Vec<u8>, merge_identical_nodes: bool) -> MultiDeBruijnVertex {
+        let mut rng = ThreadRng::default();
+
         MultiDeBruijnVertex {
             sequence,
             merge_identical_nodes,
             reads: Vec::new(),
             additonal_info: format!(""),
+            identity_code: rng.gen(),
         }
     }
 
@@ -47,7 +53,7 @@ impl MultiDeBruijnVertex {
      * Create a new MultiDeBruijnVertex with kmer sequence
      * @param sequence the kmer sequence
      */
-    pub fn new_with_sequence(seqeunce: String) -> MultiDeBruijnVertex {
+    pub fn new_with_sequence(seqeunce: Vec<u8>) -> MultiDeBruijnVertex {
         Self::new(seqeunce, false)
     }
 
@@ -96,10 +102,9 @@ impl MultiDeBruijnVertex {
      * @return a non-null non-empty string
      */
     pub fn get_suffix_string(&self) -> String {
-        return format!(
-            "{}",
-            std::str::from_utf8(self.get_suffix_as_array()).unwrap()
-        );
+        return std::str::from_utf8(self.get_suffix_as_array())
+            .unwrap()
+            .to_string();
     }
 
     /**
@@ -111,7 +116,7 @@ impl MultiDeBruijnVertex {
      * @return a byte
      */
     pub fn get_suffix(&self) -> u8 {
-        return self.sequence.as_bytes()[self.get_kmer_size() - 1];
+        return self.sequence[self.get_kmer_size() - 1];
     }
 
     /**
@@ -121,20 +126,29 @@ impl MultiDeBruijnVertex {
      *
      * @return a byte[] that contains 1 byte == getSuffix()
      */
-    fn get_suffix_as_array(&self) -> &[u8] {
-        return &suffices_as_byte_array[self.get_suffix() as usize][..];
+    pub fn get_suffix_as_array(&self) -> &[u8] {
+        return &*suffices_as_byte_array[self.get_suffix() as usize];
     }
 }
 
 impl Hash for MultiDeBruijnVertex {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.sequence.hash(state)
+        if self.merge_identical_nodes {
+            self.sequence.hash(state);
+        } else {
+            self.sequence.hash(state);
+            self.identity_code.hash(state);
+        }
     }
 }
 
 impl PartialEq for MultiDeBruijnVertex {
     fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
+        if self.merge_identical_nodes {
+            self.sequence == other.sequence
+        } else {
+            false
+        }
     }
 }
 

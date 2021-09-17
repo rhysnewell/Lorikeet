@@ -10,6 +10,7 @@ use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use smith_waterman::bindings::SWParameters;
+use std::collections::HashMap;
 use utils::simple_interval::Locatable;
 
 /**
@@ -69,8 +70,8 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
     fn add_sequence(
         &mut self,
         seq_name: String,
-        sample_name: &str,
-        sequence: &[u8],
+        sample_index: usize,
+        sequence: Vec<u8>,
         start: usize,
         stop: usize,
         count: usize,
@@ -188,7 +189,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
      * @return the longest matching suffix
      */
     fn longest_suffix_match(seq: &[u8], kmer: &[u8], seq_start: i64) -> usize {
-        for len in 1..(kmer.len() as i64 + 1) {
+        for len in 1..=(kmer.len() as i64) {
             let seq_i = seq_start - len + 1;
             let kmer_i = kmer.len() as i64 - len;
             if seq_i < 0 || seq[seq_i as usize] != kmer[kmer_i as usize] {
@@ -219,7 +220,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
     fn recover_dangling_tails(
         &mut self,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_end_sw_parameters: &SWParameters,
     );
@@ -235,7 +236,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
     fn recover_dangling_heads(
         &mut self,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_end_sw_parameters: &SWParameters,
     );
@@ -253,7 +254,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         &mut self,
         vertex: NodeIndex,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_tail_sw_parameters: &SWParameters,
     ) -> usize;
@@ -272,7 +273,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         &mut self,
         vertex: NodeIndex,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_head_sw_parameters: &SWParameters,
     ) -> usize;
@@ -373,7 +374,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         &self,
         vertex: NodeIndex,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_tail_sw_parameters: &SWParameters,
     ) -> Option<DanglingChainMergeHelper>;
@@ -392,7 +393,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         &self,
         vertex: NodeIndex,
         prune_factor: usize,
-        min_dangling_branch_length: usize,
+        min_dangling_branch_length: i32,
         recover_all: bool,
         dangling_head_sw_parameters: &SWParameters,
     ) -> Option<DanglingChainMergeHelper>;
@@ -542,6 +543,12 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
         debug_graph_output_path: Option<&String>,
         ref_haplotype: &L,
     );
+
+    fn find_kmer(&self, kmer: &Kmer) -> Option<&NodeIndex>;
+
+    fn set_increase_counts_through_branches(&mut self, increase_counts_through_branches: bool);
+
+    fn set_min_matching_bases_to_dangling_end_recovery(&mut self, min_matching_bases: i32);
 }
 
 pub enum TraversalDirection {
@@ -589,11 +596,11 @@ impl SequenceForKmers {
  * Class to keep track of the important dangling chain merging data
  */
 pub struct DanglingChainMergeHelper {
-    pub(crate) dangling_path: Vec<NodeIndex>,
-    pub(crate) reference_path: Vec<NodeIndex>,
-    pub(crate) dangling_path_string: String,
-    pub(crate) reference_path_string: String,
-    pub(crate) cigar: CigarString,
+    pub dangling_path: Vec<NodeIndex>,
+    pub reference_path: Vec<NodeIndex>,
+    pub dangling_path_string: String,
+    pub reference_path_string: String,
+    pub cigar: CigarString,
 }
 
 impl DanglingChainMergeHelper {

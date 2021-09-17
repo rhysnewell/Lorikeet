@@ -18,6 +18,8 @@ extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
+#[macro_use]
+extern crate ntest;
 
 use bio::io::fasta::IndexedReader;
 use itertools::Itertools;
@@ -77,69 +79,94 @@ use std::fs::File;
 use std::ops::Deref;
 use std::sync::Mutex;
 
-// fn test_prune_low_weight_chains<E: BaseEdge>(
-//     name: &str,
-//     mut graph: SeqGraph<E>,
-//     prune_factor: usize,
-//     remaining_vertices: HashSet<SeqVertex>,
-//     chain_count_before_pruning: Option<usize>,
-// ) {
-//     println!("remaining vertices {:?}", &remaining_vertices);
-//     let copy = remaining_vertices.clone();
-//     let mut pruner = AdaptiveChainPruner::new(
-//         0.001, MathUtils::log10_to_log(1.0), MathUtils::log10_to_log(4.0), 50
-//     );
-//
-//     match chain_count_before_pruning {
-//         Some(chain_count_before_pruning) => {
-//             assert_eq!(AdaptiveChainPruner::find_all_chains(&graph.base_graph).len(), chain_count_before_pruning);
-//         },
-//         _ => {
-//             // pass
-//         }
-//     };
-//
-//     pruner.prune_low_weight_chains(&mut graph.base_graph);
-//     assert_eq!(graph.base_graph.graph.node_weights().cloned().collect::<HashSet<SeqVertex>>(), copy);
-// }
-//
-// #[test]
-// fn make_prune_chains_data() {
-//     let v1 = SeqVertex::new("A".to_string());
-//     let v2 = SeqVertex::new("C".to_string());
-//     let v3 = SeqVertex::new("G".to_string());
-//     let v4 = SeqVertex::new("T".to_string());
-//     let v5 = SeqVertex::new("AA".to_string());
-//     let v6 = SeqVertex::new("CC".to_string());
-//
-//     for edge_weight in vec![1, 2, 3] {
-//         for prune_factor in vec![1, 2, 3, 4] {
-//             for is_ref in vec![true, false] {
-//                 // just an isolated chain
-//                 let n_expected = if edge_weight < prune_factor && !is_ref {
-//                     3
-//                 } else {
-//                     0
-//                 };
-//                 println!("edge weight {} prune factor {} is ref {}", edge_weight, prune_factor, is_ref);
-//                 let mut graph = SeqGraph::new(11);
-//                 let new_nodes = graph.base_graph.add_vertices(vec![v1.clone(), v2.clone(), v3.clone()]);
-//                 graph.base_graph.add_edges(new_nodes[0], new_nodes[1..].to_vec(), BaseEdgeStruct::new(is_ref, edge_weight));
-//                 test_prune_low_weight_chains(
-//                     "combinatorial",
-//                     graph.clone(),
-//                     prune_factor,
-//                     if n_expected > 0 {
-//                         HashSet::new()
-//                     } else {
-//                         graph.base_graph.graph.node_weights().cloned().collect::<HashSet<SeqVertex>>()
-//                     },
-//                     Some(1)
-//                 );
-//             }
-//         }
-//     }
-// }
+fn test_prune_low_weight_chains<E: BaseEdge>(
+    name: &str,
+    mut graph: SeqGraph<E>,
+    prune_factor: usize,
+    remaining_vertices: HashSet<SeqVertex>,
+    chain_count_before_pruning: Option<usize>,
+) {
+    println!("remaining vertices {:?}", &remaining_vertices);
+    let copy = remaining_vertices.clone();
+    let mut pruner = AdaptiveChainPruner::new(
+        0.001,
+        MathUtils::log10_to_log(2.0),
+        MathUtils::log10_to_log(4.0),
+        50,
+    );
+
+    match chain_count_before_pruning {
+        Some(chain_count_before_pruning) => {
+            assert_eq!(
+                AdaptiveChainPruner::find_all_chains(&graph.base_graph).len(),
+                chain_count_before_pruning
+            );
+        }
+        _ => {
+            // pass
+        }
+    };
+
+    pruner.prune_low_weight_chains(&mut graph.base_graph);
+    assert_eq!(
+        graph
+            .base_graph
+            .graph
+            .node_weights()
+            .cloned()
+            .collect::<HashSet<SeqVertex>>(),
+        copy
+    );
+}
+
+#[test]
+fn make_prune_chains_data() {
+    let v1 = SeqVertex::new(b"A".to_vec());
+    let v2 = SeqVertex::new(b"C".to_vec());
+    let v3 = SeqVertex::new(b"G".to_vec());
+    let v4 = SeqVertex::new(b"T".to_vec());
+    let v5 = SeqVertex::new(b"AA".to_vec());
+    let v6 = SeqVertex::new(b"CC".to_vec());
+
+    for edge_weight in vec![1, 2, 3] {
+        for prune_factor in vec![1, 2, 3, 4] {
+            for is_ref in vec![true, false] {
+                // just an isolated chain
+                let n_expected = if edge_weight < prune_factor && !is_ref {
+                    3
+                } else {
+                    0
+                };
+                println!(
+                    "edge weight {} prune factor {} is ref {}",
+                    edge_weight, prune_factor, is_ref
+                );
+                let mut graph = SeqGraph::new(11);
+                let new_nodes =
+                    graph
+                        .base_graph
+                        .add_vertices(vec![v1.clone(), v2.clone(), v3.clone()]);
+                graph.base_graph.add_edges(
+                    new_nodes[0],
+                    new_nodes[1..].to_vec(),
+                    BaseEdgeStruct::new(is_ref, edge_weight, 0),
+                );
+                test_prune_low_weight_chains(
+                    "combinatorial",
+                    graph.clone(),
+                    prune_factor,
+                    graph
+                        .base_graph
+                        .graph
+                        .node_weights()
+                        .cloned()
+                        .collect::<HashSet<SeqVertex>>(),
+                    Some(1),
+                );
+            }
+        }
+    }
+}
 
 // test that in graph with good path A -> B -> C and bad edges A -> D -> C and D -> B that the adjacency of bad edges --
 // such that when bad edges meet the multiplicities do not indicate an error - does not harm pruning.
@@ -150,13 +177,13 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
     let variant_multiplicity = 50;
     let bad_multiplicity = 5;
 
-    let source = SeqVertex::new("source".to_string());
-    let sink = SeqVertex::new("sink".to_string());
-    let A = SeqVertex::new("A".to_string());
-    let B = SeqVertex::new("B".to_string());
-    let C = SeqVertex::new("C".to_string());
-    let D = SeqVertex::new("D".to_string());
-    let E = SeqVertex::new("E".to_string());
+    let source = SeqVertex::new("source".as_bytes().to_vec());
+    let sink = SeqVertex::new("sink".as_bytes().to_vec());
+    let A = SeqVertex::new("A".as_bytes().to_vec());
+    let B = SeqVertex::new("B".as_bytes().to_vec());
+    let C = SeqVertex::new("C".as_bytes().to_vec());
+    let D = SeqVertex::new("D".as_bytes().to_vec());
+    let E = SeqVertex::new("E".as_bytes().to_vec());
 
     for variant_present in vec![false, true] {
         let mut graph = SeqGraph::new(20);
@@ -177,17 +204,17 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
                 NodeIndex::new(3),
                 NodeIndex::new(5),
             ],
-            BaseEdgeStruct::new(true, good_multiplicity),
+            BaseEdgeStruct::new(true, good_multiplicity, 0),
         );
         graph.base_graph.add_edges(
             NodeIndex::new(1),
             vec![NodeIndex::new(4), NodeIndex::new(3)],
-            BaseEdgeStruct::new(false, bad_multiplicity),
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
         );
         graph.base_graph.add_edges(
             NodeIndex::new(4),
             vec![NodeIndex::new(2)],
-            BaseEdgeStruct::new(false, bad_multiplicity),
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
         );
 
         if variant_present {
@@ -195,7 +222,7 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
             graph.base_graph.add_edges(
                 NodeIndex::new(1),
                 vec![NodeIndex::new(6), NodeIndex::new(2)],
-                BaseEdgeStruct::new(false, variant_multiplicity),
+                BaseEdgeStruct::new(false, variant_multiplicity, 0),
             );
         };
 
@@ -209,6 +236,94 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
                 "Node not found {:?}",
                 graph.base_graph.graph.node_indices()
             );
+        }
+    }
+}
+
+// test that in graph with good path A -> B -> C and bad edges A -> D and E -> C with a bubble with edges F, G between D and E
+// that the bad bubble does not harm pruning.
+// we test with and without a true variant path A -> H -> C
+#[test]
+fn test_adaptive_chain_pruning_with_bad_bubble() {
+    let good_multiplicity = 1000;
+    let variant_multiplicity = 50;
+    let bad_multiplicity = 5;
+
+    let source = SeqVertex::new(b"source".to_vec());
+    let sink = SeqVertex::new(b"sink".to_vec());
+    let A = SeqVertex::new(b"A".to_vec());
+    let B = SeqVertex::new(b"B".to_vec());
+    let C = SeqVertex::new(b"C".to_vec());
+    let D = SeqVertex::new(b"D".to_vec());
+    let E = SeqVertex::new(b"E".to_vec());
+    let F = SeqVertex::new(b"F".to_vec());
+    let G = SeqVertex::new(b"G".to_vec());
+    let H = SeqVertex::new(b"H".to_vec());
+
+    for variant_present in vec![true, false] {
+        let mut graph = SeqGraph::new(20);
+        let node_indices = graph.base_graph.add_vertices(vec![
+            source.clone(),
+            A.clone(),
+            B.clone(),
+            C.clone(),
+            D.clone(),
+            E.clone(),
+            F.clone(),
+            G.clone(),
+            sink.clone(),
+        ]);
+        graph.base_graph.add_edges(
+            node_indices[0],
+            vec![
+                node_indices[1],
+                node_indices[2],
+                node_indices[3],
+                node_indices[8],
+            ],
+            BaseEdgeStruct::new(true, good_multiplicity, 0),
+        );
+        graph.base_graph.add_edges(
+            node_indices[1],
+            vec![node_indices[4]],
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
+        );
+        graph.base_graph.add_edges(
+            node_indices[4],
+            vec![node_indices[6], node_indices[5]],
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
+        );
+        graph.base_graph.add_edges(
+            node_indices[4],
+            vec![node_indices[7], node_indices[5]],
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
+        );
+        graph.base_graph.add_edges(
+            node_indices[5],
+            vec![node_indices[3]],
+            BaseEdgeStruct::new(false, bad_multiplicity, 0),
+        );
+
+        let mut h_index = NodeIndex::new(0);
+        if variant_present {
+            h_index = graph.base_graph.add_node(H.clone());
+            graph.base_graph.add_edges(
+                node_indices[1],
+                vec![h_index, node_indices[3]],
+                BaseEdgeStruct::new(false, variant_multiplicity, 0),
+            );
+        }
+
+        let mut pruner = AdaptiveChainPruner::new(
+            0.01,
+            MathUtils::log10_to_log(1.0),
+            MathUtils::log10_to_log(4.0),
+            50,
+        );
+        pruner.prune_low_weight_chains(&mut graph.base_graph);
+        assert!(!graph.base_graph.graph.contains_node(node_indices[4]));
+        if variant_present {
+            assert!(graph.base_graph.graph.contains_node(h_index));
         }
     }
 }
@@ -238,8 +353,8 @@ fn test_adaptive_pruning(
     let mut graph = ReadThreadingGraph::default_with_kmer_size(kmer_size);
     graph.add_sequence(
         "anonymous".to_string(),
-        "XXX_UNNAMED_XXX",
-        reference,
+        0,
+        reference.to_vec(),
         0,
         reference.len(),
         1,
@@ -268,53 +383,56 @@ fn test_adaptive_pruning(
         .collect::<Vec<Vec<u8>>>();
 
     reads.into_iter().for_each(|r| {
-        graph.add_sequence(
-            "anonymous".to_string(),
-            "XXX_UNNAMED_XXX",
-            r.as_slice(),
-            0,
-            r.len(),
-            1,
-            false,
-        )
+        graph.add_sequence("anonymous".to_string(), 0, r.to_vec(), 0, r.len(), 1, false)
     });
     println!("Reads added");
 
     // note: these are the steps in ReadThreadingAssembler::createGraph
     graph.build_graph_if_necessary();
-    println!("Graph built");
 
     let mut pruner =
         AdaptiveChainPruner::new(0.001, log_odds_threshold, MathUtils::log10_to_log(4.0), 50);
     pruner.prune_low_weight_chains(graph.get_base_graph_mut());
-    println!("Low weight chains pruned");
+    println!("Low weight chains pruned",);
 
+    println!(
+        "Actual ref {} actual alt {}",
+        std::str::from_utf8(reference).unwrap(),
+        std::str::from_utf8(alternate).unwrap()
+    );
     graph.recover_dangling_tails(1, 3, false, &*STANDARD_NGS);
+    println!("recovered dangling tails");
+
     graph.recover_dangling_heads(1, 3, false, &*STANDARD_NGS);
+    println!("recovered dangling heads");
+
     graph.remove_paths_not_connected_to_ref();
+    println!("removed not connected to ref");
 
     let mut seq_graph = graph.to_sequence_graph();
     seq_graph.zip_linear_chains();
+
     seq_graph.base_graph.remove_singleton_orphan_vertices();
     seq_graph
         .base_graph
         .remove_vertices_not_connected_to_ref_regardless_of_edge_direction();
+    println!("beginning simplify");
     seq_graph.simplify_graph();
+    println!("finished first simplify");
+
     seq_graph.base_graph.remove_paths_not_connected_to_ref();
     seq_graph.simplify_graph();
-
-    let best_paths = GraphBasedKBestHaplotypeFinder::new(
-        &seq_graph.base_graph,
-        seq_graph
-            .base_graph
-            .get_sources_generic()
-            .collect::<HashSet<NodeIndex>>(),
-        seq_graph
-            .base_graph
-            .get_sinks_generic()
-            .collect::<HashSet<NodeIndex>>(),
-    )
-    .find_best_haplotypes(10);
+    println!("finished second simplify");
+    let sources = seq_graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = seq_graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let best_paths = GraphBasedKBestHaplotypeFinder::new(&mut seq_graph.base_graph, sources, sinks)
+        .find_best_haplotypes(10, &seq_graph.base_graph);
 
     let alt_index = (0..10)
         .filter(|n| {
@@ -345,7 +463,7 @@ fn test_adaptive_pruning(
     assert!(best_paths.len() < 15);
 }
 
-// #[test]
+#[test]
 fn get_chain_pruner_data() {
     let mut rng = ThreadRng::default();
     let ref_length = 100;

@@ -23,12 +23,12 @@ use std::hash::{Hash, Hasher};
  */
 #[derive(Debug, Clone)]
 pub struct SeqVertex {
-    pub sequence: String,
+    pub sequence: Vec<u8>,
     pub additional_info: String,
 }
 
 impl SeqVertex {
-    pub fn new(sequence: String) -> SeqVertex {
+    pub fn new(sequence: Vec<u8>) -> SeqVertex {
         Self {
             sequence,
             additional_info: format!(""),
@@ -45,12 +45,6 @@ impl SeqVertex {
         hasher.finish() as usize
     }
 
-    pub fn to_string(&self) -> String {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        format!("SeqVertex_id_{}_seq_{}", hasher.finish(), self.sequence)
-    }
-
     /**
      * Return a new SeqVertex derived from this one but not including the suffix bases
      *
@@ -61,11 +55,7 @@ impl SeqVertex {
         let prefix_size = self.sequence.len() - suffix.len();
 
         return if prefix_size > 0 {
-            Some(Self::new(
-                std::str::from_utf8(&self.sequence.as_bytes()[prefix_size..])
-                    .unwrap()
-                    .to_string(),
-            ))
+            Some(Self::new(self.sequence[..prefix_size].to_vec()))
         } else {
             None
         };
@@ -84,11 +74,7 @@ impl SeqVertex {
         let stop = start + length;
 
         return if length > 0 {
-            Some(SeqVertex::new(
-                std::str::from_utf8(&self.sequence.as_bytes()[start..stop])
-                    .unwrap()
-                    .to_string(),
-            ))
+            Some(SeqVertex::new(self.sequence[start..stop].to_vec()))
         } else {
             None
         };
@@ -119,7 +105,11 @@ impl BaseVertex for SeqVertex {
     fn to_string(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
-        return format!("SeqVertex_id_{}_seq_{}", hasher.finish(), self.sequence);
+        format!(
+            "SeqVertex_id_{}_seq_{}",
+            hasher.finish(),
+            std::str::from_utf8(&self.sequence).unwrap()
+        )
     }
 
     /**
@@ -130,11 +120,11 @@ impl BaseVertex for SeqVertex {
      * @return a non-null pointer to the bases contained in this vertex
      */
     fn get_sequence(&self) -> &[u8] {
-        self.sequence.as_bytes()
+        self.sequence.as_slice()
     }
 
-    fn get_sequence_string(&self) -> &String {
-        &self.sequence
+    fn get_sequence_string(&self) -> &str {
+        std::str::from_utf8(&self.sequence).unwrap()
     }
 
     /**
@@ -149,7 +139,7 @@ impl BaseVertex for SeqVertex {
      * @return a byte[] of the sequence added by this vertex to the overall sequence
      */
     fn get_additional_sequence(&self, source: bool) -> &[u8] {
-        self.sequence.as_bytes()
+        self.sequence.as_slice()
     }
 
     /**
@@ -182,7 +172,7 @@ impl BaseVertex for SeqVertex {
      * @return {@code true} iff so.
      */
     fn has_ambiguous_sequence(&self) -> bool {
-        return self.sequence.as_bytes().par_iter().any(|base| {
+        return self.sequence.par_iter().any(|base| {
             let base = base.to_ascii_uppercase();
             let base = base as char;
             match base {

@@ -2,9 +2,14 @@ use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
 use graphs::seq_vertex::SeqVertex;
+use graphs::vertex_based_transformer::VertexBasedTransformer::{
+    MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
+};
+use graphs::vertex_based_transformer::VertexBasedTransformerOptions;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
+use std::collections::HashSet;
 
 /**
  * A graph that contains base sequence at each node
@@ -45,10 +50,9 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
         self.simplify_graph_with_cycles(std::usize::MAX)
     }
 
-    fn simplify_graph_with_cycles(&mut self, max_cycles: usize) {
+    pub fn simplify_graph_with_cycles(&mut self, max_cycles: usize) {
         // start off with one round of zipping of chains for performance reasons
         self.zip_linear_chains();
-
         let mut prev_graph = None;
         for i in 0..max_cycles {
             if i > Self::MAX_REASONABLE_SIMPLIFICATION_CYCLES {
@@ -91,10 +95,31 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      */
     fn simplify_graph_once(&mut self, iteration: usize) -> bool {
         // iterate until we haven't don't anything useful
-        self.print_graph_simplification(&format!("simplify_graph.{}.1.dot", iteration));
+        self.print_graph_simplification(&format!("simplify_graph.{}.0.dot", iteration));
         let mut did_some_work = false;
-        // did_some_work |=
-        return false;
+        did_some_work |=
+            VertexBasedTransformerOptions::MergeDiamonds.transform_until_complete(self);
+        self.print_graph_simplification(&format!("simplify_graph.{}.1.diamonds.dot", iteration));
+        did_some_work |= VertexBasedTransformerOptions::MergeTails.transform_until_complete(self);
+        self.print_graph_simplification(&format!("simplify_graph.{}.2.tails.dot", iteration));
+
+        did_some_work |=
+            VertexBasedTransformerOptions::SplitCommonSuffices.transform_until_complete(self);
+        self.print_graph_simplification(&format!(
+            "simplify_graph.{}.3.split_suffix.dot",
+            iteration
+        ));
+
+        did_some_work |=
+            VertexBasedTransformerOptions::MergeCommonSuffices.transform_until_complete(self);
+        self.print_graph_simplification(&format!(
+            "simplify_graph.{}.4.merge_suffix.dot",
+            iteration
+        ));
+
+        did_some_work |= self.zip_linear_chains();
+
+        return did_some_work;
     }
 
     /**
@@ -104,7 +129,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
     fn print_graph_simplification(&self, path: &str) {
         if Self::PRINT_SIMPLIFY_GRAPHS {
             self.base_graph
-                .subset_to_neighbours(self.base_graph.get_reference_source_vertex().unwrap(), 5)
+                // .subset_to_neighbours(self.base_graph.get_reference_source_vertex().unwrap(), 5)
                 .print_graph(path, true, 0)
         }
     }
@@ -121,6 +146,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      * @return true if any such pair of vertices could be found, false otherwise
      */
     pub fn zip_linear_chains(&mut self) -> bool {
+        // create the list of start sites [doesn't modify graph yet]
         let mut zip_starts = Vec::new();
         for source in self.base_graph.graph.node_indices() {
             if self.is_linear_chain_start(source) {
@@ -260,7 +286,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
         // TODO -- performance problem -- can be optimized if we want
         let added_vertex = self.merge_linear_chain_vertices(linear_chain);
 
-        let added_node_index = self.base_graph.graph.add_node(added_vertex);
+        let added_node_index = self.base_graph.add_node(added_vertex);
 
         // update the incoming and outgoing edges to point to the new vertex
         for edge in self.base_graph.edges_directed(*last, Direction::Outgoing) {
@@ -270,7 +296,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
                 self.base_graph.graph.edge_weight(edge).unwrap().clone(),
             );
         }
-        for edge in self.base_graph.edges_directed(*last, Direction::Incoming) {
+        for edge in self.base_graph.edges_directed(*first, Direction::Incoming) {
             self.base_graph.graph.add_edge(
                 self.base_graph.get_edge_source(edge),
                 added_node_index,
@@ -299,6 +325,6 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
 
         let seqs_joined = seqs.concat();
 
-        return SeqVertex::new(String::from_utf8(seqs_joined).unwrap());
+        return SeqVertex::new(seqs_joined);
     }
 }

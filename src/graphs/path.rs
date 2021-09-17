@@ -132,14 +132,9 @@ impl Path {
             .get_vertices(graph)
             .par_iter()
             .map(|v| {
-                graph
-                    .graph
-                    .node_weight(*v)
-                    .unwrap()
-                    .get_sequence_string()
-                    .to_string()
+                std::str::from_utf8(graph.graph.node_weight(*v).unwrap().get_sequence()).unwrap()
             })
-            .collect::<Vec<String>>()
+            .collect::<Vec<&str>>()
             .join("->");
 
         return format!("Path{{path={}}}", joined_path);

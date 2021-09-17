@@ -14,7 +14,7 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 // lazy_static! {
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Haplotype<'a, L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,
@@ -218,6 +218,14 @@ impl<'a, L: Locatable> Hash for Haplotype<'a, L> {
         self.kmer_size.hash(state);
     }
 }
+
+impl<'a, L: Locatable> PartialEq for Haplotype<'a, L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_bases() == other.get_bases()
+    }
+}
+
+impl<'a, L: Locatable> Eq for Haplotype<'a, L> {}
 
 impl<'a, L: Locatable> Ord for Haplotype<'a, L> {
     fn cmp(&self, other: &Self) -> Ordering {

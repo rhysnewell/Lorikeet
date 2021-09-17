@@ -54,31 +54,6 @@ impl PartialEq for MultiSampleEdge {
 impl Eq for MultiSampleEdge {}
 
 impl MultiSampleEdge {
-    /**
-     * Create a new MultiSampleEdge with weight multiplicity and, if isRef == true, indicates a path through the reference
-     *
-     * @param isRef indicates whether this edge is a path through the reference
-     * @param multiplicity the number of observations of this edge in this sample
-     * @param singleSampleCapacity the max number of samples to track edge multiplicities
-     */
-    pub fn new(
-        is_ref: bool,
-        multiplicity: usize,
-        single_sample_capacity: usize,
-    ) -> MultiSampleEdge {
-        let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
-        single_sample_multiplicities.push(multiplicity);
-
-        MultiSampleEdge {
-            multiplicity,
-            is_ref,
-            single_sample_multiplicities,
-            single_sample_capacity,
-            current_single_sample_multiplicity: multiplicity,
-            reference_path_indexes: Vec::with_capacity(2),
-        }
-    }
-
     pub fn set(&mut self, is_ref: bool, multiplicity: usize, single_sample_capacity: usize) {
         let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
         single_sample_multiplicities.push(multiplicity);
@@ -128,6 +103,27 @@ impl MultiSampleEdge {
 }
 
 impl BaseEdge for MultiSampleEdge {
+    /**
+     * Create a new MultiSampleEdge with weight multiplicity and, if isRef == true, indicates a path through the reference
+     *
+     * @param isRef indicates whether this edge is a path through the reference
+     * @param multiplicity the number of observations of this edge in this sample
+     * @param singleSampleCapacity the max number of samples to track edge multiplicities
+     */
+    fn new(is_ref: bool, multiplicity: usize, single_sample_capacity: usize) -> MultiSampleEdge {
+        let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
+        single_sample_multiplicities.push(multiplicity);
+
+        MultiSampleEdge {
+            multiplicity,
+            is_ref,
+            single_sample_multiplicities,
+            single_sample_capacity,
+            current_single_sample_multiplicity: multiplicity,
+            reference_path_indexes: Vec::with_capacity(2),
+        }
+    }
+
     /**
      * Get the number of observations of paths connecting two vertices
      * @return a positive integer >= 0

@@ -99,15 +99,9 @@ impl KBestHaplotype {
 
 impl Ord for KBestHaplotype {
     fn cmp(&self, other: &Self) -> Ordering {
-        let result = OrderedFloat::from(self.score)
-            .cmp(&OrderedFloat::from(other.score))
-            .reverse();
+        let result = OrderedFloat::from(self.score).cmp(&OrderedFloat::from(other.score));
         if result == Ordering::Equal {
-            return other
-                .path
-                .edges_in_order
-                .cmp(&self.path.edges_in_order)
-                .reverse();
+            return other.path.edges_in_order.cmp(&self.path.edges_in_order);
         } else {
             return result;
         }

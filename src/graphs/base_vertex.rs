@@ -8,7 +8,7 @@ use std::hash::{Hash, Hasher};
 /**
  * A graph vertex that holds some sequence information
  */
-pub trait BaseVertex: Debug + Clone + Send + Sync + Eq + PartialEq {
+pub trait BaseVertex: Debug + Clone + Send + Sync + Eq + PartialEq + Hash {
     fn is_empty(&self) -> bool;
 
     fn len(&self) -> usize;
@@ -17,7 +17,7 @@ pub trait BaseVertex: Debug + Clone + Send + Sync + Eq + PartialEq {
 
     fn get_sequence(&self) -> &[u8];
 
-    fn get_sequence_string(&self) -> &String;
+    fn get_sequence_string(&self) -> &str;
 
     fn get_additional_sequence(&self, source: bool) -> &[u8];
 
@@ -26,17 +26,21 @@ pub trait BaseVertex: Debug + Clone + Send + Sync + Eq + PartialEq {
     fn get_additional_info(&self) -> String;
 
     fn has_ambiguous_sequence(&self) -> bool;
+
+    fn merge_identical_nodes(&self) -> bool {
+        false
+    }
 }
 
 impl BaseVertex for MultiDeBruijnVertex {
-    /**
-     * Create a new sequence vertex with sequence
-     *
-     * This code doesn't copy sequence for efficiency reasons, so sequence must absolutely not be modified
-     * in any way after passing this sequence to the BaseVertex
-     *
-     * @param sequence a non-null sequence of bases contained in this vertex
-     */
+    // /**
+    //  * Create a new sequence vertex with sequence
+    //  *
+    //  * This code doesn't copy sequence for efficiency reasons, so sequence must absolutely not be modified
+    //  * in any way after passing this sequence to the BaseVertex
+    //  *
+    //  * @param sequence a non-null sequence of bases contained in this vertex
+    //  */
     // pub fn new<'a>(sequence: &'a [u8]) -> Self {
     //     Self {
     //         sequence,
@@ -44,6 +48,10 @@ impl BaseVertex for MultiDeBruijnVertex {
     //         // node_index: 0,
     //     }
     // }
+
+    fn merge_identical_nodes(&self) -> bool {
+        self.merge_identical_nodes
+    }
 
     /**
      * Does this vertex have an empty sequence?
@@ -71,7 +79,7 @@ impl BaseVertex for MultiDeBruijnVertex {
         return format!(
             "MultiDeBruijnVertex_id_{}_seq_{}",
             hasher.finish(),
-            self.sequence
+            std::str::from_utf8(self.sequence.as_slice()).unwrap()
         );
     }
 
@@ -83,11 +91,11 @@ impl BaseVertex for MultiDeBruijnVertex {
      * @return a non-null pointer to the bases contained in this vertex
      */
     fn get_sequence(&self) -> &[u8] {
-        self.sequence.as_bytes()
+        self.sequence.as_slice()
     }
 
-    fn get_sequence_string(&self) -> &String {
-        &self.sequence
+    fn get_sequence_string(&self) -> &str {
+        std::str::from_utf8(self.sequence.as_slice()).unwrap()
     }
 
     /**
@@ -102,7 +110,11 @@ impl BaseVertex for MultiDeBruijnVertex {
      * @return a byte[] of the sequence added by this vertex to the overall sequence
      */
     fn get_additional_sequence(&self, source: bool) -> &[u8] {
-        self.sequence.as_bytes()
+        if source {
+            return self.sequence.as_slice();
+        } else {
+            return self.get_suffix_as_array();
+        }
     }
 
     /**
@@ -147,7 +159,7 @@ impl BaseVertex for MultiDeBruijnVertex {
      * @return {@code true} iff so.
      */
     fn has_ambiguous_sequence(&self) -> bool {
-        return self.sequence.as_bytes().par_iter().any(|base| {
+        return self.sequence.par_iter().any(|base| {
             let base = base.to_ascii_uppercase();
             let base = base as char;
             match base {

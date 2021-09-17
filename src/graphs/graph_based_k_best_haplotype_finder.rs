@@ -16,11 +16,11 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
  * For Rust translation:
  * @author Rhys Newell &lt;rhys.newell@hdr.qut.edu.au&gt;
  */
-pub struct GraphBasedKBestHaplotypeFinder<'a, V: BaseVertex, E: BaseEdge> {
-    k_best_haplotype_finder: KBestHaplotypeFinder<'a, V, E>,
+pub struct GraphBasedKBestHaplotypeFinder {
+    pub k_best_haplotype_finder: KBestHaplotypeFinder,
 }
 
-impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
+impl GraphBasedKBestHaplotypeFinder {
     /**
      * Constructs a new best haplotypes finder.
      *
@@ -33,21 +33,21 @@ impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
      *     <li>any of {@code sources}' or any {@code sinks}' member is not a vertex in {@code graph}.</li>
      * </ul>
      */
-    pub fn new(
-        graph: &'a BaseGraph<V, E>,
+    pub fn new<V: BaseVertex, E: BaseEdge>(
+        graph: &mut BaseGraph<V, E>,
         sources: HashSet<NodeIndex>,
         sinks: HashSet<NodeIndex>,
-    ) -> GraphBasedKBestHaplotypeFinder<'a, V, E> {
+    ) -> GraphBasedKBestHaplotypeFinder {
         GraphBasedKBestHaplotypeFinder {
             k_best_haplotype_finder: KBestHaplotypeFinder::new(sinks, sources, graph),
         }
     }
 
-    pub fn new_from_singletons(
-        graph: &'a BaseGraph<V, E>,
+    pub fn new_from_singletons<V: BaseVertex, E: BaseEdge>(
+        graph: &mut BaseGraph<V, E>,
         source: NodeIndex,
         sink: NodeIndex,
-    ) -> GraphBasedKBestHaplotypeFinder<'a, V, E> {
+    ) -> GraphBasedKBestHaplotypeFinder {
         let mut sources = HashSet::new();
         sources.insert(source);
 
@@ -60,19 +60,21 @@ impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
     /**
      * Implement Dijkstra's algorithm as described in https://en.wikipedia.org/wiki/K_shortest_path_routing
      */
-    pub fn find_best_haplotypes(&self, max_number_of_haplotypes: usize) -> Vec<KBestHaplotype> {
+    pub fn find_best_haplotypes<V: BaseVertex, E: BaseEdge>(
+        &self,
+        max_number_of_haplotypes: usize,
+        graph: &BaseGraph<V, E>,
+    ) -> Vec<KBestHaplotype> {
         let mut result = Vec::new();
 
         let mut queue: BinaryHeap<KBestHaplotype> = self
             .k_best_haplotype_finder
             .sources
             .par_iter()
-            .map(|source| KBestHaplotype::new(*source, self.k_best_haplotype_finder.graph))
+            .map(|source| KBestHaplotype::new(*source, graph))
             .collect::<BinaryHeap<KBestHaplotype>>();
 
-        let mut vertex_counts = self
-            .k_best_haplotype_finder
-            .graph
+        let mut vertex_counts = graph
             .graph
             .node_indices()
             .par_bridge()
@@ -93,26 +95,19 @@ impl<'a, V: BaseVertex, E: BaseEdge> GraphBasedKBestHaplotypeFinder<'a, V, E> {
                     let vertex_count = vertex_counts.entry(vertex_to_extend).or_insert(0);
                     *vertex_count += 1;
                     if *vertex_count < max_number_of_haplotypes {
-                        let outgoing_edges = self
-                            .k_best_haplotype_finder
-                            .graph
-                            .edges_directed(vertex_to_extend, Direction::Outgoing);
+                        let outgoing_edges =
+                            graph.edges_directed(vertex_to_extend, Direction::Outgoing);
                         let mut total_outgoing_multiplicity = 0;
                         for edge in outgoing_edges.iter() {
-                            total_outgoing_multiplicity += self
-                                .k_best_haplotype_finder
-                                .graph
-                                .graph
-                                .edge_weight(*edge)
-                                .unwrap()
-                                .get_multiplicity();
+                            total_outgoing_multiplicity +=
+                                graph.graph.edge_weight(*edge).unwrap().get_multiplicity();
                         }
 
                         for edge in outgoing_edges.iter() {
                             queue.push(path_to_extend.new_from_edge(
                                 *edge,
                                 total_outgoing_multiplicity,
-                                self.k_best_haplotype_finder.graph,
+                                graph,
                             ));
                         }
                     }

@@ -9,9 +9,11 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use petgraph::{algo, Directed, EdgeType};
 use rayon::prelude::*;
+use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::File;
+use std::hash::Hash;
 use std::io::Write;
 use utils::base_utils::BaseUtils;
 
@@ -19,34 +21,35 @@ use utils::base_utils::BaseUtils;
  * Common code for graphs used for local assembly.
  */
 #[derive(Debug, Clone)]
-pub struct BaseGraph<V: BaseVertex, E: BaseEdge> {
+pub struct BaseGraph<V: BaseVertex + Hash, E: BaseEdge> {
     kmer_size: usize,
     pub graph: StableDiGraph<V, E>,
 }
 
-impl<V: BaseVertex, E: BaseEdge> Eq for BaseGraph<V, E> {}
+impl<V: BaseVertex + Hash, E: BaseEdge> Eq for BaseGraph<V, E> {}
 
-impl<V: BaseVertex, E: BaseEdge> PartialEq for BaseGraph<V, E> {
+impl<V: BaseVertex + Hash, E: BaseEdge> PartialEq for BaseGraph<V, E> {
     fn eq(&self, other: &Self) -> bool {
-        let a_ns = self.graph.node_weights();
-        let b_ns = other.graph.node_weights();
-        let a_es = self
-            .graph
-            .edge_indices()
-            .par_bridge()
-            .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
-            .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
-        let b_es = other
-            .graph
-            .edge_indices()
-            .par_bridge()
-            .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
-            .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
-        self.kmer_size == other.kmer_size && a_ns.eq(b_ns) && a_es.eq(&b_es)
+        // let a_ns = self.graph.node_weights();
+        // let b_ns = other.graph.node_weights();
+        // let a_es = self
+        //     .graph
+        //     .edge_indices()
+        //     .par_bridge()
+        //     .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
+        //     .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
+        // let b_es = other
+        //     .graph
+        //     .edge_indices()
+        //     .par_bridge()
+        //     .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
+        //     .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
+        // self.kmer_size == other.kmer_size && a_ns.eq(b_ns) && a_es.eq(&b_es)
+        self.graph_equals(other)
     }
 }
 
-impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
+impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
     pub fn new(kmer_size: usize) -> BaseGraph<V, E> {
         BaseGraph {
             kmer_size,
@@ -70,12 +73,12 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         for dv in self.graph.node_indices() {
             let v_weight = self.graph.node_weight(dv).unwrap();
             let mut sv = SeqVertex::new(
-                std::str::from_utf8(v_weight.get_additional_sequence(self.is_source(dv)))
-                    .unwrap()
-                    .to_string(),
+                v_weight
+                    .get_additional_sequence(self.is_source(dv))
+                    .to_vec(),
             );
             sv.set_additional_info(v_weight.get_additional_info());
-            let sv_ind = seq_graph.base_graph.graph.add_node(sv);
+            let sv_ind = seq_graph.base_graph.add_node(sv);
             vertex_map.insert(dv, sv_ind);
         }
 
@@ -87,11 +90,19 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             seq_graph.base_graph.graph.add_edge(
                 seq_in_v,
                 seq_out_v,
-                BaseEdgeStruct::new(e_weight.is_ref(), e_weight.get_multiplicity()),
+                BaseEdgeStruct::new(e_weight.is_ref(), e_weight.get_multiplicity(), 0),
             );
         }
 
         return seq_graph;
+    }
+
+    pub fn vertex_set(&self) -> HashSet<&V> {
+        self.graph.node_weights().collect::<HashSet<&V>>()
+    }
+
+    pub fn edge_set(&self) -> HashSet<&E> {
+        self.graph.edge_weights().collect::<HashSet<&E>>()
     }
 
     pub fn edges_directed(&self, node: NodeIndex, direction: Direction) -> Vec<EdgeIndex> {
@@ -129,11 +140,23 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @return  true if this vertex is a reference node (meaning that it appears on the reference path in the graph)
      */
     pub fn is_reference_node(&self, vertex_index: NodeIndex) -> bool {
-        self.graph
-            .edges(vertex_index)
+        if self
+            .graph
+            .edges_directed(vertex_index, Direction::Incoming)
             .into_iter()
             .par_bridge()
             .any(|e| e.weight().is_ref())
+            || self
+                .graph
+                .edges_directed(vertex_index, Direction::Outgoing)
+                .into_iter()
+                .par_bridge()
+                .any(|e| e.weight().is_ref())
+        {
+            return true;
+        } else {
+            self.vertex_set().len() == 1
+        }
     }
 
     /**
@@ -157,16 +180,6 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @return number of incoming edges
      */
     pub fn in_degree_of(&self, vertex_index: NodeIndex) -> usize {
-        if NodeIndex::new(6) == vertex_index {
-            println!(
-                "Node in degree {:?}",
-                self.graph
-                    .edges_directed(vertex_index, Direction::Incoming)
-                    .into_iter()
-                    .map(|e| e.id())
-                    .collect::<Vec<EdgeIndex>>()
-            );
-        }
         self.graph
             .edges_directed(vertex_index, Direction::Incoming)
             .count()
@@ -177,16 +190,6 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @return number of outgoing edges
      */
     pub fn out_degree_of(&self, vertex_index: NodeIndex) -> usize {
-        if NodeIndex::new(6) == vertex_index {
-            println!(
-                "Node out degree {:?}",
-                self.graph
-                    .edges_directed(vertex_index, Direction::Outgoing)
-                    .into_iter()
-                    .map(|e| e.id())
-                    .collect::<Vec<EdgeIndex>>()
-            );
-        }
         self.graph
             .edges_directed(vertex_index, Direction::Outgoing)
             .count()
@@ -266,8 +269,8 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @param v our vertex
      * @return the single incoming edge to v, or null if none exists
      */
-    pub fn incoming_edge_of(&self, v: NodeIndex) -> EdgeIndex {
-        self.get_directed_singletong_edge(v, Direction::Incoming)
+    pub fn incoming_edge_of(&self, v: NodeIndex) -> Option<EdgeIndex> {
+        self.get_directed_singleton_edge(v, Direction::Incoming)
     }
 
     /**
@@ -275,11 +278,11 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
      * @param v our vertex
      * @return the single incoming edge to v, or null if none exists
      */
-    pub fn outgoing_edge_of(&self, v: NodeIndex) -> EdgeIndex {
-        self.get_directed_singletong_edge(v, Direction::Outgoing)
+    pub fn outgoing_edge_of(&self, v: NodeIndex) -> Option<EdgeIndex> {
+        self.get_directed_singleton_edge(v, Direction::Outgoing)
     }
 
-    fn get_directed_singletong_edge(&self, v: NodeIndex, direction: Direction) -> EdgeIndex {
+    fn get_directed_singleton_edge(&self, v: NodeIndex, direction: Direction) -> Option<EdgeIndex> {
         self.get_singleton_edge(
             self.graph
                 .edges_directed(v, direction)
@@ -287,7 +290,6 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
                 .map(|e| e.id())
                 .collect::<Vec<EdgeIndex>>(),
         )
-        .unwrap()
     }
 
     /**
@@ -324,14 +326,18 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     /**
      * Removes all provided vertices from the graph
      */
-    pub fn remove_all_vertices(&mut self, vertices: HashSet<NodeIndex>) {
+    pub fn remove_all_vertices(&mut self, vertices: &HashSet<NodeIndex>) {
         self.graph.retain_nodes(|gr, v| !vertices.contains(&v));
     }
 
     /**
      * Removes all provided edges from the graph
      */
-    pub fn remove_all_edges(&mut self, edges: HashSet<EdgeIndex>) {
+    pub fn remove_all_edges(&mut self, edges: &HashSet<EdgeIndex>) {
+        self.graph.retain_edges(|gr, e| !edges.contains(&e));
+    }
+
+    pub fn remove_all_edges_vec(&mut self, edges: &Vec<EdgeIndex>) {
         self.graph.retain_edges(|gr, e| !edges.contains(&e));
     }
 
@@ -405,7 +411,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             .par_bridge()
             .filter(|v| self.is_singleton_orphan(*v))
             .collect::<HashSet<NodeIndex>>();
-        self.remove_all_vertices(to_remove)
+        self.remove_all_vertices(&to_remove)
     }
 
     fn is_singleton_orphan(&self, v: NodeIndex) -> bool {
@@ -654,12 +660,14 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         );
 
         // we want to remove anything that's not in both the sink and source sets
-        let mut vertices_to_remove = on_path_from_ref_source
+        let mut vertices_to_remove = self.graph.node_indices().collect::<HashSet<NodeIndex>>();
+        let not_in_both = on_path_from_ref_source
             .symmetric_difference(&on_path_from_ref_sink)
-            .par_bridge()
             .map(|v| *v)
             .collect::<HashSet<NodeIndex>>();
-        self.remove_all_vertices(vertices_to_remove);
+
+        vertices_to_remove.retain(|v| not_in_both.contains(v));
+        self.remove_all_vertices(&vertices_to_remove);
 
         // simple sanity checks that this algorithm is working.
         if self.get_sinks().len() > 1 {
@@ -695,12 +703,24 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
         starting_node: NodeIndex,
         direction: Direction,
     ) -> HashSet<NodeIndex> {
-        return self
-            .graph
-            .neighbors_directed(starting_node, direction)
-            .par_bridge()
-            .flat_map(|neighbour| self.get_all_connected_nodes_from_node(neighbour, direction))
-            .collect::<HashSet<NodeIndex>>();
+        let mut to_visit = BinaryHeap::new();
+        let mut visited = HashSet::new();
+        to_visit.push(starting_node);
+
+        let mut v = None;
+        while !to_visit.is_empty() {
+            v = to_visit.pop();
+            if !visited.contains(&v.unwrap()) {
+                visited.insert(v.unwrap());
+                to_visit.extend(
+                    self.graph
+                        .neighbors_directed(v.unwrap(), direction)
+                        .collect::<Vec<NodeIndex>>(),
+                );
+            }
+        }
+
+        return visited;
     }
 
     /**
@@ -728,7 +748,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
             while !edges_to_check.is_empty() {
                 let e = edges_to_check.pop().unwrap();
-                if self.graph.edge_weight(e).unwrap().is_ref() {
+                if !self.graph.edge_weight(e).unwrap().is_ref() {
                     edges_to_check.par_extend(
                         self.graph
                             .edges_directed(self.get_edge_source(e), Direction::Incoming)
@@ -742,7 +762,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             edges_to_check.par_extend(
                 self.graph
                     .edges_directed(
-                        self.get_reference_source_vertex().unwrap(),
+                        self.get_reference_sink_vertex().unwrap(),
                         Direction::Outgoing,
                     )
                     .par_bridge()
@@ -751,7 +771,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
             while !edges_to_check.is_empty() {
                 let e = edges_to_check.pop().unwrap();
-                if self.graph.edge_weight(e).unwrap().is_ref() {
+                if !self.graph.edge_weight(e).unwrap().is_ref() {
                     edges_to_check.par_extend(
                         self.graph
                             .edges_directed(self.get_edge_source(e), Direction::Outgoing)
@@ -775,7 +795,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
 
         let ref_v = self.get_reference_source_vertex();
         match ref_v {
-            None => self.remove_all_vertices(to_remove),
+            None => self.remove_all_vertices(&to_remove),
             Some(ref_v) => {
                 for node in self.get_all_connected_nodes_from_node(ref_v, Direction::Incoming) {
                     to_remove.remove(&node);
@@ -784,8 +804,9 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
                 for node in self.get_all_connected_nodes_from_node(ref_v, Direction::Outgoing) {
                     to_remove.remove(&node);
                 }
+                to_remove.remove(&ref_v);
 
-                self.remove_all_vertices(to_remove);
+                self.remove_all_vertices(&to_remove);
             }
         }
     }
@@ -842,7 +863,7 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
     pub fn add_vertices(&mut self, vertices: Vec<V>) -> Vec<NodeIndex> {
         let node_indices = vertices
             .into_iter()
-            .map(|v| self.graph.add_node(v))
+            .map(|v| self.add_node(v))
             .collect::<Vec<NodeIndex>>();
 
         return node_indices;
@@ -855,4 +876,190 @@ impl<V: BaseVertex, E: BaseEdge> BaseGraph<V, E> {
             prev = next;
         }
     }
+
+    /**
+     * Gets all node weights in vector of node indices. Returns a vector of Options pointing to references
+     */
+    pub fn get_node_weights(&self, node_indices: &Vec<NodeIndex>) -> Vec<Option<&V>> {
+        node_indices
+            .into_par_iter()
+            .map(|n| self.graph.node_weight(*n))
+            .collect::<Vec<Option<&V>>>()
+    }
+
+    /**
+     * Semi-lenient comparison of two graphs, truing true if g1 and g2 have similar structure
+     *
+     * By similar this means that both graphs have the same number of vertices, where each vertex can find
+     * a vertex in the other graph that's seqEqual to it.  A similar constraint applies to the edges,
+     * where all edges in g1 must have a corresponding edge in g2 where both source and target vertices are
+     * seqEqual
+     *
+     * @param g1 the first graph to compare
+     * @param g2 the second graph to compare
+     * @param <T> the type of the nodes in those graphs
+     * @return true if g1 and g2 are equals
+     */
+    pub fn graph_equals(&self, other: &Self) -> bool {
+        let vertices_1 = self.graph.node_indices().collect::<HashSet<NodeIndex>>();
+        let vertices_2 = other.graph.node_indices().collect::<HashSet<NodeIndex>>();
+        let edges_1 = self.graph.edge_indices().collect::<HashSet<EdgeIndex>>();
+        let edges_2 = other.graph.edge_indices().collect::<HashSet<EdgeIndex>>();
+
+        if vertices_1.len() != vertices_2.len() || edges_1.len() != edges_2.len() {
+            return false;
+        }
+
+        if vertices_1.len() == 0
+            && vertices_2.len() == 0
+            && edges_1.len() == 0
+            && edges_2.len() == 0
+        {
+            return true;
+        }
+
+        //for every vertex in g1 there is a vertex in g2 with an equal getSequenceString
+        let ok = vertices_1
+            .iter()
+            .map(|v1| self.graph.node_weight(*v1).unwrap().get_sequence())
+            .all(|v1_seq_string| {
+                vertices_2
+                    .iter()
+                    .any(|v2| v1_seq_string == other.graph.node_weight(*v2).unwrap().get_sequence())
+            });
+        if !ok {
+            return false;
+        }
+
+        //for every edge in g1 there is an equal edge in g2
+        let ok_g1 = edges_1
+            .iter()
+            .all(|e1| edges_2.iter().any(|e2| self.seq_equals(*e1, *e2, &other)));
+        if !ok_g1 {
+            return false;
+        }
+
+        return edges_2
+            .iter()
+            .all(|e2| edges_1.iter().any(|e1| other.seq_equals(*e2, *e1, self)));
+    }
+
+    fn seq_equals(&self, edge_1: EdgeIndex, edge_2: EdgeIndex, other: &Self) -> bool {
+        return self
+            .graph
+            .node_weight(self.get_edge_source(edge_1))
+            .unwrap()
+            .get_sequence()
+            == other
+                .graph
+                .node_weight(other.get_edge_source(edge_2))
+                .unwrap()
+                .get_sequence()
+            && self
+                .graph
+                .node_weight(self.get_edge_target(edge_1))
+                .unwrap()
+                .get_sequence()
+                == other
+                    .graph
+                    .node_weight(other.get_edge_target(edge_2))
+                    .unwrap()
+                    .get_sequence();
+    }
+
+    /**
+     * Add nodes to the graph, if the node is already present in the graph then retrieve and return
+     * its current index. Use this instead of petgraph's usual add_node as we do not want to be able
+     * have identical nodes especially when dealing with k-mers
+     * **Returns** the NodeIndex of the provided vertex/node
+     */
+    pub fn add_node(&mut self, v: V) -> NodeIndex {
+        if v.merge_identical_nodes() {
+            let index = self.graph.node_indices().find(|i| &self.graph[*i] == &v);
+            match index {
+                None => return self.graph.add_node(v),
+                Some(index) => return index,
+            }
+        } else {
+            return self.graph.add_node(v);
+        }
+    }
+
+    /**
+     * Add edge between source -> target if none exists, or add e to an already existing one if present
+     *
+     * @param source source vertex
+     * @param target vertex
+     * @param e edge to add
+     */
+    pub fn add_or_update_edge(&mut self, source: NodeIndex, target: NodeIndex, e: E) {
+        let prev = self.graph.find_edge(source, target);
+        match prev {
+            None => {
+                self.graph.add_edge(source, target, e);
+            }
+            Some(prev) => {
+                let mut prev_weight = self.graph.edge_weight_mut(prev).unwrap();
+                prev_weight.add(e);
+            }
+        }
+    }
+
+    /**
+     * Returns the index of a given node if it is found in the graph. None if not found.
+     */
+    pub fn index_from_vertex(&self, v: &V) -> Option<NodeIndex> {
+        let index = self.graph.node_indices().find(|i| &self.graph[*i] == v);
+        return index;
+    }
+}
+
+pub struct TestGraph {
+    pub graph: BaseGraph<MultiDeBruijnVertex, BaseEdgeStruct>,
+}
+
+impl TestGraph {
+    pub fn new(kmer_size: usize) -> Self {
+        Self {
+            graph: BaseGraph::new(kmer_size),
+        }
+    }
+
+    /**
+     * Only used for testing purposes
+     * Add edge to assembly graph connecting the two kmers
+     * @param kmer1 the source kmer for the edge
+     * @param kmer2 the target kmer for the edge
+     * @param isRef true if the added edge is a reference edge
+     */
+    pub fn add_kmers_to_graph(
+        &mut self,
+        kmer_1: &[u8],
+        kmer_2: &[u8],
+        is_ref: bool,
+        multiplicity: usize,
+    ) {
+        assert_eq!(
+            kmer_1.len(),
+            kmer_2.len(),
+            "Attempting to add kmers of differing lengths"
+        );
+        let v1 = MultiDeBruijnVertex::new(kmer_1.to_vec(), true);
+        let v2 = MultiDeBruijnVertex::new(kmer_2.to_vec(), true);
+        let to_add = BaseEdgeStruct::new(is_ref, multiplicity, 0);
+
+        let node_indices = self.graph.add_vertices(vec![v1, v2]);
+        self.graph
+            .add_or_update_edge(node_indices[0], node_indices[1], to_add);
+    }
+
+    // /**
+    //  * Convert this kmer graph to a simple sequence graph.
+    //  *
+    //  * Each kmer suffix shows up as a distinct SeqVertex, attached in the same structure as in the kmer
+    //  * graph.  Nodes that are sources are mapped to SeqVertex nodes that contain all of their sequence
+    //  *
+    //  * @return a newly allocated SequenceGraph
+    //  */
+    // pub fn to_sequence_graph(&self) -> SeqGraph<BaseEdgeStruct>
 }

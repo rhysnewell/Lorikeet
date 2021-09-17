@@ -626,15 +626,22 @@ impl ReadThreadingAssembler {
             let k_best_haplotypes: Box<Vec<KBestHaplotype>> = if self.generate_seq_graph {
                 Box::new(
                     GraphBasedKBestHaplotypeFinder::new_from_singletons(
-                        &assembly_result
+                        assembly_result
+                            .threading_graph
+                            .as_mut()
+                            .unwrap()
+                            .get_base_graph_mut(),
+                        source.unwrap(),
+                        sink.unwrap(),
+                    )
+                    .find_best_haplotypes(
+                        self.num_best_haplotypes_per_graph as usize,
+                        assembly_result
                             .threading_graph
                             .as_ref()
                             .unwrap()
                             .get_base_graph(),
-                        source.unwrap(),
-                        sink.unwrap(),
-                    )
-                    .find_best_haplotypes(self.num_best_haplotypes_per_graph as usize),
+                    ),
                 )
             } else {
                 // TODO: JunctionTreeKBestHaplotype looks munted and I haven't implemented the other
@@ -848,8 +855,9 @@ impl ReadThreadingAssembler {
             // add the reference sequence to the graph
             rt_graph.add_sequence(
                 "ref".to_string(),
-                ReadThreadingGraph::ANONYMOUS_SAMPLE,
-                ref_haplotype.get_bases(),
+                // ReadThreadingGraph::ANONYMOUS_SAMPLE,
+                0,
+                ref_haplotype.get_bases().to_vec(),
                 0,
                 ref_haplotype.get_bases().len(),
                 1,
@@ -861,6 +869,7 @@ impl ReadThreadingAssembler {
                 rt_graph.add_read(read, sample_names)
             }
 
+            // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
             // actually build the read threading graph
             rt_graph.build_graph_if_necessary();
 
@@ -952,13 +961,13 @@ impl ReadThreadingAssembler {
         if self.recover_dangling_branches {
             rt_graph.recover_dangling_tails(
                 self.prune_factor as usize,
-                self.min_dangling_branch_length as usize,
+                self.min_dangling_branch_length,
                 self.recover_all_dangling_branches,
                 dangling_end_sw_parameters,
             );
             rt_graph.recover_dangling_heads(
                 self.prune_factor as usize,
-                self.min_dangling_branch_length as usize,
+                self.min_dangling_branch_length,
                 self.recover_all_dangling_branches,
                 dangling_end_sw_parameters,
             );
@@ -1152,12 +1161,12 @@ impl ReadThreadingAssembler {
             // the code from blowing up.
             // TODO -- ref properties should really be on the vertices, not the graph itself
             let complete = seq_graph.base_graph.graph.node_indices().next().unwrap();
-            let dummy = SeqVertex::new(format!(""));
-            let dummy_index = seq_graph.base_graph.graph.add_node(dummy);
+            let dummy = SeqVertex::new(Vec::new());
+            let dummy_index = seq_graph.base_graph.add_node(dummy);
             seq_graph.base_graph.graph.add_edge(
                 complete,
                 dummy_index,
-                BaseEdgeStruct::new(true, 0),
+                BaseEdgeStruct::new(true, 0, 0),
             );
         };
 

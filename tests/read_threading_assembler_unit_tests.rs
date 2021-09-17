@@ -127,7 +127,7 @@ fn test_assemble_ref(
     assert_eq!(haplotypes, vec![ref_haplotype_orig]);
 }
 
-// #[test]
+#[test]
 fn make_assemble_intervals_data() {
     let start = 100000;
     let end = 200001;

@@ -52,6 +52,7 @@ ndarray-npy = "0.8.0"
 ndarray = {version = "0.15.3", features = ["rayon"]}
 needletail = "0.4.1"
 nix = "0.13"
+ntest = "0.7.3"
 num = "0.4.0"
 ordered-float = "1"
 #plotly = "0.4"

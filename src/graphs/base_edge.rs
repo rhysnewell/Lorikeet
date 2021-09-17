@@ -1,12 +1,15 @@
 use rayon::prelude::*;
 use std::fmt::Debug;
+use std::hash::Hash;
 
 /**
  * Simple edge class for connecting nodes in the graph.
  *
  * Works equally well for all graph types (kmer or sequence)
  */
-pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq {
+pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq + Hash {
+    fn new(is_ref: bool, multiplicity: usize, single_sample_capacity: usize) -> Self;
+
     fn get_multiplicity(&self) -> usize;
 
     fn get_dot_label(&self) -> String;
@@ -23,9 +26,23 @@ pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq {
 
     fn add(&mut self, edge: Self);
 
+    /**
+     * Create a new BaseEdge with the given multiplicity.
+     * The resulting edge is a reference edge if any of the argument edges are reference.
+     *
+     * @param edges a collection of edges to or their isRef values
+     * @param multiplicity our desired multiplicity
+     * @return a newly allocated BaseEdge
+     */
     fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self
     where
-        Self: std::marker::Sized;
+        Self: std::marker::Sized,
+    {
+        assert!(!edges.is_empty(), "Edges cannot be empty");
+        let is_ref = edges.par_iter().any(|e| e.is_ref());
+
+        Self::new(is_ref, multiplicity, 0)
+    }
 
     fn to_string(&self) -> String;
 }
@@ -34,20 +51,13 @@ pub trait BaseEdge: Debug + Clone + Send + Sync + Eq + PartialEq {
 * The most basic implementation of a BaseEdge like object. Only meant as a placeholder for certain
 * functions
 */
-#[derive(Debug, Clone, Copy, Eq, Ord, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Ord, PartialOrd, PartialEq, Hash)]
 pub struct BaseEdgeStruct {
     pub(crate) multiplicity: usize,
     pub(crate) is_ref: bool,
 }
 
 impl BaseEdgeStruct {
-    pub fn new(is_ref: bool, multiplicity: usize) -> Self {
-        Self {
-            is_ref,
-            multiplicity,
-        }
-    }
-
     pub fn set(&mut self, is_ref: bool, multiplicity: usize) {
         self.is_ref = is_ref;
         self.multiplicity = multiplicity;
@@ -55,6 +65,13 @@ impl BaseEdgeStruct {
 }
 
 impl BaseEdge for BaseEdgeStruct {
+    fn new(is_ref: bool, multiplicity: usize, _: usize) -> Self {
+        Self {
+            is_ref,
+            multiplicity,
+        }
+    }
+
     /**
      * Get the number of observations of paths connecting two vertices
      * @return a positive integer >= 0
@@ -124,21 +141,6 @@ impl BaseEdge for BaseEdgeStruct {
     fn add(&mut self, edge: Self) {
         self.multiplicity += edge.multiplicity;
         self.is_ref = self.is_ref || edge.is_ref;
-    }
-
-    /**
-     * Create a new BaseEdge with the given multiplicity.
-     * The resulting edge is a reference edge if any of the argument edges are reference.
-     *
-     * @param edges a collection of edges to or their isRef values
-     * @param multiplicity our desired multiplicity
-     * @return a newly allocated BaseEdge
-     */
-    fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self {
-        assert!(!edges.is_empty(), "Edges cannot be empty");
-        let is_ref = edges.par_iter().any(|e| e.is_ref());
-
-        Self::new(is_ref, multiplicity)
     }
 
     fn to_string(&self) -> String {
