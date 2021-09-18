@@ -310,7 +310,12 @@ impl CigarUtils {
             std::str::from_utf8(alt_seq).unwrap(),
             *SW_PAD
         );
-        let alignment = SmithWatermanAligner::align(ref_seq, alt_seq, sw_parameters, strategy);
+        let alignment = SmithWatermanAligner::align(
+            padded_ref.as_bytes(),
+            padded_path.as_bytes(),
+            sw_parameters,
+            strategy,
+        );
 
         if Self::is_s_w_failure(&alignment) {
             return None;
@@ -318,7 +323,7 @@ impl CigarUtils {
 
         // cut off the padding bases
         let base_start = SW_PAD.len();
-        let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 because it's inclusive not sure about this?
+        let base_end = padded_path.len() - SW_PAD.len() - 1; // -1 becuase it is inclusive
 
         let mut trimmed_cigar_and_deletions_removed = AlignmentUtils::trim_cigar_by_bases(
             alignment.cigar,
@@ -327,7 +332,6 @@ impl CigarUtils {
         );
 
         let mut non_standard = trimmed_cigar_and_deletions_removed.cigar.0;
-
         if trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed > 0 {
             non_standard.push(Cigar::Del(
                 trimmed_cigar_and_deletions_removed.trailing_deletion_bases_removed,

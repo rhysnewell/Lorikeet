@@ -249,41 +249,41 @@ impl ReadThreadingAssembler {
      * Follow the old behavior, call into {@link #assemble(List, Haplotype, SAMFileHeader, SmithWatermanAligner)} to decide if a graph
      * is acceptable for haplotype discovery then detect haplotypes.
      */
-    fn assemble_kmer_graphs_and_haplotype_call<'a, 'b, A: AbstractReadThreadingGraph>(
+    fn assemble_kmer_graphs_and_haplotype_call<'a, 'b>(
         &mut self,
         ref_haplotype: &'b mut Haplotype<'a, SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         corrected_reads: &'b Vec<BirdToolRead>,
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
-        result_set: &'b mut AssemblyResultSet<'a, A>,
+        result_set: &'b mut AssemblyResultSet<'a, ReadThreadingGraph>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
         dangling_end_sw_parameters: &SWParameters,
         reference_to_haplotype_sw_parameters: &SWParameters,
     ) {
         // create the graphs by calling our subclass assemble method
-        for result in self
+        for mut result in self
             .assemble(
                 &corrected_reads,
                 ref_haplotype,
                 sample_names,
                 dangling_end_sw_parameters,
             )
-            .iter_mut()
+            .into_iter()
         {
             if result.status == Status::AssembledSomeVariation {
                 // do some QC on the graph
                 Self::sanity_check_graph(&result.graph.as_ref().unwrap().base_graph, ref_haplotype);
                 // add it to graphs with meaningful non-reference features
                 self.find_best_path(
-                    result,
+                    &mut result,
                     ref_haplotype,
                     ref_loc,
                     active_region_extended_location,
                     reference_to_haplotype_sw_parameters,
                 );
                 // non_ref_seq_graphs.push(result.graph.unwrap());
-                // result_set.add_with_assembly_result()
+                result_set.add_assembly_result(result);
             }
         }
     }
@@ -494,7 +494,7 @@ impl ReadThreadingAssembler {
         };
 
         if graph.get_reference_bytes(ref_source_vertex.unwrap(), ref_sink_vertex, true, true)
-            == ref_haplotype.get_bases()
+            != ref_haplotype.get_bases()
         {
             panic!(
                 "Mismatch between the reference haplotype and the reference assembly graph path.\
@@ -609,14 +609,16 @@ impl ReadThreadingAssembler {
         {
             // Validate that the graph is valid with extant source and sink before operating
             let source = assembly_result
-                .threading_graph
+                .graph
                 .as_ref()
                 .unwrap()
+                .base_graph
                 .get_reference_source_vertex();
             let sink = assembly_result
-                .threading_graph
+                .graph
                 .as_ref()
                 .unwrap()
+                .base_graph
                 .get_reference_sink_vertex();
             assert!(
                 source.is_some() && sink.is_some(),
@@ -626,21 +628,13 @@ impl ReadThreadingAssembler {
             let k_best_haplotypes: Box<Vec<KBestHaplotype>> = if self.generate_seq_graph {
                 Box::new(
                     GraphBasedKBestHaplotypeFinder::new_from_singletons(
-                        assembly_result
-                            .threading_graph
-                            .as_mut()
-                            .unwrap()
-                            .get_base_graph_mut(),
+                        &mut assembly_result.graph.as_mut().unwrap().base_graph,
                         source.unwrap(),
                         sink.unwrap(),
                     )
                     .find_best_haplotypes(
                         self.num_best_haplotypes_per_graph as usize,
-                        assembly_result
-                            .threading_graph
-                            .as_ref()
-                            .unwrap()
-                            .get_base_graph(),
+                        &assembly_result.graph.as_ref().unwrap().base_graph,
                     ),
                 )
             } else {
@@ -653,13 +647,8 @@ impl ReadThreadingAssembler {
                 // TODO for now this seems like the solution, perhaps in the future it will be to excise the haplotype completely)
                 // TODO: Lorikeet note, some weird Java shit happens here, will need a work around when
                 //       junction tree is implemented
-                let mut h = k_best_haplotype.haplotype(
-                    &assembly_result
-                        .threading_graph
-                        .as_ref()
-                        .unwrap()
-                        .get_base_graph(),
-                );
+                let mut h =
+                    k_best_haplotype.haplotype(&assembly_result.graph.as_ref().unwrap().base_graph);
                 h.kmer_size = k_best_haplotype.kmer_size;
 
                 if !return_haplotypes.contains(&h) {

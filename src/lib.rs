@@ -47,6 +47,8 @@ extern crate ndarray_npy;
 extern crate statrs;
 
 // Utilities
+#[macro_use]
+extern crate approx;
 extern crate clap;
 extern crate compare;
 extern crate csv;

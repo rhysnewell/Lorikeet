@@ -211,11 +211,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
 
 impl<'a, L: Locatable> Hash for Haplotype<'a, L> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.cigar.hash(state);
-        self.allele.hash(state);
-        self.genome_location.hash(state);
-        self.score.hash(state);
-        self.kmer_size.hash(state);
+        self.get_bases().hash(state);
     }
 }
 

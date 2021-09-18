@@ -178,3 +178,228 @@ fn assemble<'a>(
 
     return assembly_result_set;
 }
+
+fn test_assemble_ref_and_snp(
+    mut assembler: ReadThreadingAssembler,
+    loc: SimpleInterval,
+    n_reads_to_use: usize,
+    variant_site: usize,
+    seq: &mut IndexedReader<File>,
+) {
+    seq.fetch_by_rid(
+        loc.get_contig(),
+        loc.get_start() as u64,
+        loc.get_end() as u64 + 1,
+    );
+    let contig_len = seq.index.sequences()[0].len as usize;
+    let mut ref_bases = Vec::new();
+    seq.read(&mut ref_bases);
+
+    let ref_base = ByteArrayAllele::new(&ref_bases[variant_site..=variant_site], true);
+    let alt_base = ByteArrayAllele::new(
+        if ref_base.get_bases()[0] == b'A' {
+            b"C"
+        } else {
+            b"A"
+        },
+        false,
+    );
+
+    let mut vcb = VariantContext::build(
+        loc.get_contig(),
+        variant_site,
+        variant_site,
+        vec![ref_base, alt_base],
+    );
+    test_assembly_with_variant(assembler, &ref_bases, loc, n_reads_to_use, vcb, contig_len);
+}
+
+fn test_assemble_ref_and_deletion(
+    mut assembler: ReadThreadingAssembler,
+    loc: SimpleInterval,
+    n_reads_to_use: usize,
+    variant_site: usize,
+    seq: &mut IndexedReader<File>,
+) {
+    seq.fetch_by_rid(
+        loc.get_contig(),
+        loc.get_start() as u64,
+        loc.get_end() as u64 + 1,
+    );
+    let contig_len = seq.index.sequences()[0].len as usize;
+    let mut ref_bases = Vec::new();
+    seq.read(&mut ref_bases);
+
+    for deletion_length in 1..10 {
+        let ref_base = ByteArrayAllele::new(
+            &ref_bases[variant_site..=(variant_site + deletion_length + 1)],
+            true,
+        );
+        let alt_base = ByteArrayAllele::new(&ref_base.get_bases()[0..=0], false);
+        let mut vcb = VariantContext::build(
+            loc.get_contig(),
+            variant_site,
+            variant_site + deletion_length,
+            vec![ref_base, alt_base],
+        );
+        let mut assembler = ReadThreadingAssembler::default();
+
+        test_assembly_with_variant(
+            assembler,
+            &ref_bases,
+            loc.clone(),
+            n_reads_to_use,
+            vcb,
+            contig_len,
+        );
+    }
+}
+
+fn test_assemble_ref_and_insertion(
+    mut assembler: ReadThreadingAssembler,
+    loc: SimpleInterval,
+    n_reads_to_use: usize,
+    variant_site: usize,
+    seq: &mut IndexedReader<File>,
+) {
+    seq.fetch_by_rid(
+        loc.get_contig(),
+        loc.get_start() as u64,
+        loc.get_end() as u64 + 1,
+    );
+    let contig_len = seq.index.sequences()[0].len as usize;
+    let mut ref_bases = Vec::new();
+    seq.read(&mut ref_bases);
+
+    for insertion_length in 1..10 {
+        let ref_base = ByteArrayAllele::new(&ref_bases[variant_site..=variant_site], true);
+        let alt_base = ByteArrayAllele::new(
+            &ref_bases[variant_site..=(variant_site + insertion_length + 1)],
+            false,
+        );
+        let mut assembler = ReadThreadingAssembler::default();
+
+        let mut vcb = VariantContext::build(
+            loc.get_contig(),
+            variant_site,
+            variant_site + insertion_length,
+            vec![ref_base, alt_base],
+        );
+        test_assembly_with_variant(
+            assembler,
+            &ref_bases,
+            loc.clone(),
+            n_reads_to_use,
+            vcb,
+            contig_len,
+        );
+    }
+}
+
+fn test_assembly_with_variant(
+    mut assembler: ReadThreadingAssembler,
+    ref_bases: &[u8],
+    loc: SimpleInterval,
+    n_reads_to_use: usize,
+    site: VariantContext,
+    contig_len: usize,
+) {
+    let pre_ref = std::str::from_utf8(&ref_bases[0..site.loc.get_start()]).unwrap();
+    let post_ref =
+        std::str::from_utf8(&ref_bases[site.loc.get_end() + 1..ref_bases.len()]).unwrap();
+    let alt_bases = format!(
+        "{}{}{}",
+        pre_ref,
+        std::str::from_utf8(site.get_alternate_alleles()[0].get_bases()).unwrap(),
+        post_ref
+    );
+
+    let mut reads = Vec::new();
+    let mut counter = 0;
+    let quals = vec![30; alt_bases.len()];
+    let cigar = format!("{}M", alt_bases.len());
+    for i in 0..n_reads_to_use {
+        let bases = alt_bases.as_bytes();
+        let read = ArtificialReadUtils::create_artificial_read_with_name_and_pos(
+            format!("{}_{}", loc.get_contig(), counter),
+            loc.tid(),
+            loc.get_start() as i64,
+            bases,
+            quals.as_slice(),
+            cigar.as_str(),
+            0,
+        );
+        reads.push(read);
+        counter += 1;
+    }
+
+    let mut ref_haplotype = Haplotype::new(ref_bases, true);
+    let alt_haplotype = Haplotype::new(alt_bases.as_bytes(), false);
+    let ref_haplotype_clone = ref_haplotype.clone();
+    let haplotypes = assemble(
+        &mut assembler,
+        ref_bases,
+        loc,
+        contig_len,
+        reads,
+        &mut ref_haplotype,
+    );
+
+    println!(
+        "{}",
+        std::str::from_utf8(ref_haplotype_clone.get_bases()).unwrap()
+    );
+    println!(
+        "{}",
+        std::str::from_utf8(alt_haplotype.get_bases()).unwrap()
+    );
+
+    assert_eq!(
+        haplotypes.get_haplotype_list(),
+        vec![ref_haplotype_clone, alt_haplotype]
+    );
+}
+
+#[test]
+fn make_assemble_intervals_with_variant_data() {
+    let start = 100000;
+    let end = 101001;
+    let window_size = 100;
+    let step_size = 200;
+    let variant_step_size = 1;
+    let n_reads_to_use = 5;
+    let mut reader = ReferenceReaderUtils::retrieve_reference(&Some(
+        "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
+    ));
+
+    for start_i in (start..end).into_iter().step_by(step_size) {
+        let end_i = start_i + window_size;
+        let ref_loc = SimpleInterval::new(0, start_i, end_i);
+        for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
+            .into_iter()
+            .step_by(variant_step_size)
+        {
+            test_assemble_ref_and_snp(
+                ReadThreadingAssembler::default(),
+                ref_loc.clone(),
+                n_reads_to_use,
+                variant_start,
+                &mut reader,
+            );
+            test_assemble_ref_and_deletion(
+                ReadThreadingAssembler::default(),
+                ref_loc.clone(),
+                n_reads_to_use,
+                variant_start,
+                &mut reader,
+            );
+            test_assemble_ref_and_insertion(
+                ReadThreadingAssembler::default(),
+                ref_loc.clone(),
+                n_reads_to_use,
+                variant_start,
+                &mut reader,
+            );
+        }
+    }
+}

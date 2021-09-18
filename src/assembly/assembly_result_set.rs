@@ -2,6 +2,7 @@ use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_result::AssemblyResult;
 use haplotype::event_map::EventMap;
 use haplotype::haplotype::Haplotype;
+use linked_hash_set::LinkedHashSet;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
@@ -27,7 +28,7 @@ use utils::simple_interval::SimpleInterval;
 pub struct AssemblyResultSet<'a, A: AbstractReadThreadingGraph> {
     // kmer size and assembly_results index hashmap
     pub(crate) assembly_result_by_kmer_size: HashMap<usize, usize>,
-    pub(crate) haplotypes: HashSet<Haplotype<'a, SimpleInterval>>,
+    pub(crate) haplotypes: LinkedHashSet<Haplotype<'a, SimpleInterval>>,
     // haplotype and assembly_results index hashmap
     pub(crate) assembly_result_by_haplotype: HashMap<Haplotype<'a, SimpleInterval>, usize>,
     pub(crate) region_for_genotyping: AssemblyRegion,
@@ -51,7 +52,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
         ref_loc: SimpleInterval,
         ref_haplotype: Haplotype<'a, SimpleInterval>,
     ) -> AssemblyResultSet<'a, A> {
-        let mut haplotypes = HashSet::new();
+        let mut haplotypes = LinkedHashSet::new();
         haplotypes.insert(ref_haplotype.clone());
 
         AssemblyResultSet {
@@ -101,6 +102,10 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             .collect::<Vec<Haplotype<SimpleInterval>>>();
     }
 
+    pub fn get_haplotypes(&self) -> &LinkedHashSet<Haplotype<'a, SimpleInterval>> {
+        return &self.haplotypes;
+    }
+
     /**
      * Adds simultaneously a haplotype and the generating assembly-result.
      *
@@ -124,6 +129,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
         ar: usize,
     ) -> bool {
         let assembly_result_addition_return = (self.assembly_results.len() - 1) <= ar;
+        println!("Haplotype {:?}", &h);
         if self.haplotypes.contains(&h) {
             let previous_ar = self.assembly_result_by_haplotype.get(&h);
             if previous_ar.is_none() {
@@ -139,6 +145,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
                 self.variation_present = true;
             };
             self.haplotypes.insert(h.clone());
+            println!("Haplotypes {:?}", &self.haplotypes);
             self.assembly_result_by_haplotype
                 .insert(h, self.assembly_results.len() - 1);
             return true;
@@ -164,6 +171,13 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             {
                 panic!("a different assembly result with the same kmerSize was already added");
             } else {
+                let ar_ind = *self.assembly_result_by_kmer_size.get(&kmer_size).unwrap();
+                if ar.discovered_haplotypes.len() > 0 {
+                    for hap in ar.discovered_haplotypes.into_iter() {
+                        self.add_haplotype_and_assembly_result(hap, ar_ind);
+                    }
+                }
+
                 return *self.assembly_result_by_kmer_size.get(&kmer_size).unwrap();
             }
         } else {
@@ -171,6 +185,28 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             self.assembly_result_by_kmer_size
                 .insert(kmer_size, self.assembly_results.len() - 1);
             self.kmer_sizes.insert(kmer_size);
+
+            if self
+                .assembly_results
+                .last()
+                .unwrap()
+                .discovered_haplotypes
+                .len()
+                > 0
+            {
+                let ar_ind = self.assembly_results.len() - 1;
+                for hap in self
+                    .assembly_results
+                    .last()
+                    .unwrap()
+                    .discovered_haplotypes
+                    .clone()
+                    .into_iter()
+                {
+                    self.add_haplotype_and_assembly_result(hap, ar_ind);
+                }
+            }
+
             return self.assembly_results.len() - 1;
         }
     }
@@ -207,7 +243,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             || !same_mnp_distance
             || self
                 .haplotypes
-                .par_iter()
+                .iter()
                 .any(|hap| !hap.allele.is_ref && hap.event_map.is_none())
         {
             self.regenerate_variation_events(max_mnp_distance);
@@ -219,7 +255,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
     pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) {
         let mut haplotype_list = self
             .haplotypes
-            .par_iter()
+            .iter()
             .cloned()
             .collect::<Vec<Haplotype<SimpleInterval>>>();
         EventMap::build_event_maps_for_haplotypes(
@@ -284,7 +320,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 
         let mut new_assembly_result_by_haplotype = HashMap::new();
-        let mut new_haplotypes = HashSet::new();
+        let mut new_haplotypes = LinkedHashSet::new();
 
         for (trimmed, original) in original_by_trimmed_haplotypes {
             let ass = self.assembly_result_by_haplotype.get(&original);
@@ -296,6 +332,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
                     new_haplotypes.insert(trimmed);
                 }
                 Some(ass) => {
+                    new_haplotypes.insert(trimmed.clone());
                     new_assembly_result_by_haplotype.insert(trimmed, *ass);
                 }
             };
@@ -323,7 +360,7 @@ impl<'a, A: 'a + AbstractReadThreadingGraph> AssemblyResultSet<'a, A> {
         );
         let mut haplotype_list = self
             .haplotypes
-            .par_iter()
+            .iter()
             .cloned()
             .collect::<Vec<Haplotype<SimpleInterval>>>();
         // trim down the haplotypes

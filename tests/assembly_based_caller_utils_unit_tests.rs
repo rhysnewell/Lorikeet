@@ -6,17 +6,35 @@
     non_snake_case
 )]
 
-extern crate bio_types;
 extern crate lorikeet_genome;
+extern crate rayon;
 extern crate rust_htslib;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate approx;
+extern crate bio;
+extern crate itertools;
+extern crate rand;
+extern crate term;
 
-use bio_types::sequence::SequenceRead;
 use lorikeet_genome::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::estimation::lorikeet_engine::ReadType;
+use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
+use lorikeet_genome::smith_waterman::bindings::SWParameters;
+use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
+    ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
+};
 use lorikeet_genome::utils::simple_interval::SimpleInterval;
+use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::{bam, bam::Read};
+use std::convert::TryFrom;
+
+lazy_static! {
+    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: SWParameters = *NEW_SW_PARAMETERS;
+}
 
 // In finalizeRegion(), the base qualities of overlapped read clips pairs are adjusted.
 // Most of read clips are clipped/copy from original reads, and the base qualities of original reads are not affected.
@@ -47,16 +65,6 @@ fn test_finalize_region() {
     let org_read1 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t83\t1\t42596803\t39\t1S95M5S\t=\t42596891\t-7\tGAATCATCATCAAATGGAATCTAATGGAATCATTGAACAGAATTGAATGGAATCGTCATCGAATGAATTGAATGCAATCATCGAATGGTCTCGAATAGAAT\tDAAAEDCFCCGEEDDBEDDDGCCDEDECDDFDCEECCFEECDCEDBCDBDBCC>DCECC>DBCDDBCBDDBCDDEBCCECC>DBCDBDBGC?FCCBDB>>?".as_bytes()).unwrap();
     let org_read2 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "HWI-ST807:461:C2P0JACXX:4:2204:18080:5857\t163\t1\t42596891\t39\t101M\t=\t42596803\t7\tCTCGAATGGAATCATTTTCTACTGGAAAGGAATGGAATCATCGCATAGAATCGAATGGAATTAACATGGAATGGAATCGAATGTAATCATCATCAAATGGA\t>@>:ABCDECCCEDCBBBDDBDDEBCCBEBBCBEBCBCDDCD>DECBGCDCF>CCCFCDDCBABDEDFCDCDFFDDDG?DDEGDDFDHFEGDDGECB@BAA".as_bytes()).unwrap();
 
-    // let org_read1 = bam::Record::from_sam(&mut bam::HeaderView::from_header(&bam_header), "ali1\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tFFFF".as_bytes()).unwrap();
-    // println!(
-    //     "Seq {:?}, len {}, quals {:?} qual len {}",
-    //     org_read1.seq().as_bytes(),
-    //     org_read1.seq().len(),
-    //     org_read1.qual(),
-    //     org_read1.qual().len()
-    // );
-    // println!("Seq {:?}, len {}, quals {:?} qual len {}", org_read2.seq(), org_read2.seq().len(), org_read2.qual(), org_read2.qual().len());
-
     let mut reads = vec![
         BirdToolRead::new(org_read1.clone(), 0, ReadType::Short),
         BirdToolRead::new(org_read2.clone(), 0, ReadType::Short),
@@ -66,5 +74,31 @@ fn test_finalize_region() {
     let min_bq = 9;
 
     // NOTE: this test MUST be run with correctOverlappingBaseQualities enabled otherwise this test can succeed even with unsafe code
-    // AssemblyBasedCallerUtils::finalize_regions(&mut active_region, false, false, min_bq, true, false);
+    AssemblyBasedCallerUtils::finalize_regions(
+        &mut active_region,
+        false,
+        false,
+        min_bq,
+        true,
+        false,
+    );
+}
+
+fn test_get_variant_contexts_from_given_alleles(
+    loc: usize,
+    active_alleles_to_genotype: Vec<VariantContext>,
+    expected_vcs_at_this_location: Vec<VariantContext>,
+) {
+    let vcs_at_this_position = AssemblyBasedCallerUtils::get_variant_contexts_from_given_alleles(
+        loc,
+        &active_alleles_to_genotype,
+        true,
+    );
+    assert_eq!(
+        vcs_at_this_position.len(),
+        expected_vcs_at_this_location.len()
+    );
+    for i in 0..expected_vcs_at_this_location.len() {
+        // Vari
+    }
 }

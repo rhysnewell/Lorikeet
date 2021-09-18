@@ -321,10 +321,10 @@ impl CigarBuilder {
 
     pub fn make_and_record_deletions_removed_result(mut self) -> CigarBuilderResult {
         let leading_deletion_bases_removed = self.leading_deletion_bases_removed;
-        let trailing_deletion_bases_removed = self.get_trailing_deletion_bases_removed();
         let cigar = self
             .make(false)
             .unwrap_or_else(|_| panic!("Unhandled error in cigar builder"));
+        let trailing_deletion_bases_removed = self.get_trailing_deletion_bases_removed();
         return CigarBuilderResult::new(
             cigar,
             leading_deletion_bases_removed,

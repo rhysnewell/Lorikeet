@@ -419,8 +419,10 @@ fn test_adaptive_pruning(
     println!("beginning simplify");
     seq_graph.simplify_graph();
     println!("finished first simplify");
-
+    println!("Graph pre removal {:?}", &seq_graph.base_graph);
     seq_graph.base_graph.remove_paths_not_connected_to_ref();
+    println!("Graph post removal {:?}", &seq_graph.base_graph);
+
     seq_graph.simplify_graph();
     println!("finished second simplify");
     let sources = seq_graph
