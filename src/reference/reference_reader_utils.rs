@@ -1,4 +1,5 @@
 use bio::io::fasta::IndexedReader;
+use clap::ArgMatches;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::genomes_and_contigs::*;
 use external_command_checker;
@@ -126,10 +127,10 @@ impl ReferenceReaderUtils {
     }
 
     pub fn setup_genome_fasta_files(
-        m: &clap::ArgMatches,
+        m: &ArgMatches,
     ) -> (Option<NamedTempFile>, Option<GenomesAndContigs>) {
         let genome_fasta_files_opt = {
-            match bird_tool_utils::clap_utils::parse_list_of_genome_fasta_files(&m, false) {
+            match bird_tool_utils::clap_utils::parse_list_of_genome_fasta_files(m, false) {
                 Ok(paths) => {
                     if paths.len() == 0 {
                         error!("Genome paths were described, but ultimately none were found");
@@ -139,7 +140,7 @@ impl ReferenceReaderUtils {
                         let genomes_after_filtering =
                             galah::cluster_argument_parsing::filter_genomes_through_checkm(
                                 &paths,
-                                &m,
+                                m,
                                 &Self::galah_command_line_definition(),
                             )
                             .expect("Error parsing CheckM-related options");
@@ -176,7 +177,7 @@ impl ReferenceReaderUtils {
                         ),
                     ),
                     Self::extract_genomes_and_contigs_option(
-                        &m,
+                        m,
                         &genome_paths.iter().map(|s| s.as_str()).collect(),
                     ),
                 ),
@@ -186,7 +187,7 @@ impl ReferenceReaderUtils {
                 // Dereplicate if required
                 // TODO: Properly implement dereplication in cli.rs and make sure function works
                 let dereplicated_genomes: Vec<String> = if m.is_present("dereplicate") {
-                    Self::dereplicate(&m, &genome_fasta_files_opt.unwrap())
+                    Self::dereplicate(m, &genome_fasta_files_opt.unwrap())
                     // genome_fasta_files_opt.unwrap()
                 } else {
                     genome_fasta_files_opt.unwrap()
@@ -202,7 +203,7 @@ impl ReferenceReaderUtils {
                         ),
                     ),
                     Self::extract_genomes_and_contigs_option(
-                        &m,
+                        m,
                         &dereplicated_genomes
                             .clone()
                             .iter()
@@ -217,7 +218,7 @@ impl ReferenceReaderUtils {
         return (concatenated_genomes, genomes_and_contigs_option);
     }
 
-    pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
+    pub fn parse_references(m: &ArgMatches) -> Vec<String> {
         let references = match m.values_of("genome-fasta-files") {
             Some(vec) => {
                 let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
@@ -247,7 +248,7 @@ impl ReferenceReaderUtils {
     }
 
     pub fn extract_genomes_and_contigs_option(
-        m: &clap::ArgMatches,
+        m: &ArgMatches,
         genome_fasta_files: &Vec<&str>,
     ) -> Option<GenomesAndContigs> {
         match m.is_present("genome-definition") {

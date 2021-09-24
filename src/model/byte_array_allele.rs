@@ -1,5 +1,6 @@
 use model::variants;
 use rayon::prelude::*;
+use std::hash::Hash;
 use utils::vcf_constants::VCFConstants;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -83,7 +84,11 @@ impl ByteArrayAllele {
     // }
 
     pub fn fake(is_ref: bool) -> ByteArrayAllele {
-        Self::new(".".as_bytes(), is_ref)
+        if is_ref {
+            Self::new("N".as_bytes(), is_ref)
+        } else {
+            Self::new("<FAKE_ALT>".as_bytes(), is_ref)
+        }
     }
 
     pub fn create_fake_alleles() -> Vec<ByteArrayAllele> {
@@ -176,7 +181,7 @@ impl ByteArrayAllele {
     }
 }
 
-pub trait Allele: Eq + PartialEq + Clone + std::fmt::Debug + Send + Sync {
+pub trait Allele: Eq + PartialEq + Clone + std::fmt::Debug + Send + Sync + Hash {
     fn is_reference(&self) -> bool;
 
     fn length(&self) -> usize;

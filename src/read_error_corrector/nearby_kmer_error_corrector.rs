@@ -199,7 +199,7 @@ impl NearbyKmerErrorCorrector {
      * @param inputRead                               Read to correct
      * @return                                        Corrected read (can be same reference as input if doInplaceErrorCorrection is set)
      */
-    fn correct_read(&mut self, input_read: &BirdToolRead) -> BirdToolRead {
+    fn correct_read(&mut self, input_read: BirdToolRead) -> BirdToolRead {
         // do actual correction
         let mut corrected = false;
         let mut corrected_bases = input_read.read.seq().as_bytes();
@@ -225,10 +225,11 @@ impl NearbyKmerErrorCorrector {
 
         if corrected {
             self.read_error_correction_stats.num_reads_corrected += 1;
-            let mut corrected_read = input_read.clone();
+            let name = input_read.read.qname().to_vec();
+            let mut corrected_read = input_read;
             corrected_read.read.set(
-                input_read.read.qname(),
-                Some(input_read.read.cigar().deref()),
+                name.as_slice(),
+                Some(corrected_read.read.cigar().deref()),
                 &corrected_bases,
                 &corrected_quals,
             );
@@ -236,7 +237,7 @@ impl NearbyKmerErrorCorrector {
             return corrected_read;
         } else {
             self.read_error_correction_stats.num_reads_uncorrected += 1;
-            return input_read.clone();
+            return input_read;
         }
     }
 
@@ -493,7 +494,7 @@ impl ReadErrorCorrector for NearbyKmerErrorCorrector {
      * Correct a collection of reads based on stored k-mer counts
      * @param reads
      */
-    fn correct_reads(&mut self, reads: &Vec<BirdToolRead>) -> Vec<BirdToolRead> {
+    fn correct_reads(&mut self, reads: Vec<BirdToolRead>) -> Vec<BirdToolRead> {
         let mut corrected_reads = Vec::with_capacity(reads.len());
 
         if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS
@@ -513,12 +514,30 @@ impl ReadErrorCorrector for NearbyKmerErrorCorrector {
                     corrected_reads.push(corrected_read)
                 }
             }
-            // debug!("Number of corrected bases: {}" self.numBasesCorrected);
-            // debug!("Number of corrected reads:" + readErrorCorrectionStats.numReadsCorrected);
-            // debug!("Number of skipped reads:" + readErrorCorrectionStats.numReadsUncorrected);
-            // debug!("Number of solid kmers:" + readErrorCorrectionStats.numSolidKmers);
-            // debug!("Number of corrected kmers:" + readErrorCorrectionStats.numCorrectedKmers);
-            // debug!("Number of uncorrectable kmers:" + readErrorCorrectionStats.numUncorrectableKmers);
+            debug!(
+                "Number of corrected bases: {}",
+                self.read_error_correction_stats.num_bases_corrected
+            );
+            debug!(
+                "Number of corrected reads: {}",
+                self.read_error_correction_stats.num_reads_corrected
+            );
+            debug!(
+                "Number of skipped reads: {}",
+                self.read_error_correction_stats.num_reads_uncorrected
+            );
+            debug!(
+                "Number of solid kmers: {}",
+                self.read_error_correction_stats.num_solid_kmers
+            );
+            debug!(
+                "Number of corrected kmers: {}",
+                self.read_error_correction_stats.num_corrected_kmers
+            );
+            debug!(
+                "Number of uncorrectable kmers: {}",
+                self.read_error_correction_stats.num_uncorrectable_kmers
+            );
 
             return corrected_reads;
         }

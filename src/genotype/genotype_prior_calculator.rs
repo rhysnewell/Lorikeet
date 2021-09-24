@@ -152,6 +152,14 @@ impl GenotypePriorCalculator {
         GenotypePriorCalculator::assuming_hw(snp_het, ind_het, None)
     }
 
+    pub fn empty() -> GenotypePriorCalculator {
+        Self {
+            diff_values: Vec::new(),
+            het_values: Vec::new(),
+            hom_values: Vec::new(),
+        }
+    }
+
     /**
      * Calculates the priors given the alleles to genetype and a likelihood calculator that determines the ploidy
      * of the sample at that site.

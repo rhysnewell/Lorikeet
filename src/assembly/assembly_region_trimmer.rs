@@ -46,7 +46,7 @@ impl AssemblyRegionTrimmer {
 
     /**
      * Returns a trimming result object from which the variant trimmed region and flanking non-variant sections
-     * can be recovered latter.
+     * can be recovered later.
      *
      * @param region the genome location range to trim.
      * @param variants list of variants contained in the trimming location. Variants therein
@@ -110,7 +110,7 @@ impl AssemblyRegionTrimmer {
 
             min_start = min(
                 min_start,
-                vc.loc.get_start().checked_sub(padding).unwrap_or(1),
+                vc.loc.get_start().checked_sub(padding).unwrap_or(0),
             );
             max_end = max(max_end, vc.loc.get_end() + padding);
         }
@@ -200,6 +200,7 @@ impl AssemblyRegionTrimmer {
     }
 }
 
+#[derive(Debug)]
 pub struct AssemblyRegionTrimmerResult {
     // Holds the input active region.
     pub(crate) original_region: AssemblyRegion,
@@ -256,7 +257,11 @@ impl AssemblyRegionTrimmerResult {
      * @return never {@code null}.
      */
     pub fn get_variant_region(self) -> AssemblyRegion {
-        assert!(self.variant_span.is_some(), "There is no variation present");
+        assert!(
+            self.variant_span.is_some(),
+            "There is no variation present {:?}",
+            &self
+        );
         return self
             .original_region
             .trim_with_padded_span(self.variant_span.unwrap(), self.padded_span.unwrap());

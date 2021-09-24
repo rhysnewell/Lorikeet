@@ -76,14 +76,14 @@ impl GenotypingEngine {
      * @param self                               Input variant context to complete.
      * @return                                   VC with assigned genotypes
      */
-    pub fn calculate_genotypes<'a, 'b>(
+    pub fn calculate_genotypes<'b>(
         &'b mut self,
-        mut vc: VariantContext<'a>,
+        mut vc: VariantContext,
         ploidy: usize,
         gpc: &'b GenotypePriorCalculator,
-        given_alleles: &'b Vec<VariantContext<'a>>,
+        given_alleles: &'b Vec<VariantContext>,
         stand_min_conf: f64,
-    ) -> Option<VariantContext<'a>> {
+    ) -> Option<VariantContext> {
         if vc.has_too_many_alternative_alleles() || vc.get_n_samples() == 0 {
             return None;
         }
@@ -91,13 +91,13 @@ impl GenotypingEngine {
         let mut reduced_vc: VariantContext;
         if VariantContext::MAX_ALTERNATE_ALLELES < (vc.alleles.len() - 1) {
             let alleles_to_keep = AlleleSubsettingUtils::calculate_most_likely_alleles(
-                &mut vc,
+                &vc,
                 ploidy,
                 VariantContext::MAX_ALTERNATE_ALLELES,
             );
 
             let reduced_genotypes = if alleles_to_keep.len() == 1 {
-                VariantContext::subset_to_ref_only(&mut vc, ploidy)
+                VariantContext::subset_to_ref_only(&vc, ploidy)
             } else {
                 AlleleSubsettingUtils::subset_alleles(
                     vc.get_genotypes().clone(),
@@ -107,6 +107,7 @@ impl GenotypingEngine {
                     gpc,
                     &GenotypeAssignmentMethod::SetToNoCall,
                     vc.get_dp(),
+                    true,
                 )
             };
             reduced_vc = vc.clone();
@@ -115,6 +116,9 @@ impl GenotypingEngine {
         } else {
             reduced_vc = vc.clone();
         }
+
+        debug!("vc {:?}", &vc);
+        debug!("reduced vc {:?}", &reduced_vc);
 
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
         let max_pl_length =
@@ -132,7 +136,8 @@ impl GenotypingEngine {
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =
             self.calculate_output_allele_subset(&af_result, &vc, given_alleles, stand_min_conf);
-
+        debug!("AFResult {:?}", &af_result);
+        debug!("Alternative alleles {:?}", &output_alternative_alleles);
         // note the math.abs is necessary because -10 * 0.0 => -0.0 which isn't nice
         let log10_confidence = if !output_alternative_alleles.site_is_monomorphic {
             af_result.log10_prob_only_ref_allele_exists() + 0.0
@@ -153,11 +158,13 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
+            debug!("Did not pass emit threshold");
             return None;
         }
 
         // start constructing the resulting VC
         let output_alleles = output_alternative_alleles.output_alleles(vc.get_reference());
+        debug!("Output alleles {:?}", &output_alleles);
 
         self.record_deletions(&vc, &output_alleles);
 
@@ -176,7 +183,7 @@ impl GenotypingEngine {
         // create the genotypes
         //TODO: omit subsetting if output alleles is not a proper subset of vc.getAlleles
         let mut genotypes = if builder.alleles.len() == 1 {
-            VariantContext::subset_to_ref_only(&mut vc, ploidy)
+            VariantContext::subset_to_ref_only(&vc, ploidy)
         } else {
             AlleleSubsettingUtils::subset_alleles(
                 vc.get_genotypes().clone(),
@@ -186,6 +193,7 @@ impl GenotypingEngine {
                 gpc,
                 &self.genotype_assignment_method,
                 vc.get_dp(),
+                true,
             )
         };
 
@@ -248,7 +256,7 @@ impl GenotypingEngine {
     }
 
     fn extract_p_no_alt(alleles: &Vec<ByteArrayAllele>, gt: &mut Genotype) -> f64 {
-        let gp_array = gt.get_attribute(GENOTYPE_POSTERIORS_KEY);
+        let gp_array = gt.get_attribute(&*GENOTYPE_POSTERIORS_KEY);
 
         match gp_array {
             Some(array) => {
@@ -348,6 +356,10 @@ impl GenotypingEngine {
     }
 
     pub fn passes_emit_threshold(conf: f64, min_conf: f64, best_guess_is_ref: bool) -> bool {
+        debug!(
+            "Best guess is ref {} conf {} min conf {}",
+            best_guess_is_ref, conf, min_conf
+        );
         !best_guess_is_ref && GenotypingEngine::passes_call_threshold(conf, min_conf)
     }
 
@@ -361,11 +373,11 @@ impl GenotypingEngine {
      * @param vc the variant context
      * @return information about the alternative allele subsetting {@code null}.
      */
-    fn calculate_output_allele_subset<'a, 'b>(
+    fn calculate_output_allele_subset<'b>(
         &'b self,
         af_calculation_result: &'b AFCalculationResult,
-        vc: &'b VariantContext<'a>,
-        given_alleles: &'b Vec<VariantContext<'a>>,
+        vc: &'b VariantContext,
+        given_alleles: &'b Vec<VariantContext>,
         stand_min_conf: f64,
     ) -> OutputAlleleSubset {
         let mut output_alleles = Vec::new();
@@ -397,7 +409,10 @@ impl GenotypingEngine {
                     || is_non_ref_which_is_lone_alt_allele
                     || forced_alleles.contains(&allele))
                     && !is_spurious_spanning_deletion;
-
+                debug!(
+                    "To output {} is plausible {} is non ref which is lone alt allele {} forced {} is spurious spanning deletion {}",
+                    to_output, is_plausible, is_non_ref_which_is_lone_alt_allele, forced_alleles.contains(&allele), is_spurious_spanning_deletion
+                );
                 site_is_monomorphic =
                     site_is_monomorphic & !(is_plausible && !is_spurious_spanning_deletion);
 
@@ -428,20 +443,20 @@ impl GenotypingEngine {
             .any(|genotype| genotype.has_attribute(&(*GENOTYPE_POSTERIORS_KEY).to_string()))
     }
 
-    fn compose_call_attributes<'a, 'b>(
+    fn compose_call_attributes<'b>(
         &self,
-        vc: &'b VariantContext<'a>,
+        vc: &'b VariantContext,
         allele_counts_of_mle: &'b Vec<i64>,
         af_result: &'b AFCalculationResult,
         all_alleles_to_use: &'b Vec<ByteArrayAllele>,
-        genotypes: &'b GenotypesContext<'a>,
-    ) -> HashMap<&'a str, AttributeObject> {
+        genotypes: &'b GenotypesContext,
+    ) -> HashMap<String, AttributeObject> {
         let mut attributes = HashMap::new();
 
         // add the MLE AC and AF annotations
         if !allele_counts_of_mle.is_empty() {
             attributes.insert(
-                MLE_ALLELE_COUNT_KEY,
+                MLE_ALLELE_COUNT_KEY.to_string(),
                 AttributeObject::Vecf64(
                     allele_counts_of_mle
                         .par_iter()
@@ -454,7 +469,7 @@ impl GenotypingEngine {
                 genotypes,
             );
             attributes.insert(
-                MLE_ALLELE_FREQUENCY_KEY,
+                MLE_ALLELE_FREQUENCY_KEY.to_string(),
                 AttributeObject::Vecf64(mle_frequencies),
             );
         }
@@ -474,12 +489,15 @@ impl GenotypingEngine {
                 //*-10 to convert from log10-scale to Phred-scale, as QUALs are typically represented
                 per_allele_quals.push(af_result.log10_prob_only_ref_allele_exists() * -10.0);
             }
-            attributes.insert(AS_QUAL_KEY, AttributeObject::Vecf64(per_allele_quals));
+            attributes.insert(
+                AS_QUAL_KEY.to_string(),
+                AttributeObject::Vecf64(per_allele_quals),
+            );
         }
 
         if self.annotate_number_of_alleles_discovered {
             attributes.insert(
-                NUMBER_OF_DISCOVERED_ALLELES_KEY,
+                NUMBER_OF_DISCOVERED_ALLELES_KEY.to_string(),
                 AttributeObject::Vecf64(vec![vc.get_alternate_alleles().len() as f64]),
             );
         }
@@ -507,6 +525,7 @@ impl GenotypingEngine {
     }
 }
 
+#[derive(Debug)]
 struct OutputAlleleSubset {
     alleles: Vec<ByteArrayAllele>,
     site_is_monomorphic: bool,

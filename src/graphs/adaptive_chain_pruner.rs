@@ -307,11 +307,8 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
     for AdaptiveChainPruner
 {
     fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
-        println!("Pruning");
         let chains = Self::find_all_chains(&graph);
-        println!("Found all chains");
         let chains_to_remove = self.chains_to_remove(&chains, &graph);
-        println!("found chains to remove {}", chains_to_remove.len());
         chains_to_remove.iter().for_each(|chain| {
             graph.remove_all_edges(
                 &chain
@@ -321,10 +318,8 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
                     .collect::<HashSet<EdgeIndex>>(),
             )
         });
-        println!("Edges removed");
 
         graph.remove_singleton_orphan_vertices();
-        println!("singletons removed");
     }
 
     fn find_all_chains(graph: &BaseGraph<V, E>) -> Vec<Path> {

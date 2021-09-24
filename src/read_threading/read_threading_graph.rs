@@ -321,10 +321,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         let sequence = read.read.seq();
         let qualities = read.read.qual();
 
-        println!(
-            "read sequence {}",
-            std::str::from_utf8(&sequence.as_bytes()).unwrap()
-        );
         let mut last_good = -1;
         for end in 0..=(sequence.len() as i32) {
             if end as usize == sequence.len()
@@ -1455,8 +1451,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         // create the Smith-Waterman strings to use
         let ref_bases = self.get_bases_for_path(&ref_path, true);
         let alt_bases = self.get_bases_for_path(&alt_path, true);
-
-        println!("ref bases {:?} alt bases {:?}", &ref_bases, &alt_bases);
 
         // run Smith-Waterman to determine the best alignment
         // (and remove trailing deletions since they aren't interesting)

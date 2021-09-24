@@ -36,6 +36,7 @@ pub enum AttributeObject {
     Vecf64(Vec<f64>),
     String(String),
     UnsizedInteger(usize),
+    VecUnsize(Vec<usize>),
     None,
 }
 
@@ -58,22 +59,22 @@ impl AttributeObject {
 }
 
 #[derive(Debug, Clone)]
-pub struct Genotype<'a> {
+pub struct Genotype {
     pub ploidy: usize,
-    pub pl: GenotypeLikelihoods,
+    pub pl: Vec<i64>,
     pub alleles: Vec<ByteArrayAllele>,
     pub ad: Vec<i64>,
     pub dp: i64,
     pub gq: i64,
     pub is_phased: bool,
     pub sample_name: String,
-    pub attributes: HashMap<&'a str, AttributeObject>,
+    pub attributes: HashMap<String, AttributeObject>,
     pub genotype_type: Option<GenotypeType>,
 }
 
-impl<'a> Eq for Genotype<'a> {}
+impl Eq for Genotype {}
 
-impl<'a> PartialEq for Genotype<'a> {
+impl PartialEq for Genotype {
     fn eq(&self, other: &Self) -> bool {
         self.ploidy == other.ploidy
             && self.alleles == other.alleles
@@ -85,7 +86,7 @@ impl<'a> PartialEq for Genotype<'a> {
     }
 }
 
-impl<'a> Hash for Genotype<'a> {
+impl Hash for Genotype {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.ploidy.hash(state);
         self.alleles.hash(state);
@@ -97,17 +98,13 @@ impl<'a> Hash for Genotype<'a> {
     }
 }
 
-impl<'a> Genotype<'a> {
-    pub fn build(
-        default_ploidy: usize,
-        likelihoods: Vec<f64>,
-        sample_name: String,
-    ) -> Genotype<'a> {
+impl Genotype {
+    pub fn build(default_ploidy: usize, likelihoods: Vec<f64>, sample_name: String) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
             alleles: Vec::with_capacity(likelihoods.len()),
             ad: Vec::with_capacity(likelihoods.len()),
-            pl: GenotypeLikelihoods::from_log10_likelihoods(likelihoods),
+            pl: GenotypeLikelihoods::from_log10_likelihoods(likelihoods).as_pls(),
             dp: -1,
             gq: -1,
             is_phased: false,
@@ -121,12 +118,12 @@ impl<'a> Genotype<'a> {
         default_ploidy: usize,
         likelihoods: GenotypeLikelihoods,
         sample_name: String,
-    ) -> Genotype<'a> {
+    ) -> Genotype {
         Genotype {
             ploidy: default_ploidy,
             alleles: Vec::with_capacity(likelihoods.len()),
             ad: Vec::with_capacity(likelihoods.len()),
-            pl: likelihoods,
+            pl: likelihoods.as_pls(),
             dp: -1,
             gq: -1,
             is_phased: false,
@@ -136,10 +133,10 @@ impl<'a> Genotype<'a> {
         }
     }
 
-    pub fn build_from_alleles(alleles: Vec<ByteArrayAllele>, sample_name: String) -> Genotype<'a> {
+    pub fn build_from_alleles(alleles: Vec<ByteArrayAllele>, sample_name: String) -> Genotype {
         Genotype {
             ploidy: alleles.len(),
-            pl: GenotypeLikelihoods::from_log10_likelihoods(vec![0.0; alleles.len()]),
+            pl: Vec::with_capacity(alleles.len()),
             dp: -1,
             gq: -1,
             ad: Vec::with_capacity(alleles.len()),
@@ -155,16 +152,39 @@ impl<'a> Genotype<'a> {
         self.ploidy
     }
 
-    pub fn get_likelihoods(&self) -> &GenotypeLikelihoods {
-        &self.pl
+    pub fn get_likelihoods(&self) -> GenotypeLikelihoods {
+        GenotypeLikelihoods::from_pls(self.pl.clone())
     }
 
-    pub fn get_likelihoods_mut(&mut self) -> &mut GenotypeLikelihoods {
-        &mut self.pl
-    }
+    // pub fn get_likelihoods_mut(&mut self) -> &mut GenotypeLikelihoods {
+    //     &mut self.pl
+    // }
 
+    /**
+     * Compute how many likelihood elements are associated with the given number of alleles
+     * Equivalent to asking in how many ways N non-negative integers can add up to P is S(N,P)
+     * where P = ploidy (number of chromosomes copies) and N = total # of alleles.
+     * Each chromosome can be in one single state (0,...,N-1) and there are P of them.
+     * Naive solution would be to store N*P likelihoods, but this is not necessary because we can't distinguish chromosome states, but rather
+     * only total number of alt allele counts in all chromosomes.
+     *
+     * For example, S(3,2) = 6: For alleles A,B,C, on a diploid organism we have six possible genotypes:
+     * AA,AB,BB,AC,BC,CC.
+     * Another way of expressing is with vector (#of A alleles, # of B alleles, # of C alleles)
+     * which is then, for ordering above, (2,0,0), (1,1,0), (0,2,0), (1,1,0), (0,1,1), (0,0,2)
+     * In general, for P=2 (regular biallelic), then S(N,2) = N*(N+1)/2
+     *
+     *
+     * the result is calculated via a call to calcNumLikelihoods,
+     * which uses the Apache Commons CombinatoricsUtils class
+     * using the formula (numAlleles + ploidy - 1) choose ploidy
+     *
+     *   @param  numAlleles      Number of alleles (including ref)
+     *   @param  ploidy          Ploidy, or number of chromosomes in set
+     *   @return    Number of likelihood elements we need to hold.
+     */
     pub fn num_likelihoods(&mut self, num_alleles: i64, ploidy: i64) -> usize {
-        let result = self.pl.num_likelihoods(num_alleles, ploidy);
+        let result = self.get_likelihoods().num_likelihoods(num_alleles, ploidy);
         if result < 0 {
             0
         } else {
@@ -184,12 +204,20 @@ impl<'a> Genotype<'a> {
         !self.pl.is_empty()
     }
 
-    pub fn pl(&mut self, pl: GenotypeLikelihoods) {
+    pub fn pl(&mut self, pl: Vec<i64>) {
         self.pl = pl
     }
 
     pub fn has_ad(&self) -> bool {
-        self.ad.len() == self.alleles.len()
+        self.ad.len() > 0
+    }
+
+    pub fn has_dp(&self) -> bool {
+        self.dp != -1
+    }
+
+    pub fn has_gq(&self) -> bool {
+        self.gq != -1
     }
 
     pub fn get_ad(&mut self) -> &mut Vec<i64> {
@@ -211,21 +239,21 @@ impl<'a> Genotype<'a> {
         self.attributes = HashMap::new();
     }
 
-    pub fn attribute(&mut self, attribute: &'a str, value: AttributeObject) {
+    pub fn attribute(&mut self, attribute: String, value: AttributeObject) {
         self.attributes.insert(attribute, value);
     }
 
-    pub fn has_attribute(&self, attribute: &str) -> bool {
-        self.attributes.contains_key(&attribute)
+    pub fn has_attribute(&self, attribute: &String) -> bool {
+        self.attributes.contains_key(attribute)
     }
 
-    pub fn get_attribute(&self, attribute: &'a str) -> Option<&AttributeObject> {
-        self.attributes.get(&attribute)
+    pub fn get_attribute(&self, attribute: &String) -> Option<&AttributeObject> {
+        self.attributes.get(attribute)
     }
 
     pub fn get_attribute_mut(
         &mut self,
-        attribute: &'a str,
+        attribute: String,
         default: AttributeObject,
     ) -> &mut AttributeObject {
         self.attributes.entry(attribute).or_insert(default)
@@ -333,28 +361,28 @@ impl<'a> Genotype<'a> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct GenotypesContext<'a> {
+pub struct GenotypesContext {
     // sample_names_in_order: Vec<String>,
-    genotypes: Vec<Genotype<'a>>,
+    genotypes: Vec<Genotype>,
     max_ploidy: i32,
 }
 
-impl<'a> GenotypesContext<'a> {
-    pub fn empty() -> GenotypesContext<'a> {
+impl GenotypesContext {
+    pub fn empty() -> GenotypesContext {
         GenotypesContext {
             genotypes: Vec::new(),
             max_ploidy: -1,
         }
     }
 
-    pub fn create(size: usize) -> GenotypesContext<'a> {
+    pub fn create(size: usize) -> GenotypesContext {
         GenotypesContext {
             genotypes: Vec::with_capacity(size),
             max_ploidy: -1,
         }
     }
 
-    pub fn new(genotypes: Vec<Genotype<'a>>) -> GenotypesContext<'a> {
+    pub fn new(genotypes: Vec<Genotype>) -> GenotypesContext {
         GenotypesContext {
             // sample_names_in_order: Vec::new(),
             genotypes,
@@ -369,7 +397,7 @@ impl<'a> GenotypesContext<'a> {
             .any(|g| &g.sample_name == sample_name);
     }
 
-    pub fn add(&mut self, genotype: Genotype<'a>) {
+    pub fn add(&mut self, genotype: Genotype) {
         self.genotypes.push(genotype)
     }
 
@@ -381,15 +409,15 @@ impl<'a> GenotypesContext<'a> {
         self.genotypes.len()
     }
 
-    pub fn genotypes(&self) -> &Vec<Genotype<'a>> {
+    pub fn genotypes(&self) -> &Vec<Genotype> {
         &self.genotypes
     }
 
-    pub fn genotypes_mut(&mut self) -> &mut Vec<Genotype<'a>> {
+    pub fn genotypes_mut(&mut self) -> &mut Vec<Genotype> {
         &mut self.genotypes
     }
 
-    pub fn get(&self, index: usize) -> Genotype<'a> {
+    pub fn get(&self, index: usize) -> Genotype {
         self.genotypes[index].clone()
     }
 

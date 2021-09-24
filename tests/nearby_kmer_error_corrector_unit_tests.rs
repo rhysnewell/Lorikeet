@@ -213,7 +213,7 @@ fn test_basic_error_correction() {
         10,
         REF_CHUNK_HARD.as_bytes(),
     );
-    let corrected_reads = read_error_corrector.correct_reads(&read_list);
+    let corrected_reads = read_error_corrector.correct_reads(read_list.clone());
 
     // check that corrected reads have exactly same content as original reads
     // I thought this would be correcting the bad reads, but apparently not?

@@ -106,29 +106,33 @@ impl HaplotypeCallerEngine {
                 .map(|k_size| k_size.parse().unwrap())
                 .collect::<Vec<usize>>(),
             args.is_present("dont-increase-kmer-sizes-for-cycles"),
-            args.is_present("allow-non-unique-kners-in-ref"),
+            !args.is_present("allow-non-unique-kmers-in-ref"),
             args.value_of("num-pruning-samples")
                 .unwrap()
                 .parse()
                 .unwrap(),
-            if args.is_present("use-adaptive-pruning") {
+            if !args.is_present("dont-use-adaptive-pruning") {
                 0
             } else {
                 args.value_of("min-prune-factor").unwrap().parse().unwrap()
             },
-            args.is_present("use-adaptive-pruning"),
+            !args.is_present("dont-use-adaptive-pruning"),
             args.value_of("initial-error-rate-for-pruning")
                 .unwrap()
                 .parse()
                 .unwrap(),
-            args.value_of("pruning-log-odds-threshold")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            args.value_of("pruning-seeding-log-odds-threshold")
-                .unwrap()
-                .parse()
-                .unwrap(),
+            MathUtils::log10_to_log(
+                args.value_of("pruning-log-odds-threshold")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+            ),
+            MathUtils::log10_to_log(
+                args.value_of("pruning-seeding-log-odds-threshold")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
+            ),
             args.value_of("max-unpruned-variants")
                 .unwrap()
                 .parse()
@@ -212,7 +216,7 @@ impl HaplotypeCallerEngine {
                     !args.is_present("soft-clip-low-quality-ends"),
                 ),
             mapping_quality_threshold: args
-                .value_of("mapping-quality-threshold")
+                .value_of("mapping-quality-threshold-for-genotyping")
                 .unwrap()
                 .parse()
                 .unwrap(),
@@ -239,7 +243,7 @@ impl HaplotypeCallerEngine {
     ) -> HashMap<usize, BandPassActivityProfile> {
         // minimum PHRED base quality
         let bq = m
-            .value_of("base-quality-threshold")
+            .value_of("min-base-quality")
             .unwrap()
             .parse::<i32>()
             .unwrap();
@@ -399,7 +403,10 @@ impl HaplotypeCallerEngine {
                             // The raw activity profile.
                             // Frequency of bases not matching reference compared
                             // to depth
-                            let mut genotype_likelihoods = Vec::with_capacity(target_len as usize);
+                            let mut genotype_likelihoods = (0..target_len as usize).into_iter()
+                                .map(|pos| {
+                                    RefVsAnyResult::new(likelihoodcount, pos, tid)
+                                }).collect::<Vec<RefVsAnyResult>>();
 
                             {
                                 bam_generated.fetch(tid as u32);
@@ -416,7 +423,6 @@ impl HaplotypeCallerEngine {
                                         );
 
                                         reference_reader.read_sequence_to_vec();
-
                                         for p in pileups {
                                             let pileup = p.unwrap();
                                             let pos = pileup.pos() as usize;
@@ -458,13 +464,15 @@ impl HaplotypeCallerEngine {
                                                 }
                                             }
 
+
                                             let denominator = result.read_counts as f64 * log10ploidy;
                                             for i in 0..likelihoodcount {
                                                 result.genotype_likelihoods[i] -= denominator
                                             }
 
-                                            genotype_likelihoods.push(result)
+                                            genotype_likelihoods[pos] = result
                                         }
+
                                     }
                                     None => println!("no bam for pileups"),
                                 };
@@ -628,20 +636,27 @@ impl HaplotypeCallerEngine {
      * @param features Features overlapping the assembly region
      * @return List of variants discovered in the region (may be empty)
      */
-    pub fn call_region<'a, 'b>(
-        &'a mut self,
+    pub fn call_region<'b>(
+        &mut self,
         mut region: AssemblyRegion,
         reference_reader: &'b mut ReferenceReader,
-        given_alleles: Vec<VariantContext<'a>>,
+        given_alleles: Vec<VariantContext>,
         args: &'b clap::ArgMatches,
         sample_names: &'b Vec<String>,
-    ) -> Vec<VariantContext<'a>> {
+    ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
+        debug!(
+            "Region of size {} with {} reads",
+            region.padded_span.size(),
+            region.reads.len()
+        );
         if !region.is_active() {
+            debug!("Region was not active");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
         if given_alleles.is_empty() && region.len() == 0 {
+            debug!("Region was of length 0");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
@@ -654,16 +669,17 @@ impl HaplotypeCallerEngine {
             args,
             reference_reader,
             &mut self.assembly_engine,
-            args.is_present("correct-overlapping-quality"),
+            !args.is_present("do-not-correct-overlapping-base-qualities"),
             sample_names,
         );
 
         debug!(
-            "There were {} haplotypes found",
-            untrimmed_assembly_result.haplotypes.len()
+            "There were {} haplotypes found with {} reads",
+            untrimmed_assembly_result.haplotypes.len(),
+            untrimmed_assembly_result.region_for_genotyping.reads.len()
         );
         let all_variation_events = untrimmed_assembly_result
-            .get_variation_events(args.value_of("max-mnp=distance").unwrap().parse().unwrap());
+            .get_variation_events(args.value_of("max-mnp-distance").unwrap().parse().unwrap());
 
         let mut trimming_result = self.assembly_region_trimmer.trim(
             self.ref_idx,
@@ -674,7 +690,7 @@ impl HaplotypeCallerEngine {
             &untrimmed_assembly_result.full_reference_with_padding,
         );
 
-        if !trimming_result.is_variation_present() && args.is_present("disable-optimizations") {
+        if !trimming_result.is_variation_present() && !args.is_present("disable-optimizations") {
             return self.reference_model_for_no_variation(
                 &mut trimming_result.original_region,
                 false,
@@ -685,17 +701,17 @@ impl HaplotypeCallerEngine {
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
 
-        let read_stubs = assembly_result
-            .region_for_genotyping
-            .reads
-            .par_iter()
-            .filter(|r| {
-                AlignmentUtils::unclipped_read_length(r)
-                    < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
-            })
-            .cloned()
-            .collect::<Vec<BirdToolRead>>();
-        let mut assembly_result = assembly_result.remove_all(&read_stubs);
+        // let read_stubs = assembly_result
+        //     .region_for_genotyping
+        //     .reads
+        //     .par_iter()
+        //     .filter(|r| {
+        //         AlignmentUtils::unclipped_read_length(r)
+        //             < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
+        //     })
+        //     .cloned()
+        //     .collect::<Vec<BirdToolRead>>();
+        // let mut assembly_result = assembly_result.remove_all(&read_stubs);
 
         // filter out reads from genotyping which fail mapping quality based criteria
         //TODO - why don't do this before any assembly is done? Why not just once at the beginning of this method
@@ -721,12 +737,16 @@ impl HaplotypeCallerEngine {
         );
         debug!("==========================================================================");
         let reads = AssemblyBasedCallerUtils::split_reads_by_sample(
-            assembly_result.region_for_genotyping.get_reads_cloned(),
+            assembly_result.region_for_genotyping.move_reads(),
         );
 
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.clone(), reads);
+        debug!(
+            "Read likelihoods first {:?}",
+            read_likelihoods.values_by_sample_index
+        );
 
         // Realign reads to their best haplotype.
         let read_alignments = AssemblyBasedCallerUtils::realign_reads_to_their_best_haplotype(
@@ -735,6 +755,10 @@ impl HaplotypeCallerEngine {
             &assembly_result.padded_reference_loc,
         );
         read_likelihoods.change_evidence(read_alignments);
+        debug!(
+            "Read likelihoods after change evidence {:?}",
+            read_likelihoods.values_by_sample_index
+        );
 
         // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there
         //  was a bad interaction between that selection and the marginalization that happens over each event when computing
@@ -769,18 +793,23 @@ impl HaplotypeCallerEngine {
         return called_haplotypes.calls;
     }
 
-    fn filter_non_passing_reads<'a>(
+    fn filter_non_passing_reads(
         &self,
-        mut assembly_result: AssemblyResultSet<'a, ReadThreadingGraph>,
-    ) -> (AssemblyResultSet<'a, ReadThreadingGraph>, Vec<BirdToolRead>) {
+        mut assembly_result: AssemblyResultSet<ReadThreadingGraph>,
+    ) -> (AssemblyResultSet<ReadThreadingGraph>, Vec<BirdToolRead>) {
         let reads_to_remove = assembly_result
             .region_for_genotyping
             .reads
             .par_iter()
             .filter(|r| {
-                AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
+                if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
-                    || !r.read.is_proper_pair()
+                {
+                    debug!("Removing read {:?}", r);
+                    true
+                } else {
+                    false
+                }
             })
             .cloned()
             .collect::<Vec<BirdToolRead>>();
@@ -799,9 +828,9 @@ impl HaplotypeCallerEngine {
      * @param needsToBeFinalized should the region be finalized before computing the ref model (should be false if already done)
      * @return a list of variant contexts (can be empty) to emit for this ref region
      */
-    fn reference_model_for_no_variation(
-        &self,
-        region: &mut AssemblyRegion,
+    fn reference_model_for_no_variation<'a>(
+        &'a self,
+        region: &'a mut AssemblyRegion,
         needs_to_be_finalized: bool,
         vc_priors: &Vec<VariantContext>,
     ) -> Vec<VariantContext> {
@@ -859,13 +888,13 @@ impl HaplotypeCallerEngine {
                 for cig in record.cigar().iter() {
                     // Cigar immediately before current position
                     // in read
-                    if qpos == read_cursor - 1 {
+                    if qpos as i32 == read_cursor - 1 {
                         match cig {
                             Cigar::SoftClip(_) => hq_soft_clips.add(
                                 HaplotypeCallerEngine::count_high_quality_soft_clips(
                                     &cig,
                                     &record,
-                                    read_cursor,
+                                    read_cursor as usize,
                                     min_soft_clip_qual,
                                 ),
                             ),
@@ -873,13 +902,13 @@ impl HaplotypeCallerEngine {
                                 // Not a soft clip
                             }
                         }
-                    } else if qpos == read_cursor + 1 {
+                    } else if qpos as i32 == read_cursor + 1 {
                         match cig {
                             Cigar::SoftClip(_) => hq_soft_clips.add(
                                 HaplotypeCallerEngine::count_high_quality_soft_clips(
                                     &cig,
                                     &record,
-                                    read_cursor,
+                                    read_cursor as usize,
                                     min_soft_clip_qual,
                                 ),
                             ),
@@ -887,7 +916,7 @@ impl HaplotypeCallerEngine {
                                 // Not a soft clip
                             }
                         }
-                    } else if read_cursor > qpos {
+                    } else if read_cursor > qpos as i32 {
                         // break out of loop since we have passed
                         // the position
                         break;
@@ -899,7 +928,7 @@ impl HaplotypeCallerEngine {
                         | Cigar::Equal(_)
                         | Cigar::Ins(_)
                         | Cigar::SoftClip(_) => {
-                            read_cursor += cig.len() as usize;
+                            read_cursor += cig.len() as i32;
                         }
                         _ => {}
                     }

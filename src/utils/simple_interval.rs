@@ -136,7 +136,7 @@ impl SimpleInterval {
     pub fn expand_within_contig(&self, padding: usize, contig_length: usize) -> SimpleInterval {
         let mut start = self.get_start();
         if start < padding {
-            start = 1
+            start = 0
         } else {
             start = start - padding
         }

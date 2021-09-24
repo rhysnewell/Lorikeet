@@ -3,6 +3,7 @@ use assembly::assembly_region::AssemblyRegion;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rayon::prelude::*;
+use std::cmp::min;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
@@ -450,7 +451,10 @@ impl Profile for ActivityProfile {
                 let region_loc = SimpleInterval::new(
                     first.get_loc().get_contig(),
                     first.get_loc().get_start(),
-                    first.get_loc().get_start() + offset_of_next_region_end,
+                    min(
+                        first.get_loc().get_start() + offset_of_next_region_end,
+                        self.contig_len - 1,
+                    ),
                 );
                 return Some(AssemblyRegion::new(
                     region_loc,
@@ -572,7 +576,6 @@ impl Profile for ActivityProfile {
             }
             end_of_active_region += 1;
         }
-
         return end_of_active_region;
     }
 

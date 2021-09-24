@@ -61,8 +61,8 @@ static TRIPLOID: usize = 3;
 static BIALLELIC: usize = 2;
 static TRIALLELIC: usize = 3;
 
-static EXTREMELY_CONFIDENT_PL: usize = 1000;
-static FAIRLY_CONFIDENT_PL: usize = 20;
+static EXTREMELY_CONFIDENT_PL: i64 = 1000;
+static FAIRLY_CONFIDENT_PL: i64 = 20;
 
 static DEFAULT_PLOIDY: usize = 2;
 
@@ -543,21 +543,21 @@ fn test_presence_of_unlikely_spanning_deletion_doesnt_affect_results() {
     ));
 }
 
-// // test that a finite precision bug for span del sites with a very unlikely alt allele doesn't occur
-// #[test]
-// fn test_spanning_deletion_with_very_unlikely_alt_allele() {
-//     let ploidy = 4;
-//     let mut af_calc = AlleleFrequencyCalculator::new(1.0, 0.1, 0.1, ploidy);
-//     let alleles = vec![A.clone(), SPAN_DEL_ALLELE.clone(), B.clone()];
-//
-//     // make PLs that don't support the alt allele
-//     let pls = vec![0,10000,10000,10000,10000, 10000,10000,10000,10000,10000,10000,10000,10000,10000,10000];
-//     let vc = make_vc(
-//         alleles,
-//         make_genotype(ploidy, 0, pls),
-//     );
-//     let log10_p_variant = af_calc.calculate(vc, ploidy).log10_prob_variant_present();
-// }
+// test that a finite precision bug for span del sites with a very unlikely alt allele doesn't occur
+#[test]
+fn test_spanning_deletion_with_very_unlikely_alt_allele() {
+    let ploidy = 4;
+    let mut af_calc = AlleleFrequencyCalculator::new(1.0, 0.1, 0.1, ploidy);
+    let alleles = vec![A.clone(), SPAN_DEL_ALLELE.clone(), B.clone()];
+
+    // make PLs that don't support the alt allele
+    let pls = vec![
+        0, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+        10000, 10000,
+    ];
+    let vc = make_vc(alleles, vec![make_genotype(ploidy, 0, pls)]);
+    let log10_p_variant = af_calc.calculate(vc, ploidy).log10_prob_variant_present();
+}
 
 #[test]
 fn test_single_sample_biallelic_shortcut() {
@@ -612,8 +612,8 @@ fn PLs_for_obvious_call(
     ploidy: usize,
     num_alleles: usize,
     allele_counts: Vec<usize>,
-    PL: usize,
-) -> Vec<usize> {
+    PL: i64,
+) -> Vec<i64> {
     let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, num_alleles);
     let mut result = vec![PL; gl_calc.genotype_count as usize];
     result[gl_calc.allele_counts_to_index(&allele_counts)] = 0;
@@ -624,9 +624,9 @@ fn genotype_with_obvious_call(
     ploidy: usize,
     num_alleles: usize,
     alleles: Vec<usize>,
-    PL: usize,
+    PL: i64,
     sample: usize,
-) -> Genotype<'static> {
+) -> Genotype {
     return make_genotype(
         ploidy,
         sample,
@@ -634,19 +634,16 @@ fn genotype_with_obvious_call(
     );
 }
 
-fn make_genotype(ploidy: usize, sample: usize, pls: Vec<usize>) -> Genotype<'static> {
+fn make_genotype(ploidy: usize, sample: usize, pls: Vec<i64>) -> Genotype {
     let mut g = Genotype::build_from_alleles(
         vec![ByteArrayAllele::no_call(); ploidy],
         format!("sample_{}", sample),
     );
-    g.pl(GenotypeLikelihoods::from_pls(pls));
+    g.pl(GenotypeLikelihoods::from_pls(pls).as_pls());
     return g;
 }
 
-fn make_vc(
-    alleles: Vec<ByteArrayAllele>,
-    genotypes: Vec<Genotype<'static>>,
-) -> VariantContext<'static> {
+fn make_vc(alleles: Vec<ByteArrayAllele>, genotypes: Vec<Genotype>) -> VariantContext {
     let mut vc = VariantContext::build(0, 1, 1, alleles);
     vc.add_genotypes(genotypes);
     return vc;

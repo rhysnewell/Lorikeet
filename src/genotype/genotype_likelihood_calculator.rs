@@ -314,6 +314,9 @@ impl GenotypeLikelihoodCalculator {
         permutation: &AlleleLikelihoodMatrixMapper<A>,
         number_of_evidences: usize,
     ) -> GenotypeLikelihoods {
+        debug!("Single likelihoods array {:?}", likelihoods);
+        debug!("Number of evidences {}", number_of_evidences);
+        debug!("permutation {:?}", permutation);
         let read_likelihoods_by_genotype_index = self
             .get_read_raw_read_likelihoods_by_genotype_index(
                 likelihoods,

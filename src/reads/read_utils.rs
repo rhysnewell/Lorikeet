@@ -305,6 +305,7 @@ impl ReadUtils {
      * @return the base insertion quality array
      */
     pub fn get_base_insertion_qualities(read: &BirdToolRead) -> Vec<u8> {
+        debug!("read aux tag {:?}", read.read.aux(b"BI"));
         match read.read.aux(b"BI") {
             Ok(tag) => {
                 match tag {
@@ -331,6 +332,7 @@ impl ReadUtils {
      * @return the base insertion quality array
      */
     pub fn get_base_deletion_qualities(read: &BirdToolRead) -> Vec<u8> {
+        debug!("read aux tag {:?}", read.read.aux(b"BD"));
         match read.read.aux(b"BD") {
             Ok(tag) => {
                 match tag {

@@ -17,23 +17,23 @@ pub enum Status {
  * Result of assembling, with the resulting graph and status
  */
 #[derive(Debug, Clone)]
-pub struct AssemblyResult<'a, L: Locatable, A: AbstractReadThreadingGraph> {
+pub struct AssemblyResult<L: Locatable, A: AbstractReadThreadingGraph> {
     pub(crate) status: Status,
     pub(crate) threading_graph: Option<A>,
     pub(crate) graph: Option<SeqGraph<BaseEdgeStruct>>,
-    pub(crate) discovered_haplotypes: HashSet<Haplotype<'a, L>>,
+    pub(crate) discovered_haplotypes: HashSet<Haplotype<L>>,
     pub(crate) contains_suspect_haploptypes: bool,
 }
 
-impl<'a, L: Locatable, A: AbstractReadThreadingGraph> Eq for AssemblyResult<'a, L, A> {}
+impl<L: Locatable, A: AbstractReadThreadingGraph> Eq for AssemblyResult<L, A> {}
 
-impl<'a, L: Locatable, A: AbstractReadThreadingGraph> PartialEq for AssemblyResult<'a, L, A> {
+impl<L: Locatable, A: AbstractReadThreadingGraph> PartialEq for AssemblyResult<L, A> {
     fn eq(&self, other: &Self) -> bool {
         self.status == other.status && self.discovered_haplotypes == other.discovered_haplotypes
     }
 }
 
-impl<'a, L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<'a, L, A> {
+impl<L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<L, A> {
     /**
      * Create a new assembly result
      * @param status the status, cannot be null
@@ -43,7 +43,7 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<'a, L, A> {
         status: Status,
         graph: Option<SeqGraph<BaseEdgeStruct>>,
         threading_graph: Option<A>,
-    ) -> AssemblyResult<'a, L, A> {
+    ) -> AssemblyResult<L, A> {
         AssemblyResult {
             status,
             graph,
@@ -53,7 +53,7 @@ impl<'a, L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<'a, L, A> {
         }
     }
 
-    pub fn set_discovered_haplotypes(&mut self, discovered_haplotypes: HashSet<Haplotype<'a, L>>) {
+    pub fn set_discovered_haplotypes(&mut self, discovered_haplotypes: HashSet<Haplotype<L>>) {
         self.discovered_haplotypes = discovered_haplotypes
     }
 

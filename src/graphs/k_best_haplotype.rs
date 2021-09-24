@@ -90,7 +90,7 @@ impl KBestHaplotype {
     pub fn haplotype<L: Locatable, V: BaseVertex, E: BaseEdge>(
         &self,
         graph: &BaseGraph<V, E>,
-    ) -> Haplotype<'static, L> {
+    ) -> Haplotype<L> {
         let mut haplotype = Haplotype::new(&self.path.get_bases(graph), self.is_reference);
         haplotype.score = OrderedFloat(self.score);
         return haplotype;

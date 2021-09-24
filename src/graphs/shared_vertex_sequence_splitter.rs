@@ -89,11 +89,6 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         );
 
         let (prefix, suffix) = Self::common_prefix_and_suffix_of_vertices(&to_split_args, &graph);
-        println!(
-            "prefix {:?} suffix {:?}",
-            prefix.to_string(),
-            suffix.to_string()
-        );
 
         Self {
             outer: graph,

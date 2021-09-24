@@ -129,7 +129,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
     fn print_graph_simplification(&self, path: &str) {
         if Self::PRINT_SIMPLIFY_GRAPHS {
             self.base_graph
-                // .subset_to_neighbours(self.base_graph.get_reference_source_vertex().unwrap(), 5)
+                .subset_to_neighbours(self.base_graph.get_reference_source_vertex().unwrap(), 5)
                 .print_graph(path, true, 0)
         }
     }

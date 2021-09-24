@@ -15,10 +15,10 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 //     pub static ref SIZE_AND_BASE_ORDER: Then<Extract<Fn(&Haplotype<Locatable>)>>
 // }
 #[derive(Debug, Clone)]
-pub struct Haplotype<'a, L: Locatable> {
+pub struct Haplotype<L: Locatable> {
     pub(crate) allele: ByteArrayAllele,
     pub(crate) genome_location: Option<L>,
-    pub(crate) event_map: Option<EventMap<'a>>,
+    pub(crate) event_map: Option<EventMap>,
     pub(crate) cigar: CigarString,
     pub(crate) alignment_start_hap_wrt_ref: usize,
     pub(crate) score: OrderedFloat<f64>,
@@ -26,14 +26,14 @@ pub struct Haplotype<'a, L: Locatable> {
     pub(crate) kmer_size: usize,
 }
 
-impl<'a, L: Locatable> Haplotype<'a, L> {
+impl<L: Locatable> Haplotype<L> {
     /**
      * Main constructor
      *
      * @param bases a non-null array of bases
      * @param isRef is this the reference haplotype?
      */
-    pub fn new(bases: &[u8], is_ref: bool) -> Haplotype<'a, L> {
+    pub fn new(bases: &[u8], is_ref: bool) -> Haplotype<L> {
         Haplotype {
             allele: ByteArrayAllele::new(bases, is_ref),
             genome_location: None,
@@ -83,6 +83,10 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
         self.genome_location = Some(genome_location)
     }
 
+    pub fn get_genome_location(&self) -> Option<&L> {
+        self.genome_location.as_ref()
+    }
+
     pub fn len(&self) -> usize {
         self.allele.len()
     }
@@ -102,7 +106,7 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
     pub fn trim<'b>(
         &'b self,
         loc: SimpleInterval,
-    ) -> Result<Option<Haplotype<'a, SimpleInterval>>, BirdToolError> {
+    ) -> Result<Option<Haplotype<SimpleInterval>>, BirdToolError> {
         if self.genome_location.is_none() {
             return Err(BirdToolError::InvalidLocation(format!(
                 "Attempting to trim haplotype with no genome location"
@@ -207,23 +211,27 @@ impl<'a, L: Locatable> Haplotype<'a, L> {
         builder.add(Cigar::Match(pad_size as u32));
         return builder.make(false);
     }
+
+    pub fn set_event_map(&mut self, event_map: EventMap) {
+        self.event_map = Some(event_map)
+    }
 }
 
-impl<'a, L: Locatable> Hash for Haplotype<'a, L> {
+impl<L: Locatable> Hash for Haplotype<L> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.get_bases().hash(state);
     }
 }
 
-impl<'a, L: Locatable> PartialEq for Haplotype<'a, L> {
+impl<L: Locatable> PartialEq for Haplotype<L> {
     fn eq(&self, other: &Self) -> bool {
         self.get_bases() == other.get_bases()
     }
 }
 
-impl<'a, L: Locatable> Eq for Haplotype<'a, L> {}
+impl<L: Locatable> Eq for Haplotype<L> {}
 
-impl<'a, L: Locatable> Ord for Haplotype<'a, L> {
+impl<L: Locatable> Ord for Haplotype<L> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.get_bases()
             .len()
@@ -232,13 +240,13 @@ impl<'a, L: Locatable> Ord for Haplotype<'a, L> {
     }
 }
 
-impl<'a, L: Locatable> PartialOrd for Haplotype<'a, L> {
+impl<L: Locatable> PartialOrd for Haplotype<L> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a, L: Locatable> Allele for Haplotype<'a, L> {
+impl<L: Locatable> Allele for Haplotype<L> {
     fn is_reference(&self) -> bool {
         self.allele.is_ref
     }

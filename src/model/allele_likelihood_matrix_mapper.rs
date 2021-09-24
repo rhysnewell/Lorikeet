@@ -1,6 +1,7 @@
 use model::allele_list::Permutation;
 use model::byte_array_allele::Allele;
 
+#[derive(Debug)]
 pub struct AlleleLikelihoodMatrixMapper<A: Allele> {
     pub(crate) permutation: Permutation<A>,
 }

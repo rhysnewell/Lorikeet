@@ -125,11 +125,6 @@ impl VertexBasedTransformerOptions {
                         }
                         .try_to_transform(v);
                         if found_nodes_to_merge {
-                            graph.base_graph.print_graph(
-                                &format!("merged_diamonds.{}.dot", i),
-                                true,
-                                1,
-                            );
                             i += 1;
                             did_at_least_one_transform = true;
                             break;

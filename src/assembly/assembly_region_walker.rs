@@ -6,6 +6,7 @@ use coverm::FlagFilter;
 use estimation::lorikeet_engine::Elem;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use model::variant_context::VariantContext;
+use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::{IndexedReader, Read};
 use std::collections::HashMap;
@@ -103,33 +104,35 @@ impl AssemblyRegionWalker {
     /**
      * Iterates through activity profiles per contig, sending each activity profile to be processed
      */
-    pub fn traverse(
-        &mut self,
-        shards: &mut HashMap<usize, BandPassActivityProfile>,
-        flag_filters: &FlagFilter,
-        args: &clap::ArgMatches,
-        sample_names: &Vec<String>,
-        reference_reader: &mut ReferenceReader,
-    ) {
+    pub fn traverse<'a, 'b>(
+        &'b mut self,
+        shards: &'b mut HashMap<usize, BandPassActivityProfile>,
+        flag_filters: &'a FlagFilter,
+        args: &'a clap::ArgMatches,
+        sample_names: &'a Vec<String>,
+        reference_reader: &'b mut ReferenceReader,
+    ) -> Vec<VariantContext> {
+        let mut contexts = Vec::new();
         for (tid, activity_profile) in shards.iter_mut() {
-            self.process_shard(
+            contexts.par_extend(self.process_shard(
                 activity_profile,
                 flag_filters,
                 args,
                 sample_names,
                 reference_reader,
-            )
+            ));
         }
+        return contexts;
     }
 
-    fn process_shard(
-        &mut self,
-        shard: &mut BandPassActivityProfile,
-        flag_filters: &FlagFilter,
+    fn process_shard<'a, 'b>(
+        &'b mut self,
+        shard: &'b mut BandPassActivityProfile,
+        flag_filters: &'a FlagFilter,
         args: &clap::ArgMatches,
-        sample_names: &Vec<String>,
-        reference_reader: &mut ReferenceReader,
-    ) {
+        sample_names: &'a Vec<String>,
+        reference_reader: &'b mut ReferenceReader,
+    ) -> Vec<VariantContext> {
         let mut assembly_region_iter = AssemblyRegionIterator::new(sample_names, self.n_threads);
 
         let mut pending_regions = shard.pop_ready_assembly_regions(
@@ -144,6 +147,7 @@ impl AssemblyRegionWalker {
                 // Indexed readers don't have sync so we cannot parallelize this
                 let mut indexed_vcf_reader = indexed_vcf_reader.as_mut().unwrap();
                 indexed_vcf_reader.set_threads(self.n_threads as usize);
+                let mut contexts = Vec::new();
 
                 for mut assembly_region in pending_regions.into_iter() {
                     assembly_region_iter.fill_next_assembly_region_with_reads(
@@ -171,16 +175,19 @@ impl AssemblyRegionWalker {
                         None => Vec::new(),
                     };
 
-                    self.evaluator.call_region(
+                    contexts.par_extend(self.evaluator.call_region(
                         assembly_region,
                         reference_reader,
                         feature_variants,
                         args,
                         sample_names,
-                    );
+                    ));
                 }
+
+                return contexts;
             }
             None => {
+                let mut contexts = Vec::new();
                 for mut assembly_region in pending_regions.into_iter() {
                     assembly_region_iter.fill_next_assembly_region_with_reads(
                         &mut assembly_region,
@@ -190,14 +197,16 @@ impl AssemblyRegionWalker {
                         self.long_read_bam_count,
                     );
 
-                    self.evaluator.call_region(
+                    contexts.par_extend(self.evaluator.call_region(
                         assembly_region,
                         reference_reader,
                         Vec::new(),
                         args,
                         sample_names,
-                    );
+                    ));
                 }
+
+                return contexts;
             }
         }
     }

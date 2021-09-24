@@ -4,6 +4,7 @@ use coverm::bam_generator::{
 };
 use coverm::FlagFilter;
 use estimation::lorikeet_engine::ReadType;
+use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::Record;
 
@@ -47,11 +48,12 @@ impl<'a> AssemblyRegionIterator<'a> {
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
-        let mut record = Record::new(); // Empty bam record
-        self.indexed_bam_readers
-            .iter()
+        let mut records: Vec<BirdToolRead> = self
+            .indexed_bam_readers
+            .par_iter()
             .enumerate()
-            .for_each(|(sample_idx, bam_generator)| {
+            .flat_map(|(sample_idx, bam_generator)| {
+                let mut record = Record::new(); // Empty bam record
                 let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
                     vec![&bam_generator],
                     n_threads,
@@ -72,6 +74,8 @@ impl<'a> AssemblyRegionIterator<'a> {
                     ReadType::Long
                 };
 
+                let mut records = Vec::new(); // container for the records to be collected
+
                 while bam_generated.read(&mut record) == true {
                     // TODO: Implement read filtering here
                     if (!flag_filters.include_supplementary
@@ -84,10 +88,16 @@ impl<'a> AssemblyRegionIterator<'a> {
                     {
                         continue;
                     } else {
-                        region.add(BirdToolRead::new(record.clone(), sample_idx, read_type));
+                        records.push(BirdToolRead::new(record.clone(), sample_idx, read_type));
                     };
                 }
-            });
+
+                records
+            })
+            .collect::<Vec<BirdToolRead>>();
+        debug!("Adding {} reads to region", records.len());
+        records.par_sort_unstable();
+        region.add_all(records);
     }
 }
 

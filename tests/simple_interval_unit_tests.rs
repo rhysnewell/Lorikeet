@@ -204,13 +204,13 @@ fn expand_within_contig() {
         SimpleInterval::new(1, 1, 10),
         10,
         CONTIG_LENGTH,
-        SimpleInterval::new(1, 1, 20),
+        SimpleInterval::new(1, 0, 20),
     );
     test_expand_within_contig(
         SimpleInterval::new(1, 10, 20),
         10,
         CONTIG_LENGTH,
-        SimpleInterval::new(1, 1, 30),
+        SimpleInterval::new(1, 0, 30),
     );
     test_expand_within_contig(
         SimpleInterval::new(1, 10, 20),

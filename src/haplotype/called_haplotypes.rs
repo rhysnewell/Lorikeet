@@ -3,16 +3,16 @@ use model::variant_context::VariantContext;
 use std::collections::HashSet;
 use utils::simple_interval::SimpleInterval;
 
-pub struct CalledHaplotypes<'a> {
-    pub(crate) calls: Vec<VariantContext<'a>>,
-    pub(crate) called_haplotypes: HashSet<Haplotype<'a, SimpleInterval>>,
+pub struct CalledHaplotypes {
+    pub(crate) calls: Vec<VariantContext>,
+    pub(crate) called_haplotypes: HashSet<Haplotype<SimpleInterval>>,
 }
 
-impl<'a> CalledHaplotypes<'a> {
+impl CalledHaplotypes {
     pub fn new(
-        calls: Vec<VariantContext<'a>>,
-        called_haplotypes: HashSet<Haplotype<'a, SimpleInterval>>,
-    ) -> CalledHaplotypes<'a> {
+        calls: Vec<VariantContext>,
+        called_haplotypes: HashSet<Haplotype<SimpleInterval>>,
+    ) -> CalledHaplotypes {
         Self {
             calls,
             called_haplotypes,

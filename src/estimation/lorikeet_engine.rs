@@ -219,34 +219,15 @@ impl<'a> LorikeetEngine<'a> {
                         &mut reference_reader,
                     );
 
-                    assembly_engine.traverse(
+                    let contexts = assembly_engine.traverse(
                         &mut shards,
                         flag_filters,
                         self.args,
                         &indexed_bam_readers,
                         &mut reference_reader,
                     );
-                    // let mut hc_engine = HaplotypeCallerEngine::new(
-                    //     &self.args,
-                    //     ref_idx,
-                    //     indexed_bam_readers.clone(),
-                    //     false,
-                    //     self.args.value_of("ploidy").unwrap().parse().unwrap()
-                    // );
-                    //
-                    // hc_engine.apply(
-                    //     &indexed_bam_readers,
-                    //     self.short_read_bam_count,
-                    //     self.long_read_bam_count,
-                    //     n_threads,
-                    //     ref_idx,
-                    //     per_reference_samples,
-                    //     &self.args,
-                    //     genomes_and_contigs,
-                    //     &concatenated_genomes,
-                    //     flag_filters,
-                    //     tree
-                    // );
+
+                    println!("contexts {:?}", &contexts);
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -256,13 +237,6 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    // Collects info about variants across samples to check whether they are genuine or not
-                    // using FDR
-                    {
-                        let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(format!("{}: Setting FDR threshold...", pb.key));
-                    }
                     // variant_matrix
                     //     .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
                     let mode = "genotype";
@@ -506,8 +480,8 @@ impl<'a> LorikeetEngine<'a> {
             key: "Operations remaining".to_string(),
             index: 0,
             progress_bar: ProgressBar::new(
-                ((references.len() * (short_sample_count + long_sample_count)) * 2
-                    + references.len()) as u64,
+                ((references.len() * (short_sample_count + long_sample_count)) + references.len())
+                    as u64,
             ),
         };
 

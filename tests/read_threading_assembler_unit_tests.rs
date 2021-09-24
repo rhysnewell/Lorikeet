@@ -150,14 +150,14 @@ fn make_assemble_intervals_data() {
     }
 }
 
-fn assemble<'a>(
-    assembler: &'a mut ReadThreadingAssembler,
+fn assemble(
+    assembler: &mut ReadThreadingAssembler,
     ref_bases: &[u8],
     loc: SimpleInterval,
     contig_len: usize,
     reads: Vec<BirdToolRead>,
-    ref_haplotype: &'a mut Haplotype<'a, SimpleInterval>,
-) -> AssemblyResultSet<'a, ReadThreadingGraph> {
+    ref_haplotype: &mut Haplotype<SimpleInterval>,
+) -> AssemblyResultSet<ReadThreadingGraph> {
     let cigar = CigarString(vec![Cigar::Match(ref_haplotype.get_bases().len() as u32)]);
     ref_haplotype.set_cigar(cigar.0);
 
@@ -399,6 +399,94 @@ fn make_assemble_intervals_with_variant_data() {
                 n_reads_to_use,
                 variant_start,
                 &mut reader,
+            );
+        }
+    }
+}
+
+fn test_simple_assembly(
+    name: &str,
+    mut assembler: ReadThreadingAssembler,
+    loc: SimpleInterval,
+    reference: &str,
+    alt: &str,
+    contig_len: usize,
+) {
+    let ref_bases = reference.as_bytes();
+    let alt_bases = alt.as_bytes();
+
+    let quals = vec![30; alt_bases.len()];
+    let cigar = format!("{}M", alt_bases.len());
+    let mut reads = Vec::new();
+    for i in 0..20 {
+        let bases = alt_bases;
+        let quals = quals.as_slice();
+        let cigar = cigar.as_str();
+        let read = ArtificialReadUtils::create_artificial_read_with_name_and_pos(
+            "test".to_string(),
+            loc.get_contig() as i32,
+            loc.get_start() as i64,
+            bases,
+            quals,
+            cigar,
+            0,
+        );
+        reads.push(read);
+    }
+
+    let mut ref_haplotype = Haplotype::new(ref_bases, true);
+    let alt_haplotype = Haplotype::new(alt_bases, false);
+    let haplotypes = assemble(
+        &mut assembler,
+        ref_bases,
+        loc,
+        contig_len,
+        reads,
+        &mut ref_haplotype,
+    )
+    .get_haplotype_list();
+    assert!(haplotypes.len() > 0, "Failed to find ref haplotype");
+    assert_eq!(&haplotypes[0], &ref_haplotype);
+
+    assert_eq!(haplotypes.len(), 2, "Failed to find single alt haplotype");
+    assert_eq!(&haplotypes[1], &alt_haplotype);
+}
+
+#[test]
+fn make_simple_assembly_test_data() {
+    let start = 100000;
+    let window_size = 200;
+    let end = start + window_size;
+
+    let exclude_variants_within_x_bp = 25; // TODO -- decrease to zero when the edge calling problem is fixed
+    let mut reader = ReferenceReaderUtils::retrieve_reference(&Some(
+        "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
+    ));
+    reader.fetch_by_rid(0, start, end + 1);
+    let contig_len = reader.index.sequences()[0].len as usize;
+    let mut ref_bases = Vec::new();
+    reader.read(&mut ref_bases);
+    let ref_loc = SimpleInterval::new(0, start as usize, end as usize);
+
+    for snp_pos in 0..window_size {
+        if snp_pos > exclude_variants_within_x_bp
+            && (window_size - snp_pos) >= exclude_variants_within_x_bp
+        {
+            let mut alt_bases = ref_bases.clone();
+            alt_bases[snp_pos as usize] = if alt_bases[snp_pos as usize] == b'A' {
+                b'C'
+            } else {
+                b'A'
+            };
+            let alt = std::str::from_utf8(&alt_bases).unwrap();
+            let name = format!("snp at {}", snp_pos);
+            test_simple_assembly(
+                name.as_str(),
+                ReadThreadingAssembler::default(),
+                ref_loc.clone(),
+                std::str::from_utf8(&ref_bases).unwrap(),
+                alt,
+                contig_len,
             );
         }
     }

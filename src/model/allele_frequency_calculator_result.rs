@@ -13,6 +13,7 @@ use utils::quality_utils::QualityUtils;
  * Note that all of the values -- i.e. priors -- are checked now that they are meaningful, which means
  * that users of this code can rely on the values coming out of these functions.
  */
+#[derive(Debug)]
 pub struct AFCalculationResult {
     log10_posterior_of_no_variant: f64,
     log10_p_ref_by_allele: HashMap<ByteArrayAllele, f64>,
@@ -115,6 +116,11 @@ impl AFCalculationResult {
         allele: &ByteArrayAllele,
         phred_scale_qual_threshold: f64,
     ) -> bool {
+        debug!(
+            "log 10 posterior {} qual thresh {}",
+            (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON),
+            QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold as u8)
+        );
         (self.get_log10_posterior_of_allele_absent(allele) + AFCalculationResult::EPSILON)
             < QualityUtils::qual_to_error_prob_log10(phred_scale_qual_threshold as u8)
     }
@@ -141,6 +147,10 @@ impl AFCalculationResult {
      * @return the log10 probability that allele is not segregating at this site
      */
     pub fn get_log10_posterior_of_allele_absent(&self, allele: &ByteArrayAllele) -> f64 {
+        debug!(
+            "allele {:?} available {:?}",
+            allele, &self.log10_p_ref_by_allele
+        );
         let log10_p_non_ref = self.log10_p_ref_by_allele.get(allele).unwrap();
         return *log10_p_non_ref;
     }

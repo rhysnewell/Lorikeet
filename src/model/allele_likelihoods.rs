@@ -240,7 +240,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
     }
 
     fn find_reference_allele_index(alleles: &AlleleList<A>) -> Option<usize> {
-        alleles.list.par_iter().position_first(|a| a.is_reference())
+        alleles
+            .as_list_of_alleles()
+            .par_iter()
+            .position_first(|a| a.is_reference())
     }
 
     fn setup_indexes(
@@ -644,6 +647,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 indexes_to_remove = (0..number_of_evidence)
                     .into_iter()
                     .filter(|i| {
+                        debug!(
+                            "read value {} and thresh {} ",
+                            self.maximum_likelihood_over_all_alleles(sample_index, *i),
+                            (log10_min_true_likelihood)(&sample_evidence[*i])
+                        );
                         self.maximum_likelihood_over_all_alleles(sample_index, *i)
                             < (log10_min_true_likelihood)(&sample_evidence[*i])
                     })

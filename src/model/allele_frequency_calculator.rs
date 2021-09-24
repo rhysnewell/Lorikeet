@@ -76,7 +76,7 @@ impl AlleleFrequencyCalculator {
         gl_calc: &mut GenotypeLikelihoodCalculator,
         log10_allele_frequencies: &mut [f64],
     ) -> Vec<f64> {
-        let log10_likelihoods = g.get_likelihoods().get_likelihoods();
+        let log10_likelihoods = g.get_likelihoods().get_as_vector();
         let log10_posteriors = (0..gl_calc.genotype_count as usize)
             .into_iter()
             .map(|genotype_index| {
@@ -209,6 +209,7 @@ impl AlleleFrequencyCalculator {
         let mut log10_absent_posteriors = Arc::new(Mutex::new(vec![Vec::new(); num_alleles]));
 
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
+            debug!("vc alleles {:?} this genotype {:?}", &vc.alleles, g);
             if !g.has_likelihoods() {
                 continue;
             }

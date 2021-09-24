@@ -15,26 +15,26 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  * Extract simple VariantContext events from a single haplotype
  */
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct EventMap<'a> {
+pub struct EventMap {
     // haplotype: Haplotype<'a, L>,
     // reference: &'a [u8],
     pub(crate) reference_loc: SimpleInterval,
     pub(crate) source_name_to_add: String,
-    pub(crate) map: BTreeMap<usize, VariantContext<'a>>,
+    pub(crate) map: BTreeMap<usize, VariantContext>,
 }
 
-impl<'a> EventMap<'a> {
+impl EventMap {
     const MIN_NUMBER_OF_EVENTS_TO_COMBINE_INTO_BLOCK_SUBSTITUTION: usize = 3;
     const MAX_EVENT_PER_HAPLOTYPE: usize = 3;
     const MAX_INDELS_PER_HAPLOTYPE: usize = 3;
 
     pub fn new<L: Locatable>(
-        haplotype: &Haplotype<'a, L>,
+        haplotype: &Haplotype<L>,
         reference: &[u8],
         reference_loc: SimpleInterval,
         source_name_to_add: String,
         max_mnp_distance: usize,
-    ) -> EventMap<'a> {
+    ) -> EventMap {
         let mut result = EventMap {
             // haplotype,
             // reference,
@@ -76,7 +76,7 @@ impl<'a> EventMap<'a> {
      */
     fn process_cigar_for_initial_events<L: Locatable>(
         &mut self,
-        haplotype: &Haplotype<'a, L>,
+        haplotype: &Haplotype<L>,
         reference: &[u8],
         max_mnp_distance: usize,
     ) {
@@ -170,10 +170,10 @@ impl<'a> EventMap<'a> {
                             && BaseUtils::is_regular_base(ref_byte)
                             && BaseUtils::is_regular_base(alt_byte);
 
-                        debug!(
-                            "Cigar {:?} ref_byte {} alt_byte {} mismatch {}",
-                            ce, ref_byte, alt_byte, mismatch
-                        );
+                        // debug!(
+                        //     "Cigar {:?} ref_byte {} alt_byte {} mismatch {}",
+                        //     ce, ref_byte, alt_byte, mismatch
+                        // );
                         if mismatch {
                             mismatch_offsets.push_back(offset);
                         };
@@ -242,7 +242,7 @@ impl<'a> EventMap<'a> {
      * @param vc the variant context to add
      * @param merge should we attempt to merge it with an already existing element, or should we throw an error in that case?
      */
-    pub fn add_vc(&mut self, vc: VariantContext<'a>, merge: bool) {
+    pub fn add_vc(&mut self, vc: VariantContext, merge: bool) {
         if self.map.contains_key(&vc.loc.start) {
             if merge {
                 let prev = self.map.remove(&vc.loc.start).unwrap();
@@ -263,10 +263,7 @@ impl<'a> EventMap<'a> {
      * @param vc2 the second
      * @return a block substitution that represents the composite substitution implied by vc1 and vc2
      */
-    pub fn make_block(
-        mut vc1: VariantContext<'a>,
-        mut vc2: VariantContext<'a>,
-    ) -> VariantContext<'a> {
+    pub fn make_block(mut vc1: VariantContext, mut vc2: VariantContext) -> VariantContext {
         assert!(
             vc1.loc.start == vc2.loc.start,
             "vc1 and 2 must have the same start but got got {} and {}",
@@ -409,20 +406,20 @@ impl<'a> EventMap<'a> {
      * Get the variant contexts in order of start position in this event map
      * @return
      */
-    pub fn get_variant_contexts<'b>(&'b self) -> Vec<&'b VariantContext<'a>> {
-        self.map.values().collect::<Vec<&'b VariantContext<'a>>>()
+    pub fn get_variant_contexts<'b>(&'b self) -> Vec<&'b VariantContext> {
+        self.map.values().collect::<Vec<&'b VariantContext>>()
     }
 
     /**
      * Returns any events in the map that overlap loc, including spanning deletions and events that start at loc.
      */
-    pub fn get_overlapping_events<'b>(&'b self, loc: usize) -> Vec<&'b VariantContext<'a>> {
+    pub fn get_overlapping_events<'b>(&'b self, loc: usize) -> Vec<&'b VariantContext> {
         let mut overlapping_events = self
             .map
             .range(..=loc)
             .filter(|(k, v)| v.loc.get_end() >= loc)
             .map(|(_, v)| v)
-            .collect::<Vec<&'b VariantContext<'a>>>();
+            .collect::<Vec<&'b VariantContext>>();
 
         let contains_insertion_at_loc = overlapping_events.par_iter().any(|v| {
             v.variant_type.as_ref().unwrap() == &VariantType::Indel

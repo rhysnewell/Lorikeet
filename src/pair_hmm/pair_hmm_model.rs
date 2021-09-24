@@ -219,15 +219,17 @@ impl PairHMMModel {
             .skip(1)
             .enumerate()
             .for_each(|(i, mut row)| {
-                model.qual_to_trans_probs_with_array1(
-                    &mut row,
-                    ins_quals[i],
-                    del_quals[i],
-                    gcps[i],
-                );
+                if i < read_length {
+                    model.qual_to_trans_probs_with_array1(
+                        &mut row,
+                        ins_quals[i],
+                        del_quals[i],
+                        gcps[i],
+                    );
+                }
             });
         // for i in 0..read_length {
-        //     let mut row = dest.row_mut(i);
+        //     let mut row = dest.row_mut(i + 1);
         //     self.qual_to_trans_probs_with_array1(&mut row, ins_quals[i], del_quals[i], gcps[i]);
         // };
     }
@@ -482,12 +484,12 @@ impl PairHMMModel {
 
     /**
      * Returns the log-probability that neither of two events takes place.
-     * <p/>
+     *
      *
      * We assume that both events never occur together and that delQual is the conditional probability (qual. encoded)
-     * of the second event, given the first event didn't took place. So that the probability of no event is: <br/>
+     * of the second event, given the first event didn't took place. So that the probability of no event is:
      *
-     * <code>1 - ProbErr(insQual) - ProbErr(delQual)</code> <br/>
+     * 1 - ProbErr(insQual) - ProbErr(delQual)
      *
      * @param insQual PhRED scaled quality/probability of an insertion.
      * @param delQual PhRED scaled quality/probability of a deletion.
@@ -506,14 +508,15 @@ impl PairHMMModel {
         }
 
         if (QualityUtils::MAX_QUAL as usize) < max_qual {
-            return -std::cmp::min(
+            return (-std::cmp::min(
                 OrderedFloat(1.0),
                 OrderedFloat(10.0.powf(MathUtils::approximate_log10_sum_log10(
                     -0.1 * min_qual as f64,
                     -0.1 * max_qual as f64,
                 ))),
             )
-            .into_inner()
+            .into_inner())
+            .ln_1p()
                 * *INV_LN10;
         } else {
             return self.match_to_match_log10[((max_qual * (max_qual + 1)) >> 1) + min_qual];

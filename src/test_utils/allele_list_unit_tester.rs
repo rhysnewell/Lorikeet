@@ -1,8 +1,10 @@
 use haplotype::haplotype::Haplotype;
+use linked_hash_set::LinkedHashSet;
 use model::allele_list::AlleleList;
-use model::byte_array_allele::ByteArrayAllele;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use rand::{rngs::ThreadRng, Rng};
 use std::collections::HashSet;
+use std::hash::Hash;
 use test_utils::random_dna::RandomDNA;
 use utils::errors::BirdToolError;
 
@@ -22,6 +24,42 @@ impl AlleleListUnitTester {
         Self {
             random: ThreadRng::default(),
             random_dna: RandomDNA::new(ThreadRng::default()),
+        }
+    }
+
+    /**
+     * Test that the contents of an allele-list are the ones expected.
+     * <p/>
+     * <p>
+     * This method perform various consistency check involving all the {@link org.broadinstitute.hellbender.utils.genotyper.AlleleList} interface methods.
+     * Therefore calling this method is equivalent to a thorough check of the {@link org.broadinstitute.hellbender.utils.genotyper.AlleleList} aspect of
+     * the {@code actual} argument.
+     * </p>
+     *
+     * @param actual   the sample-list to assess.
+     * @param expected the expected sample-list.
+     * @throws IllegalArgumentException if {@code expected} is {@code null} or contains
+     *                                  {@code null}s which is an indication of an bug in the testing code.
+     * @throws RuntimeException         if there is some testing assertion exception which
+     *                                  is an indication of an actual bug the code that is been tested.
+     */
+    pub fn assert_allele_list<A: Allele + Send + Sync + Hash>(
+        actual: &AlleleList<A>,
+        expected: Vec<&A>,
+    ) {
+        let mut expected_allele_set = LinkedHashSet::new();
+        assert_eq!(actual.number_of_alleles(), expected.len());
+        for i in 0..expected.len() {
+            let expected_allele = expected[i];
+            let actual_allele = actual.get_allele(i);
+            assert!(!expected_allele_set.contains(actual_allele));
+            assert_eq!(actual_allele, expected_allele);
+            assert_eq!(
+                actual.index_of_allele(actual_allele).unwrap(),
+                i,
+                "allele index mismatch"
+            );
+            expected_allele_set.insert(actual_allele.clone());
         }
     }
 

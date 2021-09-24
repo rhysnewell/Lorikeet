@@ -22,16 +22,16 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
 
 #[derive(Debug, Clone)]
-pub struct VariantContext<'a> {
+pub struct VariantContext {
     pub loc: SimpleInterval,
     // variant alleles
     pub alleles: Vec<ByteArrayAllele>,
     // per sample likelihoods
-    pub genotypes: GenotypesContext<'a>,
+    pub genotypes: GenotypesContext,
     pub source: String,
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
-    pub attributes: HashMap<&'a str, AttributeObject>,
+    pub attributes: HashMap<String, AttributeObject>,
     pub variant_type: Option<VariantType>,
 }
 
@@ -48,7 +48,7 @@ pub enum VariantType {
 // The priority queue depends on `Ord`.
 // Explicitly implement the trait so the queue becomes a min-heap
 // instead of a max-heap.
-impl<'a> Ord for VariantContext<'a> {
+impl Ord for VariantContext {
     fn cmp(&self, other: &Self) -> Ordering {
         other
             .loc
@@ -63,21 +63,21 @@ impl<'a> Ord for VariantContext<'a> {
 }
 
 // `PartialOrd` needs to be implemented as well.
-impl<'a> PartialOrd for VariantContext<'a> {
+impl PartialOrd for VariantContext {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a> Eq for VariantContext<'a> {}
+impl Eq for VariantContext {}
 
-impl<'a> PartialEq for VariantContext<'a> {
+impl PartialEq for VariantContext {
     fn eq(&self, other: &Self) -> bool {
         self.loc == other.loc && self.alleles == other.alleles
     }
 }
 
-impl<'a> Hash for VariantContext<'a> {
+impl Hash for VariantContext {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.loc.hash(state);
         self.alleles.hash(state);
@@ -85,11 +85,11 @@ impl<'a> Hash for VariantContext<'a> {
     }
 }
 
-impl<'a> VariantContext<'a> {
+impl VariantContext {
     pub const MAX_ALTERNATE_ALLELES: usize = 180;
     pub const SUM_GL_THRESH_NOCALL: f64 = -0.1; // if sum(gl) is bigger than this threshold, we treat GL's as non-informative and will force a no-call.
 
-    pub fn empty(tid: usize, start: usize, end: usize) -> VariantContext<'a> {
+    pub fn empty(tid: usize, start: usize, end: usize) -> VariantContext {
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles: Vec::new(),
@@ -107,7 +107,7 @@ impl<'a> VariantContext<'a> {
         start: usize,
         end: usize,
         alleles: Vec<ByteArrayAllele>,
-    ) -> VariantContext<'a> {
+    ) -> VariantContext {
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -120,7 +120,7 @@ impl<'a> VariantContext<'a> {
         }
     }
 
-    pub fn build_from_vc<'b>(vc: &'b VariantContext<'a>) -> VariantContext<'a> {
+    pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
         VariantContext {
             loc: vc.loc.clone(),
             alleles: vc.alleles.clone(),
@@ -150,11 +150,11 @@ impl<'a> VariantContext<'a> {
         self.get_type() != &VariantType::NoVariation
     }
 
-    pub fn attributes(&mut self, attributes: HashMap<&'a str, AttributeObject>) {
+    pub fn attributes(&mut self, attributes: HashMap<String, AttributeObject>) {
         self.attributes.par_extend(attributes);
     }
 
-    pub fn set_attribute(&mut self, tag: &'a str, value: AttributeObject) {
+    pub fn set_attribute(&mut self, tag: String, value: AttributeObject) {
         self.attributes.insert(tag, value);
     }
 
@@ -190,7 +190,7 @@ impl<'a> VariantContext<'a> {
         self.alleles.len()
     }
 
-    pub fn add_genotypes(&mut self, genotypes: Vec<Genotype<'a>>) {
+    pub fn add_genotypes(&mut self, genotypes: Vec<Genotype>) {
         // for genotype in genotypes.iter() {
         //     if genotype.pl.len() != self.alleles.len() {
         //         panic!(
@@ -274,14 +274,15 @@ impl<'a> VariantContext<'a> {
                                 gb.no_call_alleles(ploidy);
                                 gb.pl = GenotypeLikelihoods::from_log10_likelihoods(
                                     vec![0.0; genotype_likelihoods.len()],
-                                );
+                                )
+                                .as_pls();
                             } else {
                                 gb.alleles = final_alleles;
                             }
                             let num_alt_alleles = alleles_to_use.len() - 1;
                             if num_alt_alleles > 0 {
                                 gb.log10_p_error(
-                                    GenotypeLikelihoods::get_gq_log10_from_likelihoods_on_the_fly(
+                                    GenotypeLikelihoods::get_gq_log10_from_likelihoods(
                                         max_likelihood_index,
                                         &genotype_likelihoods,
                                     ),
@@ -322,7 +323,7 @@ impl<'a> VariantContext<'a> {
                             );
                         // Update GP and PG annotations:
                         gb.attribute(
-                            GENOTYPE_POSTERIORS_KEY,
+                            GENOTYPE_POSTERIORS_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 normalized_log10_posteriors
                                     .par_iter()
@@ -339,7 +340,7 @@ impl<'a> VariantContext<'a> {
                         );
 
                         gb.attribute(
-                            GENOTYPE_PRIOR_KEY,
+                            GENOTYPE_PRIOR_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 log10_priors
                                     .par_iter()
@@ -365,6 +366,9 @@ impl<'a> VariantContext<'a> {
                                 .genotype_allele_counts_at(max_posterior_index)
                                 .as_allele_list(alleles_to_use),
                         );
+                    }
+                    &GenotypeAssignmentMethod::DoNotAssignGenotypes => {
+                        // pass
                     }
                     _ => panic!("Unknown GenotypeAssignmentMethod"),
                 }
@@ -438,10 +442,7 @@ impl<'a> VariantContext<'a> {
      * @param defaultPloidy defaultPloidy to use if a genotype doesn't have any alleles
      * @return a GenotypesContext
      */
-    pub fn subset_to_ref_only<'b>(
-        vc: &'b mut VariantContext<'a>,
-        default_ploidy: usize,
-    ) -> GenotypesContext<'a> {
+    pub fn subset_to_ref_only(vc: &VariantContext, default_ploidy: usize) -> GenotypesContext {
         if default_ploidy < 1 {
             panic!("default_ploidy must be >= 1, got {}", default_ploidy)
         } else {
@@ -476,11 +477,23 @@ impl<'a> VariantContext<'a> {
         }
     }
 
-    pub fn get_genotypes<'b>(&'b self) -> &'b GenotypesContext<'a> {
+    pub fn get_attribute_as_int(&self, key: &String, default_value: usize) -> usize {
+        match self.attributes.get(key) {
+            Some(value) => {
+                match value {
+                    AttributeObject::UnsizedInteger(value) => return *value,
+                    _ => return default_value, // value can not sensibly be converted to usize
+                }
+            }
+            None => return default_value,
+        }
+    }
+
+    pub fn get_genotypes(&self) -> &GenotypesContext {
         &self.genotypes
     }
 
-    pub fn get_genotypes_mut<'b>(&'b mut self) -> &'b mut GenotypesContext<'a> {
+    pub fn get_genotypes_mut(&mut self) -> &mut GenotypesContext {
         &mut self.genotypes
     }
 
@@ -511,12 +524,12 @@ impl<'a> VariantContext<'a> {
             .collect::<Vec<&ByteArrayAllele>>()
     }
 
-    pub fn process_vcf_in_region<'b>(
-        indexed_vcf: &'b mut IndexedReader,
+    pub fn process_vcf_in_region(
+        indexed_vcf: &mut IndexedReader,
         tid: u32,
         start: u64,
         end: u64,
-    ) -> Vec<VariantContext<'a>> {
+    ) -> Vec<VariantContext> {
         indexed_vcf.fetch(tid, start, Some(end));
 
         let variant_contexts = indexed_vcf
@@ -532,7 +545,7 @@ impl<'a> VariantContext<'a> {
         return variant_contexts;
     }
 
-    pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext<'a>> {
+    pub fn process_vcf_from_path(vcf_path: &str) -> Vec<VariantContext> {
         let mut vcf_reader = Reader::from_path(vcf_path);
         match vcf_reader {
             Ok(ref mut reader) => {
@@ -555,7 +568,7 @@ impl<'a> VariantContext<'a> {
         }
     }
 
-    pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext<'a>> {
+    pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext> {
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() > 0 {
             // Get elements from record

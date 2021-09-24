@@ -25,7 +25,7 @@ use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use lorikeet_genome::utils::base_utils::BaseUtils;
+use lorikeet_genome::utils::base_utils::{BaseUtils, BASES};
 use lorikeet_genome::utils::math_utils::MathUtils;
 use lorikeet_genome::utils::quality_utils::QualityUtils;
 use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
@@ -48,18 +48,19 @@ static LEFT_FLANK: &'static str = "GATTTATCATCGAGTCTGC";
 static RIGHT_FLANK: &'static str = "CATGGATCGTTATCAGCTATCTCGAGGGATTCACTTAACAGTTTTA";
 static MASSIVE_QUAL: u8 = 100;
 
+#[derive(Debug)]
 struct BasicLikelihoodTestProvider {
     reference: String,
-    next_reference: String,
+    next_reference: Option<String>,
     read: String,
     ref_bases_with_context: String,
-    next_ref_bases_with_context: String,
+    next_ref_bases_with_context: Option<String>,
     read_bases_with_context: String,
     base_qual: u8,
     ins_qual: u8,
     del_qual: u8,
     gcp: u8,
-    expected_qual: u8,
+    expected_qual: usize,
     left: bool,
     right: bool,
 }
@@ -67,18 +68,22 @@ struct BasicLikelihoodTestProvider {
 impl BasicLikelihoodTestProvider {
     pub fn new(
         reference: String,
-        next_reference: String,
+        next_reference: Option<String>,
         read: String,
         base_qual: u8,
         ins_qual: u8,
         del_qual: u8,
-        expected_qual: u8,
+        expected_qual: usize,
         gcp: u8,
         left: bool,
         right: bool,
     ) -> Self {
         let ref_bases_with_context = as_bytes(&reference, left, right);
-        let next_ref_bases_with_context = as_bytes(&next_reference, left, right);
+        let next_ref_bases_with_context = if next_reference.is_some() {
+            Some(as_bytes(next_reference.as_ref().unwrap(), left, right))
+        } else {
+            None
+        };
         let read_bases_with_context = as_bytes(&read, false, false);
 
         Self {
@@ -99,12 +104,17 @@ impl BasicLikelihoodTestProvider {
     }
 
     fn expected_log_likelihood(&self) -> f64 {
+        println!(
+            "expcted qual {} ref length {}",
+            self.expected_qual,
+            self.read_bases_with_context.len()
+        );
         return (self.expected_qual as f64 / -10.0)
             + 0.03
-            + (1.0 / self.ref_bases_with_context.len() as f64);
+            + (1.0 / self.ref_bases_with_context.len() as f64).log10();
     }
 
-    fn get_tolerance(&self, hmm: &PairHMM) -> f64 {
+    fn get_tolerance(&self) -> f64 {
         0.2
     }
 
@@ -121,6 +131,7 @@ impl BasicLikelihoodTestProvider {
             self.read_bases_with_context.len(),
             self.ref_bases_with_context.len(),
         );
+        pair_hmm.do_not_use_tristate_correction();
         return pair_hmm.compute_read_likelihood_given_haplotype_log10(
             self.ref_bases_with_context.as_bytes(),
             self.read_bases_with_context.as_bytes(),
@@ -129,7 +140,11 @@ impl BasicLikelihoodTestProvider {
             &self.qual_as_bytes(self.del_qual, true, anchor_indel),
             &self.qual_as_bytes(self.gcp, false, anchor_indel),
             true,
-            Some(self.next_ref_bases_with_context.as_bytes()),
+            match &self.next_ref_bases_with_context {
+                Some(bases) => Some(bases.as_bytes()),
+                None => None,
+            },
+            // Some(self.next_ref_bases_with_context.as_bytes()),
         );
     }
 
@@ -158,69 +173,180 @@ impl BasicLikelihoodTestProvider {
 
 fn as_bytes<'a>(bases: &'a str, left: bool, right: bool) -> String {
     format!(
-        "{}{}{}",
+        "{}{}{}{}{}",
         if left { LEFT_FLANK } else { "" },
+        CONTEXT,
         bases,
+        CONTEXT,
         if right { RIGHT_FLANK } else { "" }
     )
 }
 
 // Requires exact log pairhmm to be implemented. Will skip for now
-// #[test]
-// fn make_basic_likelihood_tests() {
-//     // context on either side is ACGTTGCA REF ACGTTGCA
-//     // test all combinations
-//     let base_quals = if EXTENSIVE_TESTING {
-//         vec![10, 20, 30, 40, 50]
-//     } else {
-//         vec![30]
-//     };
-//     let indel_quals = if EXTENSIVE_TESTING {
-//         vec![20, 30, 40, 50]
-//     } else {
-//         vec![40]
-//     };
-//     let gcps = if EXTENSIVE_TESTING {
-//         vec![8, 10, 20]
-//     } else {
-//         vec![10]
-//     };
-//     let sizes = if EXTENSIVE_TESTING {
-//         vec![2, 3, 4, 5, 7, 8, 9, 10, 20, 30, 35]
-//     } else {
-//         vec![2]
-//     };
-//
-//     for base_qual in base_quals {
-//         for indel_qual in indel_quals {
-//             for gcp in gcps {
-//                 for ref_base in BaseUtils::BASES.iter() {
-//                     for read_base in BaseUtils::BASES.iter() {
-//                         let reference = String::from_utf8(vec![ref_base]).unwrap();
-//                         let read = String::from_utf8(vec![read_base]).unwrap();
-//                         let expected = if ref_base == read_base {
-//                             0
-//                         } else {
-//                             base_qual
-//                         };
-//                         // runBasicLikelihoodTests uses calcLogLikelihood(), which runs HMM with recacheReads=true. Since we will not cache, should pass null in place of a nextRef
-//
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
-//
-// fn test_basic_likelihoods(cfg: BasicLikelihoodTestProvider) {
-//     if ALLOW_READS_LONGER_THAN_HAPLOTYPE || cfg.read.len() <= cfg.reference.len() {
-//         let exact_loc_l = cfg.calc_log10_likelihood()
-//     }
-// }
+#[test]
+fn make_basic_likelihood_tests() {
+    // context on either side is ACGTTGCA REF ACGTTGCA
+    // test all combinations
+    let base_quals = if EXTENSIVE_TESTING {
+        vec![10, 20, 30, 40, 50]
+    } else {
+        vec![30]
+    };
+    let indel_quals = if EXTENSIVE_TESTING {
+        vec![20, 30, 40, 50]
+    } else {
+        vec![40]
+    };
+    let gcps = if EXTENSIVE_TESTING {
+        vec![8, 10, 20]
+    } else {
+        vec![10]
+    };
+    let sizes = if EXTENSIVE_TESTING {
+        vec![2, 3, 4, 5, 7, 8, 9, 10, 20, 30, 35]
+    } else {
+        vec![2]
+    };
+
+    for base_qual in base_quals.iter() {
+        for indel_qual in indel_quals.iter() {
+            for gcp in gcps.iter() {
+                for ref_base in BASES.iter() {
+                    for read_base in BASES.iter() {
+                        let reference = String::from_utf8(vec![*ref_base]).unwrap();
+                        let read = String::from_utf8(vec![*read_base]).unwrap();
+                        let expected = if ref_base == read_base {
+                            0
+                        } else {
+                            *base_qual as usize
+                        };
+                        // runBasicLikelihoodTests uses calcLogLikelihood(), which runs HMM with recacheReads=true. Since we will not cache, should pass null in place of a nextRef
+                        test_basic_likelihoods(BasicLikelihoodTestProvider::new(
+                            reference,
+                            None,
+                            read,
+                            *base_qual,
+                            *indel_qual,
+                            *indel_qual,
+                            expected,
+                            *gcp,
+                            false,
+                            false,
+                        ));
+                    }
+                }
+
+                // test insertions and deletions
+                for size in sizes.iter() {
+                    for base in BASES.iter() {
+                        let expected =
+                            (*indel_qual as i32 + (*size as i32 - 2) * *gcp as i32) as usize;
+
+                        println!("expected {}, indel qual {} size {} gcp {} size - 2 {} expected recalc {}", expected, indel_qual, size, gcp, size-2, ((*indel_qual as i32 + (*size as i32 - 2) * *gcp as i32)));
+                        for insertion_p in vec![true, false] {
+                            let small = String::from_utf8(vec![*base]).unwrap();
+                            let big = String::from_utf8(vec![*base; *size as usize]).unwrap();
+
+                            let reference = if insertion_p {
+                                small.clone()
+                            } else {
+                                big.clone()
+                            };
+
+                            let read = if insertion_p {
+                                big.clone()
+                            } else {
+                                small.clone()
+                            };
+
+                            test_basic_likelihoods(BasicLikelihoodTestProvider::new(
+                                reference.clone(),
+                                None,
+                                read.clone(),
+                                *base_qual,
+                                *indel_qual,
+                                *indel_qual,
+                                expected,
+                                *gcp,
+                                false,
+                                false,
+                            ));
+                            test_basic_likelihoods(BasicLikelihoodTestProvider::new(
+                                reference.clone(),
+                                None,
+                                read.clone(),
+                                *base_qual,
+                                *indel_qual,
+                                *indel_qual,
+                                expected,
+                                *gcp,
+                                true,
+                                false,
+                            ));
+                            test_basic_likelihoods(BasicLikelihoodTestProvider::new(
+                                reference.clone(),
+                                None,
+                                read.clone(),
+                                *base_qual,
+                                *indel_qual,
+                                *indel_qual,
+                                expected,
+                                *gcp,
+                                false,
+                                true,
+                            ));
+                            test_basic_likelihoods(BasicLikelihoodTestProvider::new(
+                                reference.clone(),
+                                None,
+                                read.clone(),
+                                *base_qual,
+                                *indel_qual,
+                                *indel_qual,
+                                expected,
+                                *gcp,
+                                true,
+                                true,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn test_basic_likelihoods(cfg: BasicLikelihoodTestProvider) {
+    println!(
+        "CFG {:?}, read len {} ref len {}",
+        &cfg,
+        cfg.read.len(),
+        cfg.reference.len()
+    );
+    if ALLOW_READS_LONGER_THAN_HAPLOTYPE || cfg.read.len() <= cfg.reference.len() {
+        // let exact_log_l = cfg.calc_log10_likelihood(true);
+        let actual_log_l = cfg.calc_log10_likelihood(true);
+        let expected_log_l = cfg.expected_log_likelihood();
+
+        // compare to our theoretical expectation
+        println!("Actual {} Expected {}", actual_log_l, expected_log_l);
+        assert!(
+            relative_eq!(actual_log_l, expected_log_l, epsilon = cfg.get_tolerance()),
+            "Failed with hmm calc {} -> {}",
+            actual_log_l,
+            expected_log_l
+        );
+        assert!(
+            MathUtils::is_valid_log10_probability(actual_log_l),
+            "Bad log likelihood {}",
+            actual_log_l
+        );
+    }
+}
 
 #[test]
 fn test_mismatch_in_every_position_in_the_read_with_centred_haplotype() {
-    let haplotpe_1 = "TTCTCTTCTGTTGTGGCTGGTT".as_bytes();
+    let haplotpe_1 =
+        "TTCTCTTCTGTTGTGGCTGGTTTTCTCTTCTGTTGTGGCTGGTTTTCTCTTCTGTTGTGGCTGGTT".as_bytes();
     let match_qual = 90;
     let mismatch_qual = 20;
     let indel_qual = 80;

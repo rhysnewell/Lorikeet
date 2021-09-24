@@ -201,6 +201,16 @@ impl AssemblyRegion {
     }
 
     /**
+     * Move the reads out of an assembly region without losing other information
+     * Returns a vector of BirdToolReads
+     */
+    pub fn move_reads(&mut self) -> Vec<BirdToolRead> {
+        let mut container = Vec::with_capacity(self.reads.len());
+        std::mem::swap(&mut self.reads, &mut container);
+        return container;
+    }
+
+    /**
      * Get an mutable reference of the list of reads currently in this assembly region.
      *
      * The reads are sorted by their coordinate position.
@@ -317,7 +327,8 @@ impl AssemblyRegion {
             );
             assert!(
                 read.get_start() >= final_read.get_start(),
-                "Attempting to add a read to ActiveRegion out of order w.r.t. other reads:"
+                "Attempting to add a read to ActiveRegion out of order w.r.t. other reads: previous {:?} -> current {:?}",
+                final_read, &read
             );
         }
 
@@ -426,8 +437,8 @@ impl AssemblyRegion {
             0,
             genome_loc.get_start().checked_sub(padding).unwrap_or(0),
         )
-            ..std::cmp::min(
-                reference_reader.current_sequence.len(),
+            ..=std::cmp::min(
+                reference_reader.current_sequence.len() - 1,
                 genome_loc.get_end() + padding,
             )]
             .to_vec();

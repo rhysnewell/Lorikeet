@@ -69,7 +69,7 @@ pub fn cons<T>(elt: T, l: Vec<T>) -> Vec<T> {
 }
 
 pub fn get_streamed_bam_readers<'a>(
-    m: &'a clap::ArgMatches,
+    m: &'a ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
     readtype: &ReadType,
@@ -106,19 +106,19 @@ pub fn get_streamed_bam_readers<'a>(
 
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
         ),
         &ReadType::Long => MappingParameters::generate_longread_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
         ),
         &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
@@ -198,7 +198,7 @@ pub fn get_streamed_bam_readers<'a>(
 }
 
 pub fn long_generator_setup(
-    m: &clap::ArgMatches,
+    m: &ArgMatches,
     reference_tempfile: &Option<NamedTempFile>,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
@@ -228,7 +228,7 @@ pub fn long_generator_setup(
 }
 
 pub fn assembly_generator_setup(
-    m: &clap::ArgMatches,
+    m: &ArgMatches,
     reference_tempfile: &Option<NamedTempFile>,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
@@ -289,7 +289,7 @@ pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
 }
 
 pub fn get_streamed_filtered_bam_readers(
-    m: &clap::ArgMatches,
+    m: &ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &Option<NamedTempFile>,
     filter_params: &FilterParameters,
@@ -327,19 +327,19 @@ pub fn get_streamed_filtered_bam_readers(
 
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
         ),
         &ReadType::Long => MappingParameters::generate_longread_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
         ),
         &ReadType::Assembly => MappingParameters::generate_assembly_from_clap(
-            &m,
+            m,
             mapping_program,
             &reference_tempfile,
             &references,
@@ -426,7 +426,7 @@ pub fn get_streamed_filtered_bam_readers(
 
 pub fn setup_mapping_index(
     reference_wise_params: &SingleReferenceMappingParameters,
-    m: &clap::ArgMatches,
+    m: &ArgMatches,
     mapping_program: MappingProgram,
 ) -> Option<Box<dyn mapping_index_maintenance::MappingIndex>> {
     match mapping_program {
@@ -628,7 +628,7 @@ pub struct FilterParameters {
     pub min_aligned_percent_pair: f32,
 }
 impl FilterParameters {
-    pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
+    pub fn generate_from_clap(m: &ArgMatches) -> FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
                 include_improper_pairs: !m.is_present("proper-pairs-only"),
@@ -636,13 +636,21 @@ impl FilterParameters {
                 include_supplementary: m.is_present("include-supplementary"),
             },
             min_aligned_length_single: match m.is_present("min-read-aligned-length") {
-                true => value_t!(m.value_of("min-read-aligned-length"), u32).unwrap(),
+                true => m
+                    .value_of("min-read-aligned-length")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
                 false => 0,
             },
             min_percent_identity_single: parse_percentage(&m, "min-read-percent-identity"),
             min_aligned_percent_single: parse_percentage(&m, "min-read-aligned-percent"),
             min_aligned_length_pair: match m.is_present("min-read-aligned-length-pair") {
-                true => value_t!(m.value_of("min-read-aligned-length-pair"), u32).unwrap(),
+                true => m
+                    .value_of("min-read-aligned-length-pair")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
                 false => 0,
             },
             min_percent_identity_pair: parse_percentage(&m, "min-read-percent-identity-pair"),

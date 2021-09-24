@@ -54,6 +54,7 @@ extern crate compare;
 extern crate csv;
 extern crate env_logger;
 extern crate glob;
+extern crate indexmap;
 extern crate itertools;
 extern crate libm;
 extern crate linked_hash_map;
@@ -89,10 +90,10 @@ extern crate term;
 use clap::*;
 use std::process;
 
-pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
+pub fn parse_percentage(m: &ArgMatches, parameter: &str) -> f32 {
     match m.is_present(parameter) {
         true => {
-            let mut percentage = value_t!(m.value_of(parameter), f32).unwrap();
+            let mut percentage: f32 = m.value_of(parameter).unwrap().parse().unwrap();
             if percentage >= 1.0 && percentage <= 100.0 {
                 percentage = percentage / 100.0;
             } else if percentage < 0.0 || percentage > 100.0 {

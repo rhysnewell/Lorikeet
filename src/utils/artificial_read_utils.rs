@@ -68,7 +68,7 @@ impl ArtificialReadUtils {
     pub fn create_artificial_read_default(
         name: &str,
         tid: usize,
-        alignment_start: usize,
+        alignment_start: i64,
         length: usize,
         unmapped: bool,
     ) -> Record {
@@ -85,7 +85,7 @@ impl ArtificialReadUtils {
             seq.as_slice(),
             quals.as_slice(),
         );
-        record.set_pos(alignment_start as i64);
+        record.set_pos(alignment_start);
         record.set_tid(tid as i32);
         record.unset_proper_pair();
 

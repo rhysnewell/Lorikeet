@@ -465,6 +465,8 @@ fn test_adaptive_pruning(
     assert!(best_paths.len() < 15);
 }
 
+// This test seems to fail on rare occassion due to something happening the in the random read creation
+// I'm kind of convinced that this is an issue of the test and not the source code
 #[test]
 fn get_chain_pruner_data() {
     let mut rng = ThreadRng::default();
@@ -477,6 +479,9 @@ fn get_chain_pruner_data() {
     reference
         .iter_mut()
         .for_each(|b| *b = BaseUtils::base_index_to_simple_base(rng.gen_range(0, 4)));
+    // The following commented reference is an example reference that generated a failure.
+    // using the same reference did not result in failure thus the issue is in the reads
+    // let mut reference = b"GTTTCCGGCGCTAGCATCAAAGATTGTGGAATGCGGGCAAACGCTGCGTTGATTAAACCGCGCTTGACTAAATCGATCGCGGATTTCCCGCAAGCACCTT".to_vec();
     reference[left_snv_position] = b'A';
     reference[middle_snv_position] = b'G';
     reference[right_snv_position] = b'T';

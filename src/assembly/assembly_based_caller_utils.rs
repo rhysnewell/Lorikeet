@@ -30,6 +30,7 @@ use rust_htslib::bam::ext::BamRecordExtensions;
 use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
@@ -227,20 +228,20 @@ impl AssemblyBasedCallerUtils {
      * returning a data structure with the resulting information needed
      * for further HC steps
      */
-    pub fn assemble_reads<'a, 'b>(
+    pub fn assemble_reads<'b>(
         mut region: AssemblyRegion,
-        given_alleles: &Vec<VariantContext<'a>>,
+        given_alleles: &Vec<VariantContext>,
         args: &clap::ArgMatches,
         reference_reader: &'b mut ReferenceReader,
         assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
         sample_names: &Vec<String>,
-    ) -> AssemblyResultSet<'a, ReadThreadingGraph> {
+    ) -> AssemblyResultSet<ReadThreadingGraph> {
         Self::finalize_regions(
             &mut region,
             args.is_present("error-correct-reads"),
             args.is_present("dont-use-soft-clipped-bases"),
-            args.value_of("base-quality-threshold")
+            args.value_of("min-base-quality")
                 .unwrap()
                 .parse::<u8>()
                 .unwrap()
@@ -262,35 +263,28 @@ impl AssemblyBasedCallerUtils {
             Self::REFERENCE_PADDING_FOR_ASSEMBLY,
             &reference_reader,
         );
+        debug!("Padded reference location {:?}", &padded_reference_loc);
         let mut ref_haplotype =
             Self::create_reference_haplotype(&region, &padded_reference_loc, reference_reader);
 
-        let pileup_error_correction_log_odds = args
-            .value_of("pileup-correction-log-odds")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap();
         let mut read_error_corrector;
-        if pileup_error_correction_log_odds == std::f64::NEG_INFINITY {
-            if args.is_present("error-correct-reads") {
-                read_error_corrector = Some(NearbyKmerErrorCorrector::default(
-                    args.value_of("kmer-length-for-read-error-correction")
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap(),
-                    HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
-                    args.value_of("min-observations-for-kmers-to-be-solid")
-                        .unwrap()
-                        .parse::<usize>()
-                        .unwrap(),
-                    full_reference_with_padding.as_slice(),
-                ))
-            } else {
-                read_error_corrector = None
-            }
+
+        if args.is_present("error-correct-reads") {
+            read_error_corrector = Some(NearbyKmerErrorCorrector::default(
+                args.value_of("kmer-length-for-read-error-correction")
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap(),
+                HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
+                args.value_of("min-observations-for-kmers-to-be-solid")
+                    .unwrap()
+                    .parse::<usize>()
+                    .unwrap(),
+                full_reference_with_padding.as_slice(),
+            ))
         } else {
             read_error_corrector = None
-        };
+        }
 
         let assembly_result_set = assembly_engine.run_local_assembly(
             region,
@@ -329,11 +323,11 @@ impl AssemblyBasedCallerUtils {
         );
     }
 
-    pub fn get_variant_contexts_from_given_alleles<'a, 'b>(
+    pub fn get_variant_contexts_from_given_alleles<'b>(
         loc: usize,
-        active_alleles_to_genotype: &'b Vec<VariantContext<'a>>,
+        active_alleles_to_genotype: &'b Vec<VariantContext>,
         include_spanning_events: bool,
-    ) -> Vec<VariantContext<'a>> {
+    ) -> Vec<VariantContext> {
         let mut unique_locations_and_alleles = HashSet::new();
         let mut results = Vec::new();
 
@@ -382,11 +376,11 @@ impl AssemblyBasedCallerUtils {
      * @param haplotypes list of active haplotypes at the current location
      * @param includeSpanningEvents If true, will also return events that span loc
      */
-    pub fn get_variant_contexts_from_active_haplotypes<'a, 'b>(
+    pub fn get_variant_contexts_from_active_haplotypes<'b>(
         loc: usize,
-        haplotypes: &'b Vec<Haplotype<'a, SimpleInterval>>,
+        haplotypes: &'b Vec<Haplotype<SimpleInterval>>,
         include_spanning_event: bool,
-    ) -> Vec<&'b VariantContext<'a>> {
+    ) -> Vec<&'b VariantContext> {
         let mut results = Vec::new();
         let mut unique_locations_and_alleles = HashSet::new();
 
@@ -411,17 +405,14 @@ impl AssemblyBasedCallerUtils {
         reference_padding: usize,
         reference_reader: &ReferenceReader,
     ) -> SimpleInterval {
-        let pad_left = max(
-            region
-                .get_padded_span()
-                .get_start()
-                .checked_sub(reference_padding)
-                .unwrap_or(0),
-            1,
-        );
+        let pad_left = region
+            .get_padded_span()
+            .get_start()
+            .checked_sub(reference_padding)
+            .unwrap_or(0);
         let pad_right = min(
             region.get_padded_span().get_end() + reference_padding,
-            reference_reader.get_contig_length(region.get_contig()) as usize,
+            reference_reader.get_contig_length(region.get_contig()) as usize - 1, // 0-based inclusive hence -1 to avoid creating size that is +1 bp larger than reference
         );
 
         return SimpleInterval::new(region.get_contig(), pad_left, pad_right);
@@ -433,11 +424,11 @@ impl AssemblyBasedCallerUtils {
      * @param paddedReferenceLoc the interval which includes padding and shows how big the reference haplotype should be
      * @return a non-null haplotype
      */
-    pub fn create_reference_haplotype<'a, L: Locatable>(
+    pub fn create_reference_haplotype<L: Locatable>(
         region: &AssemblyRegion,
         padded_reference_loc: &SimpleInterval,
         reference_reader: &mut ReferenceReader,
-    ) -> Haplotype<'a, L> {
+    ) -> Haplotype<L> {
         return ReferenceConfidenceModel::create_reference_haplotype(
             region,
             region
@@ -447,11 +438,11 @@ impl AssemblyBasedCallerUtils {
         );
     }
 
-    pub fn create_reference_haplotype_from_bytes<'a, L: Locatable>(
+    pub fn create_reference_haplotype_from_bytes<L: Locatable>(
         region: &AssemblyRegion,
         padded_reference_loc: &SimpleInterval,
         reference: &[u8],
-    ) -> Haplotype<'a, L> {
+    ) -> Haplotype<L> {
         return ReferenceConfidenceModel::create_reference_haplotype(
             region,
             reference,
@@ -470,12 +461,12 @@ impl AssemblyBasedCallerUtils {
      * @param emitSpanningDels If true will map spanning events to a * allele instead of reference // TODO add a test for this behavior
      * @return
      */
-    pub fn create_allele_mapper<'a, 'b>(
-        merged_vc: &VariantContext<'a>,
+    pub fn create_allele_mapper<'b>(
+        merged_vc: &VariantContext,
         loc: usize,
-        haplotypes: &'b Vec<Haplotype<'a, SimpleInterval>>,
+        haplotypes: &'b Vec<Haplotype<SimpleInterval>>,
         emit_spanning_dels: bool,
-    ) -> HashMap<usize, Vec<&'b Haplotype<'a, SimpleInterval>>> {
+    ) -> HashMap<usize, Vec<&'b Haplotype<SimpleInterval>>> {
         let mut result = HashMap::new();
 
         let ref_allele = merged_vc.get_reference();
@@ -601,9 +592,9 @@ impl AssemblyBasedCallerUtils {
         return result;
     }
 
-    pub fn get_alleles_consistent_with_given_alleles<'a, 'b>(
-        given_alleles: &'b Vec<VariantContext<'a>>,
-        merged_vc: &'b VariantContext<'a>,
+    pub fn get_alleles_consistent_with_given_alleles<'b>(
+        given_alleles: &'b Vec<VariantContext>,
+        merged_vc: &'b VariantContext,
     ) -> HashSet<&'b ByteArrayAllele> {
         if given_alleles.is_empty() {
             return HashSet::new();
@@ -683,7 +674,7 @@ impl AssemblyBasedCallerUtils {
         args: &clap::ArgMatches,
         handle_soft_clips: bool,
     ) -> PairHMMLikelihoodCalculationEngine {
-        //AlleleLikelihoods::normalizeLikelihoods uses Double.NEGATIVE_INFINITY as a flag to disable capping
+        //AlleleLikelihoods::normalizeLikelihoods uses std::f64::NEGATIVE_INFINITY as a flag to disable capping
         let log10_global_read_mismapping_rate = if args
             .value_of("phred-scaled-global-read-mismapping-rate")
             .unwrap()
@@ -706,8 +697,7 @@ impl AssemblyBasedCallerUtils {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            args,
-            log10_global_read_mismapping_rate,
+            MathUtils::log_to_log10(log10_global_read_mismapping_rate),
             PCRErrorModel::new(args),
             args.value_of("base-quality-score-threshold")
                 .unwrap()
@@ -723,7 +713,7 @@ impl AssemblyBasedCallerUtils {
                 .parse()
                 .unwrap(),
             !args.is_present("disable-symmetric-hmm-normalizing"),
-            !args.is_present("disable-cap-base-qualities-to-map-quality"),
+            args.is_present("disable-cap-base-qualities-to-map-quality"),
             handle_soft_clips,
         )
     }
@@ -735,10 +725,10 @@ impl AssemblyBasedCallerUtils {
      * @param calledHaplotypes  the set of haplotypes used for calling
      * @return a non-null list which represents the possibly phased version of the calls
      */
-    pub fn phase_calls<'a>(
-        mut calls: Vec<VariantContext<'a>>,
+    pub fn phase_calls(
+        mut calls: Vec<VariantContext>,
         called_haplotypes: &HashSet<Haplotype<SimpleInterval>>,
-    ) -> Vec<VariantContext<'a>> {
+    ) -> Vec<VariantContext> {
         // construct a mapping from alternate allele to the set of haplotypes that contain that allele
         let haplotype_map = Self::construct_haplotype_mapping(&calls, called_haplotypes);
 
@@ -810,8 +800,8 @@ impl AssemblyBasedCallerUtils {
      * @param phaseGT the phase GT string to use
      * @return phased non-null variant context
      */
-    fn phase_vc<'a, 'b>(
-        vc: &'b mut VariantContext<'a>,
+    fn phase_vc<'b>(
+        vc: &'b mut VariantContext,
         id: String,
         phase_gt: &'b PhaseGroup,
         phase_set_id: usize,
@@ -830,14 +820,17 @@ impl AssemblyBasedCallerUtils {
 
             g.is_phased = true;
             g.attribute(
-                HAPLOTYPE_CALLER_PHASING_ID_KEY,
+                HAPLOTYPE_CALLER_PHASING_ID_KEY.to_string(),
                 AttributeObject::String(id.clone()),
             );
             g.attribute(
-                HAPLOTYPE_CALLER_PHASING_GT_KEY,
+                HAPLOTYPE_CALLER_PHASING_GT_KEY.to_string(),
                 AttributeObject::String(phase_gt.get_description().clone()),
             );
-            g.attribute(PHASE_SET_KEY, AttributeObject::UnsizedInteger(phase_set_id));
+            g.attribute(
+                PHASE_SET_KEY.to_string(),
+                AttributeObject::UnsizedInteger(phase_set_id),
+            );
         }
     }
 
@@ -884,7 +877,7 @@ impl AssemblyBasedCallerUtils {
         let mut unique_counter = 0;
 
         // use the haplotype mapping to connect variants that are always/never present on the same haplotypes
-        for i in 0..(num_calls - 1) {
+        for i in 0..(num_calls).checked_sub(1).unwrap_or(0) {
             let call = &original_calls[i];
             let haplotypes_with_call = haplotype_map.get(&i);
             match haplotypes_with_call {
@@ -1029,10 +1022,10 @@ impl AssemblyBasedCallerUtils {
      * @param calledHaplotypes  the set of haplotypes used for calling
      * @return non-null Map
      */
-    fn construct_haplotype_mapping<'a, 'b>(
-        original_calls: &Vec<VariantContext<'a>>,
-        called_haplotypes: &'b HashSet<Haplotype<'a, SimpleInterval>>,
-    ) -> HashMap<usize, HashSet<&'b Haplotype<'a, SimpleInterval>>> {
+    fn construct_haplotype_mapping<'b>(
+        original_calls: &Vec<VariantContext>,
+        called_haplotypes: &'b HashSet<Haplotype<SimpleInterval>>,
+    ) -> HashMap<usize, HashSet<&'b Haplotype<SimpleInterval>>> {
         let mut haplotype_map = HashMap::new();
 
         for (index, call) in original_calls.iter().enumerate() {
@@ -1071,9 +1064,7 @@ impl AssemblyBasedCallerUtils {
      * If at least one exists, returns a concrete (not NONREF) site-specific (starting at the current POS) alternate allele
      * from within the current variant context.
      */
-    fn get_site_specific_alt_allele<'a, 'b>(
-        call: &'b VariantContext<'a>,
-    ) -> Option<&'b ByteArrayAllele> {
+    fn get_site_specific_alt_allele<'b>(call: &'b VariantContext) -> Option<&'b ByteArrayAllele> {
         let allele = call
             .get_alternate_alleles()
             .iter()

@@ -62,7 +62,7 @@ fn test_trim(
     }
 }
 
-fn make_hcf_for_cigar<'a, 'b>(bases: &'b str, cigar: &'b str) -> Haplotype<'a, SimpleInterval> {
+fn make_hcf_for_cigar(bases: &str, cigar: &str) -> Haplotype<SimpleInterval> {
     let mut h = Haplotype::new(bases.as_bytes(), false);
     h.set_cigar(CigarString::try_from(cigar).unwrap().0);
     return h;

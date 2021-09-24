@@ -43,7 +43,7 @@ const MAPPER_HELP: &'static str = "
 const VARIANT_CALLING_HELP: &'static str = "
   --mapq-threshold <INT>                Mapping quality threshold used to verify
                                         a variant. [default: 10]\n
-  -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
+  -q, --base-quality-threshold-score    The minimum PHRED score for base in a read for it to be
                                         considered in the variant calling process.\n
   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
                                         based on the quality scores and accounting for the
@@ -215,8 +215,8 @@ Other arguments (optional):
                                          A more thorough description of the different
                                          methods is available at
                                          https://github.com/rhysnewell/lorikeet
-   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
-                                         table. [default: 4]
+   -k, --kmer-sizes <INT>                K-mer size used to generate k-mer frequency
+                                         table. [default: 25]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -412,7 +412,7 @@ Other arguments (optional):
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
    -t, --threads                         Number of threads used. [default: 1]
-   --parallel-genomes                    Number of genomes to run in parallel.
+   --parallel-genomes                    Number of genomes to run in parallel.ma
                                          Increases memory usage linearly.
                                          [default 1]
    --no-zeros                            Omit printing of genomes that have zero
@@ -740,7 +740,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("-1")
+                        .short("1")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -755,7 +755,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("-2")
+                        .short("2")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -770,7 +770,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("-c")
+                        .short("c")
                         .long("coupled")
                         .multiple(true)
                         .takes_value(true)
@@ -978,7 +978,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("mapq-threshold")
                         .long("mapq-threshold")
-                        .default_value("30"),
+                        .default_value("10"),
                 )
                 .arg(
                     Arg::with_name("base-quality-threshold")
@@ -1099,7 +1099,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("-1")
+                        .short("1")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -1114,7 +1114,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("-2")
+                        .short("2")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -1129,7 +1129,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("-c")
+                        .short("c")
                         .long("coupled")
                         .multiple(true)
                         .takes_value(true)
@@ -1222,7 +1222,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .short("-t")
+                        .short("t")
                         .long("threads")
                         .default_value("1")
                         .takes_value(true),
@@ -1451,7 +1451,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("sharded").long("sharded").required(false))
                 .arg(
                     Arg::with_name("read1")
-                        .short("-1")
+                        .short("1")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read2")
@@ -1466,7 +1466,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("read2")
-                        .short("-2")
+                        .short("2")
                         .multiple(true)
                         .takes_value(true)
                         .requires("read1")
@@ -1481,7 +1481,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("coupled")
-                        .short("-c")
+                        .short("c")
                         .long("coupled")
                         .multiple(true)
                         .takes_value(true)
@@ -1581,7 +1581,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .short("-t")
+                        .short("t")
                         .long("threads")
                         .default_value("1")
                         .takes_value(true),
@@ -1711,14 +1711,36 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("cluster-distance")
                         .long("cluster-distance")
-                        .short("s")
                         .default_value("0.35"),
                 )
                 .arg(
-                    Arg::with_name("base-quality-threshold")
-                        .long("base-quality-threshold")
-                        .short("q")
-                        .default_value("13"),
+                    Arg::with_name("phred-scaled-global-read-mismapping-rate")
+                        .long("phred-scaled-global-read-mismapping-rate")
+                        .default_value("45"),
+                )
+                .arg(
+                    Arg::with_name("pair-hmm-gap-continuation-penalty")
+                        .long("pair-hmm-gap-continuation-penalty")
+                        .default_value("10"),
+                )
+                .arg(
+                    Arg::with_name("pcr-indel-model")
+                        .long("pcr-indel-model")
+                        .default_value("conservative")
+                        .possible_values(&[
+                            "none",
+                            "None",
+                            "NONE",
+                            "hostile",
+                            "Hostile",
+                            "HOSTILE",
+                            "aggresive",
+                            "Agressive",
+                            "AGGRESSIVE",
+                            "conservative",
+                            "Conservative",
+                            "CONSERVATIVE",
+                        ]),
                 )
                 .arg(
                     Arg::with_name("fdr-threshold")
@@ -1743,7 +1765,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("standard-min-confidence-threshold-for-calling")
                         .long("standard-min-confidence-threshold-for-calling")
-                        .short("stand-call-conf")
+                        .short("C")
                         .default_value("30.0"),
                 )
                 .arg(
@@ -1767,19 +1789,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("annotate-with-num-discovered-alleles"),
                 )
                 .arg(
-                    Arg::with_name("max-prob-propagation-distance")
-                        .long("max-prob-propagation-distance")
-                        .default_value("50"),
-                )
-                .arg(
                     Arg::with_name("active-probability-threshold")
                         .long("active-probability-threshold")
                         .default_value("0.002"),
-                )
-                .arg(
-                    Arg::with_name("assembly-region-padding")
-                        .long("assembly-region-padding")
-                        .default_value("100"),
                 )
                 .arg(
                     Arg::with_name("min-assembly-region-size")
@@ -1789,18 +1801,158 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-assembly-region-size")
                         .long("max-assembly-region-size")
-                        .default_value("50"),
+                        .default_value("300"),
                 )
                 .arg(
-                    Arg::with_name("kmer-size")
-                        .long("kmer-size")
+                    Arg::with_name("kmer-sizes")
+                        .long("kmer-sizes")
                         .short("k")
+                        .multiple(true)
+                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                )
+                .arg(
+                    Arg::with_name("max-allowed-path-for-read-threading-assembler")
+                        .long("max-allowed-path-for-read-threading-assembler")
+                        .default_value("128"),
+                )
+                .arg(
+                    Arg::with_name("dont-increase-kmer-sizes-for-cycles")
+                        .long("dont-increase-kmer-sizes-for-cycles"),
+                )
+                .arg(
+                    Arg::with_name("allow-non-unique-kmers-in-ref")
+                        .long("allow-non-unique-kmers-in-ref"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-transformations")
+                        .long("debug-graph-transformations"),
+                )
+                .arg(
+                    Arg::with_name("do-not-recover-dangling-branches")
+                        .long("do-not-recover-dangling-branches"),
+                )
+                .arg(
+                    Arg::with_name("do-not-run-physical-phasing")
+                        .long("do-not-run-physical-phasing"),
+                )
+                .arg(
+                    Arg::with_name("recover-all-dangling-branches")
+                        .long("recover-all-dangling-branches"),
+                )
+                .arg(
+                    Arg::with_name("min-dangling-branch-length")
+                        .long("min-dangling-branch-length")
                         .default_value("4"),
+                )
+                .arg(
+                    Arg::with_name("graph-output")
+                        .long("graph-output")
+                        .default_value("lorikeet_haplotype_caller"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-output")
+                        .long("debug-graph-output")
+                        .default_value("lorikeet_haplotype_caller_debug"),
+                )
+                .arg(
+                    Arg::with_name("num-pruning-samples")
+                        .long("num-pruning-samples")
+                        .multiple(true)
+                        .default_value("1"),
+                )
+                .arg(
+                    Arg::with_name("min-prune-factor")
+                        .long("min-prune-factor")
+                        .default_value("2"),
+                )
+                .arg(Arg::with_name("dont-use-adaptive-pruning").long("dont-use-adaptive-pruning"))
+                .arg(
+                    Arg::with_name("dont-use-soft-clipped-bases")
+                        .long("dont-use-soft-clipped-bases"),
+                )
+                .arg(
+                    Arg::with_name("initial-error-rate-for-pruning")
+                        .long("initial-error-rate-for-pruning")
+                        .default_value("0.001"),
+                )
+                .arg(
+                    Arg::with_name("pruning-seeding-log-odds-threshold")
+                        .long("pruning-seeding-log-odds-threshold")
+                        .default_value("4.0"),
+                )
+                .arg(
+                    Arg::with_name("pruning-log-odds-threshold")
+                        .long("pruning-log-odds-threshold")
+                        .default_value("1.0"),
+                )
+                .arg(
+                    Arg::with_name("max-unpruned-variants")
+                        .long("max-unpruned-variants")
+                        .default_value("100"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
                         .default_value("75"),
+                )
+                .arg(
+                    Arg::with_name("max-prob-propagation-distance")
+                        .long("max-prob-propagation-distance")
+                        .default_value("50"),
+                )
+                .arg(Arg::with_name("use-linked-debruijn-graph").long("use-linked-debruijn-graph"))
+                .arg(Arg::with_name("error-correct-reads").long("error-correct-reads"))
+                .arg(
+                    Arg::with_name("kmer-length-for-read-error-correction")
+                        .long("kmer-length-for-read-error-correction")
+                        .default_value("25"),
+                )
+                .arg(
+                    Arg::with_name("max-mnp-distance")
+                        .long("max-mnp-distance")
+                        .default_value("0"),
+                )
+                .arg(
+                    Arg::with_name("min-observation-for-kmer-to-be-solid")
+                        .long("min-observation-for-kmer-to-be-solid")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("enable-legacy-graph-cycle-detection")
+                        .long("enable-legacy-graph-cycle-detection"),
+                )
+                .arg(
+                    Arg::with_name("min-matching-bases-to-dangling-end-recovery")
+                        .long("min-matching-bases-to-dangling-end-recovery")
+                        .default_value("-1"),
+                )
+                .arg(
+                    Arg::with_name("assembly-region-padding")
+                        .long("assembly-region-padding")
+                        .default_value("100"),
+                )
+                .arg(
+                    Arg::with_name("indel-padding-for-genotyping")
+                        .long("indel-padding-for-genotyping")
+                        .default_value("75"),
+                )
+                .arg(
+                    Arg::with_name("str-padding-for-genotyping")
+                        .long("str-padding-for-genotyping")
+                        .default_value("75"),
+                )
+                .arg(
+                    Arg::with_name("snp-padding-for-genotyping")
+                        .long("snp-padding-for-genotyping")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("max-extension-into-region-padding")
+                        .long("max-extension-into-region-padding")
+                        .default_value("25"),
+                )
+                .arg(
+                    Arg::with_name("soft-clip-low-quality-ends").long("soft-clip-low-quality-ends"),
                 )
                 .arg(
                     Arg::with_name("trim-min")
@@ -1812,6 +1964,54 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("trim-max")
                         .default_value("0.95"),
                 )
+                .arg(
+                    Arg::with_name("mapping-quality-threshold-for-genotyping")
+                        .long("mapping-quality-threshold-for-genotyping")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("min-base-quality")
+                        .long("min-base-quality")
+                        .short("q")
+                        .default_value("10"),
+                )
+                .arg(
+                    Arg::with_name("base-quality-score-threshold")
+                        .long("base-quality-score-threshold")
+                        .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
+                        .long("enable-dynamic-read-disqualification-for-genotyping"),
+                )
+                .arg(
+                    Arg::with_name("dynamic-read-disqualification-threshold")
+                        .long("dynamic-read-disqualification-threshold")
+                        .default_value("1.0"),
+                )
+                .arg(
+                    Arg::with_name("expected-mismatch-rate-for-read-disqualification")
+                        .long("expected-mismatch-rate-for-read-disqualification")
+                        .default_value("0.02"),
+                )
+                .arg(
+                    Arg::with_name("allele-informative-reads-overlap-margin")
+                        .long("allele-informative-reads-overlap-margin")
+                        .default_value("2"),
+                )
+                .arg(
+                    Arg::with_name("disable-symmetric-hmm-normalizing")
+                        .long("disable-symmetric-hmm-normalizing"),
+                )
+                .arg(
+                    Arg::with_name("disable-cap-base-qualities-to-map-quality")
+                        .long("disable-cap-base-qualities-to-map-quality"),
+                )
+                .arg(
+                    Arg::with_name("disable-spanning-event-genotyping")
+                        .long("disable-spanning-event-genotyping"),
+                )
+                .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -1826,449 +2026,449 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
-        )
-        .subcommand(
-            SubCommand::with_name("kmer")
-                .about("Generate kmer count matrix for contigs")
-                //                .help(CONTIG_HELP.as_str())
-                .arg(Arg::with_name("full-help").long("full-help"))
-                .arg(
-                    Arg::with_name("reference")
-                        .short("-r")
-                        .long("reference")
-                        .takes_value(true)
-                        .required(true),
-                )
-                .arg(Arg::with_name("verbose").short("v").long("verbose")),
-        )
-        .subcommand(
-            SubCommand::with_name("filter")
-                .about("Remove alignments with insufficient identity")
-                .help(FILTER_HELP.as_str())
-                .arg(Arg::with_name("full-help").long("full-help"))
-                .arg(
-                    Arg::with_name("bam-files")
-                        .short("b")
-                        .long("bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&["full-help"]),
-                )
-                .arg(
-                    Arg::with_name("output-bam-files")
-                        .short("o")
-                        .long("output-bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&["full-help"]),
-                )
-                .arg(Arg::with_name("inverse").long("inverse"))
-                .arg(
-                    Arg::with_name("min-read-aligned-length")
-                        .long("min-read-aligned-length")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity")
-                        .long("min-read-percent-identity")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent")
-                        .long("min-read-aligned-percent")
-                        .default_value("0.0")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-length-pair")
-                        .long("min-read-aligned-length-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity-pair")
-                        .long("min-read-percent-identity-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent-pair")
-                        .long("min-read-aligned-percent-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-                .arg(
-                    Arg::with_name("threads")
-                        .long("threads")
-                        .short("t")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("parallel-genomes")
-                        .long("parallel-genomes")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(Arg::with_name("force").long("force"))
-                .arg(
-                    Arg::with_name("verbose")
-                        // .short("v") // Do not use since could be confused with
-                        // inverse (a la grep -v)
-                        .long("verbose"),
-                )
-                .arg(Arg::with_name("quiet").short("q").long("quiet")),
-        )
-        .subcommand(
-            SubCommand::with_name("polish")
-                .about("Polish an assembly using highly abundant variant calls")
-                .help(POLISH_HELP.as_str())
-                .arg(Arg::with_name("full-help").long("full-help"))
-                .arg(
-                    Arg::with_name("bam-files")
-                        .short("b")
-                        .long("bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "read1",
-                            "read2",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ]),
-                )
-                .arg(
-                    Arg::with_name("assembly-bam-files")
-                        .long("query-assembly-bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly"]),
-                )
-                .arg(
-                    Arg::with_name("assembly")
-                        .short("a")
-                        .long("query-assembly")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly-bam-files"]),
-                )
-                .arg(Arg::with_name("sharded").long("sharded").required(false))
-                .arg(
-                    Arg::with_name("read1")
-                        .short("-1")
-                        .multiple(true)
-                        .takes_value(true)
-                        .requires("read2")
-                        .required_unless_one(&[
-                            "bam-files",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("read2")
-                        .short("-2")
-                        .multiple(true)
-                        .takes_value(true)
-                        .requires("read1")
-                        .required_unless_one(&[
-                            "bam-files",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("coupled")
-                        .short("c")
-                        .long("coupled")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("longreads")
-                        .long("longreads")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["longread-bam-files"]),
-                )
-                .arg(
-                    Arg::with_name("longread-bam-files")
-                        .short("l")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["longreads"]),
-                )
-                .arg(
-                    Arg::with_name("interleaved")
-                        .long("interleaved")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "coupled",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("single")
-                        .long("single")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "coupled",
-                            "interleaved",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-files")
-                        .short("r")
-                        .long("reference")
-                        .alias("reference")
-                        .takes_value(true)
-                        .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-directory")
-                        .long("genome-fasta-directory")
-                        .short("d")
-                        .takes_value(true)
-                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-extension")
-                        .long("genome-fasta-extension")
-                        .short("x")
-                        .takes_value(true)
-                        .default_value("fna"),
-                )
-                .arg(
-                    Arg::with_name("bam-file-cache-directory")
-                        .long("bam-file-cache-directory")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("output-directory")
-                        .long("output-directory")
-                        .short("o")
-                        .default_value("./"),
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("-t")
-                        .long("threads")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("parallel-genomes")
-                        .long("parallel-genomes")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("mapper")
-                        .short("p")
-                        .long("mapper")
-                        .possible_values(MAPPING_SOFTWARE_LIST)
-                        .default_value(DEFAULT_MAPPING_SOFTWARE),
-                )
-                .arg(
-                    Arg::with_name("longread-mapper")
-                        .long("longread-mapper")
-                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
-                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
-                )
-                .arg(
-                    Arg::with_name("minimap2-params")
-                        .long("minimap2-params")
-                        .long("minimap2-parameters")
-                        .takes_value(true)
-                        .allow_hyphen_values(true),
-                )
-                .arg(
-                    Arg::with_name("minimap2-reference-is-index")
-                        .long("minimap2-reference-is-index")
-                        .requires("reference"),
-                )
-                .arg(
-                    Arg::with_name("bwa-params")
-                        .long("bwa-params")
-                        .long("bwa-parameters")
-                        .takes_value(true)
-                        .allow_hyphen_values(true)
-                        .requires("reference"),
-                )
-                .arg(
-                    Arg::with_name("discard-unmapped")
-                        .long("discard-unmapped")
-                        .requires("bam-file-cache-directory"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-length")
-                        .long("min-read-aligned-length")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity")
-                        .long("min-read-percent-identity")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent")
-                        .long("min-read-aligned-percent")
-                        .takes_value(true)
-                        .default_value("0.0"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-length-pair")
-                        .long("min-read-aligned-length-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity-pair")
-                        .long("min-read-percent-identity-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent-pair")
-                        .long("min-read-aligned-percent-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("method")
-                        .short("m")
-                        .long("method")
-                        .takes_value(true)
-                        .multiple(false)
-                        .possible_values(&["trimmed_mean", "mean", "metabat"])
-                        .default_value("trimmed_mean"),
-                )
-                .arg(
-                    Arg::with_name("min-covered-fraction")
-                        .long("min-covered-fraction")
-                        .default_value("0.0"),
-                )
-                .arg(
-                    Arg::with_name("coverage-fold")
-                        .long("coverage-fold")
-                        .default_value("0.5"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-depth")
-                        .long("min-variant-depth")
-                        .short("f")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-quality")
-                        .long("min-variant-quality")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("mapq-threshold")
-                        .long("mapq-threshold")
-                        .default_value("0"),
-                )
-                .arg(
-                    Arg::with_name("base-quality-threshold")
-                        .long("base-quality-threshold")
-                        .short("q")
-                        .default_value("13"),
-                )
-                .arg(
-                    Arg::with_name("fdr-threshold")
-                        .long("fdr-threshold")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("heterozygosity")
-                        .long("heterozygosity")
-                        .default_value("0.01"),
-                )
-                .arg(
-                    Arg::with_name("indel-heterozygosity")
-                        .long("indel-heterozygosity")
-                        .default_value("0.001"),
-                )
-                .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
-                .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
-                .arg(
-                    Arg::with_name("contig-end-exclusion")
-                        .long("contig-end-exclusion")
-                        .default_value("75"),
-                )
-                .arg(
-                    Arg::with_name("trim-min")
-                        .long("trim-min")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("trim-max")
-                        .long("trim-max")
-                        .default_value("0.95"),
-                )
-                .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("plot").long("plot"))
-                .arg(
-                    Arg::with_name("ploidy")
-                        .long("ploidy")
-                        .default_value("1")
-                        .required(false),
-                )
-                .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.3")
-                        .required(false),
-                )
-                .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-                .arg(
-                    Arg::with_name("window-size")
-                        .long("window-size")
-                        .short("w")
-                        .default_value("1"),
-                )
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet"))
-                .arg(Arg::with_name("freebayes").long("freebayes"))
-                .arg(
-                    Arg::with_name("ulimit")
-                        .long("ulimit")
-                        .default_value("81920"),
-                ),
         );
+    // .subcommand(
+    //     SubCommand::with_name("kmer")
+    //         .about("Generate kmer count matrix for contigs")
+    //         //                .help(CONTIG_HELP.as_str())
+    //         .arg(Arg::with_name("full-help").long("full-help"))
+    //         .arg(
+    //             Arg::with_name("reference")
+    //                 .short("-r")
+    //                 .long("reference")
+    //                 .takes_value(true)
+    //                 .required(true),
+    //         )
+    //         .arg(Arg::with_name("verbose").short("v").long("verbose")),
+    // )
+    // .subcommand(
+    //     SubCommand::with_name("filter")
+    //         .about("Remove alignments with insufficient identity")
+    //         .help(FILTER_HELP.as_str())
+    //         .arg(Arg::with_name("full-help").long("full-help"))
+    //         .arg(
+    //             Arg::with_name("bam-files")
+    //                 .short("b")
+    //                 .long("bam-files")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&["full-help"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("output-bam-files")
+    //                 .short("o")
+    //                 .long("output-bam-files")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&["full-help"]),
+    //         )
+    //         .arg(Arg::with_name("inverse").long("inverse"))
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-length")
+    //                 .long("min-read-aligned-length")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-percent-identity")
+    //                 .long("min-read-percent-identity")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-percent")
+    //                 .long("min-read-aligned-percent")
+    //                 .default_value("0.0")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-length-pair")
+    //                 .long("min-read-aligned-length-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-percent-identity-pair")
+    //                 .long("min-read-percent-identity-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-percent-pair")
+    //                 .long("min-read-aligned-percent-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+    //         .arg(
+    //             Arg::with_name("threads")
+    //                 .long("threads")
+    //                 .short("t")
+    //                 .default_value("1")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("parallel-genomes")
+    //                 .long("parallel-genomes")
+    //                 .default_value("1")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(Arg::with_name("force").long("force"))
+    //         .arg(
+    //             Arg::with_name("verbose")
+    //                 // .short("v") // Do not use since could be confused with
+    //                 // inverse (a la grep -v)
+    //                 .long("verbose"),
+    //         )
+    //         .arg(Arg::with_name("quiet").short("q").long("quiet")),
+    // )
+    // .subcommand(
+    //     SubCommand::with_name("polish")
+    //         .about("Polish an assembly using highly abundant variant calls")
+    //         .help(POLISH_HELP.as_str())
+    //         .arg(Arg::with_name("full-help").long("full-help"))
+    //         .arg(
+    //             Arg::with_name("bam-files")
+    //                 .short("b")
+    //                 .long("bam-files")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&[
+    //                     "read1",
+    //                     "read2",
+    //                     "coupled",
+    //                     "interleaved",
+    //                     "single",
+    //                     "full-help",
+    //                 ]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("assembly-bam-files")
+    //                 .long("query-assembly-bam-files")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required(false)
+    //                 .conflicts_with_all(&["assembly"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("assembly")
+    //                 .short("a")
+    //                 .long("query-assembly")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required(false)
+    //                 .conflicts_with_all(&["assembly-bam-files"]),
+    //         )
+    //         .arg(Arg::with_name("sharded").long("sharded").required(false))
+    //         .arg(
+    //             Arg::with_name("read1")
+    //                 .short("-1")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .requires("read2")
+    //                 .required_unless_one(&[
+    //                     "bam-files",
+    //                     "coupled",
+    //                     "interleaved",
+    //                     "single",
+    //                     "full-help",
+    //                 ])
+    //                 .conflicts_with("bam-files"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("read2")
+    //                 .short("-2")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .requires("read1")
+    //                 .required_unless_one(&[
+    //                     "bam-files",
+    //                     "coupled",
+    //                     "interleaved",
+    //                     "single",
+    //                     "full-help",
+    //                 ])
+    //                 .conflicts_with("bam-files"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("coupled")
+    //                 .short("c")
+    //                 .long("coupled")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&[
+    //                     "bam-files",
+    //                     "read1",
+    //                     "interleaved",
+    //                     "single",
+    //                     "full-help",
+    //                 ])
+    //                 .conflicts_with("bam-files"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("longreads")
+    //                 .long("longreads")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required(false)
+    //                 .conflicts_with_all(&["longread-bam-files"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("longread-bam-files")
+    //                 .short("l")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required(false)
+    //                 .conflicts_with_all(&["longreads"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("interleaved")
+    //                 .long("interleaved")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&[
+    //                     "bam-files",
+    //                     "read1",
+    //                     "coupled",
+    //                     "single",
+    //                     "full-help",
+    //                 ])
+    //                 .conflicts_with("bam-files"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("single")
+    //                 .long("single")
+    //                 .multiple(true)
+    //                 .takes_value(true)
+    //                 .required_unless_one(&[
+    //                     "bam-files",
+    //                     "read1",
+    //                     "coupled",
+    //                     "interleaved",
+    //                     "full-help",
+    //                 ])
+    //                 .conflicts_with("bam-files"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("genome-fasta-files")
+    //                 .short("r")
+    //                 .long("reference")
+    //                 .alias("reference")
+    //                 .takes_value(true)
+    //                 .multiple(true)
+    //                 .required_unless_one(&["genome-fasta-directory", "full-help"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("genome-fasta-directory")
+    //                 .long("genome-fasta-directory")
+    //                 .short("d")
+    //                 .takes_value(true)
+    //                 .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
+    //         )
+    //         .arg(
+    //             Arg::with_name("genome-fasta-extension")
+    //                 .long("genome-fasta-extension")
+    //                 .short("x")
+    //                 .takes_value(true)
+    //                 .default_value("fna"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("bam-file-cache-directory")
+    //                 .long("bam-file-cache-directory")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("output-directory")
+    //                 .long("output-directory")
+    //                 .short("o")
+    //                 .default_value("./"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("threads")
+    //                 .short("-t")
+    //                 .long("threads")
+    //                 .default_value("1")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("parallel-genomes")
+    //                 .long("parallel-genomes")
+    //                 .default_value("1")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("mapper")
+    //                 .short("p")
+    //                 .long("mapper")
+    //                 .possible_values(MAPPING_SOFTWARE_LIST)
+    //                 .default_value(DEFAULT_MAPPING_SOFTWARE),
+    //         )
+    //         .arg(
+    //             Arg::with_name("longread-mapper")
+    //                 .long("longread-mapper")
+    //                 .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+    //                 .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
+    //         )
+    //         .arg(
+    //             Arg::with_name("minimap2-params")
+    //                 .long("minimap2-params")
+    //                 .long("minimap2-parameters")
+    //                 .takes_value(true)
+    //                 .allow_hyphen_values(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("minimap2-reference-is-index")
+    //                 .long("minimap2-reference-is-index")
+    //                 .requires("reference"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("bwa-params")
+    //                 .long("bwa-params")
+    //                 .long("bwa-parameters")
+    //                 .takes_value(true)
+    //                 .allow_hyphen_values(true)
+    //                 .requires("reference"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("discard-unmapped")
+    //                 .long("discard-unmapped")
+    //                 .requires("bam-file-cache-directory"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-length")
+    //                 .long("min-read-aligned-length")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-percent-identity")
+    //                 .long("min-read-percent-identity")
+    //                 .takes_value(true),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-percent")
+    //                 .long("min-read-aligned-percent")
+    //                 .takes_value(true)
+    //                 .default_value("0.0"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-length-pair")
+    //                 .long("min-read-aligned-length-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-percent-identity-pair")
+    //                 .long("min-read-percent-identity-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-read-aligned-percent-pair")
+    //                 .long("min-read-aligned-percent-pair")
+    //                 .takes_value(true)
+    //                 .conflicts_with("proper-pairs-only"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("method")
+    //                 .short("m")
+    //                 .long("method")
+    //                 .takes_value(true)
+    //                 .multiple(false)
+    //                 .possible_values(&["trimmed_mean", "mean", "metabat"])
+    //                 .default_value("trimmed_mean"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-covered-fraction")
+    //                 .long("min-covered-fraction")
+    //                 .default_value("0.0"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("coverage-fold")
+    //                 .long("coverage-fold")
+    //                 .default_value("0.5"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-variant-depth")
+    //                 .long("min-variant-depth")
+    //                 .short("f")
+    //                 .default_value("10"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-variant-quality")
+    //                 .long("min-variant-quality")
+    //                 .default_value("10"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("mapq-threshold")
+    //                 .long("mapq-threshold")
+    //                 .default_value("0"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-base-quality")
+    //                 .long("min-base-quality")
+    //                 .short("q")
+    //                 .default_value("10"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("fdr-threshold")
+    //                 .long("fdr-threshold")
+    //                 .default_value("0.05"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("heterozygosity")
+    //                 .long("heterozygosity")
+    //                 .default_value("0.01"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("indel-heterozygosity")
+    //                 .long("indel-heterozygosity")
+    //                 .default_value("0.001"),
+    //         )
+    //         .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
+    //         .arg(Arg::with_name("include-secondary").long("include-secondary"))
+    //         .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+    //         .arg(
+    //             Arg::with_name("contig-end-exclusion")
+    //                 .long("contig-end-exclusion")
+    //                 .default_value("75"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("trim-min")
+    //                 .long("trim-min")
+    //                 .default_value("0.05"),
+    //         )
+    //         .arg(
+    //             Arg::with_name("trim-max")
+    //                 .long("trim-max")
+    //                 .default_value("0.95"),
+    //         )
+    //         .arg(Arg::with_name("no-zeros").long("no-zeros"))
+    //         .arg(Arg::with_name("plot").long("plot"))
+    //         .arg(
+    //             Arg::with_name("ploidy")
+    //                 .long("ploidy")
+    //                 .default_value("1")
+    //                 .required(false),
+    //         )
+    //         .arg(
+    //             Arg::with_name("min-repeat-entropy")
+    //                 .long("min-repeat-entropy")
+    //                 .default_value("1.3")
+    //                 .required(false),
+    //         )
+    //         .arg(Arg::with_name("force").long("force"))
+    //         .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+    //         .arg(
+    //             Arg::with_name("window-size")
+    //                 .long("window-size")
+    //                 .short("w")
+    //                 .default_value("1"),
+    //         )
+    //         .arg(Arg::with_name("verbose").short("v").long("verbose"))
+    //         .arg(Arg::with_name("quiet").long("quiet"))
+    //         .arg(Arg::with_name("freebayes").long("freebayes"))
+    //         .arg(
+    //             Arg::with_name("ulimit")
+    //                 .long("ulimit")
+    //                 .default_value("81920"),
+    //         ),
+    // );
 }

@@ -6,6 +6,7 @@ use model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
+use std::fs::read;
 
 pub struct IndependentSamplesGenotypesModel {
     cache_allele_count_capacity: usize,
@@ -45,14 +46,15 @@ impl IndependentSamplesGenotypesModel {
 
     pub fn calculate_likelihoods<A: Allele, P: PloidyModel>(
         &mut self,
-        genotyping_alleles: &AlleleList<ByteArrayAllele>,
+        genotyping_alleles: &AlleleList<A>,
         read_likelihoods: &AlleleLikelihoods<A>,
         ploidy_model: &P,
         padded_reference: &[u8],
         offset_for_into_event: usize,
     ) -> Vec<GenotypeLikelihoods> {
+        // println!("from {:?} to {:?}", &read_likelihoods.get_allele_list_byte_array(), genotyping_alleles);
         let permutation = read_likelihoods
-            .get_allele_list_byte_array()
+            .get_allele_list()
             .permutation(genotyping_alleles.clone());
         let mut allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
 

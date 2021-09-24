@@ -1,5 +1,7 @@
 use genotype::genotype_builder::{AttributeObject, GenotypesContext};
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use linked_hash_map::LinkedHashMap;
+use linked_hash_set::LinkedHashSet;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
 use model::variants::SPAN_DEL_ALLELE;
@@ -217,18 +219,19 @@ impl VariantContextUtils {
             test_string_length <= test_string_full.len(),
             "repeat unit lengths do not match"
         );
-        assert!(
-            test_string_length >= repeat_unit_length,
-            "test string too short"
-        );
-        let length_difference = test_string_length - repeat_unit_length;
+
+        let length_difference = test_string_length as i64 - repeat_unit_length as i64;
         if leading_repeats {
             let mut num_repeats = 0;
             // look forward on the test string
             for start in (0..=length_difference).step_by(repeat_unit_length) {
-                if &repeat_unit_full[start + offset_in_repeat_unit_full..]
-                    == &test_string_full[start + offset_in_test_string_full..]
-                {
+                if Self::test_equal_slice(
+                    test_string_full,
+                    start as usize + offset_in_test_string_full,
+                    repeat_unit_full,
+                    offset_in_repeat_unit_full,
+                    repeat_unit_length,
+                ) {
                     num_repeats += 1;
                 } else {
                     return num_repeats;
@@ -240,9 +243,13 @@ impl VariantContextUtils {
             let mut num_repeats = 0;
             // look backward on the test string
             for start in (0..=length_difference).rev().step_by(repeat_unit_length) {
-                if &repeat_unit_full[start + offset_in_repeat_unit_full..]
-                    == &test_string_full[start + offset_in_test_string_full..]
-                {
+                if Self::test_equal_slice(
+                    test_string_full,
+                    start as usize + offset_in_test_string_full,
+                    repeat_unit_full,
+                    offset_in_repeat_unit_full,
+                    repeat_unit_length,
+                ) {
                     num_repeats += 1;
                 } else {
                     return num_repeats;
@@ -250,6 +257,19 @@ impl VariantContextUtils {
             }
             return num_repeats;
         }
+    }
+
+    /// Tests whether two slices are equal.
+    /// left and right offset represent first index to test, and length is the length of the unit
+    /// to be tested
+    pub fn test_equal_slice<T: Eq + PartialEq>(
+        left: &[T],
+        left_offset: usize,
+        right: &[T],
+        right_offset: usize,
+        length: usize,
+    ) -> bool {
+        left[left_offset..(left_offset + length)] == right[right_offset..(right_offset + length)]
     }
 
     /**
@@ -281,14 +301,14 @@ impl VariantContextUtils {
      * @param filteredAreUncalled       are filtered records uncalled?
      * @return new VariantContext       representing the merge of unsortedVCs
      */
-    pub fn simple_merge<'a>(
-        unsorted_vcs: Vec<VariantContext<'a>>,
+    pub fn simple_merge(
+        unsorted_vcs: Vec<VariantContext>,
         priority_list_of_vcs: Option<Vec<String>>,
         original_num_of_vcs: usize,
         filtered_record_merge_type: FilteredRecordMergeType,
         genotype_merge_options: GenotypeMergeType,
         filtered_are_uncalled: bool,
-    ) -> Option<VariantContext<'a>> {
+    ) -> Option<VariantContext> {
         if unsorted_vcs.is_empty() {
             return None;
         }
@@ -320,13 +340,14 @@ impl VariantContextUtils {
         // let mut first: &mut VariantContext;
         // let name: &String;
         let ref_allele = Self::determine_reference_allele(&VCs, None).cloned();
+        debug!("Proposed ref allele: {:?}", &ref_allele);
 
-        let mut alleles = HashSet::new();
+        let mut alleles = LinkedHashSet::new();
         let mut filters = HashSet::new();
-        let mut attributes: HashMap<&str, AttributeObject> = HashMap::new();
-        let mut inconsistent_attributes = HashSet::new();
-        let mut variant_sources = HashSet::new(); // contains the set of sources we found in our set of VCs that are variant
-                                                  // let mut rs_IDs = HashSet::new(); // most of the time there's one id
+        let mut attributes: HashMap<String, AttributeObject> = HashMap::new();
+        let mut inconsistent_attributes = LinkedHashSet::new();
+        let mut variant_sources = LinkedHashSet::new(); // contains the set of sources we found in our set of VCs that are variant
+                                                        // let mut rs_IDs = HashSet::new(); // most of the time there's one id
 
         let mut longest_vc = VCs[0].loc.clone();
         let mut depth = 0.0;
@@ -353,7 +374,7 @@ impl VariantContextUtils {
             };
             let allele_mapping =
                 Self::resolve_incompatible_alleles(ref_allele.as_ref().unwrap(), &vc);
-            alleles.par_extend(allele_mapping.values().into_par_iter().cloned());
+            alleles.extend(allele_mapping.values().into_iter().cloned());
 
             Self::merge_genotypes(
                 &mut genotypes,
@@ -366,7 +387,7 @@ impl VariantContextUtils {
                 log10_p_error = vc.get_log10_p_error();
             };
 
-            filters.par_extend(vc.filters.clone());
+            filters.extend(vc.filters.clone());
             any_vc_had_filters_applied = any_vc_had_filters_applied | !vc.filters.is_empty();
 
             //
@@ -374,16 +395,16 @@ impl VariantContextUtils {
             //
             // special case DP (add it up) and ID (just preserve it)
             //
-            if vc.attributes.contains_key(DEPTH_KEY) {
+            if vc.attributes.contains_key(&*DEPTH_KEY) {
                 depth += match vc
                     .attributes
-                    .get(DEPTH_KEY)
+                    .get(&*DEPTH_KEY)
                     .unwrap_or(&AttributeObject::f64(0.0))
                 {
                     AttributeObject::f64(val) => *val,
                     _ => panic!(
                         "Incorrect AttributeObject type {:?}",
-                        vc.attributes.get(DEPTH_KEY)
+                        vc.attributes.get(&*DEPTH_KEY)
                     ),
                 };
             };
@@ -433,7 +454,7 @@ impl VariantContextUtils {
         }
 
         if depth > 0.0 {
-            attributes.insert(DEPTH_KEY, AttributeObject::f64(depth));
+            attributes.insert(DEPTH_KEY.to_string(), AttributeObject::f64(depth));
         }
 
         let mut builder =
@@ -450,7 +471,7 @@ impl VariantContextUtils {
 
     pub fn strip_pls_and_ad(genotypes: &mut GenotypesContext) {
         genotypes.genotypes_mut().par_iter_mut().for_each(|g| {
-            g.pl = GenotypeLikelihoods::new();
+            g.pl = Vec::new();
             g.ad = Vec::new();
         })
     }
@@ -478,10 +499,10 @@ impl VariantContextUtils {
         return it1.peek().is_some() || it2.peek().is_some();
     }
 
-    fn merge_genotypes<'a, 'b>(
-        merged_genotypes: &'b mut GenotypesContext<'a>,
-        one_vc: &'b VariantContext<'a>,
-        mut allele_mapping: AlleleMapper<'a, 'b>,
+    fn merge_genotypes<'b>(
+        merged_genotypes: &'b mut GenotypesContext,
+        one_vc: &'b VariantContext,
+        mut allele_mapping: AlleleMapper<'b>,
         uniquify_samples: bool,
     ) {
         //TODO: should we add a check for cases when the genotypeMergeOption is REQUIRE_UNIQUE
@@ -511,10 +532,10 @@ impl VariantContextUtils {
         }
     }
 
-    pub fn resolve_incompatible_alleles<'a, 'b>(
+    pub fn resolve_incompatible_alleles<'b>(
         ref_allele: &'b ByteArrayAllele,
-        vc: &'b VariantContext<'a>,
-    ) -> AlleleMapper<'a, 'b> {
+        vc: &'b VariantContext,
+    ) -> AlleleMapper<'b> {
         if ref_allele == vc.get_reference() {
             let mut am = AlleleMapper::default();
             am.set_vc(Some(vc));
@@ -593,8 +614,8 @@ impl VariantContextUtils {
      * @param loc    if not null, ignore records that do not begin at this start location
      * @return possibly null Allele
      */
-    pub fn determine_reference_allele<'a, 'b>(
-        VCs: &'b Vec<VariantContext<'a>>,
+    pub fn determine_reference_allele<'b>(
+        VCs: &'b Vec<VariantContext>,
         loc: Option<SimpleInterval>,
     ) -> Option<&'b ByteArrayAllele> {
         let mut ref_allele = None;
@@ -646,11 +667,11 @@ impl VariantContextUtils {
         }
     }
 
-    pub fn sort_variant_contexts_by_priority<'a>(
-        mut unsorted_vcs: Vec<VariantContext<'a>>,
+    pub fn sort_variant_contexts_by_priority(
+        mut unsorted_vcs: Vec<VariantContext>,
         priority_list_of_vcs: Option<Vec<String>>,
         merge_option: &GenotypeMergeType,
-    ) -> Vec<VariantContext<'a>> {
+    ) -> Vec<VariantContext> {
         if merge_option == &GenotypeMergeType::Prioritize && priority_list_of_vcs.is_none() {
             panic!("cannot merge calls by priority with a None priority list")
         };
@@ -677,11 +698,11 @@ impl VariantContextUtils {
      * @param trimReverse should we trim up the alleles from the reverse direction?
      * @return a non-null VariantContext (may be == to inputVC) with trimmed up alleles
      */
-    pub fn trim_alleles<'a>(
-        input_vc: &VariantContext<'a>,
+    pub fn trim_alleles(
+        input_vc: &VariantContext,
         trim_forward: bool,
         trim_reverse: bool,
-    ) -> VariantContext<'a> {
+    ) -> VariantContext {
         if input_vc.get_n_alleles() <= 1 || input_vc.get_alleles().iter().any(|a| a.len() == 1) {
             return input_vc.clone();
         }
@@ -741,11 +762,11 @@ impl VariantContextUtils {
      * @param revTrim the last revTrim bases of each allele will be clipped off as well
      * @return a non-null VariantContext (may be == to inputVC) with trimmed up alleles
      */
-    fn do_trim_alleles<'a, 'b>(
-        input_vc: &'b VariantContext<'a>,
+    fn do_trim_alleles<'b>(
+        input_vc: &'b VariantContext,
         fwd_trim_end: i32,
         rev_trim: i32,
-    ) -> VariantContext<'a> {
+    ) -> VariantContext {
         if fwd_trim_end == -1 && rev_trim == 0 {
             // nothing to do
             return input_vc.clone();
@@ -788,11 +809,11 @@ impl VariantContextUtils {
         return builder;
     }
 
-    fn update_genotypes_with_mapped_alleles<'a, 'b>(
-        original_genotypes: &'b GenotypesContext<'a>,
+    fn update_genotypes_with_mapped_alleles<'b>(
+        original_genotypes: &'b GenotypesContext,
         allele_mapper: HashMap<&'b ByteArrayAllele, usize>,
         new_alleles: &'b Vec<ByteArrayAllele>,
-    ) -> GenotypesContext<'a> {
+    ) -> GenotypesContext {
         let mut updated_genotypes = GenotypesContext::create(original_genotypes.len());
 
         for genotype in original_genotypes.genotypes() {
@@ -822,7 +843,7 @@ impl VariantContextUtils {
      * @param inputVC a non-null input VC whose alleles might need a haircut
      * @return a non-null VariantContext (may be == to inputVC) with alleles trimmed up
      */
-    pub fn reverse_trim_alleles<'a>(input_vc: &VariantContext<'a>) -> VariantContext<'a> {
+    pub fn reverse_trim_alleles(input_vc: &VariantContext) -> VariantContext {
         Self::trim_alleles(input_vc, false, true)
     }
 
@@ -892,12 +913,12 @@ pub enum FilteredRecordMergeType {
     KeepUnconditional,
 }
 
-pub struct AlleleMapper<'a, 'b> {
-    vc: Option<&'b VariantContext<'a>>,
+pub struct AlleleMapper<'b> {
+    vc: Option<&'b VariantContext>,
     map: Option<HashMap<usize, ByteArrayAllele>>,
 }
 
-impl<'a, 'b> AlleleMapper<'a, 'b> {
+impl<'b> AlleleMapper<'b> {
     pub fn default() -> Self {
         Self {
             vc: None,
@@ -905,7 +926,7 @@ impl<'a, 'b> AlleleMapper<'a, 'b> {
         }
     }
 
-    pub fn set_vc(&mut self, vc: Option<&'b VariantContext<'a>>) {
+    pub fn set_vc(&mut self, vc: Option<&'b VariantContext>) {
         self.vc = vc;
     }
 

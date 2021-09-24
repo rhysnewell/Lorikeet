@@ -762,7 +762,12 @@ impl AlignmentUtils {
             ref_end
         );
         if bases.len() != CigarUtils::get_read_length(bases_to_ref_cigar) as usize {
-            panic!("Mismatch between length in reference bases and cigar length");
+            panic!(
+                "Mismatch between length in reference bases and cigar length {} -> {}; Cigar {:?}",
+                bases.len(),
+                CigarUtils::get_read_length(bases_to_ref_cigar),
+                bases_to_ref_cigar.to_string()
+            );
         };
 
         let mut ref_pos = bases_start_on_ref;

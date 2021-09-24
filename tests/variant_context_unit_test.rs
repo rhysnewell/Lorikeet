@@ -42,7 +42,7 @@ lazy_static! {
     // static ref ATC_ref: ByteArrayAllele = ByteArrayAllele::new("ATC".as_bytes(), true);
 }
 
-struct VariantContextUnitTest<'a> {
+struct VariantContextUnitTest {
     del: ByteArrayAllele,
     del_ref: ByteArrayAllele,
     A: ByteArrayAllele,
@@ -52,12 +52,12 @@ struct VariantContextUnitTest<'a> {
     T_ref: ByteArrayAllele,
     ATC: ByteArrayAllele,
     ATC_ref: ByteArrayAllele,
-    basic_builder: VariantContext<'a>,
-    snp_builder: VariantContext<'a>,
-    ins_builder: VariantContext<'a>,
+    basic_builder: VariantContext,
+    snp_builder: VariantContext,
+    ins_builder: VariantContext,
 }
 
-impl<'a> VariantContextUnitTest<'a> {
+impl VariantContextUnitTest {
     pub fn new() -> Self {
         let basic_builder = VariantContext::build(
             0,

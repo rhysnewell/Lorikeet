@@ -27,10 +27,10 @@ impl IntervalUtils {
             "Contig length should be at least 1 but was {}",
             contig_length
         );
-        let bounded_start = std::cmp::max(1, start);
+        let bounded_start = start;
         let bounded_stop = std::cmp::min(contig_length, stop);
 
-        if (bounded_start > contig_length) || (bounded_stop < 1) {
+        if (bounded_start > contig_length) {
             return None;
         } else {
             return Some(SimpleInterval::new(tid, bounded_start, bounded_stop));

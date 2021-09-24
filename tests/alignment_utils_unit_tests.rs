@@ -85,7 +85,7 @@ impl AlignmentUtilsUnitTests {
     }
 }
 
-fn create_mapped_read(name: &str, start: usize) -> BirdToolRead {
+fn create_mapped_read(name: &str, start: i64) -> BirdToolRead {
     BirdToolRead::new(
         ArtificialReadUtils::create_artificial_read_default(
             name,
@@ -125,10 +125,7 @@ fn make_cigar_element_combinations() -> Vec<Vec<Cigar>> {
 /******************************************************
  * Tests for AlignmentUtils.createReadAlignedToRef()
  ******************************************************/
-fn make_haplotype_for_aligned_to_ref_test(
-    bases: &str,
-    cigar: &str,
-) -> Haplotype<'static, SimpleInterval> {
+fn make_haplotype_for_aligned_to_ref_test(bases: &str, cigar: &str) -> Haplotype<SimpleInterval> {
     let mut hap = Haplotype::new(bases.as_bytes(), false);
     hap.set_cigar(CigarString::try_from(cigar).unwrap().0);
     return hap;

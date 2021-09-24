@@ -154,11 +154,13 @@ impl ReferenceReader {
         };
     }
 
+    /// Fetches the reference sequence from a given SimpleInterval
+    /// The return position is 0-base start and stop inclusive
     pub fn fetch_reference_context(&mut self, ref_idx: usize, interval: &SimpleInterval) {
         match self.indexed_reader.fetch(
             std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap(),
             interval.get_start() as u64,
-            interval.get_end() as u64,
+            interval.get_end() as u64 + 1,
         ) {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch(
