@@ -64,8 +64,8 @@ impl<'a> AssemblyRegionIterator<'a> {
 
                 bam_generated.fetch((
                     region.get_contig() as i32,
-                    region.get_start() as i64,
-                    region.get_end() as i64,
+                    region.get_padded_span().start as i64,
+                    region.get_padded_span().end as i64,
                 ));
 
                 let read_type = if sample_idx < short_read_bam_count {

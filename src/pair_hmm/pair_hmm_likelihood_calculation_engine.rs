@@ -203,21 +203,25 @@ impl PairHMMLikelihoodCalculationEngine {
         // Add likelihoods for each sample's reads to our result
         let sample_count = samples.len();
         let mut result = AlleleLikelihoods::new(haplotypes, samples, per_sample_read_list);
-        println!(
+        debug!(
             "Spawned likelihood result {:?}",
             &result.values_by_sample_index
         );
         for i in 0..sample_count {
             self.compute_read_likelihoods_in_matrix(i, &mut result);
         }
-        println!("After computation {:?}", &result.values_by_sample_index);
+        debug!("After computation {:?}", &result.values_by_sample_index);
         result.normalize_likelihoods(
             self.log10_global_read_mismapping_rate,
             self.symmetrically_normalize_alleles_to_reference,
         );
-        println!("after normalization using log10 global mismapping rate {} and symmetrically normalize alleles to ref {} {:?}", self.log10_global_read_mismapping_rate, self.symmetrically_normalize_alleles_to_reference, &result.values_by_sample_index[0][[0, 0]]);
+        debug!("after normalization using log10 global mismapping rate {} and symmetrically normalize alleles to ref {} {:?}",
+               self.log10_global_read_mismapping_rate,
+               self.symmetrically_normalize_alleles_to_reference,
+               &result.values_by_sample_index[0][[0, 0]]);
+        debug!("{:?}", &result.values_by_sample_index);
 
-        println!(
+        debug!(
             "using dynamic disqualification {}",
             self.dynamic_disqualification
         );
@@ -244,18 +248,8 @@ impl PairHMMLikelihoodCalculationEngine {
             let dynamic_threshold =
                 Self::calculate_log10_dynamic_read_qual_threshold(read, dynamic_read_qual_constant);
             let log10_max_likelihoods_for_true_allele = (log10_min_true_likelihood)(read);
-            debug!(
-                "Dynamic threshold {} log10 max likelihoods for true allele {}",
-                dynamic_threshold, &log10_max_likelihoods_for_true_allele
-            );
 
             if dynamic_threshold < log10_max_likelihoods_for_true_allele {
-                debug!(
-                    "For read {:?} replacing old threshold ({}) with new threshold: {}",
-                    std::str::from_utf8(read.read.qname()),
-                    log10_max_likelihoods_for_true_allele,
-                    dynamic_threshold
-                );
                 return dynamic_threshold;
             } else {
                 log10_max_likelihoods_for_true_allele
@@ -290,13 +284,13 @@ impl PairHMMLikelihoodCalculationEngine {
             sum_mean += dynamic_read_qual_thresh_lookup_table[mean_offset];
             sum_variance += dynamic_read_qual_thresh_lookup_table[var_offset];
         }
-        debug!(
-            "sum mean {} dynamic read qual constant {} sum variance sqrt {} -> sum variance {}",
-            sum_mean,
-            dynamic_read_qual_constant,
-            sum_variance.sqrt(),
-            sum_variance
-        );
+        // debug!(
+        //     "sum mean {} dynamic read qual constant {} sum variance sqrt {} -> sum variance {}",
+        //     sum_mean,
+        //     dynamic_read_qual_constant,
+        //     sum_variance.sqrt(),
+        //     sum_variance
+        // );
 
         let threshold = sum_mean + dynamic_read_qual_constant * sum_variance.sqrt();
         return threshold * -0.1;
@@ -325,13 +319,6 @@ impl PairHMMLikelihoodCalculationEngine {
             };
 
             let log10_qual_per_base = -4.0;
-            debug!(
-                "Max errors for reads {} return {} read length {} maximum error per base {}",
-                max_errors_for_read,
-                max_errors_for_read * log10_qual_per_base,
-                qualified_read_length,
-                maximum_error_per_base
-            );
 
             return max_errors_for_read * log10_qual_per_base;
         })
@@ -439,7 +426,6 @@ impl PairHMMLikelihoodCalculationEngine {
         base_quality_score_threshold: u8,
         disable_cap_read_qualities_to_mapq: bool,
     ) {
-        debug!("Read quals before {:?}", read_quals);
         for i in 0..read_quals.len() {
             if !disable_cap_read_qualities_to_mapq {
                 read_quals[i] = min(read_quals[i], read.read.mapq());
@@ -462,7 +448,6 @@ impl PairHMMLikelihoodCalculationEngine {
                 QualityUtils::MIN_USABLE_Q_SCORE,
             );
         }
-        debug!("Read quals after {:?}", read_quals);
     }
 
     fn set_to_fixed_value_if_too_low(current_val: u8, min_qual: u8, fixed_qual: u8) -> u8 {

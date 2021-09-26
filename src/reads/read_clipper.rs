@@ -84,7 +84,7 @@ impl<'a> ReadClipper<'a> {
             if alignment_start < ref_start && alignment_stop > ref_stop {
                 return ReadClipper::new(&read).hard_clip_both_ends_by_reference_coordinates(
                     ref_start.checked_sub(1).unwrap_or(0),
-                    ref_start + 1,
+                    ref_stop + 1,
                 );
             } else if alignment_start < ref_start {
                 return ReadClipper::new(&read).hard_clip_by_reference_coordinates_left_tail(

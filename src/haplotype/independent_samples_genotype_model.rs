@@ -1,6 +1,7 @@
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use genotype::genotyping_likelihoods::GenotypingLikelihoods;
 use haplotype::homogenous_ploidy_model::PloidyModel;
 use model::allele_likelihood_matrix_mapper::AlleleLikelihoodMatrixMapper;
 use model::allele_likelihoods::AlleleLikelihoods;
@@ -52,23 +53,38 @@ impl IndependentSamplesGenotypesModel {
         padded_reference: &[u8],
         offset_for_into_event: usize,
     ) -> Vec<GenotypeLikelihoods> {
-        // println!("from {:?} to {:?}", &read_likelihoods.get_allele_list_byte_array(), genotyping_alleles);
         let permutation = read_likelihoods
             .get_allele_list()
             .permutation(genotyping_alleles.clone());
         let mut allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
 
         let sample_count = read_likelihoods.samples.len();
-        assert!(sample_count > 0, "Sample count must be greater than 0");
         let mut genotype_likelihoods = Vec::with_capacity(sample_count);
-        let allele_count = genotyping_alleles.len();
+        let allele_count = genotyping_alleles.number_of_alleles();
 
-        let mut likelihoods_calculator =
-            self.get_likelihood_calculator(ploidy_model.sample_ploidy(0), allele_count);
+        let mut likelihoods_calculator = if sample_count > 0 {
+            self.get_likelihood_calculator(ploidy_model.sample_ploidy(0), allele_count)
+        } else {
+            None
+        };
         for i in 0..sample_count {
             let sample_ploidy = ploidy_model.sample_ploidy(i);
             let sample_likelihoods = &read_likelihoods.values_by_sample_index[i];
             let number_of_evidences = read_likelihoods.sample_evidence_count(i);
+
+            likelihoods_calculator = match likelihoods_calculator {
+                None => {
+                    // pass for now, these likelihoods are uncached so calculate later
+                    None
+                }
+                Some(likelihoods_calculator) => {
+                    if sample_ploidy != likelihoods_calculator.ploidy {
+                        self.get_likelihood_calculator(sample_ploidy, allele_count)
+                    } else {
+                        Some(likelihoods_calculator)
+                    }
+                }
+            };
 
             match likelihoods_calculator {
                 None => {
@@ -87,9 +103,10 @@ impl IndependentSamplesGenotypesModel {
                         number_of_evidences,
                     ));
                 }
-            };
+            }
         }
 
+        debug!("Genotype likelihoods {:#?}", &genotype_likelihoods);
         return genotype_likelihoods;
     }
 

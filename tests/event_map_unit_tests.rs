@@ -89,7 +89,7 @@ fn test_get_overlapping_events(
     if events_expected {
         assert_eq!(overlapping_events[0].get_reference(), expected_ref.unwrap());
         assert_eq!(
-            &overlapping_events[0].get_alternate_alleles()[0],
+            overlapping_events[0].get_alternate_alleles()[0],
             expected_alt.unwrap()
         );
     }

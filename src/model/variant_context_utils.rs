@@ -1,6 +1,5 @@
 use genotype::genotype_builder::{AttributeObject, GenotypesContext};
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
@@ -543,9 +542,8 @@ impl VariantContextUtils {
         } else {
             let mut map = Self::create_allele_mapping(
                 ref_allele,
-                vc.get_reference(),
-                vc.get_alleles_ref()[1..].to_vec(),
-                1,
+                vc.get_reference_and_index(),
+                vc.get_alleles_with_index(),
             );
             map.insert(0, ref_allele.clone());
             let mut am = AlleleMapper::default();
@@ -574,23 +572,22 @@ impl VariantContextUtils {
      */
     pub fn create_allele_mapping<'a>(
         ref_allele: &ByteArrayAllele,
-        input_ref: &ByteArrayAllele,
-        input_alleles: Vec<&'a ByteArrayAllele>,
-        index_offset: usize,
+        input_ref: (usize, &ByteArrayAllele),
+        input_alleles: Vec<(usize, &'a ByteArrayAllele)>,
     ) -> HashMap<usize, ByteArrayAllele> {
         assert!(
-            ref_allele.len() > input_ref.len(),
+            ref_allele.len() > input_ref.1.len(),
             "BUG: Input ref is longer than ref_allele"
         );
-        let extra_bases = ref_allele.get_bases();
+        let extra_bases = &ref_allele.get_bases()[input_ref.1.len()..];
 
         let mut map = HashMap::new();
-        for (idx, a) in input_alleles.into_iter().enumerate() {
+        for (idx, a) in input_alleles.into_iter() {
             if Self::is_non_symbolic_extendable_allele(a) {
                 let extended = ByteArrayAllele::extend(a, extra_bases);
-                map.insert(idx + index_offset, extended);
+                map.insert(idx, extended);
             } else if a == &*SPAN_DEL_ALLELE {
-                map.insert(idx + index_offset, a.clone());
+                map.insert(idx, a.clone());
             };
         }
 

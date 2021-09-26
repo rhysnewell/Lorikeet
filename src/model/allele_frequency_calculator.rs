@@ -196,6 +196,7 @@ impl AlleleFrequencyCalculator {
             log10_allele_frequencies =
                 Dirichlet::new(&posterior_pseudo_counts).log10_mean_weights();
         }
+        debug!("Log10AlleleFrequencies {:?}", &log10_allele_frequencies);
 
         let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
         let mut log10_p_no_variant = 0.0;
@@ -228,6 +229,7 @@ impl AlleleFrequencyCalculator {
                 &mut log10_allele_frequencies,
             );
 
+            debug!("log10_genotype_posteriors {:?}", &log10_genotype_posteriors);
             if !spanning_deletion_present {
                 log10_p_no_variant +=
                     log10_genotype_posteriors[AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX];
@@ -318,6 +320,10 @@ impl AlleleFrequencyCalculator {
             })
             .collect::<HashMap<ByteArrayAllele, f64>>();
 
+        debug!(
+            "Log10PNoVariant {} Log10PRefAlelle {:?}",
+            log10_p_no_variant, &log10_p_ref_by_allele
+        );
         return AFCalculationResult::new(
             int_alt_allele_counts,
             alleles.to_vec(),

@@ -206,7 +206,7 @@ impl AssemblyRegion {
      */
     pub fn move_reads(&mut self) -> Vec<BirdToolRead> {
         let mut container = Vec::with_capacity(self.reads.len());
-        std::mem::swap(&mut self.reads, &mut container);
+        std::mem::swap(&mut self.reads, &mut container); // Indiana jones maneuver
         return container;
     }
 
@@ -271,10 +271,10 @@ impl AssemblyRegion {
     ) -> AssemblyRegion {
         let new_active_span = self.get_span().intersect(&span);
         let new_padded_span = self.get_padded_span().intersect(&padded_span);
-
+        debug!("new padded span {:?}", &new_padded_span);
         let mut result = AssemblyRegion::new_with_padded_span(
             new_active_span,
-            new_padded_span,
+            new_padded_span.clone(),
             self.is_active,
             self.contig_length,
             self.tid,
@@ -287,8 +287,8 @@ impl AssemblyRegion {
             .map(|read| {
                 ReadClipper::hard_clip_to_region(
                     read,
-                    result.padded_span.get_start(),
-                    result.padded_span.get_end(),
+                    new_padded_span.get_start(),
+                    new_padded_span.get_end(),
                 )
             })
             .filter(|read| !read.is_empty() && read.overlaps(&result.padded_span))

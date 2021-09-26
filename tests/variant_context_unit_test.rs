@@ -255,5 +255,5 @@ fn test_creating_snp_variant_context() {
     assert_eq!(vc.get_alleles().len(), 2);
     assert_eq!(vc.get_n_alleles(), 2);
     assert_eq!(vc.get_alternate_alleles().len(), 1);
-    assert_eq!(&vc.get_alternate_alleles()[0], &vc_unit_test.T);
+    assert_eq!(vc.get_alternate_alleles()[0], &vc_unit_test.T)
 }

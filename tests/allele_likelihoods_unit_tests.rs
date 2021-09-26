@@ -12,10 +12,12 @@ extern crate rust_htslib;
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
+extern crate hashlink;
 extern crate ndarray;
 extern crate ordered_float;
 extern crate rand;
 
+use hashlink::LinkedHashMap;
 use lorikeet_genome::genotype::genotype_allele_counts::GenotypeAlleleCounts;
 use lorikeet_genome::genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
@@ -622,7 +624,7 @@ fn test_marginalization_with_overlap(
     samples: Vec<String>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
-    new_to_old_allele_mapping: HashMap<usize, Vec<&ByteArrayAllele>>,
+    new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
@@ -640,10 +642,9 @@ fn test_marginalization_with_overlap(
     );
     let marginalized_alleles = marginalized.alleles().clone();
 
-    for (a, allele) in marginalized_alleles.list.iter().enumerate() {
-        let old_alleles = new_to_old_allele_mapping
-            .get(&original.alleles().index_of_allele(allele).unwrap())
-            .unwrap();
+    for allele in marginalized_alleles.list.iter() {
+        let a = marginalized_alleles.index_of_allele(allele).unwrap();
+        let old_alleles = new_to_old_allele_mapping.get(&a).unwrap();
         for s in 0..samples.len() {
             let old_sample_likelihoods = original.sample_matrix(s).clone();
             let sample_likelihoods = marginalized.sample_matrix(s).clone();
@@ -685,13 +686,17 @@ fn test_marginalization(
     samples: Vec<String>,
     alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
-    new_to_old_allele_mapping: HashMap<usize, Vec<&ByteArrayAllele>>,
+    new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
     let mut original = AlleleLikelihoods::new(alleles.clone(), samples.clone(), reads.clone());
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
     let mut marginalized = original.clone();
+    println!(
+        "onew to old allele mapping {:?}",
+        &new_to_old_allele_mapping
+    );
     marginalized.marginalize(&new_to_old_allele_mapping);
 
     assert_eq!(
@@ -700,10 +705,9 @@ fn test_marginalization(
     );
     let marginalized_alleles = marginalized.alleles().clone();
 
-    for (a, allele) in marginalized_alleles.list.iter().enumerate() {
-        let old_alleles = new_to_old_allele_mapping
-            .get(&original.alleles().index_of_allele(allele).unwrap())
-            .unwrap();
+    for allele in marginalized_alleles.list.iter() {
+        let a = marginalized_alleles.index_of_allele(allele).unwrap();
+        let old_alleles = new_to_old_allele_mapping.get(&a).unwrap();
         for s in 0..samples.len() {
             let old_sample_likelihoods = original.sample_matrix(s).clone();
             let sample_likelihoods = marginalized.sample_matrix(s).clone();
@@ -728,11 +732,11 @@ fn test_marginalization(
                 assert_eq!(
                     sample_likelihoods[[a, r]],
                     old_best_lk,
-                    "Read likelihoods {:?} Allele index {}, read index {} old likelihoods {:?}",
-                    sample_likelihoods.row(a),
+                    "Allele index {}, read index {} old likelihoods {:?} new likelihoods {:?}",
                     a,
                     r,
-                    old_sample_likelihoods.column(r)
+                    old_sample_likelihoods.column(r),
+                    sample_likelihoods.column(r)
                 );
             }
         }
@@ -911,6 +915,10 @@ fn data_for_test_marginalization() {
         for allele_set_1 in ALLELE_SETS.iter() {
             for allele_set_2 in ALLELE_SETS.iter() {
                 if allele_set_2.len() < allele_set_1.len() {
+                    println!(
+                        "samples {:?} alleles1 {:?} alleles2 {:?}",
+                        sample_set, allele_set_1, allele_set_2
+                    );
                     test_marginalization(
                         sample_set.clone(),
                         allele_set_1.clone(),
@@ -955,8 +963,8 @@ fn data_set_reads(samples: &Vec<String>, rnd: &mut ThreadRng) -> HashMap<usize, 
 fn random_allele_map<'a, A: Allele>(
     from_alleles: &'a Vec<A>,
     to_alleles: &Vec<A>,
-) -> HashMap<usize, Vec<&'a A>> {
-    let mut result = HashMap::new();
+) -> LinkedHashMap<usize, Vec<&'a A>> {
+    let mut result = LinkedHashMap::new();
     let mut remaining = from_alleles.iter().collect::<Vec<&'a A>>();
     let mut rnd = ThreadRng::default();
     let mut next_to_index = 0;

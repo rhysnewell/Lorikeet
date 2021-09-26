@@ -6,7 +6,6 @@ use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
-use linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;

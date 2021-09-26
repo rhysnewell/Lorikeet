@@ -318,6 +318,10 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         let mut original_by_trimmed_haplotypes =
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 
+        debug!(
+            "Original by trimmed haplotypes {:?}",
+            &original_by_trimmed_haplotypes
+        );
         let mut new_assembly_result_by_haplotype = HashMap::new();
         let mut new_haplotypes = LinkedHashSet::new();
 
@@ -337,7 +341,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             };
         }
 
-        trimmed_assembly_region.reads = self.region_for_genotyping.reads;
+        // trimmed_assembly_region.reads = self.region_for_genotyping.reads;
         self.region_for_genotyping = trimmed_assembly_region;
         self.haplotypes.clear();
         self.assembly_result_by_haplotype.clear();

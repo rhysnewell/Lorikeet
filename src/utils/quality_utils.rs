@@ -67,8 +67,6 @@ impl QualityUtils {
      *
      * This is the Phred-style conversion, *not* the Illumina-style conversion.
      *
-     * Because the input is a double value, this function must call Math.pow so can be quite expensive
-     *
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)
      */
@@ -84,8 +82,6 @@ impl QualityUtils {
      * Convert a phred-scaled quality score to its probability of being wrong (Q30 => 0.001)
      *
      * This is the Phred-style conversion, *not* the Illumina-style conversion.
-     *
-     * Because the input is a double value, this function must call Math.pow so can be quite expensive
      *
      * @param qual a phred-scaled quality score encoded as a double.  Can be non-integer values (30.5)
      * @return a probability (0.0-1.0)

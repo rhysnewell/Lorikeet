@@ -227,7 +227,9 @@ impl<'a> LorikeetEngine<'a> {
                         &mut reference_reader,
                     );
 
-                    println!("contexts {:?}", &contexts);
+                    for (i, x) in contexts.iter().enumerate() {
+                        println!("context {} {:#?}", i, &x);
+                    }
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];

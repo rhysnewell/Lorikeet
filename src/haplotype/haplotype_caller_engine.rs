@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex};
 use utils::math_utils::{MathUtils, RunningAverage};
 use utils::natural_log_utils::NaturalLogUtils;
 use utils::quality_utils::QualityUtils;
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct HaplotypeCallerEngine {
     active_region_evaluation_genotyper_engine: GenotypingEngine,
@@ -663,6 +663,11 @@ impl HaplotypeCallerEngine {
         let mut region_without_reads = region.clone_without_reads();
 
         // run the local assembler, getting back a collection of information on how we should proceed
+        debug!(
+            "region read sizes before assembly {} {}",
+            region.reads[0].get_length_on_reference(),
+            region.reads[1].get_length_on_reference()
+        );
         let mut untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
             region,
             &given_alleles,
@@ -672,6 +677,15 @@ impl HaplotypeCallerEngine {
             !args.is_present("do-not-correct-overlapping-base-qualities"),
             sample_names,
         );
+        debug!(
+            "region read sizes after ass {} {}",
+            untrimmed_assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
+            untrimmed_assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
+        );
+        debug!(
+            "Untrimmed haplotypes {:?}",
+            &untrimmed_assembly_result.haplotypes
+        );
 
         debug!(
             "There were {} haplotypes found with {} reads",
@@ -680,6 +694,7 @@ impl HaplotypeCallerEngine {
         );
         let all_variation_events = untrimmed_assembly_result
             .get_variation_events(args.value_of("max-mnp-distance").unwrap().parse().unwrap());
+        debug!("All variation events  {:?}", &all_variation_events);
 
         let mut trimming_result = self.assembly_region_trimmer.trim(
             self.ref_idx,
@@ -697,21 +712,47 @@ impl HaplotypeCallerEngine {
                 &vc_priors,
             );
         }
-
+        trimming_result.original_region.reads =
+            untrimmed_assembly_result.region_for_genotyping.move_reads();
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
+        debug!(
+            "Assembly result allele order after region trimming {:?}",
+            &assembly_result.haplotypes
+        );
 
-        // let read_stubs = assembly_result
-        //     .region_for_genotyping
-        //     .reads
-        //     .par_iter()
-        //     .filter(|r| {
-        //         AlignmentUtils::unclipped_read_length(r)
-        //             < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
-        //     })
-        //     .cloned()
-        //     .collect::<Vec<BirdToolRead>>();
-        // let mut assembly_result = assembly_result.remove_all(&read_stubs);
+        debug!(
+            "region read sizes after trim {} {}",
+            assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
+            assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
+        );
+
+        let read_stubs = assembly_result
+            .region_for_genotyping
+            .reads
+            .par_iter()
+            .filter(|r| {
+                debug!(
+                    "read length {} read cigar {}",
+                    AlignmentUtils::unclipped_read_length(r),
+                    r.read.cigar().to_string()
+                );
+                AlignmentUtils::unclipped_read_length(r)
+                    < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
+            })
+            .cloned()
+            .collect::<Vec<BirdToolRead>>();
+        let mut assembly_result = assembly_result.remove_all(&read_stubs);
+        debug!(
+            "Assembly result allele order after stub filter {:?}",
+            &assembly_result.haplotypes
+        );
+
+        debug!(
+            "region read sizes after removing read stubs {} {}",
+            assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
+            assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
+        );
 
         // filter out reads from genotyping which fail mapping quality based criteria
         //TODO - why don't do this before any assembly is done? Why not just once at the beginning of this method
@@ -719,6 +760,10 @@ impl HaplotypeCallerEngine {
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
         let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result);
+        debug!(
+            "Assembly result allele order after read filter {:?}",
+            &assembly_result.haplotypes
+        );
         let per_sample_filtered_read_list =
             AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
 
@@ -732,8 +777,9 @@ impl HaplotypeCallerEngine {
 
         debug!("==========================================================================");
         debug!(
-            "              Assembly region {:?}",
-            &assembly_result.region_for_genotyping
+            "              Assembly region {:?} \n\
+                           Alleles {:?}",
+            &assembly_result.region_for_genotyping, &assembly_result.haplotypes
         );
         debug!("==========================================================================");
         let reads = AssemblyBasedCallerUtils::split_reads_by_sample(
@@ -744,7 +790,7 @@ impl HaplotypeCallerEngine {
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.clone(), reads);
         debug!(
-            "Read likelihoods first {:?}",
+            "Read likelihoods first {:#?}",
             read_likelihoods.values_by_sample_index
         );
 
@@ -756,7 +802,7 @@ impl HaplotypeCallerEngine {
         );
         read_likelihoods.change_evidence(read_alignments);
         debug!(
-            "Read likelihoods after change evidence {:?}",
+            "Read likelihoods after change evidence {:#?}",
             read_likelihoods.values_by_sample_index
         );
 
@@ -804,6 +850,7 @@ impl HaplotypeCallerEngine {
             .filter(|r| {
                 if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
+                    || (!r.read.is_proper_pair() && r.read_type != ReadType::Long)
                 {
                     debug!("Removing read {:?}", r);
                     true

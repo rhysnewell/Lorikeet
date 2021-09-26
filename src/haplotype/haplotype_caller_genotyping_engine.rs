@@ -8,6 +8,7 @@ use haplotype::event_map::EventMap;
 use haplotype::haplotype::Haplotype;
 use haplotype::homogenous_ploidy_model::HomogeneousPloidyModel;
 use haplotype::independent_samples_genotype_model::IndependentSamplesGenotypesModel;
+use hashlink::linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::allele_list::AlleleList;
@@ -131,12 +132,12 @@ impl HaplotypeCallerGenotypingEngine {
         let mut no_call_alleles = VariantContextUtils::no_call_alleles(ploidy);
         let read_qualifies_for_genotyping_predicate =
             Self::compose_read_qualifies_for_genotyping_predicate();
+        debug!("haplotypes at assignment {:?}", &haplotypes);
 
         for loc in start_pos_key_set {
             if loc < active_region_window.get_start() || loc > active_region_window.get_end() {
                 continue;
             };
-            debug!("haplotypes {:?}", &haplotypes);
 
             let events_at_this_loc =
                 AssemblyBasedCallerUtils::get_variant_contexts_from_active_haplotypes(
@@ -175,6 +176,8 @@ impl HaplotypeCallerGenotypingEngine {
                         &haplotypes,
                         !args.is_present("disable-spanning-event-genotyping"),
                     );
+
+                    debug!("allele mapper {:?}", &allele_mapper);
 
                     debug!(
                         "Genotyping event at {} with alleles {:?} and genotypes {:?}",
@@ -261,6 +264,10 @@ impl HaplotypeCallerGenotypingEngine {
 
                     let mut variant_context_builder = VariantContext::build_from_vc(&merged_vc);
                     variant_context_builder.genotypes = genotypes;
+                    debug!(
+                        "Variant context genotype values {:?}",
+                        &variant_context_builder.genotypes
+                    );
                     let call = self.genotyping_engine.calculate_genotypes(
                         variant_context_builder,
                         self.ploidy_model.ploidy,
@@ -268,6 +275,7 @@ impl HaplotypeCallerGenotypingEngine {
                         &given_alleles,
                         stand_min_confidence,
                     );
+                    debug!("Call {:?}", &call);
 
                     match call {
                         None => continue, // pass,
@@ -366,13 +374,13 @@ impl HaplotypeCallerGenotypingEngine {
     ) -> GenotypesContext {
         let vc_alleles = &merged_vc.alleles;
         // let allele_list: AlleleList<ByteArrayAllele> = if read_likelihoods.number_of_alleles() == vc_alleles.len() {
-        //     read_likelihoods.get_allele_list()
+        //     read_likelihoods.get_allele_list_byte_array()
         // } else {
         //     AlleleList::new(vc_alleles)
-        // }; Old version
+        // }; // Old version
         let allele_list = read_likelihoods.alleles.clone();
         debug!(
-            "Read likelihood {:?}",
+            "Read likelihood {:#?}",
             read_likelihoods.values_by_sample_index
         );
         let likelihoods = self.genotyping_model.calculate_likelihoods(
@@ -383,7 +391,7 @@ impl HaplotypeCallerGenotypingEngine {
             offset_for_ref_into_event,
         );
 
-        debug!("Proposed likelihoods {:?}", &likelihoods);
+        debug!("Proposed likelihoods {:#?}", &likelihoods);
 
         let sample_count = self.genotyping_engine.samples.len();
         let mut result = GenotypesContext::create(sample_count);
@@ -394,7 +402,7 @@ impl HaplotypeCallerGenotypingEngine {
                 self.genotyping_engine.samples[s].clone(),
             );
             genotype_builder.alleles = no_call_alleles.clone();
-            debug!("Adding genotype {:?}", &genotype_builder);
+            debug!("Adding genotype {:#?}", &genotype_builder);
             result.add(genotype_builder);
         }
 
@@ -418,7 +426,7 @@ impl HaplotypeCallerGenotypingEngine {
     fn remove_alt_alleles_if_too_many_genotypes<'b>(
         &mut self,
         ploidy: usize,
-        allele_mapper: &mut HashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
+        allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
     ) {
         let original_allele_count = allele_mapper.len();
@@ -499,7 +507,7 @@ impl HaplotypeCallerGenotypingEngine {
      * @param desiredNumOfAlleles   desired allele count, including ref allele
      */
     fn which_alleles_to_keep_based_on_hap_scores<'b>(
-        allele_mapper: &mut HashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
+        allele_mapper: &mut LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>>,
         merged_vc: &mut VariantContext,
         desired_num_of_alleles: usize,
     ) -> Vec<usize> {

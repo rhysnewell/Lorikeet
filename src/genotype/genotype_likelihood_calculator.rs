@@ -338,11 +338,13 @@ impl GenotypeLikelihoodCalculator {
         number_of_evidences: usize,
     ) -> Vec<f64> {
         assert!(
-            likelihoods.nrows() == self.allele_count,
-            "Mismatch between likelihood matrix and allele_count"
+            permutation.permutation.number_of_alleles() == self.allele_count,
+            "Mismatch between likelihood matrix and allele_count {} -> {}",
+            permutation.permutation.number_of_alleles(),
+            self.allele_count
         );
 
-        self.ensure_read_capcity(number_of_evidences);
+        self.ensure_read_capcity(likelihoods.ncols());
 
         // [x][y][z] = z * LnLk(Read_x | Allele_y)
         self.read_likelihood_components_by_allele_count(
@@ -613,20 +615,36 @@ impl GenotypeLikelihoodCalculator {
         permutation: &AlleleLikelihoodMatrixMapper<A>,
         number_of_evidences: usize,
     ) {
-        let read_count = likelihoods.ncols();
+        let read_count = number_of_evidences;
         let allele_data_size = read_count * (self.ploidy + 1);
 
         // frequency1Offset = readCount to skip the useless frequency == 0. So now we are at the start frequency == 1
         // frequency1Offset += alleleDataSize to skip to the next allele index data location (+ readCount) at each iteration.
         let mut frequency_1_offset = read_count;
         for a in 0..self.allele_count {
+            debug!(
+                "no slice cloning from slice offset {} evidences {} dest size {} source size {}",
+                frequency_1_offset,
+                number_of_evidences,
+                self.read_allele_likelihood_by_allele_count.len(),
+                &likelihoods.row(permutation.permutation.from_index(a)).len()
+            );
+            debug!(
+                "cloning from slice offset {} evidences {} dest size {} source size {}",
+                frequency_1_offset,
+                number_of_evidences,
+                self.read_allele_likelihood_by_allele_count
+                    [frequency_1_offset..frequency_1_offset + number_of_evidences]
+                    .len(),
+                &likelihoods.row(permutation.permutation.from_index(a)).len()
+            );
             self.read_allele_likelihood_by_allele_count
                 [frequency_1_offset..frequency_1_offset + number_of_evidences]
                 .clone_from_slice(
                     &likelihoods
                         .row(permutation.permutation.from_index(a))
                         .as_slice()
-                        .unwrap(),
+                        .unwrap()[0..number_of_evidences],
                 );
 
             // p = 2 because the frequency == 1 we already have it.

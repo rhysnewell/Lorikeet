@@ -1,4 +1,5 @@
 use haplotype::haplotype::Haplotype;
+use hashlink::linked_hash_map::LinkedHashMap;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use ndarray::Array2;
@@ -305,8 +306,13 @@ impl<A: Allele> AlleleLikelihoods<A> {
         maximum_likelihood_difference_cap: f64,
         symmetrically_normalize_alleles_to_reference: bool,
     ) {
+        debug!(
+            "about to normalize with max cap {}",
+            maximum_likelihood_difference_cap
+        );
         if maximum_likelihood_difference_cap != f64::NEG_INFINITY {
             let allele_count = self.alleles.len();
+            debug!("Allele count {}", allele_count);
             if !(allele_count == 0 || allele_count == 1) {
                 for s in 0..self.values_by_sample_index.len() {
                     let evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
@@ -340,6 +346,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
         );
 
         let worst_likelihood_cap = best_allele.likelihood + maximum_best_alt_likelihood_difference;
+        debug!(
+            "Worst likelihood cap {}, best likelihood {}, max best diff {}",
+            worst_likelihood_cap, best_allele.likelihood, maximum_best_alt_likelihood_difference
+        );
 
         let allele_count = self.alleles.len();
 
@@ -478,7 +488,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
      *  or its values contain reference to non-existing alleles in this evidence-likelihood collection. Also no new allele
      *  can have zero old alleles mapping nor two new alleles can make reference to the same old allele.
      */
-    pub fn marginalize<'b>(&mut self, new_to_old_allele_map: &'b HashMap<usize, Vec<&'b A>>) {
+    pub fn marginalize<'b>(&mut self, new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>) {
         let new_alleles = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
         let old_allele_count = self.alleles.len();
         let new_allele_count = new_alleles.len();
@@ -487,7 +497,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         // allele does not map to any new; supported but typically not the case.
         let old_to_new_allele_index_map =
             self.old_to_new_allele_index_map(new_to_old_allele_map, old_allele_count, new_alleles);
-
+        debug!("old to new allele map {:?}", &old_to_new_allele_index_map);
         // We calculate the marginal likelihoods.
         let new_likelihood_values = self.marginal_likelihoods(
             old_allele_count,
@@ -496,7 +506,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         );
 
         let sample_count = self.number_of_samples();
-
+        debug!("new liklelihood values {:?}", &new_likelihood_values);
         // GATK returns a whole new AlleleLikelihood Object here, but that would require
         // a lot of cloning, so we will mutate the current object and pay attention downstream
         self.values_by_sample_index = new_likelihood_values;
@@ -517,6 +527,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
     ) -> Vec<Array2<f64>> {
         let sample_count = self.samples.len();
         let mut result = vec![Array2::zeros((0, 0)); sample_count];
+        debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
             let sample_evidence_count = self.sample_evidence_count(s);
@@ -592,12 +603,12 @@ impl<A: Allele> AlleleLikelihoods<A> {
     // calculates an old to new allele index map array.
     fn old_to_new_allele_index_map<'b>(
         &self,
-        new_to_old_allele_map: &'b HashMap<usize, Vec<&'b A>>,
+        new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>,
         old_allele_count: usize,
         new_alleles: Vec<&'b usize>,
     ) -> Vec<Option<usize>> {
         let mut old_to_new_allele_index_map = vec![None; old_allele_count];
-
+        debug!("New alleles {:?}", &new_alleles);
         for new_index in 0..new_alleles.len() {
             let new_allele = new_alleles[new_index];
             for old_allele in new_to_old_allele_map.get(new_allele).unwrap() {
@@ -613,7 +624,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                         if old_to_new_allele_index_map[old_allele_index] != None {
                             panic!("Collision detected: Two new alleles refer to same old allele");
                         };
-                        old_to_new_allele_index_map[old_allele_index] = Some(new_index);
+                        old_to_new_allele_index_map[old_allele_index] = Some(*new_allele);
                     }
                 };
             }

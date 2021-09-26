@@ -179,7 +179,6 @@ impl PairHMM {
             for read in processed_reads {
                 let read_bases = read.read.seq().as_bytes();
                 let read_quals = read.read.qual();
-                debug!("Read quals {:?}", &read_quals);
                 let read_ins_quals = input_score_imputator.ins_open_penalties(&read);
                 let read_del_quals = input_score_imputator.del_open_penalties(&read);
                 let overall_gcp = input_score_imputator.gap_continuation_penalties(&read);
@@ -203,11 +202,14 @@ impl PairHMM {
                         is_first_haplotype,
                         next_allele_bases,
                     );
-                    if read_index % 10 == 0 {
-                        println!("read likelihood {} index {}", lk, read_index);
+                    if read_index % 100 == 0 {
+                        debug!("read likelihood {} index {}", lk, read_index);
                     }
                     allele_likelihoods.values_by_sample_index[sample_index][[a, read_index]] = lk;
                     self.m_log_likelihood_array[idx] = lk;
+                    if is_first_haplotype {
+                        is_first_haplotype = false;
+                    }
                     idx += 1;
                 }
                 read_index += 1;
@@ -373,22 +375,10 @@ impl PairHMM {
             }
         };
 
-        debug!(
-            "constant {} recache {}",
-            self.constants_are_initialized, recache_read_values
-        );
         if !self.constants_are_initialized || recache_read_values {
             self.initialize_probabilities(insertion_gop, deletion_gop, overall_gcp);
             self.constants_are_initialized = true;
         };
-
-        println!(
-            "hap bases {} read bases {} read quals {:?} hap_start {}",
-            std::str::from_utf8(haplotype_bases).unwrap(),
-            std::str::from_utf8(read_bases).unwrap(),
-            read_quals,
-            hap_start_index
-        );
 
         self.initialize_priors(haplotype_bases, read_bases, read_quals, hap_start_index);
 
@@ -467,12 +457,12 @@ impl PairHMM {
             })
             .sum::<f64>();
 
-        println!(
-            "final sum prob {} log10 {} initial condition log10 {}",
-            final_sum_probabilities,
-            final_sum_probabilities.log10(),
-            *INITIAL_CONDITION_LOG10
-        );
+        // debug!(
+        //     "final sum prob {} log10 {} initial condition log10 {}",
+        //     final_sum_probabilities,
+        //     final_sum_probabilities.log10(),
+        //     *INITIAL_CONDITION_LOG10
+        // );
 
         return final_sum_probabilities.log10() - *INITIAL_CONDITION_LOG10;
     }

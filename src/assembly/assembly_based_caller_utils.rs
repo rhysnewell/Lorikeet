@@ -5,6 +5,7 @@ use haplotype::haplotype::Haplotype;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use haplotype::location_and_alleles::LocationsAndAlleles;
 use haplotype::reference_confidence_model::ReferenceConfidenceModel;
+use hashlink::linked_hash_map::LinkedHashMap;
 use itertools::Itertools;
 use model::allele_likelihoods::{AlleleLikelihoods, ReadIndexer};
 use model::byte_array_allele::{Allele, ByteArrayAllele};
@@ -466,11 +467,11 @@ impl AssemblyBasedCallerUtils {
         loc: usize,
         haplotypes: &'b Vec<Haplotype<SimpleInterval>>,
         emit_spanning_dels: bool,
-    ) -> HashMap<usize, Vec<&'b Haplotype<SimpleInterval>>> {
-        let mut result = HashMap::new();
+    ) -> LinkedHashMap<usize, Vec<&'b Haplotype<SimpleInterval>>> {
+        let mut result = LinkedHashMap::new();
 
-        let ref_allele = merged_vc.get_reference();
-        // result.insert(ref_allele, Vec::new());
+        let (ref_index, ref_allele) = merged_vc.get_reference_and_index();
+        result.insert(ref_index, Vec::new());
 
         //Note: we can't use the alleles implied by eventsAtThisLoc because they are not yet merged to a common reference
         //For example, a homopolymer AAAAA reference with a single and double deletion would yield (i) AA* A and (ii) AAA* A
@@ -479,7 +480,7 @@ impl AssemblyBasedCallerUtils {
             .get_alleles()
             .iter()
             .enumerate()
-            .filter(|(idx, a)| !a.is_symbolic)
+            .filter(|(idx, a)| !a.is_symbolic && !a.is_ref)
             .for_each(|(idx, a)| {
                 result.insert(idx, Vec::new());
             });
@@ -488,7 +489,7 @@ impl AssemblyBasedCallerUtils {
             let spanning_events = h.event_map.as_ref().unwrap().get_overlapping_events(loc);
 
             if spanning_events.is_empty() {
-                let allele_vec = result.entry(0).or_insert(Vec::new());
+                let allele_vec = result.entry(ref_index).or_insert(Vec::new());
                 allele_vec.push(h);
             } else {
                 for spanning_event in spanning_events {
@@ -500,7 +501,7 @@ impl AssemblyBasedCallerUtils {
                             let index = merged_vc
                                 .alleles
                                 .iter()
-                                .position(|a| a == spanning_event.get_alternate_alleles_vec()[0]);
+                                .position(|a| a == spanning_event.get_alternate_alleles()[0]);
                             match index {
                                 None => {
                                     // pass
@@ -521,13 +522,14 @@ impl AssemblyBasedCallerUtils {
                             let spanning_event_allele_mapping_to_merge_vc =
                                 VariantContextUtils::create_allele_mapping(
                                     merged_vc.get_reference(),
-                                    spanning_event.get_reference(),
-                                    spanning_event.get_alternate_alleles_vec(),
-                                    0,
+                                    spanning_event.get_reference_and_index(),
+                                    spanning_event.get_alleles_with_index(),
                                 );
 
                             let remapped_spanning_event_alt_allele =
-                                spanning_event_allele_mapping_to_merge_vc.get(&0).unwrap();
+                                spanning_event_allele_mapping_to_merge_vc
+                                    .get(&spanning_event.get_alternate_alleles_with_index()[0].0)
+                                    .unwrap();
                             // in the case of GGA mode the spanning event might not match an allele in the mergedVC
                             let index = merged_vc
                                 .alleles
@@ -566,7 +568,7 @@ impl AssemblyBasedCallerUtils {
                             match index {
                                 None => {
                                     // I guess pass? We can't exactly insert it into merged_vc
-                                    result.get_mut(&0).unwrap().push(h);
+                                    result.get_mut(&ref_index).unwrap().push(h);
                                     break;
                                 }
                                 Some(index) => {
@@ -581,7 +583,7 @@ impl AssemblyBasedCallerUtils {
                             // result.get_mut(&*SPAN_DEL_ALLELE).unwrap().push(h);
                             // break
                         } else {
-                            result.get_mut(&0).unwrap().push(h);
+                            result.get_mut(&ref_index).unwrap().push(h);
                             break;
                         }
                     }
@@ -619,7 +621,7 @@ impl AssemblyBasedCallerUtils {
 
         let result = merged_vc
             .get_alternate_alleles()
-            .par_iter()
+            .into_par_iter()
             .map(|allele| (allele, merged_vc.get_reference()))
             .filter(|alt_and_ref| {
                 given_alt_and_ref_alleles_in_original_context
@@ -697,7 +699,7 @@ impl AssemblyBasedCallerUtils {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            MathUtils::log_to_log10(log10_global_read_mismapping_rate),
+            log10_global_read_mismapping_rate,
             PCRErrorModel::new(args),
             args.value_of("base-quality-score-threshold")
                 .unwrap()
@@ -1046,7 +1048,7 @@ impl AssemblyBasedCallerUtils {
                                 None => false,
                                 Some(event_map) => event_map.map.values().any(|vc| {
                                     vc.loc.get_start() == call.loc.get_start()
-                                        && vc.get_alternate_alleles().contains(alt)
+                                        && vc.get_alternate_alleles().contains(&alt)
                                 }),
                             })
                             .collect::<HashSet<&Haplotype<SimpleInterval>>>();
@@ -1067,7 +1069,7 @@ impl AssemblyBasedCallerUtils {
     fn get_site_specific_alt_allele<'b>(call: &'b VariantContext) -> Option<&'b ByteArrayAllele> {
         let allele = call
             .get_alternate_alleles()
-            .iter()
+            .into_iter()
             .find(|a| Self::is_site_specific_alt_allele(a));
         return allele;
     }

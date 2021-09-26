@@ -502,26 +502,39 @@ impl VariantContext {
     }
 
     pub fn get_alleles_ref(&self) -> Vec<&ByteArrayAllele> {
-        self.alleles.par_iter().collect::<Vec<&ByteArrayAllele>>()
+        self.alleles.iter().collect::<Vec<&ByteArrayAllele>>()
     }
 
     pub fn get_reference(&self) -> &ByteArrayAllele {
-        &self.alleles[0]
+        self.alleles.iter().find(|a| a.is_ref).unwrap()
+    }
+
+    pub fn get_reference_and_index(&self) -> (usize, &ByteArrayAllele) {
+        self.alleles
+            .iter()
+            .enumerate()
+            .find(|(_, a)| a.is_ref)
+            .unwrap()
+    }
+
+    pub fn get_alleles_with_index(&self) -> Vec<(usize, &ByteArrayAllele)> {
+        self.alleles.iter().enumerate().collect()
     }
 
     pub fn get_dp(&self) -> i64 {
         self.genotypes.get_dp()
     }
 
-    pub fn get_alternate_alleles(&self) -> &[ByteArrayAllele] {
-        &self.alleles[1..]
+    pub fn get_alternate_alleles(&self) -> Vec<&ByteArrayAllele> {
+        self.alleles.iter().filter(|a| !a.is_ref).collect()
     }
 
-    pub fn get_alternate_alleles_vec(&self) -> Vec<&ByteArrayAllele> {
+    pub fn get_alternate_alleles_with_index(&self) -> Vec<(usize, &ByteArrayAllele)> {
         self.alleles
             .iter()
-            .skip(1)
-            .collect::<Vec<&ByteArrayAllele>>()
+            .enumerate()
+            .filter(|(_, a)| !a.is_ref)
+            .collect()
     }
 
     pub fn process_vcf_in_region(
