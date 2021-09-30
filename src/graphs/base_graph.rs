@@ -11,7 +11,7 @@ use petgraph::{algo, Directed, EdgeType};
 use rayon::prelude::*;
 use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::hash::Hash;
 use std::io::Write;
@@ -30,21 +30,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> Eq for BaseGraph<V, E> {}
 
 impl<V: BaseVertex + Hash, E: BaseEdge> PartialEq for BaseGraph<V, E> {
     fn eq(&self, other: &Self) -> bool {
-        // let a_ns = self.graph.node_weights();
-        // let b_ns = other.graph.node_weights();
-        // let a_es = self
-        //     .graph
-        //     .edge_indices()
-        //     .par_bridge()
-        //     .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
-        //     .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
-        // let b_es = other
-        //     .graph
-        //     .edge_indices()
-        //     .par_bridge()
-        //     .map(|e| (self.graph.edge_endpoints(e).unwrap(), e))
-        //     .collect::<Vec<((NodeIndex, NodeIndex), EdgeIndex)>>();
-        // self.kmer_size == other.kmer_size && a_ns.eq(b_ns) && a_es.eq(&b_es)
         self.graph_equals(other)
     }
 }
@@ -201,11 +186,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      *       which is deterministic in output due to the underlying sets all being BTreeSet
      * @return a non-null set
      */
-    pub fn get_sources(&self) -> BinaryHeap<NodeIndex> {
+    pub fn get_sources(&self) -> VecDeque<NodeIndex> {
         return self
             .graph
             .externals(Direction::Incoming)
-            .collect::<BinaryHeap<NodeIndex>>();
+            .collect::<VecDeque<NodeIndex>>();
     }
 
     pub fn get_sources_generic(&self) -> Externals<'_, V, Directed, u32> {
@@ -326,19 +311,25 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
     /**
      * Removes all provided vertices from the graph
      */
-    pub fn remove_all_vertices(&mut self, vertices: &HashSet<NodeIndex>) {
-        self.graph.retain_nodes(|gr, v| !vertices.contains(&v));
+    pub fn remove_all_vertices<'a, I>(&'a mut self, vertices: I)
+    where
+        I: IntoIterator<Item = &'a NodeIndex>,
+    {
+        for vertex in vertices.into_iter() {
+            self.graph.remove_node(*vertex);
+        }
     }
 
     /**
      * Removes all provided edges from the graph
      */
-    pub fn remove_all_edges(&mut self, edges: &HashSet<EdgeIndex>) {
-        self.graph.retain_edges(|gr, e| !edges.contains(&e));
-    }
-
-    pub fn remove_all_edges_vec(&mut self, edges: &Vec<EdgeIndex>) {
-        self.graph.retain_edges(|gr, e| !edges.contains(&e));
+    pub fn remove_all_edges<'a, I>(&'a mut self, edges: I)
+    where
+        I: IntoIterator<Item = &'a EdgeIndex>,
+    {
+        for edge in edges.into_iter() {
+            self.graph.remove_edge(*edge);
+        }
     }
 
     /**
@@ -367,7 +358,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         }
 
         // edge case: if the graph only has one node then it's a ref source, otherwise it's not
-        return self.graph.node_indices().size_hint().1.unwrap() == 1;
+        return self.graph.node_indices().collect::<Vec<NodeIndex>>().len() == 1;
     }
 
     /**
@@ -396,7 +387,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         }
 
         // edge case: if the graph only has one node then it's a ref source, otherwise it's not
-        return self.graph.node_indices().size_hint().1.unwrap() == 1;
+        return self.graph.node_indices().collect::<Vec<NodeIndex>>().len() == 1;
     }
 
     /**
@@ -661,12 +652,14 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
 
         // we want to remove anything that's not in both the sink and source sets
         let mut vertices_to_remove = self.graph.node_indices().collect::<HashSet<NodeIndex>>();
-        let not_in_both = on_path_from_ref_source
-            .symmetric_difference(&on_path_from_ref_sink)
-            .map(|v| *v)
-            .collect::<HashSet<NodeIndex>>();
+        on_path_from_ref_source.retain(|v| on_path_from_ref_sink.contains(v));
+        vertices_to_remove.retain(|v| !on_path_from_ref_source.contains(v));
+        // let not_in_both = on_path_from_ref_source
+        //     .symmetric_difference(&on_path_from_ref_sink)
+        //     .map(|v| *v)
+        //     .collect::<HashSet<NodeIndex>>();
 
-        vertices_to_remove.retain(|v| not_in_both.contains(v));
+        // vertices_to_remove.retain(|v| not_in_both.contains(v));
         self.remove_all_vertices(&vertices_to_remove);
 
         // simple sanity checks that this algorithm is working.
@@ -774,7 +767,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                 if !self.graph.edge_weight(e).unwrap().is_ref() {
                     edges_to_check.par_extend(
                         self.graph
-                            .edges_directed(self.get_edge_source(e), Direction::Outgoing)
+                            .edges_directed(self.get_edge_target(e), Direction::Outgoing)
                             .par_bridge()
                             .map(|edge_ref| edge_ref.id()),
                     );

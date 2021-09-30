@@ -20,7 +20,7 @@ impl ClippingOp {
     }
 
     pub fn get_length(&self) -> usize {
-        (self.stop + 1).checked_sub(self.start).unwrap_or(0)
+        (self.stop + 1).saturating_sub(self.start)
     }
 
     /**
@@ -36,22 +36,22 @@ impl ClippingOp {
             // important note:
             //   it's not safe to call read.getBases()[i] = 'N' or read.getBaseQualities()[i] = 0
             //   because you're not guaranteed to get a pointer to the actual array of bytes in the BirdToolRead
-            &ClippingRepresentation::WriteNs => {
+            ClippingRepresentation::WriteNs => {
                 Self::apply_write_ns(original_read);
             }
-            &ClippingRepresentation::WriteQ0s => {
+            ClippingRepresentation::WriteQ0s => {
                 Self::apply_write_q0s(original_read);
             }
-            &ClippingRepresentation::WriteNsQ0s => {
+            ClippingRepresentation::WriteNsQ0s => {
                 Self::apply_write_ns_and_q0s(original_read);
             }
-            &ClippingRepresentation::HardclipBases => {
+            ClippingRepresentation::HardclipBases => {
                 ClippingOp::apply_hard_clip_bases(original_read, self.start, self.stop);
             }
-            &ClippingRepresentation::SoftclipBases => {
+            ClippingRepresentation::SoftclipBases => {
                 self.apply_soft_clip_bases(original_read);
             }
-            &ClippingRepresentation::RevertSoftclippedBases => {
+            ClippingRepresentation::RevertSoftclippedBases => {
                 self.apply_revert_soft_clipped_bases(original_read);
             }
         }
@@ -69,7 +69,7 @@ impl ClippingOp {
         } else {
             let stop = std::cmp::min(self.stop, self.start + read.read.seq_len() - 2);
 
-            assert!(self.start <= 0 || stop == read.read.seq_len() - 1,
+            assert!(self.start < 1 || stop == read.read.seq_len() - 1,
                     "Cannot apply soft clipping operator to the middle of a read: {:?} to be clipped at {}-{}", read.read.qname(), self.start, stop);
 
             let old_cigar = read.read.cigar();

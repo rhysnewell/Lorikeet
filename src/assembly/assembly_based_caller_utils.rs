@@ -160,6 +160,10 @@ impl AssemblyBasedCallerUtils {
         })
     }
 
+    pub fn reference_tiebreaking_priority<A: Allele>() -> Box<dyn Fn(&A) -> i32> {
+        Box::new(|h: &A| if h.is_reference() { 1 } else { 0 })
+    }
+
     /**
      * Returns a map with the original read indices (sample_index, evidence_index) as a key and the realigned read as the value.
      * <p>
@@ -955,8 +959,9 @@ impl AssemblyBasedCallerUtils {
                                                 unique_counter += 1;
                                             } else if !phase_set_mapping.contains_key(&j) {
                                                 // otherwise it's part of an existing group so use that group's unique ID
-                                                let call_phase = phase_set_mapping.get(&i).unwrap();
-                                                phase_set_mapping.insert(j, call_phase.clone());
+                                                let call_phase =
+                                                    phase_set_mapping.get(&i).unwrap().clone();
+                                                phase_set_mapping.insert(j, call_phase);
                                             }
                                         } else if (haplotypes_with_call.len()
                                             + haplotypes_with_comp.len())
@@ -990,7 +995,7 @@ impl AssemblyBasedCallerUtils {
                                                 } else if !phase_set_mapping.contains_key(&j) {
                                                     // otherwise it's part of an existing group so use that group's unique ID
                                                     let call_phase =
-                                                        phase_set_mapping.get(&i).unwrap();
+                                                        phase_set_mapping.get(&i).unwrap().clone();
                                                     phase_set_mapping.insert(
                                                         j,
                                                         (

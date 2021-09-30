@@ -3,3 +3,6 @@ target/
 *pyc
 *\.dot
 *\.out
+*_out/
+tests/data/ben/bams/
+Cargo.lock

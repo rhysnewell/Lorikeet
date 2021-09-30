@@ -6,6 +6,7 @@ use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
+use hashlink::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
@@ -22,7 +23,7 @@ use rust_htslib::bam::record::Cigar;
 use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use utils::simple_interval::Locatable;
 
 /**
@@ -39,11 +40,11 @@ pub struct ReadThreadingGraph {
     /**
      * Sequences added for read threading before we've actually built the graph
      */
-    pending: HashMap<usize, Vec<SequenceForKmers>>,
+    pending: LinkedHashMap<usize, VecDeque<SequenceForKmers>>,
     /**
      * A map from kmers -> their corresponding vertex in the graph
      */
-    kmer_to_vertex_map: HashMap<Kmer, NodeIndex>,
+    kmer_to_vertex_map: LinkedHashMap<Kmer, NodeIndex>,
     debug_graph_transformations: bool,
     min_base_quality_to_use_in_assembly: u8,
     pub reference_path: Vec<NodeIndex>,
@@ -79,9 +80,9 @@ impl ReadThreadingGraph {
             min_matching_bases_to_dangling_end_recovery:
                 min_matching_bases_to_dangling_end_recovery,
             counter: 0,
-            pending: HashMap::new(),
-            kmer_to_vertex_map: HashMap::new(),
-            debug_graph_transformations: false,
+            pending: LinkedHashMap::new(),
+            kmer_to_vertex_map: LinkedHashMap::new(),
+            debug_graph_transformations: true,
             min_base_quality_to_use_in_assembly: 0,
             reference_path: Vec::new(),
             already_built: false,
@@ -183,8 +184,8 @@ impl ReadThreadingGraph {
      * effectively clears out the result and gives ownership of pending the function call.
      * Used to avoid cloning in the build_graph_if_necessary()
      */
-    pub fn get_pending(&mut self) -> HashMap<usize, Vec<SequenceForKmers>> {
-        std::mem::replace(&mut self.pending, HashMap::new())
+    pub fn get_pending(&mut self) -> LinkedHashMap<usize, VecDeque<SequenceForKmers>> {
+        std::mem::replace(&mut self.pending, LinkedHashMap::new())
     }
 
     /**
@@ -303,9 +304,9 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     ) {
         // note that argument testing is taken care of in SequenceForKmers
         // get the list of sequences for this sample
-        let sample_sequences = self.pending.entry(sample_index).or_insert(Vec::new());
+        let sample_sequences = self.pending.entry(sample_index).or_insert(VecDeque::new());
         // add the new sequence to the list of sequences for sample
-        sample_sequences.push(SequenceForKmers::new(
+        sample_sequences.push_back(SequenceForKmers::new(
             seq_name, sequence, start, stop, count, is_ref,
         ))
     }
@@ -447,13 +448,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                     self.increase_counts_in_matched_kmers(
                         seq_for_kmers,
                         starting_vertex,
-                        // self.base_graph
-                        //     .graph
-                        //     .node_weight(starting_vertex)
-                        //     .unwrap()
-                        //     .get_sequence(),
                         &seq_for_kmers.sequence,
-                        // &original_kmer,
                         self.base_graph.get_kmer_size().checked_sub(2),
                     );
                 }
@@ -601,7 +596,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      */
     fn create_vertex(&mut self, mut kmer: Kmer) -> NodeIndex {
         let new_vertex = MultiDeBruijnVertex::new(kmer.bases().to_vec(), false);
-        let prev_size = self.base_graph.graph.node_indices().size_hint().1.unwrap();
         let node_index = self.base_graph.add_node(new_vertex);
 
         self.track_kmer(kmer, node_index);

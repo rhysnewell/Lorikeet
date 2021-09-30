@@ -1,5 +1,6 @@
 use bio::io::fasta::IndexedReader;
 use coverm::genomes_and_contigs::GenomesAndContigs;
+use hashlink::LinkedHashSet;
 use rayon::prelude::*;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use std::collections::HashMap;
@@ -8,12 +9,19 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
 * Struct handling methods to read and handle information for references
+* indexed_reader represents the #[IndexedReader<File>]
+* current_sequence is the byte array current being read from the indexed_reader file
+* genomes_and_contigs holds the #[GenomesAndContigs] struct matching contig string names to tids
+* reference index to tid holds a reference index matched to a LinkedHashSet of all associated tids
+* target_names matches the tid to a byte array representation of the contigs name in the Fasta file
+* target_lens matches the tid of a contig to its observed length in the Fasta file in base pairs
 */
 #[derive(Debug)]
 pub struct ReferenceReader {
     indexed_reader: IndexedReader<File>,
     pub current_sequence: Vec<u8>,
     pub genomes_and_contigs: GenomesAndContigs,
+    reference_index_to_tid: HashMap<usize, LinkedHashSet<usize>>,
     target_names: HashMap<usize, Vec<u8>>,
     pub target_lens: HashMap<usize, u64>,
 }
@@ -29,6 +37,7 @@ impl ReferenceReader {
         ReferenceReader {
             indexed_reader,
             current_sequence: Vec::new(),
+            reference_index_to_tid: HashMap::new(),
             target_names: HashMap::new(),
             target_lens: HashMap::new(),
             genomes_and_contigs: genomes_and_contigs,
@@ -45,6 +54,7 @@ impl ReferenceReader {
         ReferenceReader {
             indexed_reader,
             current_sequence: Vec::new(),
+            reference_index_to_tid: HashMap::new(),
             target_names: target_names
                 .into_par_iter()
                 .enumerate()
@@ -55,8 +65,24 @@ impl ReferenceReader {
         }
     }
 
+    pub fn get_target_name(&self, tid: usize) -> &[u8] {
+        self.target_names.get(&tid).unwrap()
+    }
+
     pub fn add_target(&mut self, target: &[u8], tid: usize) {
         self.target_names.insert(tid, target.to_vec());
+    }
+
+    pub fn update_ref_index_tids(&mut self, ref_index: usize, tid: usize) {
+        let tids = self
+            .reference_index_to_tid
+            .entry(ref_index)
+            .or_insert(LinkedHashSet::new());
+        tids.insert(tid);
+    }
+
+    pub fn retrieve_tids_for_ref_index(&self, ref_index: usize) -> Option<&LinkedHashSet<usize>> {
+        self.reference_index_to_tid.get(&ref_index)
     }
 
     pub fn add_length(&mut self, tid: usize, length: u64) {

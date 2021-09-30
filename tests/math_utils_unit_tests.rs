@@ -302,3 +302,23 @@ fn assert_equals_double_array(actual: &[f64], expected: &[f64], tolerance: f64) 
         );
     }
 }
+
+#[test]
+fn test_fast_bernoulli_entropy() {
+    let N = 100;
+    (0..N + 1).for_each(|n| {
+        let p = (n as f64) / N as f64;
+        let computed = MathUtils::fast_bernoulli_entropy(p);
+        if n == 0 || n == N {
+            assert!(relative_eq!(computed, 0.0, epsilon = 1e-8))
+        } else {
+            let exact = -((p * p.ln()) + (1.0 - p) * ((1.0 - p).ln()));
+            assert!(
+                relative_eq!(computed, exact, epsilon = 0.01),
+                "computed {} exact {}",
+                computed,
+                exact
+            )
+        }
+    });
+}

@@ -1,5 +1,6 @@
 use genotype::genotype_builder::{AttributeObject, GenotypesContext};
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use hashlink::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
@@ -343,7 +344,7 @@ impl VariantContextUtils {
 
         let mut alleles = LinkedHashSet::new();
         let mut filters = HashSet::new();
-        let mut attributes: HashMap<String, AttributeObject> = HashMap::new();
+        let mut attributes: LinkedHashMap<String, AttributeObject> = LinkedHashMap::new();
         let mut inconsistent_attributes = LinkedHashSet::new();
         let mut variant_sources = LinkedHashSet::new(); // contains the set of sources we found in our set of VCs that are variant
                                                         // let mut rs_IDs = HashSet::new(); // most of the time there's one id

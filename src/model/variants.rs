@@ -475,6 +475,16 @@ impl Filter {
             _ => Filter::None,
         }
     }
+
+    pub fn to_key(&self) -> &str {
+        match self {
+            Self::None => ".",
+            Self::LowCov => "LowCov",
+            Self::Amb => "Amb",
+            Self::Del => "Del",
+            Self::PASS => "PASS",
+        }
+    }
 }
 
 /// Information about each base position

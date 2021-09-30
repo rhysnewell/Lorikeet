@@ -270,12 +270,12 @@ pub fn recover_bams(
     if bam_readers.len() == (short_sample_count + long_sample_count) {
         debug!("Reread in correct bam count")
     } else {
-        panic!(format!(
+        panic!(
             "Original sample count {} does not match new sample count {}, \
                 please clear bam cache directory or ask for support at: github.com/rhysnewell/Lorikeet",
             (short_sample_count + long_sample_count),
             bam_readers.len(),
-        ))
+        )
     }
     let bam_readers = bam_readers.into_iter().map(|b| b.to_string()).collect();
     return bam_readers;

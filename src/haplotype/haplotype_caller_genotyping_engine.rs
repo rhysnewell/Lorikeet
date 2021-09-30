@@ -1,3 +1,5 @@
+use annotator::variant_annotation::Annotation;
+use annotator::variant_annotator_engine::VariantAnnotationEngine;
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use genotype::genotype_builder::{Genotype, GenotypesContext};
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
@@ -219,7 +221,7 @@ impl HaplotypeCallerGenotypingEngine {
                     );
 
                     read_likelihoods
-                        .set_variant_calling_subset_used(variant_calling_relevant_overlap);
+                        .set_variant_calling_subset_used(&variant_calling_relevant_overlap);
 
                     // TODO: sample contamination downsampling occurs here. Won't worry about this for nmow
                     //      as it would require a clone of read_likelihoods
@@ -268,7 +270,7 @@ impl HaplotypeCallerGenotypingEngine {
                         "Variant context genotype values {:?}",
                         &variant_context_builder.genotypes
                     );
-                    let call = self.genotyping_engine.calculate_genotypes(
+                    let mut call = self.genotyping_engine.calculate_genotypes(
                         variant_context_builder,
                         self.ploidy_model.ploidy,
                         &gpc,
@@ -279,10 +281,26 @@ impl HaplotypeCallerGenotypingEngine {
 
                     match call {
                         None => continue, // pass,
-                        Some(call) => {
+                        Some(mut call) => {
+                            // if call.get_alleles().len() != read_likelihoods.number_of_alleles() {
+                            //     read_likelihoods.update_non_ref_allele_likelihoods(AlleleList::new(&call.alleles));
+                            // }
+                            read_likelihoods.retain_evidence(
+                                &Self::compose_read_qualifies_for_genotyping_predicate(),
+                                &variant_calling_relevant_overlap,
+                            );
+                            // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
+                            // right after a few lines of code below.
+                            let overlapping_filtered_reads = Self::overlapping_filtered_reads(
+                                &per_sample_filtered_read_list,
+                                variant_calling_relevant_overlap,
+                            );
+                            read_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
+
                             let annotated_call = self.make_annotated_call(
                                 merged_alleles_list_size_before_possible_trimming,
-                                &call,
+                                &mut read_likelihoods,
+                                &mut call,
                             );
 
                             return_calls.push(annotated_call);
@@ -319,7 +337,32 @@ impl HaplotypeCallerGenotypingEngine {
         return CalledHaplotypes::new(phased_calls, called_haplotypes);
     }
 
-    fn make_annotated_call<'b>(
+    fn overlapping_filtered_reads(
+        per_sample_filtered_read_list: &HashMap<usize, Vec<BirdToolRead>>,
+        loc: SimpleInterval,
+    ) -> HashMap<usize, Vec<BirdToolRead>> {
+        let mut overlapping_filtered_reads =
+            HashMap::with_capacity(per_sample_filtered_read_list.len());
+
+        for (sample_index, original_list) in per_sample_filtered_read_list {
+            if original_list.is_empty() {
+                continue;
+            };
+            let new_list = original_list
+                .into_par_iter()
+                .filter(|r| r.overlaps(&loc))
+                .map(|r| r.clone())
+                .collect::<Vec<BirdToolRead>>();
+
+            if !new_list.is_empty() {
+                overlapping_filtered_reads.insert(*sample_index, new_list);
+            }
+        }
+
+        return overlapping_filtered_reads;
+    }
+
+    fn make_annotated_call<'b, A: Allele>(
         &self,
         // ref_seq: &[u8],
         // ref_loc: &SimpleInterval,
@@ -328,8 +371,8 @@ impl HaplotypeCallerGenotypingEngine {
         // samples: &Vec<String>,
         // merged_vc: &VariantContext,
         merged_alleles_list_size_before_possible_trimming: usize,
-        // read_allele_likelihoods: &AlleleLikelihoods,
-        call: &'b VariantContext,
+        read_allele_likelihoods: &mut AlleleLikelihoods<A>,
+        call: &'b mut VariantContext,
         // annotation_engine: VariantAnnotationEnging
     ) -> VariantContext {
         // let locus = merged_vc.loc.clone();
@@ -338,10 +381,18 @@ impl HaplotypeCallerGenotypingEngine {
         // TODO: This function does a bunch of annotation that I'm not sure we need to worry about
         //       Can revisit if it is causing issues. So we will skipf or not
 
-        if call.get_alleles_ref().len() == merged_alleles_list_size_before_possible_trimming {
-            return call.clone();
+        let mut untrimmed_result = VariantAnnotationEngine::annotate_context(
+            call,
+            read_allele_likelihoods,
+            Box::new(|a: &Annotation| true),
+        );
+
+        if untrimmed_result.get_alleles_ref().len()
+            == merged_alleles_list_size_before_possible_trimming
+        {
+            return untrimmed_result;
         } else {
-            return VariantContextUtils::reverse_trim_alleles(call);
+            return VariantContextUtils::reverse_trim_alleles(&untrimmed_result);
         }
     }
 

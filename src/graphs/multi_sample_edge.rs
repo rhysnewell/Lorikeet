@@ -1,5 +1,6 @@
 use graphs::base_edge::BaseEdge;
 use rayon::prelude::*;
+use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::hash::{Hash, Hasher};
 
@@ -27,7 +28,7 @@ use std::hash::{Hash, Hasher};
 pub struct MultiSampleEdge {
     current_single_sample_multiplicity: usize,
     single_sample_capacity: usize,
-    single_sample_multiplicities: BinaryHeap<usize>,
+    single_sample_multiplicities: BinaryHeap<Reverse<usize>>,
     reference_path_indexes: Vec<usize>,
     pub(crate) multiplicity: usize,
     pub(crate) is_ref: bool,
@@ -56,7 +57,7 @@ impl Eq for MultiSampleEdge {}
 impl MultiSampleEdge {
     pub fn set(&mut self, is_ref: bool, multiplicity: usize, single_sample_capacity: usize) {
         let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
-        single_sample_multiplicities.push(multiplicity);
+        single_sample_multiplicities.push(Reverse(multiplicity));
         self.multiplicity = multiplicity;
         self.is_ref = is_ref;
         self.single_sample_capacity = single_sample_capacity;
@@ -71,8 +72,9 @@ impl MultiSampleEdge {
      */
     pub fn flush_single_sample_multiplicity(&mut self) {
         self.single_sample_multiplicities
-            .push(self.current_single_sample_multiplicity);
+            .push(Reverse(self.current_single_sample_multiplicity));
         if self.single_sample_multiplicities.len() == self.single_sample_capacity + 1 {
+            // remove the lowest multiplicity from the list
             self.single_sample_multiplicities.pop();
         } else if self.single_sample_multiplicities.len() > self.single_sample_capacity + 1 {
             panic!(
@@ -90,7 +92,7 @@ impl MultiSampleEdge {
     }
 
     pub fn get_pruning_multiplicity(&self) -> usize {
-        *self.single_sample_multiplicities.peek().unwrap()
+        self.single_sample_multiplicities.peek().unwrap().0
     }
 
     pub fn add_reference_index(&mut self, i: usize) {
@@ -99,6 +101,10 @@ impl MultiSampleEdge {
 
     pub fn get_reference_path_indexes(&self) -> &Vec<usize> {
         &self.reference_path_indexes
+    }
+
+    pub fn get_current_single_sample_multiplicity(&self) -> usize {
+        self.current_single_sample_multiplicity
     }
 }
 
@@ -112,7 +118,7 @@ impl BaseEdge for MultiSampleEdge {
      */
     fn new(is_ref: bool, multiplicity: usize, single_sample_capacity: usize) -> MultiSampleEdge {
         let mut single_sample_multiplicities = BinaryHeap::with_capacity(single_sample_capacity);
-        single_sample_multiplicities.push(multiplicity);
+        single_sample_multiplicities.push(Reverse(multiplicity));
 
         MultiSampleEdge {
             multiplicity,
@@ -158,7 +164,7 @@ impl BaseEdge for MultiSampleEdge {
      * @return the multiplicity value that should be used for pruning
      */
     fn get_pruning_multiplicity(&self) -> usize {
-        self.multiplicity
+        self.single_sample_multiplicities.peek().unwrap().0
     }
 
     /**

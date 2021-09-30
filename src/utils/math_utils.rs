@@ -31,6 +31,12 @@ impl MathUtils {
     // const LOG_10_FACTORIAL_CACHE: Log10FactorialCache
     // const DIGAMMA_CACHE: DiGammaCache
 
+    pub fn median<T: Ord + PartialOrd + Copy>(numbers: &mut [T]) -> T {
+        numbers.sort();
+        let mid = numbers.len() / 2;
+        numbers[mid]
+    }
+
     pub fn normalize_pls(pls: &[f64]) -> Vec<f64> {
         let mut new_pls = vec![0.0; pls.len()];
         let smallest = *pls
@@ -171,11 +177,16 @@ impl MathUtils {
                 })
                 .sum::<f64>();
 
-        if sum_tot == std::f64::NAN || sum_tot == std::f64::INFINITY {
+        if sum_tot.is_nan() || sum_tot == std::f64::INFINITY {
             panic!("log10 p: Values must be non-infinite and non-NAN")
         }
 
-        return max_value + (if sum_tot != 1.0 { sum_tot.log10() } else { 0.0 });
+        max_value
+            + (if (sum_tot - 1.0).abs() > f64::EPSILON {
+                sum_tot.log10()
+            } else {
+                0.0
+            })
     }
 
     pub fn log10_sum_log10_two_values(a: f64, b: f64) -> f64 {
@@ -195,11 +206,11 @@ impl MathUtils {
      */
     pub fn log10_sum_log10_three_values(a: f64, b: f64, c: f64) -> f64 {
         if a >= b && a >= c {
-            return a + (1.0 + 10.0_f64.powf(b - a) + 10.0_f64.powf(c - a)).log10();
+            a + (1.0 + 10.0_f64.powf(b - a) + 10.0_f64.powf(c - a)).log10()
         } else if b >= c {
-            return b + (1.0 + 10.0_f64.powf(a - b) + 10.0_f64.powf(c - b)).log10();
+            b + (1.0 + 10.0_f64.powf(a - b) + 10.0_f64.powf(c - b)).log10()
         } else {
-            return c + (1.0 + 10.0_f64.powf(a - c) + 10.0_f64.powf(b - c)).log10();
+            c + (1.0 + 10.0_f64.powf(a - c) + 10.0_f64.powf(b - c)).log10()
         }
     }
 
@@ -220,7 +231,7 @@ impl MathUtils {
             .par_iter()
             .map(|x| *x - max_value)
             .collect::<Vec<f64>>();
-        return result;
+        result
     }
 
     /**
@@ -271,7 +282,7 @@ impl MathUtils {
             }
         });
 
-        return normalized;
+        normalized
     }
 
     pub fn is_valid_log10_probability(result: f64) -> bool {
@@ -279,7 +290,7 @@ impl MathUtils {
     }
 
     pub fn log10_to_log(log10: f64) -> f64 {
-        return log10 * (*LOG_10);
+        log10 * (*LOG_10)
     }
     /**
      * Calculates {@code log10(1-10^a)} without losing precision.
@@ -302,20 +313,20 @@ impl MathUtils {
     pub fn approximate_log10_sum_log10(a: f64, b: f64) -> f64 {
         // this code works only when a <= b so we flip them if the order is opposite
         if a > b {
-            return MathUtils::approximate_log10_sum_log10(b, a);
+            MathUtils::approximate_log10_sum_log10(b, a)
         } else if a == std::f64::NEG_INFINITY {
-            return b;
+            b
         } else {
             // if |b-a| < tol we need to compute log(e^a + e^b) = log(e^b(1 + e^(a-b))) = b + log(1 + e^(-(b-a)))
             // we compute the second term as a table lookup with integer quantization
             // we have pre-stored correction for 0,0.1,0.2,... 10.0
             let diff = b - a;
 
-            return b + if diff < JacobianLogTable::MAX_TOLERANCE {
+            b + if diff < JacobianLogTable::MAX_TOLERANCE {
                 JacobianLogTable::get(diff)
             } else {
                 0.0
-            };
+            }
         }
     }
 

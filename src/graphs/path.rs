@@ -19,7 +19,7 @@ use utils::base_utils::BaseUtils;
  * class to keep track of paths
  *
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Path {
     pub(crate) last_vertex: NodeIndex,
     pub(crate) edges_in_order: Vec<EdgeIndex>,
@@ -31,9 +31,9 @@ impl Path {
      * @param initialVertex the starting vertex of the path
      * @param graph the graph this path will follow through
      */
-    pub fn new(initial_vertex: NodeIndex, edges_in_order: Vec<EdgeIndex>) -> Self {
+    pub fn new(last_vertex: NodeIndex, edges_in_order: Vec<EdgeIndex>) -> Self {
         Self {
-            last_vertex: initial_vertex,
+            last_vertex,
             edges_in_order,
         }
     }
@@ -66,6 +66,33 @@ impl Path {
         edges_in_order.push(edge);
         Path {
             last_vertex: graph.get_edge_target(edge),
+            edges_in_order,
+        }
+    }
+
+    /// Creates a new path continuing on from #[self] that prepends the given edge index to
+    /// the beginning of the path, checking that the edge is contiguous with the rest of the path
+    pub fn new_prepend_edge<V: BaseVertex, E: BaseEdge>(
+        &self,
+        edge: EdgeIndex,
+        graph: &BaseGraph<V, E>,
+    ) -> Path {
+        assert!(
+            graph.contains_edge(edge),
+            "Graph must contain edge {:?} but it doesn't",
+            edge
+        );
+        assert_eq!(
+            graph.get_edge_target(edge),
+            self.get_first_vertex(graph),
+            "Edges added to path must be contiguous."
+        );
+
+        let mut edges_in_order = Vec::new();
+        edges_in_order.push(edge);
+        edges_in_order.par_extend(self.edges_in_order.par_iter());
+        Self {
+            last_vertex: self.last_vertex,
             edges_in_order,
         }
     }
@@ -246,7 +273,7 @@ impl Path {
             .iter()
             .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
             .max()
-            .unwrap_or(0)
+            .unwrap_or_default()
     }
 
     /**
@@ -289,11 +316,11 @@ impl PartialEq for Path {
 // `Eq` needs to be implemented as well.
 impl Eq for Path {}
 
-impl Hash for Path {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.edges_in_order.hash(state)
-    }
-}
+// impl Hash for Path {
+//     fn hash<H: Hasher>(&self, state: &mut H) {
+//         self.last_vertex.hash(state)
+//     }
+// }
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Chain<'a, V: BaseVertex + Sync + std::fmt::Debug, E: BaseEdge + Sync + std::fmt::Debug> {

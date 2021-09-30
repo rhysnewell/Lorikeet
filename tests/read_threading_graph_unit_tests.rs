@@ -37,8 +37,11 @@ use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
+use lorikeet_genome::utils::base_utils::BaseUtils;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
+use rand::prelude::ThreadRng;
+use rand::Rng;
 use rust_htslib::bam::record::CigarString;
 use std::cmp::min;
 use std::collections::HashSet;
@@ -485,6 +488,7 @@ fn test_dangling_tails(
         num_leading_matches_allowed
     );
     let kmer_size = 15;
+    let mut rng = ThreadRng::default();
 
     // construct the haplotypes
     let common_prefix = "AAAAAAAAAACCCCCCCCCCGGGGGGGGGGTTTTTTTTTT";
@@ -502,6 +506,32 @@ fn test_dangling_tails(
         1,
         true,
     );
+
+    // let reads = (0..reference.len())
+    //     .map(|start| {
+    //         (0..10)
+    //             .map(|n| {
+    //
+    //                 generate_read_with_errors(
+    //                     if rng.gen_range(0.0, 1.0) < 0.1 {
+    //                         alternate.as_bytes()
+    //                     } else {
+    //                         reference.as_bytes()
+    //                     },
+    //                     start,
+    //                     None,
+    //                     0.001,
+    //                     &mut rng,
+    //                 )
+    //             })
+    //             .collect::<Vec<Vec<u8>>>()
+    //     })
+    //     .flat_map(|s| s)
+    //     .collect::<Vec<Vec<u8>>>();
+    //
+    // reads.into_iter().for_each(|r| {
+    //     rtgraph.add_sequence("anonymous".to_string(), 0, r.to_vec(), 0, r.len(), 1, false)
+    // });
 
     let quals = vec![30; alternate.len()];
     let read = ArtificialReadUtils::create_artificial_read(
@@ -1056,4 +1086,29 @@ fn make_dangling_heads_data() {
         true,
         1,
     ); // 7 base with snp (NOTE: This triggers extendDanglingPathAgainstReference but should fail unless the cigar is used to predict the correct reference vertex to use for merging)
+}
+
+fn generate_read_with_errors(
+    sequence: &[u8],
+    start: usize,
+    end: Option<usize>,
+    error_rate: f64,
+    rng: &mut ThreadRng,
+) -> Vec<u8> {
+    let end = match end {
+        None => sequence.len(),
+        Some(end) => end,
+    };
+
+    let adjusted_error_rate = (error_rate * 4.0) / 3.0; // one time in four a random base won't be an error
+    let mut result = vec![0; end - start];
+    (start..end).for_each(|n| {
+        result[n - start] = if rng.gen_range(0.0, 1.0) > adjusted_error_rate {
+            sequence[n]
+        } else {
+            BaseUtils::base_index_to_simple_base(rng.gen_range(0, 4))
+        }
+    });
+
+    return result;
 }

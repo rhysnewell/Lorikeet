@@ -236,7 +236,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         self.outer.base_graph.remove_all_vertices(&self.to_splits);
         self.outer
             .base_graph
-            .remove_all_edges_vec(&self.edges_to_remove);
+            .remove_all_edges(&self.edges_to_remove);
 
         let new_nodes = self.outer.base_graph.add_vertices(
             self.split_graph

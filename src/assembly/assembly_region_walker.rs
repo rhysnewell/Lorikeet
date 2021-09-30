@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub struct AssemblyRegionWalker {
-    evaluator: HaplotypeCallerEngine,
+    pub(crate) evaluator: HaplotypeCallerEngine,
     features: Option<Result<IndexedReader, rust_htslib::errors::Error>>,
     short_read_bam_count: usize,
     long_read_bam_count: usize,

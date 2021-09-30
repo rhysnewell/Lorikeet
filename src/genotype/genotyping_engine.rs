@@ -5,6 +5,7 @@ use genotype::genotype_builder::{
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use hashlink::LinkedHashMap;
 use model::allele_frequency_calculator::AlleleFrequencyCalculator;
 use model::allele_frequency_calculator_result::AFCalculationResult;
 use model::allele_subsetting_utils::AlleleSubsettingUtils;
@@ -228,6 +229,7 @@ impl GenotypingEngine {
         );
 
         builder.attributes(attributes);
+        builder.genotypes = genotypes;
 
         return Some(builder);
     }
@@ -450,8 +452,8 @@ impl GenotypingEngine {
         af_result: &'b AFCalculationResult,
         all_alleles_to_use: &'b Vec<ByteArrayAllele>,
         genotypes: &'b GenotypesContext,
-    ) -> HashMap<String, AttributeObject> {
-        let mut attributes = HashMap::new();
+    ) -> LinkedHashMap<String, AttributeObject> {
+        let mut attributes = LinkedHashMap::new();
 
         // add the MLE AC and AF annotations
         if !allele_counts_of_mle.is_empty() {

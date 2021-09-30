@@ -187,9 +187,9 @@ impl CigarBuilder {
     pub fn add_all(&mut self, elements: Vec<Cigar>) -> Result<(), BirdToolError> {
         for element in elements {
             if self.add(element).is_err() {
-                return Err(BirdToolError::InvalidClip(format!(
-                    "Cigar has already reached its right hard clip"
-                )));
+                return Err(BirdToolError::InvalidClip(
+                    "Cigar has already reached its right hard clip".to_string(),
+                ));
             }
         }
 
@@ -234,12 +234,12 @@ impl CigarBuilder {
             Cigar::SoftClip(_) => {
                 match self.section {
                     Section::RightHardClip => {
-                        self.error = Err(BirdToolError::InvalidClip(format!(
-                            "Cigar has already reached its right hard clip"
-                        )));
-                        return Err(BirdToolError::InvalidClip(format!(
-                            "Cigar has already reached its right hard clip"
-                        )));
+                        self.error = Err(BirdToolError::InvalidClip(
+                            "Cigar has already reached its right hard clip".to_string(),
+                        ));
+                        return Err(BirdToolError::InvalidClip(
+                            "Cigar has already reached its right hard clip".to_string(),
+                        ));
                     }
                     Section::LeftHardClip => self.section = Section::LeftSoftClip,
                     Section::Middle => self.section = Section::RightSoftClip,
@@ -251,12 +251,12 @@ impl CigarBuilder {
             _ => {
                 match self.section {
                     Section::RightSoftClip | Section::RightHardClip => {
-                        self.error = Err(BirdToolError::InvalidClip(format!(
-                            "Section has alread reached right clip"
-                        )));
-                        return Err(BirdToolError::InvalidClip(format!(
-                            "Section has alread reached right clip"
-                        )));
+                        self.error = Err(BirdToolError::InvalidClip(
+                            "Cigar has already reached its right clip".to_string(),
+                        ));
+                        return Err(BirdToolError::InvalidClip(
+                            "Cigar has already reached its right clip".to_string(),
+                        ));
                     }
                     Section::LeftHardClip | Section::LeftSoftClip => self.section = Section::Middle,
                     _ => {
@@ -280,9 +280,9 @@ impl CigarBuilder {
                 _ => false,
             }
         {
-            return Err(BirdToolError::InvalidClip(format!(
-                "Cigar is completely soft clipped"
-            )));
+            return Err(BirdToolError::InvalidClip(
+                "Cigar is completely soft clipped".to_string(),
+            ));
         }
 
         self.trailing_deletion_bases_removed_in_make = 0;
@@ -293,9 +293,9 @@ impl CigarBuilder {
                     _ => false,
                 },
                 None => {
-                    return Err(BirdToolError::InvalidClip(format!(
-                        "Last element cannot be None at this point"
-                    )))
+                    return Err(BirdToolError::InvalidClip(
+                        "Last element cannot be None at this point".to_string(),
+                    ))
                 }
             }
         {
@@ -311,9 +311,9 @@ impl CigarBuilder {
         }
 
         if !allow_empty && self.cigar_elements.is_empty() {
-            return Err(BirdToolError::InvalidClip(format!(
-                "No cigar elements left after removing leading and trailing deletions."
-            )));
+            return Err(BirdToolError::InvalidClip(
+                "No cigar elements left after removing leading and trailing deletions.".to_string(),
+            ));
         }
 
         return Ok(CigarString::from(self.cigar_elements.clone()));

@@ -1,9 +1,11 @@
+use annotator::variant_annotation::VariantAnnotations;
 use genotype::genotype_builder::{
     AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
 };
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
+use hashlink::LinkedHashMap;
 use itertools::Itertools;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::{Filter, Variant, NON_REF_ALLELE};
@@ -11,8 +13,8 @@ use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::header::HeaderView;
-use rust_htslib::bcf::record::Numeric;
-use rust_htslib::bcf::{IndexedReader, Read, Reader, Record};
+use rust_htslib::bcf::record::{GenotypeAllele, Numeric};
+use rust_htslib::bcf::{IndexedReader, Read, Reader, Record, Writer};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -31,7 +33,7 @@ pub struct VariantContext {
     pub source: String,
     pub log10_p_error: f64,
     pub filters: HashSet<Filter>,
-    pub attributes: HashMap<String, AttributeObject>,
+    pub attributes: LinkedHashMap<String, AttributeObject>,
     pub variant_type: Option<VariantType>,
 }
 
@@ -43,6 +45,19 @@ pub enum VariantType {
     Indel,
     Symbolic,
     Mixed,
+}
+
+impl VariantType {
+    pub fn to_key(&self) -> &str {
+        match self {
+            VariantType::NoVariation => ".",
+            VariantType::Snp => "SNP",
+            VariantType::Mnp => "MNP",
+            VariantType::Indel => "INDEL",
+            VariantType::Symbolic => "SYM",
+            VariantType::Mixed => "MIXED",
+        }
+    }
 }
 
 // The priority queue depends on `Ord`.
@@ -97,7 +112,7 @@ impl VariantContext {
             source: "".to_string(),
             log10_p_error: 0.0,
             filters: HashSet::new(),
-            attributes: HashMap::new(),
+            attributes: LinkedHashMap::new(),
             variant_type: None,
         }
     }
@@ -115,7 +130,7 @@ impl VariantContext {
             source: "".to_string(),
             log10_p_error: 0.0,
             filters: HashSet::new(),
-            attributes: HashMap::new(),
+            attributes: LinkedHashMap::new(),
             variant_type: None,
         }
     }
@@ -150,8 +165,8 @@ impl VariantContext {
         self.get_type() != &VariantType::NoVariation
     }
 
-    pub fn attributes(&mut self, attributes: HashMap<String, AttributeObject>) {
-        self.attributes.par_extend(attributes);
+    pub fn attributes(&mut self, attributes: LinkedHashMap<String, AttributeObject>) {
+        self.attributes.extend(attributes);
     }
 
     pub fn set_attribute(&mut self, tag: String, value: AttributeObject) {
@@ -160,6 +175,10 @@ impl VariantContext {
 
     pub fn filter(&mut self, filter: Filter) {
         self.filters.insert(filter);
+    }
+
+    pub fn has_log10_p_error(&self) -> bool {
+        self.log10_p_error != 1.0
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -886,5 +905,195 @@ impl VariantContext {
      */
     pub fn get_max_ploidy(&mut self, default_ploidy: usize) -> i32 {
         self.genotypes.get_max_ploidy(default_ploidy)
+    }
+
+    pub fn get_alleles_as_bytes(&self) -> Vec<&[u8]> {
+        self.get_alleles()
+            .into_iter()
+            .map(|a| a.get_bases())
+            .collect::<Vec<&[u8]>>()
+    }
+
+    /// writes this VariantContext as a VCF4 record. Assumes writer has prepopulated all INFO
+    /// and FORMAT fields using the variant annotation engine.
+    pub fn write_as_vcf_record(&self, bcf_writer: &mut Writer, reference_reader: &ReferenceReader) {
+        let mut record = bcf_writer.empty_record();
+        record.set_rid(Some(self.loc.tid as u32));
+        record.set_pos(self.loc.start as i64); // 0-based
+        record.set_qual(-10.0 * self.log10_p_error as f32);
+        match &self.variant_type {
+            None => {
+                record.set_id(b".").expect("Failed to set id");
+            }
+            Some(variant_type) => {
+                record
+                    .set_id(variant_type.to_key().as_bytes())
+                    .expect("Failed to set id");
+            }
+        }
+        record
+            .set_alleles(&self.get_alleles_as_bytes())
+            .expect("Failed to set alleles");
+        if !self.filters.is_empty() {
+            for filter in &self.filters {
+                record
+                    .push_filter(filter.to_key().as_bytes())
+                    .expect("Failed to set filter");
+            }
+        }
+
+        self.add_genotype_format(&mut record);
+
+        self.add_variant_info(&mut record);
+
+        bcf_writer.write(&record).unwrap();
+    }
+
+    fn add_variant_info(&self, record: &mut Record) {
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::QualByDepth.to_key())
+        {
+            if let AttributeObject::f64(val) = self
+                .attributes
+                .get(VariantAnnotations::QualByDepth.to_key())
+                .unwrap()
+            {
+                record
+                    .push_info_float(
+                        VariantAnnotations::QualByDepth.to_key().as_bytes(),
+                        &vec![*val as f32],
+                    )
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::Depth.to_key())
+        {
+            if let AttributeObject::UnsizedInteger(val) = self
+                .attributes
+                .get(VariantAnnotations::Depth.to_key())
+                .unwrap()
+            {
+                record
+                    .push_info_integer(
+                        VariantAnnotations::Depth.to_key().as_bytes(),
+                        &vec![*val as i32],
+                    )
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::MappingQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get(VariantAnnotations::MappingQuality.to_key())
+                .unwrap()
+            {
+                let val = val.into_iter().map(|v| *v as i32).collect::<Vec<i32>>();
+                record
+                    .push_info_integer(VariantAnnotations::MappingQuality.to_key().as_bytes(), &val)
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::BaseQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get(VariantAnnotations::BaseQuality.to_key())
+                .unwrap()
+            {
+                let val = val.into_iter().map(|v| *v as i32).collect::<Vec<i32>>();
+                record
+                    .push_info_integer(VariantAnnotations::BaseQuality.to_key().as_bytes(), &val)
+                    .expect("Cannot push info tag");
+            }
+        }
+    }
+
+    fn add_genotype_format(&self, record: &mut Record) {
+        // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
+        for genotype in self.genotypes.genotypes() {
+            let mut phased = Vec::new();
+            if genotype.is_phased {
+                let pgt = genotype.attributes.get("PGT");
+                match pgt {
+                    None => {
+                        phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                        // assume this
+                    }
+                    Some(pgt) => {
+                        match pgt {
+                            AttributeObject::String(string) => {
+                                let slash = string.contains("/");
+                                for (idx, byte) in string.as_bytes().into_iter().enumerate() {
+                                    let val = if *byte == 48 {
+                                        // utf8 to int
+                                        0
+                                    } else if *byte == 49 {
+                                        1
+                                    } else {
+                                        2
+                                    };
+                                    if val == 0 || val == 1 {
+                                        if idx == 0 {
+                                            if slash {
+                                                phased.push(GenotypeAllele::Unphased(val))
+                                            } else {
+                                                phased.push(GenotypeAllele::Phased(val))
+                                            }
+                                        } else {
+                                            phased.push(GenotypeAllele::Phased(val))
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                phased =
+                                    vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                                // assume this
+                            }
+                        }
+                    }
+                }
+            } else {
+                phased = vec![GenotypeAllele::Unphased(1), GenotypeAllele::Unphased(1)]
+            }
+            record.push_genotypes(&phased);
+            record
+                .push_format_integer(
+                    VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
+                    &genotype.pl_i32(),
+                )
+                .expect("Unable to push format tag");
+            record
+                .push_format_integer(
+                    VariantAnnotations::DepthPerAlleleBySample
+                        .to_key()
+                        .as_bytes(),
+                    &genotype.ad_i32(),
+                )
+                .expect("Unable to push format tag");
+            record
+                .push_format_integer(
+                    VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
+                    &vec![genotype.gq as i32],
+                )
+                .expect("Unable to push format tag");
+            record
+                .push_format_integer(
+                    VariantAnnotations::Depth.to_key().as_bytes(),
+                    &vec![genotype.dp as i32],
+                )
+                .expect("Unable to push format tag");
+        }
     }
 }

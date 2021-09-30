@@ -389,11 +389,30 @@ fn test_adaptive_pruning(
 
     // note: these are the steps in ReadThreadingAssembler::createGraph
     graph.build_graph_if_necessary();
+    println!(
+        "Graph nodes {} edges {}",
+        graph.get_base_graph().graph.node_indices().count(),
+        graph.get_base_graph().graph.edge_indices().count()
+    );
+    println!(
+        "Reference edges {}",
+        graph
+            .get_base_graph()
+            .graph
+            .edge_weights()
+            .filter(|e| e.is_ref())
+            .count()
+    );
 
     let mut pruner =
         AdaptiveChainPruner::new(0.001, log_odds_threshold, MathUtils::log10_to_log(4.0), 50);
     pruner.prune_low_weight_chains(graph.get_base_graph_mut());
     println!("Low weight chains pruned",);
+    println!(
+        "Graph nodes {} edges {}",
+        graph.get_base_graph().graph.node_indices().count(),
+        graph.get_base_graph().graph.edge_indices().count()
+    );
 
     println!(
         "Actual ref {} actual alt {}",
@@ -402,26 +421,69 @@ fn test_adaptive_pruning(
     );
     graph.recover_dangling_tails(1, 3, false, &*STANDARD_NGS);
     println!("recovered dangling tails");
+    println!(
+        "Graph nodes {} edges {}",
+        graph.get_base_graph().graph.node_indices().count(),
+        graph.get_base_graph().graph.edge_indices().count()
+    );
 
     graph.recover_dangling_heads(1, 3, false, &*STANDARD_NGS);
     println!("recovered dangling heads");
+    println!(
+        "Graph nodes {} edges {}",
+        graph.get_base_graph().graph.node_indices().count(),
+        graph.get_base_graph().graph.edge_indices().count()
+    );
 
     graph.remove_paths_not_connected_to_ref();
     println!("removed not connected to ref");
+    println!(
+        "Graph nodes {} edges {}",
+        graph.get_base_graph().graph.node_indices().count(),
+        graph.get_base_graph().graph.edge_indices().count()
+    );
 
     let mut seq_graph = graph.to_sequence_graph();
     seq_graph.zip_linear_chains();
+    println!("Zip linear chains");
+    println!(
+        "Graph nodes {} edges {}",
+        seq_graph.base_graph.graph.node_indices().count(),
+        seq_graph.base_graph.graph.edge_indices().count()
+    );
+    println!("Graph post zip {:?}", &seq_graph.base_graph);
 
     seq_graph.base_graph.remove_singleton_orphan_vertices();
+    println!("Remove orphans");
+    println!(
+        "Graph nodes {} edges {}",
+        seq_graph.base_graph.graph.node_indices().count(),
+        seq_graph.base_graph.graph.edge_indices().count()
+    );
     seq_graph
         .base_graph
         .remove_vertices_not_connected_to_ref_regardless_of_edge_direction();
     println!("beginning simplify");
+    println!(
+        "Graph nodes {} edges {}",
+        seq_graph.base_graph.graph.node_indices().count(),
+        seq_graph.base_graph.graph.edge_indices().count()
+    );
     seq_graph.simplify_graph();
     println!("finished first simplify");
-    println!("Graph pre removal {:?}", &seq_graph.base_graph);
+    println!(
+        "Graph nodes {} edges {}",
+        seq_graph.base_graph.graph.node_indices().count(),
+        seq_graph.base_graph.graph.edge_indices().count()
+    );
+    // println!("Graph pre removal {:?}", &seq_graph.base_graph);
     seq_graph.base_graph.remove_paths_not_connected_to_ref();
-    println!("Graph post removal {:?}", &seq_graph.base_graph);
+    // println!("Graph post removal {:?}", &seq_graph.base_graph);
+    println!(
+        "Graph nodes {} edges {}",
+        seq_graph.base_graph.graph.node_indices().count(),
+        seq_graph.base_graph.graph.edge_indices().count()
+    );
 
     seq_graph.simplify_graph();
     println!("finished second simplify");
@@ -532,15 +594,18 @@ fn get_chain_pruner_data() {
         5,
         MathUtils::log10_to_log(1.0),
     );
+
+    println!("Test that breaks pruning");
     test_adaptive_pruning(
         25,
         reference.as_slice(),
         middle_snv.as_slice(),
-        0.01,
+        0.5,
         0.001,
         1000,
         MathUtils::log10_to_log(1.0),
     ); // note the extreme depth -- this would confuse non-adaptive pruning
+
     test_adaptive_pruning(
         10,
         reference.as_slice(),

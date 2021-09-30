@@ -37,38 +37,6 @@ impl ReadUtils {
             return (None, None);
         }
 
-        // let mut current_read_pos = alignment_start;
-        // let mut current_read_index = 0;
-        //
-        // for cig in cigar.iter() {
-        //     if ref_coord - 1 <= current_read_pos {
-        //         let read_index_at_position = current_read_index as i64 +
-        //             if CigarUtils::cigar_consumes_read_bases(cig) {
-        //                 ref_coord as i64 - current_read_pos as i64
-        //             } else {
-        //                 0
-        //             };
-        //
-        //         println!("Found read index {} for ref coord {}", read_index_at_position, ref_coord);
-        //         return (Some(read_index_at_position as usize), Some(cig.clone()))
-        //     };
-        //
-        //     current_read_pos += if CigarUtils::cigar_consumes_reference_bases(cig)
-        //         || CigarUtils::cigar_is_soft_clip(cig) {
-        //         cig.len() as usize
-        //     } else {
-        //         0
-        //     };
-        //
-        //     current_read_index += if CigarUtils::cigar_consumes_read_bases(cig) {
-        //         cig.len() as usize
-        //     } else {
-        //         0
-        //     }
-        //
-        //
-        // }
-
         let mut first_read_pos_of_element = 0; // inclusive
         let mut first_ref_pos_of_element = alignment_start; // inclusive
         let mut last_read_pos_of_element = 0; // exclusive
@@ -105,6 +73,31 @@ impl ReadUtils {
             }
         }
         return (None, None);
+    }
+
+    pub fn get_read_base_quality_at_reference_coordinate(
+        read: &BirdToolRead,
+        ref_coord: usize,
+    ) -> Option<u8> {
+        if ref_coord < read.get_start() || read.get_end() < ref_coord {
+            return None;
+        }
+
+        let (offset, operator) = Self::get_read_index_for_reference_coordinate(
+            read.get_soft_start().unwrap_or(0),
+            read.read.cigar(),
+            ref_coord,
+        );
+        match operator {
+            None => return None,
+            Some(cig) => {
+                if CigarUtils::cigar_consumes_read_bases(&cig) {
+                    return Some(read.read.qual()[offset.unwrap_or(0)]);
+                } else {
+                    return None;
+                }
+            }
+        }
     }
 
     /**

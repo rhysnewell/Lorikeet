@@ -1,6 +1,7 @@
 use activity_profile::activity_profile::Profile;
 use activity_profile::activity_profile_state::{ActivityProfileState, Type};
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
+use annotator::variant_annotator_engine::VariantAnnotationEngine;
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
@@ -31,6 +32,7 @@ use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::{self, record::Cigar, Record};
+use rust_htslib::bcf::{Format, Header, Writer};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use utils::math_utils::{MathUtils, RunningAverage};
@@ -396,6 +398,7 @@ impl HaplotypeCallerEngine {
                             || reference_reader.match_target_name_and_ref_idx(ref_idx, &target_name)
                         {
                             // Get contig stats
+                            reference_reader.update_ref_index_tids(ref_idx, tid);
                             reference_reader.add_target(contig_name, tid);
                             let target_len = target_lens[tid];
                             reference_reader.add_length(tid, target_len);
@@ -1095,5 +1098,84 @@ impl HaplotypeCallerEngine {
     ) -> f64 {
         let qual = QualityUtils::error_prob_to_qual(error_probability);
         return Self::log_likelihood_ratio(ref_count, vec![qual], alt_count, None);
+    }
+
+    /// Takes a vector of VariantContexts and writes them to a single VCF4 file
+    pub fn write_vcf(
+        &self,
+        output_prefix: &str,
+        variant_contexts: &Vec<VariantContext>,
+        sample_names: &Vec<String>,
+        reference_reader: &ReferenceReader,
+    ) {
+        if variant_contexts.len() > 0 {
+            // initiate header
+            let mut header = Header::new();
+            // Add program info
+            self.populate_vcf_header(sample_names, reference_reader, &mut header);
+
+            let vcf_presort = tempfile::Builder::new()
+                .prefix("lorikeet-fifo")
+                .tempfile()
+                .expect("Unable to create VCF tempfile");
+
+            // Initiate writer
+            let mut bcf_writer = Writer::from_path(
+                format!(
+                    "{}/{}.vcf",
+                    output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
+                )
+                .as_str(),
+                &header,
+                true,
+                Format::Vcf,
+            )
+            .expect(format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+
+            for vc in variant_contexts {
+                vc.write_as_vcf_record(&mut bcf_writer, reference_reader);
+            }
+        }
+    }
+
+    fn populate_vcf_header(
+        &self,
+        sample_names: &Vec<String>,
+        reference_reader: &ReferenceReader,
+        header: &mut Header,
+    ) {
+        header.push_record(format!("##source=lorikeet-v{}", env!("CARGO_PKG_VERSION")).as_bytes());
+
+        debug!("samples {:?}", &sample_names);
+        for sample_idx in 0..sample_names.len() {
+            // remove tmp file name from sample id
+            header.push_record(
+                format!(
+                    "##samples=<ID={}, name={}>",
+                    sample_idx + 1,
+                    sample_names[sample_idx]
+                )
+                .as_bytes(),
+            );
+            header.push_sample(format!("{}", sample_idx + 1).as_bytes());
+        }
+
+        // Add contig info
+        for tid in reference_reader
+            .retrieve_tids_for_ref_index(self.ref_idx)
+            .unwrap()
+            .iter()
+        {
+            header.push_record(
+                format!(
+                    "##contig=<ID={}, length={}>",
+                    std::str::from_utf8(reference_reader.get_target_name(*tid)).unwrap(),
+                    reference_reader.target_lens.get(&tid).unwrap()
+                )
+                .as_bytes(),
+            );
+        }
+
+        VariantAnnotationEngine::populate_vcf_header(header);
     }
 }

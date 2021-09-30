@@ -37,6 +37,7 @@ pub enum AttributeObject {
     String(String),
     UnsizedInteger(usize),
     VecUnsize(Vec<usize>),
+    VecU8(Vec<u8>),
     None,
 }
 
@@ -222,6 +223,14 @@ impl Genotype {
 
     pub fn get_ad(&mut self) -> &mut Vec<i64> {
         &mut self.ad
+    }
+
+    pub fn pl_i32(&self) -> Vec<i32> {
+        self.pl.iter().map(|i| *i as i32).collect()
+    }
+
+    pub fn ad_i32(&self) -> Vec<i32> {
+        self.ad.iter().map(|i| *i as i32).collect()
     }
 
     pub fn no_call_alleles(&mut self, ploidy: usize) {

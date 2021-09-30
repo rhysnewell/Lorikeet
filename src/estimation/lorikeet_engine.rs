@@ -5,6 +5,7 @@ use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
 use estimation::bams::index_bams::*;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
@@ -73,7 +74,7 @@ impl<'a> LorikeetEngine<'a> {
                     self.args.value_of("output-directory").unwrap().to_string(),
                 ) {
                     Ok(_) => {}
-                    Err(err) => panic!(format!("Unable to create output directory {:?}", err)),
+                    Err(err) => panic!("Unable to create output directory {:?}", err),
                 };
                 self.args.value_of("output-directory").unwrap()
             }
@@ -116,7 +117,7 @@ impl<'a> LorikeetEngine<'a> {
                     let cache = glob::glob(&format!("{}/*.vcf", &output_prefix))
                         .expect("failed to interpret glob")
                         .map(|p| {
-                            p.expect("Failed to read cached bam path")
+                            p.expect("Failed to read cached vcf path")
                                 .to_str()
                                 .unwrap()
                                 .to_string()
@@ -227,10 +228,6 @@ impl<'a> LorikeetEngine<'a> {
                         &mut reference_reader,
                     );
 
-                    for (i, x) in contexts.iter().enumerate() {
-                        println!("context {} {:#?}", i, &x);
-                    }
-
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar.set_message(format!(
@@ -239,10 +236,20 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    // variant_matrix
-                    //     .remove_false_discoveries(alpha, &genomes_and_contigs.genomes[ref_idx]);
-                    let mode = "genotype";
-                    if mode == "genotype" {
+                    let mode = "call";
+                    if mode == "call" {
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar
+                                .set_message(format!("{}: Generating VCF file...", &reference,));
+                        }
+                        assembly_engine.evaluator.write_vcf(
+                            &output_prefix,
+                            &contexts,
+                            &indexed_bam_readers,
+                            &reference_reader,
+                        )
+                    } else if mode == "genotype" {
                         // let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
                         // let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
                         // let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();

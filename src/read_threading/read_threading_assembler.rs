@@ -180,12 +180,14 @@ impl ReadThreadingAssembler {
                 read_error_corrector.correct_reads(assembly_region.get_reads_cloned())
             }
         };
+        println!("Corrected reads.");
 
         // Revert clipped bases if necessary (since we do not want to assemble them)
         corrected_reads = corrected_reads
             .par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
+        println!("Clipped reads.");
 
         // let non_ref_rt_graphs: Vec<ReadThreadingGraph> = Vec::new();
         // let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
@@ -222,6 +224,7 @@ impl ReadThreadingAssembler {
                 &reference_to_haplotype_sw_parameters,
             )
         }
+        println!("Assemble graphs completed.");
 
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
@@ -820,25 +823,26 @@ impl ReadThreadingAssembler {
         {
             return None;
         } else {
-            let mut rt_graph = if self.generate_seq_graph {
+            let mut rt_graph =
+            // if self.generate_seq_graph {
                 ReadThreadingGraph::new(
                     kmer_size,
                     false,
                     self.min_base_quality_to_use_in_assembly,
                     self.num_pruning_samples as usize,
                     self.min_matching_bases_to_dangling_end_recovery,
-                )
-            } else {
-                // This is where the junction tree debruijn graph would go but considering it is experimental
-                // we will leave it out for now
-                ReadThreadingGraph::new(
-                    kmer_size,
-                    false,
-                    self.min_base_quality_to_use_in_assembly,
-                    self.num_pruning_samples as usize,
-                    self.min_matching_bases_to_dangling_end_recovery,
-                )
-            };
+                );
+            // } else {
+            //     // This is where the junction tree debruijn graph would go but considering it is experimental
+            //     // we will leave it out for now
+            //     ReadThreadingGraph::new(
+            //         kmer_size,
+            //         false,
+            //         self.min_base_quality_to_use_in_assembly,
+            //         self.num_pruning_samples as usize,
+            //         self.min_matching_bases_to_dangling_end_recovery,
+            //     )
+            // };
 
             rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
 

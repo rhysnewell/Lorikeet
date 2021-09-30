@@ -42,7 +42,7 @@ impl VariantContextTestUtils {
         assert_eq!(&actual.sample_name, &expected.sample_name, "genotype names");
         assert_eq!(&actual.alleles, &expected.alleles, "Genotype alleles");
         assert_eq!(
-            &actual.genotype_type, &actual.genotype_type,
+            &actual.genotype_type, &expected.genotype_type,
             "Genotype types"
         );
 

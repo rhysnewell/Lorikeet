@@ -133,22 +133,25 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             let previous_ar = self.assembly_result_by_haplotype.get(&h);
             if previous_ar.is_none() {
                 self.assembly_result_by_haplotype.insert(h, ar);
-                return true;
-            } else if self.assembly_results[*previous_ar.unwrap()].discovered_haplotypes
-                != self.assembly_results[self.assembly_results.len() - 1].discovered_haplotypes
-            {
-                panic!("There is already a different assembly result for the input haplotype")
+                true
+            } else if assembly_result_addition_return {
+                if self.assembly_results[*previous_ar.unwrap()].discovered_haplotypes
+                    != self.assembly_results[ar].discovered_haplotypes
+                {
+                    panic!("There is already a different assembly result for the input haplotype")
+                } else {
+                    assembly_result_addition_return
+                }
             } else {
-                return assembly_result_addition_return;
+                assembly_result_addition_return
             }
         } else {
             if !h.allele.is_ref {
                 self.variation_present = true;
             };
             self.haplotypes.insert(h.clone());
-            self.assembly_result_by_haplotype
-                .insert(h, self.assembly_results.len() - 1);
-            return true;
+            self.assembly_result_by_haplotype.insert(h, ar);
+            true
         }
     }
 
@@ -178,12 +181,13 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                     }
                 }
 
-                return *self.assembly_result_by_kmer_size.get(&kmer_size).unwrap();
+                *self.assembly_result_by_kmer_size.get(&kmer_size).unwrap()
             }
         } else {
             self.assembly_results.push(ar);
-            self.assembly_result_by_kmer_size
-                .insert(kmer_size, self.assembly_results.len() - 1);
+            let ar_ind = self.assembly_results.len() - 1;
+
+            self.assembly_result_by_kmer_size.insert(kmer_size, ar_ind);
             self.kmer_sizes.insert(kmer_size);
 
             if self
@@ -194,7 +198,6 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                 .len()
                 > 0
             {
-                let ar_ind = self.assembly_results.len() - 1;
                 for hap in self
                     .assembly_results
                     .last()
@@ -207,7 +210,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                 }
             }
 
-            return self.assembly_results.len() - 1;
+            ar_ind
         }
     }
 

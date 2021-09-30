@@ -170,7 +170,7 @@ impl PairHMMModel {
     pub fn qual_to_trans_probs_return_vec(&self, ins_qual: u8, del_qual: u8, gcp: u8) -> Vec<f64> {
         let mut dest = vec![0.0; Self::TRANS_PROB_ARRAY_LENGTH];
         self.qual_to_trans_probs_with_vec(&mut dest, ins_qual, del_qual, gcp);
-        return dest;
+        dest
     }
 
     /**
@@ -228,10 +228,6 @@ impl PairHMMModel {
                     );
                 }
             });
-        // for i in 0..read_length {
-        //     let mut row = dest.row_mut(i + 1);
-        //     self.qual_to_trans_probs_with_array1(&mut row, ins_quals[i], del_quals[i], gcps[i]);
-        // };
     }
 
     /**
@@ -255,13 +251,13 @@ impl PairHMMModel {
      */
     pub fn qual_to_trans_probs_return_array(
         &self,
-        ins_quals: &Vec<u8>,
-        del_quals: &Vec<u8>,
-        gcps: &Vec<u8>,
+        ins_quals: &[u8],
+        del_quals: &[u8],
+        gcps: &[u8],
     ) -> Array2<f64> {
         let mut dest = Self::create_transition_matrix(ins_quals.len());
         self.qual_to_trans_probs_with_array(&mut dest, ins_quals, del_quals, gcps);
-        return dest;
+        dest
     }
 
     /**
@@ -272,7 +268,7 @@ impl PairHMMModel {
      * @return never {@code null}. A matrix of {@code maxReadLength + 1} by {@link #TRANS_PROB_ARRAY_LENGTH} positions.
      */
     pub fn create_transition_matrix(max_read_length: usize) -> Array2<f64> {
-        return Array2::zeros((max_read_length + 1, Self::TRANS_PROB_ARRAY_LENGTH));
+        Array2::zeros((max_read_length + 1, Self::TRANS_PROB_ARRAY_LENGTH))
     }
 
     /**
@@ -288,7 +284,7 @@ impl PairHMMModel {
      */
     pub fn qual_to_trans_probs_log10_with_vec(
         &self,
-        dest: &mut Vec<f64>,
+        dest: &mut [f64],
         ins_qual: u8,
         del_qual: u8,
         gcp: u8,
@@ -341,7 +337,7 @@ impl PairHMMModel {
     ) -> Vec<f64> {
         let mut dest = vec![0.0; Self::TRANS_PROB_ARRAY_LENGTH];
         self.qual_to_trans_probs_log10_with_vec(&mut dest, ins_qual, del_qual, gcp);
-        return dest;
+        dest
     }
 
     /**
@@ -425,7 +421,7 @@ impl PairHMMModel {
     ) -> Array2<f64> {
         let mut dest = Self::create_transition_matrix(ins_quals.len());
         self.qual_to_trans_probs_log10_with_array(&mut dest, ins_quals, del_quals, gcps);
-        return dest;
+        dest
     }
 
     /**
@@ -454,13 +450,12 @@ impl PairHMMModel {
         }
 
         if (QualityUtils::MAX_QUAL as usize) < max_qual {
-            return 1.0
-                - 10.0.powf(MathUtils::approximate_log10_sum_log10(
-                    -0.1 * min_qual as f64,
-                    -0.1 * max_qual as f64,
-                ));
+            1.0 - 10.0.powf(MathUtils::approximate_log10_sum_log10(
+                -0.1 * min_qual as f64,
+                -0.1 * max_qual as f64,
+            ))
         } else {
-            return self.match_to_match_prob[((max_qual * (max_qual + 1)) >> 1) + min_qual];
+            self.match_to_match_prob[((max_qual * (max_qual + 1)) >> 1) + min_qual]
         }
     }
 
@@ -475,11 +470,10 @@ impl PairHMMModel {
             max_qual = ins_qual;
         }
 
-        return 1.0
-            - 10.0.powf(MathUtils::approximate_log10_sum_log10(
-                -0.1 * min_qual as f64,
-                -0.1 * max_qual as f64,
-            ));
+        1.0 - 10.0.powf(MathUtils::approximate_log10_sum_log10(
+            -0.1 * min_qual as f64,
+            -0.1 * max_qual as f64,
+        ))
     }
 
     /**
@@ -508,7 +502,7 @@ impl PairHMMModel {
         }
 
         if (QualityUtils::MAX_QUAL as usize) < max_qual {
-            return (-std::cmp::min(
+            (-std::cmp::min(
                 OrderedFloat(1.0),
                 OrderedFloat(10.0.powf(MathUtils::approximate_log10_sum_log10(
                     -0.1 * min_qual as f64,
@@ -517,9 +511,9 @@ impl PairHMMModel {
             )
             .into_inner())
             .ln_1p()
-                * *INV_LN10;
+                * *INV_LN10
         } else {
-            return self.match_to_match_log10[((max_qual * (max_qual + 1)) >> 1) + min_qual];
+            self.match_to_match_log10[((max_qual * (max_qual + 1)) >> 1) + min_qual]
         }
     }
 }

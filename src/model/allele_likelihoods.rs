@@ -1,14 +1,19 @@
+use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use haplotype::haplotype::Haplotype;
 use hashlink::linked_hash_map::LinkedHashMap;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
-use ndarray::Array2;
+use model::variants::NON_REF_ALLELE;
+use ndarray::{Array2, ArrayBase, ArrayView};
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
+use statrs::statistics::Median;
+use std::cmp::max;
 use std::collections::HashMap;
+use std::f64::NAN;
 use std::hash::Hash;
 use utils::math_utils::MathUtils;
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -270,8 +275,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
         }
     }
 
-    pub fn set_variant_calling_subset_used(&mut self, loc: SimpleInterval) {
-        self.subsetted_genomic_loc = Some(loc)
+    pub fn set_variant_calling_subset_used(&mut self, loc: &SimpleInterval) {
+        self.subsetted_genomic_loc = Some(loc.clone())
     }
 
     /**
@@ -476,6 +481,64 @@ impl<A: Allele> AlleleLikelihoods<A> {
     }
 
     /**
+     * Updates the likelihood of the NonRef allele (if present) based on the likelihoods of a set of non-symbolic
+     */
+    pub fn update_non_ref_allele_likelihoods(
+        &mut self,
+        alleles_to_consider: AlleleList<A>,
+        non_ref_allele_index: Option<usize>,
+    ) {
+        match non_ref_allele_index {
+            None => return,
+            Some(non_ref_allele_index) => {
+                let allele_count = self.alleles.number_of_alleles();
+                let non_symbolic_allele_count = allele_count - 1;
+                // likelihood buffer reused across evidence:
+                let mut qualified_allele_likelihoods = vec![0.0; non_symbolic_allele_count];
+                for s in 0..self.samples.len() {
+                    let evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
+                    for r in 0..evidence_count {
+                        let sample_values = &self.values_by_sample_index[s];
+
+                        let best_allele = self.search_best_allele(s, r, true, &None);
+                        let mut number_of_qualified_allele_likelihoods = 0;
+                        for i in 0..allele_count {
+                            let allele_likelihood = sample_values[[i, r]];
+                            if !allele_likelihood.is_nan() {
+                                if i != non_ref_allele_index
+                                    && allele_likelihood < best_allele.likelihood
+                                    && alleles_to_consider
+                                        .index_of_allele(self.alleles().get_allele(i))
+                                        .is_some()
+                                {
+                                    qualified_allele_likelihoods
+                                        [number_of_qualified_allele_likelihoods] =
+                                        allele_likelihood;
+                                    number_of_qualified_allele_likelihoods += 1;
+                                }
+                            }
+                        }
+                        let non_ref_likelihood = qualified_allele_likelihoods.median();
+                        // when the median is NaN that means that all applicable likekihoods are the same as the best
+                        // so the evidence is not informative at all given the existing alleles. Unless there is only one (or zero) concrete
+                        // alleles with give the same (the best) likelihood to the NON-REF. When there is only one (or zero) concrete
+                        // alleles we set the NON-REF likelihood to NaN.
+                        let mut sample_values = &mut self.values_by_sample_index[s];
+
+                        sample_values[[non_ref_allele_index, r]] = if !non_ref_likelihood.is_nan() {
+                            non_ref_likelihood
+                        } else if non_symbolic_allele_count <= 1 {
+                            NAN
+                        } else {
+                            best_allele.likelihood
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Perform marginalization from an allele set to another (smaller one) taking the maximum value
      * for each evidence in the original allele subset.
      *
@@ -598,6 +661,93 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .unwrap()
                 .retain(|r| predicate(r, interval));
         }
+    }
+
+    /**
+     * Add more evidence to the collection.
+     *
+     * @param evidenceBySample evidence to add.
+     * @param initialLikelihood the likelihood for the new entries.
+     *
+     * @throws
+     */
+    pub fn add_evidence(
+        &mut self,
+        evidence_by_sample: HashMap<usize, Vec<BirdToolRead>>,
+        initial_likelihood: f64,
+    ) {
+        for (sample_index, new_sample_evidence) in evidence_by_sample {
+            if new_sample_evidence.is_empty() {
+                continue;
+            };
+
+            let old_evidence_count = self
+                .evidence_by_sample_index
+                .get(&sample_index)
+                .unwrap()
+                .len();
+            self.append_evidence(new_sample_evidence, sample_index);
+            let new_evidence_count = self
+                .evidence_by_sample_index
+                .get(&sample_index)
+                .unwrap()
+                .len();
+            self.extends_likelihood_arrays(
+                initial_likelihood,
+                sample_index,
+                old_evidence_count,
+                new_evidence_count,
+            );
+        }
+    }
+
+    /// Extends the likelihood array
+    fn extends_likelihood_arrays(
+        &mut self,
+        initial_likelihood: f64,
+        sample_index: usize,
+        old_evidence_count: usize,
+        new_evidence_count: usize,
+    ) {
+        let number_of_alleles = self.alleles.number_of_alleles();
+        self.ensure_likelihoods_matrix_evidence_capacity(
+            sample_index,
+            new_evidence_count,
+            number_of_alleles,
+            initial_likelihood,
+        )
+    }
+
+    /// Resizes the lk value holding arrays to be able to handle at least "X" amount of evidence
+    fn ensure_likelihoods_matrix_evidence_capacity(
+        &mut self,
+        sample_index: usize,
+        x: usize,
+        number_of_alleles: usize,
+        initial_likelihood: f64,
+    ) {
+        let current_capacity =
+            self.likelihoods_matrix_evidence_capacity_by_sample_index[sample_index];
+        if current_capacity < x {
+            let new_capacity = x << 1; // we double it to avoid repetitive 1-element extensions resizing.
+            for i in 0..(new_capacity - current_capacity) {
+                self.values_by_sample_index[sample_index].push_column(ArrayView::from(
+                    &vec![initial_likelihood; number_of_alleles],
+                ));
+            }
+            self.likelihoods_matrix_evidence_capacity_by_sample_index[sample_index] = new_capacity;
+        }
+    }
+
+    /// Append the new evidence reference into the structure per-sample, returning the count of evidence actually added (duplicates are not added)
+    /// NOTE: the evidence-to-index cache is updated in place and not invalidated via {@link #invalidateEvidenceToIndexCache(int)} because adding new evidence
+    /// to the cache, as opposed to removing evidence, is just a matter of appending entries
+    fn append_evidence(&mut self, new_sample_evidence: Vec<BirdToolRead>, sample_index: usize) {
+        let mut sample_evidence = self
+            .evidence_by_sample_index
+            .entry(sample_index)
+            .or_insert(Vec::new());
+        sample_evidence.par_extend(new_sample_evidence);
     }
 
     // calculates an old to new allele index map array.
@@ -755,6 +905,13 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .into_iter()
             .flat_map(|n| self.best_alleles_tie_breaking(n, &tie_breaking_priority))
             .collect::<Vec<BestAllele>>();
+    }
+
+    pub fn best_alleles_breaking_ties_for_sample(&self, sample_index: usize) -> Vec<BestAllele> {
+        self.best_alleles_tie_breaking(
+            sample_index,
+            &AssemblyBasedCallerUtils::reference_tiebreaking_priority(),
+        )
     }
 
     /**

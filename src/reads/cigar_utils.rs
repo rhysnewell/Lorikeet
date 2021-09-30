@@ -616,11 +616,11 @@ impl CigarUtils {
      * Checks if cigar starts with a deletion (ignoring any clips at the beginning).
      */
     fn starts_or_ends_with_deletion_ignoring_clips(elems: &Vec<Cigar>) -> bool {
-        for left_side in vec![true, false] {
-            if left_side {
+        for left_side in &[true, false] {
+            if *left_side {
                 for elem in elems.iter() {
                     match elem {
-                        &Cigar::Del(_) => return true,
+                        Cigar::Del(_) => return true,
                         _ => {
                             if !Self::is_clipping(elem) {
                                 break;
@@ -631,7 +631,7 @@ impl CigarUtils {
             } else {
                 for elem in elems.iter().rev() {
                     match elem {
-                        &Cigar::Del(_) => return true,
+                        Cigar::Del(_) => return true,
                         _ => {
                             if !Self::is_clipping(elem) {
                                 break;

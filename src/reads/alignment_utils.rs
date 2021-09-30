@@ -42,12 +42,6 @@ impl AlignmentUtils {
         reference_start: usize,
         is_informative: bool,
     ) -> BirdToolRead {
-        assert!(
-            reference_start >= 0,
-            "Reference start must be >= 0, but got {}",
-            reference_start
-        );
-
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
         let read_minus_soft_clips = ReadClipper::new(original_read).hard_clip_soft_clipped_bases();
 
@@ -881,9 +875,7 @@ impl AlignmentUtils {
                     }
                     Cigar::Match(element_length) => {
                         for j in 0..*element_length as usize {
-                            if ref_index >= ref_seq.len() {
-                                // pass
-                            } else if read_idx < start_on_read {
+                            if ref_index >= ref_seq.len() || read_idx < start_on_read {
                                 // pass
                             } else if read_idx > end_on_read {
                                 break;
