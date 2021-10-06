@@ -61,7 +61,7 @@ impl<'a> MergeNodesWithNoVariationTestProvider<'a> {
             debruijn_graph.add_kmers_to_graph(kmer_1, kmer_2, false, 1);
         }
         let mut seq_graph = debruijn_graph.graph.to_sequence_graph();
-        seq_graph.simplify_graph();
+        seq_graph.simplify_graph("anon");
         return seq_graph;
     }
 }
@@ -373,7 +373,7 @@ fn make_vertices(n: usize) -> Vec<SeqVertex> {
 
 fn test_merging<E: BaseEdge>(graph: &SeqGraph<E>, expected: &SeqGraph<E>) {
     let mut merged = graph.clone();
-    merged.simplify_graph_with_cycles(1);
+    merged.simplify_graph_with_cycles(1, "anon");
     if !merged.base_graph.graph_equals(&expected.base_graph) {
         graph.base_graph.print_graph("graph.dot", true, 0);
         merged.base_graph.print_graph("merged.dot", true, 0);
@@ -702,7 +702,7 @@ fn test_bubble_same_bases_with_ref() {
 
 fn test_bubble_merging<E: BaseEdge>(graph: &SeqGraph<E>, expected: &SeqGraph<E>) {
     let mut merged = graph.clone();
-    merged.simplify_graph();
+    merged.simplify_graph("anon");
     if !merged.base_graph.graph_equals(&expected.base_graph) {
         graph.base_graph.print_graph("graph.dot", true, 0);
         merged.base_graph.print_graph("merged.dot", true, 0);

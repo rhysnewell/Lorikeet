@@ -180,14 +180,12 @@ impl ReadThreadingAssembler {
                 read_error_corrector.correct_reads(assembly_region.get_reads_cloned())
             }
         };
-        println!("Corrected reads.");
 
         // Revert clipped bases if necessary (since we do not want to assemble them)
         corrected_reads = corrected_reads
             .par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
-        println!("Clipped reads.");
 
         // let non_ref_rt_graphs: Vec<ReadThreadingGraph> = Vec::new();
         // let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
@@ -224,7 +222,6 @@ impl ReadThreadingAssembler {
                 &reference_to_haplotype_sw_parameters,
             )
         }
-        println!("Assemble graphs completed.");
 
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
@@ -275,6 +272,12 @@ impl ReadThreadingAssembler {
             )
             .into_iter()
         {
+            // debug!("graph after assembly {:?}", &result.graph.as_ref().unwrap().base_graph);
+            debug!(
+                "Result loc {:?} Status {:?} haps {:?}",
+                active_region_extended_location, &result.status, &result.discovered_haplotypes
+            );
+
             if result.status == Status::AssembledSomeVariation {
                 // do some QC on the graph
                 Self::sanity_check_graph(&result.graph.as_ref().unwrap().base_graph, ref_haplotype);
@@ -285,9 +288,10 @@ impl ReadThreadingAssembler {
                     ref_loc,
                     active_region_extended_location,
                     reference_to_haplotype_sw_parameters,
+                    result_set,
                 );
                 // non_ref_seq_graphs.push(result.graph.unwrap());
-                result_set.add_assembly_result(result);
+                // result_set.add_haplotype(result);
             }
         }
     }
@@ -322,7 +326,13 @@ impl ReadThreadingAssembler {
                 dangling_end_sw_parameters,
             ) {
                 None => continue,
-                Some(assembly_result) => results.push(assembly_result),
+                Some(assembly_result) => {
+                    debug!(
+                        "Found assembly result (No increase) graph -> {:?}",
+                        assembly_result.graph.as_ref().unwrap().base_graph
+                    );
+                    results.push(assembly_result)
+                }
             }
         }
 
@@ -346,6 +356,10 @@ impl ReadThreadingAssembler {
                         // pass
                     }
                     Some(assembly_result) => {
+                        debug!(
+                            "Found assembly result (With increase) graph -> {:?}",
+                            assembly_result.graph.as_ref().unwrap().base_graph
+                        );
                         results.push(assembly_result);
                     }
                 };
@@ -422,6 +436,7 @@ impl ReadThreadingAssembler {
                                 ref_loc,
                                 active_region_extended_location,
                                 reference_to_haplotype_sw_parameters,
+                                result_set,
                             );
 
                             saved_assembly_results.push(assembled_result);
@@ -603,11 +618,11 @@ impl ReadThreadingAssembler {
         ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
         haplotype_to_reference_sw_parameters: &SWParameters,
-        // result_set: &mut Option<HashSet<AssemblyResult<E, SimpleInterval>>>, unused part that is annoying to implement
+        result_set: &mut AssemblyResultSet<A>,
     ) {
         // add the reference haplotype separately from all the others to ensure
         // that it is present in the list of haplotypes
-        let mut return_haplotypes = HashSet::new();
+        let mut return_haplotypes = LinkedHashSet::new();
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut failed_cigars = 0;
         {
@@ -656,11 +671,22 @@ impl ReadThreadingAssembler {
                 h.kmer_size = k_best_haplotype.kmer_size;
 
                 if !return_haplotypes.contains(&h) {
+                    debug!(
+                        "Potential location {:?} potential haplotype {:?}",
+                        active_region_window, &h
+                    );
                     // TODO this score seems to be irrelevant at this point...
                     if k_best_haplotype.is_reference {
                         ref_haplotype.score = OrderedFloat(k_best_haplotype.score);
                     };
 
+                    debug!("+++++++++==================================== Candidates ====================================+++++++++");
+                    debug!(
+                        "ref -> {}",
+                        std::str::from_utf8(ref_haplotype.get_bases()).unwrap()
+                    );
+                    debug!("alt -> {}", std::str::from_utf8(h.get_bases()).unwrap());
+                    debug!("+++++++++====================================++++++++++++====================================+++++++++");
                     let cigar = CigarUtils::calculate_cigar(
                         ref_haplotype.get_bases(),
                         h.get_bases(),
@@ -745,8 +771,9 @@ impl ReadThreadingAssembler {
                                     .base_graph
                                     .get_kmer_size()
                             );
-                            return_haplotypes.insert(h);
+                            return_haplotypes.insert(h.clone());
                             // result set would get added to here
+                            result_set.add_haplotype(h);
                         }
                     }
                 }
@@ -850,7 +877,7 @@ impl ReadThreadingAssembler {
             rt_graph.add_sequence(
                 "ref".to_string(),
                 // ReadThreadingGraph::ANONYMOUS_SAMPLE,
-                0,
+                std::usize::MAX,
                 ref_haplotype.get_bases().to_vec(),
                 0,
                 ref_haplotype.get_bases().len(),
@@ -1118,7 +1145,12 @@ impl ReadThreadingAssembler {
             );
         };
 
-        seq_graph.simplify_graph();
+        seq_graph.simplify_graph(&format!(
+            "{}_{}-{}.0",
+            ref_haplotype.genome_location.as_ref().unwrap().tid(),
+            ref_haplotype.genome_location.as_ref().unwrap().get_start(),
+            ref_haplotype.genome_location.as_ref().unwrap().get_end(),
+        ));
         if self.debug_graph_transformations {
             self.print_debug_graph_transform_seq_graph(
                 &seq_graph,
@@ -1142,7 +1174,12 @@ impl ReadThreadingAssembler {
         };
 
         seq_graph.base_graph.remove_paths_not_connected_to_ref();
-        seq_graph.simplify_graph();
+        seq_graph.simplify_graph(&format!(
+            "{}_{}-{}.1",
+            ref_haplotype.genome_location.as_ref().unwrap().tid(),
+            ref_haplotype.genome_location.as_ref().unwrap().get_start(),
+            ref_haplotype.genome_location.as_ref().unwrap().get_end(),
+        ));
         if seq_graph
             .base_graph
             .graph

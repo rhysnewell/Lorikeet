@@ -6,6 +6,7 @@ use graphs::shared_vertex_sequence_splitter::SharedVertexSequenceSplitter;
 use graphs::vertex_based_transformer::VertexBasedTransformer::{
     MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
 };
+use hashlink::LinkedHashSet;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::Direction;
 use std::collections::HashSet;
@@ -73,7 +74,7 @@ pub enum VertexBasedTransformer<'a, E: BaseEdge> {
     SplitCommonSuffices {
         graph: &'a mut SeqGraph<E>,
         dont_modify_graph_even_if_possible: bool,
-        already_split: &'a mut HashSet<NodeIndex>,
+        already_split: &'a mut LinkedHashSet<NodeIndex>,
     },
     /**
      * Merge headless configurations:
@@ -162,7 +163,7 @@ impl VertexBasedTransformerOptions {
             Self::SplitCommonSuffices => {
                 let mut did_at_least_one_transform = false;
                 let mut found_nodes_to_merge = true;
-                let mut already_split = HashSet::new();
+                let mut already_split = LinkedHashSet::new();
                 while found_nodes_to_merge {
                     found_nodes_to_merge = false;
                     let node_indices = graph

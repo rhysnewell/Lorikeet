@@ -1,6 +1,7 @@
 use graphs::base_edge::BaseEdge;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
+use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
@@ -96,7 +97,7 @@ impl SharedSequenceMerger {
     fn can_merge<E: BaseEdge>(
         graph: &SeqGraph<E>,
         v: NodeIndex,
-        incoming_vertices: &HashSet<NodeIndex>,
+        incoming_vertices: &LinkedHashSet<NodeIndex>,
     ) -> bool {
         if incoming_vertices.is_empty() {
             return false;

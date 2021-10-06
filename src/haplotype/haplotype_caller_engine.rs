@@ -7,6 +7,7 @@ use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_trimmer::AssemblyRegionTrimmer;
 use assembly::assembly_result_set::AssemblyResultSet;
 use bio::stats::{LogProb, PHREDProb};
+use clap::ArgMatches;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
@@ -34,6 +35,7 @@ use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::{self, record::Cigar, Record};
 use rust_htslib::bcf::{Format, Header, Writer};
 use std::collections::HashMap;
+use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
 use utils::math_utils::{MathUtils, RunningAverage};
 use utils::natural_log_utils::NaturalLogUtils;
@@ -262,6 +264,8 @@ impl HaplotypeCallerEngine {
             .parse::<f64>()
             .unwrap();
 
+        let limiting_interval = Self::parse_limiting_interval(m);
+
         // let min_variant_quality = m
         //     .value_of("min-variant-quality")
         //     .unwrap()
@@ -301,6 +305,7 @@ impl HaplotypeCallerEngine {
                         flag_filters,
                         &mut per_contig_per_base_hq_soft_clips,
                         reference_reader,
+                        &limiting_interval,
                     ));
                 } else if (m.is_present("longreads") | m.is_present("longread-bam-files"))
                     && sample_idx >= short_sample_count
@@ -322,6 +327,7 @@ impl HaplotypeCallerEngine {
                         flag_filters,
                         &mut per_contig_per_base_hq_soft_clips,
                         reference_reader,
+                        &limiting_interval,
                     ));
                 }
                 {
@@ -352,6 +358,23 @@ impl HaplotypeCallerEngine {
         );
     }
 
+    fn parse_limiting_interval(args: &ArgMatches) -> Option<SimpleInterval> {
+        if args.is_present("limiting-interval") {
+            let interval_str = args.value_of("limiting-interval").unwrap();
+            let split = interval_str.split("-").collect::<Vec<&str>>();
+            if split.len() == 1 {
+                None
+            } else {
+                let mut split_iter = split.into_iter();
+                let start = split_iter.next().unwrap().parse().unwrap();
+                let end = split_iter.next().unwrap().parse().unwrap();
+                Some(SimpleInterval::new(0, start, end))
+            }
+        } else {
+            None
+        }
+    }
+
     pub fn update_activity_profile<
         'b,
         R: IndexedNamedBamReader + Send,
@@ -369,6 +392,7 @@ impl HaplotypeCallerEngine {
         flag_filters: &'b FlagFilter,
         per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
         reference_reader: &mut ReferenceReader,
+        limiting_interval: &Option<SimpleInterval>,
     ) -> HashMap<usize, Vec<RefVsAnyResult>> {
         let mut bam_generated = bam_generator.start();
 
@@ -412,7 +436,14 @@ impl HaplotypeCallerEngine {
                                 }).collect::<Vec<RefVsAnyResult>>();
 
                             {
-                                bam_generated.fetch(tid as u32);
+                                match limiting_interval {
+                                    Some(limiting_interval) => {
+                                        bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).expect(&format!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
+                                    },
+                                    None => {
+                                        bam_generated.fetch(tid as u32).expect(&format!("Failed to fetch tid {}", tid))
+                                    }
+                                };
 
                                 // Position based - Loop through the positions in the genome
                                 // Calculate likelihood of activity being present at this position
@@ -748,7 +779,7 @@ impl HaplotypeCallerEngine {
         let mut assembly_result = assembly_result.remove_all(&read_stubs);
         debug!(
             "Assembly result allele order after stub filter {:?}",
-            &assembly_result.haplotypes
+            &assembly_result.haplotypes.len()
         );
 
         debug!(
@@ -765,7 +796,7 @@ impl HaplotypeCallerEngine {
         let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result);
         debug!(
             "Assembly result allele order after read filter {:?}",
-            &assembly_result.haplotypes
+            &assembly_result.haplotypes.len()
         );
         let per_sample_filtered_read_list =
             AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
@@ -793,8 +824,8 @@ impl HaplotypeCallerEngine {
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.clone(), reads);
         debug!(
-            "Read likelihoods first {:#?}",
-            read_likelihoods.values_by_sample_index
+            "Read likelihoods first {:?}",
+            read_likelihoods.alleles.len()
         );
 
         // Realign reads to their best haplotype.
@@ -805,8 +836,8 @@ impl HaplotypeCallerEngine {
         );
         read_likelihoods.change_evidence(read_alignments);
         debug!(
-            "Read likelihoods after change evidence {:#?}",
-            read_likelihoods.values_by_sample_index
+            "Read likelihoods after change evidence {:?}",
+            read_likelihoods.alleles.len()
         );
 
         // Note: we used to subset down at this point to only the "best" haplotypes in all samples for genotyping, but there
@@ -1114,10 +1145,8 @@ impl HaplotypeCallerEngine {
             // Add program info
             self.populate_vcf_header(sample_names, reference_reader, &mut header);
 
-            let vcf_presort = tempfile::Builder::new()
-                .prefix("lorikeet-fifo")
-                .tempfile()
-                .expect("Unable to create VCF tempfile");
+            // ensure path exists
+            create_dir_all(output_prefix).expect("Unable to create output directory");
 
             // Initiate writer
             let mut bcf_writer = Writer::from_path(

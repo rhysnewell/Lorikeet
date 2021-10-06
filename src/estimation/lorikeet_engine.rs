@@ -50,16 +50,11 @@ pub struct LorikeetEngine<'a> {
     tree: Arc<Mutex<Vec<&'a Elem>>>,
     progress_bars: &'a Vec<Elem>,
     threads: usize,
+    mode: &'a str,
 }
 
 impl<'a> LorikeetEngine<'a> {
     pub fn apply_per_reference(&self) {
-        let alpha: f64 = self
-            .args
-            .value_of("fdr-threshold")
-            .unwrap()
-            .parse()
-            .unwrap();
         let parallel_genomes = self
             .args
             .value_of("parallel-genomes")
@@ -86,6 +81,7 @@ impl<'a> LorikeetEngine<'a> {
             Self::begin_tick(1, &self.progress_bars, &self.multi_inner, "");
 
             for (ref_idx, reference_stem) in self.reference_map.clone().into_iter() {
+                let mode = self.mode;
                 let multi_inner = &self.multi_inner;
                 let tree = &self.tree;
                 let progress_bars = &self.progress_bars;
@@ -236,7 +232,6 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let mode = "call";
                     if mode == "call" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -343,23 +338,17 @@ impl<'a> LorikeetEngine<'a> {
                         //     &genomes_and_contigs,
                         // );
 
-                        // If flagged, then create plots using CMplot
-                        if self.args.is_present("plot") {
-                            // let window_size = m.value_of("window-size").unwrap().parse().unwrap();
-                            // variant_matrix.print_variant_stats(
-                            //     window_size,
-                            //     &output_prefix,
-                            //     &genomes_and_contigs,
-                            // );
-                        };
-
-                        // Write variants in VCF format, reference specific
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
                                 .set_message(format!("{}: Generating VCF file...", &reference,));
                         }
-                        // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                        assembly_engine.evaluator.write_vcf(
+                            &output_prefix,
+                            &contexts,
+                            &indexed_bam_readers,
+                            &reference_reader,
+                        )
                     } else if mode == "polish" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -622,6 +611,7 @@ pub fn start_lorikeet_engine<
             tree,
             progress_bars: &progress_bars,
             threads,
+            mode,
         };
 
         lorikeet_engine.apply_per_reference();

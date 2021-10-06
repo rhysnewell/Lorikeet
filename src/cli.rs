@@ -15,6 +15,7 @@ const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] =
 const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "minimap2-ont";
 
 const MAPPER_HELP: &'static str = "
+Read mapping options:
   -p, --mapper <NAME>             Underlying mapping software used
                                   (\"minimap2-sr\", \"bwa-mem\",
                                   \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
@@ -41,34 +42,72 @@ const MAPPER_HELP: &'static str = "
                                   implications if untrusted input is specified.\n";
 
 const VARIANT_CALLING_HELP: &'static str = "
-  --mapq-threshold <INT>                Mapping quality threshold used to verify
-                                        a variant. [default: 10]\n
-  -q, --base-quality-threshold-score    The minimum PHRED score for base in a read for it to be
-                                        considered in the variant calling process.\n
-  --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                        based on the quality scores and accounting for the
-                                        presence in all available samples.\n
-  --ploidy <INT>                        Sets the default ploidy for the analysis to N.  [default: 1]\n
-  --min-repeat-entropy <FLOAT>          To detect interrupted repeats, build across sequence until it has
-                                        entropy > N bits per bp. Set to 0 to turn off. [default: 1.3]\n
-  -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
-  -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                        for it to be considered. [default: 10]\n
-  --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                        analysis. [default: 10]\n
-  --include-longread-svs                Include structural variants produced by SVIM in genotyping
-                                        analysis. Can often overestimate number of variants present.\n
-  --freebayes                           Flag specifying whether to include freebayes in the variant
-                                        process. *WARNING* Freebayes may cause crashes if the number
-                                        of contigs in a MAG is too large. If so, increase the --ulimit value
-                                        If crashes persist then do not use this flag.
-  --ulimit                              Sets the ulimit stack size to help prevent segmentation faults
-                                        in freebayes recursive calls. Lower this on smaller systems.
-                                        Increase this if your bam files contain thousands of contigs and
-                                        freebayes is segfaulting. [default: 81920]\n
-  --force                               Forcefully overwrite previous runs.\n";
+Variant calling options:
+  --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
+  --pair-hmm-gap-continuation-penalty           Flat gap continuation penalty for use in the Pair HMM. [default: 10]
+  --pcr-indel-model                             The PCR indel model to use. [default: conservative]
+  --heterozygosity                              Heterozygosity value used to compute prior
+                                                likelihoods for any locus. [default: 0.001]
+  --heterozygosity-stdev                        Standard deviation of heterozygosity for SNP and
+                                                indel calling. [default: 0.01]
+  --indel-heterozygosity                        Heterozygosity for indel calling. [default: 0.000125]
+  -C, --standard-min-confidence-threshold-for-calling
+                                                The minimum phred-scaled confidence threshold at
+                                                which variants should be called. [default: 30.0]
+  --use-posteriors-to-calculate-qual            if available, use the genotype posterior
+                                                probabilities to calculate the site QUAL.
+  --annotate-with-num-discovered-alleles        If provided, we will annotate records with the
+                                                number of alternate alleles that were discovered
+                                                (but not necessarily genotyped) at a given site.
+  --active-probability-threshold                Minimum probability for a locus to be
+                                                considered active. [default: 0.002]
+  --min-assembly-region-size                    Minimum size of an assembly region. [default: 50]
+  --max-assembly-region-size                    Maximum size of an assembly region. [default: 300]
+  --assembly-region-padding                     Number of additional bases of context to
+                                                include around each assembly region. [default: 100]
+  --dont-increase-kmer-sizes-for-cycles         Disable iterating over kmer sizes when
+                                                graph cycles are detected.
+  --allow-non-unique-kmers-in-ref               Allow graphs that have non-unique kmers in the reference.
+  --do-not-run-physical-phasing                 Disable physical phasing.
+  --recover-all-dangling-branches               Recover all dangling branches.
+  --min-dangling-branch-length                  Minimum length of a dangling branch to
+                                                attempt recovery. [default: 4]
+  --graph-output                                Write debug assembly graph information to this file.
+  --num-pruning-samples                         Number of samples that must pass the
+                                                min_pruning threshold [default: 1]
+  --dont-use-soft-clipped-bases                 Do not analyze soft clipped bases in the reads.
+  --initial-error-rate-for-pruning              Initial base error rate estimate for adaptive
+                                                pruning. [default: 0.001]
+  --pruning-log-odds-threshold                  Likelihood ratio threshold for adaptive
+                                                pruning algorithm. This value will be converted to
+                                                log odds value. [default: 1.0]
+  --max-unpruned-variants                       Maximum number of variants in graph the
+                                                adaptive pruner will allow. [default: 100]
+  --max-prob-propagation-distance               Upper limit on how many bases away probability mass
+                                                can be moved around when calculating the boundaries
+                                                between active and inactive assembly regions. [default: 50]
+  --max-mnp-distance                            Two or more phased substitutions separated by
+                                                this distance or less are merged into MNPs. [default: 0]
+  --min-base-quality                            Minimum base quality required to consider a
+                                                base for calling. [default: 10]
+  --base-quality-score-threshold                Base qualities below this threshold will
+                                                be reduced to the minimum (6). [default: 18]
+  -q, --base-quality-threshold-score            The minimum PHRED score for base in a read for it to be
+                                                considered in the variant calling process.\n
+  -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
+                                                Multiple values at once are accepted and encouraged
+                                                e.g. 10 25 [default: 25] \n
+  --ploidy <INT>                                Sets the default ploidy for the analysis to N.
+                                                [default: 1]\n
+  --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
+  --limiting-interval                           Mainly used for debugging purposes. Only call variants
+                                                within this given span on all contigs. E.g. providing
+                                                '1000-2000' would only call variants between the 1000
+                                                and 2000 bp span on each provided contig.
+  --force                                       Forcefully overwrite previous runs.\n";
 
-const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
+const ALIGNMENT_OPTIONS: &'static str = "
+Define mapping(s) (required):
   Either define BAM:
    -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
                                          reference sorted (e.g. with samtools sort)
@@ -90,11 +129,6 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
    -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
-   -a, --query-assembly                  FASTA file(s) containing metagenome assembly
-                                         contigs or scaffolds for finding potential
-                                         structural variants in the provided MAGs
-   -t, --threads <INT>                   Number of threads for mapping / sorting
-                                         [default 1]
    --parallel-genomes                    Number of genomes to run in parallel.
                                          Increases memory usage linearly.
                                          [default 1]
@@ -109,71 +143,12 @@ const ALIGNMENT_OPTIONS: &'static str = "Define mapping(s) (required):
    --longreads <PATH> ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
    --bam-file-cache-directory            Directory to store cached BAM files. BAM files are stored
                                          in /tmp by default.
-   -d, --output-directory                Output directory";
+   -d, --output-directory                Output directory
+   -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
 
-pub fn filter_full_help() -> &'static str {
-    "lorikeet filter: Remove alignments with insufficient identity.
-
-Only primary, non-supplementary alignments are considered, and output files
-are grouped by reference, but not sorted by position.
-
-Files (both required):
-   -b, --bam-files <PATH> ..             Path to reference-sorted BAM file(s)
-   -o, --output-bam-files <PATH> ..      Path to corresponding output file(s)
-
-Thresholds:
-   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                              aligned bases [default: 0]
-   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                              identity e.g. 0.95 for 95%. [default 0.0]
-   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.97]
-   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                              aligned bases.
-                                              Implies --proper-pairs-only. [default: 0]
-   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                              identity e.g. 0.95 for 95%.
-                                              Implies --proper-pairs-only. [default 0.0]
-   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned.
-                                              Implies --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                        Require reads to be mapped as proper pairs
-
-Other:
-   -t, --threads <INT>                   Number of threads for output compression
-                                         [default 1]
-   --parallel-genomes                    Number of genomes to run in parallel.
-                                         Increases memory usage linearly.
-                                         [default 1]
-   --inverse                             Only keep reads which are unmapped or
-                                         align below thresholds. Note that output
-                                         records may still be marked as mapped
-                                         if they do not meet the thresholds.
-                                         [default false]
-   --verbose                             Print extra debugging information
-   -q, --quiet                           Unless there is an error, do not print
-                                         log messages
-
-Example usage:
-
-  lorikeet filter -b in.bam -o out.bam --min-read-aligned-length 75
-
-Rhys J.P. Newell <rhys.newell near hdr.qut.edu.au>"
-}
-
-pub fn polish_full_help() -> &'static str {
-    lazy_static! {
-        static ref POLISH_HELP: String = format!(
-            "lorikeet polish: Produce consensus genomes for input genomes per sample
-
-{}
-{}
-{}
 
 Sharding i.e. multiple reference sets (optional):
-   --sharded                             If -b/--bam-files was used:
+  --sharded                              If -b/--bam-files was used:
                                            Input BAM files are read-sorted alignments
                                            of a set of reads mapped to multiple
                                            reference contig sets. Choose the best
@@ -181,9 +156,17 @@ Sharding i.e. multiple reference sets (optional):
 
                                          Otherwise if mapping was carried out:
                                            Map reads to each reference, choosing the
-                                           best hit for each pair.
+                                             best hit for each pair.
 
 Alignment filtering (optional):
+   -m, --method <METHOD>                 Method for calculating coverage.
+                                         One or more (space separated) of:
+                                           trimmed_mean
+                                           mean
+                                           metabat (\"MetaBAT adjusted coverage\")
+                                         A more thorough description of the different
+                                         methods is available at
+                                         https://github.com/rhysnewell/lorikeet
    --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
                                          aligned bases [default: 0]
    --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
@@ -201,22 +184,6 @@ Alignment filtering (optional):
                                          bases e.g. 0.95 means 95% of the read's
                                          bases must be aligned.
                                          Conflicts --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                Allows reads to be mapped as improper pairs
-   --include-supplementary               Includes read alignments flagged as supplementary
-   --include-secondary                   Includes read alignments flagged as secondary
-
-
-Other arguments (optional):
-   -m, --method <METHOD>                 Method for calculating coverage.
-                                         One or more (space separated) of:
-                                           trimmed_mean
-                                           mean
-                                           metabat (\"MetaBAT adjusted coverage\")
-                                         A more thorough description of the different
-                                         methods is available at
-                                         https://github.com/rhysnewell/lorikeet
-   -k, --kmer-sizes <INT>                K-mer size used to generate k-mer frequency
-                                         table. [default: 25]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -227,308 +194,65 @@ Other arguments (optional):
                                          [default: 0.05]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
-   --plot                                Produce SNP density plots
-   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
-                                         SV density.
-   -t, --threads                         Number of threads used. [default: 1]
-   --parallel-genomes                    Number of genomes to run in parallel.
-                                         Increases memory usage linearly.
-                                         [default 1]
-   --no-zeros                            Omit printing of genomes that have zero
-                                         coverage
-
-   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   -v, --verbose                         Print extra debugging information
-   -q, --quiet                           Unless there is an error, do not print
-                                         log messages
-
-Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>",
-            ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP
-        );
-    }
-    &POLISH_HELP
-}
-
-pub fn evolve_full_help() -> &'static str {
-    lazy_static! {
-        static ref EVOLVE_HELP: String = format!(
-    "lorikeet evolve: Calculate dN/dS values in coding regions based on variants found in read mappings
-
-{}
-{}
-{}
-
-Sharding i.e. multiple reference sets (optional):
-   --sharded                             If -b/--bam-files was used:
-                                           Input BAM files are read-sorted alignments
-                                           of a set of reads mapped to multiple
-                                           reference contig sets. Choose the best
-                                           hit for each read pair.
-
-                                         Otherwise if mapping was carried out:
-                                           Map reads to each reference, choosing the
-                                           best hit for each pair.
-
-Alignment filtering (optional):
-   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                              aligned bases [default: 0]
-   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                              identity e.g. 0.95 for 95%. [default 0.0]
-   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned. [default 0.97]
-   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                              aligned bases.
-                                              Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                              identity e.g. 0.95 for 95%.
-                                              Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                              bases e.g. 0.95 means 95% of the read's
-                                              bases must be aligned.
-                                              Conflicts --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                     Allows reads to be mapped as improper pairs
-   --include-supplementary                    Includes read alignments flagged as supplementary
-   --include-secondary                        Includes read alignments flagged as secondary
-
-Other arguments (optional):
-   -m, --method <METHOD>                 Method for calculating coverage.
-                                         One or more (space separated) of:
-                                           trimmed_mean
-                                           mean
-                                           metabat (\"MetaBAT adjusted coverage\")
-                                         A more thorough description of the different
-                                         method is available at
-                                         https://github.com/rhysnewell/lorikeet
-   --include-indels                      Flag indicating whether to attempt to calculate INDEL sites
-                                         Not recommended if using nanopore long read data.
-   --mapq-threshold <INT>                Mapping quality threshold used to verify
-                                         a variant. [default: 10]
-   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
-                                         considered in the variant calling process.
-   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                         based on the quality scores and accounting for the
-                                         presence in all available samples.
-   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                         for it to be considered. [default: 10]
-   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                         analysis. [default: 10]
-   --min-covered-fraction FRACTION       Contigs with less coverage than this
-                                         reported as having zero coverage.
-                                         [default: 0.0]
-   --contig-end-exclusion                Exclude bases at the ends of reference
-                                         sequences from calculation [default: 75]
-   --trim-min FRACTION                   Remove this smallest fraction of positions
-                                         when calculating trimmed_mean
-                                         [default: 0.05]
-   --trim-max FRACTION                   Maximum fraction for trimmed_mean
-                                         calculations [default: 0.95]
-   -t, --threads                         Number of threads used. [default: 1]
-   --parallel-genomes                    Number of genomes to run in parallel.
-                                         Increases memory usage linearly.
-                                         [default 1]
-   --no-zeros                            Omit printing of genomes that have zero
-                                         coverage
-   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   -v, --verbose                         Print extra debugging information
-   -q, --quiet                           Unless there is an error, do not print
-                                         log messages
-
-Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
-    }
-    &EVOLVE_HELP
-}
-
-pub fn summarize_full_help() -> &'static str {
-    lazy_static! {
-        static ref SUMMARIZE_HELP: String = format!(
-    "lorikeet summarize: Provides per contig variant statistics for a metagenome
-
-{}
-{}
-{}
-
-Alignment filtering (optional):
-   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                         aligned bases [default: 0]
-   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                         identity e.g. 0.95 for 95%. [default 0.0]
-   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.97]
-   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                         aligned bases.
-                                         Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                         identity e.g. 0.95 for 95%.
-                                         Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned.
-                                         Conflicts --proper-pairs-only. [default 0.0]
    --proper-pairs-only                Allows reads to be mapped as improper pairs
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
-
-Other arguments (optional):
-   -m, --method <METHOD>                 Method for calculating coverage.
-                                         One or more (space separated) of:
-                                           trimmed_mean
-                                           mean
-                                           metabat (\"MetaBAT adjusted coverage\")
-                                         A more thorough description of the different
-                                         methods is available at
-                                         https://github.com/rhysnewell/lorikeet
-   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
-                                         SV density.
-   --include-longread-svs                Include structural variants produced by SVIM in genotyping
-                                         analysis. Can often overestimate number of variants present.
-   --mapq-threshold <INT>                Mapping quality threshold used to verify
-                                         a variant. [default: 10]
-   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
-                                         considered in the variant calling process.
-   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                         based on the quality scores and accounting for the
-                                         presence in all available samples.
-   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                         for it to be considered. [default: 10]
-   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                         analysis. [default: 10]
-   --output-format FORMAT                Shape of output: 'sparse' for long format,
-                                         'dense' for species-by-site.
-                                         [default: dense]
-   --min-covered-fraction FRACTION       Contigs with less coverage than this
-                                         reported as having zero coverage.
-                                         [default: 0.0]
-   --include-longread-svs                Flag indicating whether to use SVIM to calculate structural
-                                         variants.
-   --contig-end-exclusion                Exclude bases at the ends of reference
-                                         sequences from calculation [default: 75]
-   --trim-min FRACTION                   Remove this smallest fraction of positions
-                                         when calculating trimmed_mean
-                                         [default: 0.05]
-   --trim-max FRACTION                   Maximum fraction for trimmed_mean
-                                         calculations [default: 0.95]
-   -t, --threads                         Number of threads used. [default: 1]
-   --parallel-genomes                    Number of genomes to run in parallel.ma
-                                         Increases memory usage linearly.
-                                         [default 1]
-   --no-zeros                            Omit printing of genomes that have zero
-                                         coverage
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   -v, --verbose                         Print extra debugging information
-   -q, --quiet                           Unless there is an error, do not print
-                                         log messages
+";
 
-Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
-    }
-    &SUMMARIZE_HELP
-}
+const GENERAL_HELP: &'static str = "
+General options:
+  -t, --threads                         Maximum number of threads used. [default: 8]
+  --parallel-genomes                    Number of genomes to run in parallel.
+                                        Increases memory usage linearly.
+                                        Thread usage qill not exceed the value
+                                        provided by --threads [default 1]
+  -v, --verbose                         Print extra debugging information
+  -q, --quiet                           Unless there is an error, do not print
+                                        log messages
 
-pub fn genotype_full_help() -> &'static str {
-    lazy_static! {
-        static ref GENOTYPE_HELP: String = format!(
-    "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
+Author: Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
+";
+
+pub fn genotype_full_help() -> String {
+    format!(
+        "lorikeet genotype: Resolves strain-level genotypes and abundance from metagenomes
 
 {}
 {}
 {}
 
-Sharding i.e. multiple reference sets (optional):
-   --sharded                             If -b/--bam-files was used:
-                                           Input BAM files are read-sorted alignments
-                                           of a set of reads mapped to multiple
-                                           reference contig sets. Choose the best
-                                           hit for each read pair.
+Genotyping arguments (optional):
 
-                                         Otherwise if mapping was carried out:
-                                           Map reads to each reference, choosing the
-                                           best hit for each pair.
-
-Alignment filtering (optional):
-   --min-read-aligned-length <INT>            Exclude reads with smaller numbers of
-                                         aligned bases [default: 0]
-   --min-read-percent-identity <FLOAT>        Exclude reads by overall percent
-                                         identity e.g. 0.95 for 95%. [default 0.0]
-   --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.97]
-   --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
-                                         aligned bases.
-                                         Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
-                                         identity e.g. 0.95 for 95%.
-                                         Conflicts --proper-pairs-only. [default 0.0]
-   --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
-                                         bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned.
-                                         Conflicts --proper-pairs-only. [default 0.0]
-   --proper-pairs-only                Allows reads to be mapped as improper pairs
-   --include-supplementary               Includes read alignments flagged as supplementary
-   --include-secondary                   Includes read alignments flagged as secondary
-
-
-Other arguments (optional):
-   -m, --method <METHOD>                 Method for calculating coverage.
-                                         One or more (space separated) of:
-                                           trimmed_mean
-                                           mean
-                                           metabat (\"MetaBAT adjusted coverage\")
-                                         A more thorough description of the different
-                                         methods is available at
-                                         https://github.com/rhysnewell/lorikeet
-   -k, --kmer-size <INT>                 K-mer size used to generate k-mer frequency
-                                         table. [default: 4]
-   --mapq-threshold <INT>                  Mapping quality threshold used to verify
-                                         a variant. [default: 10]
-   -q, --base-quality-threshold <INT>    The minimum PHRED score for base in a read for it to be
-                                         considered in the variant calling process.
-   --fdr-threshold <FLOAT>               False discovery rate threshold for filtering variants
-                                         based on the quality scores and accounting for the
-                                         presence in all available samples.
-   -o, --output-prefix <STRING>          Output prefix for files. [default: output]
-   -f, --min-variant-depth <INT>         Minimum depth threshold value a variant must occur at
-                                         for it to be considered. [default: 10]
-   --min-variant-quality <INT>           Minimum QUAL value required for a variant to be included in
-                                         analysis. [default: 10]
    --n-components <INT>                  Number of components for the UMAP algorithm to embed into. [default: 2]
    -n, --n-neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
    -s, --cluster-distance <FLOAT>        The cluster distance used to decide if two or more clusters
                                          should be combined into a genotype. [default: 0.15]
    --minimum-reads-in-link <INT>         Minimum amount of reads required to be shared between two
                                          variants before they are counted as 'linked'. [default: 5]
-   --include-longread-svs                Include structural variants produced by SVIM in genotyping
-                                         analysis. Can often overestimate number of variants present.
-   --min-covered-fraction FRACTION       Contigs with less coverage than this
-                                         reported as having zero coverage.
-                                         [default: 0.0]
-   --contig-end-exclusion                Exclude bases at the ends of reference
-                                         sequences from calculation [default: 75]
-   --trim-min FRACTION                   Remove this smallest fraction of positions
-                                         when calculating trimmed_mean
-                                         [default: 0.05]
-   --trim-max FRACTION                   Maximum fraction for trimmed_mean
-                                         calculations [default: 0.95]
-   --plot                                Produce SNP density plots
-   -w, --window-size <FLOAT>             Window size in kilobase pairs at which to calculate SNP and
-                                         SV density.
+
    -t, --threads                         Number of threads used. [default: 1]
    --parallel-genomes                    Number of genomes to run in parallel.
                                          Increases memory usage linearly.
                                          [default 1]
-   --no-zeros                            Omit printing of genomes that have zero
-                                         coverage
-
-   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    -v, --verbose                         Print extra debugging information
    -q, --quiet                           Unless there is an error, do not print
                                          log messages
+{}
+        ",
+    ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP)
+}
 
-Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>", ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP);
-    }
-    &GENOTYPE_HELP
+pub fn call_full_help() -> String {
+    format!(
+        "lorikeet call: Call variants using local reassembly across multiple genomes and samples
+
+        {}
+        {}
+        {}
+        {}",
+        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
+    )
 }
 
 pub fn build_cli() -> App<'static, 'static> {
@@ -621,12 +345,12 @@ See lorikeet summarize --full-help for further options and further detail.
 
 {}
 
-  lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10
+  lorikeet genotype --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25
 
 {}
 
   lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
-    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --plot
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10
 
 See lorikeet genotype --full-help for further options and further detail.
 ",
@@ -640,34 +364,30 @@ See lorikeet genotype --full-help for further options and further detail.
                 "Example: Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file and plots the results:"),
         ).to_string();
 
-        static ref FILTER_HELP: String = format!(
+        static ref CALL_HELP: String = format!(
             "
                             {}
-                     {}
+              {}
 
 {}
 
-  lorikeet filter --bam-files input.bam --output-bam filtered.bam
-    --min-read-aligned-length 50
+  lorikeet call --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --kmer-sizes 10 25
 
 {}
 
-  lorikeet filter -b input.bam -o inverse_filtered.bam --inverse
-    --min-read-percent-identity 0.95 --threads 16
+  lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+    --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --kmer-sizes 10 25
 
-See lorikeet filter --full-help for further options and further detail.
+See lorikeet genotype --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet filter"),
+                "lorikeet call"),
             ansi_term::Colour::Green.paint(
-                "Filter BAM file alignments"),
+                "Perform read mapping and variant calling using local reassembly of active regions"),
             ansi_term::Colour::Purple.paint(
-                "Example: Filter a BAM file by removing alignments shorter than 50bp:"),
+                "Example: Map paired reads to a reference and generate genotypes"),
             ansi_term::Colour::Purple.paint(
-                "Example: Filter inverse: Keep alignments that have <95% alignment identity\n\
-                 and those which do map at all. Note that the output BAM file will likely\n\
-                 records that are still mapped, but align with < 95% identity. Use 16\n\
-                 threads for output compression:"),
+                "Example: Perform read read mapping and variant calling on an entire directory of genomes and save the bam files:"),
         ).to_string();
     }
 
@@ -687,12 +407,8 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tgenotype \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
-\tsummarize\tSummarizes contig stats from one or multiple samples
+\tcall \tPerforms variant calling on the provides genomes
 \tevolve   \tCalculate dN/dS values for genes from read mappings
-
-Less used utility subcommands:
-\tkmer     \tCalculate kmer frequencies within contigs
-\tfilter   \tRemove (or only keep) alignments with insufficient identity
 
 Other options:
 \t-V, --version\tPrint version information
@@ -865,7 +581,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("threads")
                         .short("t")
                         .long("threads")
-                        .default_value("1")
+                        .default_value("8")
                         .takes_value(true),
                 )
                 .arg(
@@ -955,440 +671,268 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("trimmed_mean"),
                 )
                 .arg(
-                    Arg::with_name("min-covered-fraction")
-                        .long("min-covered-fraction")
-                        .default_value("0.0"),
+                    Arg::with_name("phred-scaled-global-read-mismapping-rate")
+                        .long("phred-scaled-global-read-mismapping-rate")
+                        .default_value("45"),
                 )
                 .arg(
-                    Arg::with_name("coverage-fold")
-                        .long("coverage-fold")
-                        .default_value("0.5"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-depth")
-                        .long("min-variant-depth")
-                        .short("f")
+                    Arg::with_name("pair-hmm-gap-continuation-penalty")
+                        .long("pair-hmm-gap-continuation-penalty")
                         .default_value("10"),
                 )
                 .arg(
-                    Arg::with_name("min-variant-quality")
-                        .long("min-variant-quality")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("mapq-threshold")
-                        .long("mapq-threshold")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("base-quality-threshold")
-                        .long("base-quality-threshold")
-                        .short("q")
-                        .default_value("13"),
-                )
-                .arg(
-                    Arg::with_name("fdr-threshold")
-                        .long("fdr-threshold")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("heterozygosity")
-                        .long("heterozygosity")
-                        .default_value("0.01"),
-                )
-                .arg(
-                    Arg::with_name("indel-heterozygosity")
-                        .long("indel-heterozygosity")
-                        .default_value("0.001"),
-                )
-                .arg(
-                    Arg::with_name("kmer-size")
-                        .long("kmer-size")
-                        .short("k")
-                        .default_value("4"),
-                )
-                .arg(
-                    Arg::with_name("contig-end-exclusion")
-                        .long("contig-end-exclusion")
-                        .default_value("75"),
-                )
-                .arg(
-                    Arg::with_name("trim-min")
-                        .long("trim-min")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("trim-max")
-                        .long("trim-max")
-                        .default_value("0.95"),
-                )
-                .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-                .arg(
-                    Arg::with_name("window-size")
-                        .long("window-size")
-                        .short("w")
-                        .default_value("1"),
-                )
-                .arg(Arg::with_name("plot").long("plot"))
-                .arg(Arg::with_name("nanopore").long("nanopore"))
-                .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
-                .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-soft-clipping").long("include-soft-clipping"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
-                .arg(Arg::with_name("include-indels").long("include-indels"))
-                .arg(
-                    Arg::with_name("ploidy")
-                        .long("ploidy")
-                        .default_value("1")
-                        .required(false),
-                )
-                .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.3")
-                        .required(false),
-                )
-                .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet"))
-                .arg(Arg::with_name("freebayes").long("freebayes"))
-                .arg(
-                    Arg::with_name("ulimit")
-                        .long("ulimit")
-                        .default_value("81920"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("summarize")
-                .about("Perform variant calling analysis and then binning")
-                .help(SUMMARIZE_HELP.as_str())
-                .arg(Arg::with_name("full-help").long("full-help"))
-                .arg(
-                    Arg::with_name("bam-files")
-                        .short("b")
-                        .long("bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "read1",
-                            "read2",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
+                    Arg::with_name("pcr-indel-model")
+                        .long("pcr-indel-model")
+                        .default_value("conservative")
+                        .possible_values(&[
+                            "none",
+                            "None",
+                            "NONE",
+                            "hostile",
+                            "Hostile",
+                            "HOSTILE",
+                            "aggresive",
+                            "Agressive",
+                            "AGGRESSIVE",
+                            "conservative",
+                            "Conservative",
+                            "CONSERVATIVE",
                         ]),
                 )
                 .arg(
-                    Arg::with_name("assembly-bam-files")
-                        .long("query-assembly-bam-files")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly"]),
-                )
-                .arg(
-                    Arg::with_name("assembly")
-                        .short("a")
-                        .long("query-assembly")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["assembly-bam-files"]),
-                )
-                .arg(Arg::with_name("sharded").long("sharded").required(false))
-                .arg(
-                    Arg::with_name("read1")
-                        .short("1")
-                        .multiple(true)
-                        .takes_value(true)
-                        .requires("read2")
-                        .required_unless_one(&[
-                            "bam-files",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("read2")
-                        .short("2")
-                        .multiple(true)
-                        .takes_value(true)
-                        .requires("read1")
-                        .required_unless_one(&[
-                            "bam-files",
-                            "coupled",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("coupled")
-                        .short("c")
-                        .long("coupled")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "interleaved",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("interleaved")
-                        .long("interleaved")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "coupled",
-                            "single",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("single")
-                        .long("single")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required_unless_one(&[
-                            "bam-files",
-                            "read1",
-                            "coupled",
-                            "interleaved",
-                            "full-help",
-                        ])
-                        .conflicts_with("bam-files"),
-                )
-                .arg(
-                    Arg::with_name("longreads")
-                        .long("longreads")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["longread-bam-files"]),
-                )
-                .arg(
-                    Arg::with_name("longread-bam-files")
-                        .short("l")
-                        .multiple(true)
-                        .takes_value(true)
-                        .required(false)
-                        .conflicts_with_all(&["longreads"]),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-file")
-                        .short("r")
-                        .long("reference")
-                        .alias("genome-fasta-files")
-                        .takes_value(true)
-                        .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-directory")
-                        .long("genome-fasta-directory")
-                        .short("d")
-                        .takes_value(true)
-                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
-                )
-                .arg(
-                    Arg::with_name("genome-fasta-extension")
-                        .long("genome-fasta-extension")
-                        .short("x")
-                        .takes_value(true)
-                        .default_value("fna"),
-                )
-                .arg(
-                    Arg::with_name("bam-file-cache-directory")
-                        .long("bam-file-cache-directory")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("output-directory")
-                        .long("output-directory")
-                        .short("o")
-                        .default_value("./"),
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("t")
-                        .long("threads")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("parallel-genomes")
-                        .long("parallel-genomes")
-                        .default_value("1")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("mapper")
-                        .short("p")
-                        .long("mapper")
-                        .possible_values(MAPPING_SOFTWARE_LIST)
-                        .default_value(DEFAULT_MAPPING_SOFTWARE),
-                )
-                .arg(
-                    Arg::with_name("longread-mapper")
-                        .long("longread-mapper")
-                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
-                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
-                )
-                .arg(
-                    Arg::with_name("minimap2-params")
-                        .long("minimap2-params")
-                        .long("minimap2-parameters")
-                        .takes_value(true)
-                        .allow_hyphen_values(true),
-                )
-                .arg(
-                    Arg::with_name("minimap2-reference-is-index")
-                        .long("minimap2-reference-is-index")
-                        .requires("reference"),
-                )
-                .arg(
-                    Arg::with_name("bwa-params")
-                        .long("bwa-params")
-                        .long("bwa-parameters")
-                        .takes_value(true)
-                        .allow_hyphen_values(true)
-                        .requires("reference"),
-                )
-                .arg(
-                    Arg::with_name("discard-unmapped")
-                        .long("discard-unmapped")
-                        .requires("bam-file-cache-directory"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-length")
-                        .long("min-read-aligned-length")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity")
-                        .long("min-read-percent-identity")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent")
-                        .long("min-read-aligned-percent")
-                        .default_value("0.0")
-                        .takes_value(true),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-length-pair")
-                        .long("min-read-aligned-length-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-percent-identity-pair")
-                        .long("min-read-percent-identity-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("min-read-aligned-percent-pair")
-                        .long("min-read-aligned-percent-pair")
-                        .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
-                )
-                .arg(
-                    Arg::with_name("method")
-                        .short("m")
-                        .long("method")
-                        .takes_value(true)
-                        .possible_values(&["trimmed_mean", "mean", "metabat"])
-                        .default_value("trimmed_mean"),
-                )
-                .arg(
-                    Arg::with_name("window-size")
-                        .long("window-size")
-                        .short("w")
-                        .default_value("1"),
-                )
-                .arg(
-                    Arg::with_name("epsilon")
-                        .long("epsilon")
-                        .short("e")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("min-cluster-size")
-                        .long("min-cluster-size")
-                        .short("s")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("min-covered-fraction")
-                        .long("min-covered-fraction")
-                        .default_value("0.0"),
-                )
-                .arg(
-                    Arg::with_name("coverage-fold")
-                        .long("coverage-fold")
-                        .default_value("0.5"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-depth")
-                        .long("min-variant-depth")
-                        .short("f")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("min-variant-quality")
-                        .long("min-variant-quality")
-                        .default_value("10"),
-                )
-                .arg(Arg::with_name("strain-ani").long("strain-ani"))
-                .arg(
-                    Arg::with_name("mapq-threshold")
-                        .long("mapq-threshold")
-                        .default_value("10"),
-                )
-                .arg(
-                    Arg::with_name("base-quality-threshold")
-                        .long("base-quality-threshold")
-                        .short("q")
-                        .default_value("13"),
-                )
-                .arg(
-                    Arg::with_name("fdr-threshold")
-                        .long("fdr-threshold")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("heterozygosity")
-                        .long("heterozygosity")
+                    Arg::with_name("heterozygosity-stdev")
+                        .long("heterozygosity-stdev")
                         .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("snp-heterozygosity")
+                        .long("snp-heterozygosity")
+                        .default_value("0.001"),
                 )
                 .arg(
                     Arg::with_name("indel-heterozygosity")
                         .long("indel-heterozygosity")
+                        .default_value("0.000125"),
+                )
+                .arg(
+                    Arg::with_name("standard-min-confidence-threshold-for-calling")
+                        .long("standard-min-confidence-threshold-for-calling")
+                        .short("C")
+                        .default_value("30.0"),
+                )
+                .arg(
+                    Arg::with_name("genotype-assignment-method")
+                        .long("genotype-assignment-method")
+                        .default_value("UsePLsToAssign")
+                        .possible_values(&[
+                            "UsePLsToAssign",
+                            "UsePosteriorProbabilities",
+                            "BestMatchToOriginal",
+                            "DoNotAssignGenotypes",
+                        ])
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("use-posteriors-to-calculate-qual")
+                        .long("use-posteriors-to-calculate-qual"),
+                )
+                .arg(
+                    Arg::with_name("annotate-with-num-discovered-alleles")
+                        .long("annotate-with-num-discovered-alleles"),
+                )
+                .arg(
+                    Arg::with_name("active-probability-threshold")
+                        .long("active-probability-threshold")
+                        .default_value("0.002"),
+                )
+                .arg(
+                    Arg::with_name("min-assembly-region-size")
+                        .long("min-assembly-region-size")
+                        .default_value("50"),
+                )
+                .arg(
+                    Arg::with_name("max-assembly-region-size")
+                        .long("max-assembly-region-size")
+                        .default_value("300"),
+                )
+                .arg(
+                    Arg::with_name("kmer-sizes")
+                        .long("kmer-sizes")
+                        .short("k")
+                        .multiple(true)
+                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                )
+                .arg(
+                    Arg::with_name("max-allowed-path-for-read-threading-assembler")
+                        .long("max-allowed-path-for-read-threading-assembler")
+                        .default_value("256")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-increase-kmer-sizes-for-cycles")
+                        .long("dont-increase-kmer-sizes-for-cycles"),
+                )
+                .arg(
+                    Arg::with_name("allow-non-unique-kmers-in-ref")
+                        .long("allow-non-unique-kmers-in-ref"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-transformations")
+                        .long("debug-graph-transformations")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("do-not-recover-dangling-branches")
+                        .long("do-not-recover-dangling-branches")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("do-not-run-physical-phasing")
+                        .long("do-not-run-physical-phasing"),
+                )
+                .arg(
+                    Arg::with_name("recover-all-dangling-branches")
+                        .long("recover-all-dangling-branches"),
+                )
+                .arg(
+                    Arg::with_name("min-dangling-branch-length")
+                        .long("min-dangling-branch-length")
+                        .default_value("4"),
+                )
+                .arg(
+                    Arg::with_name("graph-output")
+                        .long("graph-output")
+                        .default_value("lorikeet_haplotype_caller"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-output")
+                        .long("debug-graph-output")
+                        .default_value("lorikeet_haplotype_caller_debug")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("num-pruning-samples")
+                        .long("num-pruning-samples")
+                        .multiple(true)
+                        .default_value("1"),
+                )
+                .arg(
+                    Arg::with_name("min-prune-factor")
+                        .long("min-prune-factor")
+                        .default_value("2")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-use-adaptive-pruning")
+                        .long("dont-use-adaptive-pruning")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-use-soft-clipped-bases")
+                        .long("dont-use-soft-clipped-bases"),
+                )
+                .arg(
+                    Arg::with_name("initial-error-rate-for-pruning")
+                        .long("initial-error-rate-for-pruning")
                         .default_value("0.001"),
                 )
                 .arg(
-                    Arg::with_name("kmer-size")
-                        .long("kmer-size")
-                        .short("k")
-                        .default_value("4"),
+                    Arg::with_name("pruning-seeding-log-odds-threshold")
+                        .long("pruning-seeding-log-odds-threshold")
+                        .default_value("4.0")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("pruning-log-odds-threshold")
+                        .long("pruning-log-odds-threshold")
+                        .default_value("1.0"),
+                )
+                .arg(
+                    Arg::with_name("max-unpruned-variants")
+                        .long("max-unpruned-variants")
+                        .default_value("100"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
                         .default_value("75"),
+                )
+                .arg(
+                    Arg::with_name("max-prob-propagation-distance")
+                        .long("max-prob-propagation-distance")
+                        .default_value("50"),
+                )
+                .arg(
+                    Arg::with_name("use-linked-debruijn-graph")
+                        .long("use-linked-debruijn-graph")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("error-correct-reads")
+                        .long("error-correct-reads")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("kmer-length-for-read-error-correction")
+                        .long("kmer-length-for-read-error-correction")
+                        .default_value("25")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("max-mnp-distance")
+                        .long("max-mnp-distance")
+                        .default_value("0"),
+                )
+                .arg(
+                    Arg::with_name("min-observation-for-kmer-to-be-solid")
+                        .long("min-observation-for-kmer-to-be-solid")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("enable-legacy-graph-cycle-detection")
+                        .long("enable-legacy-graph-cycle-detection")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-matching-bases-to-dangling-end-recovery")
+                        .long("min-matching-bases-to-dangling-end-recovery")
+                        .default_value("-1")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("assembly-region-padding")
+                        .long("assembly-region-padding")
+                        .default_value("100"),
+                )
+                .arg(
+                    Arg::with_name("indel-padding-for-genotyping")
+                        .long("indel-padding-for-genotyping")
+                        .default_value("75")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("str-padding-for-genotyping")
+                        .long("str-padding-for-genotyping")
+                        .default_value("75")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("snp-padding-for-genotyping")
+                        .long("snp-padding-for-genotyping")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("max-extension-into-region-padding")
+                        .long("max-extension-into-region-padding")
+                        .default_value("25")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("soft-clip-low-quality-ends")
+                        .long("soft-clip-low-quality-ends")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("trim-min")
@@ -1401,32 +945,80 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("0.95"),
                 )
                 .arg(
+                    Arg::with_name("mapping-quality-threshold-for-genotyping")
+                        .long("mapping-quality-threshold-for-genotyping")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-base-quality")
+                        .long("min-base-quality")
+                        .short("q")
+                        .default_value("10"),
+                )
+                .arg(
+                    Arg::with_name("base-quality-score-threshold")
+                        .long("base-quality-score-threshold")
+                        .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
+                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dynamic-read-disqualification-threshold")
+                        .long("dynamic-read-disqualification-threshold")
+                        .default_value("1.0")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("expected-mismatch-rate-for-read-disqualification")
+                        .long("expected-mismatch-rate-for-read-disqualification")
+                        .default_value("0.02")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("allele-informative-reads-overlap-margin")
+                        .long("allele-informative-reads-overlap-margin")
+                        .default_value("2")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-symmetric-hmm-normalizing")
+                        .long("disable-symmetric-hmm-normalizing")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-cap-base-qualities-to-map-quality")
+                        .long("disable-cap-base-qualities-to-map-quality")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-spanning-event-genotyping")
+                        .long("disable-spanning-event-genotyping")
+                        .hidden(true),
+                )
+                .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("no-zeros").long("no-zeros"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("include-secondary").long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
                         .default_value("1")
                         .required(false),
                 )
                 .arg(
-                    Arg::with_name("min-repeat-entropy")
-                        .long("min-repeat-entropy")
-                        .default_value("1.3")
-                        .required(false),
+                    Arg::with_name("limiting-interval")
+                        .long("limiting-interval")
+                        .required(false)
+                        .takes_value(true),
                 )
                 .arg(Arg::with_name("force").long("force"))
-                .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-                .arg(Arg::with_name("nanopore").long("nanopore"))
-                .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
-                .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
-                .arg(Arg::with_name("quiet").long("quiet"))
-                .arg(Arg::with_name("freebayes").long("freebayes"))
-                .arg(
-                    Arg::with_name("ulimit")
-                        .long("ulimit")
-                        .default_value("81920"),
-                ),
+                .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
             SubCommand::with_name("genotype")
@@ -1574,16 +1166,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("./"),
                 )
                 .arg(
-                    Arg::with_name("vcfs")
-                        .long("vcfs")
-                        .multiple(true)
+                    Arg::with_name("features-vcf")
+                        .long("features-vcf")
                         .required(false),
                 )
                 .arg(
                     Arg::with_name("threads")
                         .short("t")
                         .long("threads")
-                        .default_value("1")
+                        .default_value("8")
                         .takes_value(true),
                 )
                 .arg(
@@ -1688,11 +1279,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("0.0"),
                 )
                 .arg(
-                    Arg::with_name("mapq-threshold")
-                        .long("mapq-threshold")
-                        .default_value("10"),
-                )
-                .arg(
                     Arg::with_name("n-neighbors")
                         .long("n-neighbors")
                         .short("n")
@@ -1743,9 +1329,603 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         ]),
                 )
                 .arg(
-                    Arg::with_name("fdr-threshold")
-                        .long("fdr-threshold")
+                    Arg::with_name("heterozygosity-stdev")
+                        .long("heterozygosity-stdev")
                         .default_value("0.01"),
+                )
+                .arg(
+                    Arg::with_name("snp-heterozygosity")
+                        .long("snp-heterozygosity")
+                        .default_value("0.001"),
+                )
+                .arg(
+                    Arg::with_name("indel-heterozygosity")
+                        .long("indel-heterozygosity")
+                        .default_value("0.000125"),
+                )
+                .arg(
+                    Arg::with_name("standard-min-confidence-threshold-for-calling")
+                        .long("standard-min-confidence-threshold-for-calling")
+                        .short("C")
+                        .default_value("30.0"),
+                )
+                .arg(
+                    Arg::with_name("genotype-assignment-method")
+                        .long("genotype-assignment-method")
+                        .default_value("UsePLsToAssign")
+                        .possible_values(&[
+                            "UsePLsToAssign",
+                            "UsePosteriorProbabilities",
+                            "BestMatchToOriginal",
+                            "DoNotAssignGenotypes",
+                        ])
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("use-posteriors-to-calculate-qual")
+                        .long("use-posteriors-to-calculate-qual"),
+                )
+                .arg(
+                    Arg::with_name("annotate-with-num-discovered-alleles")
+                        .long("annotate-with-num-discovered-alleles"),
+                )
+                .arg(
+                    Arg::with_name("active-probability-threshold")
+                        .long("active-probability-threshold")
+                        .default_value("0.002"),
+                )
+                .arg(
+                    Arg::with_name("min-assembly-region-size")
+                        .long("min-assembly-region-size")
+                        .default_value("50"),
+                )
+                .arg(
+                    Arg::with_name("max-assembly-region-size")
+                        .long("max-assembly-region-size")
+                        .default_value("300"),
+                )
+                .arg(
+                    Arg::with_name("kmer-sizes")
+                        .long("kmer-sizes")
+                        .short("k")
+                        .multiple(true)
+                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                )
+                .arg(
+                    Arg::with_name("max-allowed-path-for-read-threading-assembler")
+                        .long("max-allowed-path-for-read-threading-assembler")
+                        .default_value("256")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-increase-kmer-sizes-for-cycles")
+                        .long("dont-increase-kmer-sizes-for-cycles"),
+                )
+                .arg(
+                    Arg::with_name("allow-non-unique-kmers-in-ref")
+                        .long("allow-non-unique-kmers-in-ref"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-transformations")
+                        .long("debug-graph-transformations")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("do-not-recover-dangling-branches")
+                        .long("do-not-recover-dangling-branches")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("do-not-run-physical-phasing")
+                        .long("do-not-run-physical-phasing"),
+                )
+                .arg(
+                    Arg::with_name("recover-all-dangling-branches")
+                        .long("recover-all-dangling-branches"),
+                )
+                .arg(
+                    Arg::with_name("min-dangling-branch-length")
+                        .long("min-dangling-branch-length")
+                        .default_value("4"),
+                )
+                .arg(
+                    Arg::with_name("graph-output")
+                        .long("graph-output")
+                        .default_value("lorikeet_haplotype_caller"),
+                )
+                .arg(
+                    Arg::with_name("debug-graph-output")
+                        .long("debug-graph-output")
+                        .default_value("lorikeet_haplotype_caller_debug")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("num-pruning-samples")
+                        .long("num-pruning-samples")
+                        .multiple(true)
+                        .default_value("1"),
+                )
+                .arg(
+                    Arg::with_name("min-prune-factor")
+                        .long("min-prune-factor")
+                        .default_value("2")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-use-adaptive-pruning")
+                        .long("dont-use-adaptive-pruning")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dont-use-soft-clipped-bases")
+                        .long("dont-use-soft-clipped-bases"),
+                )
+                .arg(
+                    Arg::with_name("initial-error-rate-for-pruning")
+                        .long("initial-error-rate-for-pruning")
+                        .default_value("0.001"),
+                )
+                .arg(
+                    Arg::with_name("pruning-seeding-log-odds-threshold")
+                        .long("pruning-seeding-log-odds-threshold")
+                        .default_value("4.0")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("pruning-log-odds-threshold")
+                        .long("pruning-log-odds-threshold")
+                        .default_value("1.0"),
+                )
+                .arg(
+                    Arg::with_name("max-unpruned-variants")
+                        .long("max-unpruned-variants")
+                        .default_value("100"),
+                )
+                .arg(
+                    Arg::with_name("contig-end-exclusion")
+                        .long("contig-end-exclusion")
+                        .default_value("75"),
+                )
+                .arg(
+                    Arg::with_name("max-prob-propagation-distance")
+                        .long("max-prob-propagation-distance")
+                        .default_value("50"),
+                )
+                .arg(
+                    Arg::with_name("use-linked-debruijn-graph")
+                        .long("use-linked-debruijn-graph")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("error-correct-reads")
+                        .long("error-correct-reads")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("kmer-length-for-read-error-correction")
+                        .long("kmer-length-for-read-error-correction")
+                        .default_value("25")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("max-mnp-distance")
+                        .long("max-mnp-distance")
+                        .default_value("0"),
+                )
+                .arg(
+                    Arg::with_name("min-observation-for-kmer-to-be-solid")
+                        .long("min-observation-for-kmer-to-be-solid")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("enable-legacy-graph-cycle-detection")
+                        .long("enable-legacy-graph-cycle-detection")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-matching-bases-to-dangling-end-recovery")
+                        .long("min-matching-bases-to-dangling-end-recovery")
+                        .default_value("-1")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("assembly-region-padding")
+                        .long("assembly-region-padding")
+                        .default_value("100"),
+                )
+                .arg(
+                    Arg::with_name("indel-padding-for-genotyping")
+                        .long("indel-padding-for-genotyping")
+                        .default_value("75")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("str-padding-for-genotyping")
+                        .long("str-padding-for-genotyping")
+                        .default_value("75")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("snp-padding-for-genotyping")
+                        .long("snp-padding-for-genotyping")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("max-extension-into-region-padding")
+                        .long("max-extension-into-region-padding")
+                        .default_value("25")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("soft-clip-low-quality-ends")
+                        .long("soft-clip-low-quality-ends")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("trim-min")
+                        .long("trim-min")
+                        .default_value("0.05"),
+                )
+                .arg(
+                    Arg::with_name("trim-max")
+                        .long("trim-max")
+                        .default_value("0.95"),
+                )
+                .arg(
+                    Arg::with_name("mapping-quality-threshold-for-genotyping")
+                        .long("mapping-quality-threshold-for-genotyping")
+                        .default_value("20")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-base-quality")
+                        .long("min-base-quality")
+                        .short("q")
+                        .default_value("10"),
+                )
+                .arg(
+                    Arg::with_name("base-quality-score-threshold")
+                        .long("base-quality-score-threshold")
+                        .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
+                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("dynamic-read-disqualification-threshold")
+                        .long("dynamic-read-disqualification-threshold")
+                        .default_value("1.0")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("expected-mismatch-rate-for-read-disqualification")
+                        .long("expected-mismatch-rate-for-read-disqualification")
+                        .default_value("0.02")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("allele-informative-reads-overlap-margin")
+                        .long("allele-informative-reads-overlap-margin")
+                        .default_value("2")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-symmetric-hmm-normalizing")
+                        .long("disable-symmetric-hmm-normalizing")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-cap-base-qualities-to-map-quality")
+                        .long("disable-cap-base-qualities-to-map-quality")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("disable-spanning-event-genotyping")
+                        .long("disable-spanning-event-genotyping")
+                        .hidden(true),
+                )
+                .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("no-zeros").long("no-zeros"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("include-secondary").long("include-secondary"))
+                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(
+                    Arg::with_name("ploidy")
+                        .long("ploidy")
+                        .default_value("1")
+                        .required(false),
+                )
+                .arg(
+                    Arg::with_name("limiting-interval")
+                        .long("limiting-interval")
+                        .required(false)
+                        .takes_value(true),
+                )
+                .arg(Arg::with_name("force").long("force"))
+                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("quiet").long("quiet")),
+        )
+        .subcommand(
+            SubCommand::with_name("call")
+                .about("Perform variant calling across the given genomes and samples")
+                .help(CALL_HELP.as_str())
+                .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(
+                    Arg::with_name("bam-files")
+                        .short("b")
+                        .long("bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&[
+                            "read1",
+                            "read2",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help",
+                        ]),
+                )
+                .arg(Arg::with_name("sharded").long("sharded").required(false))
+                .arg(
+                    Arg::with_name("read1")
+                        .short("1")
+                        .multiple(true)
+                        .takes_value(true)
+                        .requires("read2")
+                        .required_unless_one(&[
+                            "bam-files",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help",
+                        ])
+                        .conflicts_with("bam-files"),
+                )
+                .arg(
+                    Arg::with_name("read2")
+                        .short("2")
+                        .multiple(true)
+                        .takes_value(true)
+                        .requires("read1")
+                        .required_unless_one(&[
+                            "bam-files",
+                            "coupled",
+                            "interleaved",
+                            "single",
+                            "full-help",
+                        ])
+                        .conflicts_with("bam-files"),
+                )
+                .arg(
+                    Arg::with_name("coupled")
+                        .short("c")
+                        .long("coupled")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "interleaved",
+                            "single",
+                            "full-help",
+                        ])
+                        .conflicts_with("bam-files"),
+                )
+                .arg(
+                    Arg::with_name("interleaved")
+                        .long("interleaved")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "single",
+                            "full-help",
+                        ])
+                        .conflicts_with("bam-files"),
+                )
+                .arg(
+                    Arg::with_name("single")
+                        .long("single")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required_unless_one(&[
+                            "bam-files",
+                            "read1",
+                            "coupled",
+                            "interleaved",
+                            "full-help",
+                        ])
+                        .conflicts_with("bam-files"),
+                )
+                .arg(
+                    Arg::with_name("longreads")
+                        .long("longreads")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required(false)
+                        .conflicts_with_all(&["longread-bam-files"]),
+                )
+                .arg(
+                    Arg::with_name("longread-bam-files")
+                        .short("l")
+                        .long("longread-bam-files")
+                        .multiple(true)
+                        .takes_value(true)
+                        .required(false)
+                        .conflicts_with_all(&["longreads"]),
+                )
+                .arg(
+                    Arg::with_name("genome-fasta-files")
+                        .short("r")
+                        .long("reference")
+                        .alias("genome-fasta-files")
+                        .takes_value(true)
+                        .multiple(true)
+                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                )
+                .arg(
+                    Arg::with_name("genome-fasta-directory")
+                        .long("genome-fasta-directory")
+                        .short("d")
+                        .takes_value(true)
+                        .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
+                )
+                .arg(
+                    Arg::with_name("genome-fasta-extension")
+                        .long("genome-fasta-extension")
+                        .short("x")
+                        .takes_value(true)
+                        .default_value("fna"),
+                )
+                .arg(
+                    Arg::with_name("bam-file-cache-directory")
+                        .long("bam-file-cache-directory")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("output-directory")
+                        .long("output-directory")
+                        .short("o")
+                        .default_value("./"),
+                )
+                .arg(
+                    Arg::with_name("features-vcf")
+                        .long("features-vcf")
+                        .required(false),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .short("t")
+                        .long("threads")
+                        .default_value("8")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("parallel-genomes")
+                        .long("parallel-genomes")
+                        .default_value("1")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("mapper")
+                        .short("p")
+                        .long("mapper")
+                        .possible_values(MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("longread-mapper")
+                        .long("longread-mapper")
+                        .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
+                        .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
+                )
+                .arg(
+                    Arg::with_name("minimap2-params")
+                        .long("minimap2-params")
+                        .long("minimap2-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true),
+                )
+                .arg(
+                    Arg::with_name("minimap2-reference-is-index")
+                        .long("minimap2-reference-is-index")
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("bwa-params")
+                        .long("bwa-params")
+                        .long("bwa-parameters")
+                        .takes_value(true)
+                        .allow_hyphen_values(true)
+                        .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("discard-unmapped")
+                        .long("discard-unmapped")
+                        .requires("bam-file-cache-directory"),
+                )
+                .arg(
+                    Arg::with_name("min-read-aligned-length")
+                        .long("min-read-aligned-length")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("min-read-percent-identity")
+                        .long("min-read-percent-identity")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("min-read-aligned-percent")
+                        .long("min-read-aligned-percent")
+                        .default_value("0.0")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("min-read-aligned-length-pair")
+                        .long("min-read-aligned-length-pair")
+                        .takes_value(true)
+                        .conflicts_with("proper-pairs-only"),
+                )
+                .arg(
+                    Arg::with_name("min-read-percent-identity-pair")
+                        .long("min-read-percent-identity-pair")
+                        .takes_value(true)
+                        .conflicts_with("proper-pairs-only"),
+                )
+                .arg(
+                    Arg::with_name("min-read-aligned-percent-pair")
+                        .long("min-read-aligned-percent-pair")
+                        .takes_value(true)
+                        .conflicts_with("proper-pairs-only"),
+                )
+                .arg(
+                    Arg::with_name("method")
+                        .short("m")
+                        .long("method")
+                        .takes_value(true)
+                        .possible_values(&["trimmed_mean", "mean", "metabat"])
+                        .default_value("trimmed_mean")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-covered-fraction")
+                        .long("min-covered-fraction")
+                        .default_value("0.0"),
+                )
+                .arg(
+                    Arg::with_name("phred-scaled-global-read-mismapping-rate")
+                        .long("phred-scaled-global-read-mismapping-rate")
+                        .default_value("45"),
+                )
+                .arg(
+                    Arg::with_name("pair-hmm-gap-continuation-penalty")
+                        .long("pair-hmm-gap-continuation-penalty")
+                        .default_value("10"),
+                )
+                .arg(
+                    Arg::with_name("pcr-indel-model")
+                        .long("pcr-indel-model")
+                        .default_value("conservative")
+                        .possible_values(&[
+                            "none",
+                            "None",
+                            "NONE",
+                            "hostile",
+                            "Hostile",
+                            "HOSTILE",
+                            "aggresive",
+                            "Agressive",
+                            "AGGRESSIVE",
+                            "conservative",
+                            "Conservative",
+                            "CONSERVATIVE",
+                        ]),
                 )
                 .arg(
                     Arg::with_name("heterozygosity-stdev")
@@ -1777,12 +1957,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "UsePosteriorProbabilities",
                             "BestMatchToOriginal",
                             "DoNotAssignGenotypes",
-                        ]),
+                        ])
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("use-posteriors-to-calculate-qual")
-                        .long("use-posteriors-to-calculate-qual")
-                        .short("gp-qual"),
+                        .long("use-posteriors-to-calculate-qual"),
                 )
                 .arg(
                     Arg::with_name("annotate-with-num-discovered-alleles")
@@ -1813,7 +1993,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .default_value("128"),
+                        .default_value("256")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("dont-increase-kmer-sizes-for-cycles")
@@ -1825,11 +2006,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("debug-graph-transformations")
-                        .long("debug-graph-transformations"),
+                        .long("debug-graph-transformations")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("do-not-recover-dangling-branches")
-                        .long("do-not-recover-dangling-branches"),
+                        .long("do-not-recover-dangling-branches")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("do-not-run-physical-phasing")
@@ -1852,7 +2035,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("debug-graph-output")
                         .long("debug-graph-output")
-                        .default_value("lorikeet_haplotype_caller_debug"),
+                        .default_value("lorikeet_haplotype_caller_debug")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("num-pruning-samples")
@@ -1863,9 +2047,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2"),
+                        .default_value("2")
+                        .hidden(true),
                 )
-                .arg(Arg::with_name("dont-use-adaptive-pruning").long("dont-use-adaptive-pruning"))
+                .arg(
+                    Arg::with_name("dont-use-adaptive-pruning")
+                        .long("dont-use-adaptive-pruning")
+                        .hidden(true),
+                )
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -1878,7 +2067,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("pruning-seeding-log-odds-threshold")
                         .long("pruning-seeding-log-odds-threshold")
-                        .default_value("4.0"),
+                        .default_value("4.0")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("pruning-log-odds-threshold")
@@ -1900,12 +2090,21 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("max-prob-propagation-distance")
                         .default_value("50"),
                 )
-                .arg(Arg::with_name("use-linked-debruijn-graph").long("use-linked-debruijn-graph"))
-                .arg(Arg::with_name("error-correct-reads").long("error-correct-reads"))
+                .arg(
+                    Arg::with_name("use-linked-debruijn-graph")
+                        .long("use-linked-debruijn-graph")
+                        .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("error-correct-reads")
+                        .long("error-correct-reads")
+                        .hidden(true),
+                )
                 .arg(
                     Arg::with_name("kmer-length-for-read-error-correction")
                         .long("kmer-length-for-read-error-correction")
-                        .default_value("25"),
+                        .default_value("25")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("max-mnp-distance")
@@ -1915,16 +2114,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-observation-for-kmer-to-be-solid")
                         .long("min-observation-for-kmer-to-be-solid")
-                        .default_value("20"),
+                        .default_value("20")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("enable-legacy-graph-cycle-detection")
-                        .long("enable-legacy-graph-cycle-detection"),
+                        .long("enable-legacy-graph-cycle-detection")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("min-matching-bases-to-dangling-end-recovery")
                         .long("min-matching-bases-to-dangling-end-recovery")
-                        .default_value("-1"),
+                        .default_value("-1")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("assembly-region-padding")
@@ -1934,25 +2136,31 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("indel-padding-for-genotyping")
                         .long("indel-padding-for-genotyping")
-                        .default_value("75"),
+                        .default_value("75")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("str-padding-for-genotyping")
                         .long("str-padding-for-genotyping")
-                        .default_value("75"),
+                        .default_value("75")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("snp-padding-for-genotyping")
                         .long("snp-padding-for-genotyping")
-                        .default_value("20"),
+                        .default_value("20")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("max-extension-into-region-padding")
                         .long("max-extension-into-region-padding")
-                        .default_value("25"),
+                        .default_value("25")
+                        .hidden(true),
                 )
                 .arg(
-                    Arg::with_name("soft-clip-low-quality-ends").long("soft-clip-low-quality-ends"),
+                    Arg::with_name("soft-clip-low-quality-ends")
+                        .long("soft-clip-low-quality-ends")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("trim-min")
@@ -1967,7 +2175,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
                         .long("mapping-quality-threshold-for-genotyping")
-                        .default_value("20"),
+                        .default_value("20")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("min-base-quality")
@@ -1982,40 +2191,46 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
-                        .long("enable-dynamic-read-disqualification-for-genotyping"),
+                        .long("enable-dynamic-read-disqualification-for-genotyping")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("dynamic-read-disqualification-threshold")
                         .long("dynamic-read-disqualification-threshold")
-                        .default_value("1.0"),
+                        .default_value("1.0")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("expected-mismatch-rate-for-read-disqualification")
                         .long("expected-mismatch-rate-for-read-disqualification")
-                        .default_value("0.02"),
+                        .default_value("0.02")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("allele-informative-reads-overlap-margin")
                         .long("allele-informative-reads-overlap-margin")
-                        .default_value("2"),
+                        .default_value("2")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("disable-symmetric-hmm-normalizing")
-                        .long("disable-symmetric-hmm-normalizing"),
+                        .long("disable-symmetric-hmm-normalizing")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("disable-cap-base-qualities-to-map-quality")
-                        .long("disable-cap-base-qualities-to-map-quality"),
+                        .long("disable-cap-base-qualities-to-map-quality")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("disable-spanning-event-genotyping")
-                        .long("disable-spanning-event-genotyping"),
+                        .long("disable-spanning-event-genotyping")
+                        .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-soft-clipping").long("include-soft-clipping"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
@@ -2023,452 +2238,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("1")
                         .required(false),
                 )
+                .arg(
+                    Arg::with_name("limiting-interval")
+                        .long("limiting-interval")
+                        .required(false)
+                        .takes_value(true),
+                )
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
         );
-    // .subcommand(
-    //     SubCommand::with_name("kmer")
-    //         .about("Generate kmer count matrix for contigs")
-    //         //                .help(CONTIG_HELP.as_str())
-    //         .arg(Arg::with_name("full-help").long("full-help"))
-    //         .arg(
-    //             Arg::with_name("reference")
-    //                 .short("-r")
-    //                 .long("reference")
-    //                 .takes_value(true)
-    //                 .required(true),
-    //         )
-    //         .arg(Arg::with_name("verbose").short("v").long("verbose")),
-    // )
-    // .subcommand(
-    //     SubCommand::with_name("filter")
-    //         .about("Remove alignments with insufficient identity")
-    //         .help(FILTER_HELP.as_str())
-    //         .arg(Arg::with_name("full-help").long("full-help"))
-    //         .arg(
-    //             Arg::with_name("bam-files")
-    //                 .short("b")
-    //                 .long("bam-files")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&["full-help"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("output-bam-files")
-    //                 .short("o")
-    //                 .long("output-bam-files")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&["full-help"]),
-    //         )
-    //         .arg(Arg::with_name("inverse").long("inverse"))
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-length")
-    //                 .long("min-read-aligned-length")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-percent-identity")
-    //                 .long("min-read-percent-identity")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-percent")
-    //                 .long("min-read-aligned-percent")
-    //                 .default_value("0.0")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-length-pair")
-    //                 .long("min-read-aligned-length-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-percent-identity-pair")
-    //                 .long("min-read-percent-identity-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-percent-pair")
-    //                 .long("min-read-aligned-percent-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-    //         .arg(
-    //             Arg::with_name("threads")
-    //                 .long("threads")
-    //                 .short("t")
-    //                 .default_value("1")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("parallel-genomes")
-    //                 .long("parallel-genomes")
-    //                 .default_value("1")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(Arg::with_name("force").long("force"))
-    //         .arg(
-    //             Arg::with_name("verbose")
-    //                 // .short("v") // Do not use since could be confused with
-    //                 // inverse (a la grep -v)
-    //                 .long("verbose"),
-    //         )
-    //         .arg(Arg::with_name("quiet").short("q").long("quiet")),
-    // )
-    // .subcommand(
-    //     SubCommand::with_name("polish")
-    //         .about("Polish an assembly using highly abundant variant calls")
-    //         .help(POLISH_HELP.as_str())
-    //         .arg(Arg::with_name("full-help").long("full-help"))
-    //         .arg(
-    //             Arg::with_name("bam-files")
-    //                 .short("b")
-    //                 .long("bam-files")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&[
-    //                     "read1",
-    //                     "read2",
-    //                     "coupled",
-    //                     "interleaved",
-    //                     "single",
-    //                     "full-help",
-    //                 ]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("assembly-bam-files")
-    //                 .long("query-assembly-bam-files")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required(false)
-    //                 .conflicts_with_all(&["assembly"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("assembly")
-    //                 .short("a")
-    //                 .long("query-assembly")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required(false)
-    //                 .conflicts_with_all(&["assembly-bam-files"]),
-    //         )
-    //         .arg(Arg::with_name("sharded").long("sharded").required(false))
-    //         .arg(
-    //             Arg::with_name("read1")
-    //                 .short("-1")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .requires("read2")
-    //                 .required_unless_one(&[
-    //                     "bam-files",
-    //                     "coupled",
-    //                     "interleaved",
-    //                     "single",
-    //                     "full-help",
-    //                 ])
-    //                 .conflicts_with("bam-files"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("read2")
-    //                 .short("-2")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .requires("read1")
-    //                 .required_unless_one(&[
-    //                     "bam-files",
-    //                     "coupled",
-    //                     "interleaved",
-    //                     "single",
-    //                     "full-help",
-    //                 ])
-    //                 .conflicts_with("bam-files"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("coupled")
-    //                 .short("c")
-    //                 .long("coupled")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&[
-    //                     "bam-files",
-    //                     "read1",
-    //                     "interleaved",
-    //                     "single",
-    //                     "full-help",
-    //                 ])
-    //                 .conflicts_with("bam-files"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("longreads")
-    //                 .long("longreads")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required(false)
-    //                 .conflicts_with_all(&["longread-bam-files"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("longread-bam-files")
-    //                 .short("l")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required(false)
-    //                 .conflicts_with_all(&["longreads"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("interleaved")
-    //                 .long("interleaved")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&[
-    //                     "bam-files",
-    //                     "read1",
-    //                     "coupled",
-    //                     "single",
-    //                     "full-help",
-    //                 ])
-    //                 .conflicts_with("bam-files"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("single")
-    //                 .long("single")
-    //                 .multiple(true)
-    //                 .takes_value(true)
-    //                 .required_unless_one(&[
-    //                     "bam-files",
-    //                     "read1",
-    //                     "coupled",
-    //                     "interleaved",
-    //                     "full-help",
-    //                 ])
-    //                 .conflicts_with("bam-files"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("genome-fasta-files")
-    //                 .short("r")
-    //                 .long("reference")
-    //                 .alias("reference")
-    //                 .takes_value(true)
-    //                 .multiple(true)
-    //                 .required_unless_one(&["genome-fasta-directory", "full-help"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("genome-fasta-directory")
-    //                 .long("genome-fasta-directory")
-    //                 .short("d")
-    //                 .takes_value(true)
-    //                 .required_unless_one(&["reference", "genome-fasta-files", "full-help"]),
-    //         )
-    //         .arg(
-    //             Arg::with_name("genome-fasta-extension")
-    //                 .long("genome-fasta-extension")
-    //                 .short("x")
-    //                 .takes_value(true)
-    //                 .default_value("fna"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("bam-file-cache-directory")
-    //                 .long("bam-file-cache-directory")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("output-directory")
-    //                 .long("output-directory")
-    //                 .short("o")
-    //                 .default_value("./"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("threads")
-    //                 .short("-t")
-    //                 .long("threads")
-    //                 .default_value("1")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("parallel-genomes")
-    //                 .long("parallel-genomes")
-    //                 .default_value("1")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("mapper")
-    //                 .short("p")
-    //                 .long("mapper")
-    //                 .possible_values(MAPPING_SOFTWARE_LIST)
-    //                 .default_value(DEFAULT_MAPPING_SOFTWARE),
-    //         )
-    //         .arg(
-    //             Arg::with_name("longread-mapper")
-    //                 .long("longread-mapper")
-    //                 .possible_values(LONGREAD_MAPPING_SOFTWARE_LIST)
-    //                 .default_value(DEFAULT_LONGREAD_MAPPING_SOFTWARE),
-    //         )
-    //         .arg(
-    //             Arg::with_name("minimap2-params")
-    //                 .long("minimap2-params")
-    //                 .long("minimap2-parameters")
-    //                 .takes_value(true)
-    //                 .allow_hyphen_values(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("minimap2-reference-is-index")
-    //                 .long("minimap2-reference-is-index")
-    //                 .requires("reference"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("bwa-params")
-    //                 .long("bwa-params")
-    //                 .long("bwa-parameters")
-    //                 .takes_value(true)
-    //                 .allow_hyphen_values(true)
-    //                 .requires("reference"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("discard-unmapped")
-    //                 .long("discard-unmapped")
-    //                 .requires("bam-file-cache-directory"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-length")
-    //                 .long("min-read-aligned-length")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-percent-identity")
-    //                 .long("min-read-percent-identity")
-    //                 .takes_value(true),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-percent")
-    //                 .long("min-read-aligned-percent")
-    //                 .takes_value(true)
-    //                 .default_value("0.0"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-length-pair")
-    //                 .long("min-read-aligned-length-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-percent-identity-pair")
-    //                 .long("min-read-percent-identity-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-read-aligned-percent-pair")
-    //                 .long("min-read-aligned-percent-pair")
-    //                 .takes_value(true)
-    //                 .conflicts_with("proper-pairs-only"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("method")
-    //                 .short("m")
-    //                 .long("method")
-    //                 .takes_value(true)
-    //                 .multiple(false)
-    //                 .possible_values(&["trimmed_mean", "mean", "metabat"])
-    //                 .default_value("trimmed_mean"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-covered-fraction")
-    //                 .long("min-covered-fraction")
-    //                 .default_value("0.0"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("coverage-fold")
-    //                 .long("coverage-fold")
-    //                 .default_value("0.5"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-variant-depth")
-    //                 .long("min-variant-depth")
-    //                 .short("f")
-    //                 .default_value("10"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-variant-quality")
-    //                 .long("min-variant-quality")
-    //                 .default_value("10"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("mapq-threshold")
-    //                 .long("mapq-threshold")
-    //                 .default_value("0"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-base-quality")
-    //                 .long("min-base-quality")
-    //                 .short("q")
-    //                 .default_value("10"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("fdr-threshold")
-    //                 .long("fdr-threshold")
-    //                 .default_value("0.05"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("heterozygosity")
-    //                 .long("heterozygosity")
-    //                 .default_value("0.01"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("indel-heterozygosity")
-    //                 .long("indel-heterozygosity")
-    //                 .default_value("0.001"),
-    //         )
-    //         .arg(Arg::with_name("include-longread-svs").long("include-longread-svs"))
-    //         .arg(Arg::with_name("include-secondary").long("include-secondary"))
-    //         .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
-    //         .arg(
-    //             Arg::with_name("contig-end-exclusion")
-    //                 .long("contig-end-exclusion")
-    //                 .default_value("75"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("trim-min")
-    //                 .long("trim-min")
-    //                 .default_value("0.05"),
-    //         )
-    //         .arg(
-    //             Arg::with_name("trim-max")
-    //                 .long("trim-max")
-    //                 .default_value("0.95"),
-    //         )
-    //         .arg(Arg::with_name("no-zeros").long("no-zeros"))
-    //         .arg(Arg::with_name("plot").long("plot"))
-    //         .arg(
-    //             Arg::with_name("ploidy")
-    //                 .long("ploidy")
-    //                 .default_value("1")
-    //                 .required(false),
-    //         )
-    //         .arg(
-    //             Arg::with_name("min-repeat-entropy")
-    //                 .long("min-repeat-entropy")
-    //                 .default_value("1.3")
-    //                 .required(false),
-    //         )
-    //         .arg(Arg::with_name("force").long("force"))
-    //         .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
-    //         .arg(
-    //             Arg::with_name("window-size")
-    //                 .long("window-size")
-    //                 .short("w")
-    //                 .default_value("1"),
-    //         )
-    //         .arg(Arg::with_name("verbose").short("v").long("verbose"))
-    //         .arg(Arg::with_name("quiet").long("quiet"))
-    //         .arg(Arg::with_name("freebayes").long("freebayes"))
-    //         .arg(
-    //             Arg::with_name("ulimit")
-    //                 .long("ulimit")
-    //                 .default_value("81920"),
-    //         ),
-    // );
 }

@@ -1,4 +1,6 @@
 use graphs::base_vertex::BaseVertex;
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use rayon::prelude::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -25,13 +27,16 @@ use std::hash::{Hash, Hasher};
 pub struct SeqVertex {
     pub sequence: Vec<u8>,
     pub additional_info: String,
+    identity_code: usize,
 }
 
 impl SeqVertex {
     pub fn new(sequence: Vec<u8>) -> SeqVertex {
+        let mut rng = ThreadRng::default();
         Self {
             sequence,
             additional_info: format!(""),
+            identity_code: rng.gen(),
         }
     }
 
@@ -185,13 +190,14 @@ impl BaseVertex for SeqVertex {
 
 impl Hash for SeqVertex {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.sequence.hash(state)
+        self.sequence.hash(state);
+        self.identity_code.hash(state);
     }
 }
 
 impl PartialEq for SeqVertex {
     fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence
+        self.sequence == other.sequence && self.identity_code == other.identity_code
     }
 }
 

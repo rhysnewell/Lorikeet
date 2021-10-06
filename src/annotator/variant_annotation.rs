@@ -64,8 +64,8 @@ pub struct Annotation {
 }
 
 impl VariantAnnotations {
-    const MAX_QD_BEFORE_FIXING: f64 = 35.0;
-    const IDEAL_HIGH_QD: f64 = 30.0;
+    const MAX_QD_BEFORE_FIXING: f64 = 45.0;
+    const IDEAL_HIGH_QD: f64 = 35.0;
     const JITTER_SIGMA: f64 = 3.0;
 
     pub fn to_key(&self) -> &str {
@@ -258,8 +258,13 @@ impl VariantAnnotations {
 
                 let qual = -10.0 * vc.log10_p_error;
                 let mut QD = qual / (depth as f64);
+                debug!(
+                    "Log10 p error {} depth {} QD {}",
+                    vc.log10_p_error, depth, QD
+                );
 
                 QD = Self::fix_too_high_qd(QD);
+                debug!("Updated QD {}", QD);
 
                 return AttributeObject::f64(QD);
             }

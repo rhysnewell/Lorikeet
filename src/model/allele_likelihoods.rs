@@ -4,7 +4,7 @@ use hashlink::linked_hash_map::LinkedHashMap;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::NON_REF_ALLELE;
-use ndarray::{Array2, ArrayBase, ArrayView};
+use ndarray::{Array2, ArrayBase, ArrayView, Axis};
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use statrs::statistics::Median;
@@ -12,6 +12,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::f64::NAN;
 use std::hash::Hash;
+use test_utils::allele_list_unit_tester::AlleleListUnitTester;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
@@ -123,6 +124,45 @@ impl<A: Allele> AlleleLikelihoods<A> {
             is_natural_log: false,
             subsetted_genomic_loc: None,
             // sample_matrices
+        }
+    }
+
+    pub fn new_from_likelihoods(
+        alleles: AlleleList<A>,
+        samples: Vec<String>,
+        evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
+        filtered_evidence_by_sample_index: HashMap<usize, Vec<BirdToolRead>>,
+        values_by_sample_index: Vec<Array2<f64>>,
+    ) -> Self {
+        let sample_count = samples.len();
+        let number_of_evidences = (0..sample_count)
+            .into_iter()
+            .map(|i| evidence_by_sample_index.get(&i).unwrap().len())
+            .collect::<Vec<usize>>();
+        let likelihoods_matrix_evidence_capacity_by_sample_index = values_by_sample_index
+            .iter()
+            .map(|sample_values| {
+                sample_values
+                    .axis_iter(Axis(1))
+                    .map(|row| row.into_par_iter().filter(|x| !x.is_nan()).count())
+                    .min()
+                    .unwrap_or(0)
+            })
+            .collect::<Vec<usize>>();
+
+        let reference_allele_index = Self::find_reference_allele_index(&alleles);
+
+        Self {
+            evidence_by_sample_index,
+            filtered_evidence_by_sample_index,
+            values_by_sample_index,
+            likelihoods_matrix_evidence_capacity_by_sample_index,
+            number_of_evidences,
+            samples,
+            alleles,
+            reference_allele_index,
+            is_natural_log: false,
+            subsetted_genomic_loc: None,
         }
     }
 
@@ -551,7 +591,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
      *  or its values contain reference to non-existing alleles in this evidence-likelihood collection. Also no new allele
      *  can have zero old alleles mapping nor two new alleles can make reference to the same old allele.
      */
-    pub fn marginalize<'b>(&mut self, new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>) {
+    pub fn marginalize<'b>(
+        &self,
+        new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>,
+    ) -> Self {
         let new_alleles = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
         let old_allele_count = self.alleles.len();
         let new_allele_count = new_alleles.len();
@@ -570,15 +613,22 @@ impl<A: Allele> AlleleLikelihoods<A> {
 
         let sample_count = self.number_of_samples();
         debug!("new liklelihood values {:?}", &new_likelihood_values);
-        // GATK returns a whole new AlleleLikelihood Object here, but that would require
-        // a lot of cloning, so we will mutate the current object and pay attention downstream
-        self.values_by_sample_index = new_likelihood_values;
-        self.alleles = AlleleList::new_from_vec(
-            new_to_old_allele_map
-                .keys()
-                .map(|index| self.alleles.list[*index].clone())
-                .collect::<Vec<A>>(),
+
+        let new_allele_list = new_to_old_allele_map
+            .keys()
+            .map(|i| self.alleles.get_allele(*i).clone())
+            .collect::<Vec<A>>();
+
+        let mut result = Self::new_from_likelihoods(
+            AlleleList::new(&new_allele_list),
+            self.samples.clone(),
+            self.evidence_by_sample_index.clone(),
+            self.filtered_evidence_by_sample_index.clone(),
+            new_likelihood_values,
         );
+        result.is_natural_log = self.is_natural_log;
+
+        return result;
     }
 
     // Calculate the marginal likelihoods considering the old -> new allele index mapping.
@@ -762,7 +812,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         for new_index in 0..new_alleles.len() {
             let new_allele = new_alleles[new_index];
             for old_allele in new_to_old_allele_map.get(new_allele).unwrap() {
-                let old_allele_index = self.alleles.index_of_allele(*old_allele);
+                let old_allele_index = self.index_of_allele(*old_allele);
                 match old_allele_index {
                     None => {
                         panic!(

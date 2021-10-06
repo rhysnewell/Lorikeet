@@ -792,6 +792,10 @@ impl VariantContext {
         return self.variant_type.as_ref().unwrap();
     }
 
+    pub fn set_type(&mut self, variant_type: VariantType) {
+        self.variant_type = Some(variant_type);
+    }
+
     pub fn determine_type(&mut self) {
         if self.variant_type.is_none() {
             match self.alleles.len() {
@@ -1021,6 +1025,8 @@ impl VariantContext {
 
     fn add_genotype_format(&self, record: &mut Record) {
         // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
+        let mut gqs = Vec::new();
+        let mut dps = Vec::new();
         for genotype in self.genotypes.genotypes() {
             let mut phased = Vec::new();
             if genotype.is_phased {
@@ -1082,18 +1088,22 @@ impl VariantContext {
                     &genotype.ad_i32(),
                 )
                 .expect("Unable to push format tag");
-            record
-                .push_format_integer(
-                    VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
-                    &vec![genotype.gq as i32],
-                )
-                .expect("Unable to push format tag");
-            record
-                .push_format_integer(
-                    VariantAnnotations::Depth.to_key().as_bytes(),
-                    &vec![genotype.dp as i32],
-                )
-                .expect("Unable to push format tag");
+            if genotype.dp != -1 {
+                dps.push(genotype.dp as i32);
+                gqs.push(genotype.gq as i32);
+            } else {
+                dps.push(0);
+                gqs.push(0);
+            }
         }
+        record
+            .push_format_integer(
+                VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
+                &gqs,
+            )
+            .expect("Unable to push format tag");
+        record
+            .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
+            .expect("Unable to push format tag");
     }
 }

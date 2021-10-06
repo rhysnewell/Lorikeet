@@ -6,6 +6,7 @@ use graphs::k_best_haplotype_finder::KBestHaplotypeFinder;
 use petgraph::prelude::NodeIndex;
 use petgraph::Direction;
 use rayon::prelude::*;
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /**
@@ -66,6 +67,10 @@ impl GraphBasedKBestHaplotypeFinder {
         graph: &BaseGraph<V, E>,
     ) -> Vec<KBestHaplotype> {
         let mut result = Vec::new();
+        debug!(
+            "Sources {:?} Sinks {:?}",
+            &self.k_best_haplotype_finder.sources, &self.k_best_haplotype_finder.sinks
+        );
 
         let mut queue: BinaryHeap<KBestHaplotype> = self
             .k_best_haplotype_finder
@@ -74,6 +79,7 @@ impl GraphBasedKBestHaplotypeFinder {
             .map(|source| KBestHaplotype::new(*source, graph))
             .collect::<BinaryHeap<KBestHaplotype>>();
 
+        debug!("Graph {:?}", &graph);
         let mut vertex_counts = graph
             .graph
             .node_indices()
@@ -81,8 +87,14 @@ impl GraphBasedKBestHaplotypeFinder {
             .map(|v| (v, 0))
             .collect::<HashMap<NodeIndex, usize>>();
 
+        debug!(
+            "Sinks {:?} queue {:?} vertex counts {:?}",
+            &self.k_best_haplotype_finder.sinks, &queue, &vertex_counts
+        );
+
         while !queue.is_empty() && result.len() < max_number_of_haplotypes {
             let mut path_to_extend = queue.pop().unwrap();
+            debug!("Path to extend {:?}", &path_to_extend);
             let vertex_to_extend = path_to_extend.path.last_vertex;
             if self
                 .k_best_haplotype_finder
@@ -94,9 +106,11 @@ impl GraphBasedKBestHaplotypeFinder {
                 if vertex_counts.contains_key(&vertex_to_extend) {
                     let vertex_count = vertex_counts.entry(vertex_to_extend).or_insert(0);
                     *vertex_count += 1;
+
                     if *vertex_count < max_number_of_haplotypes {
                         let outgoing_edges =
                             graph.edges_directed(vertex_to_extend, Direction::Outgoing);
+                        debug!("Outgoing edges {:?}", &outgoing_edges);
                         let mut total_outgoing_multiplicity = 0;
                         for edge in outgoing_edges.iter() {
                             total_outgoing_multiplicity +=
@@ -114,6 +128,8 @@ impl GraphBasedKBestHaplotypeFinder {
                 }
             }
         }
+
+        debug!("Results {:?}", &result);
 
         return result;
     }

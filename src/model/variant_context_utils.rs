@@ -324,6 +324,7 @@ impl VariantContextUtils {
             priority_list_of_vcs,
             &genotype_merge_options,
         );
+        debug!("Sorted vcs {:?}", &pre_filtered_vcs);
 
         // Make sure all variant contexts are padded with reference base in case of indels if necessary
         let mut VCs: Vec<VariantContext> = pre_filtered_vcs
@@ -544,9 +545,9 @@ impl VariantContextUtils {
             let mut map = Self::create_allele_mapping(
                 ref_allele,
                 vc.get_reference_and_index(),
-                vc.get_alleles_with_index(),
+                vc.get_alternate_alleles_with_index(),
             );
-            map.insert(0, ref_allele.clone());
+            map.insert(vc.get_reference_and_index().0, ref_allele.clone());
             let mut am = AlleleMapper::default();
             am.set_map(Some(map));
             return am;
@@ -575,14 +576,14 @@ impl VariantContextUtils {
         ref_allele: &ByteArrayAllele,
         input_ref: (usize, &ByteArrayAllele),
         input_alleles: Vec<(usize, &'a ByteArrayAllele)>,
-    ) -> HashMap<usize, ByteArrayAllele> {
+    ) -> LinkedHashMap<usize, ByteArrayAllele> {
         assert!(
             ref_allele.len() > input_ref.1.len(),
             "BUG: Input ref is longer than ref_allele"
         );
         let extra_bases = &ref_allele.get_bases()[input_ref.1.len()..];
 
-        let mut map = HashMap::new();
+        let mut map = LinkedHashMap::new();
         for (idx, a) in input_alleles.into_iter() {
             if Self::is_non_symbolic_extendable_allele(a) {
                 let extended = ByteArrayAllele::extend(a, extra_bases);
@@ -913,7 +914,7 @@ pub enum FilteredRecordMergeType {
 
 pub struct AlleleMapper<'b> {
     vc: Option<&'b VariantContext>,
-    map: Option<HashMap<usize, ByteArrayAllele>>,
+    map: Option<LinkedHashMap<usize, ByteArrayAllele>>,
 }
 
 impl<'b> AlleleMapper<'b> {
@@ -928,7 +929,7 @@ impl<'b> AlleleMapper<'b> {
         self.vc = vc;
     }
 
-    pub fn set_map(&mut self, map: Option<HashMap<usize, ByteArrayAllele>>) {
+    pub fn set_map(&mut self, map: Option<LinkedHashMap<usize, ByteArrayAllele>>) {
         self.map = map;
     }
 

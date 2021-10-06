@@ -469,7 +469,7 @@ fn test_adaptive_pruning(
         seq_graph.base_graph.graph.node_indices().count(),
         seq_graph.base_graph.graph.edge_indices().count()
     );
-    seq_graph.simplify_graph();
+    seq_graph.simplify_graph("anon");
     println!("finished first simplify");
     println!(
         "Graph nodes {} edges {}",
@@ -485,7 +485,7 @@ fn test_adaptive_pruning(
         seq_graph.base_graph.graph.edge_indices().count()
     );
 
-    seq_graph.simplify_graph();
+    seq_graph.simplify_graph("anon");
     println!("finished second simplify");
     let sources = seq_graph
         .base_graph

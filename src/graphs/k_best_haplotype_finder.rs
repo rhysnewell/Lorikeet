@@ -1,12 +1,13 @@
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
+use hashlink::LinkedHashSet;
 use petgraph::algo::is_cyclic_directed;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 /**
  * A common interface for the different KBestHaplotypeFinder implementations to conform to
@@ -34,11 +35,11 @@ impl KBestHaplotypeFinder {
         let mut result = KBestHaplotypeFinder { sinks, sources };
 
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
-        //TODO Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
-        //TODO just the line commented out below if you want to trade early-bug-fail for speed.
-        // TODO: Lorikeet shouldn't have the above mentioned bugs, but will test and then implement
-        //       above points if needed.
+        //     Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
+        //     just the line commented out below if you want to trade early-bug-fail for speed.
+        debug!("Graph before cycles removed {:?}", graph);
         result.remove_cycles_if_necessary(graph, false);
+        debug!("Graph after cycles removed {:?}", graph);
         result
     }
 
@@ -62,8 +63,6 @@ impl KBestHaplotypeFinder {
         //TODO dealing with cycles here due to a bug in some of the graph transformations that produces cycles.
         //TODO Once that is solve, the if-else below should be substituted by a throw if there is any cycles,
         //TODO just the line commented out below if you want to trade early-bug-fail for speed.
-        // TODO: Lorikeet shouldn't have the above mentioned bugs, but will test and then implement
-        //       above points if needed.
         result.remove_cycles_if_necessary(graph, keep_cycles);
         result
     }
@@ -90,18 +89,12 @@ impl KBestHaplotypeFinder {
         &self,
         original: &mut BaseGraph<V, E>,
     ) {
-        let mut edges_to_remove = original
-            .graph
-            .edge_indices()
-            .collect::<HashSet<EdgeIndex>>();
-        let mut vertices_to_remove = original
-            .graph
-            .node_indices()
-            .collect::<HashSet<NodeIndex>>();
+        let mut edges_to_remove = HashSet::with_capacity(original.graph.edge_count());
+        let mut vertices_to_remove = HashSet::with_capacity(original.graph.node_count());
 
         let mut found_some_path = false;
         for source in self.sources.iter() {
-            let mut parent_vertices = HashSet::with_capacity(vertices_to_remove.len());
+            let mut parent_vertices = HashSet::with_capacity(original.graph.node_count());
             found_some_path = self.find_guilty_vertices_and_edges_to_remove_cycles(
                 original,
                 *source,
@@ -120,6 +113,8 @@ impl KBestHaplotypeFinder {
             "Cannot find a way to remove the cycles"
         );
 
+        debug!("Nodes to remove {:?}", &vertices_to_remove);
+        debug!("Edges to remove {:?}", &edges_to_remove);
         original.remove_all_edges(&edges_to_remove);
         original.remove_all_vertices(&vertices_to_remove);
     }
@@ -154,12 +149,18 @@ impl KBestHaplotypeFinder {
             .graph
             .edges_directed(current_vertex, Direction::Outgoing)
             .map(|e| e.id())
-            .collect::<Vec<EdgeIndex>>();
+            .collect::<LinkedHashSet<EdgeIndex>>();
+
+        debug!(
+            "Current vertex {:?} outgoing edges {:?}",
+            &current_vertex, &outgoing_edges
+        );
         parent_vertices.insert(current_vertex);
 
         let mut reaches_sink = false;
         for e in outgoing_edges {
             let child = graph.get_edge_target(e);
+            debug!("Current edge {:?} child {:?}", &e, &child);
             if parent_vertices.contains(&child) {
                 edges_to_remove.insert(e);
             } else {

@@ -6,23 +6,14 @@ use lorikeet_genome::external_command_checker;
 use lorikeet_genome::utils::utils::*;
 use lorikeet_genome::*;
 
-extern crate rust_htslib;
-use rust_htslib::bam;
-use rust_htslib::bam::Read;
-
-extern crate bio;
-use bio::alignment::sparse::*;
-
 extern crate coverm;
+use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::*;
 use coverm::FlagFilter;
 use coverm::*;
-use coverm::{bam_generator::*, filter};
 
-use std::collections::BTreeMap;
 use std::env;
-use std::path::Path;
 use std::process;
 use std::str;
 
@@ -31,9 +22,6 @@ extern crate tempfile;
 use tempfile::NamedTempFile;
 extern crate clap;
 use clap::*;
-
-extern crate itertools;
-use itertools::Itertools;
 
 #[macro_use]
 extern crate log;
@@ -49,62 +37,15 @@ fn main() {
     set_log_level(&matches, false);
 
     match matches.subcommand_name() {
-        Some("filter") => {
-            let m = matches.subcommand_matches("filter").unwrap();
-            if m.is_present("full-help") {
-                println!("{}", filter_full_help());
-                process::exit(1);
-            }
-            set_log_level(m, true);
-
-            let bam_files: Vec<&str> = m.values_of("bam-files").unwrap().collect();
-            let output_bam_files: Vec<&str> = m.values_of("output-bam-files").unwrap().collect();
-            if bam_files.len() != output_bam_files.len() {
-                panic!("The number of input BAM files must be the same as the number output")
-            }
-
-            let filter_params = FilterParameters::generate_from_clap(m);
-
-            let num_threads = value_t!(m.value_of("threads"), u16).unwrap();
-
-            for (bam, output) in bam_files.iter().zip(output_bam_files.iter()) {
-                let reader =
-                    bam::Reader::from_path(bam).expect(&format!("Unable to find BAM file {}", bam));
-                let header = bam::header::Header::from_template(reader.header());
-                let mut writer =
-                    bam::Writer::from_path(output, &header, rust_htslib::bam::Format::Bam)
-                        .expect(&format!("Failed to write BAM file {}", output));
-                writer
-                    .set_threads(num_threads as usize)
-                    .expect("Failed to set num threads in writer");
-                let mut filtered = filter::ReferenceSortedBamFilter::new(
-                    reader,
-                    filter_params.flag_filters.clone(),
-                    filter_params.min_aligned_length_single,
-                    filter_params.min_percent_identity_single,
-                    filter_params.min_aligned_percent_single,
-                    filter_params.min_aligned_length_pair,
-                    filter_params.min_percent_identity_pair,
-                    filter_params.min_aligned_percent_pair,
-                    !m.is_present("inverse"),
-                );
-
-                let mut record = bam::record::Record::new();
-                while filtered.read(&mut record).is_some() {
-                    debug!("Writing.. {:?}", record.qname());
-                    writer.write(&record).expect("Failed to write BAM record");
-                }
-            }
-        }
-        Some("summarize") => {
-            let m = matches.subcommand_matches("summarize").unwrap();
-            let mode = "summarize";
-            if m.is_present("full-help") {
-                println!("{}", summarize_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
-        }
+        // Some("summarize") => {
+        //     let m = matches.subcommand_matches("summarize").unwrap();
+        //     let mode = "summarize";
+        //     if m.is_present("full-help") {
+        //         println!("{}", summarize_full_help());
+        //         process::exit(1);
+        //     }
+        //     prepare_pileup(m, mode);
+        // }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
             let mode = "genotype";
@@ -114,67 +55,33 @@ fn main() {
             }
             prepare_pileup(m, mode);
         }
+        Some("call") => {
+            let m = matches.subcommand_matches("call").unwrap();
+            let mode = "genotype";
+            if m.is_present("full-help") {
+                println!("{}", call_full_help());
+                process::exit(1);
+            }
+            prepare_pileup(m, mode);
+        }
         Some("evolve") => {
             let m = matches.subcommand_matches("evolve").unwrap();
             let mode = "evolve";
             if m.is_present("full-help") {
-                println!("{}", summarize_full_help());
+                println!("{}", call_full_help());
                 process::exit(1);
             }
             prepare_pileup(m, mode);
         }
-        Some("polish") => {
-            let m = matches.subcommand_matches("polish").unwrap();
-            let mode = "polish";
-            if m.is_present("full-help") {
-                println!("{}", polish_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
-        }
-        Some("kmer") => {
-            let m = matches.subcommand_matches("kmer").unwrap();
-            if m.is_present("full-help") {
-                //                println!("{}", contig_full_help());
-                process::exit(1);
-            }
-            set_log_level(m, true);
-            let reference_path = Path::new(m.value_of("reference").unwrap());
-            let fasta_reader = match bio::io::fasta::Reader::from_file(&reference_path) {
-                Ok(reader) => reader,
-                Err(e) => {
-                    eprintln!("Missing or corrupt fasta file {}", e);
-                    process::exit(1);
-                }
-            };
-            let contigs = fasta_reader.records().collect_vec();
-            // Initialize bound contig variable
-            let mut tet_freq = BTreeMap::new();
-            let contig_count = contigs.len();
-            let mut contig_idx = 0 as usize;
-            let mut contig_names = vec![String::new(); contig_count];
-            for contig in contigs {
-                let contig = contig.unwrap();
-                contig_names[contig_idx] = contig.id().to_string();
-                debug!("Parsing contig: {}", contig.id());
-                let kmers = hash_kmers(contig.seq(), 4);
-                // Get kmer counts in a contig
-                for (kmer, pos) in kmers {
-                    let k = tet_freq
-                        .entry(kmer.to_vec())
-                        .or_insert(vec![0; contig_count]);
-                    k[contig_idx] = pos.len();
-                }
-                contig_idx += 1;
-            }
-            for (idx, contig) in contig_names.iter().enumerate() {
-                print!("{}\t", contig);
-                for (_kmer, counts) in &tet_freq {
-                    print!("{}\t", counts[idx])
-                }
-                print!("\n");
-            }
-        }
+        // Some("polish") => {
+        //     let m = matches.subcommand_matches("polish").unwrap();
+        //     let mode = "polish";
+        //     if m.is_present("full-help") {
+        //         println!("{}", polish_full_help());
+        //         process::exit(1);
+        //     }
+        //     prepare_pileup(m, mode);
+        // }
         _ => {
             app.print_help().unwrap();
             println!();

@@ -10,7 +10,6 @@ use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use smith_waterman::bindings::SWParameters;
-use std::collections::HashMap;
 use utils::simple_interval::Locatable;
 
 /**

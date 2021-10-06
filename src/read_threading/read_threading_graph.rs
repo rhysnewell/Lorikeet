@@ -23,7 +23,7 @@ use rust_htslib::bam::record::Cigar;
 use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use utils::simple_interval::Locatable;
 
 /**
@@ -242,8 +242,9 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
     }
 
     /**
-     * Does the graph not have enough complexity?  We define low complexity as a situation where the number
-     * of non-unique kmers is more than 20% of the total number of kmers.
+     * Does the graph not have enough complexity?  We define low complexity
+     * as a situation where the number of non-unique kmers is more than 20%
+     * of the total number of kmers.
      *
      * @return true if the graph has low complexity, false otherwise
      */
@@ -274,7 +275,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         self.non_unique_kmers = self.determine_non_uniques(
             self.base_graph.get_kmer_size(),
             self.get_all_pending_sequences(),
-        )
+        );
     }
 
     // whether reads are needed after graph construction

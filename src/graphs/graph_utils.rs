@@ -1,6 +1,7 @@
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
+use hashlink::LinkedHashSet;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -57,14 +58,14 @@ impl GraphUtils {
      * @param vertices a collection of vertices
      * @return a list of their kmers in order of the iterator on vertices
      */
-    pub fn get_kmers<'a, V: BaseVertex, E: BaseEdge>(
-        vertices: &HashSet<NodeIndex>,
+    pub fn get_kmers<'a, V: BaseVertex, E: BaseEdge, I: IntoIterator<Item = &'a NodeIndex>>(
+        vertices: I,
         graph: &'a BaseGraph<V, E>,
     ) -> Vec<&'a [u8]> {
-        return vertices
-            .into_par_iter()
+        vertices
+            .into_iter()
             .map(|v| graph.get_sequence_from_index(*v))
-            .collect::<Vec<&[u8]>>();
+            .collect::<Vec<&[u8]>>()
     }
 
     /**

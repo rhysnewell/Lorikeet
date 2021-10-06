@@ -14,10 +14,12 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate hashlink;
 extern crate itertools;
 extern crate rand;
 extern crate term;
 
+use hashlink::LinkedHashMap;
 use lorikeet_genome::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::estimation::lorikeet_engine::ReadType;
@@ -25,16 +27,17 @@ use lorikeet_genome::genotype::genotype_builder::{Genotype, GenotypesContext};
 use lorikeet_genome::haplotype::event_map::EventMap;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
-use lorikeet_genome::model::variant_context::VariantContext;
+use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::smith_waterman::bindings::SWParameters;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
 use lorikeet_genome::test_utils::variant_context_test_utils::VariantContextTestUtils;
-use lorikeet_genome::utils::simple_interval::SimpleInterval;
+use lorikeet_genome::utils::simple_interval::{Locatable, SimpleInterval};
 use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::{bam, bam::Read};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 
 lazy_static! {
@@ -264,5 +267,53 @@ fn get_vcs_at_this_location_from_given_alleles_data() {
             del_vc_expected.clone(),
             del_vc_false_duplicate_expected.clone(),
         ],
+    );
+}
+
+fn test_get_event_mapper(
+    merged_vc: VariantContext,
+    loc: usize,
+    haplotypes: Vec<Haplotype<SimpleInterval>>,
+    expected_event_map: LinkedHashMap<usize, Vec<&Haplotype<SimpleInterval>>>,
+) {
+    let actual_event_map =
+        AssemblyBasedCallerUtils::create_allele_mapper(&merged_vc, loc, &haplotypes, true);
+    assert_eq!(actual_event_map.len(), expected_event_map.len());
+    for key in actual_event_map.keys() {
+        assert!(expected_event_map.contains_key(key));
+        assert_eq!(actual_event_map.get(key), expected_event_map.get(key));
+    }
+
+    for key in expected_event_map.keys() {
+        assert!(actual_event_map.contains_key(key))
+    }
+}
+
+#[test]
+fn get_event_mapper_data() {
+    let mut ref_haplotype = Haplotype::new(b"ACTGGTCAACTAGTCAACTGGTCAACTGGTCA", true);
+    ref_haplotype.set_event_map(EventMap::state_for_testing(Vec::new()));
+
+    let mut snp_haplotype = Haplotype::new(b"ACTGGTCAACTGGTCAACTGGTCAACTGGTCA", false);
+    let ref_allele = ByteArrayAllele::new(b"A", true);
+    let snp_allele = ByteArrayAllele::new(b"G", false);
+    let snp_alleles = vec![ref_allele.clone(), snp_allele.clone()];
+    let mut snp_vc = VariantContext::build(20, 1000, 1000, snp_alleles.clone());
+    snp_vc.set_type(VariantType::Snp);
+    snp_haplotype.set_event_map(EventMap::state_for_testing(vec![snp_vc.clone()]));
+
+    let mut test1_expected_map = LinkedHashMap::new();
+    for (i, a) in snp_alleles.iter().enumerate() {
+        if &snp_alleles[1] == a {
+            test1_expected_map.insert(i, vec![&snp_haplotype]);
+        } else {
+            test1_expected_map.insert(i, vec![&ref_haplotype]);
+        }
+    }
+    test_get_event_mapper(
+        snp_vc.clone(),
+        snp_vc.loc.get_start(),
+        vec![snp_haplotype.clone(), ref_haplotype.clone()],
+        test1_expected_map,
     );
 }

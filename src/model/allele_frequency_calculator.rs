@@ -196,7 +196,6 @@ impl AlleleFrequencyCalculator {
             log10_allele_frequencies =
                 Dirichlet::new(&posterior_pseudo_counts).log10_mean_weights();
         }
-        debug!("Log10AlleleFrequencies {:?}", &log10_allele_frequencies);
 
         let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
         let mut log10_p_no_variant = 0.0;
@@ -210,7 +209,6 @@ impl AlleleFrequencyCalculator {
         let mut log10_absent_posteriors = Arc::new(Mutex::new(vec![Vec::new(); num_alleles]));
 
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
-            debug!("vc alleles {:?} this genotype {:?}", &vc.alleles, g);
             if !g.has_likelihoods() {
                 continue;
             }
@@ -229,7 +227,6 @@ impl AlleleFrequencyCalculator {
                 &mut log10_allele_frequencies,
             );
 
-            debug!("log10_genotype_posteriors {:?}", &log10_genotype_posteriors);
             if !spanning_deletion_present {
                 log10_p_no_variant +=
                     log10_genotype_posteriors[AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX];
@@ -304,26 +301,27 @@ impl AlleleFrequencyCalculator {
             log10_p_of_zero_counts_by_allele[1] = log10_p_no_variant
         }
 
-        let int_allele_counts = allele_counts
+        let int_allele_counts: Vec<i64> = allele_counts
             .par_iter()
             .map(|n| n.round() as i64)
             .collect::<Vec<i64>>();
 
-        let int_alt_allele_counts = int_allele_counts[1..].to_vec();
-        let log10_p_ref_by_allele = (1..num_alleles)
-            .into_par_iter()
-            .map(|a| {
-                (
-                    alleles[a].clone(),
-                    log10_p_of_zero_counts_by_allele[a].clone(),
-                )
-            })
-            .collect::<HashMap<ByteArrayAllele, f64>>();
+        let current_ref_index = alleles.iter().position(|a| a.is_reference()).unwrap_or(0);
 
-        debug!(
-            "Log10PNoVariant {} Log10PRefAlelle {:?}",
-            log10_p_no_variant, &log10_p_ref_by_allele
-        );
+        let int_alt_allele_counts: Vec<i64> = int_allele_counts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != current_ref_index)
+            .map(|(_, v)| *v)
+            .collect::<Vec<i64>>();
+
+        let log10_p_ref_by_allele: HashMap<ByteArrayAllele, f64> = alleles
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != current_ref_index)
+            .map(|(i, a)| (a.clone(), log10_p_of_zero_counts_by_allele[i]))
+            .collect();
+
         return AFCalculationResult::new(
             int_alt_allele_counts,
             alleles.to_vec(),

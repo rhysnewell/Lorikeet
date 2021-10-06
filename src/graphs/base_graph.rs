@@ -3,6 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::path::Path;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
+use hashlink::LinkedHashSet;
 use petgraph::prelude::{EdgeIndex, NodeIndex};
 use petgraph::stable_graph::{Externals, IndexType, StableDiGraph};
 use petgraph::visit::EdgeRef;
@@ -108,8 +109,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      * @return {@code true} if all the vertices in the input collection are present in this graph.
      * Also if the input collection is empty. Otherwise it returns {@code false}.
      */
-    pub fn contains_all_vertices(&self, nodes: &HashSet<NodeIndex>) -> bool {
-        return nodes.par_iter().all(|v| self.graph.contains_node(*v));
+    pub fn contains_all_vertices<'a, I: IntoIterator<Item = &'a NodeIndex>>(
+        &self,
+        nodes: I,
+    ) -> bool {
+        return nodes.into_iter().all(|v| self.graph.contains_node(*v));
     }
 
     pub fn contains_edge(&self, edge: EdgeIndex) -> bool {
@@ -228,11 +232,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      * @param v a non-null vertex
      * @return a set of vertices {X} connected X -> v
      */
-    pub fn incoming_vertices_of(&self, v: NodeIndex) -> HashSet<NodeIndex> {
+    pub fn incoming_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
         return self
             .graph
             .neighbors_directed(v, Direction::Incoming)
-            .collect::<HashSet<NodeIndex>>();
+            .collect::<LinkedHashSet<NodeIndex>>();
     }
 
     /**
@@ -242,11 +246,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      * @param v a non-null vertex
      * @return a set of vertices {X} connected X -> v
      */
-    pub fn outgoing_vertices_of(&self, v: NodeIndex) -> HashSet<NodeIndex> {
+    pub fn outgoing_vertices_of(&self, v: NodeIndex) -> LinkedHashSet<NodeIndex> {
         return self
             .graph
             .neighbors_directed(v, Direction::Outgoing)
-            .collect::<HashSet<NodeIndex>>();
+            .collect::<LinkedHashSet<NodeIndex>>();
     }
 
     /**

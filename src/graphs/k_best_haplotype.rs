@@ -11,7 +11,9 @@ use utils::simple_interval::Locatable;
 /**
  * Represents a result from a K-best haplotype search.
  *
- * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
+ * Original Java implementation by Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
+ *
+ * @author Rhys Newell &lt;rhys.newell@hdr.qut.edu.au&gt;
  */
 #[derive(Debug, Clone)]
 pub struct KBestHaplotype {

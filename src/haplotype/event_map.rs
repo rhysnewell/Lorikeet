@@ -28,6 +28,14 @@ impl EventMap {
     const MAX_EVENT_PER_HAPLOTYPE: usize = 3;
     const MAX_INDELS_PER_HAPLOTYPE: usize = 3;
 
+    pub fn empty() -> Self {
+        Self {
+            reference_loc: SimpleInterval::new(0, 0, 0),
+            source_name_to_add: "".to_string(),
+            map: BTreeMap::new(),
+        }
+    }
+
     pub fn new<L: Locatable>(
         haplotype: &Haplotype<L>,
         reference: &[u8],

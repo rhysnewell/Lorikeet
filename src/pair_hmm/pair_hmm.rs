@@ -148,7 +148,6 @@ impl PairHMM {
         processed_reads: Vec<BirdToolRead>,
         input_score_imputator: &PairHMMInputScoreImputator,
     ) {
-        debug!("processed reads {:?}", &processed_reads.len());
         if !processed_reads.is_empty() {
             // (re)initialize the pairHMM only if necessary
             let max_read_length = processed_reads
@@ -202,9 +201,7 @@ impl PairHMM {
                         is_first_haplotype,
                         next_allele_bases,
                     );
-                    if read_index % 100 == 0 {
-                        debug!("read likelihood {} index {}", lk, read_index);
-                    }
+
                     allele_likelihoods.values_by_sample_index[sample_index][[a, read_index]] = lk;
                     self.m_log_likelihood_array[idx] = lk;
                     if is_first_haplotype {
@@ -215,10 +212,6 @@ impl PairHMM {
                 read_index += 1;
             }
         }
-        debug!(
-            "Allele likelihoods after assignment for 0[[0, 0]] -> {:?}",
-            allele_likelihoods.values_by_sample_index[0][[0, 0]]
-        );
     }
 
     pub fn get_log_likelihood_array(&self) -> &Vec<f64> {
@@ -456,13 +449,6 @@ impl PairHMM {
                 a + (match_matrix[[end_i, j]] + insertion_matrix[[end_i, j]])
             })
             .sum::<f64>();
-
-        // debug!(
-        //     "final sum prob {} log10 {} initial condition log10 {}",
-        //     final_sum_probabilities,
-        //     final_sum_probabilities.log10(),
-        //     *INITIAL_CONDITION_LOG10
-        // );
 
         return final_sum_probabilities.log10() - *INITIAL_CONDITION_LOG10;
     }

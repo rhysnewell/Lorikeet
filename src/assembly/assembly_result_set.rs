@@ -3,6 +3,7 @@ use assembly::assembly_result::AssemblyResult;
 use haplotype::event_map::EventMap;
 use haplotype::haplotype::Haplotype;
 use linked_hash_set::LinkedHashSet;
+use model::byte_array_allele::Allele;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
@@ -71,29 +72,51 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         }
     }
 
-    /**
-     * Adds a haplotype to the result set without indicating a generating assembly result.
-     *
-     * <p>
-     *     It is possible to call this method with the same haplotype several times. In that the second and further
-     *     calls won't have any effect (thus returning {@code false}).
-     * </p>
-     *
-     * @param h the haplotype to add to the assembly result set.
-     *
-     * @throws NullPointerException if {@code h} is {@code null}
-     * @throws IllegalArgumentException if {@code h} does not have a genome location.
-     *
-     * @return {@code true} if the assembly result set has been modified as a result of this call.
-     */
+    /// Adds a haplotype to the result set without indicating a generating assembly result.
+    ///
+    ///
+    /// It is possible to call this method with the same haplotype several times. In that the second and further
+    /// calls won't have any effect (thus returning `false`).
+    ///
+    ///
+    /// @param `h` the haplotype to add to the assembly result set.
+    ///
+    /// @return `true` if the assembly result set has been modified as a result of this call.
+    ///
     pub fn add_haplotype(&mut self, h: Haplotype<SimpleInterval>) -> bool {
         if self.haplotypes.contains(&h) {
             return false;
         } else {
+            debug!("Loc {:?} hap {:?}", &self.padded_reference_loc, &h);
+            self.update_reference_haplotype(&h);
             self.haplotypes.insert(h);
             return true;
         }
     }
+
+    /**
+     * Given whether a new haplotype that has been already added to {@link #haplotypes} collection is the
+     * reference haplotype and updates {@link #refHaplotype} accordingly.
+     *
+     * <p>
+     *     This method assumes that the colling code has verified that the haplotype was not already in {@link #haplotypes}
+     *     I.e. that it is really a new one. Otherwise it will result in an exception if it happen to be a reference
+     *     haplotype and this has already be set. This is the case even if the new haplotypes and the current reference
+     *     are equal.
+     * </p>
+     *
+     * @param `new_haplotype` the new haplotype.
+     */
+    fn update_reference_haplotype(&mut self, new_haplotype: &Haplotype<SimpleInterval>) {
+        if new_haplotype.is_reference() {
+            if self.ref_haplotype.is_no_call() {
+                self.ref_haplotype = new_haplotype.clone();
+            } else if &self.ref_haplotype != new_haplotype {
+                panic!("The assembly result set already has a reference that is different to this haplotype")
+            }
+        };
+    }
+
     pub fn get_haplotype_list(&self) -> Vec<Haplotype<SimpleInterval>> {
         return self
             .haplotypes
@@ -118,10 +141,8 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      * @param h haplotype to add.
      * @param ar assembly-result that is assumed to have given rise to that haplotype.
      *
-     * @throws NullPointerException if {@code h} or {@code ar} is {@code null}.
-     * @throws IllegalArgumentException if {@code h} has not defined genome location.
      *
-     * @return {@code true} iff this called changes the assembly result set.
+     * @return `true` iff this called changes the assembly result set.
      */
     pub fn add_haplotype_and_assembly_result(
         &mut self,

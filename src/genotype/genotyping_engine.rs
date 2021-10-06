@@ -118,9 +118,6 @@ impl GenotypingEngine {
             reduced_vc = vc.clone();
         }
 
-        debug!("vc {:?}", &vc);
-        debug!("reduced vc {:?}", &reduced_vc);
-
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
         let max_pl_length =
             GenotypeLikelihoods::calc_num_likelihoods(reduced_vc.get_n_alleles(), ploidy);
@@ -137,8 +134,6 @@ impl GenotypingEngine {
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =
             self.calculate_output_allele_subset(&af_result, &vc, given_alleles, stand_min_conf);
-        debug!("AFResult {:?}", &af_result);
-        debug!("Alternative alleles {:?}", &output_alternative_alleles);
         // note the math.abs is necessary because -10 * 0.0 => -0.0 which isn't nice
         let log10_confidence = if !output_alternative_alleles.site_is_monomorphic {
             af_result.log10_prob_only_ref_allele_exists() + 0.0
@@ -159,13 +154,11 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
-            debug!("Did not pass emit threshold");
             return None;
         }
 
         // start constructing the resulting VC
         let output_alleles = output_alternative_alleles.output_alleles(vc.get_reference());
-        debug!("Output alleles {:?}", &output_alleles);
 
         self.record_deletions(&vc, &output_alleles);
 
@@ -358,10 +351,6 @@ impl GenotypingEngine {
     }
 
     pub fn passes_emit_threshold(conf: f64, min_conf: f64, best_guess_is_ref: bool) -> bool {
-        debug!(
-            "Best guess is ref {} conf {} min conf {}",
-            best_guess_is_ref, conf, min_conf
-        );
         !best_guess_is_ref && GenotypingEngine::passes_call_threshold(conf, min_conf)
     }
 
@@ -411,10 +400,7 @@ impl GenotypingEngine {
                     || is_non_ref_which_is_lone_alt_allele
                     || forced_alleles.contains(&allele))
                     && !is_spurious_spanning_deletion;
-                debug!(
-                    "To output {} is plausible {} is non ref which is lone alt allele {} forced {} is spurious spanning deletion {}",
-                    to_output, is_plausible, is_non_ref_which_is_lone_alt_allele, forced_alleles.contains(&allele), is_spurious_spanning_deletion
-                );
+
                 site_is_monomorphic =
                     site_is_monomorphic & !(is_plausible && !is_spurious_spanning_deletion);
 

@@ -3,6 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::graph_utils::GraphUtils;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
+use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::{Direction, Graph};
@@ -42,10 +43,6 @@ impl CommonSuffixSplitter {
             "Graph doesn't contain the vertex {:?}",
             v
         );
-        let mut edge_template = match graph.base_graph.graph.edges(v).next() {
-            None => return false,
-            Some(e) => e.weight().clone(),
-        };
 
         let to_split = graph.base_graph.incoming_vertices_of(v);
 
@@ -53,7 +50,7 @@ impl CommonSuffixSplitter {
         match suffix_v_template {
             None => return false,
             Some(suffix_v_template) => {
-                let mut edges_to_remove = HashSet::new();
+                let mut edges_to_remove = Vec::new();
 
                 for mid in to_split.iter() {
                     let suffix_v = graph.base_graph.add_node(suffix_v_template.clone());
@@ -64,6 +61,7 @@ impl CommonSuffixSplitter {
                         .unwrap()
                         .without_suffix(suffix_v_template.get_sequence());
                     let out = graph.base_graph.outgoing_edge_of(*mid).unwrap();
+                    debug!("Mid {:?} out {:?}", &mid, &out);
                     let mut incoming_target;
                     match prefix_v {
                         None => {
@@ -80,10 +78,10 @@ impl CommonSuffixSplitter {
                                 .base_graph
                                 .graph
                                 .add_edge(prefix_v_index, suffix_v, out_weight);
-                            edges_to_remove.insert(out);
+                            edges_to_remove.push(out);
                         }
                     }
-
+                    debug!("Incoming target {:?}", &incoming_target);
                     graph.base_graph.graph.add_edge(
                         suffix_v,
                         graph.base_graph.get_edge_target(out),
@@ -101,10 +99,11 @@ impl CommonSuffixSplitter {
                             incoming_target,
                             incoming_weight,
                         );
-                        edges_to_remove.insert(incoming_index);
+                        edges_to_remove.push(incoming_index);
                     }
                 }
-
+                debug!("Node to remove {:?}", &to_split);
+                debug!("Edges to remove {:?}", &edges_to_remove);
                 graph.base_graph.remove_all_vertices(&to_split);
                 graph.base_graph.remove_all_edges(&edges_to_remove);
                 return true;
@@ -115,7 +114,7 @@ impl CommonSuffixSplitter {
     fn common_suffix<E: BaseEdge>(
         graph: &SeqGraph<E>,
         v: NodeIndex,
-        to_split: &HashSet<NodeIndex>,
+        to_split: &LinkedHashSet<NodeIndex>,
     ) -> Option<SeqVertex> {
         if to_split.len() < 2 {
             // Can only split at least 2 vertices
@@ -149,12 +148,12 @@ impl CommonSuffixSplitter {
      */
     fn all_vertices_are_the_common_suffix<E: BaseEdge>(
         common_suffix: &SeqVertex,
-        to_splits: &HashSet<NodeIndex>,
+        to_splits: &LinkedHashSet<NodeIndex>,
         graph: &SeqGraph<E>,
     ) -> bool {
-        return !to_splits
-            .par_iter()
-            .any(|v| graph.base_graph.graph.node_weight(*v).unwrap().len() != common_suffix.len());
+        to_splits
+            .iter()
+            .all(|v| graph.base_graph.graph.node_weight(*v).unwrap().len() == common_suffix.len())
     }
 
     /**
@@ -167,7 +166,7 @@ impl CommonSuffixSplitter {
     fn would_eliminate_ref_source<E: BaseEdge>(
         graph: &SeqGraph<E>,
         common_suffix: &SeqVertex,
-        to_splits: &HashSet<NodeIndex>,
+        to_splits: &LinkedHashSet<NodeIndex>,
     ) -> bool {
         for to_split in to_splits {
             if graph.base_graph.is_ref_source(*to_split) {
@@ -189,7 +188,7 @@ impl CommonSuffixSplitter {
     fn safe_to_split<E: BaseEdge>(
         graph: &SeqGraph<E>,
         bot: NodeIndex,
-        to_merge: &HashSet<NodeIndex>,
+        to_merge: &LinkedHashSet<NodeIndex>,
     ) -> bool {
         let outgoing_of_bot = graph.base_graph.outgoing_vertices_of(bot);
         for m in to_merge {
@@ -198,7 +197,7 @@ impl CommonSuffixSplitter {
                 .graph
                 .edges_directed(*m, Direction::Outgoing)
                 .map(|e| e.id())
-                .collect::<Vec<EdgeIndex>>();
+                .collect::<HashSet<EdgeIndex>>();
             if m == &bot
                 || outs.len() != 1
                 || !graph.base_graph.outgoing_vertices_of(*m).contains(&bot)
@@ -227,7 +226,7 @@ impl CommonSuffixSplitter {
      * @return a single vertex that contains the common suffix of all middle vertices
      */
     fn common_suffix_of_set<E: BaseEdge>(
-        middle_vertices: &HashSet<NodeIndex>,
+        middle_vertices: &LinkedHashSet<NodeIndex>,
         graph: &SeqGraph<E>,
     ) -> SeqVertex {
         let kmers = GraphUtils::get_kmers(middle_vertices, &graph.base_graph);
@@ -235,6 +234,10 @@ impl CommonSuffixSplitter {
         let suffix_len = GraphUtils::common_maximum_suffix_length(&kmers, min);
         let kmer = &kmers[0];
         let suffix = kmer[kmer.len() - suffix_len..kmer.len()].to_vec();
+        debug!(
+            "Choosing suffix {:?}",
+            std::str::from_utf8(&suffix).unwrap()
+        );
         return SeqVertex::new(suffix);
     }
 }

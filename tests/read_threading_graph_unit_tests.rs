@@ -825,7 +825,7 @@ fn test_forked_dangling_ends() {
     }
 
     let mut seq_graph = rtgraph.to_sequence_graph();
-    seq_graph.simplify_graph();
+    seq_graph.simplify_graph("anon");
     let sources = seq_graph.base_graph.get_sources_generic().collect();
     let sinks = seq_graph.base_graph.get_sinks_generic().collect();
     let paths = GraphBasedKBestHaplotypeFinder::new(&mut seq_graph.base_graph, sources, sinks)

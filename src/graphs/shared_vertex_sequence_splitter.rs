@@ -3,6 +3,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::graph_utils::GraphUtils;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
+use hashlink::LinkedHashSet;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
@@ -59,7 +60,7 @@ pub struct SharedVertexSequenceSplitter<'a, E: BaseEdge> {
     suffix_v: SeqVertex,
     prefix_v_index: NodeIndex,
     suffix_v_index: NodeIndex,
-    to_splits: HashSet<NodeIndex>,
+    to_splits: LinkedHashSet<NodeIndex>,
     split_graph: SeqGraph<E>,
     new_middles: Vec<NodeIndex>,
     edges_to_remove: Vec<EdgeIndex>,
@@ -76,7 +77,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
      */
     pub fn new(
         graph: &'a mut SeqGraph<E>,
-        to_split_args: HashSet<NodeIndex>,
+        to_split_args: LinkedHashSet<NodeIndex>,
     ) -> SharedVertexSequenceSplitter<'a, E> {
         assert!(
             to_split_args.len() > 1,
@@ -251,7 +252,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             .split_graph
             .base_graph
             .graph
-            .contains_edge(self.suffix_v_index, self.prefix_v_index);
+            .contains_edge(self.prefix_v_index, self.suffix_v_index);
         let has_only_prefix_suffix_edges = has_prefix_suffix_edge
             && self
                 .split_graph
@@ -263,24 +264,26 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         let need_suffix_node =
             !self.suffix_v.is_empty() || (bot.is_none() && !has_only_prefix_suffix_edges);
 
+        let mut outer_prefix_index = None;
         if need_prefix_node {
-            self.add_prefix_node_and_edges(top);
+            outer_prefix_index = Some(self.add_prefix_node_and_edges(top));
         }
 
+        let mut outer_suffix_index = None;
         if need_suffix_node {
-            self.add_suffix_node_and_edges(bot);
+            outer_suffix_index = Some(self.add_suffix_node_and_edges(bot));
         }
 
         // if prefix / suffix are needed, keep them
         // This needs to be run after we add the prefix and suffix nodes
         let top_for_connect = if need_prefix_node {
-            self.outer.base_graph.index_from_vertex(&self.prefix_v)
+            outer_prefix_index
         } else {
             top
         };
 
         let bot_for_connect = if need_suffix_node {
-            self.outer.base_graph.index_from_vertex(&self.suffix_v)
+            outer_suffix_index
         } else {
             bot
         };
@@ -374,7 +377,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         }
     }
 
-    fn add_suffix_node_and_edges(&mut self, bot: Option<NodeIndex>) {
+    fn add_suffix_node_and_edges(&mut self, bot: Option<NodeIndex>) -> NodeIndex {
         let suffix_v_index = self.outer.base_graph.add_node(self.suffix_v.clone());
         match bot {
             Some(bot) => {
@@ -397,9 +400,11 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
                 // pass
             }
         }
+
+        suffix_v_index
     }
 
-    fn add_prefix_node_and_edges(&mut self, top: Option<NodeIndex>) {
+    fn add_prefix_node_and_edges(&mut self, top: Option<NodeIndex>) -> NodeIndex {
         let prefix_v_index = self.outer.base_graph.add_node(self.prefix_v.clone());
         match top {
             Some(top) => {
@@ -422,6 +427,8 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
                 // pass
             }
         }
+
+        prefix_v_index
     }
 
     /**
@@ -435,7 +442,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
      * @return
      */
     pub fn common_prefix_and_suffix_of_vertices(
-        middle_vertices: &HashSet<NodeIndex>,
+        middle_vertices: &LinkedHashSet<NodeIndex>,
         graph: &SeqGraph<E>,
     ) -> (SeqVertex, SeqVertex) {
         let mut kmers = Vec::new();
@@ -469,17 +476,9 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             None => {
                 // there's no edge, so we return a newly allocated one and don't schedule e for removal
                 // the weight must be 0 to preserve sum through the diamond
-                let mut edge_template = self
-                    .outer
-                    .base_graph
-                    .graph
-                    .edges(v)
-                    .next()
-                    .unwrap()
-                    .weight()
-                    .clone();
-                edge_template.set_multiplicity(0);
-                edge_template.set_is_ref(self.outer.base_graph.is_reference_node(v));
+
+                let mut edge_template = E::new(self.outer.base_graph.is_reference_node(v), 0, 0);
+                debug!("Edge template {:?}", &e);
                 return edge_template;
             }
             Some(e) => {
@@ -488,5 +487,29 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
                 return self.outer.base_graph.graph.edge_weight(e).cloned().unwrap();
             }
         }
+    }
+
+    pub fn get_prefix(&self) -> &SeqVertex {
+        &self.prefix_v
+    }
+
+    pub fn get_prefix_index(&self) -> NodeIndex {
+        self.prefix_v_index
+    }
+
+    pub fn get_suffix(&self) -> &SeqVertex {
+        &self.suffix_v
+    }
+
+    pub fn get_suffix_index(&self) -> NodeIndex {
+        self.suffix_v_index
+    }
+
+    pub fn get_split_graph(&self) -> &SeqGraph<E> {
+        &self.split_graph
+    }
+
+    pub fn get_new_middles(&self) -> &Vec<NodeIndex> {
+        &self.new_middles
     }
 }

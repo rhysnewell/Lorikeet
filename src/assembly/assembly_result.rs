@@ -21,7 +21,7 @@ pub struct AssemblyResult<L: Locatable, A: AbstractReadThreadingGraph> {
     pub(crate) status: Status,
     pub(crate) threading_graph: Option<A>,
     pub(crate) graph: Option<SeqGraph<BaseEdgeStruct>>,
-    pub(crate) discovered_haplotypes: HashSet<Haplotype<L>>,
+    pub(crate) discovered_haplotypes: LinkedHashSet<Haplotype<L>>,
     pub(crate) contains_suspect_haploptypes: bool,
 }
 
@@ -48,12 +48,15 @@ impl<L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<L, A> {
             status,
             graph,
             threading_graph,
-            discovered_haplotypes: HashSet::new(),
+            discovered_haplotypes: LinkedHashSet::new(),
             contains_suspect_haploptypes: false,
         }
     }
 
-    pub fn set_discovered_haplotypes(&mut self, discovered_haplotypes: HashSet<Haplotype<L>>) {
+    pub fn set_discovered_haplotypes(
+        &mut self,
+        discovered_haplotypes: LinkedHashSet<Haplotype<L>>,
+    ) {
         self.discovered_haplotypes = discovered_haplotypes
     }
 

@@ -203,27 +203,13 @@ impl PairHMMLikelihoodCalculationEngine {
         // Add likelihoods for each sample's reads to our result
         let sample_count = samples.len();
         let mut result = AlleleLikelihoods::new(haplotypes, samples, per_sample_read_list);
-        debug!(
-            "Spawned likelihood result {:?}",
-            &result.values_by_sample_index
-        );
+
         for i in 0..sample_count {
             self.compute_read_likelihoods_in_matrix(i, &mut result);
         }
-        debug!("After computation {:?}", &result.values_by_sample_index);
         result.normalize_likelihoods(
             self.log10_global_read_mismapping_rate,
             self.symmetrically_normalize_alleles_to_reference,
-        );
-        debug!("after normalization using log10 global mismapping rate {} and symmetrically normalize alleles to ref {} {:?}",
-               self.log10_global_read_mismapping_rate,
-               self.symmetrically_normalize_alleles_to_reference,
-               &result.values_by_sample_index[0][[0, 0]]);
-        debug!("{:?}", &result.values_by_sample_index);
-
-        debug!(
-            "using dynamic disqualification {}",
-            self.dynamic_disqualification
         );
         if self.dynamic_disqualification {
             result.filter_poorly_modeled_evidence(Self::dynamic_log10_min_likelihood_model(
@@ -284,13 +270,6 @@ impl PairHMMLikelihoodCalculationEngine {
             sum_mean += dynamic_read_qual_thresh_lookup_table[mean_offset];
             sum_variance += dynamic_read_qual_thresh_lookup_table[var_offset];
         }
-        // debug!(
-        //     "sum mean {} dynamic read qual constant {} sum variance sqrt {} -> sum variance {}",
-        //     sum_mean,
-        //     dynamic_read_qual_constant,
-        //     sum_variance.sqrt(),
-        //     sum_variance
-        // );
 
         let threshold = sum_mean + dynamic_read_qual_constant * sum_variance.sqrt();
         return threshold * -0.1;
@@ -629,10 +608,6 @@ impl PairHMMLikelihoodCalculationEngine {
             .map(|hap| hap.allele.len())
             .max()
             .unwrap_or(0);
-        debug!(
-            "Max read length {} max haplotype length {}",
-            read_max_length, max_haplotype_length
-        );
         // initialize arrays to hold the probabilities of being in the match, insertion and deletion cases
         self.pair_hmm = PairHMM::initialize(read_max_length, max_haplotype_length);
     }

@@ -193,7 +193,8 @@ impl HaplotypeCallerGenotypingEngine {
                         &mut merged_vc,
                     );
 
-                    read_likelihoods.marginalize(&allele_mapper);
+                    debug!("Alleles in read likelihoods {:?}", read_likelihoods.alleles);
+                    let mut read_allele_likelihoods = read_likelihoods.marginalize(&allele_mapper);
                     let mut variant_calling_relevant_overlap = SimpleInterval::new(
                         merged_vc.loc.tid,
                         merged_vc.loc.start,
@@ -215,12 +216,12 @@ impl HaplotypeCallerGenotypingEngine {
                     //         read_qualifies_for_genotyping_predicate(read, interval)
                     //     });
                     // We want to retain evidence that overlaps within its softclipping edges.
-                    read_likelihoods.retain_evidence(
+                    read_allele_likelihoods.retain_evidence(
                         &read_qualifies_for_genotyping_predicate,
                         &variant_calling_relevant_overlap,
                     );
 
-                    read_likelihoods
+                    read_allele_likelihoods
                         .set_variant_calling_subset_used(&variant_calling_relevant_overlap);
 
                     // TODO: sample contamination downsampling occurs here. Won't worry about this for nmow
@@ -231,8 +232,8 @@ impl HaplotypeCallerGenotypingEngine {
                     debug!(
                         "Event at: {:?} with {} reads and {} disqualified",
                         &merged_vc.loc,
-                        read_likelihoods.evidence_count(),
-                        read_likelihoods
+                        read_allele_likelihoods.evidence_count(),
+                        read_allele_likelihoods
                             .filtered_evidence_by_sample_index
                             .get(&0)
                             .unwrap()
@@ -249,7 +250,7 @@ impl HaplotypeCallerGenotypingEngine {
                     }
 
                     let mut genotypes = self.calculate_gls_for_this_event(
-                        &read_likelihoods,
+                        &read_allele_likelihoods,
                         &merged_vc,
                         &no_call_alleles,
                         ref_bases,
@@ -285,7 +286,7 @@ impl HaplotypeCallerGenotypingEngine {
                             // if call.get_alleles().len() != read_likelihoods.number_of_alleles() {
                             //     read_likelihoods.update_non_ref_allele_likelihoods(AlleleList::new(&call.alleles));
                             // }
-                            read_likelihoods.retain_evidence(
+                            read_allele_likelihoods.retain_evidence(
                                 &Self::compose_read_qualifies_for_genotyping_predicate(),
                                 &variant_calling_relevant_overlap,
                             );
@@ -295,11 +296,11 @@ impl HaplotypeCallerGenotypingEngine {
                                 &per_sample_filtered_read_list,
                                 variant_calling_relevant_overlap,
                             );
-                            read_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
+                            read_allele_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
 
                             let annotated_call = self.make_annotated_call(
                                 merged_alleles_list_size_before_possible_trimming,
-                                &mut read_likelihoods,
+                                &mut read_allele_likelihoods,
                                 &mut call,
                             );
 

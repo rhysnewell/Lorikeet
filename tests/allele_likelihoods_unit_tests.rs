@@ -630,8 +630,7 @@ fn test_marginalization_with_overlap(
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
-    let mut marginalized = original.clone();
-    marginalized.marginalize(&new_to_old_allele_mapping);
+    let mut marginalized = original.marginalize(&new_to_old_allele_mapping);
     let read_qualifies_for_genotyping_predicate =
         HaplotypeCallerGenotypingEngine::compose_read_qualifies_for_genotyping_predicate();
 
@@ -692,12 +691,11 @@ fn test_marginalization(
     let even_read_overlap = SimpleInterval::new(0, EVEN_READ_START, EVEN_READ_START);
     fill_with_random_likelihoods(&samples, &alleles, &mut original);
 
-    let mut marginalized = original.clone();
     println!(
         "onew to old allele mapping {:?}",
         &new_to_old_allele_mapping
     );
-    marginalized.marginalize(&new_to_old_allele_mapping);
+    let mut marginalized = original.marginalize(&new_to_old_allele_mapping);
 
     assert_eq!(
         new_to_old_allele_mapping.len(),

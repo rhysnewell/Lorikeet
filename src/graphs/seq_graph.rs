@@ -6,6 +6,7 @@ use graphs::vertex_based_transformer::VertexBasedTransformer::{
     MergeCommonSuffices, MergeDiamonds, MergeTails, SplitCommonSuffices,
 };
 use graphs::vertex_based_transformer::VertexBasedTransformerOptions;
+use petgraph::algo::is_cyclic_directed;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
@@ -46,11 +47,11 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      * effort to minimize the number of overall vertices in the graph without changing
      * in any way the sequences implied by a complex enumeration of all paths through the graph.
      */
-    pub fn simplify_graph(&mut self) {
-        self.simplify_graph_with_cycles(std::usize::MAX)
+    pub fn simplify_graph(&mut self, name: &str) {
+        self.simplify_graph_with_cycles(std::usize::MAX, name)
     }
 
-    pub fn simplify_graph_with_cycles(&mut self, max_cycles: usize) {
+    pub fn simplify_graph_with_cycles(&mut self, max_cycles: usize, name: &str) {
         // start off with one round of zipping of chains for performance reasons
         self.zip_linear_chains();
         let mut prev_graph = None;
@@ -64,7 +65,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
                 );
             }
 
-            let did_some_work = self.simplify_graph_once(i);
+            let did_some_work = self.simplify_graph_once(i, name);
             if !did_some_work {
                 // no simplification algorithm could be run so break
                 break;
@@ -93,31 +94,75 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      * Run one full cycle of the graph simplification algorithms
      * @return true if any algorithms said they did some simplification
      */
-    fn simplify_graph_once(&mut self, iteration: usize) -> bool {
+    fn simplify_graph_once(&mut self, iteration: usize, name: &str) -> bool {
         // iterate until we haven't don't anything useful
-        self.print_graph_simplification(&format!("simplify_graph.{}.0.dot", iteration));
+        debug!(
+            "Before anything Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
+
         let mut did_some_work = false;
         did_some_work |=
             VertexBasedTransformerOptions::MergeDiamonds.transform_until_complete(self);
-        self.print_graph_simplification(&format!("simplify_graph.{}.1.diamonds.dot", iteration));
+        debug!(
+            "After diamonds Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
+        self.print_graph_simplification(&format!(
+            "{}_simplify_graph.{}.1.diamonds.dot",
+            name, iteration
+        ));
         did_some_work |= VertexBasedTransformerOptions::MergeTails.transform_until_complete(self);
-        self.print_graph_simplification(&format!("simplify_graph.{}.2.tails.dot", iteration));
+        debug!(
+            "After tails Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
+        self.print_graph_simplification(&format!(
+            "{}_simplify_graph.{}.2.tails.dot",
+            name, iteration
+        ));
 
         did_some_work |=
             VertexBasedTransformerOptions::SplitCommonSuffices.transform_until_complete(self);
+        debug!(
+            "After split common Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
+
         self.print_graph_simplification(&format!(
-            "simplify_graph.{}.3.split_suffix.dot",
-            iteration
+            "{}_simplify_graph.{}.3.split_suffix.dot",
+            name, iteration
         ));
 
         did_some_work |=
             VertexBasedTransformerOptions::MergeCommonSuffices.transform_until_complete(self);
+        debug!(
+            "After merge common Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
+
         self.print_graph_simplification(&format!(
-            "simplify_graph.{}.4.merge_suffix.dot",
-            iteration
+            "{}_simplify_graph.{}.4.merge_suffix.dot",
+            name, iteration
         ));
 
         did_some_work |= self.zip_linear_chains();
+        debug!(
+            "After zip Edges {}, Nodes {}, Cyclic? {}",
+            self.base_graph.edge_set().len(),
+            self.base_graph.vertex_set().len(),
+            is_cyclic_directed(&self.base_graph.graph)
+        );
 
         return did_some_work;
     }

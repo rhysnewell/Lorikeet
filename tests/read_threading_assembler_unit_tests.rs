@@ -386,6 +386,29 @@ fn make_assemble_intervals_with_variant_data() {
                 variant_start,
                 &mut reader,
             );
+        }
+    }
+}
+
+#[test]
+fn make_assemble_intervals_with_deletion_data() {
+    let start = 100000;
+    let end = 101001;
+    let window_size = 100;
+    let step_size = 200;
+    let variant_step_size = 1;
+    let n_reads_to_use = 5;
+    let mut reader = ReferenceReaderUtils::retrieve_reference(&Some(
+        "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
+    ));
+
+    for start_i in (start..end).into_iter().step_by(step_size) {
+        let end_i = start_i + window_size;
+        let ref_loc = SimpleInterval::new(0, start_i, end_i);
+        for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
+            .into_iter()
+            .step_by(variant_step_size)
+        {
             test_assemble_ref_and_deletion(
                 ReadThreadingAssembler::default(),
                 ref_loc.clone(),
@@ -393,6 +416,29 @@ fn make_assemble_intervals_with_variant_data() {
                 variant_start,
                 &mut reader,
             );
+        }
+    }
+}
+
+#[test]
+fn make_assemble_intervals_with_insertion_data() {
+    let start = 100000;
+    let end = 101001;
+    let window_size = 100;
+    let step_size = 200;
+    let variant_step_size = 1;
+    let n_reads_to_use = 5;
+    let mut reader = ReferenceReaderUtils::retrieve_reference(&Some(
+        "tests/resources/large/Homo_sapiens_assembly19_chr1_1M.fasta".to_string(),
+    ));
+
+    for start_i in (start..end).into_iter().step_by(step_size) {
+        let end_i = start_i + window_size;
+        let ref_loc = SimpleInterval::new(0, start_i, end_i);
+        for variant_start in (((window_size / 2) - 10)..((window_size / 2) + 10))
+            .into_iter()
+            .step_by(variant_step_size)
+        {
             test_assemble_ref_and_insertion(
                 ReadThreadingAssembler::default(),
                 ref_loc.clone(),
