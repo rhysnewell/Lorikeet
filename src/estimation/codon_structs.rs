@@ -1,9 +1,9 @@
 use bio::alphabets::dna;
-use bio_types::strand;
+use bio_types::strand::Strand;
 use itertools::{izip, Itertools};
 use model::variants::{Base, Variant};
 use std::collections::HashMap;
-use utils::{mean, std_deviation};
+use utils::utils::{mean, std_deviation};
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -358,13 +358,13 @@ impl Translations for CodonTable {
 }
 
 #[allow(unused)]
-pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: strand::Strand) -> Vec<Vec<u8>> {
+pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: Strand) -> Vec<Vec<u8>> {
     let codons = match strandedness {
-        strand::Strand::Forward | strand::Strand::Unknown => sequence[0 + frame..]
+        Strand::Forward | Strand::Unknown => sequence[0 + frame..]
             .chunks(3)
             .map(|chunk| chunk.to_vec())
             .collect::<Vec<Vec<u8>>>(),
-        strand::Strand::Reverse => {
+        Strand::Reverse => {
             let rc = dna::revcomp(sequence);
             rc[0 + frame..]
                 .chunks(3)

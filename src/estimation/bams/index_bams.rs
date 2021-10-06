@@ -24,7 +24,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let path = bam.path().to_string();
         let stoit_name = bam.name().to_string().replace("/", ".");
 
-        pb1.set_message(&format!(
+        pb1.set_message(format!(
             "Processing sample: {}",
             match &stoit_name[..4] {
                 ".tmp" => &stoit_name[15..],
@@ -51,7 +51,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 tmp_header.push_record(&tmp_header_record);
 
                 let mut bam_writer =
-                    bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::BAM)
+                    bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::Bam)
                         .expect("Unable to create bam");
 
                 bam_writer
@@ -61,11 +61,9 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     .set_compression_level(bam::CompressionLevel::Uncompressed)
                     .expect("Unexpected compression level");
 
-                let rg = bam::record::Aux::String("1".as_bytes());
-
-                while bam.read(&mut record) == true {
+                while bam.read(&mut record).is_some() {
                     // push aux flags
-                    record.push_aux("RG".as_bytes(), &rg);
+                    record.push_aux("RG".as_bytes(), bam::record::Aux::String("1"));
 
                     // Write to bam
                     bam_writer.write(&record).expect("Unable to write to BAM");
@@ -80,7 +78,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             bam::index::build(
                 &path,
                 Some(&format!("{}.bai", path)),
-                bam::index::Type::BAI,
+                bam::index::Type::Bai,
                 n_threads as u32,
             )
             .expect("Unable to index BAM");
@@ -105,7 +103,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 bam::index::build(
                     &path,
                     Some(&format!("{}.bai", path)),
-                    bam::index::Type::BAI,
+                    bam::index::Type::Bai,
                     n_threads as u32,
                 )
                 .expect(&format!("Unable to index bam at {}", &path));
@@ -113,7 +111,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         }
         pb1.inc(1);
     }
-    pb1.finish_with_message(&format!("Reads and BAM files processed..."));
+    pb1.finish_with_message(format!("Reads and BAM files processed..."));
 }
 
 pub fn recover_bams(
@@ -121,7 +119,6 @@ pub fn recover_bams(
     concatenated_genomes: &Option<String>,
     short_sample_count: usize,
     long_sample_count: usize,
-    assembly_sample_count: usize,
     genomes_and_contigs: &GenomesAndContigs,
     _n_threads: u32,
     tmp_bam_file_cache: &Option<String>,
@@ -270,83 +267,15 @@ pub fn recover_bams(
         bam_readers.extend(all_bam_paths);
     }
 
-    if m.is_present("assembly-bam-files") {
-        let bam_paths = m
-            .values_of("assembly-bam-files")
-            .unwrap()
-            .map(|b| b.to_string())
-            .collect::<Vec<String>>();
-        bam_readers.extend(bam_paths);
-    } else if m.is_present("assembly") {
-        let mut all_bam_paths = vec![];
-
-        match concatenated_genomes {
-            Some(ref _tmp_file) => {
-                let cache = format!(
-                    "{}/assembly/*.bam",
-                    match m.is_present("bam-file-cache-directory") {
-                        false => {
-                            tmp_bam_file_cache.as_ref().unwrap()
-                        }
-                        true => {
-                            m.value_of("bam-file-cache-directory").unwrap()
-                        }
-                    },
-                );
-                let bam_paths = glob(&cache)
-                    .expect("Failed to read cache")
-                    .map(|p| {
-                        p.expect("Failed to read cached bam path")
-                            .to_str()
-                            .unwrap()
-                            .to_string()
-                    })
-                    .collect::<Vec<String>>();
-                all_bam_paths.extend(bam_paths);
-            }
-            None => {
-                for ref_name in genomes_and_contigs.genomes.iter() {
-                    let cache = format!(
-                        "{}/assembly/{}*.bam",
-                        match m.is_present("bam-file-cache-directory") {
-                            false => {
-                                tmp_bam_file_cache.as_ref().unwrap()
-                            }
-                            true => {
-                                m.value_of("bam-file-cache-directory").unwrap()
-                            }
-                        },
-                        ref_name
-                    );
-                    let bam_paths = glob(&cache)
-                        .expect("Failed to read cache")
-                        .map(|p| {
-                            p.expect("Failed to read cached bam path")
-                                .to_str()
-                                .unwrap()
-                                .to_string()
-                        })
-                        .collect::<Vec<String>>();
-                    all_bam_paths.extend(bam_paths);
-                }
-            }
-        }
-
-        debug!("Rereading in {}", all_bam_paths.len());
-
-        let _bam_cnts = all_bam_paths.len();
-        bam_readers.extend(all_bam_paths);
-    }
-
-    if bam_readers.len() == (short_sample_count + long_sample_count + assembly_sample_count) {
+    if bam_readers.len() == (short_sample_count + long_sample_count) {
         debug!("Reread in correct bam count")
     } else {
-        panic!(format!(
+        panic!(
             "Original sample count {} does not match new sample count {}, \
                 please clear bam cache directory or ask for support at: github.com/rhysnewell/Lorikeet",
             (short_sample_count + long_sample_count),
             bam_readers.len(),
-        ))
+        )
     }
     let bam_readers = bam_readers.into_iter().map(|b| b.to_string()).collect();
     return bam_readers;

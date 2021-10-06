@@ -1,8 +1,29 @@
+#![allow(
+    non_upper_case_globals,
+    unused_parens,
+    unused_mut,
+    unused_imports,
+    non_snake_case,
+    unused
+)]
+pub mod activity_profile;
+pub mod annotator;
+pub mod assembly;
 pub mod cli;
-pub mod dbscan;
 pub mod estimation;
 pub mod external_command_checker;
+pub mod genotype;
+pub mod graphs;
+pub mod haplotype;
 pub mod model;
+pub mod pair_hmm;
+pub mod read_error_corrector;
+pub mod read_orientation;
+pub mod read_threading;
+pub mod reads;
+pub mod reference;
+pub mod smith_waterman;
+pub mod test_utils;
 pub mod utils;
 
 // HTS and bio files
@@ -19,24 +40,35 @@ extern crate galah;
 // Stats
 extern crate kodama;
 extern crate linregress;
+#[macro_use]
 extern crate ndarray;
+extern crate mathru;
 extern crate ndarray_npy;
 extern crate statrs;
 
 // Utilities
+#[macro_use]
+extern crate approx;
 extern crate clap;
+extern crate compare;
 extern crate csv;
 extern crate env_logger;
 extern crate glob;
+extern crate hashlink;
+extern crate indexmap;
 extern crate itertools;
+extern crate libm;
+extern crate linked_hash_set;
+extern crate multimap;
 extern crate nix;
+extern crate num;
 extern crate ordered_float;
+extern crate petgraph;
 extern crate rand;
 extern crate rayon;
 extern crate scoped_threadpool;
 extern crate tempdir;
 extern crate tempfile;
-
 //extern crate plotly;
 extern crate strum;
 
@@ -51,14 +83,17 @@ extern crate serde_derive;
 extern crate lazy_static;
 extern crate derive_new;
 extern crate pest_derive;
+#[macro_use]
+extern crate enum_ordinalize;
+extern crate term;
 
 use clap::*;
 use std::process;
 
-pub fn parse_percentage(m: &clap::ArgMatches, parameter: &str) -> f32 {
+pub fn parse_percentage(m: &ArgMatches, parameter: &str) -> f32 {
     match m.is_present(parameter) {
         true => {
-            let mut percentage = value_t!(m.value_of(parameter), f32).unwrap();
+            let mut percentage: f32 = m.value_of(parameter).unwrap().parse().unwrap();
             if percentage >= 1.0 && percentage <= 100.0 {
                 percentage = percentage / 100.0;
             } else if percentage < 0.0 || percentage > 100.0 {

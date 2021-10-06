@@ -5,14 +5,30 @@
 ![](https://anaconda.org/bioconda/lorikeet-genome/badges/platforms.svg)
 
 
-![](docs/images/lorikeet_logo_crop_left.png)
+![](docs/images/lorikeet_logo.png)
 
-## Introduction
+## Lorikeet
 
 Lorikeet is a within-species variant analysis pipeline for metagenomic communities that utilizes both long and short read datasets.
 Lorikeet combines short read variant calling with Freebayes and long read structural variant calling with SVIM to generate a 
 complete variant landscape present across samples within a microbial community. SNV are also linked together using read 
 information to help provide likely genotypes based on observed physical linkages.
+
+## Index
+1. [Installation](#installation)
+    - [Conda installation](#option-1-conda)
+    - [Manual installation](#option-2-install-manually)
+2. [Requirements](#requirements)
+3. [Usage](#usage)
+4. [Workflow](#workflow)
+5. [Output](#output)
+    - [Genotype](#genotype)
+    - [Polish](#polish)
+    - [Evolve](#evolve)
+    - [Summarize](#summarize)
+6. [FAQs](#faqs)
+7. [Resource](#resources)
+8. [Citation](#citation)
 
 ## Installation
 
@@ -136,3 +152,23 @@ Evolve will produce:
   variations per provided base pair window
 *optional*
 - SNP density plot. Can take a long time to generate
+
+## FAQs
+
+Your feedback and input helps me as a developer create better tools for you. So please, if you have any questions
+raise them as an issue on this GitHub. If I feel like it is an issue others might frequently have then I'll place my 
+response here.
+
+## Resources
+
+Rosella makes use of a couple new and daunting algorithms. UMAP in particular is an amazing algorithm but might be cause 
+for concern since it is difficult to understand how it works and what it is doing. So please look over this amazing article 
+by Andy Coenen and Adam Pearce: [Understanding UMAP](https://pair-code.github.io/understanding-umap/)
+
+## Citation
+
+*Watch this space* A paper is on its way. If you use rosella and like the results before the paper, then please cite this GitHub
+
+## License
+
+Code is [GPL-3.0](LICENSE)
