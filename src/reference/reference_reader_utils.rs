@@ -9,6 +9,7 @@ use process::Stdio;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::process;
 use tempfile::NamedTempFile;
 
@@ -38,7 +39,7 @@ impl ReferenceReaderUtils {
         let reference = match concatenated_genomes {
             Some(reference_path) => match IndexedReader::from_file(&reference_path) {
                 Ok(reader) => reader,
-                Err(_e) => Self::generate_faidx(&reference_path),
+                Err(_e) => Self::generate_faidx(reference_path.as_str()),
             },
             None => panic!("Concatenated reference file does not exist"),
         };
@@ -267,7 +268,7 @@ impl ReferenceReaderUtils {
         let cmd_string = format!(
             "set -e -o pipefail; \
                      samtools faidx {}",
-            &reference_path
+            reference_path
         );
         debug!("Queuing cmd_string: {}", cmd_string);
 

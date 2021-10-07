@@ -39,6 +39,7 @@ lazy_static! {
                 ];
 }
 
+#[derive(Debug, Clone)]
 pub struct PairHMMLikelihoodCalculationEngine {
     constant_gcp: u8,
     log10_global_read_mismapping_rate: f64,
@@ -613,6 +614,7 @@ impl PairHMMLikelihoodCalculationEngine {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PairHMMInputScoreImputator {
     constant_gcp: u8,
 }

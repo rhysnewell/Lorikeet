@@ -7,6 +7,7 @@ use std::cmp::{max, min};
 use std::collections::BTreeSet;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
+#[derive(Debug, Clone)]
 pub struct AssemblyRegionTrimmer {
     assembly_region_padding: usize,
     indel_padding_for_genotyping: usize,

@@ -20,14 +20,17 @@ use pair_hmm::pair_hmm_likelihood_calculation_engine::{
 };
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
+use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
+use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -84,6 +87,7 @@ impl AssemblyBasedCallerUtils {
     // if we don't, the several bases left of reads that end just within the assembly window can
     // get realigned incorrectly.  See https://github.com/broadinstitute/gatk/issues/5060
     pub const MINIMUM_READ_LENGTH_AFTER_TRIMMING: usize = 10;
+    pub const NUM_HAPLOTYPES_TO_INJECT_FORCE_CALLING_ALLELES_INTO: usize = 5;
 
     pub fn finalize_regions(
         region: &mut AssemblyRegion,
@@ -291,7 +295,8 @@ impl AssemblyBasedCallerUtils {
             read_error_corrector = None
         }
 
-        let assembly_result_set = assembly_engine.run_local_assembly(
+        let region_padded_start = region.get_padded_span().get_start();
+        let mut assembly_result_set = assembly_engine.run_local_assembly(
             region,
             &mut ref_haplotype,
             full_reference_with_padding,
@@ -302,7 +307,173 @@ impl AssemblyBasedCallerUtils {
             *NEW_SW_PARAMETERS,
         );
 
+        if !given_alleles.is_empty() {
+            Self::add_given_alleles(
+                region_padded_start,
+                given_alleles,
+                args.value_of("max-mnp-distance").unwrap().parse().unwrap(),
+                *NEW_SW_PARAMETERS,
+                &ref_haplotype,
+                &mut assembly_result_set,
+            );
+        }
+
         return assembly_result_set;
+    }
+
+    fn add_given_alleles<A: AbstractReadThreadingGraph>(
+        assembly_region_start: usize,
+        given_alleles: &Vec<VariantContext>,
+        max_mnp_distance: usize,
+        haplotype_to_reference_sw_parameters: SWParameters,
+        ref_haplotype: &Haplotype<SimpleInterval>,
+        assembly_result_set: &mut AssemblyResultSet<A>,
+    ) {
+        let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
+        let mut grouped_by = HashMap::new(); // vcs grouped by start
+        assembly_result_set
+            .get_variation_events(max_mnp_distance)
+            .into_iter()
+            .for_each(|vc| {
+                let pos = grouped_by.entry(vc.loc.get_start()).or_insert(Vec::new());
+                pos.push(vc);
+            });
+        let mut assembled_variants = grouped_by
+            .into_iter()
+            .map(|(i, vcs)| (i, Self::make_merged_variant_context(vcs).unwrap()))
+            .collect::<HashMap<usize, VariantContext>>();
+
+        for given_vc in given_alleles {
+            let mut assembled_haplotypes = assembly_result_set.get_haplotype_list();
+            let mut assembled_vc = assembled_variants.get(&given_vc.loc.get_start());
+            let given_vc_ref_length = given_vc.get_reference().len();
+            let mut unassembled_given_alleles = Vec::new();
+            let mut longer_ref;
+            match &assembled_vc {
+                None => {
+                    longer_ref = given_vc.get_reference();
+                }
+                Some(assembled_vc) => {
+                    if given_vc_ref_length > assembled_vc.get_reference().len() {
+                        longer_ref = given_vc.get_reference();
+                    } else {
+                        longer_ref = assembled_vc.get_reference();
+                    }
+                }
+            };
+
+            match assembled_vc {
+                None => {
+                    unassembled_given_alleles = given_vc
+                        .get_alternate_alleles()
+                        .into_iter()
+                        .map(|vc| vc.clone())
+                        .collect::<Vec<ByteArrayAllele>>();
+                }
+                Some(assembled_vc) => {
+                    // map all alleles to the longest common reference
+                    let mut assembled_allele_set = HashSet::new();
+                    if longer_ref.len() == assembled_vc.get_reference().len() {
+                        assembled_allele_set.extend(
+                            assembled_vc
+                                .get_alternate_alleles()
+                                .into_iter()
+                                .map(|vc| vc.clone()),
+                        );
+                    } else {
+                        assembled_allele_set
+                            .extend(VariantContextUtils::remap_alleles(assembled_vc, longer_ref));
+                    };
+
+                    let mut given_allele_set = HashSet::new();
+                    if longer_ref.len() == given_vc_ref_length {
+                        given_allele_set.extend(
+                            given_vc
+                                .get_alternate_alleles()
+                                .into_iter()
+                                .map(|vc| vc.clone()),
+                        );
+                    } else {
+                        given_allele_set
+                            .extend(VariantContextUtils::remap_alleles(given_vc, longer_ref));
+                    };
+
+                    unassembled_given_alleles = given_allele_set
+                        .into_iter()
+                        .filter(|a| !assembled_allele_set.contains(a))
+                        .collect::<Vec<ByteArrayAllele>>();
+                }
+            }
+
+            let unassembled_non_symbolic_alleles = unassembled_given_alleles
+                .into_iter()
+                .filter(|a| {
+                    let bases = a.get_bases();
+                    !(ByteArrayAllele::would_be_no_call_allele(bases)
+                        || ByteArrayAllele::would_be_null_allele(bases)
+                        || ByteArrayAllele::would_be_star_allele(bases)
+                        || ByteArrayAllele::would_be_symbolic_allele(bases))
+                })
+                .collect::<Vec<ByteArrayAllele>>();
+
+            // choose the highest-scoring haplotypes along with the reference for building force-calling haplotypes
+            let base_haplotypes = if unassembled_non_symbolic_alleles.is_empty() {
+                Vec::new()
+            } else {
+                assembled_haplotypes.sort_by(|h1, h2| {
+                    h1.is_reference()
+                        .cmp(&h2.is_reference())
+                        .then_with(|| h1.score.cmp(&h2.score))
+                });
+                assembled_haplotypes.reverse();
+                assembled_haplotypes
+                    .into_iter()
+                    .take(Self::NUM_HAPLOTYPES_TO_INJECT_FORCE_CALLING_ALLELES_INTO)
+                    .collect::<Vec<Haplotype<SimpleInterval>>>()
+            };
+
+            for given_allele in unassembled_non_symbolic_alleles {
+                for base_haplotype in base_haplotypes.iter() {
+                    match &base_haplotype.event_map {
+                        Some(event) => {
+                            if event
+                                .get_variant_contexts()
+                                .iter()
+                                .any(|vc| vc.loc.overlaps(&given_vc.loc))
+                            {
+                                continue;
+                            };
+                        }
+                        _ => {
+                            // pass
+                        }
+                    };
+
+                    let mut inserted_haplotype = base_haplotype.insert_allele(
+                        longer_ref,
+                        &given_allele,
+                        active_region_start + given_vc.loc.get_start() - assembly_region_start,
+                    );
+
+                    if let Some(mut inserted_haplotype) = inserted_haplotype {
+                        let cigar = CigarUtils::calculate_cigar(
+                            ref_haplotype.get_bases(),
+                            inserted_haplotype.get_bases(),
+                            SWOverhangStrategy::Indel,
+                            &haplotype_to_reference_sw_parameters,
+                        );
+                        inserted_haplotype.set_cigar(cigar.unwrap().0);
+                        inserted_haplotype.set_genome_location(
+                            ref_haplotype.get_genome_location().unwrap().clone(),
+                        );
+                        inserted_haplotype.set_alignment_start_hap_wrt_ref(active_region_start);
+                        assembly_result_set.add_haplotype(inserted_haplotype);
+                    }
+                }
+            }
+        }
+
+        assembly_result_set.regenerate_variation_events(max_mnp_distance);
     }
 
     // Contract: the List<Allele> alleles of the resulting VariantContext is the ref allele followed by alt alleles in the

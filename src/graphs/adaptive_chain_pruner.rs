@@ -17,6 +17,7 @@ use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use utils::base_utils::BaseUtils;
 
+#[derive(Debug, Clone)]
 pub struct AdaptiveChainPruner {
     pub initial_error_probability: f64,
     log_odds_threshold: f64,

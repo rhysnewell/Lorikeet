@@ -3,6 +3,7 @@ use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use ndarray::{Array, Array2};
 use utils::math_utils::MathUtils;
 
+#[derive(Debug, Clone)]
 pub struct GenotypeLikelihoodCalculators {
     pub ploidy: usize,
     pub allele_count: usize,

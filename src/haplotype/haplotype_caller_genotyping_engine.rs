@@ -11,7 +11,7 @@ use haplotype::haplotype::Haplotype;
 use haplotype::homogenous_ploidy_model::HomogeneousPloidyModel;
 use haplotype::independent_samples_genotype_model::IndependentSamplesGenotypesModel;
 use hashlink::linked_hash_map::LinkedHashMap;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashSet;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
@@ -26,6 +26,7 @@ use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use utils::simple_interval::{Locatable, SimpleInterval};
 
+#[derive(Debug, Clone)]
 pub struct HaplotypeCallerGenotypingEngine {
     genotyping_engine: GenotypingEngine,
     genotyping_model: IndependentSamplesGenotypesModel,

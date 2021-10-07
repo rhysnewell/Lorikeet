@@ -6,12 +6,9 @@ dependencies:
   - python>=3.8
   - parallel
   - pysam=0.16
-  - svim
-  - svim-asm
-  - freebayes
   - prodigal
   - samtools=1.9
-  - vt
+  - bcftools
   - rust
   - clangdev
   - pkg-config

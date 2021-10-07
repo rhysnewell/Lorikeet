@@ -1,4 +1,5 @@
 use annotator::variant_annotation::VariantAnnotations;
+use external_command_checker::check_for_bcftools;
 use genotype::genotype_builder::{
     AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
 };
@@ -10,6 +11,7 @@ use itertools::Itertools;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::{Filter, Variant, NON_REF_ALLELE};
 use ordered_float::OrderedFloat;
+use process::Stdio;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::header::HeaderView;
@@ -600,6 +602,38 @@ impl VariantContext {
         }
     }
 
+    pub fn retrieve_indexed_vcf_file(file: &str) -> IndexedReader {
+        match IndexedReader::from_path(file) {
+            Ok(vcf_reader) => return vcf_reader,
+            Err(_e) => {
+                // vcf file likely not indexed
+                Self::generate_vcf_index(file)
+            }
+        }
+    }
+
+    pub fn generate_vcf_index<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
+        check_for_bcftools();
+        info!("Generating VCF index");
+        let cmd_string = format!(
+            "set -e -o pipefail; \
+                     bcftools index {}",
+            vcf_path.as_ref()
+        );
+        debug!("Queuing cmd_string: {}", cmd_string);
+
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&cmd_string)
+            .stdout(Stdio::piped())
+            .output()
+            .expect("Unable to execute bash");
+
+        return IndexedReader::from_path(vcf_path.as_ref()).expect(
+            "Unable to generate index. Please ensure you have gzipped your file using 'bgzip -c'.",
+        );
+    }
+
     pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext> {
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() > 0 {
@@ -726,8 +760,6 @@ impl VariantContext {
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
                     // SNV
                     if omit_snvs {
-                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-                    } else if alt_allele == &ref_allele {
                         variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     } else {
                         variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))

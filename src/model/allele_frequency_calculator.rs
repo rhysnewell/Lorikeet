@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use utils::dirichlet::Dirichlet;
 use utils::math_utils::MathUtils;
 
+#[derive(Debug, Clone)]
 pub struct AlleleFrequencyCalculator {
     pub ref_pseudo_count: f64,
     pub snp_pseudo_count: f64,

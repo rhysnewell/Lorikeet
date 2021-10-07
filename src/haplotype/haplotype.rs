@@ -4,6 +4,7 @@ use ordered_float::OrderedFloat;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
 use reads::cigar_utils::CigarUtils;
+use reads::read_utils::ReadUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
@@ -89,6 +90,47 @@ impl<L: Locatable> Haplotype<L> {
 
     pub fn len(&self) -> usize {
         self.allele.len()
+    }
+
+    pub fn insert_allele(
+        &self,
+        ref_allele: &ByteArrayAllele,
+        alt_allele: &ByteArrayAllele,
+        ref_insert_location: usize,
+    ) -> Option<Haplotype<L>> {
+        // refInsertLocation is in ref haplotype offset coordinates NOT genomic coordinates
+        let haplotype_insert_location_and_operator =
+            ReadUtils::get_read_index_for_reference_coordinate(
+                self.alignment_start_hap_wrt_ref,
+                self.cigar.clone().into_view(0),
+                ref_insert_location,
+            );
+
+        // can't insert outside the haplotype or into a deletion
+        if haplotype_insert_location_and_operator.0.is_none()
+            || if let Some(hap) = haplotype_insert_location_and_operator.1 {
+                !CigarUtils::cigar_consumes_read_bases(&hap)
+            } else {
+                false
+            }
+        {
+            return None;
+        };
+
+        let haplotype_insert_location = haplotype_insert_location_and_operator.0.unwrap();
+        let my_bases = self.get_bases();
+
+        // can't insert if we don't have any sequence after the inserted alt allele to span the new variant
+        if haplotype_insert_location + ref_allele.len() >= my_bases.len() {
+            return None;
+        }
+
+        let mut new_haplotype_bases = Vec::new();
+        new_haplotype_bases.extend_from_slice(&my_bases[..haplotype_insert_location]); // bases before the variant
+        new_haplotype_bases.extend_from_slice(alt_allele.get_bases()); // the alt allele of the variant
+        new_haplotype_bases
+            .extend_from_slice(&my_bases[haplotype_insert_location + ref_allele.len()..]); // bases after the variant
+        return Some(Haplotype::new(new_haplotype_bases.as_slice(), false));
     }
 
     /**

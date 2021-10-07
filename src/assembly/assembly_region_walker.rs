@@ -8,13 +8,14 @@ use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
+use reference::reference_reader_utils::ReferenceReaderUtils;
 use rust_htslib::bcf::{IndexedReader, Read};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub struct AssemblyRegionWalker {
     pub(crate) evaluator: HaplotypeCallerEngine,
-    features: Option<Result<IndexedReader, rust_htslib::errors::Error>>,
+    features: Option<IndexedReader>,
     short_read_bam_count: usize,
     long_read_bam_count: usize,
     ref_idx: usize,
@@ -58,7 +59,10 @@ impl AssemblyRegionWalker {
             .unwrap();
 
         let features_vcf = match args.value_of("features-vcf") {
-            Some(vcf_path) => Some(IndexedReader::from_path(vcf_path)),
+            Some(vcf_path) => {
+                debug!("Attempting to read in features...");
+                Some(VariantContext::retrieve_indexed_vcf_file(vcf_path))
+            }
             None => None,
         };
 
@@ -144,8 +148,8 @@ impl AssemblyRegionWalker {
 
         match &mut self.features {
             Some(indexed_vcf_reader) => {
+                debug!("Attempting to extract features...");
                 // Indexed readers don't have sync so we cannot parallelize this
-                let mut indexed_vcf_reader = indexed_vcf_reader.as_mut().unwrap();
                 indexed_vcf_reader.set_threads(self.n_threads as usize);
                 let mut contexts = Vec::new();
 
@@ -167,13 +171,15 @@ impl AssemblyRegionWalker {
 
                     let feature_variants = match vcf_rid {
                         Some(rid) => VariantContext::process_vcf_in_region(
-                            &mut indexed_vcf_reader,
+                            indexed_vcf_reader,
                             rid,
                             assembly_region.get_start() as u64,
                             assembly_region.get_end() as u64,
                         ),
                         None => Vec::new(),
                     };
+
+                    debug!("Feature variants {:?}", &feature_variants);
 
                     contexts.par_extend(self.evaluator.call_region(
                         assembly_region,

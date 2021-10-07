@@ -42,6 +42,7 @@ use utils::natural_log_utils::NaturalLogUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
+#[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine {
     active_region_evaluation_genotyper_engine: GenotypingEngine,
     genotyping_engine: HaplotypeCallerGenotypingEngine,

@@ -1,7 +1,6 @@
 use genotype::genotype_builder::{AttributeObject, GenotypesContext};
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use hashlink::LinkedHashMap;
-use linked_hash_set::LinkedHashSet;
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
 use model::variants::SPAN_DEL_ALLELE;
@@ -873,6 +872,68 @@ impl VariantContextUtils {
 
         let mut b = VariantContext::build(contig, start, start + length - 1, alleles);
         return b;
+    }
+
+    /**
+     * This method does a couple of things:
+     * <ul><li>
+     *     remaps the vc alleles considering the differences between the final reference allele and its own reference,</li>
+     * <li>
+     *     collects alternative alleles present in variant context and add them to the {@code finalAlleles} set.
+     * </li></ul>
+     *
+     * @param vc           the variant context.
+     * @param refAllele    final reference allele.
+     * @return never {@code null}
+     */
+    pub fn remap_alleles(
+        vc: &VariantContext,
+        ref_allele: &ByteArrayAllele,
+    ) -> Vec<ByteArrayAllele> {
+        let vc_ref = vc.get_reference();
+        let ref_bases = ref_allele.get_bases();
+
+        let extra_base_count = ref_bases.len() - vc_ref.get_bases().len();
+        if ref_bases.len() < vc_ref.get_bases().len() {
+            panic!("The wrong reference allele was selected")
+        };
+
+        let mut result = Vec::with_capacity(vc.get_n_alleles());
+        result.push(ref_allele.clone());
+
+        for a in vc.get_alternate_alleles() {
+            if a.is_symbolic {
+                result.push(a.clone())
+            } else if a == &*SPAN_DEL_ALLELE {
+                // add SPAN_DEL directly so we don't try to extend the bases
+                result.push(a.clone())
+            } else if a.is_called() {
+                result.push(Self::extend_allele(a, extra_base_count, ref_bases))
+            } else {
+                // NO_CALL and strange miscellanea
+                result.push(a.clone())
+            }
+        }
+
+        result
+    }
+
+    /**
+     * prefix an allele with additional reference bases if extraBaseCount > 0
+     */
+    fn extend_allele(
+        allele: &ByteArrayAllele,
+        extra_base_count: usize,
+        ref_bases: &[u8],
+    ) -> ByteArrayAllele {
+        if extra_base_count > 0 {
+            let old_bases = allele.get_bases();
+            let mut new_bases = old_bases.to_vec();
+            new_bases.extend_from_slice(&ref_bases[ref_bases.len() - extra_base_count..]);
+            ByteArrayAllele::new(new_bases.as_slice(), false)
+        } else {
+            allele.clone()
+        }
     }
 }
 

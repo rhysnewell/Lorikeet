@@ -170,7 +170,7 @@ impl VariantAnnotations {
                     .samples
                     .iter()
                     .position(|s| s == &genotype.sample_name)
-                    .unwrap();
+                    .unwrap_or(0);
                 likelihoods
                     .best_alleles_breaking_ties_for_sample(sample_index)
                     .into_iter()

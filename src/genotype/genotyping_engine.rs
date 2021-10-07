@@ -21,6 +21,7 @@ use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
 
+#[derive(Debug, Clone)]
 pub struct GenotypingEngine {
     pub(crate) allele_frequency_calculator: AlleleFrequencyCalculator,
     pub(crate) number_of_genomes: usize,
@@ -382,6 +383,7 @@ impl GenotypingEngine {
         let forced_alleles: HashSet<&ByteArrayAllele> =
             AssemblyBasedCallerUtils::get_alleles_consistent_with_given_alleles(given_alleles, vc);
 
+        debug!("Forced alleles {:?}", &forced_alleles);
         for allele in alleles.iter() {
             if allele.is_reference() {
                 _reference_size = allele.length();

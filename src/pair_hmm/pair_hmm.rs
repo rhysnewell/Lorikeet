@@ -18,6 +18,7 @@ lazy_static! {
 /**
  * Class for performing the pair HMM for global alignment. Figure 4.1 in Durbin 1998 book.
  */
+#[derive(Debug, Clone)]
 pub struct PairHMM {
     constants_are_initialized: bool,
     previous_haplotype_length: Option<usize>,
