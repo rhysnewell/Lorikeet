@@ -38,6 +38,7 @@ pub trait PloidyModel {
 * {@link PloidyModel} implementation tailored to work with a homogeneous constant ploidy
 * across samples and positions.
 */
+#[derive(Debug, Clone)]
 pub struct HomogeneousPloidyModel {
     pub(crate) sample_list: Vec<String>,
     pub(crate) ploidy: usize,

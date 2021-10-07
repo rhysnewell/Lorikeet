@@ -1,5 +1,5 @@
 use haplotype::haplotype::Haplotype;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashSet;
 use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use rand::{rngs::ThreadRng, Rng};

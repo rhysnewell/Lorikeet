@@ -9,6 +9,7 @@ use model::allele_list::AlleleList;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use std::fs::read;
 
+#[derive(Debug, Clone)]
 pub struct IndependentSamplesGenotypesModel {
     cache_allele_count_capacity: usize,
     cache_ploidy_capacity: usize,

@@ -35,6 +35,7 @@ enum AlleleType {
  * </p>
  * assumptions
  */
+#[derive(Debug, Clone)]
 pub struct GenotypePriorCalculator {
     het_values: Vec<f64>,
     hom_values: Vec<f64>,

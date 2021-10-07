@@ -21,6 +21,7 @@ lazy_static! {
 /**
  * Helper class that implement calculations required to implement the PairHMM Finite State Automation (FSA) model.
  */
+#[derive(Debug, Clone)]
 pub struct PairHMMModel {
     /**
      * Holds pre-calculated the matchToMath probability values in linear scale.

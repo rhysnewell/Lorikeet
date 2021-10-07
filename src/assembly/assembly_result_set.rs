@@ -2,7 +2,7 @@ use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_result::AssemblyResult;
 use haplotype::event_map::EventMap;
 use haplotype::haplotype::Haplotype;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashSet;
 use model::byte_array_allele::Allele;
 use model::variant_context::VariantContext;
 use rayon::prelude::*;

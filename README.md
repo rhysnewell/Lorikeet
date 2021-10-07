@@ -9,10 +9,9 @@
 
 ## Lorikeet
 
-Lorikeet is a within-species variant analysis pipeline for metagenomic communities that utilizes both long and short read datasets.
-Lorikeet combines short read variant calling with Freebayes and long read structural variant calling with SVIM to generate a 
-complete variant landscape present across samples within a microbial community. SNV are also linked together using read 
-information to help provide likely genotypes based on observed physical linkages.
+Lorikeet is a within-species variant analysis pipeline for metagenomic communities that utilizes both long and short reads.
+Lorikeet utilizes a re-implementaion of the GATK HaplotypeCaller algorithm, performing local re-assembly of potentially active
+regions within candidate genomes. Called variants can be clustered into likely strains using a combination of UMAP and HDBSCAN.
 
 ## Index
 1. [Installation](#installation)
@@ -87,12 +86,8 @@ Usage: lorikeet <subcommand> ...
 Main subcommands:
     genotype    *Experimental* Resolve strain-level genotypes of MAGs from microbial communities
     polish      Creates consensus genomes for each input reference and for each sample
-    summarize   Summarizes contig stats from multiple samples
+    call        Performs variant calling with no downstream analysis
     evolve      Calculate dN/dS values for genes from read mappings
-
-Less used utility subcommands:
-    kmer      Calculate kmer frequencies within contigs
-    filter    Remove (or only keep) alignments with insufficient identity
 
 Other options:
     -V, --version   Print version information
@@ -100,19 +95,18 @@ Other options:
 Rhys J. P. Newell <r.newell near uq.edu.au>
 ```
 
-Genotype from bam:
+Call variants from bam:
 
-`lorikeet genotype --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+`lorikeet call --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
      --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10 --plot`
 
-Genotype from short reads and longread bam:
+Call variants from short reads and longread bam files:
 
-`lorikeet genotype -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
+`lorikeet call -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
 
 ## Workflow
 
-![](docs/images/Lorikeet-workflow.png)
-
+An updated workflow image is on its way.
 
 ## Output
 
@@ -122,19 +116,12 @@ Genotype will produce:
 - Sample adjacency matrix displaying the number of shared variants seen between samples.
 - VCF file detailing all observed variants
 - Expected coverage values for each of the produced genotypes in each sample
-- Per reference and per sample summary statistics displaying the mean SNPs and structural
-  variations per provided base pair window
-*optional*
-- SNP density plot. Can take a long time to generate
+
 #### Polish
-Polish produces:
+Polish will produce:
 - Consensus genomes for each input reference across each sample.
 - Sample adjacency matrix displaying the number of shared variants seen between samples.
 - VCF file detailing all observed variants
-- Per reference and per sample summary statistics displaying the mean SNPs and structural
-  variations per provided base pair window
-*optional*
-- SNP density plot. Can take a long time to generate
 
 #### Evolve
 Evolve will produce:
@@ -142,16 +129,9 @@ Evolve will produce:
   found along the reference
     - These dN/dS values only take single nucleotide polymorphisms into account but INDELs can still be reported.
 - VCF file detailing all observed variants
-- Per reference and per sample summary statistics displaying the mean SNPs and structural
-  variations per provided base pair window
-*optional*
-- SNP density plot. Can take a long time to generate
 
-#### Summarize
-- Per reference and per sample summary statistics displaying the mean SNPs and structural
-  variations per provided base pair window
-*optional*
-- SNP density plot. Can take a long time to generate
+#### Call
+Call only produces the called variants in a VCF file without any downstream analysis.
 
 ## FAQs
 
@@ -161,7 +141,11 @@ response here.
 
 ## Resources
 
-Rosella makes use of a couple new and daunting algorithms. UMAP in particular is an amazing algorithm but might be cause 
+The variant calling algorithm is basically a one-to-one re-implementation of the algorithm used in GATK HaplotypeCaller.
+As such, many of the FAQs and documentation for HaplotypeCaller can be useful in understanding how Lorikeet actually
+finds variants. An overview of the HaplotypeCaller pipeline can be found here: [HaplotypeCaller Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller).
+
+Lorikeet makes use of a couple new and daunting algorithms. UMAP in particular is an amazing algorithm but might be cause 
 for concern since it is difficult to understand how it works and what it is doing. So please look over this amazing article 
 by Andy Coenen and Adam Pearce: [Understanding UMAP](https://pair-code.github.io/understanding-umap/)
 

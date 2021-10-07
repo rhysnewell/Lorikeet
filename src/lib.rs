@@ -58,7 +58,6 @@ extern crate hashlink;
 extern crate indexmap;
 extern crate itertools;
 extern crate libm;
-extern crate linked_hash_set;
 extern crate multimap;
 extern crate nix;
 extern crate num;
@@ -67,10 +66,9 @@ extern crate petgraph;
 extern crate rand;
 extern crate rayon;
 extern crate scoped_threadpool;
+extern crate strum;
 extern crate tempdir;
 extern crate tempfile;
-//extern crate plotly;
-extern crate strum;
 
 #[macro_use]
 extern crate log;

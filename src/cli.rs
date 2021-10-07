@@ -42,7 +42,26 @@ Read mapping options:
                                   implications if untrusted input is specified.\n";
 
 const VARIANT_CALLING_HELP: &'static str = "
-Variant calling options:
+Variant calling options (Basic):
+  -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
+                                                Multiple values at once are accepted and encouraged
+                                                e.g. 10 25 [default: 25] \n
+  --ploidy <INT>                                Sets the default ploidy for the analysis to N.
+                                                [default: 1]\n
+  -f, --features-vcf                            The set of alleles to force-call regardless
+                                                of evidence. Note: The sight containing these alleles
+                                                has to be called as 'active' in order for them to appear
+                                                in the final VCF. Addtionally, Provided file must be
+                                                compressed using bgzip and indexed using bcftools index. If no index
+                                                is present, and index will be attempted to be created.
+                                                If the file is not properly compressed, Lorikeet will
+                                                segfault with no error message.
+  -q, --min-base-quality                        Minimum base quality required to consider a
+                                                base for calling. [default: 10]
+  --base-quality-score-threshold                Base qualities below this threshold will
+                                                be reduced to the minimum (6). [default: 18]
+
+Variant calling options (Advanced):
   --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
   --pair-hmm-gap-continuation-penalty           Flat gap continuation penalty for use in the Pair HMM. [default: 10]
   --pcr-indel-model                             The PCR indel model to use. [default: conservative]
@@ -88,17 +107,6 @@ Variant calling options:
                                                 between active and inactive assembly regions. [default: 50]
   --max-mnp-distance                            Two or more phased substitutions separated by
                                                 this distance or less are merged into MNPs. [default: 0]
-  --min-base-quality                            Minimum base quality required to consider a
-                                                base for calling. [default: 10]
-  --base-quality-score-threshold                Base qualities below this threshold will
-                                                be reduced to the minimum (6). [default: 18]
-  -q, --base-quality-threshold-score            The minimum PHRED score for base in a read for it to be
-                                                considered in the variant calling process.\n
-  -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
-                                                Multiple values at once are accepted and encouraged
-                                                e.g. 10 25 [default: 25] \n
-  --ploidy <INT>                                Sets the default ploidy for the analysis to N.
-                                                [default: 1]\n
   --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
   --limiting-interval                           Mainly used for debugging purposes. Only call variants
                                                 within this given span on all contigs. E.g. providing
@@ -129,7 +137,6 @@ Define mapping(s) (required):
    -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
-   --parallel-genomes                    Number of genomes to run in parallel.
                                          Increases memory usage linearly.
                                          [default 1]
    -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
@@ -203,7 +210,7 @@ Alignment filtering (optional):
 const GENERAL_HELP: &'static str = "
 General options:
   -t, --threads                         Maximum number of threads used. [default: 8]
-  --parallel-genomes                    Number of genomes to run in parallel.
+  -p, --parallel-genomes                Number of genomes to run in parallel.
                                         Increases memory usage linearly.
                                         Thread usage qill not exceed the value
                                         provided by --threads [default 1]
@@ -230,14 +237,6 @@ Genotyping arguments (optional):
                                          should be combined into a genotype. [default: 0.15]
    --minimum-reads-in-link <INT>         Minimum amount of reads required to be shared between two
                                          variants before they are counted as 'linked'. [default: 5]
-
-   -t, --threads                         Number of threads used. [default: 1]
-   --parallel-genomes                    Number of genomes to run in parallel.
-                                         Increases memory usage linearly.
-                                         [default 1]
-   -v, --verbose                         Print extra debugging information
-   -q, --quiet                           Unless there is an error, do not print
-                                         log messages
 {}
         ",
     ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP)
@@ -586,13 +585,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
+                        .short("p")
                         .long("parallel-genomes")
                         .default_value("1")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("mapper")
-                        .short("p")
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
@@ -1168,6 +1167,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("features-vcf")
                         .long("features-vcf")
+                        .short("f")
+                        .takes_value(true)
                         .required(false),
                 )
                 .arg(
@@ -1179,13 +1180,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
+                        .short("p")
                         .long("parallel-genomes")
                         .default_value("1")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("mapper")
-                        .short("p")
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),
@@ -1797,6 +1798,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("features-vcf")
                         .long("features-vcf")
+                        .short("f")
+                        .takes_value(true)
                         .required(false),
                 )
                 .arg(
@@ -1808,13 +1811,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(
                     Arg::with_name("parallel-genomes")
+                        .short("p")
                         .long("parallel-genomes")
                         .default_value("1")
                         .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("mapper")
-                        .short("p")
                         .long("mapper")
                         .possible_values(MAPPING_SOFTWARE_LIST)
                         .default_value(DEFAULT_MAPPING_SOFTWARE),

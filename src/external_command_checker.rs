@@ -9,6 +9,10 @@ pub fn check_for_samtools() {
     self::check_for_external_command_presence("samtools", "which samtools");
 }
 
+pub fn check_for_tabix() {
+    self::check_for_external_command_presence("tabix", "which tabix");
+}
+
 pub fn check_for_samclip() {
     self::check_for_external_command_presence("samclip", "which samclip");
 }

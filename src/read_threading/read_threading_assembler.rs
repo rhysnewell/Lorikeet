@@ -11,7 +11,7 @@ use graphs::k_best_haplotype::KBestHaplotype;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
 use haplotype::haplotype::Haplotype;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashSet;
 use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
 use petgraph::stable_graph::NodeIndex;
@@ -28,6 +28,7 @@ use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use std::collections::HashSet;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
+#[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
     kmer_sizes: Vec<usize>,
     dont_increase_kmer_sizes_for_cycles: bool,

@@ -1,7 +1,7 @@
 use graphs::base_edge::BaseEdgeStruct;
 use graphs::seq_graph::SeqGraph;
 use haplotype::haplotype::Haplotype;
-use linked_hash_set::LinkedHashSet;
+use hashlink::LinkedHashSet;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use std::collections::HashSet;
 use utils::simple_interval::Locatable;
