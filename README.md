@@ -51,11 +51,12 @@ conda activate lorikeet
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-git clone --recursivehttps://github.com/rhysnewell/Lorikeet.git \ 
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
 cd Lorikeet \
 conda env create -n lorikeet -f lorikeet.yml \ 
 conda activate lorikeet \ 
-bash install.sh # or e.g. `cargo run -- genotype`
+bash install.sh # or run without installing e.g. `cargo run --release -- genotype -h` \
+lorikeet genotype -h
 ```
 
 Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
@@ -85,7 +86,7 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
     genotype    *Experimental* Resolve strain-level genotypes of MAGs from microbial communities
-    polish      Creates consensus genomes for each input reference and for each sample
+    consensus   Creates consensus genomes for each input reference and for each sample
     call        Performs variant calling with no downstream analysis
     evolve      Calculate dN/dS values for genes from read mappings
 

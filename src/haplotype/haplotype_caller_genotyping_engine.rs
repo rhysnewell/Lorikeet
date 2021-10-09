@@ -142,6 +142,7 @@ impl HaplotypeCallerGenotypingEngine {
                 continue;
             };
 
+            debug!("Loc {}", loc);
             let events_at_this_loc =
                 AssemblyBasedCallerUtils::get_variant_contexts_from_active_haplotypes(
                     loc,
@@ -304,6 +305,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 &mut read_allele_likelihoods,
                                 &mut call,
                             );
+                            debug!("Annotated call {:?}", &annotated_call);
 
                             return_calls.push(annotated_call);
                             call.alleles
@@ -382,11 +384,17 @@ impl HaplotypeCallerGenotypingEngine {
 
         // TODO: This function does a bunch of annotation that I'm not sure we need to worry about
         //       Can revisit if it is causing issues. So we will skipf or not
-
+        debug!("Call length {}", call.get_alleles().len());
         let mut untrimmed_result = VariantAnnotationEngine::annotate_context(
             call,
             read_allele_likelihoods,
             Box::new(|a: &Annotation| true),
+        );
+
+        debug!(
+            "untrimmed len {} vs {}",
+            untrimmed_result.get_alleles().len(),
+            merged_alleles_list_size_before_possible_trimming
         );
 
         if untrimmed_result.get_alleles_ref().len()

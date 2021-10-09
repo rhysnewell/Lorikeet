@@ -68,6 +68,29 @@ pub fn cons<T>(elt: T, l: Vec<T>) -> Vec<T> {
     return l2;
 }
 
+pub fn clean_sample_name(sample_idx: usize, samples: &Vec<String>) -> &str {
+    if samples[sample_idx].contains(".tmp") {
+        samples[sample_idx]
+            .split("/.tmp")
+            .skip(1)
+            .next()
+            .unwrap()
+            .split(".fna.")
+            .skip(1)
+            .next()
+            .unwrap()
+    } else {
+        &samples[sample_idx]
+    }
+}
+
+pub fn get_cleaned_sample_names(samples: &Vec<String>) -> Vec<&str> {
+    (0..samples.len())
+        .into_iter()
+        .map(|i| clean_sample_name(i, samples))
+        .collect()
+}
+
 pub fn get_streamed_bam_readers<'a>(
     m: &'a ArgMatches,
     mapping_program: MappingProgram,

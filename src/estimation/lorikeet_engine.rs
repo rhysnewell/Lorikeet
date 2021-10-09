@@ -9,12 +9,14 @@ use model::variant_context::VariantContext;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
+use reference::reference_writer::ReferenceWriter;
 use scoped_threadpool::Pool;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+use utils::utils::get_cleaned_sample_names;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -232,6 +234,8 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
+                    let cleaned_sample_names = get_cleaned_sample_names(&indexed_bam_readers);
+
                     if mode == "call" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -241,7 +245,7 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &indexed_bam_readers,
+                            &cleaned_sample_names,
                             &reference_reader,
                         )
                     } else if mode == "genotype" {
@@ -346,10 +350,23 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &indexed_bam_readers,
+                            &cleaned_sample_names,
                             &reference_reader,
                         )
-                    } else if mode == "polish" {
+                    } else if mode == "consensus" {
+                        // Get sample distances
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar
+                                .set_message(format!("{}: Generating VCF file...", &reference,));
+                        }
+                        assembly_engine.evaluator.write_vcf(
+                            &output_prefix,
+                            &contexts,
+                            &cleaned_sample_names,
+                            &reference_reader,
+                        );
+
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar.set_message(format!(
@@ -358,42 +375,13 @@ impl<'a> LorikeetEngine<'a> {
                             ));
                         }
                         // variant_matrix.generate_distances();
-                        // variant_matrix.polish_genomes(
-                        //     &output_prefix,
-                        //     &reference_map,
-                        //     &genomes_and_contigs,
-                        //     &concatenated_genomes,
-                        // );
-
-                        // Get sample distances
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Generating adjacency matrix...",
-                                &reference,
-                            ));
-                        }
-                        // variant_matrix.calculate_sample_distances(
-                        //     &output_prefix,
-                        //     &reference_map,
-                        //     &genomes_and_contigs,
-                        // );
-                        // If flagged, then create plots using CMplot
-                        // if m.is_present("plot") {
-                        //     let window_size = self.args.value_of("window-size").unwrap().parse().unwrap();
-                        //     variant_matrix.print_variant_stats(
-                        //         window_size,
-                        //         &output_prefix,
-                        //         &genomes_and_contigs,
-                        //     );
-                        // };
-
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Generating VCF file...", &reference,));
-                        }
-                        // variant_matrix.write_vcf(&output_prefix, &genomes_and_contigs);
+                        let mut reference_writer =
+                            ReferenceWriter::new(reference_reader, &output_prefix);
+                        reference_writer.generate_consensus(
+                            contexts,
+                            ref_idx,
+                            &cleaned_sample_names,
+                        );
                     };
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];

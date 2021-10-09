@@ -24,10 +24,10 @@ impl SimpleInterval {
     pub const END_OF_CONTIG: char = '+';
 
     /**
-     * Create a new immutable 1-based interval of the form [start, end]
+     * Create a new immutable 0-based interval of the form [start, end]
      * @param contig the name of the contig, must not be null
-     * @param start  1-based inclusive start position
-     * @param end  1-based inclusive end position
+     * @param start  0-based inclusive start position
+     * @param end  0-based inclusive end position
      */
     pub fn new(tid: usize, start: usize, end: usize) -> SimpleInterval {
         SimpleInterval { start, end, tid }

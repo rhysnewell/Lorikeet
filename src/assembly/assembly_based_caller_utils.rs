@@ -831,8 +831,14 @@ impl AssemblyBasedCallerUtils {
         }
     }
 
-    pub fn split_reads_by_sample(reads: Vec<BirdToolRead>) -> HashMap<usize, Vec<BirdToolRead>> {
+    pub fn split_reads_by_sample(
+        reads: Vec<BirdToolRead>,
+        n_samples: usize,
+    ) -> HashMap<usize, Vec<BirdToolRead>> {
         let mut return_map = HashMap::new();
+        (0..n_samples).into_iter().for_each(|sample_index| {
+            return_map.entry(sample_index).or_insert(Vec::new());
+        });
 
         for read in reads.into_iter() {
             let read_vec = return_map.entry(read.sample_index).or_insert(Vec::new());

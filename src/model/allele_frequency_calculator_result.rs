@@ -22,7 +22,7 @@ pub struct AFCalculationResult {
 }
 
 impl AFCalculationResult {
-    const EPSILON: f64 = 1.0e-10;
+    pub const EPSILON: f64 = 1.0e-10;
 
     /**
      * Create a results object capability of storing results for calls with up to maxAltAlleles
