@@ -417,6 +417,14 @@ impl VariantContext {
             }
         }
 
+        debug!(
+            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+            current_max_depth,
+            self.genotypes.genotypes()[sample_index],
+            &current_consensus,
+            self.genotypes.genotypes()
+        );
+
         if current_max_depth == 0 {
             // no variant was found in this sample
             return None;

@@ -366,7 +366,7 @@ impl HaplotypeCallerGenotypingEngine {
         return overlapping_filtered_reads;
     }
 
-    fn make_annotated_call<'b, A: Allele>(
+    fn make_annotated_call<'b>(
         &self,
         // ref_seq: &[u8],
         // ref_loc: &SimpleInterval,
@@ -375,7 +375,7 @@ impl HaplotypeCallerGenotypingEngine {
         // samples: &Vec<String>,
         // merged_vc: &VariantContext,
         merged_alleles_list_size_before_possible_trimming: usize,
-        read_allele_likelihoods: &mut AlleleLikelihoods<A>,
+        read_allele_likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
         call: &'b mut VariantContext,
         // annotation_engine: VariantAnnotationEnging
     ) -> VariantContext {

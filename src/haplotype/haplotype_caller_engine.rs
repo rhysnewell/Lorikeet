@@ -277,7 +277,7 @@ impl HaplotypeCallerEngine {
 
         let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
 
-        let mut genotype_likelihoods = HashMap::new();
+        let mut genotype_likelihoods = Vec::new();
 
         let mut per_contig_per_base_hq_soft_clips = HashMap::new();
 
@@ -349,22 +349,22 @@ impl HaplotypeCallerEngine {
                 }
             });
 
-        let likelihoodcount = ploidy + 1;
-        let log10ploidy = (likelihoodcount as f64).log10();
-        genotype_likelihoods
-            .par_iter_mut()
-            .for_each(|(tid, results)| {
-                results.iter_mut().for_each(|result| {
-                    let denominator = result.read_counts as f64 * log10ploidy;
-                    for i in 0..likelihoodcount {
-                        result.genotype_likelihoods[i] -= denominator
-                    }
-                })
-            });
+        // let likelihoodcount = ploidy + 1;
+        // let log10ploidy = (likelihoodcount as f64).log10();
+        // genotype_likelihoods
+        //     .par_iter_mut()
+        //     .for_each(|(tid, results)| {
+        //         results.iter_mut().for_each(|result| {
+        //             let denominator = result.read_counts as f64 * log10ploidy;
+        //             for i in 0..likelihoodcount {
+        //                 result.genotype_likelihoods[i] -= denominator
+        //             }
+        //         })
+        //     });
 
         // return genotype_likelihoods for each contig in current genome across samples
         return self.calculate_activity_probabilities(
-            vec![genotype_likelihoods],
+            genotype_likelihoods,
             per_contig_per_base_hq_soft_clips,
             &reference_reader.target_lens,
             ploidy,
@@ -410,7 +410,7 @@ impl HaplotypeCallerEngine {
         per_contig_per_base_hq_soft_clips: &mut HashMap<usize, Vec<RunningAverage>>,
         reference_reader: &mut ReferenceReader,
         limiting_interval: &Option<SimpleInterval>,
-        current_likelihoods: &mut HashMap<usize, Vec<RefVsAnyResult>>,
+        current_likelihoods: &mut Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
     ) {
         let mut bam_generated = bam_generator.start();
 
@@ -426,6 +426,7 @@ impl HaplotypeCallerEngine {
 
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
+        let mut genotype_likelihoods = HashMap::new();
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
         match readtype {
@@ -447,7 +448,7 @@ impl HaplotypeCallerEngine {
                             // The raw activity profile.
                             // Frequency of bases not matching reference compared
                             // to depth
-                            let genotype_likelihoods = current_likelihoods.entry(tid)
+                            let likelihoods = genotype_likelihoods.entry(tid)
                                 .or_insert((0..target_len as usize).into_iter()
                                     .map(|pos| {
                                         RefVsAnyResult::new(likelihoodcount, pos, tid)
@@ -480,7 +481,7 @@ impl HaplotypeCallerEngine {
                                             let pos = pileup.pos() as usize;
                                             let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
                                             let refr_base = reference_reader.current_sequence[pos];
-                                            let mut result = &mut genotype_likelihoods[pos];
+                                            let mut result = &mut likelihoods[pos];
                                             for alignment in pileup.alignments() {
                                                 let record = alignment.record();
                                                 if (!flag_filters.include_supplementary
@@ -512,6 +513,11 @@ impl HaplotypeCallerEngine {
                                                 }
                                             }
 
+                                            let denominator = result.read_counts as f64 * log10ploidy;
+                                            for i in 0..likelihoodcount {
+                                                result.genotype_likelihoods[i] -= denominator
+                                            }
+
                                         }
 
                                     }
@@ -523,6 +529,8 @@ impl HaplotypeCallerEngine {
             }
             _ => {}
         }
+
+        current_likelihoods.push(genotype_likelihoods);
 
         bam_generated.finish();
     }
