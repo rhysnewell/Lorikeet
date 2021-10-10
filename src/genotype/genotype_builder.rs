@@ -225,12 +225,36 @@ impl Genotype {
         &mut self.ad
     }
 
-    pub fn pl_i32(&self) -> Vec<i32> {
-        self.pl.iter().map(|i| *i as i32).collect()
+    pub fn pl_i32(&self, n_samples: usize) -> Vec<i32> {
+        let mut pls: Vec<i32> = self.pl.iter().map(|i| *i as i32).collect();
+
+        // expand pls to be as long as the number of samples
+        while pls.len() < n_samples {
+            pls.push(0)
+        }
+
+        pls
     }
 
-    pub fn ad_i32(&self) -> Vec<i32> {
-        self.ad.iter().map(|i| *i as i32).collect()
+    pub fn pl_str(&self) -> String {
+        let mut buf = String::new();
+        self.pl.iter().for_each(|pl| {
+            if buf.is_empty() {
+                buf = format!("{}", pl);
+            } else {
+                buf = format!("{},{}", buf, pl);
+            }
+        });
+        return buf;
+    }
+
+    pub fn ad_i32(&self, n_samples: usize) -> Vec<i32> {
+        let mut ads: Vec<i32> = self.ad.iter().map(|i| *i as i32).collect();
+        // expand pls to be as long as the number of samples
+        while ads.len() < n_samples {
+            ads.push(0)
+        }
+        ads
     }
 
     pub fn no_call_alleles(&mut self, ploidy: usize) {

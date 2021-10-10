@@ -150,7 +150,7 @@ impl GenotypePriorCalculator {
             .parse::<f64>()
             .unwrap();
 
-        GenotypePriorCalculator::assuming_hw(snp_het, ind_het, None)
+        GenotypePriorCalculator::assuming_hw(snp_het.log10(), ind_het.log10(), None)
     }
 
     pub fn empty() -> GenotypePriorCalculator {

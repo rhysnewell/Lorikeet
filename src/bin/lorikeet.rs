@@ -73,15 +73,15 @@ fn main() {
             }
             prepare_pileup(m, mode);
         }
-        // Some("polish") => {
-        //     let m = matches.subcommand_matches("polish").unwrap();
-        //     let mode = "polish";
-        //     if m.is_present("full-help") {
-        //         println!("{}", polish_full_help());
-        //         process::exit(1);
-        //     }
-        //     prepare_pileup(m, mode);
-        // }
+        Some("consensus") => {
+            let m = matches.subcommand_matches("consensus").unwrap();
+            let mode = "consensus";
+            if m.is_present("full-help") {
+                println!("{}", consensus_full_help());
+                process::exit(1);
+            }
+            prepare_pileup(m, mode);
+        }
         _ => {
             app.print_help().unwrap();
             println!();

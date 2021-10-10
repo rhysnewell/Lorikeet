@@ -222,6 +222,14 @@ impl<A: Allele> AlleleLikelihoods<A> {
         )
     }
 
+    pub fn get_allele_list_haplotypes(&self) -> Vec<Haplotype<SimpleInterval>> {
+        self.alleles
+            .list
+            .iter()
+            .map(|a| Haplotype::new(a.get_bases(), a.is_reference()))
+            .collect::<Vec<Haplotype<SimpleInterval>>>()
+    }
+
     /**
      * Returns the quantity of evidence that belongs to a sample in the evidence-likelihood collection.
      * @param sampleIndex the query sample index.

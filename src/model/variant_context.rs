@@ -401,6 +401,38 @@ impl VariantContext {
         }
     }
 
+    /// Returns and owned representation of the consensus allele at this position,
+    /// that is the allele with highest sequencing depth in the specified sample index.
+    pub fn get_consensus_allele(&self, sample_index: usize) -> Option<ByteArrayAllele> {
+        let mut current_max_depth = std::i64::MIN;
+        let mut current_consensus = None;
+        for (i, dp) in self.genotypes.genotypes()[sample_index]
+            .ad
+            .iter()
+            .enumerate()
+        {
+            if dp > &current_max_depth {
+                current_max_depth = *dp;
+                current_consensus = Some(self.alleles[i].clone());
+            }
+        }
+
+        debug!(
+            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+            current_max_depth,
+            self.genotypes.genotypes()[sample_index],
+            &current_consensus,
+            self.genotypes.genotypes()
+        );
+
+        if current_max_depth == 0 {
+            // no variant was found in this sample
+            return None;
+        }
+
+        current_consensus
+    }
+
     fn get_gq_log10_from_posteriors(best_genotype_index: usize, log10_posteriors: &[f64]) -> f64 {
         match log10_posteriors.len() {
             0 | 1 => 1.0,
@@ -863,7 +895,7 @@ impl VariantContext {
         }
     }
 
-    fn type_of_biallelic_variant(
+    pub fn type_of_biallelic_variant(
         reference: &ByteArrayAllele,
         allele: &ByteArrayAllele,
     ) -> VariantType {
@@ -952,7 +984,12 @@ impl VariantContext {
 
     /// writes this VariantContext as a VCF4 record. Assumes writer has prepopulated all INFO
     /// and FORMAT fields using the variant annotation engine.
-    pub fn write_as_vcf_record(&self, bcf_writer: &mut Writer, reference_reader: &ReferenceReader) {
+    pub fn write_as_vcf_record(
+        &self,
+        bcf_writer: &mut Writer,
+        reference_reader: &ReferenceReader,
+        n_samples: usize,
+    ) {
         let mut record = bcf_writer.empty_record();
         record.set_rid(Some(self.loc.tid as u32));
         record.set_pos(self.loc.start as i64); // 0-based
@@ -978,7 +1015,7 @@ impl VariantContext {
             }
         }
 
-        self.add_genotype_format(&mut record);
+        self.add_genotype_format(&mut record, n_samples);
 
         self.add_variant_info(&mut record);
 
@@ -1055,69 +1092,72 @@ impl VariantContext {
         }
     }
 
-    fn add_genotype_format(&self, record: &mut Record) {
+    fn add_genotype_format(&self, record: &mut Record, n_samples: usize) {
         // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
         let mut gqs = Vec::new();
         let mut dps = Vec::new();
         for genotype in self.genotypes.genotypes() {
             let mut phased = Vec::new();
-            if genotype.is_phased {
-                let pgt = genotype.attributes.get("PGT");
-                match pgt {
-                    None => {
-                        phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-                        // assume this
-                    }
-                    Some(pgt) => {
-                        match pgt {
-                            AttributeObject::String(string) => {
-                                let slash = string.contains("/");
-                                for (idx, byte) in string.as_bytes().into_iter().enumerate() {
-                                    let val = if *byte == 48 {
-                                        // utf8 to int
-                                        0
-                                    } else if *byte == 49 {
-                                        1
-                                    } else {
-                                        2
-                                    };
-                                    if val == 0 || val == 1 {
-                                        if idx == 0 {
-                                            if slash {
-                                                phased.push(GenotypeAllele::Unphased(val))
-                                            } else {
-                                                phased.push(GenotypeAllele::Phased(val))
-                                            }
-                                        } else {
-                                            phased.push(GenotypeAllele::Phased(val))
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                phased =
-                                    vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-                                // assume this
-                            }
-                        }
-                    }
-                }
-            } else {
-                phased = vec![GenotypeAllele::Unphased(1), GenotypeAllele::Unphased(1)]
-            }
+            // if genotype.is_phased {
+            //     let pgt = genotype.attributes.get("PGT");
+            //     match pgt {
+            //         None => {
+            //             phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+            //             // assume this
+            //         }
+            //         Some(pgt) => {
+            //             match pgt {
+            //                 AttributeObject::String(string) => {
+            //                     let slash = string.contains("/");
+            //                     for (idx, byte) in string.as_bytes().into_iter().enumerate() {
+            //                         let val = if *byte == 48 {
+            //                             // utf8 to int
+            //                             0
+            //                         } else if *byte == 49 {
+            //                             1
+            //                         } else {
+            //                             2
+            //                         };
+            //                         if val == 0 || val == 1 {
+            //                             if idx == 0 {
+            //                                 if slash {
+            //                                     phased.push(GenotypeAllele::Unphased(val))
+            //                                 } else {
+            //                                     phased.push(GenotypeAllele::Phased(val))
+            //                                 }
+            //                             } else {
+            //                                 phased.push(GenotypeAllele::Phased(val))
+            //                             }
+            //                         }
+            //                     }
+            //                 }
+            //                 _ => {
+            //                     phased =
+            //                         vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+            //                     // assume this
+            //                 }
+            //             }
+            //         }
+            //     }
+            // } else {
+            //     phased = vec![GenotypeAllele::Unphased(1); n_samples]
+            // }
+            phased = vec![GenotypeAllele::Unphased(1); n_samples];
+            debug!("Genotypes {:?}", &phased);
             record.push_genotypes(&phased);
-            record
-                .push_format_integer(
-                    VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
-                    &genotype.pl_i32(),
-                )
-                .expect("Unable to push format tag");
+            // debug!("PLs {:?}", genotype.pl_i32(n_samples));
+            // record
+            //     .push_format_string(
+            //         VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
+            //         &vec![genotype.pl_str().as_bytes(); n_samples],
+            //     )
+            //     .expect("Unable to push format tag");
             record
                 .push_format_integer(
                     VariantAnnotations::DepthPerAlleleBySample
                         .to_key()
                         .as_bytes(),
-                    &genotype.ad_i32(),
+                    &genotype.ad_i32(n_samples),
                 )
                 .expect("Unable to push format tag");
             if genotype.dp != -1 {
@@ -1128,12 +1168,14 @@ impl VariantContext {
                 gqs.push(0);
             }
         }
+        debug!("Pushing GQ {:?}", &gqs);
         record
             .push_format_integer(
                 VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
                 &gqs,
             )
             .expect("Unable to push format tag");
+        debug!("Pushing DP {:?}", &dps);
         record
             .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
             .expect("Unable to push format tag");

@@ -1,4 +1,6 @@
+use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
+use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashMap;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::Allele;
@@ -11,6 +13,7 @@ use statrs::statistics::Median;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use utils::math_utils::MathUtils;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /// Determine whether the annotation appears in the info or format field of the VCF
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -85,11 +88,11 @@ impl VariantAnnotations {
         }
     }
 
-    pub fn annotate<A: Allele>(
+    pub fn annotate(
         &self,
         vc: &mut VariantContext,
         genotype: Option<&mut Genotype>,
-        likelihoods: &mut AlleleLikelihoods<A>,
+        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
     ) -> AttributeObject {
         match self {
             Self::Depth => {
@@ -154,24 +157,30 @@ impl VariantAnnotations {
             }
             Self::DepthPerAlleleBySample => {
                 let mut genotype = genotype.unwrap();
-                let alleles = vc.get_alleles();
-                // alleles.iter().for_each(|a| { // type difference mean we can't check if this allele is in the array at this point
-                //     assert!(likelihoods.alleles.contains_allele(a), "Likelihoods {:?} does not contain {:?}", likelihoods.alleles, a)
-                // });
+                let alleles = likelihoods.get_allele_list_haplotypes();
+                alleles.iter().for_each(|a| {
+                    // type difference mean we can't check if this allele is in the array at this point
+                    assert!(
+                        likelihoods.alleles.contains_allele(a),
+                        "Likelihoods {:?} does not contain {:?}",
+                        likelihoods.alleles,
+                        a
+                    )
+                });
 
                 let mut allele_counts = LinkedHashMap::new();
-                // let mut subset = LinkedHashMap::new();
-                for (allele_index, allele) in vc.get_alleles().into_iter().enumerate() {
+                let mut subset = LinkedHashMap::new();
+                for (allele_index, allele) in alleles.iter().enumerate() {
                     allele_counts.insert(allele_index, 0);
-                    // subset.insert(allele_index, vec![allele]);
+                    subset.insert(allele_index, vec![allele]);
                 }
-                // likelihoods.marginalize(&subset);
-                let sample_index = likelihoods
+                let subsetted = likelihoods.marginalize(&subset);
+                let sample_index = subsetted
                     .samples
                     .iter()
                     .position(|s| s == &genotype.sample_name)
                     .unwrap_or(0);
-                likelihoods
+                subsetted
                     .best_alleles_breaking_ties_for_sample(sample_index)
                     .into_iter()
                     .filter(|ba| ba.is_informative())
@@ -197,13 +206,15 @@ impl VariantAnnotations {
                 let mut values: LinkedHashMap<usize, Vec<u8>> = LinkedHashMap::new();
 
                 likelihoods
-                    .best_alleles_breaking_ties_main(Box::new(|allele: &A| {
-                        if allele.is_reference() {
-                            1
-                        } else {
-                            0
-                        }
-                    }))
+                    .best_alleles_breaking_ties_main(Box::new(
+                        |allele: &Haplotype<SimpleInterval>| {
+                            if allele.is_reference() {
+                                1
+                            } else {
+                                0
+                            }
+                        },
+                    ))
                     .into_iter()
                     .filter(|ba| {
                         ba.is_informative()
@@ -434,11 +445,11 @@ impl Annotation {
         }
     }
 
-    pub fn annotate<A: Allele>(
+    pub fn annotate(
         mut self,
         vc: &mut VariantContext,
         genotype: Option<&mut Genotype>,
-        likelihoods: &mut AlleleLikelihoods<A>,
+        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
     ) -> Self {
         self.value = self.annotation.annotate(vc, genotype, likelihoods);
         self

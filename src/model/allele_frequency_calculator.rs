@@ -127,7 +127,7 @@ impl AlleleFrequencyCalculator {
                     + MathUtils::log10_binomial_coeffecient(ploidy as f64, n as f64)
                     + MathUtils::log_to_log10(
                         ln_gamma(n as f64 + self.snp_pseudo_count)
-                            + ln_gamma((ploidy - n) as f64 + self.ref_pseudo_count),
+                            + ln_gamma(ploidy as f64 - n as f64 + self.ref_pseudo_count),
                     )
             })
             .collect::<Vec<f64>>();
@@ -210,7 +210,12 @@ impl AlleleFrequencyCalculator {
         let mut log10_absent_posteriors = Arc::new(Mutex::new(vec![Vec::new(); num_alleles]));
 
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
-            if !g.has_likelihoods() {
+            if !(g.has_likelihoods()
+                || g.has_gq()
+                || g.alleles
+                    .iter()
+                    .any(|a| a.is_called() && !a.is_reference() && !a.is_symbolic()))
+            {
                 continue;
             }
 

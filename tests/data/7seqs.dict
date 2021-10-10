@@ -1,0 +1,8 @@
+@HD	VN:1.6
+@SQ	SN:genome1~random_sequence_length_11000	LN:11000	M5:d65783e43cd5235581b5cb048dd39ea9	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome1~random_sequence_length_11010	LN:11010	M5:9d411b57778ab52d0f3fedbc53372d66	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome2~seq1	LN:1000	M5:81e5bc18276f23726eebfbe9a12f084f	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome3~random_sequence_length_11001	LN:11001	M5:a9b9d68a5cfcae29016ff19194c862f8	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome4~random_sequence_length_11002	LN:11002	M5:91129ff95241c807fe37ab29955bd6ac	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome5~seq2	LN:1000	M5:f598fb9afb1053c9b3dc994cdf0d0f01	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna
+@SQ	SN:genome6~random_sequence_length_11003	LN:11003	M5:97c65e6606d691964101b65b6a8e6e51	UR:file:/mnt/c/Users/n10853499/Documents/gatk/../Lorikeet/tests/data/7seqs.fna

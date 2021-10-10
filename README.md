@@ -16,9 +16,11 @@ regions within candidate genomes. Called variants can be clustered into likely s
 ## Index
 1. [Installation](#installation)
     - [Conda installation](#option-1-conda)
-    - [Manual installation](#option-2-install-manually)
+    - [Static binary installation](#option-2-install-static-binary)
+    - [Manual installation](#option-3-install-manually)
 2. [Requirements](#requirements)
 3. [Usage](#usage)
+    - [Forcing variant calls](#forcing-variant-calls)
 4. [Workflow](#workflow)
 5. [Output](#output)
     - [Genotype](#genotype)
@@ -31,7 +33,7 @@ regions within candidate genomes. Called variants can be clustered into likely s
 
 ## Installation
 
-#### Option 1: Conda
+#### Option 1: Conda *Only for version <= 0.5.0*
 
 *NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
 up to date version, follow the instruction in option 2. 
@@ -47,15 +49,26 @@ conda create -n lorikeet -c bioconda lorikeet-genome && \
 conda activate lorikeet
 ```
 
-#### Option 2: Install manually
+#### Option 2: Install static binary
+You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
+conda environment using the lorikeet.yml.
+```
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
+cd Lorikeet \
+conda env create -n lorikeet -f lorikeet.yml \
+bash install_static.sh
+```
+
+#### Option 2: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
-git clone --recursivehttps://github.com/rhysnewell/Lorikeet.git \ 
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
 cd Lorikeet \
 conda env create -n lorikeet -f lorikeet.yml \ 
 conda activate lorikeet \ 
-bash install.sh # or e.g. `cargo run -- genotype`
+bash install.sh # or run without installing e.g. `cargo run --release -- genotype -h` \
+lorikeet genotype -h
 ```
 
 Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
@@ -85,7 +98,7 @@ Usage: lorikeet <subcommand> ...
 
 Main subcommands:
     genotype    *Experimental* Resolve strain-level genotypes of MAGs from microbial communities
-    polish      Creates consensus genomes for each input reference and for each sample
+    consensus   Creates consensus genomes for each input reference and for each sample
     call        Performs variant calling with no downstream analysis
     evolve      Calculate dN/dS values for genes from read mappings
 
@@ -103,6 +116,35 @@ Call variants from bam:
 Call variants from short reads and longread bam files:
 
 `lorikeet call -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
+
+#### Forcing variant calls
+Through use of the `-f, --features-vcf` argument it is possible to provide lorikeet with a list of known variants or variants of concern that will be forcibly called by
+the algorithm if there is any activity occurring at that genomic location in the provided samples. It is possible that lorikeet
+will also call any potential variation events surrounding a given location as well. This can be useful if you are more 
+interested in the activity occurring around some given locations rather than specific variation events.
+
+The list of variants must be provided in VCF format with some caveats on how the variant locations are written. E.g.
+```
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##source=lorikeet-v0.6.0
+##contig=<ID=random10000~random_sequence_length_10000_1,length=10000>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER
+random10000~random_sequence_length_10000_1	223	.	G	C	1445.63	.
+random10000~random_sequence_length_10000_1	435	.	G	C	1941.63	.
+random10000~random_sequence_length_10000_1	949	.	T	A	383.629	.
+```
+
+Note that you need to specific both the genome name and contig name in the `CHROM` column separated by the `~` character
+ e.g. `random10000~random_sequence_length_10000_1`. Additionally, the standard `FORMAT` and `INFO` columns are optional when
+ provding a VCF file.
+ 
+Finally, the provided VCF file must be compressed using `bgzip` and indexed using `bcftools index` e.g.
+```
+bgzip -c random10000.vcf > random10000.vcf;
+bcftools index random10000.vcf.gz;
+lorikeet call -r random10000.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam -f random10000.vcf.gz
+```
 
 ## Workflow
 
