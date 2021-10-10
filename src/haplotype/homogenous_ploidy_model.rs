@@ -87,7 +87,7 @@ impl HeterogeneousPloidyModel {
             sample_list.len() == ploidies.len(),
             "Sample list and ploidy array length must match"
         );
-        let ploidy_sum = ploidies.par_iter().sum();
+        let ploidy_sum = ploidies.iter().sum();
         let is_homogenous = ploidies.len() == 0 || ploidies.iter().all_equal();
         Self {
             sample_list,

@@ -349,19 +349,6 @@ impl HaplotypeCallerEngine {
                 }
             });
 
-        // let likelihoodcount = ploidy + 1;
-        // let log10ploidy = (likelihoodcount as f64).log10();
-        // genotype_likelihoods
-        //     .par_iter_mut()
-        //     .for_each(|(tid, results)| {
-        //         results.iter_mut().for_each(|result| {
-        //             let denominator = result.read_counts as f64 * log10ploidy;
-        //             for i in 0..likelihoodcount {
-        //                 result.genotype_likelihoods[i] -= denominator
-        //             }
-        //         })
-        //     });
-
         // return genotype_likelihoods for each contig in current genome across samples
         return self.calculate_activity_probabilities(
             genotype_likelihoods,

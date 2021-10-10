@@ -6,6 +6,9 @@
     non_snake_case,
     unused
 )]
+extern crate openssl;
+extern crate openssl_sys;
+
 pub mod activity_profile;
 pub mod annotator;
 pub mod assembly;

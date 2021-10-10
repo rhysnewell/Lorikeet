@@ -284,7 +284,7 @@ impl GenotypingEngine {
         posteriors: &[f64],
     ) -> f64 {
         if !alleles
-            .par_iter()
+            .iter()
             .any(|allele| VCFConstants::is_spanning_deletion(allele))
         {
             let reducer: f64 = std::cmp::max(
@@ -298,8 +298,8 @@ impl GenotypingEngine {
             let ploidy = gt.ploidy;
             let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
             let span_del_index = alleles
-                .par_iter()
-                .position_first(|allele| VCFConstants::is_spanning_deletion(allele))
+                .iter()
+                .position(|allele| VCFConstants::is_spanning_deletion(allele))
                 .unwrap();
             // allele counts are in the GenotypeLikelihoodCalculator format of {ref index, ref count, span del index, span del count}
             let mut non_variant_log10_posteriors = (0..ploidy)
@@ -453,7 +453,7 @@ impl GenotypingEngine {
 
     fn has_posteriors(gc: &GenotypesContext) -> bool {
         gc.genotypes()
-            .par_iter()
+            .iter()
             .any(|genotype| genotype.has_attribute(&(*GENOTYPE_POSTERIORS_KEY).to_string()))
     }
 
@@ -473,7 +473,7 @@ impl GenotypingEngine {
                 MLE_ALLELE_COUNT_KEY.to_string(),
                 AttributeObject::Vecf64(
                     allele_counts_of_mle
-                        .par_iter()
+                        .iter()
                         .map(|count| *count as f64)
                         .collect::<Vec<f64>>(),
                 ),
@@ -531,7 +531,7 @@ impl GenotypingEngine {
             .count();
 
         return allele_counts_of_mle
-            .par_iter()
+            .iter()
             .map(|ac| {
                 std::cmp::min(OrderedFloat(0.0), OrderedFloat((*ac as f64) / (an as f64))).into()
             })

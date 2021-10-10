@@ -1,3 +1,6 @@
+extern crate openssl;
+extern crate openssl_sys;
+
 extern crate lorikeet_genome;
 
 use lorikeet_genome::cli::*;

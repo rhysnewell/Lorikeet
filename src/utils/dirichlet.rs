@@ -11,21 +11,6 @@ impl<'a> Dirichlet<'a> {
         Dirichlet { alpha: alpha }
     }
 
-    // /**
-    //  * Create a symmetric distribution Dir(a/K, a/K, a/K . . .) where K is the number of states and
-    //  * a is the concentration.
-    //  */
-    // pub fn symmetric_dirichlet(num_states: usize, concentration: f64) -> Dirichlet<'a> {
-    //     if num_states <= 0 {
-    //         panic!("Must have at least one state")
-    //     }
-    //     if concentration <= 0.0 {
-    //         panic!("Concentration must be positive")
-    //     }
-    //
-    //     Dirichlet::new(&vec![concentration / (num_states as f64); num_states])
-    // }
-
     // in variational Bayes one often needs the effective point estimate of a multinomial distribution with a
     // Dirichlet prior.  This value is not the mode or mean of the Dirichlet but rather the exp of the expected log weights.
     // note that these effective weights do not add up to 1.  This is fine because in any probabilistic model scaling all weights

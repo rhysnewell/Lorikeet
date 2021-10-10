@@ -78,7 +78,7 @@ impl BaseUtils {
     }
 
     pub fn is_all_regular_base(bases: &[u8]) -> bool {
-        bases.par_iter().all(|base| Self::is_regular_base(*base))
+        bases.iter().all(|base| Self::is_regular_base(*base))
     }
 
     /**

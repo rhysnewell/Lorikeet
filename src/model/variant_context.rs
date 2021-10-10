@@ -347,7 +347,7 @@ impl VariantContext {
                             GENOTYPE_POSTERIORS_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 normalized_log10_posteriors
-                                    .par_iter()
+                                    .iter()
                                     .map(|v| {
                                         if *v == 0.0 {
                                             // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
@@ -364,7 +364,7 @@ impl VariantContext {
                             GENOTYPE_PRIOR_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 log10_priors
-                                    .par_iter()
+                                    .iter()
                                     .map(|v| if *v == 0.0 { 0.0 } else { v * -10. })
                                     .collect::<Vec<f64>>(),
                             ),
@@ -483,7 +483,7 @@ impl VariantContext {
     }
 
     pub fn is_informative(gls: &[f64]) -> bool {
-        gls.par_iter().sum::<f64>() < VariantContext::SUM_GL_THRESH_NOCALL
+        gls.iter().sum::<f64>() < VariantContext::SUM_GL_THRESH_NOCALL
     }
 
     /**
@@ -686,11 +686,6 @@ impl VariantContext {
                     &header.id_to_name(filter)[..],
                 )));
             }
-
-            // let mut depths = record.format(b"AD").float().unwrap_or(vec![0.0; variants.len()]);
-            // let depths = depths.par_iter().map(|dp| dp[0] as f64).collect::<Vec<f64>>();
-            //
-            // vc.set_attribute("AD", depths);
             Some(vc)
         } else {
             None

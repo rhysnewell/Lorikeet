@@ -424,10 +424,7 @@ impl GenotypesContext {
     }
 
     pub fn contains_sample(&self, sample_name: &String) -> bool {
-        return self
-            .genotypes
-            .par_iter()
-            .any(|g| &g.sample_name == sample_name);
+        return self.genotypes.iter().any(|g| &g.sample_name == sample_name);
     }
 
     pub fn add(&mut self, genotype: Genotype) {

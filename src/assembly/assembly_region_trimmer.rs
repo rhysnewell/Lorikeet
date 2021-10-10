@@ -69,7 +69,7 @@ impl AssemblyRegionTrimmer {
         };
 
         let variants_in_region = variants
-            .into_par_iter()
+            .into_iter()
             .filter(|variant| region.get_span().overlaps(&variant.loc))
             .collect::<Vec<VariantContext>>();
 
@@ -78,12 +78,12 @@ impl AssemblyRegionTrimmer {
         };
 
         let mut min_start = variants_in_region
-            .par_iter()
+            .iter()
             .map(|vc| vc.loc.get_start())
             .min()
             .unwrap_or(0);
         let mut max_end = variants_in_region
-            .par_iter()
+            .iter()
             .map(|vc| vc.loc.get_end())
             .max()
             .unwrap_or(0);
@@ -99,7 +99,7 @@ impl AssemblyRegionTrimmer {
                 match num_repeats_and_unit {
                     Some(num_repeats_and_unit) => {
                         let repeat_length = num_repeats_and_unit.1.len();
-                        let most_repeats = num_repeats_and_unit.0.par_iter().max().unwrap_or(&0);
+                        let most_repeats = num_repeats_and_unit.0.iter().max().unwrap_or(&0);
                         let longest_str = most_repeats * repeat_length;
                         padding = self.str_padding_for_genotyping + longest_str;
                     }

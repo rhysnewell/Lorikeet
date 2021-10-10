@@ -541,10 +541,10 @@ impl ReadThreadingAssembler {
      */
     fn get_expanded_kmer_list(&self) -> Vec<usize> {
         let mut return_list = Vec::new();
-        return_list.par_extend(self.kmer_sizes.par_iter());
+        return_list.extend(self.kmer_sizes.iter());
         if !self.dont_increase_kmer_sizes_for_cycles {
             let mut kmer_size =
-                self.kmer_sizes.par_iter().max().unwrap() + Self::KMER_SIZE_ITERATION_INCREASE;
+                self.kmer_sizes.iter().max().unwrap() + Self::KMER_SIZE_ITERATION_INCREASE;
             let mut num_iterations = 1;
             while num_iterations <= Self::MAX_KMER_ITERATIONS_TO_ATTEMPT {
                 return_list.push(kmer_size);

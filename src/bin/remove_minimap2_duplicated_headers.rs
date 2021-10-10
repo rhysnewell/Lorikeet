@@ -1,3 +1,6 @@
+extern crate openssl;
+extern crate openssl_sys;
+
 use std::io::prelude::*;
 
 fn main() {

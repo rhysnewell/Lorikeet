@@ -484,7 +484,7 @@ impl AssemblyBasedCallerUtils {
         }
 
         let haplotype_sources = vcs
-            .par_iter()
+            .iter()
             .map(|vc| vc.source.clone())
             .collect::<Vec<String>>();
         let orignal_num_of_vcs = haplotype_sources.len();
@@ -784,11 +784,11 @@ impl AssemblyBasedCallerUtils {
         );
 
         let given_alt_and_ref_alleles_in_original_context = vcs
-            .par_iter()
+            .iter()
             .flat_map(|vc| {
                 let refr = vc.get_reference();
                 let alt = vc.get_alternate_alleles();
-                alt.into_par_iter()
+                alt.into_iter()
                     .map(|allele| (allele, refr))
                     .collect::<Vec<(&ByteArrayAllele, &ByteArrayAllele)>>()
             })
@@ -796,11 +796,11 @@ impl AssemblyBasedCallerUtils {
 
         let result = merged_vc
             .get_alternate_alleles()
-            .into_par_iter()
+            .into_iter()
             .map(|allele| (allele, merged_vc.get_reference()))
             .filter(|alt_and_ref| {
                 given_alt_and_ref_alleles_in_original_context
-                    .par_iter()
+                    .iter()
                     .any(|given_alt_and_ref| {
                         AssemblyBasedCallerUtils::alleles_are_consistent(
                             given_alt_and_ref,

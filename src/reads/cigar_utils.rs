@@ -288,7 +288,7 @@ impl CigarUtils {
         // one deletion, in which case two substitutions is a better alignment.
         if alt_seq.len() == ref_seq.len() {
             let mismatch_count = (0..ref_seq.len())
-                .into_par_iter()
+                .into_iter()
                 .map(|n| if alt_seq[n] == ref_seq[n] { 0 } else { 1 })
                 .sum::<usize>();
 
@@ -521,7 +521,7 @@ impl CigarUtils {
     pub fn get_reference_length(cigar: &CigarString) -> u32 {
         let length = cigar
             .0
-            .par_iter()
+            .iter()
             .map(|elem| match elem {
                 Cigar::Match(len)
                 | Cigar::Del(len)
@@ -541,7 +541,7 @@ impl CigarUtils {
     pub fn get_padded_reference_length(cigar: &CigarString) -> u32 {
         let length = cigar
             .0
-            .par_iter()
+            .iter()
             .map(|elem| match elem {
                 Cigar::Match(len)
                 | Cigar::Del(len)
@@ -562,7 +562,7 @@ impl CigarUtils {
     pub fn get_read_length(cigar: &CigarString) -> u32 {
         let length = cigar
             .0
-            .par_iter()
+            .iter()
             .filter(|elem| CigarUtils::cigar_consumes_read_bases(elem))
             .map(|elem| elem.len())
             .sum::<u32>();

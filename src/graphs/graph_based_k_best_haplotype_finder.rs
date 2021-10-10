@@ -75,7 +75,7 @@ impl GraphBasedKBestHaplotypeFinder {
         let mut queue: BinaryHeap<KBestHaplotype> = self
             .k_best_haplotype_finder
             .sources
-            .par_iter()
+            .iter()
             .map(|source| KBestHaplotype::new(*source, graph))
             .collect::<BinaryHeap<KBestHaplotype>>();
 
@@ -83,7 +83,6 @@ impl GraphBasedKBestHaplotypeFinder {
         let mut vertex_counts = graph
             .graph
             .node_indices()
-            .par_bridge()
             .map(|v| (v, 0))
             .collect::<HashMap<NodeIndex, usize>>();
 

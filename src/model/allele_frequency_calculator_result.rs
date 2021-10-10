@@ -86,8 +86,8 @@ impl AFCalculationResult {
         }
         let index_in_all_alleles_including_ref = self
             .alleles_used_in_genotyping
-            .par_iter()
-            .position_first(|a| a == allele)
+            .iter()
+            .position(|a| a == allele)
             .unwrap();
         let index_in_alt_alleles = index_in_all_alleles_including_ref - 1;
         return self.allele_counts_of_mle[index_in_alt_alleles];
