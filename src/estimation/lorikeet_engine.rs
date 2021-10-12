@@ -4,6 +4,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
 use estimation::bams::index_bams::*;
+use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use model::variant_context::VariantContext;
 use rayon::prelude::*;
@@ -225,6 +226,7 @@ impl<'a> LorikeetEngine<'a> {
                         &indexed_bam_readers,
                         &mut reference_reader,
                     );
+                    debug!("example variant {:?}", &contexts.first());
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -247,6 +249,7 @@ impl<'a> LorikeetEngine<'a> {
                             &contexts,
                             &cleaned_sample_names,
                             &reference_reader,
+                            false,
                         )
                     } else if mode == "genotype" {
                         // let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
@@ -276,13 +279,21 @@ impl<'a> LorikeetEngine<'a> {
 
                         // Generate initial read linked clusters
                         // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Running UMAP and HDBSCAN...",
-                                &reference,
-                            ));
-                        }
+                        let mut clustering_engine = HaplotypeClusteringEngine::new(
+                            output_prefix.as_str(),
+                            contexts,
+                            &reference_reader,
+                            ref_idx,
+                            indexed_bam_readers.len(),
+                            n_threads,
+                        );
+                        let contexts = clustering_engine.perform_clustering(
+                            &indexed_bam_readers,
+                            n_threads,
+                            tree,
+                        );
+                        debug!("example variant after clustering {:?}", &contexts.first());
+
                         // variant_matrix.run_fuzzy_scan(
                         //     e_min,
                         //     e_max,
@@ -352,6 +363,7 @@ impl<'a> LorikeetEngine<'a> {
                             &contexts,
                             &cleaned_sample_names,
                             &reference_reader,
+                            true,
                         )
                     } else if mode == "consensus" {
                         // Get sample distances
@@ -365,6 +377,7 @@ impl<'a> LorikeetEngine<'a> {
                             &contexts,
                             &cleaned_sample_names,
                             &reference_reader,
+                            false,
                         );
 
                         {

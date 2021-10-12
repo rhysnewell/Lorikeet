@@ -29,6 +29,7 @@
 // use std::sync::{Arc, Mutex};
 // use tempfile;
 // use reference::reference_reader_utils::ReferenceReaderUtils;
+// use linkage::strain_abundances::GenotypeWeights;
 //
 // #[derive(Debug, Clone)]
 // /// Container for all variants within a genome and associated clusters
@@ -1433,6 +1434,7 @@
 //                             let mut genotype_key: HashMap<usize, usize> = HashMap::new();
 //                             let mut strain_id_key: HashMap<usize, usize> = HashMap::new();
 //
+//
 //                             loop {
 //                                 let number_of_genotypes = genotype_map.keys().len();
 //
@@ -1467,7 +1469,7 @@
 //                                     for (strain_id, _) in genotype_map.iter() {
 //                                         let genotype_idx = genotype_key.get(strain_id).unwrap();
 //                                         sample_vec[*genotype_idx] =
-//                                             genotype_abundances::GenotypeWeights::new(*strain_id);
+//                                             GenotypeWeights::new(*strain_id);
 //                                     }
 //                                 });
 //

@@ -18,6 +18,7 @@ use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
 use haplotype::haplotype::Haplotype;
 use haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
+use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
 use mathru::special::gamma::{digamma, ln_gamma};
 use model::allele_likelihoods::AlleleLikelihoods;
@@ -1143,12 +1144,13 @@ impl HaplotypeCallerEngine {
         variant_contexts: &Vec<VariantContext>,
         sample_names: &Vec<&str>,
         reference_reader: &ReferenceReader,
+        strain_info: bool,
     ) {
         if variant_contexts.len() > 0 {
             // initiate header
             let mut header = Header::new();
             // Add program info
-            self.populate_vcf_header(sample_names, reference_reader, &mut header);
+            self.populate_vcf_header(sample_names, reference_reader, &mut header, strain_info);
 
             // ensure path exists
             create_dir_all(output_prefix).expect("Unable to create output directory");
@@ -1177,6 +1179,7 @@ impl HaplotypeCallerEngine {
         sample_names: &Vec<&str>,
         reference_reader: &ReferenceReader,
         header: &mut Header,
+        strain_info: bool,
     ) {
         header.push_record(format!("##source=lorikeet-v{}", env!("CARGO_PKG_VERSION")).as_bytes());
 
@@ -1210,6 +1213,26 @@ impl HaplotypeCallerEngine {
             );
         }
 
-        VariantAnnotationEngine::populate_vcf_header(header);
+        VariantAnnotationEngine::populate_vcf_header(header, strain_info);
+    }
+
+    pub fn haplotype_clustering(
+        &self,
+        output_prefix: &str,
+        variant_contexts: Vec<VariantContext>,
+        sample_names: &Vec<&str>,
+        ref_idx: usize,
+        n_samples: usize,
+        reference_reader: &ReferenceReader,
+    ) -> Vec<VariantContext> {
+        // let mut haplotype_custering_engine = HaplotypeClusteringEngine::new(
+        //     output_prefix,
+        //     variant_contexts,
+        //     reference_reader,
+        //     ref_idx,
+        //     n_samples
+        // );
+
+        return variant_contexts;
     }
 }

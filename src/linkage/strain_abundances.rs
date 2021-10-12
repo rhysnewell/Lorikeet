@@ -2,8 +2,6 @@ use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct GenotypeWeights {
-    // The variants in a genotype, not order is random but consistent with variant_weights
-    // pub variants: Vec<variants::Variant>,
     // The genotype index
     pub index: usize,
     // The expected weights of each variant that decide the strain abundance

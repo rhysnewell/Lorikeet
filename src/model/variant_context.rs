@@ -1085,76 +1085,102 @@ impl VariantContext {
                     .expect("Cannot push info tag");
             }
         }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::VariantGroup.to_key())
+        {
+            if let AttributeObject::I32(val) = self
+                .attributes
+                .get(VariantAnnotations::VariantGroup.to_key())
+                .unwrap()
+            {
+                record
+                    .push_info_integer(
+                        VariantAnnotations::VariantGroup.to_key().as_bytes(),
+                        &vec![*val],
+                    )
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::Strain.to_key())
+        {
+            if let AttributeObject::VecUnsize(val) = self
+                .attributes
+                .get(VariantAnnotations::Strain.to_key())
+                .unwrap()
+            {
+                let val = val.into_iter().map(|v| *v as i32).collect::<Vec<i32>>();
+                record
+                    .push_info_integer(VariantAnnotations::Strain.to_key().as_bytes(), &val)
+                    .expect("Cannot push info tag");
+            }
+        }
     }
 
     fn add_genotype_format(&self, record: &mut Record, n_samples: usize) {
         // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
+        let mut phases = Vec::new();
+        let mut pls = Vec::new();
+        let mut ads = Vec::new();
         let mut gqs = Vec::new();
         let mut dps = Vec::new();
         for genotype in self.genotypes.genotypes() {
             let mut phased = Vec::new();
-            // if genotype.is_phased {
-            //     let pgt = genotype.attributes.get("PGT");
-            //     match pgt {
-            //         None => {
-            //             phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-            //             // assume this
-            //         }
-            //         Some(pgt) => {
-            //             match pgt {
-            //                 AttributeObject::String(string) => {
-            //                     let slash = string.contains("/");
-            //                     for (idx, byte) in string.as_bytes().into_iter().enumerate() {
-            //                         let val = if *byte == 48 {
-            //                             // utf8 to int
-            //                             0
-            //                         } else if *byte == 49 {
-            //                             1
-            //                         } else {
-            //                             2
-            //                         };
-            //                         if val == 0 || val == 1 {
-            //                             if idx == 0 {
-            //                                 if slash {
-            //                                     phased.push(GenotypeAllele::Unphased(val))
-            //                                 } else {
-            //                                     phased.push(GenotypeAllele::Phased(val))
-            //                                 }
-            //                             } else {
-            //                                 phased.push(GenotypeAllele::Phased(val))
-            //                             }
-            //                         }
-            //                     }
-            //                 }
-            //                 _ => {
-            //                     phased =
-            //                         vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-            //                     // assume this
-            //                 }
-            //             }
-            //         }
-            //     }
-            // } else {
-            //     phased = vec![GenotypeAllele::Unphased(1); n_samples]
-            // }
+            if genotype.is_phased {
+                let pgt = genotype.attributes.get("PGT");
+                match pgt {
+                    None => {
+                        phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                        // assume this
+                    }
+                    Some(pgt) => {
+                        match pgt {
+                            AttributeObject::String(string) => {
+                                let slash = string.contains("/");
+                                for (idx, byte) in string.as_bytes().into_iter().enumerate() {
+                                    let val = if *byte == 48 {
+                                        // utf8 to int
+                                        0
+                                    } else if *byte == 49 {
+                                        1
+                                    } else {
+                                        2
+                                    };
+                                    if val == 0 || val == 1 {
+                                        if idx == 0 {
+                                            if slash {
+                                                phased.push(GenotypeAllele::Unphased(val))
+                                            } else {
+                                                phased.push(GenotypeAllele::Phased(val))
+                                            }
+                                        } else {
+                                            phased.push(GenotypeAllele::Phased(val))
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                phased =
+                                    vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                                // assume this
+                            }
+                        }
+                    }
+                }
+            } else {
+                phased = vec![GenotypeAllele::Unphased(1); n_samples]
+            }
             phased = vec![GenotypeAllele::Unphased(1); n_samples];
             debug!("Genotypes {:?}", &phased);
-            record.push_genotypes(&phased);
-            // debug!("PLs {:?}", genotype.pl_i32(n_samples));
-            // record
-            //     .push_format_string(
-            //         VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
-            //         &vec![genotype.pl_str().as_bytes(); n_samples],
-            //     )
-            //     .expect("Unable to push format tag");
-            record
-                .push_format_integer(
-                    VariantAnnotations::DepthPerAlleleBySample
-                        .to_key()
-                        .as_bytes(),
-                    &genotype.ad_i32(n_samples),
-                )
-                .expect("Unable to push format tag");
+            phases.extend(phased);
+
+            pls.push(genotype.pl_str());
+            ads.push(genotype.ad_str());
+
             if genotype.dp != -1 {
                 dps.push(genotype.dp as i32);
                 gqs.push(genotype.gq as i32);
@@ -1163,6 +1189,24 @@ impl VariantContext {
                 gqs.push(0);
             }
         }
+        record
+            .push_genotypes(&phases)
+            .expect("Unable to push genotypes");
+        record
+            .push_format_string(
+                VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
+                &pls.iter().map(|p| p.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+        record
+            .push_format_string(
+                VariantAnnotations::DepthPerAlleleBySample
+                    .to_key()
+                    .as_bytes(),
+                &ads.iter().map(|a| a.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+
         debug!("Pushing GQ {:?}", &gqs);
         record
             .push_format_integer(
