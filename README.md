@@ -59,7 +59,7 @@ conda env create -n lorikeet -f lorikeet.yml \
 bash install_static.sh
 ```
 
-#### Option 2: Build manually
+#### Option 3: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system.
 ```
