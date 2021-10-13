@@ -54,6 +54,8 @@ needletail = "0.4.1"
 nix = "0.13"
 ntest = "0.7.3"
 num = "0.4.0"
+openssl-sys = "0.9"
+openssl = "0.10"
 ordered-float = "1"
 pest = "2"
 pest_derive = "2"
@@ -132,7 +134,7 @@ overflow-checks = false
 # The testing profile, used for `cargo test` (for `cargo test --release` see
 # the `release` and `bench` profiles).
 [profile.test]
-opt-level = 0
+opt-level = 3
 debug = 2
 rpath = false
 lto = false

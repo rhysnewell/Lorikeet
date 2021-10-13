@@ -125,6 +125,7 @@ impl VariantContext {
         end: usize,
         alleles: Vec<ByteArrayAllele>,
     ) -> VariantContext {
+        let alleles = Self::make_alleles(alleles);
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -138,9 +139,10 @@ impl VariantContext {
     }
 
     pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
+        let alleles = Self::make_alleles(vc.alleles.clone());
         VariantContext {
             loc: vc.loc.clone(),
-            alleles: vc.alleles.clone(),
+            alleles,
             genotypes: vc.genotypes.clone(),
             source: vc.source.clone(),
             log10_p_error: vc.log10_p_error.clone(),
@@ -148,6 +150,41 @@ impl VariantContext {
             attributes: vc.attributes.clone(),
             variant_type: None,
         }
+    }
+
+    fn make_alleles(alleles: Vec<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
+        let mut allele_list = Vec::new();
+
+        let mut saw_ref = false;
+        for a in alleles {
+            if allele_list.contains(&a) {
+                panic!("Duplicate allele added to VariantContext {:?}", &a)
+            };
+
+            // deal with the case where the first allele isn't the reference
+            if a.is_reference() {
+                if saw_ref {
+                    panic!("Alleles for a VariantContext must contain at most one reference allele: {:?}", &a);
+                }
+                allele_list.insert(0, a);
+                saw_ref = true;
+            } else {
+                allele_list.push(a);
+            }
+        }
+
+        if allele_list.is_empty() {
+            panic!("Cannot create a VariantContext with an empty allele list");
+        }
+
+        if !allele_list[0].is_reference() {
+            panic!(
+                "Alleles for a VariantContext must contain at least one reference allele: {:?}",
+                &allele_list
+            );
+        }
+
+        allele_list
     }
 
     pub fn is_filtered(&self) -> bool {
@@ -347,7 +384,7 @@ impl VariantContext {
                             GENOTYPE_POSTERIORS_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 normalized_log10_posteriors
-                                    .par_iter()
+                                    .iter()
                                     .map(|v| {
                                         if *v == 0.0 {
                                             // the reason for the == 0.0 is to avoid a signed 0 output "-0.0"
@@ -364,7 +401,7 @@ impl VariantContext {
                             GENOTYPE_PRIOR_KEY.to_string(),
                             AttributeObject::Vecf64(
                                 log10_priors
-                                    .par_iter()
+                                    .iter()
                                     .map(|v| if *v == 0.0 { 0.0 } else { v * -10. })
                                     .collect::<Vec<f64>>(),
                             ),
@@ -483,7 +520,7 @@ impl VariantContext {
     }
 
     pub fn is_informative(gls: &[f64]) -> bool {
-        gls.par_iter().sum::<f64>() < VariantContext::SUM_GL_THRESH_NOCALL
+        gls.iter().sum::<f64>() < VariantContext::SUM_GL_THRESH_NOCALL
     }
 
     /**
@@ -686,11 +723,6 @@ impl VariantContext {
                     &header.id_to_name(filter)[..],
                 )));
             }
-
-            // let mut depths = record.format(b"AD").float().unwrap_or(vec![0.0; variants.len()]);
-            // let depths = depths.par_iter().map(|dp| dp[0] as f64).collect::<Vec<f64>>();
-            //
-            // vc.set_attribute("AD", depths);
             Some(vc)
         } else {
             None
@@ -982,6 +1014,23 @@ impl VariantContext {
             .collect::<Vec<&[u8]>>()
     }
 
+    /// Returns a boolean indicating whether this `VariantContext` is part of the given strain
+    pub fn part_of_strain(&self, strain_id: usize) -> bool {
+        match self.attributes.get(VariantAnnotations::Strain.to_key()) {
+            None => {
+                // Strain annotation not present so panic
+                panic!("This VariantContext has not been annotated with any strains")
+            }
+            Some(attribute) => {
+                if let AttributeObject::VecUnsize(vec) = attribute {
+                    return vec.contains(&strain_id);
+                } else {
+                    panic!("Strain key has value not contained in AttributeObject::VecUnsize")
+                }
+            }
+        }
+    }
+
     /// writes this VariantContext as a VCF4 record. Assumes writer has prepopulated all INFO
     /// and FORMAT fields using the variant annotation engine.
     pub fn write_as_vcf_record(
@@ -1020,6 +1069,40 @@ impl VariantContext {
         self.add_variant_info(&mut record);
 
         bcf_writer.write(&record).unwrap();
+    }
+
+    /// Removes all other alts attribtues except the one provided by alt_index
+    /// Also keeps the reference
+    pub fn remove_attributes_for_alt_by_index(&mut self, alt_index: usize) {
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::MappingQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get_mut(VariantAnnotations::MappingQuality.to_key())
+                .unwrap()
+            {
+                if alt_index < val.len() {
+                    *val = vec![val[0], val[alt_index]];
+                }
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::BaseQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get_mut(VariantAnnotations::BaseQuality.to_key())
+                .unwrap()
+            {
+                if alt_index < val.len() {
+                    *val = vec![val[0], val[alt_index]];
+                }
+            }
+        }
     }
 
     fn add_variant_info(&self, record: &mut Record) {
@@ -1090,76 +1173,100 @@ impl VariantContext {
                     .expect("Cannot push info tag");
             }
         }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::VariantGroup.to_key())
+        {
+            if let AttributeObject::I32(val) = self
+                .attributes
+                .get(VariantAnnotations::VariantGroup.to_key())
+                .unwrap()
+            {
+                record
+                    .push_info_integer(
+                        VariantAnnotations::VariantGroup.to_key().as_bytes(),
+                        &vec![*val],
+                    )
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::Strain.to_key())
+        {
+            if let AttributeObject::VecUnsize(val) = self
+                .attributes
+                .get(VariantAnnotations::Strain.to_key())
+                .unwrap()
+            {
+                let val = val.into_iter().map(|v| *v as i32).collect::<Vec<i32>>();
+                record
+                    .push_info_integer(VariantAnnotations::Strain.to_key().as_bytes(), &val)
+                    .expect("Cannot push info tag");
+            }
+        }
     }
 
     fn add_genotype_format(&self, record: &mut Record, n_samples: usize) {
         // let mut genotype_alleles = Vec::with_capacity(self.genotypes.len());
+        let mut phases = Vec::new();
+        let mut pls = Vec::new();
+        let mut ads = Vec::new();
         let mut gqs = Vec::new();
         let mut dps = Vec::new();
         for genotype in self.genotypes.genotypes() {
             let mut phased = Vec::new();
-            // if genotype.is_phased {
-            //     let pgt = genotype.attributes.get("PGT");
-            //     match pgt {
-            //         None => {
-            //             phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-            //             // assume this
-            //         }
-            //         Some(pgt) => {
-            //             match pgt {
-            //                 AttributeObject::String(string) => {
-            //                     let slash = string.contains("/");
-            //                     for (idx, byte) in string.as_bytes().into_iter().enumerate() {
-            //                         let val = if *byte == 48 {
-            //                             // utf8 to int
-            //                             0
-            //                         } else if *byte == 49 {
-            //                             1
-            //                         } else {
-            //                             2
-            //                         };
-            //                         if val == 0 || val == 1 {
-            //                             if idx == 0 {
-            //                                 if slash {
-            //                                     phased.push(GenotypeAllele::Unphased(val))
-            //                                 } else {
-            //                                     phased.push(GenotypeAllele::Phased(val))
-            //                                 }
-            //                             } else {
-            //                                 phased.push(GenotypeAllele::Phased(val))
-            //                             }
-            //                         }
-            //                     }
-            //                 }
-            //                 _ => {
-            //                     phased =
-            //                         vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-            //                     // assume this
-            //                 }
-            //             }
-            //         }
-            //     }
-            // } else {
-            //     phased = vec![GenotypeAllele::Unphased(1); n_samples]
-            // }
-            phased = vec![GenotypeAllele::Unphased(1); n_samples];
-            debug!("Genotypes {:?}", &phased);
-            record.push_genotypes(&phased);
-            // debug!("PLs {:?}", genotype.pl_i32(n_samples));
-            // record
-            //     .push_format_string(
-            //         VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
-            //         &vec![genotype.pl_str().as_bytes(); n_samples],
-            //     )
-            //     .expect("Unable to push format tag");
-            record
-                .push_format_integer(
-                    VariantAnnotations::DepthPerAlleleBySample
-                        .to_key()
-                        .as_bytes(),
-                    &genotype.ad_i32(n_samples),
-                )
-                .expect("Unable to push format tag");
+            if genotype.is_phased {
+                let pgt = genotype.attributes.get("PGT");
+                match pgt {
+                    None => {
+                        phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                        // assume this
+                    }
+                    Some(pgt) => {
+                        match pgt {
+                            AttributeObject::String(string) => {
+                                let slash = string.contains("/");
+                                for (idx, byte) in string.as_bytes().into_iter().enumerate() {
+                                    let val = if *byte == 48 {
+                                        // utf8 to int
+                                        0
+                                    } else if *byte == 49 {
+                                        1
+                                    } else {
+                                        2
+                                    };
+                                    if val == 0 || val == 1 {
+                                        if idx == 0 {
+                                            if slash {
+                                                phased.push(GenotypeAllele::Unphased(val))
+                                            } else {
+                                                phased.push(GenotypeAllele::Phased(val))
+                                            }
+                                        } else {
+                                            phased.push(GenotypeAllele::Phased(val))
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                phased =
+                                    vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
+                                // assume this
+                            }
+                        }
+                    }
+                }
+            } else {
+                phased = vec![GenotypeAllele::Unphased(1); 2]
+            }
+            phases.extend(phased);
+
+            pls.push(genotype.pl_str());
+            ads.push(genotype.ad_str());
+
             if genotype.dp != -1 {
                 dps.push(genotype.dp as i32);
                 gqs.push(genotype.gq as i32);
@@ -1168,14 +1275,30 @@ impl VariantContext {
                 gqs.push(0);
             }
         }
-        debug!("Pushing GQ {:?}", &gqs);
+        record
+            .push_genotypes(&phases)
+            .expect("Unable to push genotypes");
+        record
+            .push_format_string(
+                VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
+                &pls.iter().map(|p| p.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+        record
+            .push_format_string(
+                VariantAnnotations::DepthPerAlleleBySample
+                    .to_key()
+                    .as_bytes(),
+                &ads.iter().map(|a| a.as_bytes()).collect::<Vec<&[u8]>>(),
+            )
+            .expect("Unable to push format tag");
+
         record
             .push_format_integer(
                 VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
                 &gqs,
             )
             .expect("Unable to push format tag");
-        debug!("Pushing DP {:?}", &dps);
         record
             .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
             .expect("Unable to push format tag");

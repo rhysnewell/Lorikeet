@@ -213,7 +213,7 @@ General options:
   -p, --parallel-genomes                Number of genomes to run in parallel.
                                         Increases memory usage linearly.
                                         Thread usage qill not exceed the value
-                                        provided by --threads [default 1]
+                                        provided by --threads [default 4]
   -v, --verbose                         Print extra debugging information
   -q, --quiet                           Unless there is an error, do not print
                                         log messages
@@ -600,7 +600,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("parallel-genomes")
                         .short("p")
                         .long("parallel-genomes")
-                        .default_value("1")
+                        .default_value("4")
                         .takes_value(true),
                 )
                 .arg(
@@ -1195,7 +1195,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("parallel-genomes")
                         .short("p")
                         .long("parallel-genomes")
-                        .default_value("1")
+                        .default_value("4")
                         .takes_value(true),
                 )
                 .arg(
@@ -1826,7 +1826,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("parallel-genomes")
                         .short("p")
                         .long("parallel-genomes")
-                        .default_value("1")
+                        .default_value("4")
                         .takes_value(true),
                 )
                 .arg(
@@ -2427,7 +2427,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("parallel-genomes")
                         .short("p")
                         .long("parallel-genomes")
-                        .default_value("1")
+                        .default_value("4")
                         .takes_value(true),
                 )
                 .arg(

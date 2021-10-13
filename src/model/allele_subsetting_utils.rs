@@ -68,31 +68,23 @@ impl AlleleSubsettingUtils {
         alleles: Vec<ByteArrayAllele>,
         likelihood_sums: Vec<f64>,
     ) -> Vec<ByteArrayAllele> {
-        let non_ref_alt_allele_index = alleles.par_iter().position_first(|a| a == &*NON_REF_ALLELE);
+        let non_ref_alt_allele_index = alleles.iter().position(|a| a == &*NON_REF_ALLELE);
         let num_alleles = alleles.len();
         let mut indices = (1..num_alleles).collect_vec();
         indices.sort_by_key(|n| OrderedFloat(likelihood_sums[*n]));
 
         let mut proper_alt_indexes_to_keep = indices
-            .into_par_iter()
+            .into_iter()
             .filter(|n| Some(*n) != non_ref_alt_allele_index)
             .collect::<Vec<usize>>();
         proper_alt_indexes_to_keep.sort_by_key(|n| -OrderedFloat(likelihood_sums[*n]));
         let proper_alt_indexes_to_keep = proper_alt_indexes_to_keep
-            .into_par_iter()
+            .into_iter()
             .take(num_alt_alleles_to_keep)
             .collect::<HashSet<usize>>();
 
-        // let result = (0..num_alleles)
-        //     .into_par_iter()
-        //     .filter(|i| {
-        //         *i == 0 || Some(*i) == non_ref_alt_allele_index || proper_alt_indexes_to_keep.contains(i)
-        //     })
-        //     .map(|i| alleles[i].clone())
-        //     .collect::<Vec<ByteArrayAllele>>();
-
         let result = alleles
-            .into_par_iter()
+            .into_iter()
             .take(num_alleles)
             .enumerate()
             .filter(|(i, a)| {
@@ -280,12 +272,10 @@ impl AlleleSubsettingUtils {
             if g.has_ad() {
                 let old_ad = g.get_ad();
                 let mut new_ad = (0..alleles_to_keep.len())
-                    .into_par_iter()
+                    .into_iter()
                     .map(|n| old_ad[allele_permutation.from_index(n)])
                     .collect::<Vec<i64>>();
-                let non_ref_index = alleles_to_keep
-                    .par_iter()
-                    .position_first(|p| p == &*NON_REF_ALLELE);
+                let non_ref_index = alleles_to_keep.iter().position(|p| p == &*NON_REF_ALLELE);
 
                 match non_ref_index {
                     Some(index) => {

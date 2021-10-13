@@ -1,3 +1,6 @@
+extern crate openssl;
+extern crate openssl_sys;
+
 extern crate lorikeet_genome;
 
 use lorikeet_genome::cli::*;
@@ -57,7 +60,7 @@ fn main() {
         }
         Some("call") => {
             let m = matches.subcommand_matches("call").unwrap();
-            let mode = "genotype";
+            let mode = "call";
             if m.is_present("full-help") {
                 println!("{}", call_full_help());
                 process::exit(1);

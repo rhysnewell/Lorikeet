@@ -130,10 +130,22 @@ impl VariantAnnotationEngine {
         return annotations;
     }
 
+    fn strain_annotations() -> Vec<Annotation> {
+        vec![
+            Annotation::new(VariantAnnotations::VariantGroup, AnnotationType::Info),
+            Annotation::new(VariantAnnotations::Strain, AnnotationType::Format),
+        ]
+    }
+
     /// Populates a given VCF header with all possible annotation fields and info
-    pub fn populate_vcf_header(header: &mut Header) {
+    pub fn populate_vcf_header(header: &mut Header, strain_info: bool) {
         for annotation in Self::all_annotations() {
             header.push_record(annotation.generate_header_record().as_bytes());
+        }
+        if strain_info {
+            for annotation in Self::strain_annotations() {
+                header.push_record(annotation.generate_header_record().as_bytes());
+            }
         }
     }
 }

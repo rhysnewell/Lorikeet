@@ -145,22 +145,6 @@ impl GenotypingEngine {
         // Add 0.0 removes -0.0 occurrences.
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
-        if vc.loc.get_start() == 30 || vc.loc.get_start() == 222 {
-            debug!(
-                "monomorphic {:?} AFresult {:?} bases {} phred scaled {} passes {} no alleles {} given empty {}",
-                &output_alternative_alleles,
-                &af_result, std::str::from_utf8(af_result.get_alleles_used_in_genotyping()[1].get_bases()).unwrap(), phred_scaled_confidence,
-                GenotypingEngine::passes_emit_threshold(
-                    phred_scaled_confidence,
-                    stand_min_conf,
-                    output_alternative_alleles.site_is_monomorphic,
-                ),
-                GenotypingEngine::no_alleles_or_first_allele_is_not_non_ref(
-                    &output_alternative_alleles.alleles,
-                ),
-                given_alleles_empty
-            )
-        }
         // return a None if we don't pass the confidence cutoff or the most likely allele frequency is zero
         // skip this if we are already looking at a vc with NON_REF as the first alt allele i.e. if we are in GenotypeGVCFs
         if !GenotypingEngine::passes_emit_threshold(
@@ -284,7 +268,7 @@ impl GenotypingEngine {
         posteriors: &[f64],
     ) -> f64 {
         if !alleles
-            .par_iter()
+            .iter()
             .any(|allele| VCFConstants::is_spanning_deletion(allele))
         {
             let reducer: f64 = std::cmp::max(
@@ -298,8 +282,8 @@ impl GenotypingEngine {
             let ploidy = gt.ploidy;
             let mut gl_calc = GenotypeLikelihoodCalculators::get_instance(ploidy, alleles.len());
             let span_del_index = alleles
-                .par_iter()
-                .position_first(|allele| VCFConstants::is_spanning_deletion(allele))
+                .iter()
+                .position(|allele| VCFConstants::is_spanning_deletion(allele))
                 .unwrap();
             // allele counts are in the GenotypeLikelihoodCalculator format of {ref index, ref count, span del index, span del count}
             let mut non_variant_log10_posteriors = (0..ploidy)
@@ -406,16 +390,7 @@ impl GenotypingEngine {
                 // if we combined a ref / NON_REF gVCF with a ref / alt gVCF
                 let is_non_ref_which_is_lone_alt_allele =
                     alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
-                if vc.loc.get_start() == 30 || vc.loc.get_start() == 222 {
-                    debug!(
-                        "allele {:?} stand min conf {} passes thresh {} val {}",
-                        allele,
-                        stand_min_conf,
-                        af_calculation_result.passes_threshold(allele, stand_min_conf),
-                        (af_calculation_result.get_log10_posterior_of_allele_absent(allele)
-                            + AFCalculationResult::EPSILON)
-                    )
-                }
+
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
@@ -453,7 +428,7 @@ impl GenotypingEngine {
 
     fn has_posteriors(gc: &GenotypesContext) -> bool {
         gc.genotypes()
-            .par_iter()
+            .iter()
             .any(|genotype| genotype.has_attribute(&(*GENOTYPE_POSTERIORS_KEY).to_string()))
     }
 
@@ -473,7 +448,7 @@ impl GenotypingEngine {
                 MLE_ALLELE_COUNT_KEY.to_string(),
                 AttributeObject::Vecf64(
                     allele_counts_of_mle
-                        .par_iter()
+                        .iter()
                         .map(|count| *count as f64)
                         .collect::<Vec<f64>>(),
                 ),
@@ -531,7 +506,7 @@ impl GenotypingEngine {
             .count();
 
         return allele_counts_of_mle
-            .par_iter()
+            .iter()
             .map(|ac| {
                 std::cmp::min(OrderedFloat(0.0), OrderedFloat((*ac as f64) / (an as f64))).into()
             })

@@ -56,6 +56,8 @@ pub enum VariantAnnotations {
     PhredLikelihoods,
     GenotypeQuality,
     Genotype,
+    VariantGroup,
+    Strain,
 }
 
 /// The actual annotation struct, Holds all information about an annotation
@@ -85,6 +87,8 @@ impl VariantAnnotations {
             Self::PhredLikelihoods => "PL",
             Self::GenotypeQuality => "GQ",
             Self::Genotype => "GT",
+            Self::VariantGroup => "VG",
+            Self::Strain => "ST",
         }
     }
 
@@ -283,8 +287,11 @@ impl VariantAnnotations {
             | Self::MLEAC
             | Self::PhredLikelihoods
             | Self::Genotype
-            | Self::GenotypeQuality => {
+            | Self::GenotypeQuality
+            | Self::Strain
+            | Self::VariantGroup => {
                 // These are returned in genotype contexts already
+                // Or calculated elsewhere i.e. Strain
                 AttributeObject::None
             }
         }
@@ -419,6 +426,12 @@ impl VariantAnnotations {
             }
             VariantAnnotations::PhredLikelihoods => {
                 format!("##FORMAT=<ID={},Number=G,Type=Integer,Description=\"Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification\">", self.to_key())
+            }
+            VariantAnnotations::VariantGroup => {
+                format!("##INFO=<ID={},Number=1,Type=Integer,Description=\"The base variant group assigned to this variant after clustering\">", self.to_key())
+            }
+            VariantAnnotations::Strain => {
+                format!("##INFO=<ID={},Number=N,Type=Integer,Description=\"A list of potential strain ids associated with this variant location\">", self.to_key())
             }
         }
     }

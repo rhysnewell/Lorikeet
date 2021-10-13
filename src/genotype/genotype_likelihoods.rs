@@ -79,7 +79,7 @@ impl GenotypeLikelihoods {
 
     pub fn pls_to_gls(pls: Vec<i64>) -> Vec<f64> {
         return pls
-            .into_par_iter()
+            .into_iter()
             .map(|p| (p as f64) / (-10.0))
             .collect::<Vec<f64>>();
     }

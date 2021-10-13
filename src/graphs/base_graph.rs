@@ -879,7 +879,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      */
     pub fn get_node_weights(&self, node_indices: &Vec<NodeIndex>) -> Vec<Option<&V>> {
         node_indices
-            .into_par_iter()
+            .into_iter()
             .map(|n| self.graph.node_weight(*n))
             .collect::<Vec<Option<&V>>>()
     }

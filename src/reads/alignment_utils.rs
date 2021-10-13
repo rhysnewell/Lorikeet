@@ -181,7 +181,7 @@ impl AlignmentUtils {
         }
 
         read_to_ref_cigar_elements_with_hard_clips
-            .par_extend(cigar_to_have_clipped_elements_added.0.into_par_iter());
+            .extend(cigar_to_have_clipped_elements_added.0.into_iter());
 
         let mut end_cigar_elements_to_reverse = Vec::new();
         while CigarUtils::is_clipping(&last_element) && first_index != last_index {
@@ -422,13 +422,13 @@ impl AlignmentUtils {
         read: &[u8],
         read_start: u32,
     ) -> CigarBuilderResult {
-        if cigar.0.par_iter().all(|elem| !CigarUtils::is_indel(elem)) {
+        if cigar.0.iter().all(|elem| !CigarUtils::is_indel(elem)) {
             return CigarBuilderResult::new(cigar, 0, 0);
         }
 
         // we need reference bases from the start of the read to the rightmost indel
         let last_indel = (0..cigar.0.len())
-            .into_par_iter()
+            .into_iter()
             .filter(|n| CigarUtils::is_indel(&cigar.0[*n]))
             .max()
             .unwrap_or(0);
@@ -579,7 +579,7 @@ impl AlignmentUtils {
             sequences.len() == bounds.len(),
             "Must have one initial allele range per sequence"
         );
-        bounds.par_iter().for_each(|bound| {
+        bounds.iter().for_each(|bound| {
             assert!(
                 max_shift <= bound.start as u32,
                 "maxShift goes past the start of a sequence"
@@ -590,9 +590,9 @@ impl AlignmentUtils {
         let mut end_shift = 0;
 
         // consume any redundant shared bases at the end of the alleles
-        let mut min_size = bounds.par_iter().map(|bound| bound.len()).min().unwrap() as i32;
+        let mut min_size = bounds.iter().map(|bound| bound.len()).min().unwrap() as i32;
         while trim && min_size > 0 && Self::last_base_on_right_is_same(sequences, &bounds) {
-            bounds.par_iter_mut().for_each(|bound| {
+            bounds.iter_mut().for_each(|bound| {
                 bound.end -= 1;
             });
             min_size -= 1;
@@ -600,7 +600,7 @@ impl AlignmentUtils {
         }
 
         while trim && min_size > 0 && Self::first_base_on_left_is_same(sequences, &bounds) {
-            bounds.par_iter_mut().for_each(|bound| {
+            bounds.iter_mut().for_each(|bound| {
                 bound.start += 1;
             });
             min_size -= 1;
@@ -613,7 +613,7 @@ impl AlignmentUtils {
             && Self::next_base_on_left_is_same(sequences, &bounds)
             && Self::last_base_on_right_is_same(sequences, &bounds)
         {
-            bounds.par_iter_mut().for_each(|bound| {
+            bounds.iter_mut().for_each(|bound| {
                 bound.start -= 1;
                 bound.end -= 1;
             });
@@ -627,7 +627,7 @@ impl AlignmentUtils {
     // do all sequences share a common base at the end of the given index range
     fn last_base_on_right_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
         let last_base_on_right = sequences[0][(bounds[0].end - 1) as usize];
-        return (0..sequences.len()).into_par_iter().all(|n| {
+        return (0..sequences.len()).into_iter().all(|n| {
             if sequences[n][(bounds[n].end - 1) as usize] != last_base_on_right {
                 false
             } else {
@@ -639,7 +639,7 @@ impl AlignmentUtils {
     // do all sequences share a common first base
     fn first_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
         let first_base_on_left = sequences[0][bounds[0].start as usize];
-        return (0..sequences.len()).into_par_iter().all(|n| {
+        return (0..sequences.len()).into_iter().all(|n| {
             if sequences[n][bounds[n].start as usize] != first_base_on_left {
                 false
             } else {
@@ -651,7 +651,7 @@ impl AlignmentUtils {
     // do all sequences share a common base just before the given index ranges
     fn next_base_on_left_is_same(sequences: &Vec<&[u8]>, bounds: &Vec<&mut Range<i32>>) -> bool {
         let next_base_on_left = sequences[0][(bounds[0].start - 1) as usize];
-        return (0..sequences.len()).into_par_iter().all(|n| {
+        return (0..sequences.len()).into_iter().all(|n| {
             if sequences[n][(bounds[n].start - 1) as usize] != next_base_on_left {
                 false
             } else {

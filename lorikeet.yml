@@ -4,18 +4,10 @@ channels:
   - defaults
 dependencies:
   - python>=3.8
-  - parallel
   - pysam=0.16
   - prodigal
   - samtools=1.9
-  - bcftools
-  - rust
-  - clangdev
-  - pkg-config
-  - zlib
-  - gsl
   - starcode
-  - openblas
   - bwa-mem2
   - minimap2>=2.20
   - fastani>=1.3

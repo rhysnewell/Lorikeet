@@ -6,6 +6,9 @@
     non_snake_case,
     unused
 )]
+extern crate openssl;
+extern crate openssl_sys;
+
 pub mod activity_profile;
 pub mod annotator;
 pub mod assembly;
@@ -15,6 +18,7 @@ pub mod external_command_checker;
 pub mod genotype;
 pub mod graphs;
 pub mod haplotype;
+pub mod linkage;
 pub mod model;
 pub mod pair_hmm;
 pub mod read_error_corrector;

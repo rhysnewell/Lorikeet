@@ -4,7 +4,6 @@ pub mod codon_structs;
 pub mod contig;
 pub mod contig_variants;
 pub mod evolve;
-pub mod genotype_abundances;
 pub mod linkage;
 pub mod lorikeet_engine;
 pub mod variant_matrix;

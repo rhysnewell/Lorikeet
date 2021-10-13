@@ -1,4 +1,5 @@
-use genotype::genotype_builder::{AttributeObject, GenotypesContext};
+use annotator::variant_annotation::VariantAnnotations;
+use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use hashlink::{LinkedHashMap, LinkedHashSet};
 use model::byte_array_allele::{Allele, ByteArrayAllele};
@@ -467,6 +468,68 @@ impl VariantContextUtils {
         builder.attributes = attributes;
 
         return Some(builder);
+    }
+
+    pub fn split_contexts(vcs: Vec<VariantContext>) -> Vec<VariantContext> {
+        let mut split_vcs = Vec::new();
+        for vc in vcs {
+            let n_alts = vc.get_alternate_alleles().len();
+            if n_alts == 1 {
+                split_vcs.push(vc);
+            } else if n_alts > 1 {
+                let ref_allele = vc.get_reference();
+                let mut new_vcs = Vec::with_capacity(vc.get_alternate_alleles().len());
+
+                for alt_index in 0..n_alts {
+                    let alt_allele = vc.get_alternate_alleles()[alt_index];
+                    let mut per_sample_genotypes = Vec::with_capacity(vc.get_genotypes().len());
+                    let mut new_depth = 0;
+                    for old_genotype in vc.get_genotypes().genotypes() {
+                        let mut new_genotype = Genotype::build_from_alleles(
+                            vec![ref_allele.clone(), alt_allele.clone()],
+                            old_genotype.sample_name.clone(),
+                        );
+
+                        let new_depths = vec![old_genotype.ad[0], old_genotype.ad[alt_index + 1]];
+                        let new_pls = vec![old_genotype.pl[0], old_genotype.pl[alt_index + 1]];
+                        new_depth += new_depths.iter().sum::<i64>();
+                        new_genotype.dp = old_genotype.ad[alt_index + 1];
+                        new_genotype.gq = old_genotype.gq;
+                        new_genotype.ploidy = old_genotype.ploidy;
+                        new_genotype.ad = new_depths;
+                        new_genotype.pl = new_pls;
+
+                        per_sample_genotypes.push(new_genotype);
+                    }
+
+                    let mut new_vc = VariantContext::build(
+                        vc.loc.tid,
+                        vc.loc.start,
+                        vc.loc.end,
+                        vec![ref_allele.clone(), alt_allele.clone()],
+                    );
+                    new_vc.attributes = vc.attributes.clone();
+                    debug!("Old vc attributes {:?}", &new_vc.attributes);
+                    new_vc.set_attribute(
+                        VariantAnnotations::Depth.to_key().to_string(),
+                        AttributeObject::UnsizedInteger(new_depth as usize),
+                    );
+                    new_vc.remove_attributes_for_alt_by_index(alt_index + 1);
+                    debug!("New vc attributes {:?}", &new_vc.attributes);
+                    new_vc.genotypes = GenotypesContext::new(per_sample_genotypes);
+                    new_vc.log10_p_error = vc.log10_p_error;
+
+                    new_vcs.push(new_vc);
+                }
+
+                split_vcs.extend(new_vcs);
+            } else {
+                // this shouldn't happen but this vc has no alternate
+                continue;
+            }
+        }
+
+        return split_vcs;
     }
 
     pub fn strip_pls_and_ad(genotypes: &mut GenotypesContext) {

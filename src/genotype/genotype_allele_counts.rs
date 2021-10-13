@@ -165,7 +165,7 @@ impl GenotypeAlleleCounts {
         {
             self.log10_combination_count = MathUtils::log10_factorial(self.ploidy as f64)
                 - (0..self.distinct_allele_count)
-                    .into_par_iter()
+                    .into_iter()
                     .map(|i| {
                         MathUtils::log10_factorial(self.sorted_allele_counts[2 * i + 1] as f64)
                     })
@@ -181,7 +181,7 @@ impl GenotypeAlleleCounts {
     {
         // let result = (0..self.distinct_allele_count)
         (0..self.distinct_allele_count)
-            .into_par_iter()
+            .into_iter()
             .map(|n| {
                 f(
                     self.sorted_allele_counts[2 * n],
@@ -195,14 +195,12 @@ impl GenotypeAlleleCounts {
     where
         F: Fn(usize, usize) + Sync,
     {
-        (0..self.distinct_allele_count)
-            .into_par_iter()
-            .for_each(|n| {
-                f(
-                    self.sorted_allele_counts[2 * n],
-                    self.sorted_allele_counts[2 * n + 1],
-                )
-            })
+        (0..self.distinct_allele_count).into_iter().for_each(|n| {
+            f(
+                self.sorted_allele_counts[2 * n],
+                self.sorted_allele_counts[2 * n + 1],
+            )
+        })
     }
 
     /**
@@ -263,10 +261,7 @@ impl GenotypeAlleleCounts {
                             let previous_counts = self.sorted_allele_counts
                                 [2..2 + ((sorted_allele_counts_length - 2) as usize)]
                                 .to_vec();
-                            // self.sorted_allele_counts[0..((sorted_allele_counts_length - 2) as usize)]
-                            //     .par_iter_mut()
-                            //     .zip(previous_counts.par_iter())
-                            //     .for_each(|(count, old_count)| *count = *old_count);
+
                             self.sorted_allele_counts = previous_counts;
                             self.sorted_allele_counts[1] += 1;
                             self.distinct_allele_count -= 1;
@@ -296,8 +291,8 @@ impl GenotypeAlleleCounts {
                                 .to_vec();
                             self.sorted_allele_counts
                                 [4..4 + ((sorted_allele_counts_length - 2) as usize)]
-                                .par_iter_mut()
-                                .zip(previous_counts.par_iter())
+                                .iter_mut()
+                                .zip(previous_counts.iter())
                                 .for_each(|(count, old_count)| *count = *old_count);
                             self.sorted_allele_counts[0] = 0;
                             self.sorted_allele_counts[1] = freq0 - 1;
@@ -663,7 +658,7 @@ impl GenotypeAlleleCounts {
             result
         } else {
             let result = (0..self.distinct_allele_count)
-                .into_par_iter()
+                .into_iter()
                 .flat_map(|distinct_allele_count| {
                     let mut allele = alleles_to_use
                         .get(self.sorted_allele_counts[2 * distinct_allele_count])

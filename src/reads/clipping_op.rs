@@ -177,7 +177,7 @@ impl ClippingOp {
     }
 
     fn overwrite_from_start_to_stop(arr: &mut [u8], new_val: u8) {
-        arr.par_iter_mut().for_each(|val| *val = new_val);
+        arr.iter_mut().for_each(|val| *val = new_val);
     }
 
     /**

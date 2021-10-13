@@ -121,7 +121,7 @@ impl AlleleFrequencyCalculator {
         let ploidy = log10_genotype_likelihoods.len() - 1;
 
         let log10_unnormalized_posteriors = (0..ploidy + 1)
-            .into_par_iter()
+            .into_iter()
             .map(|n| {
                 log10_genotype_likelihoods[n]
                     + MathUtils::log10_binomial_coeffecient(ploidy as f64, n as f64)
@@ -160,7 +160,7 @@ impl AlleleFrequencyCalculator {
             panic!("Variant context has only a single reference allele, but get_log10_p_non_ref requires at least one at all {:?}", vc);
         }
         let prior_pseudo_counts = alleles
-            .par_iter()
+            .iter()
             .map(|a| {
                 if a.is_reference() {
                     self.ref_pseudo_count
@@ -184,7 +184,7 @@ impl AlleleFrequencyCalculator {
                 self.effective_allele_counts(&vc, &mut log10_allele_frequencies);
             allele_counts_maximum_difference =
                 MathUtils::ebe_subtract(&allele_counts, &new_allele_counts)
-                    .into_par_iter()
+                    .into_iter()
                     .map(|x| x.abs())
                     .max_by_key(|x| OrderedFloat(*x))
                     .unwrap_or(std::f64::NAN);
@@ -201,8 +201,7 @@ impl AlleleFrequencyCalculator {
         let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
         let mut log10_p_no_variant = 0.0;
 
-        let spanning_deletion_present =
-            alleles.par_iter().any(|allele| allele == &*SPAN_DEL_ALLELE);
+        let spanning_deletion_present = alleles.iter().any(|allele| allele == &*SPAN_DEL_ALLELE);
 
         let mut non_variant_indices_by_ploidy = BTreeMap::new();
 
@@ -244,7 +243,7 @@ impl AlleleFrequencyCalculator {
                 );
 
                 let non_variant_log10_posteriors = non_variant_indices
-                    .par_iter()
+                    .iter()
                     .map(|n| log10_genotype_posteriors[*n])
                     .collect::<Vec<f64>>();
                 // when the only alt allele is the spanning deletion the probability that the site is non-variant
@@ -271,7 +270,7 @@ impl AlleleFrequencyCalculator {
             {
                 let mut log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
                 log10_absent_posteriors
-                    .par_iter_mut()
+                    .iter_mut()
                     .for_each(|arr| arr.clear());
             }
             for genotype in (0..gl_calc.genotype_count as usize).into_iter() {
@@ -290,7 +289,7 @@ impl AlleleFrequencyCalculator {
 
             let log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
             let log10_p_no_allele = log10_absent_posteriors
-                .par_iter()
+                .iter()
                 .map(|buffer| {
                     let mut result = MathUtils::log10_sum_log10(&buffer, 0, buffer.len());
                     result = std::cmp::min(OrderedFloat(0.0), OrderedFloat(result)).into_inner();
@@ -308,7 +307,7 @@ impl AlleleFrequencyCalculator {
         }
 
         let int_allele_counts: Vec<i64> = allele_counts
-            .par_iter()
+            .iter()
             .map(|n| n.round() as i64)
             .collect::<Vec<i64>>();
 
@@ -348,8 +347,8 @@ impl AlleleFrequencyCalculator {
             vec![AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX]
         } else {
             let span_del_index = alleles
-                .par_iter()
-                .position_first(|allele| allele == &*SPAN_DEL_ALLELE)
+                .iter()
+                .position(|allele| allele == &*SPAN_DEL_ALLELE)
                 .unwrap();
             let result = (0..ploidy + 1)
                 .into_iter()
@@ -400,9 +399,7 @@ impl AlleleFrequencyCalculator {
         }
 
         let mut log10_result = log10_result.lock().unwrap();
-        log10_result
-            .par_iter_mut()
-            .for_each(|x| *x = (10.0).powf(*x));
+        log10_result.iter_mut().for_each(|x| *x = (10.0).powf(*x));
 
         return log10_result.to_vec();
     }

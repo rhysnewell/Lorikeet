@@ -619,19 +619,6 @@ impl Profile for ActivityProfile {
     }
 }
 
-// /**
-// * Implement the parallel extend method for ActivityProfile when
-// * given a parallel iterator of ActivityProfileState
-// */
-// impl ParallelExtend<ActivityProfileState> for ActivityProfile {
-//     fn par_extend<I>(&mut self, par_iter: I)
-//         where I: IntoParallelIterator<Item = ActivityProfileState>
-//     {
-//         let par_iter = par_iter.into_par_iter();
-//         par_iter.for_each(|state| { self.add(state) });
-//     }
-// }
-
 /**
 * Implement the extend method for ActivityProfile when
 * given a parallel iterator of ActivityProfileState
