@@ -53,10 +53,18 @@ conda activate lorikeet
 You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
 conda environment using the lorikeet.yml.
 ```
-git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
-cd Lorikeet \
-conda env create -n lorikeet -f lorikeet.yml \
-bash install_static.sh
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+cd Lorikeet;
+conda env create -n lorikeet -f lorikeet.yml;
+conda activate lorikeet
+```
+
+Once you have created the conda environment download and install the latest release file from github
+```
+wget https://github.com/rhysnewell/Lorikeet/releases/download/v0.6.0rc2/lorikeet-x86_64-unknown-linux-musl-0.6.0.tar.gz;
+tar -xvzf lorikeet-x86_64-unknown-linux-musl-0.6.0.tar.gz;
+cp lorikeet-x86_64-unknown-linux-musl-0.6.0/lorikeet $CONDA_PREFIX/bin;
+cp lorikeet-x86_64-unknown-linux-musl-0.6.0/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 ```
 
 #### Option 3: Build manually
