@@ -7,6 +7,7 @@ use linkage::linkage_engine::LinkageEngine;
 use model::variant_context::VariantContext;
 use ndarray::{Array, Array1, Array2};
 use ndarray_npy::{read_npy, write_npy};
+use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -49,12 +50,14 @@ impl<'a> HaplotypeClusteringEngine<'a> {
     }
 
     /// Runs the clustering engine, linkage engine, and genotype abundances engine
+    /// Returns a tuple containing the number of found strains and a `Vec<VariantContext>` with
+    /// each context tagged with one or more strains.
     pub fn perform_clustering(
         mut self,
         sample_names: &Vec<String>,
         n_threads: usize,
         tree: &Arc<Mutex<Vec<&Elem>>>,
-    ) -> Vec<VariantContext> {
+    ) -> (usize, Vec<VariantContext>) {
         // Creates the depth array used by flight
         let file_name = self.prepare_depth_file();
         {
@@ -71,16 +74,59 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             pb.progress_bar
                 .set_message(format!("{}: Linking variant groups...", self.ref_name,));
         }
+
+        debug!("separation {:?}", &self.cluster_separation);
         let grouped_contexts = self.group_contexts();
-        let mut linkage_engine = LinkageEngine::new(grouped_contexts, sample_names);
+        let mut linkage_engine =
+            LinkageEngine::new(grouped_contexts, sample_names, &self.cluster_separation);
         let mut potential_strains = linkage_engine.run_linkage(sample_names, n_threads);
         debug!("Potential strains {:?}", potential_strains);
 
-        self.variants
+        (
+            potential_strains.len(),
+            self.annotate_variant_contexts_with_strains(potential_strains),
+        )
     }
 
-    fn annotate_variant_contexts_with_strains(&mut self, potential_strains: Vec<Vec<i32>>) {
-        for strain in potential_strains {}
+    fn annotate_variant_contexts_with_strains(
+        mut self,
+        potential_strains: Vec<Vec<i32>>,
+    ) -> Vec<VariantContext> {
+        // regroup contexts but owned
+        let mut grouped_contexts = LinkedHashMap::with_capacity(self.labels_set.len());
+        for context in self.variants {
+            if let AttributeObject::I32(val) = context
+                .attributes
+                .get(VariantAnnotations::VariantGroup.to_key())
+                .unwrap()
+            {
+                let group = grouped_contexts.entry(*val).or_insert(Vec::new());
+                group.push(context);
+            }
+        }
+
+        for (strain_idx, groups_in_strain) in potential_strains.into_iter().enumerate() {
+            for group in groups_in_strain {
+                let variant_contexts = grouped_contexts.entry(group).or_insert(Vec::new());
+                for vc in variant_contexts {
+                    let vc_strain = vc
+                        .attributes
+                        .entry(VariantAnnotations::Strain.to_key().to_string())
+                        .or_insert(AttributeObject::VecUnsize(Vec::new()));
+                    if let AttributeObject::VecUnsize(vec) = vc_strain {
+                        vec.push(strain_idx)
+                    }
+                }
+            }
+        }
+
+        let mut return_contexts = grouped_contexts
+            .into_iter()
+            .flat_map(|(_, vc_vec)| vc_vec.into_iter())
+            .collect::<Vec<VariantContext>>();
+        return_contexts.par_sort_unstable();
+
+        return_contexts
     }
 
     /// Group contexts by their variant group and return a HashMap

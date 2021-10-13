@@ -270,8 +270,8 @@ impl HaplotypeCallerGenotypingEngine {
                     let mut variant_context_builder = VariantContext::build_from_vc(&merged_vc);
                     variant_context_builder.genotypes = genotypes;
                     debug!(
-                        "Variant context genotype values {:?}",
-                        &variant_context_builder.genotypes
+                        "Variant context allele values {:?}",
+                        &variant_context_builder.alleles
                     );
                     let mut call = self.genotyping_engine.calculate_genotypes(
                         variant_context_builder,

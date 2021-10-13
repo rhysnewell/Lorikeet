@@ -125,6 +125,7 @@ impl VariantContext {
         end: usize,
         alleles: Vec<ByteArrayAllele>,
     ) -> VariantContext {
+        let alleles = Self::make_alleles(alleles);
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -138,9 +139,10 @@ impl VariantContext {
     }
 
     pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
+        let alleles = Self::make_alleles(vc.alleles.clone());
         VariantContext {
             loc: vc.loc.clone(),
-            alleles: vc.alleles.clone(),
+            alleles,
             genotypes: vc.genotypes.clone(),
             source: vc.source.clone(),
             log10_p_error: vc.log10_p_error.clone(),
@@ -148,6 +150,41 @@ impl VariantContext {
             attributes: vc.attributes.clone(),
             variant_type: None,
         }
+    }
+
+    fn make_alleles(alleles: Vec<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
+        let mut allele_list = Vec::new();
+
+        let mut saw_ref = false;
+        for a in alleles {
+            if allele_list.contains(&a) {
+                panic!("Duplicate allele added to VariantContext {:?}", &a)
+            };
+
+            // deal with the case where the first allele isn't the reference
+            if a.is_reference() {
+                if saw_ref {
+                    panic!("Alleles for a VariantContext must contain at most one reference allele: {:?}", &a);
+                }
+                allele_list.insert(0, a);
+                saw_ref = true;
+            } else {
+                allele_list.push(a);
+            }
+        }
+
+        if allele_list.is_empty() {
+            panic!("Cannot create a VariantContext with an empty allele list");
+        }
+
+        if !allele_list[0].is_reference() {
+            panic!(
+                "Alleles for a VariantContext must contain at least one reference allele: {:?}",
+                &allele_list
+            );
+        }
+
+        allele_list
     }
 
     pub fn is_filtered(&self) -> bool {
@@ -977,6 +1014,23 @@ impl VariantContext {
             .collect::<Vec<&[u8]>>()
     }
 
+    /// Returns a boolean indicating whether this `VariantContext` is part of the given strain
+    pub fn part_of_strain(&self, strain_id: usize) -> bool {
+        match self.attributes.get(VariantAnnotations::Strain.to_key()) {
+            None => {
+                // Strain annotation not present so panic
+                panic!("This VariantContext has not been annotated with any strains")
+            }
+            Some(attribute) => {
+                if let AttributeObject::VecUnsize(vec) = attribute {
+                    return vec.contains(&strain_id);
+                } else {
+                    panic!("Strain key has value not contained in AttributeObject::VecUnsize")
+                }
+            }
+        }
+    }
+
     /// writes this VariantContext as a VCF4 record. Assumes writer has prepopulated all INFO
     /// and FORMAT fields using the variant annotation engine.
     pub fn write_as_vcf_record(
@@ -1015,6 +1069,40 @@ impl VariantContext {
         self.add_variant_info(&mut record);
 
         bcf_writer.write(&record).unwrap();
+    }
+
+    /// Removes all other alts attribtues except the one provided by alt_index
+    /// Also keeps the reference
+    pub fn remove_attributes_for_alt_by_index(&mut self, alt_index: usize) {
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::MappingQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get_mut(VariantAnnotations::MappingQuality.to_key())
+                .unwrap()
+            {
+                if alt_index < val.len() {
+                    *val = vec![val[0], val[alt_index]];
+                }
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::BaseQuality.to_key())
+        {
+            if let AttributeObject::VecU8(val) = self
+                .attributes
+                .get_mut(VariantAnnotations::BaseQuality.to_key())
+                .unwrap()
+            {
+                if alt_index < val.len() {
+                    *val = vec![val[0], val[alt_index]];
+                }
+            }
+        }
     }
 
     fn add_variant_info(&self, record: &mut Record) {
@@ -1172,10 +1260,8 @@ impl VariantContext {
                     }
                 }
             } else {
-                phased = vec![GenotypeAllele::Unphased(1); n_samples]
+                phased = vec![GenotypeAllele::Unphased(1); 2]
             }
-            phased = vec![GenotypeAllele::Unphased(1); n_samples];
-            debug!("Genotypes {:?}", &phased);
             phases.extend(phased);
 
             pls.push(genotype.pl_str());
@@ -1207,14 +1293,12 @@ impl VariantContext {
             )
             .expect("Unable to push format tag");
 
-        debug!("Pushing GQ {:?}", &gqs);
         record
             .push_format_integer(
                 VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
                 &gqs,
             )
             .expect("Unable to push format tag");
-        debug!("Pushing DP {:?}", &dps);
         record
             .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
             .expect("Unable to push format tag");

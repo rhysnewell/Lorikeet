@@ -133,7 +133,7 @@ impl VariantAnnotationEngine {
     fn strain_annotations() -> Vec<Annotation> {
         vec![
             Annotation::new(VariantAnnotations::VariantGroup, AnnotationType::Info),
-            // Annotation::new(VariantAnnotations::Strain, AnnotationType::Format) // TODO: Add this in once linkage algorithm is reimplmented
+            Annotation::new(VariantAnnotations::Strain, AnnotationType::Format),
         ]
     }
 

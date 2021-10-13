@@ -1,7 +1,7 @@
 use coverm::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use coverm::bam_generator::IndexedNamedBamReader;
 use coverm::bam_generator::NamedBamReaderGenerator;
-use hashlink::LinkedHashMap;
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use itertools::Itertools;
 use model::byte_array_allele::Allele;
 use model::variant_context::VariantContext;
@@ -10,6 +10,7 @@ use ordered_float::OrderedFloat;
 use petgraph::algo::{all_simple_paths, min_spanning_tree, tarjan_scc};
 use petgraph::data::{Element, FromElements};
 use petgraph::prelude::{NodeIndex, UnGraph};
+use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
 use std::cmp::min;
@@ -24,19 +25,22 @@ pub struct LinkageEngine<'a> {
     grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
     grouped_mean_read_depth: LinkedHashMap<i32, f64>,
     samples: &'a Vec<String>,
+    cluster_separations: &'a Array2<f64>,
 }
 
 impl<'a> LinkageEngine<'a> {
-    const MIN_DETECTABLE_DEPTH_EPSILON: f64 = 0.2;
+    const MIN_DETECTABLE_DEPTH_EPSILON: f64 = 0.25;
 
     pub fn new(
         grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
         samples: &'a Vec<String>,
+        cluster_separations: &'a Array2<f64>,
     ) -> LinkageEngine<'a> {
         Self {
             grouped_contexts,
             grouped_mean_read_depth: LinkedHashMap::new(),
             samples,
+            cluster_separations,
         }
     }
 
@@ -97,8 +101,12 @@ impl<'a> LinkageEngine<'a> {
                     )
                 })
                 .unwrap();
-            // sorted list of nodes in ascending order of read depth
-            let mut lowest_depth_nodes = mst.node_indices().collect::<Vec<NodeIndex>>();
+            // sorted list of nodes in ascending order of read depth, only checking external nodes
+            // i.e. nodes without incoming edges or outgoing edges. i.e. edge count <= 1
+            let mut lowest_depth_nodes = mst
+                .node_indices()
+                .filter(|node| mst.edges(*node).count() <= 1)
+                .collect::<Vec<NodeIndex>>();
             lowest_depth_nodes.sort_by_key(|node| {
                 OrderedFloat(
                     *self
@@ -121,15 +129,25 @@ impl<'a> LinkageEngine<'a> {
                 if (1.0 - (previous_depth / current_depth)) >= Self::MIN_DETECTABLE_DEPTH_EPSILON
                     || !seen_nodes.contains(mst.node_weight(lowest_depth_node).unwrap())
                 {
-                    let paths = all_simple_paths::<Vec<NodeIndex>, _>(
+                    // Here we collect into a LinkedHashSet because it seems that might be bug in
+                    // the mst creation where a node can be retraced after reaching the head node?
+                    // TODO: Investigate above bug.
+                    let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
                         &mst,
                         lowest_depth_node,
                         highest_depth_node,
                         0,
                         None,
                     )
-                    .collect::<Vec<Vec<NodeIndex>>>();
-                    debug!("Paths {:?}", &paths);
+                    .collect::<Vec<LinkedHashSet<NodeIndex>>>();
+                    debug!(
+                        "Paths {:?} lowest depth node {:?} depth {}",
+                        &paths,
+                        lowest_depth_node,
+                        self.grouped_mean_read_depth
+                            .get(mst.node_weight(lowest_depth_node).unwrap())
+                            .unwrap()
+                    );
                     // should be only one path
                     if paths.len() == 1 {
                         strains.push(
@@ -147,7 +165,9 @@ impl<'a> LinkageEngine<'a> {
                         );
                     } else if paths.len() == 0 {
                         // Last node left has adequate depth
-                        strains.push(vec![*mst.node_weight(lowest_depth_node).unwrap()])
+                        let variant_group = *mst.node_weight(lowest_depth_node).unwrap();
+                        seen_nodes.insert(variant_group);
+                        strains.push(vec![variant_group]);
                     }
                 }
 
@@ -284,10 +304,10 @@ impl<'a> LinkageEngine<'a> {
                             if read_index < 0 {
                                 read_index = variant.loc.start as i64 - record.pos();
                             }
-                            if variant.get_reference().get_bases()
-                                != &record.seq().as_bytes()[read_index as usize
+                            if variant.get_alternate_alleles()[0].get_bases()
+                                == &record.seq().as_bytes()[read_index as usize
                                     ..(read_index as usize
-                                        + variant.get_reference().get_bases().len())]
+                                        + variant.get_alternate_alleles()[0].get_bases().len())]
                             {
                                 // Read containing potential alternate allele
                                 let read_id = format!(
@@ -356,19 +376,35 @@ impl<'a> LinkageEngine<'a> {
                 if !graph.contains_edge(node1, node2) {
                     // How many read ids are shared
                     let intersection = reads1.intersection(reads2).count() as f64;
-                    if intersection > 0.0 {
+                    let mut under_sep_thresh = false;
+                    if *group1 != 0 && *group2 != 0 {
+                        under_sep_thresh = self.cluster_separations
+                            [[*group1 as usize - 1, *group2 as usize - 1]]
+                            < 3.0;
+                    }
+                    if intersection > 0.0 || under_sep_thresh {
                         let union = min(reads1.len(), reads2.len()) as f64;
 
                         // The weight needs to be low for highly connected nodes and
                         // high for poorly connected nodes. This is because minimum spanning trees
                         // generate the tree with lowest edge weights
                         let weight = 1.0 - (intersection / union);
-                        debug!(
-                            "{}:{} weight {} intersection {} union {}",
-                            group1, group2, weight, intersection, union
-                        );
-                        if weight < 0.95 {
+
+                        if weight < 0.99 {
                             // Don't include any edges that are not con
+                            debug!(
+                                "{}:{} weight {} intersection {} union {}",
+                                group1, group2, weight, intersection, union
+                            );
+                            graph.add_edge(node1, node2, weight);
+                        } else if under_sep_thresh {
+                            let weight = self.cluster_separations
+                                [[*group1 as usize - 1, *group2 as usize - 1]]
+                                / 3.0;
+                            debug!(
+                                "{}:{} weight {} intersection {} union {}",
+                                group1, group2, weight, intersection, union
+                            );
                             graph.add_edge(node1, node2, weight);
                         }
                     }

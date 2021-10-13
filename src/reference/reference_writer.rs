@@ -24,6 +24,100 @@ impl<'a> ReferenceWriter<'a> {
         }
     }
 
+    /// Generates the potential strain genomes calculated by Lorikeet. The VariantContexts are expected
+    /// To be tagged with one or more strain genomes in their `attributes` with `VariantAnnotation::Strain`
+    /// tag
+    pub fn generate_strains(
+        &mut self,
+        variant_contexts: Vec<VariantContext>,
+        ref_idx: usize,
+        n_strains: usize,
+    ) {
+        let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
+        let mut tids = self
+            .reference_reader
+            .retrieve_tids_for_ref_index(ref_idx)
+            .unwrap()
+            .clone();
+
+        for strain_idx in 0..n_strains {
+            let file_name = format!(
+                "{}/{}_strain_{}.fna",
+                self.output_prefix,
+                self.reference_reader.genomes_and_contigs.genomes[ref_idx],
+                strain_idx,
+            );
+
+            let file_path = Path::new(&file_name);
+            debug!("File path {}", &file_name);
+            // Open new reference file or create one
+            let mut file_open =
+                File::create(file_path).expect("No Read or Write Permission in current directory");
+            for tid in tids.iter() {
+                self.reference_reader
+                    .fetch_contig_from_reference_by_tid(*tid, ref_idx);
+                self.reference_reader.read_sequence_to_vec();
+                debug!(
+                    "Fetched length {} tid {} ref_idx {} ",
+                    self.reference_reader.current_sequence.len(),
+                    *tid,
+                    ref_idx
+                );
+                let mut new_bases = std::mem::take(&mut self.reference_reader.current_sequence);
+                let old_length = new_bases.len();
+                debug!("Contig length {}", old_length);
+                // This value holds how far right or left the vc location has shifted as we add indels
+                let mut offset = 0;
+                let mut variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
+                let mut variations = 0;
+                match variant_contexts_of_contig {
+                    Some(variant_contexts_of_contig) => {
+                        for mut vc in variant_contexts_of_contig.iter_mut() {
+                            if vc.part_of_strain(strain_idx) {
+                                let alternate_allele = vc.get_alternate_alleles()[0].clone();
+                                let variant_type = vc.get_type().clone();
+                                let is_ref = alternate_allele.is_ref;
+                                Self::modify_reference_bases_based_on_variant_type(
+                                    &mut new_bases,
+                                    alternate_allele,
+                                    &mut vc,
+                                    variant_type,
+                                    &mut offset,
+                                );
+                                variations += if is_ref { 0 } else { 1 };
+                            }
+                        }
+                    }
+                    None => {
+                        // pass
+                    }
+                }
+
+                debug!(
+                    "Writing contig {}",
+                    std::str::from_utf8(self.reference_reader.get_target_name(*tid)).unwrap()
+                );
+                // write the contig header
+                writeln!(
+                    file_open,
+                    ">{} strain_id={} old_length={} new_length={} variations={}",
+                    std::str::from_utf8(self.reference_reader.get_target_name(*tid)).unwrap(),
+                    strain_idx,
+                    old_length,
+                    new_bases.len(),
+                    variations
+                )
+                .expect("Unable to write to file");
+
+                // write out the actual contig
+                for line in new_bases[..].chunks(60).into_iter() {
+                    file_open.write(line).unwrap();
+                    file_open.write(b"\n").unwrap();
+                }
+            }
+        }
+    }
+
     /// Generates the per sample consensus genomes based on the provided variant contexts.
     /// The consensus is defined as the most dominant variant at a given position on the reference
     /// genome measured by read depth.

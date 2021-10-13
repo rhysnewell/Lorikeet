@@ -7,11 +7,13 @@ use estimation::bams::index_bams::*;
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use model::variant_context::VariantContext;
+use model::variant_context_utils::VariantContextUtils;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use reference::reference_writer::ReferenceWriter;
 use scoped_threadpool::Pool;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -65,7 +67,10 @@ impl<'a> LorikeetEngine<'a> {
             .parse()
             .unwrap();
         let mut pool = Pool::new(parallel_genomes);
-        let n_threads = std::cmp::max(self.threads / parallel_genomes as usize, 2);
+        let n_threads = std::cmp::max(
+            self.threads / min(parallel_genomes as usize, self.references.len()),
+            2,
+        );
         let output_prefix = match self.args.is_present("output-directory") {
             true => {
                 match std::fs::create_dir_all(
@@ -219,6 +224,13 @@ impl<'a> LorikeetEngine<'a> {
                         &mut reference_reader,
                     );
 
+                    {
+                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                        pb.progress_bar.set_message(format!(
+                            "{}: Performing variant calling on active regions...",
+                            pb.key
+                        ));
+                    }
                     let contexts = assembly_engine.traverse(
                         &mut shards,
                         flag_filters,
@@ -230,10 +242,8 @@ impl<'a> LorikeetEngine<'a> {
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar.set_message(format!(
-                            "{}: Initial variant calling complete...",
-                            pb.key
-                        ));
+                        pb.progress_bar
+                            .set_message(format!("{}: Variant calling complete...", pb.key));
                     }
 
                     let cleaned_sample_names = get_cleaned_sample_names(&indexed_bam_readers);
@@ -252,21 +262,6 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         )
                     } else if mode == "genotype" {
-                        // let e_min: f64 = m.value_of("e-min").unwrap().parse().unwrap();
-                        // let e_max: f64 = m.value_of("e-max").unwrap().parse().unwrap();
-                        // let pts_min: f64 = m.value_of("pts-min").unwrap().parse().unwrap();
-                        // let pts_max: f64 = m.value_of("pts-max").unwrap().parse().unwrap();
-                        // let phi: f64 = m.value_of("phi").unwrap().parse().unwrap();
-                        // let anchor_size: usize = m.value_of("n-neighbors").unwrap().parse().unwrap();
-                        // let anchor_similarity: f64 =
-                        //     m.value_of("cluster-distance").unwrap().parse().unwrap();
-                        // let minimum_reads_in_link: usize = m
-                        //     .value_of("minimum-reads-in-link")
-                        //     .unwrap()
-                        //     .parse()
-                        //     .unwrap();
-                        // let n_components: usize = m.value_of("n-components").unwrap().parse().unwrap();
-
                         // Calculate the geometric mean values and CLR for each variant, reference specific
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -275,41 +270,31 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference,
                             ));
                         }
-                        // variant_matrix.generate_distances();
 
-                        // Generate initial read linked clusters
-                        // Cluster each variant using phi-D and fuzzy DBSCAN, reference specific
+                        // If a variant context contains more than one allele, we need to split
+                        // this context into n different contexts, where n is number of variant
+                        // alleles
+                        let split_contexts = VariantContextUtils::split_contexts(contexts);
+
+                        // Perform UMAP and HDBSCAN clustering followed by variant group
+                        // read linkage clustering.
                         let mut clustering_engine = HaplotypeClusteringEngine::new(
                             output_prefix.as_str(),
-                            contexts,
+                            split_contexts,
                             &reference_reader,
                             ref_idx,
                             indexed_bam_readers.len(),
                             n_threads,
                         );
-                        let contexts = clustering_engine.perform_clustering(
+                        let (n_strains, split_contexts) = clustering_engine.perform_clustering(
                             &indexed_bam_readers,
                             n_threads,
                             tree,
                         );
-                        debug!("example variant after clustering {:?}", &contexts.first());
-
-                        // variant_matrix.run_fuzzy_scan(
-                        //     e_min,
-                        //     e_max,
-                        //     pts_min,
-                        //     pts_max,
-                        //     phi,
-                        //     anchor_size,
-                        //     anchor_similarity,
-                        //     minimum_reads_in_link,
-                        //     &reference_map,
-                        //     &multi_inner,
-                        //     &output_prefix,
-                        //     anchor_size,
-                        //     n_components,
-                        //     n_threads,
-                        // );
+                        debug!(
+                            "example variant after clustering {:?}",
+                            &split_contexts.first()
+                        );
 
                         // Get strain abundances
                         {
@@ -360,11 +345,16 @@ impl<'a> LorikeetEngine<'a> {
                         }
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
-                            &contexts,
+                            &split_contexts,
                             &cleaned_sample_names,
                             &reference_reader,
                             true,
-                        )
+                        );
+
+                        // variant_matrix.generate_distances();
+                        let mut reference_writer =
+                            ReferenceWriter::new(reference_reader, &output_prefix);
+                        reference_writer.generate_strains(split_contexts, ref_idx, n_strains);
                     } else if mode == "consensus" {
                         // Get sample distances
                         {

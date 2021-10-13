@@ -338,7 +338,7 @@ impl HaplotypeCallerEngine {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
 
                     pb.progress_bar.set_message(format!(
-                        "{}: Variant calling on sample: {}",
+                        "{}: Finding active regions in sample: {}",
                         pb.key,
                         clean_sample_name(sample_idx, indexed_bam_readers),
                     ));
