@@ -14,7 +14,7 @@ use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
 use std::cmp::min;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -103,11 +103,11 @@ impl<'a> LinkageEngine<'a> {
                 .unwrap();
             // sorted list of nodes in ascending order of read depth, only checking external nodes
             // i.e. nodes without incoming edges or outgoing edges. i.e. edge count <= 1
-            let mut lowest_depth_nodes = mst
+            let mut starting_nodes = mst
                 .node_indices()
                 .filter(|node| mst.edges(*node).count() <= 1)
                 .collect::<Vec<NodeIndex>>();
-            lowest_depth_nodes.sort_by_key(|node| {
+            starting_nodes.sort_by_key(|node| {
                 OrderedFloat(
                     *self
                         .grouped_mean_read_depth
@@ -116,63 +116,97 @@ impl<'a> LinkageEngine<'a> {
                 )
             });
 
-            let mut strains = Vec::with_capacity(lowest_depth_nodes.len());
-            let mut seen_nodes = HashSet::with_capacity(lowest_depth_nodes.len());
-            let mut previous_depth = 0.0;
-            let mut cumulative_depth = 0.0;
-            for (idx, lowest_depth_node) in lowest_depth_nodes.into_iter().enumerate() {
-                let current_depth = *self
-                    .grouped_mean_read_depth
-                    .get(mst.node_weight(lowest_depth_node).unwrap())
-                    .unwrap();
-
-                if (1.0 - (previous_depth / current_depth)) >= Self::MIN_DETECTABLE_DEPTH_EPSILON
-                    || !seen_nodes.contains(mst.node_weight(lowest_depth_node).unwrap())
+            let mut strains = Vec::with_capacity(mst.node_count());
+            let mut seen_nodes = HashSet::with_capacity(starting_nodes.len());
+            // Container holding the cumulative depth of each node in this MST
+            // The value for a node will increment by the last starting node if the path
+            // from the lowest depth node passed through this node. The value will increment by the
+            // depth of the starting node
+            let mut nodes_cumulative_depth = HashMap::with_capacity(mst.node_count());
+            for (idx, starting_node) in starting_nodes.into_iter().enumerate() {
                 {
                     // Here we collect into a LinkedHashSet because it seems that might be bug in
                     // the mst creation where a node can be retraced after reaching the head node?
                     // TODO: Investigate above bug.
                     let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
                         &mst,
-                        lowest_depth_node,
+                        starting_node,
                         highest_depth_node,
                         0,
                         None,
                     )
                     .collect::<Vec<LinkedHashSet<NodeIndex>>>();
-                    debug!(
-                        "Paths {:?} lowest depth node {:?} depth {}",
-                        &paths,
-                        lowest_depth_node,
-                        self.grouped_mean_read_depth
-                            .get(mst.node_weight(lowest_depth_node).unwrap())
-                            .unwrap()
-                    );
+
                     // should be only one path
                     if paths.len() == 1 {
-                        strains.push(
-                            paths
-                                .into_iter()
-                                .next()
-                                .unwrap()
-                                .into_iter()
-                                .map(|node| {
-                                    let variant_group = *mst.node_weight(node).unwrap();
+                        let mut path = paths.into_iter().next().unwrap();
+                        let mut start = true;
+                        while !path.is_empty() {
+                            let current_node = path.pop_front().unwrap();
+                            let current_depth = *self
+                                .grouped_mean_read_depth
+                                .get(mst.node_weight(current_node).unwrap())
+                                .unwrap();
+
+                            let current_node_cumulative_depth =
+                                *nodes_cumulative_depth.entry(current_node).or_insert(0.0);
+                            debug!(
+                                "Paths {:?} current node {:?} depth {} cumulative depth {} value {}",
+                                &path,
+                                current_node,
+                                current_depth,
+                                current_node_cumulative_depth,
+                                (1.0 - (current_node_cumulative_depth / current_depth))
+                            );
+                            if (1.0 - (current_node_cumulative_depth / current_depth))
+                                >= Self::MIN_DETECTABLE_DEPTH_EPSILON
+                                || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
+                            {
+                                let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
+                                    &mst,
+                                    current_node,
+                                    highest_depth_node,
+                                    0,
+                                    None,
+                                )
+                                .collect::<Vec<LinkedHashSet<NodeIndex>>>();
+
+                                if paths.len() == 1 {
+                                    strains.push(
+                                        paths
+                                            .into_iter()
+                                            .next()
+                                            .unwrap()
+                                            .into_iter()
+                                            .map(|node| {
+                                                let variant_group = *mst.node_weight(node).unwrap();
+                                                seen_nodes.insert(variant_group);
+                                                let node_cumulative_depth = nodes_cumulative_depth
+                                                    .entry(node)
+                                                    .or_insert(0.0);
+                                                // add the depth of the current node to this node
+                                                *node_cumulative_depth += current_depth;
+                                                variant_group
+                                            })
+                                            .collect::<Vec<i32>>(),
+                                    );
+                                } else if paths.len() == 0 {
+                                    // Last node left has adequate depth
+                                    let variant_group = *mst.node_weight(current_node).unwrap();
                                     seen_nodes.insert(variant_group);
-                                    variant_group
-                                })
-                                .collect::<Vec<i32>>(),
-                        );
-                    } else if paths.len() == 0 {
+                                    strains.push(vec![variant_group]);
+                                }
+                            }
+                        }
+                    } else if paths.len() == 0
+                        && !seen_nodes.contains(mst.node_weight(starting_node).unwrap())
+                    {
                         // Last node left has adequate depth
-                        let variant_group = *mst.node_weight(lowest_depth_node).unwrap();
+                        let variant_group = *mst.node_weight(starting_node).unwrap();
                         seen_nodes.insert(variant_group);
                         strains.push(vec![variant_group]);
                     }
                 }
-
-                previous_depth = current_depth;
-                cumulative_depth += current_depth;
             }
 
             all_strains.extend(strains)
