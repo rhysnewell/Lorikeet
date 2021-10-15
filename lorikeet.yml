@@ -3,6 +3,7 @@ channels:
   - bioconda
   - defaults
 dependencies:
+  - rust
   - python>=3.8
   - pysam=0.16
   - prodigal

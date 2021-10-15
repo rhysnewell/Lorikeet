@@ -54,6 +54,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut strain_id_key = HashMap::with_capacity(n_strains);
 
         loop {
+            abundance_key = HashMap::with_capacity(n_strains);
+            strain_id_key = HashMap::with_capacity(n_strains);
             for (abundance_index, strain_index) in strain_ids.iter().enumerate() {
                 abundance_key.insert(*strain_index, abundance_index);
                 strain_id_key.insert(abundance_index, *strain_index);
@@ -62,6 +64,11 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             debug!(
                 "Populating sample_vec with genotypes... {:?}",
                 &abundance_key,
+            );
+
+            debug!(
+                "Per sample reference presences {:?}",
+                &per_sample_reference_presence
             );
 
             abundance_vectors = (0..n_samples)
@@ -205,7 +212,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .position(|s| s == strain_id_to_remove)
                         .unwrap();
                     strain_ids.remove(position_of_strain_id);
-                    something_removed = true
+                    something_removed = true;
+                    n_strains -= 1;
                 }
             }
 
@@ -268,15 +276,15 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         // Print header line
         write!(file_open, "{: <10}", "strainID").unwrap();
         for sample in 0..self.sample_names.len() {
-            write!(file_open, "\t{: <10}", sample + 1).unwrap();
+            write!(file_open, "\t{: <6}", sample + 1).unwrap();
         }
         write!(file_open, "\n").unwrap();
 
         for (strain_id, abundances) in printing_genotype.iter() {
-            write!(file_open, "strain_{: <10}", strain_id,).unwrap();
+            write!(file_open, "strain_{}", strain_id,).unwrap();
 
             for coverage in abundances.iter() {
-                write!(file_open, "\t{: <10}", coverage).unwrap();
+                write!(file_open, "\t{:.2}", coverage).unwrap();
             }
             write!(file_open, "\n").unwrap();
         }

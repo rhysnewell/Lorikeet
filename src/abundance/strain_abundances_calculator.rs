@@ -35,7 +35,7 @@ impl StrainAbundanceCalculator {
         // the difference between theta curr and theta prev
         let mut omega = 1.;
         // The minimum value of omega before stopping
-        let eps = 0.00001;
+        let eps = 10e-10;
 
         let mut theta_curr = vec![1.; sample_genotypes.len()];
         let mut n = 0;
@@ -59,6 +59,10 @@ impl StrainAbundanceCalculator {
                             .par_iter()
                             .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
                             .sum::<f64>();
+                        debug!(
+                            "Variant index {} weight {} pooled weight {}",
+                            variant_index, w, pooled_weights
+                        );
                         let w = w * (genotype.abundance_weight / pooled_weights);
                         w
                     })
@@ -68,7 +72,15 @@ impl StrainAbundanceCalculator {
                 genotype.abundance_weight = genotype.variant_weights.par_iter().sum::<f64>()
                     / genotype.variant_weights.len() as f64;
 
-                if genotype.abundance_weight <= eps || genotype.abundance_weight.is_nan() {
+                debug!(
+                    "Index {} abundance weight {} variant weights {:?}",
+                    index, genotype.abundance_weight, &genotype.variant_weights
+                );
+
+                if genotype.abundance_weight <= eps
+                    || genotype.abundance_weight.is_nan()
+                    || genotype.variant_weights.contains(&0.0)
+                {
                     genotype.abundance_weight = 0.;
                     genotype.variant_weights = vec![];
                 }
@@ -82,10 +94,8 @@ impl StrainAbundanceCalculator {
             omega = (theta_curr_mean - theta_prev_mean).abs();
 
             debug!(
-                "Theta Current {:?} \
-            theta curr mean {} \
-            Omega {}",
-                &theta_curr, &theta_prev_mean, &omega,
+                "Theta Current {:?} mean {} theta prev mean {} Omega {}",
+                &theta_curr, theta_curr_mean, &theta_prev_mean, &omega,
             );
             n += 1;
         }
