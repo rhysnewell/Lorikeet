@@ -79,6 +79,9 @@ impl PhaseGroup {
     }
 }
 
+/// Collection of functions used during various assembly stages
+///
+/// @author Rhys Newell <rhys.newell@.hdr.qut.edu.au>
 pub struct AssemblyBasedCallerUtils {}
 
 impl AssemblyBasedCallerUtils {

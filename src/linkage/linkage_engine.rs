@@ -14,7 +14,8 @@ use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -73,13 +74,16 @@ impl<'a> LinkageEngine<'a> {
 
     /// Compute the different denominations of strain groupings from a given component.
     /// The minimum spanning tree for a component is calculated. The tree is then rooted using
-    /// the node with the highest read count/depth. The tree is then arranged as if it were on
-    /// a cartesian plane, where the y-axis is read depth and the x-axis is the total edge weight.
-    /// One nodes distance from another node on the x-axis is given by the edge weight returned
-    /// by the minimum spanning tree.
-    /// TODO: Implement the above idea properly. Currently it is just a hack that compares the current
-    ///       depth to the previous depth to see if it is above a threshold. If so, introduce the new
-    ///       path as a strain
+    /// the tip node with the highest read count/depth. The tip nodes of the tree are then visited
+    /// in ascending order of read depth. Low coverage nodes are visited first, tracing path from
+    /// this node back to the rooting node. If the starting node has not been visited before or if
+    /// the current cumulative depth of this node (i.e. the read depth accumulated from previous visits)
+    /// divided by the nodes total depth is greater than some threshold then trace the path from this
+    /// node back to the rooting node, incrementing each node by coverage difference of the current node,
+    /// and treat that path as a strain.
+    /// Cumulative depth can be thought of as a rising water table, and if the start of path sits above
+    /// the water table then save that path and then raise the water table to the current nodes read depth.
+    /// TODO: Test how this performs on more complex MSTs
     fn compute_strain_denominations(
         &self,
         connected_components: Vec<UnGraph<i32, f64>>,
@@ -89,124 +93,130 @@ impl<'a> LinkageEngine<'a> {
             // compute the minimum spanning tree
             let mut mst = UnGraph::from_elements(min_spanning_tree(&component_graph));
             debug!("MST {:?}", &mst);
-            // summit - all paths must lead to here
-            let highest_depth_node = mst
-                .node_indices()
-                .max_by_key(|node| {
-                    OrderedFloat(
-                        *self
-                            .grouped_mean_read_depth
-                            .get(mst.node_weight(*node).unwrap())
-                            .unwrap(),
-                    )
-                })
-                .unwrap();
+
             // sorted list of nodes in ascending order of read depth, only checking external nodes
             // i.e. nodes without incoming edges or outgoing edges. i.e. edge count <= 1
-            let mut starting_nodes = mst
+            let mut starting_nodes_vec = mst
                 .node_indices()
                 .filter(|node| mst.edges(*node).count() <= 1)
-                .collect::<Vec<NodeIndex>>();
-            starting_nodes.sort_by_key(|node| {
-                OrderedFloat(
-                    *self
-                        .grouped_mean_read_depth
-                        .get(mst.node_weight(*node).unwrap())
-                        .unwrap(),
-                )
-            });
+                .map(|node| {
+                    (
+                        Reverse(OrderedFloat(
+                            *self
+                                .grouped_mean_read_depth
+                                .get(mst.node_weight(node).unwrap())
+                                .unwrap(),
+                        )),
+                        node,
+                    )
+                })
+                .collect::<Vec<(Reverse<OrderedFloat<f64>>, NodeIndex)>>();
 
+            starting_nodes_vec.par_sort_unstable();
+
+            // summit - all paths must lead to here
+            // This is the highest depth terminating node. i.e. This node is a tip of the tree
+            // with the highest depth compared to all other tips
+            let highest_depth_node = starting_nodes_vec.first().unwrap().clone().1;
+
+            // Turn the vec into a BinaryHeap
+            let mut starting_nodes = BinaryHeap::from(starting_nodes_vec);
+            debug!(
+                "Starting nodes {:?} highest depth node {:?} VG {}",
+                &starting_nodes,
+                highest_depth_node,
+                mst.node_weight(highest_depth_node).unwrap()
+            );
+
+            // Can't have more strains than nodes in the tree
             let mut strains = Vec::with_capacity(mst.node_count());
-            let mut seen_nodes = HashSet::with_capacity(starting_nodes.len());
+            let mut seen_nodes = HashSet::with_capacity(mst.node_count());
             // Container holding the cumulative depth of each node in this MST
             // The value for a node will increment by the last starting node if the path
             // from the lowest depth node passed through this node. The value will increment by the
             // depth of the starting node
             let mut nodes_cumulative_depth = HashMap::with_capacity(mst.node_count());
-            for (idx, starting_node) in starting_nodes.into_iter().enumerate() {
+            while !starting_nodes.is_empty() {
+                let current_node_info = starting_nodes.pop().unwrap();
+                let current_depth = current_node_info.0 .0 .0; // I hate this??? wot
+                let current_node = current_node_info.1;
+
+                let current_node_cumulative_depth =
+                    *nodes_cumulative_depth.entry(current_node).or_insert(0.0);
+
+                if (1.0 - (current_node_cumulative_depth / current_depth))
+                    >= Self::MIN_DETECTABLE_DEPTH_EPSILON
+                    || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
                 {
-                    // Here we collect into a LinkedHashSet because it seems that might be bug in
-                    // the mst creation where a node can be retraced after reaching the head node?
-                    // TODO: Investigate above bug.
                     let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
                         &mst,
-                        starting_node,
+                        current_node,
                         highest_depth_node,
                         0,
                         None,
                     )
                     .collect::<Vec<LinkedHashSet<NodeIndex>>>();
+                    debug!(
+                        "Paths {:?} current node {:?} depth {} cumulative depth {} value {}",
+                        &paths,
+                        current_node,
+                        current_depth,
+                        current_node_cumulative_depth,
+                        (1.0 - (current_node_cumulative_depth / current_depth))
+                    );
 
-                    // should be only one path
                     if paths.len() == 1 {
-                        let mut path = paths.into_iter().next().unwrap();
-                        let mut start = true;
-                        while !path.is_empty() {
-                            let current_node = path.pop_front().unwrap();
-                            let current_depth = *self
-                                .grouped_mean_read_depth
-                                .get(mst.node_weight(current_node).unwrap())
-                                .unwrap();
-
-                            let current_node_cumulative_depth =
-                                *nodes_cumulative_depth.entry(current_node).or_insert(0.0);
-                            debug!(
-                                "Paths {:?} current node {:?} depth {} cumulative depth {} value {}",
-                                &path,
-                                current_node,
-                                current_depth,
-                                current_node_cumulative_depth,
-                                (1.0 - (current_node_cumulative_depth / current_depth))
-                            );
-                            if (1.0 - (current_node_cumulative_depth / current_depth))
-                                >= Self::MIN_DETECTABLE_DEPTH_EPSILON
-                                || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
-                            {
-                                let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
-                                    &mst,
-                                    current_node,
-                                    highest_depth_node,
-                                    0,
-                                    None,
-                                )
-                                .collect::<Vec<LinkedHashSet<NodeIndex>>>();
-
-                                if paths.len() == 1 {
-                                    strains.push(
-                                        paths
-                                            .into_iter()
-                                            .next()
-                                            .unwrap()
-                                            .into_iter()
-                                            .map(|node| {
-                                                let variant_group = *mst.node_weight(node).unwrap();
-                                                seen_nodes.insert(variant_group);
-                                                let node_cumulative_depth = nodes_cumulative_depth
-                                                    .entry(node)
-                                                    .or_insert(0.0);
-                                                // add the depth of the current node to this node
-                                                *node_cumulative_depth += current_depth;
-                                                variant_group
-                                            })
-                                            .collect::<Vec<i32>>(),
-                                    );
-                                } else if paths.len() == 0 {
-                                    // Last node left has adequate depth
-                                    let variant_group = *mst.node_weight(current_node).unwrap();
+                        strains.push(
+                            paths
+                                .into_iter()
+                                .next()
+                                .unwrap()
+                                .into_iter()
+                                .enumerate()
+                                .map(|(idx, node)| {
+                                    let variant_group = *mst.node_weight(node).unwrap();
                                     seen_nodes.insert(variant_group);
-                                    strains.push(vec![variant_group]);
-                                }
-                            }
-                        }
-                    } else if paths.len() == 0
-                        && !seen_nodes.contains(mst.node_weight(starting_node).unwrap())
-                    {
-                        // Last node left has adequate depth
-                        let variant_group = *mst.node_weight(starting_node).unwrap();
-                        seen_nodes.insert(variant_group);
-                        strains.push(vec![variant_group]);
+                                    let node_cumulative_depth =
+                                        nodes_cumulative_depth.entry(node).or_insert(0.0);
+                                    // add the depth of the current node to this node
+                                    // subtract the cumulative depth as it has already
+                                    // been seen that many times
+                                    *node_cumulative_depth +=
+                                        (current_depth - current_node_cumulative_depth);
+
+                                    // check if this the next node in the path, if so append to
+                                    // binary heap as it will act as the next branch tip once current
+                                    // tips run out
+                                    if idx == 1 {
+                                        starting_nodes
+                                            .push((Reverse(OrderedFloat(current_depth)), node));
+                                    };
+                                    variant_group
+                                })
+                                .collect::<Vec<i32>>(),
+                        );
                     }
                 }
+            }
+
+            // check if highest depth node is still above the water table after all other paths
+            // have been visited. This also should catch component graphs which contained only
+            // a single node
+            let highest_depth = *self
+                .grouped_mean_read_depth
+                .get(mst.node_weight(highest_depth_node).unwrap())
+                .unwrap();
+
+            let highest_depth_node_cumulative_depth = *nodes_cumulative_depth
+                .entry(highest_depth_node)
+                .or_insert(0.0);
+            if (1.0 - (highest_depth_node_cumulative_depth / highest_depth))
+                >= Self::MIN_DETECTABLE_DEPTH_EPSILON
+                || !seen_nodes.contains(mst.node_weight(highest_depth_node).unwrap())
+            {
+                let variant_group = *mst.node_weight(highest_depth_node).unwrap();
+                seen_nodes.insert(variant_group);
+                strains.push(vec![variant_group]);
             }
 
             all_strains.extend(strains)
@@ -424,17 +434,20 @@ impl<'a> LinkageEngine<'a> {
                         // generate the tree with lowest edge weights
                         let weight = 1.0 - (intersection / union);
 
-                        if weight < 0.99 {
-                            // Don't include any edges that are not con
+                        if weight < 1.0 {
+                            // variant groups connected by reads are favoured
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union
                             );
                             graph.add_edge(node1, node2, weight);
                         } else if under_sep_thresh {
+                            // We will form an edge here but it will essentially
+                            // have to be directly on top of the other variant group
+                            // for the edge to be favoured in the MST
                             let weight = self.cluster_separations
                                 [[*group1 as usize - 1, *group2 as usize - 1]]
-                                / 3.0;
+                                / 1.5;
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union

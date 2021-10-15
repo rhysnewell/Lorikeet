@@ -4,6 +4,8 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 /**
  * Captures the probability that a specific locus in the genome represents an "active" site containing
  * real variation.
+ *
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Type<T: Float + Copy> {

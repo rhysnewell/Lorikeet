@@ -1188,7 +1188,7 @@ impl HaplotypeCallerEngine {
             // remove tmp file name from sample id
             header.push_record(
                 format!(
-                    "##samples=<ID={}, name={}>",
+                    "##sample=<ID={}, name={}>",
                     sample_idx + 1,
                     sample_names[sample_idx]
                 )

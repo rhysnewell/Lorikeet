@@ -1,3 +1,4 @@
+use abundance::abundance_calculator_engine::AbundanceCalculatorEngine;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
@@ -15,6 +16,7 @@ use reference::reference_writer::ReferenceWriter;
 use scoped_threadpool::Pool;
 use std::cmp::min;
 use std::collections::HashMap;
+use std::fs::create_dir_all;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
@@ -35,10 +37,10 @@ pub struct Elem {
     pub progress_bar: ProgressBar,
 }
 
-/**
-The main lorikeet engine, takes input files and performs activity profiling and local reassembly
-per reference and per contig
-*/
+/// The main lorikeet engine, takes any number of reference genomes and reads/bam files and performs
+/// read mapping, variant calling, consensus genome calling, and strain genotyping
+///
+/// @author Rhys Newell <rhys.newell@.hdr.qut.edu.au>
 pub struct LorikeetEngine<'a> {
     args: &'a clap::ArgMatches<'a>,
     short_read_bam_count: usize,
@@ -248,6 +250,8 @@ impl<'a> LorikeetEngine<'a> {
 
                     let cleaned_sample_names = get_cleaned_sample_names(&indexed_bam_readers);
 
+                    // ensure output path exists
+                    create_dir_all(&output_prefix).expect("Unable to create output directory");
                     if mode == "call" {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -304,39 +308,15 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference,
                             ));
                         }
-                        // variant_matrix.calculate_strain_abundances(
-                        //     &output_prefix,
-                        //     &reference_map,
-                        //     &genomes_and_contigs,
-                        // );
+                        let mut abundance_calculator_engine = AbundanceCalculatorEngine::new(
+                            split_contexts,
+                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                            &output_prefix,
+                            &cleaned_sample_names,
+                        );
 
-                        // Write genotypes to disk, reference specific
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Generating genotypes...", &reference,));
-                        }
-
-                        // variant_matrix.generate_genotypes(
-                        //     &output_prefix,
-                        //     &reference_map,
-                        //     &genomes_and_contigs,
-                        //     &concatenated_genomes,
-                        // );
-
-                        // Get sample distances
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Generating adjacency matrix...",
-                                &reference,
-                            ));
-                        }
-                        // variant_matrix.calculate_sample_distances(
-                        //     &output_prefix,
-                        //     &reference_map,
-                        //     &genomes_and_contigs,
-                        // );
+                        let split_contexts = abundance_calculator_engine
+                            .run_abundance_calculator(n_strains, cleaned_sample_names.len());
 
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -351,7 +331,12 @@ impl<'a> LorikeetEngine<'a> {
                             true,
                         );
 
-                        // variant_matrix.generate_distances();
+                        // Write genotypes to disk, reference specific
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar
+                                .set_message(format!("{}: Writing strains...", &reference,));
+                        }
                         let mut reference_writer =
                             ReferenceWriter::new(reference_reader, &output_prefix);
                         reference_writer.generate_strains(split_contexts, ref_idx, n_strains);
