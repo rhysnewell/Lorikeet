@@ -16,11 +16,11 @@ jobs:
 
     steps:
       - name: Checkout lorikeet repo (+ download lfs dependencies)
-        - uses: actions/checkout@v2
-        - with:
-            - lfs: true
+        uses: actions/checkout@v2
+        with:
+          lfs: true
       - name: Checkout LFS objects
-        - run: git lfs checkout
+        run: git lfs checkout
       - name: Build
         run: cargo build --release
       - name: Run tests
