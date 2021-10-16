@@ -16,9 +16,9 @@ default-run = "lorikeet"
 
 
 [features]
-#openblas = ["ndarray-linalg/openblas"]
-#openblas-src = ["ndarray-linalg/openblas-src"]
-#cargo-features = ["resolver"]
+# Force openssl-sys to staticly link in the openssl library. Necessary when
+# cross compiling to x86_64-unknown-linux-musl.
+vendored-openssl = ["openssl-sys/vendored"]
 
 [dependencies]
 approx = "0.5.0"
