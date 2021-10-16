@@ -11,8 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@master
         if: github.actor != 'dependabot[bot]'
+      - run: cargo install cross
       - id: 'compile'
-        uses: heroku/rust-cargo-musl-action@v1
+        uses: rhysnewell/rust-cargo-musl-action@v1
         with:
           command: 'build'
           flags: '--features vendored-openssl'
