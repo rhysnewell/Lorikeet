@@ -11,7 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@master
         if: github.actor != 'dependabot[bot]'
-      - run: cargo install cross
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.9
       - id: 'compile'
         uses: rhysnewell/rust-cargo-musl-action@v1
         with:
