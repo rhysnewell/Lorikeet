@@ -52,6 +52,14 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut strain_ids = (0..n_strains).into_iter().collect::<Vec<usize>>();
         let mut abundance_key = HashMap::with_capacity(n_strains);
         let mut strain_id_key = HashMap::with_capacity(n_strains);
+        // the per sample strain presence vec, true if suspected of being present
+        // false if not. Used to detect if a suspected strain disappears from a sample between
+        // iterations
+        let mut strain_presences = self.determine_if_strain_is_present(
+            n_strains,
+            n_samples,
+            &per_sample_reference_presence
+        );
 
         loop {
             abundance_key = HashMap::with_capacity(n_strains);
@@ -112,20 +120,28 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             }
                         };
 
-                        sample_vector[abundance_index].variant_weights.push(weight);
+                        if strain_presences[sample_index][*strain] {
+                            sample_vector[abundance_index].variant_weights.push(weight);
 
-                        // Collect the other abundance indices that this variant is associated with
-                        let other_abundance_indices = strains
-                            .iter()
-                            .filter_map(|idx| match abundance_key.get(idx) {
-                                Some(a_idx) => Some(*a_idx),
-                                None => None,
-                            })
-                            .collect();
+                            // Collect the other abundance indices that this variant is associated with
+                            let other_abundance_indices = strains
+                                .iter()
+                                .filter_map(|idx| match abundance_key.get(idx) {
+                                    Some(a_idx) => {
+                                        if strain_presences[sample_index][*a_idx] {
+                                            Some(*a_idx)
+                                        } else {
+                                            None
+                                        }
+                                    },
+                                    None => None,
+                                })
+                                .collect();
 
-                        sample_vector[abundance_index]
-                            .variant_genotype_ids
-                            .push(other_abundance_indices);
+                            sample_vector[abundance_index]
+                                .variant_genotype_ids
+                                .push(other_abundance_indices);
+                        }
                     }
 
                     // Remove the strains that weren't present
@@ -161,7 +177,13 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             .filter_map(|idx| {
                                 if !strains.contains(&idx) {
                                     match abundance_key.get(&idx) {
-                                        Some(a_idx) => Some(*a_idx),
+                                        Some(a_idx) => {
+                                            if strain_presences[sample_index][*a_idx] {
+                                                Some(*a_idx)
+                                            } else {
+                                                None
+                                            }
+                                        },
                                         None => None,
                                     }
                                 } else {
@@ -188,6 +210,17 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);
                 });
 
+            let mut something_removed = false;
+            abundance_vectors.iter().enumerate().for_each(|(idx, sample_calculators)| {
+                let mut strain_present = &mut strain_presences[idx];
+                sample_calculators.iter().enumerate().for_each(|(strain_index, calculator)| {
+                    if strain_present[strain_index] && calculator.abundance_weight == 0. {
+                        strain_present[strain_index] = false;
+                        something_removed = true;
+                    }
+                })
+            });
+
             // Vector of counters for each genotype
             // If the counter reaches the same value as the number of samples
             // Then that genotype had an abundance weighting of 0 in
@@ -203,7 +236,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             }
 
             debug!("strain removal counts {:?}", &strains_to_remove);
-            let mut something_removed = false;
+
             for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
                 if count == n_samples {
                     let strain_id_to_remove = strain_id_key.get(&strain_index).unwrap();
@@ -212,6 +245,10 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .position(|s| s == strain_id_to_remove)
                         .unwrap();
                     strain_ids.remove(position_of_strain_id);
+                    strain_presences.iter_mut().for_each(|vec| {
+                        vec.remove(position_of_strain_id);
+                    });
+
                     something_removed = true;
                     n_strains -= 1;
                 }
@@ -220,7 +257,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             if !something_removed {
                 break;
             } else {
-                debug!("Genotype removed, rerunning abundance calculations");
+                debug!("Something removed, rerunning abundance calculations");
             }
         }
 
@@ -303,5 +340,44 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         reference_presence_counters
             .iter()
             .any(|count| *count == self.variant_contexts.len())
+    }
+
+    fn determine_if_strain_is_present(&self, n_strains: usize, n_samples: usize, per_sample_reference_presence: &Vec<bool>) -> Vec<Vec<bool>> {
+        let mut per_sample_strain_presence = Vec::with_capacity(n_samples);
+
+        for sample_index in 0..n_samples {
+            let mut per_strain_variant_count = vec![false; n_strains];
+            for vc in self.variant_contexts.iter() {
+                let strains = match vc
+                    .attributes
+                    .get(VariantAnnotations::Strain.to_key())
+                    .unwrap()
+                {
+                    AttributeObject::VecUnsize(vec) => vec,
+                    _ => panic!("Strain annotation was not the correct AttributeObject"),
+                };
+                let variant_depth = vc.genotypes.genotypes()[sample_index].ad[1];
+
+                if variant_depth > 0 {
+                    for strain in strains.iter() {
+                        if !per_strain_variant_count[*strain] {
+                            per_strain_variant_count[*strain] = true;
+                        }
+                    }
+                }
+
+                let reference_present = per_sample_reference_presence[sample_index];
+                if reference_present {
+                    if !per_strain_variant_count[n_strains - 1] {
+                        per_strain_variant_count[n_strains - 1] = true;
+                    }
+                }
+            }
+
+            per_sample_strain_presence.push(per_strain_variant_count)
+        }
+
+
+        return per_sample_strain_presence
     }
 }
