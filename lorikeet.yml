@@ -4,7 +4,6 @@ channels:
   - defaults
   - anaconda
 dependencies:
-  - gxx_link-64
   - sysroot_linux-64
   - rust
   - python>=3.8
