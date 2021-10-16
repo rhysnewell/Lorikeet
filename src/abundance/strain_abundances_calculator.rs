@@ -1,22 +1,25 @@
 use rayon::prelude::*;
 
+/// Implementation of the EM algorithm used by centrifuge
+///
+/// @author Rhys Newell <rhys.newell@.hdr.qut.edu.au>
 #[derive(Debug, Clone)]
-pub struct GenotypeWeights {
+pub struct StrainAbundanceCalculator {
     // The genotype index
     pub index: usize,
     // The expected weights of each variant that decide the strain abundance
-    pub variant_weights: Vec<f32>,
+    pub variant_weights: Vec<f64>,
     // The indices of all the genotypes that share this variant
     pub variant_genotype_ids: Vec<Vec<usize>>,
     // The geometric weighting of this strains abundance
     // Strain abundance would be calculated as abundance_weight * total_abundance
     // denoted as `theta`
-    pub abundance_weight: f32,
+    pub abundance_weight: f64,
 }
 
-impl GenotypeWeights {
-    pub fn new(index: usize) -> GenotypeWeights {
-        GenotypeWeights {
+impl StrainAbundanceCalculator {
+    pub fn new(index: usize) -> Self {
+        Self {
             index,
             variant_weights: vec![],
             variant_genotype_ids: vec![],
@@ -24,15 +27,15 @@ impl GenotypeWeights {
         }
     }
 
-    pub fn calculate_abundances(sample_genotypes: &mut Vec<GenotypeWeights>) {
+    pub fn calculate_abundances(sample_genotypes: &mut Vec<Self>) {
         // Placeholder stopping criterion vector
         // Going to check for small changes between theta_prev and theta_curr
-        let mut theta_prev_mean: f32;
-        let mut theta_curr_mean: f32 = 1.;
+        let mut theta_prev_mean: f64;
+        let mut theta_curr_mean: f64 = 1.;
         // the difference between theta curr and theta prev
         let mut omega = 1.;
         // The minimum value of omega before stopping
-        let eps = 0.00001;
+        let eps = 10e-10;
 
         let mut theta_curr = vec![1.; sample_genotypes.len()];
         let mut n = 0;
@@ -55,17 +58,29 @@ impl GenotypeWeights {
                         let pooled_weights = genotype.variant_genotype_ids[variant_index]
                             .par_iter()
                             .fold_with(0., |acc, genotype_index| acc + theta_curr[*genotype_index])
-                            .sum::<f32>();
+                            .sum::<f64>();
+                        debug!(
+                            "Variant index {} weight {} pooled weight {}",
+                            variant_index, w, pooled_weights
+                        );
                         let w = w * (genotype.abundance_weight / pooled_weights);
                         w
                     })
                     .collect();
 
                 // Step 2: update abundance weight based on mean of variant weights
-                genotype.abundance_weight = genotype.variant_weights.par_iter().sum::<f32>()
-                    / genotype.variant_weights.len() as f32;
+                genotype.abundance_weight = genotype.variant_weights.par_iter().sum::<f64>()
+                    / genotype.variant_weights.len() as f64;
 
-                if genotype.abundance_weight <= eps || genotype.abundance_weight.is_nan() {
+                debug!(
+                    "Index {} abundance weight {} variant weights {:?}",
+                    index, genotype.abundance_weight, &genotype.variant_weights
+                );
+
+                if genotype.abundance_weight <= eps
+                    || genotype.abundance_weight.is_nan()
+                    || genotype.variant_weights.contains(&0.0)
+                {
                     genotype.abundance_weight = 0.;
                     genotype.variant_weights = vec![];
                 }
@@ -75,14 +90,12 @@ impl GenotypeWeights {
             }
 
             // Update theta_curr_mean and omega
-            theta_curr_mean = theta_curr.par_iter().sum::<f32>() / theta_curr.len() as f32;
+            theta_curr_mean = theta_curr.par_iter().sum::<f64>() / theta_curr.len() as f64;
             omega = (theta_curr_mean - theta_prev_mean).abs();
 
             debug!(
-                "Theta Current {:?} \
-            theta curr mean {} \
-            Omega {}",
-                &theta_curr, &theta_prev_mean, &omega,
+                "Theta Current {:?} mean {} theta prev mean {} Omega {}",
+                &theta_curr, theta_curr_mean, &theta_prev_mean, &omega,
             );
             n += 1;
         }

@@ -25,6 +25,10 @@ use utils::simple_interval::SimpleInterval;
  * they contain.  The AssemblyRegion is then trimmed down to a new primary interval bound by all assembled variants within the original primary interval
  * and a new padded interval.  The amount of padding of the new padded interval around the variants depends on the needs of local realignment
  * and as such need not equal the original padding that was used for assembly.
+ *
+ * Re-implementation of the GATK code base. Original author unknown
+ * Rust implementation:
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Debug, Clone)]
 pub struct AssemblyRegion {

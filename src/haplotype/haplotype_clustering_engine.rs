@@ -10,6 +10,7 @@ use ndarray_npy::{read_npy, write_npy};
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use std::collections::{HashMap, HashSet};
+use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
 
 /// HaplotypeClusteringEngine provides a suite of functions that takes a list of VariantContexts
@@ -163,6 +164,8 @@ impl<'a> HaplotypeClusteringEngine<'a> {
     /// Writes out a variant by sample depth array from the provided collection of variant contexts
     fn prepare_depth_file(&self) -> String {
         let file_name = format!("{}/{}", self.output_prefix, self.ref_name,);
+        // ensure path exists
+        create_dir_all(self.output_prefix).expect("Unable to create output directory");
 
         // Depth array for each variant across all samples
         // Each variant (row) is accompanied by n_samples * 2 columns. The columns contain the depth

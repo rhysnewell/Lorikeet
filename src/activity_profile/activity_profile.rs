@@ -9,6 +9,8 @@ use utils::simple_interval::{Locatable, SimpleInterval};
 /**
  * Class holding information about per-base activity scores for
  * assembly region traversal
+ *
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Debug)]
 pub struct ActivityProfile {

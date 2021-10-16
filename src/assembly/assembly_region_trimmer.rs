@@ -7,6 +7,17 @@ use std::cmp::{max, min};
 use std::collections::BTreeSet;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
+/**
+ * Helper component to manage active region trimming
+ *
+ * <p/>
+ * It receives the user arguments that controls trimming and also performs the trimming region calculation.
+ *
+ * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
+ * Rust implementation:
+ *
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
+ */
 #[derive(Debug, Clone)]
 pub struct AssemblyRegionTrimmer {
     assembly_region_padding: usize,
@@ -16,14 +27,6 @@ pub struct AssemblyRegionTrimmer {
     max_extension_into_region_padding: usize,
 }
 
-/**
- * Helper component to manage active region trimming
- *
- * <p/>
- * It receives the user arguments that controls trimming and also performs the trimming region calculation.
- *
- * @author Valentin Ruano-Rubio &lt;valentin@broadinstitute.org&gt;
- */
 impl AssemblyRegionTrimmer {
     pub fn new(
         assembly_region_padding: usize,

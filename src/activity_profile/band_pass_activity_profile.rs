@@ -10,6 +10,8 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  *
  * Applies a band pass filter with a Gaussian kernel to the input state probabilities to smooth
  * them out of an interval
+ *
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Debug)]
 pub struct BandPassActivityProfile {

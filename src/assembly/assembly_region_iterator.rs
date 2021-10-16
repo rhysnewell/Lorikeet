@@ -19,6 +19,9 @@ use rust_htslib::bam::Record;
  *
  * NOTE: the provided shard must have appropriate read filters set on it for this traversal type (ie., unmapped
  * and malformed reads must be filtered out).
+ * Re-implementation of the GATK code base. Original author unknown
+ * Rust implementation:
+ * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
 #[derive(Debug)]
 pub struct AssemblyRegionIterator<'a> {

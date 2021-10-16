@@ -1,0 +1,42 @@
+name: Rust
+
+on:
+  push:
+    branches: [ master, dev ]
+  pull_request:
+    branches: [ master, dev ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  miniconda:
+    name: Miniconda ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -l {0}
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test
+          environment-file: lorikeet.yml
+          python-version: 3.8
+          auto-activate-base: false
+          mamba-version: "*"
+          channels: conda-forge,bioconda,defaults
+
+      - name: Checkout lorikeet repo (+ download lfs dependencies)
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+      - name: Checkout LFS objects
+        run: git lfs checkout
+      - name: Build
+        run: cargo build --release
+      - name: Run tests
+        run: cargo test --release

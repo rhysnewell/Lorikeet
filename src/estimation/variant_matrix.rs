@@ -14,12 +14,14 @@
 // use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 // use itertools::izip;
 // use itertools::Itertools;
+// use linkage::strain_abundances::GenotypeWeights;
 // use model::variants::*;
 // use ndarray::prelude::*;
 // use ndarray_npy::{read_npy, write_npy};
 // use ordered_float::NotNan;
 // use rayon::current_num_threads;
 // use rayon::prelude::*;
+// use reference::reference_reader_utils::ReferenceReaderUtils;
 // use rust_htslib::bcf::{self};
 // use std::collections::{BTreeMap, HashMap, HashSet};
 // use std::fs::File;
@@ -28,8 +30,6 @@
 // use std::str;
 // use std::sync::{Arc, Mutex};
 // use tempfile;
-// use reference::reference_reader_utils::ReferenceReaderUtils;
-// use linkage::strain_abundances::GenotypeWeights;
 //
 // #[derive(Debug, Clone)]
 // /// Container for all variants within a genome and associated clusters
@@ -1434,7 +1434,6 @@
 //                             let mut genotype_key: HashMap<usize, usize> = HashMap::new();
 //                             let mut strain_id_key: HashMap<usize, usize> = HashMap::new();
 //
-//
 //                             loop {
 //                                 let number_of_genotypes = genotype_map.keys().len();
 //
@@ -1616,7 +1615,9 @@
 //                                             "Genotype Vector before EM {} {:?}",
 //                                             idx, sample_genotypes
 //                                         );
-//                                         genotype_abundances::GenotypeWeights::calculate_abundances(sample_genotypes);
+//                                         genotype_abundances::GenotypeWeights::calculate_abundances(
+//                                             sample_genotypes,
+//                                         );
 //                                         debug!(
 //                                             "Genotype Vector after EM {} {:?}",
 //                                             idx, sample_genotypes
@@ -2034,7 +2035,9 @@
 //                         }
 //                         None => match bio::io::fasta::IndexedReader::from_file(&reference_path) {
 //                             Ok(reader) => reader,
-//                             Err(_e) => ReferenceReaderUtils::generate_faidx(&reference_path.to_str().unwrap()),
+//                             Err(_e) => ReferenceReaderUtils::generate_faidx(
+//                                 &reference_path.to_str().unwrap(),
+//                             ),
 //                         },
 //                     };
 //
