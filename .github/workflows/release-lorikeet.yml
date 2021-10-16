@@ -1,0 +1,29 @@
+name: Publish Release
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+        if: github.actor != 'dependabot[bot]'
+      - id: 'compile'
+        uses: heroku/rust-cargo-musl-action@v1
+        with:
+          command: 'build'
+          flags: '--release'
+      - uses: actions/upload-artifact@v2
+        with:
+          name: binary
+          path: ${{ steps.compile.outputs.release-dir }}/binary
+      - name: Create a Release
+        if: github.actor != 'dependabot[bot]'
+        uses: elgohr/Github-Release-Action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          args: ${{ github.sha }}
