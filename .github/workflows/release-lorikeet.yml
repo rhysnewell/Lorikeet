@@ -15,7 +15,6 @@ jobs:
         uses: heroku/rust-cargo-musl-action@v1
         with:
           command: 'build'
-          flags: '--release'
       - uses: actions/upload-artifact@v2
         with:
           name: binary
