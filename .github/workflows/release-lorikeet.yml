@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@master
         if: github.actor != 'dependabot[bot]'
       - id: 'compile'
-        uses: rhysnewell/rust-cargo-musl-action@v0.1.13
+        uses: rhysnewell/rust-cargo-musl-action@v0.1.14
         with:
           command: 'build'
           flags: '--features vendored-openssl'
