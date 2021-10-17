@@ -11,12 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@master
         if: github.actor != 'dependabot[bot]'
-      - name: Setup cmake
-        uses: jwlawson/actions-setup-cmake@v1.9
-      - name: Use cmake
-        run: cmake --version
       - id: 'compile'
-        uses: rhysnewell/rust-cargo-musl-action@v1
+        uses: rhysnewell/rust-cargo-musl-action@v0.1.7
         with:
           command: 'build'
           flags: '--features vendored-openssl'
