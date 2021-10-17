@@ -17,7 +17,7 @@ jobs:
           command: 'build'
           flags: '--features vendored-openssl'
       - name: Package binaries
-        run: cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/ && \
+        run: mkdir -p dist/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/ && \
             tar czf lorikeet-x86_64-unknown-linux-musl-${{ env.RELEASE_VERSION }}.tar.gz dist/
       - uses: actions/upload-artifact@v2
         with:
@@ -27,7 +27,8 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          repo_token: "${{ secrets.RELEASE_TOKEN }}"
           prerelease: false
+          title: "${{ env.RELEASE_VERSION }}"
           files: |
             lorikeet-x86_64-unknown-linux-musl-${{ env.RELEASE_VERSION }}.tar.gz
