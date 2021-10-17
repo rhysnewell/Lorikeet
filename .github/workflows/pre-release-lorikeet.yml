@@ -1,0 +1,34 @@
+name: Publish pre-release
+on:
+  push:
+    branches:
+      - "master"
+jobs:
+  pre-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+        if: github.actor != 'dependabot[bot]'
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - id: 'compile'
+        uses: rhysnewell/rust-cargo-musl-action@v0.1.14
+        with:
+          command: 'build'
+          flags: '--features vendored-openssl'
+      - name: Package binaries
+        run: mkdir -p dist/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/ && \
+            tar czf lorikeet-x86_64-unknown-linux-musl-pre-release-${{ env.RELEASE_VERSION }}.tar.gz dist/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: binary
+          path: lorikeet-x86_64-unknown-linux-musl-${{ env.RELEASE_VERSION }}.tar.gz
+      - name: Create a Release
+        if: github.actor != 'dependabot[bot]'
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.RELEASE_TOKEN }}"
+          prerelease: true
+          title: "Development build: ${{ env.RELEASE_VERSION }}"
+          files: |
+            lorikeet-x86_64-unknown-linux-musl-pre-release-${{ env.RELEASE_VERSION }}.tar.gz
