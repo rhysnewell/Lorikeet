@@ -37,6 +37,7 @@ jobs:
         with:
           repo_token: "${{ secrets.RELEASE_TOKEN }}"
           prerelease: false
+          automatic_release_tag: "latest"
           title: "${{ env.RELEASE_VERSION }}"
           files: |
             lorikeet-x86_64-unknown-linux-musl-${{ env.RELEASE_VERSION }}.tar.gz
