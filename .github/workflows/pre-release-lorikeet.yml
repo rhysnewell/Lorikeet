@@ -1,8 +1,5 @@
 name: Publish pre-release
 on:
-  push:
-    branches:
-      - "master"
   pull_request:
     branches:
       - "master"
