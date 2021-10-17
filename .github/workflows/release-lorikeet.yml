@@ -13,6 +13,8 @@ jobs:
         if: github.actor != 'dependabot[bot]'
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v1.9
+      - name: Use cmake
+        run: cmake --version
       - id: 'compile'
         uses: rhysnewell/rust-cargo-musl-action@v1
         with:
