@@ -1,5 +1,8 @@
 name: Publish pre-release
 on:
+  push:
+    branches:
+      - "master"
   pull_request:
     branches:
       - "master"
@@ -16,13 +19,17 @@ jobs:
         with:
           command: 'build'
           flags: '--features vendored-openssl'
-      - name: Download packagin dependencies
-        uses: teddyking/dependency-action@master
-        with:
-          deps: https://dep1.tar.gz
       - name: Package binaries
-        run: mkdir -p dist/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/ && \
-            tar czf lorikeet-x86_64-unknown-linux-musl-pre-release-${{ env.RELEASE_VERSION }}.tar.gz dist/
+        run: mkdir -p release/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/      
+      - name: Compress action step
+        uses: master-atul/tar-action@v1.0.2
+        id: compress
+        with:
+          command: c
+          cwd: ./
+          files: |
+            ./release/
+          outPath: lorikeet-x86_64-unknown-linux-musl-pre-release-${{ env.RELEASE_VERSION }}.tar.gz
       - uses: actions/upload-artifact@v2
         with:
           name: binary
