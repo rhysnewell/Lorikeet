@@ -16,6 +16,10 @@ jobs:
         with:
           command: 'build'
           flags: '--features vendored-openssl'
+      - name: Download packagin dependencies
+        uses: teddyking/dependency-action@master
+        with:
+          deps: https://dep1.tar.gz
       - name: Package binaries
         run: mkdir -p dist/ && cp ${{ steps.compile.outputs.release-dir }}/lorikeet ${{ steps.compile.outputs.release-dir }}/remove_minimap2_duplicated_headers INSTALL.md dist/ && \
             tar czf lorikeet-x86_64-unknown-linux-musl-pre-release-${{ env.RELEASE_VERSION }}.tar.gz dist/
