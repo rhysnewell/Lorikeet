@@ -412,14 +412,14 @@ See lorikeet genotype --full-help for further options and further detail.
         )
         .help(
             "
-Strain genotyping analysis for metagenomics
+Variant calling and strain genotyping analysis for metagenomics
 
 Usage: lorikeet <subcommand> ...
 
 Main subcommands:
 \tgenotype  \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
 \tconsensus \tCreates consensus genomes for each input reference and for each sample
-\tcall  \tPerforms variant calling on the provides genomes
+\tcall      \tPerforms variant calling on the provides genomes
 \tevolve    \tCalculate dN/dS values for genes from read mappings
 
 Other options:

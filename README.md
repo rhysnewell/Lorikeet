@@ -61,21 +61,24 @@ conda activate lorikeet
 
 Once you have created the conda environment download and install the latest release file from github
 ```
-wget https://github.com/rhysnewell/Lorikeet/releases/download/v0.6.0rc2/lorikeet-x86_64-unknown-linux-musl-0.6.0.tar.gz;
-tar -xvzf lorikeet-x86_64-unknown-linux-musl-0.6.0.tar.gz;
-cp lorikeet-x86_64-unknown-linux-musl-0.6.0/lorikeet $CONDA_PREFIX/bin;
-cp lorikeet-x86_64-unknown-linux-musl-0.6.0/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
+wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0rc3.tar.gz;
+tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
+cp release/lorikeet $CONDA_PREFIX/bin;
+cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 ```
 
 #### Option 3: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
-paths in the your conda environment if they can't properly be found on your system.
+paths in the your conda environment if they can't properly be found on your system. This method also assumes you have 
+previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
+versions need to be used for installation.
 ```
-git clone --recursive https://github.com/rhysnewell/Lorikeet.git \ 
-cd Lorikeet \
-conda env create -n lorikeet -f lorikeet.yml \ 
-conda activate lorikeet \ 
-bash install.sh # or run without installing e.g. `cargo run --release -- genotype -h` \
+git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+cd Lorikeet;
+conda env create -n lorikeet -f lorikeet.yml; 
+conda activate lorikeet;
+pip install --upgrade cmake;
+bash install.sh # or run without installing e.g. `cargo run --release -- genotype -h`;
 lorikeet genotype -h
 ```
 
