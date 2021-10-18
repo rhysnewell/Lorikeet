@@ -357,7 +357,6 @@ impl HaplotypeCallerEngine {
                 "{}: Calculating activity probabilities...",
                 pb.key,
             ));
-            pb.progress_bar.inc(1);
         }
         // return genotype_likelihoods for each contig in current genome across samples
         return self.calculate_activity_probabilities(
