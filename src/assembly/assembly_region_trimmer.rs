@@ -65,7 +65,7 @@ impl AssemblyRegionTrimmer {
         variants: BTreeSet<VariantContext>,
         legacy_trimming: bool,
         reference_reader: &ReferenceReader,
-        reference_bases: &Vec<u8>,
+        reference_bases: &[u8],
     ) -> AssemblyRegionTrimmerResult {
         if legacy_trimming {
             return self.trim_legacy(region, variants, reference_reader);

@@ -240,11 +240,11 @@ impl AssemblyBasedCallerUtils {
      * returning a data structure with the resulting information needed
      * for further HC steps
      */
-    pub fn assemble_reads<'b>(
+    pub fn assemble_reads(
         mut region: AssemblyRegion,
         given_alleles: &Vec<VariantContext>,
         args: &clap::ArgMatches,
-        reference_reader: &'b mut ReferenceReader,
+        reference_reader: &mut ReferenceReader,
         assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
         sample_names: &Vec<String>,
@@ -269,7 +269,8 @@ impl AssemblyBasedCallerUtils {
         );
 
         let full_reference_with_padding = region
-            .get_assembly_region_reference(reference_reader, Self::REFERENCE_PADDING_FOR_ASSEMBLY);
+            .get_assembly_region_reference(reference_reader, Self::REFERENCE_PADDING_FOR_ASSEMBLY)
+            .to_vec();
         let padded_reference_loc = Self::get_padded_reference_loc(
             &region,
             Self::REFERENCE_PADDING_FOR_ASSEMBLY,
@@ -610,9 +611,7 @@ impl AssemblyBasedCallerUtils {
     ) -> Haplotype<L> {
         return ReferenceConfidenceModel::create_reference_haplotype(
             region,
-            region
-                .get_assembly_region_reference(reference_reader, 0)
-                .as_slice(),
+            region.get_assembly_region_reference(reference_reader, 0),
             padded_reference_loc,
         );
     }

@@ -3,6 +3,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use hashlink::LinkedHashSet;
 use rayon::prelude::*;
 use reference::reference_reader_utils::ReferenceReaderUtils;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fs::File;
 use utils::simple_interval::{Locatable, SimpleInterval};
@@ -24,6 +25,23 @@ pub struct ReferenceReader {
     reference_index_to_tid: HashMap<usize, LinkedHashSet<usize>>,
     target_names: HashMap<usize, Vec<u8>>,
     pub target_lens: HashMap<usize, u64>,
+    genome_path: Option<String>,
+}
+
+impl Clone for ReferenceReader {
+    fn clone(&self) -> Self {
+        let indexed_reader = ReferenceReaderUtils::retrieve_reference(&self.genome_path);
+
+        Self {
+            indexed_reader,
+            current_sequence: Vec::new(),
+            genomes_and_contigs: self.genomes_and_contigs.clone(),
+            reference_index_to_tid: self.reference_index_to_tid.clone(),
+            target_names: self.target_names.clone(),
+            target_lens: self.target_lens.clone(),
+            genome_path: None,
+        }
+    }
 }
 
 impl ReferenceReader {
@@ -41,6 +59,7 @@ impl ReferenceReader {
             target_names: HashMap::new(),
             target_lens: HashMap::new(),
             genomes_and_contigs: genomes_and_contigs,
+            genome_path: concatenated_genomes.clone(),
         }
     }
 
@@ -62,6 +81,7 @@ impl ReferenceReader {
                 .collect::<HashMap<usize, Vec<u8>>>(),
             genomes_and_contigs: genomes_and_contigs,
             target_lens: HashMap::new(),
+            genome_path: concatenated_genomes.clone(),
         }
     }
 
@@ -137,7 +157,7 @@ impl ReferenceReader {
             )) {
                 Ok(reference) => reference,
                 Err(e) => {
-                    println!(
+                    panic!(
                         "Cannot read sequence from reference {} {:?}",
                         format!(
                             "{}~{}",
@@ -146,7 +166,6 @@ impl ReferenceReader {
                         ),
                         e,
                     );
-                    std::process::exit(1);
                 }
             },
         };
@@ -165,7 +184,7 @@ impl ReferenceReader {
             )) {
                 Ok(reference) => reference,
                 Err(e) => {
-                    println!(
+                    panic!(
                         "Cannot read sequence from reference {} {:?}",
                         format!(
                             "{}~{}",
@@ -174,7 +193,6 @@ impl ReferenceReader {
                         ),
                         e,
                     );
-                    std::process::exit(1);
                 }
             },
         };
@@ -186,7 +204,10 @@ impl ReferenceReader {
         match self.indexed_reader.fetch(
             std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap(),
             interval.get_start() as u64,
-            interval.get_end() as u64 + 1,
+            min(
+                (interval.get_end() + 1) as u64,
+                *self.target_lens.get(&interval.get_contig()).unwrap(),
+            ),
         ) {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch(
@@ -196,11 +217,14 @@ impl ReferenceReader {
                     std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap()
                 ),
                 interval.get_start() as u64,
-                interval.get_end() as u64,
+                min(
+                    (interval.get_end() + 1) as u64,
+                    *self.target_lens.get(&interval.get_contig()).unwrap(),
+                ),
             ) {
                 Ok(reference) => reference,
                 Err(e) => {
-                    println!(
+                    panic!(
                         "Cannot read sequence from reference {} {:?}",
                         format!(
                             "{}~{}",
@@ -210,7 +234,6 @@ impl ReferenceReader {
                         ),
                         e,
                     );
-                    std::process::exit(1);
                 }
             },
         };
@@ -220,8 +243,7 @@ impl ReferenceReader {
         match self.indexed_reader.read(&mut self.current_sequence) {
             Ok(reference) => reference,
             Err(e) => {
-                println!("Cannot read sequence from reference {:?}", e,);
-                std::process::exit(1)
+                panic!("Cannot read sequence from reference {:?}", e,);
             }
         };
     }

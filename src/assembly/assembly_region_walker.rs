@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 
 pub struct AssemblyRegionWalker {
     pub(crate) evaluator: HaplotypeCallerEngine,
-    features: Option<IndexedReader>,
     short_read_bam_count: usize,
     long_read_bam_count: usize,
     ref_idx: usize,
@@ -58,17 +57,8 @@ impl AssemblyRegionWalker {
             .parse()
             .unwrap();
 
-        let features_vcf = match args.value_of("features-vcf") {
-            Some(vcf_path) => {
-                debug!("Attempting to read in features...");
-                Some(VariantContext::retrieve_indexed_vcf_file(vcf_path))
-            }
-            None => None,
-        };
-
         AssemblyRegionWalker {
             evaluator: hc_engine,
-            features: features_vcf,
             short_read_bam_count,
             long_read_bam_count,
             ref_idx,
@@ -110,107 +100,130 @@ impl AssemblyRegionWalker {
      */
     pub fn traverse<'a, 'b>(
         &'b mut self,
-        shards: &'b mut HashMap<usize, BandPassActivityProfile>,
+        mut shards: HashMap<usize, BandPassActivityProfile>,
         flag_filters: &'a FlagFilter,
         args: &'a clap::ArgMatches,
         sample_names: &'a Vec<String>,
         reference_reader: &'b mut ReferenceReader,
     ) -> Vec<VariantContext> {
-        let mut contexts = Vec::new();
-        for (tid, activity_profile) in shards.iter_mut() {
-            contexts.par_extend(self.process_shard(
-                activity_profile,
-                flag_filters,
-                args,
-                sample_names,
-                reference_reader,
-            ));
-        }
+        let contexts = shards
+            .into_par_iter()
+            .flat_map(|(tid, mut activity_profile)| {
+                Self::process_shard(
+                    &mut activity_profile,
+                    flag_filters,
+                    args,
+                    sample_names,
+                    reference_reader.clone(),
+                    self.n_threads,
+                    self.assembly_region_padding,
+                    self.min_assembly_region_size,
+                    self.max_assembly_region_size,
+                    self.short_read_bam_count,
+                    self.long_read_bam_count,
+                    self.evaluator.clone(),
+                )
+                .into_par_iter()
+            })
+            .collect::<Vec<VariantContext>>();
         return contexts;
     }
 
     fn process_shard<'a, 'b>(
-        &'b mut self,
         shard: &'b mut BandPassActivityProfile,
         flag_filters: &'a FlagFilter,
         args: &clap::ArgMatches,
         sample_names: &'a Vec<String>,
-        reference_reader: &'b mut ReferenceReader,
+        mut reference_reader: ReferenceReader,
+        n_threads: u32,
+        assembly_region_padding: usize,
+        min_assembly_region_size: usize,
+        max_assembly_region_size: usize,
+        short_read_bam_count: usize,
+        long_read_bam_count: usize,
+        mut evaluator: HaplotypeCallerEngine,
     ) -> Vec<VariantContext> {
-        let mut assembly_region_iter = AssemblyRegionIterator::new(sample_names, self.n_threads);
+        let mut assembly_region_iter = AssemblyRegionIterator::new(sample_names, n_threads);
 
         let mut pending_regions = shard.pop_ready_assembly_regions(
-            self.assembly_region_padding,
-            self.min_assembly_region_size,
-            self.max_assembly_region_size,
+            assembly_region_padding,
+            min_assembly_region_size,
+            max_assembly_region_size,
             false,
         );
-
-        match &mut self.features {
+        let features = args.value_of("features-vcf");
+        match features {
             Some(indexed_vcf_reader) => {
                 debug!("Attempting to extract features...");
                 // Indexed readers don't have sync so we cannot parallelize this
-                indexed_vcf_reader.set_threads(self.n_threads as usize);
-                let mut contexts = Vec::new();
+                // indexed_vcf_reader.set_threads(self.n_threads as usize);
+                let mut indexed_vcf_reader =
+                    VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
+                let contexts = pending_regions
+                    .into_iter()
+                    .flat_map(|mut assembly_region| {
+                        assembly_region_iter.fill_next_assembly_region_with_reads(
+                            &mut assembly_region,
+                            flag_filters,
+                            n_threads,
+                            short_read_bam_count,
+                            long_read_bam_count,
+                        );
 
-                for mut assembly_region in pending_regions.into_iter() {
-                    assembly_region_iter.fill_next_assembly_region_with_reads(
-                        &mut assembly_region,
-                        flag_filters,
-                        self.n_threads,
-                        self.short_read_bam_count,
-                        self.long_read_bam_count,
-                    );
+                        let vcf_rid = VariantContext::get_contig_vcf_tid(
+                            indexed_vcf_reader.header(),
+                            reference_reader
+                                .retrieve_contig_name_from_tid(assembly_region.get_contig())
+                                .unwrap(),
+                        );
 
-                    let vcf_rid = VariantContext::get_contig_vcf_tid(
-                        indexed_vcf_reader.header(),
-                        reference_reader
-                            .retrieve_contig_name_from_tid(assembly_region.get_contig())
-                            .unwrap(),
-                    );
+                        let feature_variants = match vcf_rid {
+                            Some(rid) => VariantContext::process_vcf_in_region(
+                                &mut indexed_vcf_reader,
+                                rid,
+                                assembly_region.get_start() as u64,
+                                assembly_region.get_end() as u64,
+                            ),
+                            None => Vec::new(),
+                        };
 
-                    let feature_variants = match vcf_rid {
-                        Some(rid) => VariantContext::process_vcf_in_region(
-                            indexed_vcf_reader,
-                            rid,
-                            assembly_region.get_start() as u64,
-                            assembly_region.get_end() as u64,
-                        ),
-                        None => Vec::new(),
-                    };
-
-                    debug!("Feature variants {:?}", &feature_variants);
-
-                    contexts.par_extend(self.evaluator.call_region(
-                        assembly_region,
-                        reference_reader,
-                        feature_variants,
-                        args,
-                        sample_names,
-                    ));
-                }
+                        debug!("Feature variants {:?}", &feature_variants);
+                        evaluator
+                            .call_region(
+                                assembly_region,
+                                &mut reference_reader,
+                                feature_variants,
+                                args,
+                                sample_names,
+                            )
+                            .into_iter()
+                    })
+                    .collect::<Vec<VariantContext>>();
 
                 return contexts;
             }
             None => {
-                let mut contexts = Vec::new();
-                for mut assembly_region in pending_regions.into_iter() {
-                    assembly_region_iter.fill_next_assembly_region_with_reads(
-                        &mut assembly_region,
-                        flag_filters,
-                        self.n_threads,
-                        self.short_read_bam_count,
-                        self.long_read_bam_count,
-                    );
-
-                    contexts.par_extend(self.evaluator.call_region(
-                        assembly_region,
-                        reference_reader,
-                        Vec::new(),
-                        args,
-                        sample_names,
-                    ));
-                }
+                let contexts = pending_regions
+                    .into_iter()
+                    .flat_map(|mut assembly_region| {
+                        assembly_region_iter.fill_next_assembly_region_with_reads(
+                            &mut assembly_region,
+                            flag_filters,
+                            n_threads,
+                            short_read_bam_count,
+                            long_read_bam_count,
+                        );
+                        evaluator
+                            .call_region(
+                                assembly_region,
+                                &mut reference_reader,
+                                Vec::new(),
+                                args,
+                                sample_names,
+                            )
+                            .into_iter()
+                    })
+                    .collect::<Vec<VariantContext>>();
 
                 return contexts;
             }

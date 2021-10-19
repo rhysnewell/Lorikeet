@@ -58,7 +58,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut strain_presences = self.determine_if_strain_is_present(
             n_strains,
             n_samples,
-            &per_sample_reference_presence
+            &per_sample_reference_presence,
         );
 
         loop {
@@ -133,7 +133,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                         } else {
                                             None
                                         }
-                                    },
+                                    }
                                     None => None,
                                 })
                                 .collect();
@@ -183,7 +183,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                             } else {
                                                 None
                                             }
-                                        },
+                                        }
                                         None => None,
                                     }
                                 } else {
@@ -211,15 +211,21 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 });
 
             let mut something_removed = false;
-            abundance_vectors.iter().enumerate().for_each(|(idx, sample_calculators)| {
-                let mut strain_present = &mut strain_presences[idx];
-                sample_calculators.iter().enumerate().for_each(|(strain_index, calculator)| {
-                    if strain_present[strain_index] && calculator.abundance_weight == 0. {
-                        strain_present[strain_index] = false;
-                        something_removed = true;
-                    }
-                })
-            });
+            abundance_vectors
+                .iter()
+                .enumerate()
+                .for_each(|(idx, sample_calculators)| {
+                    let mut strain_present = &mut strain_presences[idx];
+                    sample_calculators
+                        .iter()
+                        .enumerate()
+                        .for_each(|(strain_index, calculator)| {
+                            if strain_present[strain_index] && calculator.abundance_weight == 0. {
+                                strain_present[strain_index] = false;
+                                something_removed = true;
+                            }
+                        })
+                });
 
             // Vector of counters for each genotype
             // If the counter reaches the same value as the number of samples
@@ -342,7 +348,12 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             .any(|count| *count == self.variant_contexts.len())
     }
 
-    fn determine_if_strain_is_present(&self, n_strains: usize, n_samples: usize, per_sample_reference_presence: &Vec<bool>) -> Vec<Vec<bool>> {
+    fn determine_if_strain_is_present(
+        &self,
+        n_strains: usize,
+        n_samples: usize,
+        per_sample_reference_presence: &Vec<bool>,
+    ) -> Vec<Vec<bool>> {
         let mut per_sample_strain_presence = Vec::with_capacity(n_samples);
 
         for sample_index in 0..n_samples {
@@ -377,7 +388,6 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             per_sample_strain_presence.push(per_strain_variant_count)
         }
 
-
-        return per_sample_strain_presence
+        return per_sample_strain_presence;
     }
 }

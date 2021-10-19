@@ -7,6 +7,7 @@ use model::variant_context::VariantContext;
 use model::variants::SPAN_DEL_ALLELE;
 use rayon::prelude::*;
 use reads::alignment_utils::AlignmentUtils;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
@@ -129,12 +130,13 @@ impl VariantContextUtils {
      *                              be represented as one, it will be just the length of the input string)
      */
     pub fn find_repeated_substring(bases: &[u8]) -> usize {
-        for rep_length in 1..=bases.len() {
+        for rep_length in 1..bases.len() {
             let candidate_repeat_unit = &bases[0..rep_length];
             let mut all_bases_match = true;
             for start in rep_length..bases.len() {
                 // check that remaining of string is exactly equal to repeat unit
-                let base_piece = &bases[start..start + candidate_repeat_unit.len()];
+                let base_piece =
+                    &bases[start..min(start + candidate_repeat_unit.len(), bases.len())];
                 if candidate_repeat_unit != base_piece {
                     all_bases_match = false;
                     break;
@@ -490,6 +492,7 @@ impl VariantContextUtils {
                             old_genotype.sample_name.clone(),
                         );
 
+                        debug!("Old genotype {:?}", old_genotype);
                         let new_depths = vec![old_genotype.ad[0], old_genotype.ad[alt_index + 1]];
                         let new_pls = vec![old_genotype.pl[0], old_genotype.pl[alt_index + 1]];
                         new_depth += new_depths.iter().sum::<i64>();
@@ -498,6 +501,7 @@ impl VariantContextUtils {
                         new_genotype.ploidy = old_genotype.ploidy;
                         new_genotype.ad = new_depths;
                         new_genotype.pl = new_pls;
+                        debug!("New genotype {:?}", &new_genotype);
 
                         per_sample_genotypes.push(new_genotype);
                     }
@@ -525,7 +529,7 @@ impl VariantContextUtils {
                 split_vcs.extend(new_vcs);
             } else {
                 // this shouldn't happen but this vc has no alternate
-                continue;
+                split_vcs.push(vc);
             }
         }
 

@@ -67,7 +67,9 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                 .set_message(format!("{}: Running UMAP and HDBSCAN...", self.ref_name,));
         }
         self.run_flight(file_name);
+        debug!("Flight complete.");
         self.apply_clusters();
+        debug!("Variant groups tagged.");
 
         // variant groups organized into potential strains
         {
@@ -163,6 +165,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
 
     /// Writes out a variant by sample depth array from the provided collection of variant contexts
     fn prepare_depth_file(&self) -> String {
+        debug!("Writing depth file...");
         let file_name = format!("{}/{}", self.output_prefix, self.ref_name,);
         // ensure path exists
         create_dir_all(self.output_prefix).expect("Unable to create output directory");
@@ -175,9 +178,22 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             Array::from_elem((self.variants.len(), self.n_samples * 2), 0);
 
         for (row_id, var) in self.variants.iter().enumerate() {
+            debug!(
+                "loc {:?} vars {} genotypes {} ads {:?}",
+                &var.loc,
+                var.alleles.len(),
+                var.genotypes.genotypes().len(),
+                var.genotypes
+                    .genotypes()
+                    .iter()
+                    .map(|g| &g.ad)
+                    .collect::<Vec<&Vec<i64>>>()
+            );
             for (sample_index, genotype) in var.genotypes.genotypes().into_iter().enumerate() {
                 for (offset, val) in genotype.ad_i32().iter().enumerate() {
-                    var_depth_array[[row_id, sample_index * 2 + offset]] = *val
+                    if offset < 2 {
+                        var_depth_array[[row_id, sample_index * 2 + offset]] = *val
+                    }
                 }
             }
         }

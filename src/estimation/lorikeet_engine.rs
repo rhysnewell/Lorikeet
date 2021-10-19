@@ -234,7 +234,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
                     let contexts = assembly_engine.traverse(
-                        &mut shards,
+                        shards,
                         flag_filters,
                         self.args,
                         &indexed_bam_readers,
@@ -270,7 +270,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar.set_message(format!(
-                                "{}: Generating variant distances...",
+                                "{}: Starting clustering engine...",
                                 &reference,
                             ));
                         }

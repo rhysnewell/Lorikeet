@@ -162,6 +162,7 @@ impl VariantAnnotations {
             Self::DepthPerAlleleBySample => {
                 let mut genotype = genotype.unwrap();
                 let alleles = likelihoods.get_allele_list_haplotypes();
+                debug!("Depth per allele alleles {:?}", &alleles);
                 alleles.iter().for_each(|a| {
                     // type difference mean we can't check if this allele is in the array at this point
                     assert!(
@@ -192,8 +193,9 @@ impl VariantAnnotations {
                         let count = allele_counts.entry(ba.allele_index.unwrap()).or_insert(0);
                         *count += 1;
                     });
-                let mut counts = vec![0; allele_counts.len()];
+                let mut counts = vec![0; vc.alleles.len()];
                 counts[0] = *allele_counts.get(&vc.get_reference_and_index().0).unwrap();
+                debug!("Allele counts {:?}", &allele_counts);
                 for (vec_index, (allele_index, _)) in vc
                     .get_alternate_alleles_with_index()
                     .into_iter()
@@ -245,7 +247,13 @@ impl VariantAnnotations {
 
                 let statistics = values
                     .into_iter()
-                    .map(|(_, mut vals)| MathUtils::median(&mut vals))
+                    .map(|(_, mut vals)| {
+                        if vals.len() > 0 {
+                            MathUtils::median(&mut vals)
+                        } else {
+                            30
+                        }
+                    })
                     .collect::<Vec<u8>>();
 
                 return AttributeObject::VecU8(statistics);

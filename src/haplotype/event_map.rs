@@ -394,9 +394,9 @@ impl EventMap {
                     }
                 });
 
-            debug!("{:?}", &h.genome_location.as_ref().unwrap());
+            debug!("{:?}", &h.genome_location);
             debug!("> Cigar {:?}", &h.cigar);
-            debug!(">> Events = {:?}", &h.event_map.as_ref().unwrap().map)
+            debug!(">> Events = {:?}", &h.event_map);
         }
 
         return start_pos_key_set;

@@ -413,12 +413,12 @@ impl AssemblyRegion {
      * @param genomeLoc a non-null genome loc indicating the base span of the bp we'd like to get the reference for
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    fn get_reference(
+    fn get_reference<'a>(
         &self,
-        reference_reader: &mut ReferenceReader,
+        reference_reader: &'a mut ReferenceReader,
         padding: usize,
         genome_loc: &SimpleInterval,
-    ) -> Vec<u8> {
+    ) -> &'a [u8] {
         assert!(
             genome_loc.size() > 0,
             "genome_loc must have size > 0 but got {:?}",
@@ -427,7 +427,17 @@ impl AssemblyRegion {
 
         reference_reader.update_current_sequence_without_capacity();
         // Update all contig information
-        reference_reader.fetch_contig_from_reference_by_tid(self.tid, self.ref_idx);
+        let interval = SimpleInterval::new(
+            self.tid,
+            genome_loc.get_start().saturating_sub(padding),
+            std::cmp::min(
+                reference_reader.current_sequence.len() - 2,
+                (genome_loc.get_end() + padding),
+            ),
+        );
+
+        debug!("Fetching interval... {:?}", &interval);
+        reference_reader.fetch_reference_context(self.ref_idx, &interval);
         reference_reader.read_sequence_to_vec();
 
         if reference_reader.current_sequence.is_empty() {
@@ -437,15 +447,7 @@ impl AssemblyRegion {
             );
         };
 
-        return reference_reader.current_sequence[std::cmp::max(
-            0,
-            genome_loc.get_start().checked_sub(padding).unwrap_or(0),
-        )
-            ..=std::cmp::min(
-                reference_reader.current_sequence.len() - 1,
-                genome_loc.get_end() + padding,
-            )]
-            .to_vec();
+        return &reference_reader.current_sequence;
     }
 
     /**
@@ -458,11 +460,11 @@ impl AssemblyRegion {
      * @param padding the padding, in BP, we want to add to either side of this active region padded region
      * @return a non-null array of bytes holding the reference bases in referenceReader
      */
-    pub fn get_assembly_region_reference(
+    pub fn get_assembly_region_reference<'a>(
         &self,
-        reference_reader: &mut ReferenceReader,
+        reference_reader: &'a mut ReferenceReader,
         padding: usize,
-    ) -> Vec<u8> {
+    ) -> &'a [u8] {
         return self.get_reference(reference_reader, padding, &self.padded_span);
     }
 

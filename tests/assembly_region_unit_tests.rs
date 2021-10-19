@@ -57,8 +57,8 @@ fn test_creating_assembly_regions(
 ) {
     let mut region = AssemblyRegion::new(loc.clone(), is_active, extension, *CONTIG_LEN, 0, 0);
     println!(
-        "loc {:?} active {} extension {}",
-        &loc, is_active, extension
+        "loc {:?} active {} extension {} Contig Length {}",
+        &loc, is_active, extension, *CONTIG_LEN
     );
     let dummy_reads = Vec::new();
     assert!(!region.is_finalized());
@@ -75,20 +75,23 @@ fn test_creating_assembly_regions(
     assert_eq!(region.get_reads(), &dummy_reads);
     assert_eq!(region.len(), 0);
 
+    println!("First");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 0),
+        region.get_assembly_region_reference(reader, 0).to_vec(),
         region.get_padded_span(),
         0,
         reader,
     );
+    println!("Second");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 0),
+        region.get_assembly_region_reference(reader, 0).to_vec(),
         region.get_padded_span(),
         0,
         reader,
     );
+    println!("Third");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 10),
+        region.get_assembly_region_reference(reader, 10).to_vec(),
         region.get_padded_span(),
         10,
         reader,
@@ -109,9 +112,10 @@ fn assert_good_reference_getter(
     reader: &mut ReferenceReader,
 ) {
     let expected_start = span.get_start().checked_sub(padding).unwrap_or(0);
-    let expected_stop = min(span.get_end() + padding, *CONTIG_LEN - 1);
+    let expected_stop = min(span.get_end() + padding, *CONTIG_LEN);
     let expected_span = SimpleInterval::new(0, expected_start, expected_stop);
     reader.fetch_reference_context(0, &expected_span);
+    println!("Reading sequence to vec");
     reader.read_sequence_to_vec();
     let expected_bytes = &reader.current_sequence;
     assert_eq!(&actual_bytes, expected_bytes);
@@ -119,11 +123,14 @@ fn assert_good_reference_getter(
 
 #[test]
 fn make_polling_data() {
+    println!("Polling data reading in ref...");
     let mut ref_reader = ReferenceReader::new_with_target_names(
         &Some(b37_reference_20_21.to_string()),
         GenomesAndContigs::new(),
         vec![b"20", b"21"],
     );
+
+    ref_reader.target_lens.insert(0, *CONTIG_LEN as u64);
 
     for start in vec![0, 10, 100, *CONTIG_LEN - 10, *CONTIG_LEN - 1] {
         for size in vec![1, 10, 100, 1000] {
@@ -136,6 +143,7 @@ fn make_polling_data() {
                         *CONTIG_LEN,
                     )
                     .unwrap();
+                    println!("Testing loc {:?}", &loc);
                     test_creating_assembly_regions(loc, is_active, ext, &mut ref_reader)
                 }
             }
@@ -183,6 +191,8 @@ fn test_assembly_region_reads(loc: SimpleInterval, read: BirdToolRead) {
 
 #[test]
 fn make_assembly_region_reads() {
+    println!("Assembly region reading in ref...");
+
     let mut ref_reader = ReferenceReader::new_with_target_names(
         &Some(b37_reference_20_21.to_string()),
         GenomesAndContigs::new(),
@@ -200,6 +210,7 @@ fn make_assembly_region_reads() {
                 )
                 .unwrap();
 
+                println!("Make assembly region test {:?}", &loc);
                 let read_start = max(start + read_start_offset, 0);
                 let read_stop = min(read_start + read_size, *CONTIG_LEN as i64);
                 let read_length = read_stop - read_start + 1;

@@ -353,10 +353,8 @@ impl HaplotypeCallerEngine {
         {
             let pb = &tree.lock().unwrap()[ref_idx + 2];
 
-            pb.progress_bar.set_message(format!(
-                "{}: Calculating activity probabilities...",
-                pb.key,
-            ));
+            pb.progress_bar
+                .set_message(format!("{}: Calculating activity probabilities...", pb.key,));
         }
         // return genotype_likelihoods for each contig in current genome across samples
         return self.calculate_activity_probabilities(
@@ -671,7 +669,7 @@ impl HaplotypeCallerEngine {
                             ),
                         );
                         activity_profile.add(activity_profile_state);
-                    };
+                    }
                     debug!("Finished {} of length {}", tid, length);
                     (*tid, activity_profile)
                 })
@@ -753,8 +751,12 @@ impl HaplotypeCallerEngine {
             all_variation_events,
             args.is_present("enable-legacy-assembly-region-trimming"),
             &reference_reader,
-            &untrimmed_assembly_result.full_reference_with_padding,
+            untrimmed_assembly_result
+                .full_reference_with_padding
+                .as_slice(),
         );
+
+        debug!("Trim complete!");
 
         if !trimming_result.is_variation_present() && !args.is_present("disable-optimizations") {
             return self.reference_model_for_no_variation(
@@ -763,8 +765,11 @@ impl HaplotypeCallerEngine {
                 &vc_priors,
             );
         }
+
+        debug!("Moving reads....");
         trimming_result.original_region.reads =
             untrimmed_assembly_result.region_for_genotyping.move_reads();
+        debug!("Move complete!");
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
         debug!(
