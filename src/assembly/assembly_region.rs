@@ -5,6 +5,7 @@ use reference::reference_reader::ReferenceReader;
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::Locatable;
 use utils::simple_interval::SimpleInterval;
+use std::cmp::min;
 
 /**
  * Region of the genome that gets assembled by the local assembly engine.
@@ -418,6 +419,7 @@ impl AssemblyRegion {
         reference_reader: &'a mut ReferenceReader,
         padding: usize,
         genome_loc: &SimpleInterval,
+        sequence_already_read_in: bool
     ) -> &'a [u8] {
         assert!(
             genome_loc.size() > 0,
@@ -425,29 +427,37 @@ impl AssemblyRegion {
             genome_loc
         );
 
-        reference_reader.update_current_sequence_without_capacity();
-        // Update all contig information
         let interval = SimpleInterval::new(
             self.tid,
             genome_loc.get_start().saturating_sub(padding),
             std::cmp::min(
-                reference_reader.current_sequence.len() - 2,
+                *reference_reader.target_lens.get(&self.tid).unwrap_or(&std::u64::MAX) as usize - 1,
                 (genome_loc.get_end() + padding),
             ),
         );
 
-        debug!("Fetching interval... {:?}", &interval);
-        reference_reader.fetch_reference_context(self.ref_idx, &interval);
-        reference_reader.read_sequence_to_vec();
+        if !sequence_already_read_in {
+            reference_reader.update_current_sequence_without_capacity();
+            // Update all contig information
 
-        if reference_reader.current_sequence.is_empty() {
-            panic!(
-                "Retrieved sequence appears to be empty ref_idx {} tid {}",
-                self.ref_idx, self.tid
-            );
-        };
+            debug!("Fetching interval... {:?}", &interval);
+            reference_reader.fetch_reference_context(self.ref_idx, &interval);
+            reference_reader.read_sequence_to_vec();
 
-        return &reference_reader.current_sequence;
+            if reference_reader.current_sequence.is_empty() {
+                panic!(
+                    "Retrieved sequence appears to be empty ref_idx {} tid {}",
+                    self.ref_idx, self.tid
+                );
+            };
+
+            return &reference_reader.current_sequence;
+        } else {
+            return &reference_reader.current_sequence[interval.start..min(
+                (interval.get_end() + 1),
+                *reference_reader.target_lens.get(&interval.get_contig()).unwrap() as usize,
+            )]
+        }
     }
 
     /**
@@ -464,8 +474,9 @@ impl AssemblyRegion {
         &self,
         reference_reader: &'a mut ReferenceReader,
         padding: usize,
+        sequence_already_read_in: bool
     ) -> &'a [u8] {
-        return self.get_reference(reference_reader, padding, &self.padded_span);
+        return self.get_reference(reference_reader, padding, &self.padded_span, sequence_already_read_in);
     }
 
     pub fn set_finalized(&mut self, value: bool) {

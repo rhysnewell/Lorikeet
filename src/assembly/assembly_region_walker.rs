@@ -109,12 +109,18 @@ impl AssemblyRegionWalker {
         let contexts = shards
             .into_par_iter()
             .flat_map(|(tid, mut activity_profile)| {
+
+                // read in entire contig
+                let mut inner_reader = reference_reader.clone();
+                inner_reader.fetch_contig_from_reference_by_tid(tid, self.ref_idx);
+                inner_reader.read_sequence_to_vec();
+
                 Self::process_shard(
                     &mut activity_profile,
                     flag_filters,
                     args,
                     sample_names,
-                    reference_reader.clone(),
+                    inner_reader,
                     self.n_threads,
                     self.assembly_region_padding,
                     self.min_assembly_region_size,
@@ -151,6 +157,7 @@ impl AssemblyRegionWalker {
             max_assembly_region_size,
             false,
         );
+
         let features = args.value_of("features-vcf");
         match features {
             Some(indexed_vcf_reader) => {
