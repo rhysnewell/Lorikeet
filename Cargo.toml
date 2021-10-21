@@ -26,6 +26,7 @@ ansi_term = "0.12.1"
 bio = "0.35"
 bio-types = "0.12.0"
 bird_tool_utils = "0.3.0"
+bstr = "0.2.17"
 clap = "2"
 compare = "0.1.0"
 coverm = {git = "https://github.com/rhysnewell/CoverM"}
