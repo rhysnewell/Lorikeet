@@ -213,10 +213,6 @@ impl HaplotypeCallerGenotypingEngine {
                             .unwrap() as usize,
                     );
 
-                    // let predicate: Box<dyn Fn(&BirdToolRead, &SimpleInterval) -> bool> =
-                    //     Box::new(|read: &BirdToolRead, interval: &SimpleInterval| {
-                    //         read_qualifies_for_genotyping_predicate(read, interval)
-                    //     });
                     // We want to retain evidence that overlaps within its softclipping edges.
                     read_allele_likelihoods.retain_evidence(
                         &read_qualifies_for_genotyping_predicate,
@@ -285,13 +281,11 @@ impl HaplotypeCallerGenotypingEngine {
                     match call {
                         None => continue, // pass,
                         Some(mut call) => {
-                            // if call.get_alleles().len() != read_likelihoods.number_of_alleles() {
-                            //     read_likelihoods.update_non_ref_allele_likelihoods(AlleleList::new(&call.alleles));
-                            // }
                             read_allele_likelihoods.retain_evidence(
                                 &Self::compose_read_qualifies_for_genotyping_predicate(),
                                 &variant_calling_relevant_overlap,
                             );
+
                             // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
                             // right after a few lines of code below.
                             let overlapping_filtered_reads = Self::overlapping_filtered_reads(

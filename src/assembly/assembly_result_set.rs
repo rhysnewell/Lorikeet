@@ -52,11 +52,11 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
         ref_haplotype: Haplotype<SimpleInterval>,
-    ) -> AssemblyResultSet<A> {
+    ) -> Self {
         let mut haplotypes = LinkedHashSet::new();
         haplotypes.insert(ref_haplotype.clone());
 
-        AssemblyResultSet {
+        Self {
             assembly_result_by_kmer_size: HashMap::new(),
             haplotypes: haplotypes,
             assembly_result_by_haplotype: HashMap::new(),
@@ -338,7 +338,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *
      * @return never {@code null}, a new trimmed assembly result set.
      */
-    pub fn trim_to(mut self, mut trimmed_assembly_region: AssemblyRegion) -> AssemblyResultSet<A> {
+    pub fn trim_to(mut self, mut trimmed_assembly_region: AssemblyRegion) -> Self {
         let mut original_by_trimmed_haplotypes =
             self.calculate_original_by_trimmed_haplotypes(&trimmed_assembly_region.padded_span);
 

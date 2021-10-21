@@ -16,6 +16,7 @@ use rust_htslib::bam::Record;
 use std::cmp::min;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use bstr::ByteSlice;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -225,6 +226,8 @@ impl<'a> LinkageEngine<'a> {
         all_strains
     }
 
+    // fn check_node_depths(&self, mst: &UnGraph<i32, f64>, path: &LinkedHashSet<NodeIndex>, nodes_cumulative_depth: )
+
     /// Extracts the connect components of the built graph and turns them into new independent graphs
     /// a connected component is defined as an induced subgraph in which any two vertices are
     /// connected to each other by paths, and which is connected to no additional vertices in the rest of the graph
@@ -337,29 +340,57 @@ impl<'a> LinkageEngine<'a> {
 
                         while bam_generated.read(&mut record) == true {
                             // be very lenient with filtering
-                            if record.is_unmapped() {
+                            if record.is_unmapped() || record.seq_len() == 0 {
                                 continue;
                             }
 
                             // TODO: Filter for only reads that contain the variant in question
                             //       not sure how to this besides aligning or other expensive method?
                             //       currently just check against reference
-                            let mut read_index = record.pos() - variant.loc.start as i64;
+                            // let mut read_index = record.pos() - variant.loc.start as i64;
+                            let variant_start = variant.loc.start as i64;
+                            let mut partial_match = false;
+                            let record_seq = record.seq().as_bytes();
+
+                            let mut read_index = variant_start - record.pos();
+                            let mut stop = 0;
                             if read_index < 0 {
-                                read_index = variant.loc.start as i64 - record.pos();
+                                partial_match = true;
+                                read_index = 0;
+                            } else if read_index as usize >= record_seq.len() {
+                                read_index = record_seq.len() as i64 - 1;
+                                partial_match = true;
                             }
-                            if variant.get_alternate_alleles()[0].get_bases()
-                                == &record.seq().as_bytes()[read_index as usize
-                                    ..(read_index as usize
-                                        + variant.get_alternate_alleles()[0].get_bases().len())]
+
+                            let alternate_allele = variant.get_alternate_alleles()[0];
+                            if read_index as usize + alternate_allele.get_bases().len() <= record_seq.len()
+                                && !partial_match
                             {
-                                // Read containing potential alternate allele
-                                let read_id = format!(
-                                    "{}_{}",
-                                    sample_idx,
-                                    std::str::from_utf8(record.qname()).unwrap()
-                                );
-                                records.insert(read_id);
+                                if alternate_allele.get_bases()
+                                    == &record_seq[read_index as usize
+                                    ..(read_index as usize
+                                    + alternate_allele.get_bases().len())]
+                                {
+                                    // Read containing potential alternate allele
+                                    let read_id = format!(
+                                        "{}_{}",
+                                        sample_idx,
+                                        std::str::from_utf8(record.qname()).unwrap()
+                                    );
+                                    records.insert(read_id);
+                                }
+                            } else if partial_match {
+                                // substring match
+                                let record_bases = &record_seq[read_index as usize..min(record_seq.len(), read_index as usize + alternate_allele.bases.len())];
+                                if alternate_allele.get_bases().contains_str(record_bases) {
+                                    // Read containing potential alternate allele
+                                    let read_id = format!(
+                                        "{}_{}",
+                                        sample_idx,
+                                        std::str::from_utf8(record.qname()).unwrap()
+                                    );
+                                    records.insert(read_id);
+                                }
                             }
                         }
                     }
@@ -427,14 +458,14 @@ impl<'a> LinkageEngine<'a> {
                             < 3.0;
                     }
                     if intersection > 0.0 || under_sep_thresh {
-                        let union = min(reads1.len(), reads2.len()) as f64;
+                        let union = reads1.union(reads2).count() as f64;
 
                         // The weight needs to be low for highly connected nodes and
                         // high for poorly connected nodes. This is because minimum spanning trees
                         // generate the tree with lowest edge weights
                         let weight = 1.0 - (intersection / union);
 
-                        if weight < 1.0 {
+                        if weight < 0.99 {
                             // variant groups connected by reads are favoured
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",

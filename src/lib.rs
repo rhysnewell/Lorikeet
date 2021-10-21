@@ -54,6 +54,7 @@ extern crate statrs;
 // Utilities
 #[macro_use]
 extern crate approx;
+extern crate bstr;
 extern crate clap;
 extern crate compare;
 extern crate csv;

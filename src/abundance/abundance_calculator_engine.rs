@@ -41,7 +41,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         mut self,
         mut n_strains: usize,
         n_samples: usize,
-    ) -> Vec<VariantContext> {
+    ) -> (Vec<usize>, Vec<VariantContext>) {
         // The initialization vector for the EM algorithm
         let mut abundance_vectors = Vec::with_capacity(n_samples);
         let reference_present = self.reference_strain_potentially_present(n_samples);
@@ -52,13 +52,14 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut strain_ids = (0..n_strains).into_iter().collect::<Vec<usize>>();
         let mut abundance_key = HashMap::with_capacity(n_strains);
         let mut strain_id_key = HashMap::with_capacity(n_strains);
+        let eps = 0.01;
         // the per sample strain presence vec, true if suspected of being present
         // false if not. Used to detect if a suspected strain disappears from a sample between
         // iterations
         let mut strain_presences = self.determine_if_strain_is_present(
             n_strains,
             n_samples,
-            &per_sample_reference_presence
+            &per_sample_reference_presence,
         );
 
         loop {
@@ -107,8 +108,9 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     // We divide the total depth of variant here by the total amount of strains that
                     // variant occurs in. E.g. if a variant had a depth of 6
                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                    let variant_depth = vc.genotypes.genotypes()[sample_index].ad[1] as f64;
-                    let weight = variant_depth; // strains.len() as f64;
+                    let total_depth = vc.genotypes.genotypes()[sample_index].ad.iter().sum::<i64>() as f64;
+                    let variant_depth = vc.genotypes.genotypes()[sample_index].ad[1] as f64 / total_depth;
+                    let weight = variant_depth;  // strains.len() as f64;
 
                     let mut strains_to_remove = HashSet::new();
                     for strain in strains.iter() {
@@ -133,7 +135,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                         } else {
                                             None
                                         }
-                                    },
+                                    }
                                     None => None,
                                 })
                                 .collect();
@@ -155,7 +157,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         // We divide the total depth of variant here by the total amount of strains that
                         // variant occurs in. E.g. if a variant had a depth of 6
                         // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                        let reference_depth = vc.genotypes.genotypes()[sample_index].ad[0] as f64;
+                        let reference_depth = vc.genotypes.genotypes()[sample_index].ad[0] as f64 / total_depth;
                         let weight = reference_depth; // (n_strains - strains.len()) as f64;
 
                         let reference_strain_index = n_strains - 1;
@@ -183,7 +185,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                             } else {
                                                 None
                                             }
-                                        },
+                                        }
                                         None => None,
                                     }
                                 } else {
@@ -206,20 +208,28 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                 .enumerate()
                 .for_each(|(idx, sample_calculators)| {
                     debug!("Genotype Vector before EM {} {:?}", idx, sample_calculators);
-                    StrainAbundanceCalculator::calculate_abundances(sample_calculators);
+                    StrainAbundanceCalculator::calculate_abundances(sample_calculators, eps);
                     debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);
                 });
 
             let mut something_removed = false;
-            abundance_vectors.iter().enumerate().for_each(|(idx, sample_calculators)| {
-                let mut strain_present = &mut strain_presences[idx];
-                sample_calculators.iter().enumerate().for_each(|(strain_index, calculator)| {
-                    if strain_present[strain_index] && calculator.abundance_weight == 0. {
-                        strain_present[strain_index] = false;
-                        something_removed = true;
-                    }
-                })
-            });
+            abundance_vectors
+                .iter()
+                .enumerate()
+                .for_each(|(idx, sample_calculators)| {
+                    let mut strain_present = &mut strain_presences[idx];
+                    sample_calculators
+                        .iter()
+                        .enumerate()
+                        .for_each(|(strain_index, calculator)| {
+                            if strain_present[strain_index] &&
+                                (calculator.abundance_weight <= eps
+                                    || calculator.abundance_weight.is_infinite()) {
+                                strain_present[strain_index] = false;
+                                something_removed = true;
+                            }
+                        })
+                });
 
             // Vector of counters for each genotype
             // If the counter reaches the same value as the number of samples
@@ -228,7 +238,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             let mut strains_to_remove = vec![0; n_strains];
             for sample_vector in abundance_vectors.iter() {
                 for abundance_calculator in sample_vector.iter() {
-                    if abundance_calculator.abundance_weight == 0.0 {
+                    if abundance_calculator.abundance_weight <= eps
+                        || abundance_calculator.abundance_weight.is_infinite() {
                         strains_to_remove
                             [*abundance_key.get(&abundance_calculator.index).unwrap()] += 1;
                     }
@@ -245,9 +256,9 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .position(|s| s == strain_id_to_remove)
                         .unwrap();
                     strain_ids.remove(position_of_strain_id);
-                    strain_presences.iter_mut().for_each(|vec| {
-                        vec.remove(position_of_strain_id);
-                    });
+                    // strain_presences.iter_mut().for_each(|vec| {
+                    //     vec.remove(position_of_strain_id);
+                    // });
 
                     something_removed = true;
                     n_strains -= 1;
@@ -263,7 +274,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
         self.print_strain_coverages(abundance_vectors);
 
-        self.variant_contexts
+        (strain_ids, self.variant_contexts)
     }
 
     fn print_strain_coverages(&self, abundance_vectors: Vec<Vec<StrainAbundanceCalculator>>) {
@@ -342,7 +353,12 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             .any(|count| *count == self.variant_contexts.len())
     }
 
-    fn determine_if_strain_is_present(&self, n_strains: usize, n_samples: usize, per_sample_reference_presence: &Vec<bool>) -> Vec<Vec<bool>> {
+    fn determine_if_strain_is_present(
+        &self,
+        n_strains: usize,
+        n_samples: usize,
+        per_sample_reference_presence: &Vec<bool>,
+    ) -> Vec<Vec<bool>> {
         let mut per_sample_strain_presence = Vec::with_capacity(n_samples);
 
         for sample_index in 0..n_samples {
@@ -377,7 +393,6 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             per_sample_strain_presence.push(per_strain_variant_count)
         }
 
-
-        return per_sample_strain_presence
+        return per_sample_strain_presence;
     }
 }

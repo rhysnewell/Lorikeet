@@ -234,7 +234,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
                     let contexts = assembly_engine.traverse(
-                        &mut shards,
+                        shards,
                         flag_filters,
                         self.args,
                         &indexed_bam_readers,
@@ -270,7 +270,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar.set_message(format!(
-                                "{}: Generating variant distances...",
+                                "{}: Starting clustering engine...",
                                 &reference,
                             ));
                         }
@@ -315,7 +315,7 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                         );
 
-                        let split_contexts = abundance_calculator_engine
+                        let (strain_ids_present, split_contexts) = abundance_calculator_engine
                             .run_abundance_calculator(n_strains, cleaned_sample_names.len());
 
                         {
@@ -339,7 +339,7 @@ impl<'a> LorikeetEngine<'a> {
                         }
                         let mut reference_writer =
                             ReferenceWriter::new(reference_reader, &output_prefix);
-                        reference_writer.generate_strains(split_contexts, ref_idx, n_strains);
+                        reference_writer.generate_strains(split_contexts, ref_idx, strain_ids_present);
                     } else if mode == "consensus" {
                         // Get sample distances
                         {

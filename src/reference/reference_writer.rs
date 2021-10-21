@@ -31,7 +31,7 @@ impl<'a> ReferenceWriter<'a> {
         &mut self,
         variant_contexts: Vec<VariantContext>,
         ref_idx: usize,
-        n_strains: usize,
+        strain_ids_present: Vec<usize>,
     ) {
         let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
         let mut tids = self
@@ -40,7 +40,7 @@ impl<'a> ReferenceWriter<'a> {
             .unwrap()
             .clone();
 
-        for strain_idx in 0..n_strains {
+        for strain_idx in strain_ids_present {
             let file_name = format!(
                 "{}/{}_strain_{}.fna",
                 self.output_prefix,
@@ -57,15 +57,9 @@ impl<'a> ReferenceWriter<'a> {
                 self.reference_reader
                     .fetch_contig_from_reference_by_tid(*tid, ref_idx);
                 self.reference_reader.read_sequence_to_vec();
-                debug!(
-                    "Fetched length {} tid {} ref_idx {} ",
-                    self.reference_reader.current_sequence.len(),
-                    *tid,
-                    ref_idx
-                );
+
                 let mut new_bases = std::mem::take(&mut self.reference_reader.current_sequence);
                 let old_length = new_bases.len();
-                debug!("Contig length {}", old_length);
                 // This value holds how far right or left the vc location has shifted as we add indels
                 let mut offset = 0;
                 let mut variant_contexts_of_contig = grouped_variant_contexts.get_mut(&tid);
@@ -93,10 +87,6 @@ impl<'a> ReferenceWriter<'a> {
                     }
                 }
 
-                debug!(
-                    "Writing contig {}",
-                    std::str::from_utf8(self.reference_reader.get_target_name(*tid)).unwrap()
-                );
                 // write the contig header
                 writeln!(
                     file_open,
