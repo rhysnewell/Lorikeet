@@ -77,21 +77,27 @@ fn test_creating_assembly_regions(
 
     println!("First");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 0, false).to_vec(),
+        region
+            .get_assembly_region_reference(reader, 0, false)
+            .to_vec(),
         region.get_padded_span(),
         0,
         reader,
     );
     println!("Second");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 0, false).to_vec(),
+        region
+            .get_assembly_region_reference(reader, 0, false)
+            .to_vec(),
         region.get_padded_span(),
         0,
         reader,
     );
     println!("Third");
     assert_good_reference_getter(
-        region.get_assembly_region_reference(reader, 10, false).to_vec(),
+        region
+            .get_assembly_region_reference(reader, 10, false)
+            .to_vec(),
         region.get_padded_span(),
         10,
         reader,
