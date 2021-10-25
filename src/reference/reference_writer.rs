@@ -128,13 +128,13 @@ impl<'a> ReferenceWriter<'a> {
                 "{}/{}_consensus_{}.fna",
                 self.output_prefix,
                 self.reference_reader.genomes_and_contigs.genomes[ref_idx],
-                &sample_name,
+                &sample_name.rsplitn(2, "/").next().unwrap(),
             );
             let file_path = Path::new(&file_name);
             debug!("File path {}", &file_name);
             // Open new reference file or create one
             let mut file_open =
-                File::create(file_path).expect("No Read or Write Permission in current directory");
+                File::create(file_path).expect(&format!("No Read or Write Permission in current directory: {:?}", file_path));
             for tid in tids.iter() {
                 self.reference_reader
                     .fetch_contig_from_reference_by_tid(*tid, ref_idx);

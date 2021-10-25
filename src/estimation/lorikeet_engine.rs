@@ -121,7 +121,17 @@ impl<'a> LorikeetEngine<'a> {
                 );
 
                 if Path::new(&output_prefix).exists() && !self.args.is_present("force") {
-                    let cache = glob::glob(&format!("{}/*.vcf", &output_prefix))
+                    let cache = glob::glob(&format!("{}/*{}", &output_prefix,
+                        if mode == "call" {
+                            ".vcf"
+                        } else if mode == "genotype" {
+                            "strain_coverages.tsv"
+                        } else if mode == "consensus" {
+                            "consensus_*.fna"
+                        } else {
+                            ".vcf"
+                        }
+                    ))
                         .expect("failed to interpret glob")
                         .map(|p| {
                             p.expect("Failed to read cached vcf path")
