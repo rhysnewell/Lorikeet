@@ -140,11 +140,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .map(|i| evidence_by_sample_index.get(&i).unwrap().len())
             .collect::<Vec<usize>>();
         let likelihoods_matrix_evidence_capacity_by_sample_index = values_by_sample_index
-            .iter()
+            .par_iter()
             .map(|sample_values| {
                 sample_values
                     .axis_iter(Axis(1))
-                    .map(|row| row.into_par_iter().filter(|x| !x.is_nan()).count())
+                    .map(|row| row.into_iter().filter(|x| !x.is_nan()).count())
                     .min()
                     .unwrap_or(0)
             })
@@ -238,10 +238,11 @@ impl<A: Allele> AlleleLikelihoods<A> {
      * @return 0 or greater.
      */
     pub fn sample_evidence_count(&self, sample_index: usize) -> usize {
-        match self.evidence_by_sample_index.get(&sample_index) {
-            Some(reads) => return reads.len(),
-            None => 0,
-        }
+        // match self.evidence_by_sample_index.get(&sample_index) {
+        //     Some(reads) => return reads.len(),
+        //     None => 0,
+        // }
+        self.number_of_evidences[sample_index]
     }
 
     /**
@@ -296,8 +297,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
     fn find_reference_allele_index(alleles: &AlleleList<A>) -> Option<usize> {
         alleles
             .as_list_of_alleles()
-            .par_iter()
-            .position_first(|a| a.is_reference())
+            .iter()
+            .position(|a| a.is_reference())
     }
 
     fn setup_indexes(
@@ -805,7 +806,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .evidence_by_sample_index
             .entry(sample_index)
             .or_insert(Vec::new());
-        sample_evidence.par_extend(new_sample_evidence);
+        sample_evidence.extend(new_sample_evidence);
     }
 
     // calculates an old to new allele index map array.
@@ -995,10 +996,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .collect::<Vec<i32>>(),
         );
         let evidence_count = self
-            .evidence_by_sample_index
-            .get(&sample_index)
-            .unwrap()
-            .len();
+            .number_of_evidences[sample_index];
+            // .get(&sample_index)
+            // .unwrap()
+            // .len();
 
         return (0..evidence_count)
             .into_par_iter()

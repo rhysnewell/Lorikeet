@@ -2,10 +2,10 @@ use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::read_clipper::ReadClipper;
 use reference::reference_reader::ReferenceReader;
+use std::cmp::min;
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::Locatable;
 use utils::simple_interval::SimpleInterval;
-use std::cmp::min;
 
 /**
  * Region of the genome that gets assembled by the local assembly engine.
@@ -288,7 +288,7 @@ impl AssemblyRegion {
 
         let mut trimmed_reads = self
             .reads
-            .into_par_iter()
+            .into_iter()
             .map(|read| {
                 ReadClipper::hard_clip_to_region(
                     read,
@@ -301,7 +301,7 @@ impl AssemblyRegion {
         trimmed_reads.par_sort_unstable();
 
         result.reads.clear();
-        result.reads.par_extend(trimmed_reads);
+        result.reads.extend(trimmed_reads);
 
         return result;
     }
@@ -375,7 +375,7 @@ impl AssemblyRegion {
     pub fn remove_all(mut self, reads_to_remove: &Vec<BirdToolRead>) -> AssemblyRegion {
         self.reads = self
             .reads
-            .into_par_iter()
+            .into_iter()
             .filter(|read| !reads_to_remove.contains(read))
             .collect::<Vec<BirdToolRead>>();
 
@@ -388,7 +388,7 @@ impl AssemblyRegion {
     ) -> AssemblyRegion {
         self.reads = self
             .reads
-            .into_par_iter()
+            .into_iter()
             .filter(|read| !reads_to_remove.contains(&read))
             .collect::<Vec<BirdToolRead>>();
 
@@ -419,7 +419,7 @@ impl AssemblyRegion {
         reference_reader: &'a mut ReferenceReader,
         padding: usize,
         genome_loc: &SimpleInterval,
-        sequence_already_read_in: bool
+        sequence_already_read_in: bool,
     ) -> &'a [u8] {
         assert!(
             genome_loc.size() > 0,
@@ -431,7 +431,11 @@ impl AssemblyRegion {
             self.tid,
             genome_loc.get_start().saturating_sub(padding),
             std::cmp::min(
-                *reference_reader.target_lens.get(&self.tid).unwrap_or(&std::u64::MAX) as usize - 1,
+                *reference_reader
+                    .target_lens
+                    .get(&self.tid)
+                    .unwrap_or(&std::u64::MAX) as usize
+                    - 1,
                 (genome_loc.get_end() + padding),
             ),
         );
@@ -453,10 +457,14 @@ impl AssemblyRegion {
 
             return &reference_reader.current_sequence;
         } else {
-            return &reference_reader.current_sequence[interval.start..min(
-                (interval.get_end() + 1),
-                *reference_reader.target_lens.get(&interval.get_contig()).unwrap() as usize,
-            )]
+            return &reference_reader.current_sequence[interval.start
+                ..min(
+                    (interval.get_end() + 1),
+                    *reference_reader
+                        .target_lens
+                        .get(&interval.get_contig())
+                        .unwrap() as usize,
+                )];
         }
     }
 
@@ -474,9 +482,14 @@ impl AssemblyRegion {
         &self,
         reference_reader: &'a mut ReferenceReader,
         padding: usize,
-        sequence_already_read_in: bool
+        sequence_already_read_in: bool,
     ) -> &'a [u8] {
-        return self.get_reference(reference_reader, padding, &self.padded_span, sequence_already_read_in);
+        return self.get_reference(
+            reference_reader,
+            padding,
+            &self.padded_span,
+            sequence_already_read_in,
+        );
     }
 
     pub fn set_finalized(&mut self, value: bool) {

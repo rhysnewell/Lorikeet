@@ -624,7 +624,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                     .base_graph
                     .graph
                     .edges_directed(vertex, Direction::Incoming)
-                    .par_bridge()
                     .map(|e| e.id())
                     .collect::<Vec<EdgeIndex>>();
 
@@ -771,7 +770,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .base_graph
             .graph
             .node_indices()
-            .par_bridge()
             .filter(|v| self.base_graph.out_degree_of(*v) == 0 && !self.base_graph.is_ref_sink(*v))
             .collect::<Vec<NodeIndex>>();
 
@@ -816,7 +814,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .base_graph
             .graph
             .node_indices()
-            .par_bridge()
             .filter(|v| self.base_graph.in_degree_of(*v) == 0 && !self.base_graph.is_ref_source(*v))
             .collect::<Vec<NodeIndex>>();
 
@@ -1196,7 +1193,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             .cigar
             .0
             .iter()
-            .par_bridge()
             .map(|ce| {
                 let a = if CigarUtils::cigar_consumes_reference_bases(ce) {
                     ce.len() as i64
@@ -1289,7 +1285,6 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
 
         let mut ref_idx = cigar_elements
             .iter()
-            .par_bridge()
             .map(|cigar| {
                 if CigarUtils::cigar_consumes_reference_bases(cigar) {
                     cigar.len() as i64
@@ -1697,7 +1692,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             });
 
             *edges
-                .par_iter()
+                .iter()
                 .max_by(|l, r| comparator.compare(l, r))
                 .unwrap()
         };

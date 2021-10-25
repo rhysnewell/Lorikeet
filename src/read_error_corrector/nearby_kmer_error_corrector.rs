@@ -480,7 +480,7 @@ impl CorrectionSet {
             return None;
         } else {
             let last_base = stored_bytes.last().unwrap();
-            if stored_bytes.par_iter().any(|b| b != last_base) {
+            if stored_bytes.iter().any(|b| b != last_base) {
                 return None;
             } else {
                 return Some(*last_base);

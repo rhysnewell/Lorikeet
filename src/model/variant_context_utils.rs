@@ -330,7 +330,7 @@ impl VariantContextUtils {
 
         // Make sure all variant contexts are padded with reference base in case of indels if necessary
         let mut VCs: Vec<VariantContext> = pre_filtered_vcs
-            .into_par_iter()
+            .into_iter()
             .filter(|vc| !filtered_are_uncalled || vc.is_not_filtered())
             .collect::<Vec<VariantContext>>();
 
@@ -537,7 +537,7 @@ impl VariantContextUtils {
     }
 
     pub fn strip_pls_and_ad(genotypes: &mut GenotypesContext) {
-        genotypes.genotypes_mut().par_iter_mut().for_each(|g| {
+        genotypes.genotypes_mut().iter_mut().for_each(|g| {
             g.pl = Vec::new();
             g.ad = Vec::new();
         })
@@ -884,7 +884,7 @@ impl VariantContextUtils {
         for genotype in original_genotypes.genotypes() {
             let updated_alleles = genotype
                 .alleles
-                .par_iter()
+                .iter()
                 .map(|a| {
                     let new_allele_index = allele_mapper.get(&a);
                     match new_allele_index {
@@ -1092,7 +1092,7 @@ impl<'b> AlleleMapper<'b> {
 
     pub fn remap_allele_list(&self, alleles: &Vec<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
         return alleles
-            .par_iter()
+            .iter()
             .enumerate()
             .map(|(idx, a)| self.remap_allele(idx, a).clone())
             .collect::<Vec<ByteArrayAllele>>();

@@ -67,11 +67,21 @@ impl BandPassActivityProfile {
         }
     }
 
+    pub fn from_band_passes(mut passes: Vec<Self>) -> Self {
+        let mut passes_iter = passes.into_iter();
+        let mut result = passes_iter.next().unwrap();
+        for pass in passes_iter {
+            result.activity_profile.state_list.extend(pass.activity_profile.state_list);
+        }
+
+        return result
+    }
+
     fn make_kernel(filter_size: usize, sigma: f64) -> Vec<f64> {
         let band_size = 2 * filter_size + 1;
         // let mut kernel = vec![0.0; band_size];
         let mut kernel = (0..band_size)
-            .into_par_iter()
+            .into_iter()
             .map(|iii| MathUtils::normal_distribution(filter_size as f64, sigma, iii as f64))
             .collect::<Vec<f64>>();
 
@@ -231,7 +241,7 @@ impl Profile for BandPassActivityProfile {
             }
             self.activity_profile.region_stop_loc = Some(loc.clone());
         }
-        let processed_states = self.process_state(state);
+        let processed_states = self.process_state(&state);
 
         for processed_state in processed_states.into_iter() {
             self.incorporate_single_state(processed_state)
@@ -242,12 +252,12 @@ impl Profile for BandPassActivityProfile {
      * Band pass the probabilities in the ActivityProfile, producing a new profile that's band pass filtered
      * @return a new double[] that's the band-pass filtered version of this profile
      */
-    fn process_state(&self, just_added_state: ActivityProfileState) -> Vec<ActivityProfileState> {
+    fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState> {
         let mut states = Vec::new();
 
         for super_state in self
             .activity_profile
-            .process_state(just_added_state.clone())
+            .process_state(just_added_state)
         {
             if super_state.is_active_prob() > 0.0 {
                 for i in (-(self.filter_size as i64)..=(self.filter_size as i64)).into_iter() {

@@ -56,6 +56,11 @@ impl ReferenceReaderUtils {
         return &target_name[(0..offset)];
     }
 
+    // pub fn get_reference_path(args: &Vec<&str>, genomes_and_contigs: &GenomesAndContigs, ref_idx: usize) -> String {
+    //     let ref_stub = &genomes_and_contigs.genomes[ref_idx];
+    //
+    // }
+
     pub fn retrieve_genome_from_contig<'a>(
         target_name: &'a [u8],
         genomes_and_contigs: &'a GenomesAndContigs,
@@ -264,7 +269,7 @@ impl ReferenceReaderUtils {
 
     pub fn generate_faidx(reference_path: &str) -> IndexedReader<File> {
         external_command_checker::check_for_samtools();
-        info!("Generating reference index");
+        debug!("Generating reference index");
         let cmd_string = format!(
             "set -e -o pipefail; \
                      samtools faidx {}",

@@ -94,7 +94,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
     pub fn edges_directed(&self, node: NodeIndex, direction: Direction) -> Vec<EdgeIndex> {
         self.graph
             .edges_directed(node, direction)
-            .par_bridge()
             .map(|e| e.id())
             .collect::<Vec<EdgeIndex>>()
     }
@@ -133,13 +132,11 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             .graph
             .edges_directed(vertex_index, Direction::Incoming)
             .into_iter()
-            .par_bridge()
             .any(|e| e.weight().is_ref())
             || self
                 .graph
                 .edges_directed(vertex_index, Direction::Outgoing)
                 .into_iter()
-                .par_bridge()
                 .any(|e| e.weight().is_ref())
         {
             return true;
@@ -275,7 +272,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         self.get_singleton_edge(
             self.graph
                 .edges_directed(v, direction)
-                .par_bridge()
                 .map(|e| e.id())
                 .collect::<Vec<EdgeIndex>>(),
         )
@@ -345,7 +341,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         if self
             .graph
             .edges_directed(v, Direction::Incoming)
-            .par_bridge()
             .any(|e| e.weight().is_ref())
         {
             return false;
@@ -355,7 +350,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         if self
             .graph
             .edges_directed(v, Direction::Outgoing)
-            .par_bridge()
             .any(|e| e.weight().is_ref())
         {
             return true;
@@ -374,7 +368,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         if self
             .graph
             .edges_directed(v, Direction::Outgoing)
-            .par_bridge()
             .any(|e| e.weight().is_ref())
         {
             return false;
@@ -384,7 +377,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         if self
             .graph
             .edges_directed(v, Direction::Incoming)
-            .par_bridge()
             .any(|e| e.weight().is_ref())
         {
             return true;
@@ -403,7 +395,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let to_remove = self
             .graph
             .node_indices()
-            .par_bridge()
             .filter(|v| self.is_singleton_orphan(*v))
             .collect::<HashSet<NodeIndex>>();
         self.remove_all_vertices(&to_remove)
@@ -470,7 +461,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let edges = match blacklisted_edge {
             Some(blacklisted_edge) => {
                 let edges = outgoing_edges
-                    .par_bridge()
                     .filter(|e| e.id() != blacklisted_edge)
                     .map(|e| e.id())
                     .collect::<Vec<EdgeIndex>>();
@@ -478,7 +468,6 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             }
             None => {
                 let edges = outgoing_edges
-                    .par_bridge()
                     .map(|e| e.id())
                     .collect::<Vec<EdgeIndex>>();
                 edges
@@ -597,7 +586,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let mut found = HashSet::new();
         found.insert(source);
         for v in self.graph.neighbors(source) {
-            found.par_extend(self.vertices_within_distance(v, distance - 1))
+            found.extend(self.vertices_within_distance(v, distance - 1))
         }
 
         return found;
@@ -733,46 +722,42 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         } else {
             // Remove non-ref edges connected before and after the reference path
             let mut edges_to_check: BinaryHeap<EdgeIndex> = BinaryHeap::new();
-            edges_to_check.par_extend(
+            edges_to_check.extend(
                 self.graph
                     .edges_directed(
                         self.get_reference_source_vertex().unwrap(),
                         Direction::Incoming,
                     )
-                    .par_bridge()
                     .map(|edge_ref| edge_ref.id()),
             );
 
             while !edges_to_check.is_empty() {
                 let e = edges_to_check.pop().unwrap();
                 if !self.graph.edge_weight(e).unwrap().is_ref() {
-                    edges_to_check.par_extend(
+                    edges_to_check.extend(
                         self.graph
                             .edges_directed(self.get_edge_source(e), Direction::Incoming)
-                            .par_bridge()
                             .map(|edge_ref| edge_ref.id()),
                     );
                     self.graph.remove_edge(e);
                 }
             }
 
-            edges_to_check.par_extend(
+            edges_to_check.extend(
                 self.graph
                     .edges_directed(
                         self.get_reference_sink_vertex().unwrap(),
                         Direction::Outgoing,
                     )
-                    .par_bridge()
                     .map(|edge_ref| edge_ref.id()),
             );
 
             while !edges_to_check.is_empty() {
                 let e = edges_to_check.pop().unwrap();
                 if !self.graph.edge_weight(e).unwrap().is_ref() {
-                    edges_to_check.par_extend(
+                    edges_to_check.extend(
                         self.graph
                             .edges_directed(self.get_edge_target(e), Direction::Outgoing)
-                            .par_bridge()
                             .map(|edge_ref| edge_ref.id()),
                     );
                     self.graph.remove_edge(e);
@@ -826,7 +811,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         let mut bytes = Vec::new();
         let mut v = Some(from_vertex);
         if include_start {
-            bytes.par_extend(
+            bytes.extend(
                 self.graph
                     .node_weight(v.unwrap())
                     .unwrap()
@@ -836,7 +821,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
 
         v = self.get_next_reference_vertex(v, false, None);
         while v.is_some() && v != to_vertex {
-            bytes.par_extend(
+            bytes.extend(
                 self.graph
                     .node_weight(v.unwrap())
                     .unwrap()
@@ -846,7 +831,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         }
 
         if include_stop && v.is_some() && v == to_vertex {
-            bytes.par_extend(
+            bytes.extend(
                 self.graph
                     .node_weight(v.unwrap())
                     .unwrap()

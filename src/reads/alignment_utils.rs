@@ -193,7 +193,7 @@ impl AlignmentUtils {
         // Reverse the order to preserve the original soft/hardclip ordering in
         // mixed clipping cases where softclips precede hardclips
         end_cigar_elements_to_reverse.reverse();
-        read_to_ref_cigar_elements_with_hard_clips.par_extend(end_cigar_elements_to_reverse);
+        read_to_ref_cigar_elements_with_hard_clips.extend(end_cigar_elements_to_reverse);
 
         return CigarString::from(read_to_ref_cigar_elements_with_hard_clips);
     }

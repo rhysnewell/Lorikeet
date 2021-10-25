@@ -210,7 +210,7 @@ impl GenotypePriorCalculator {
         // let ref_length = ref_allele.length();
 
         let result = alleles
-            .par_iter()
+            .iter()
             .map(|allele| {
                 if allele.is_reference() {
                     AlleleType::REF.ordinal() as i64

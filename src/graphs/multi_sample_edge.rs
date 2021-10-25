@@ -215,7 +215,7 @@ impl BaseEdge for MultiSampleEdge {
      */
     fn make_o_r_edge(edges: Vec<Self>, multiplicity: usize, single_sample_capacity: usize) -> Self {
         assert!(!edges.is_empty(), "Edges cannot be empty");
-        let is_ref = edges.par_iter().any(|e| e.is_ref());
+        let is_ref = edges.iter().any(|e| e.is_ref());
 
         Self::new(is_ref, multiplicity, single_sample_capacity)
     }

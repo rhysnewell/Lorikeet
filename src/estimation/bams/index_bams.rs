@@ -4,100 +4,50 @@ use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_htslib::bam;
 use std::path::Path;
+use std::fs::create_dir_all;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use rayon::prelude::*;
 
+/// Ensures mapping is completed for provided bams. If multiple references are provided and
+/// the user has asked to run genomes in parallel, then the bams are split per reference to
+/// avoid file locking when reading bams in parallel.
 pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     bams: Vec<G>,
     n_threads: usize,
+    references: &GenomesAndContigs,
+    parallel_genomes: bool,
 ) {
-    let mut record: bam::record::Record = bam::Record::new();
 
-    // progress bar
-    let sty = ProgressStyle::default_bar()
-        .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
-    let pb1 = ProgressBar::new(bams.len() as u64);
-    pb1.set_style(sty.clone());
-    pb1.enable_steady_tick(500);
-    for bam_generator in bams {
-        let mut bam = bam_generator.start();
-        bam.set_threads(std::cmp::max(n_threads / 2, 1));
+    if !parallel_genomes {
+        let mut record: bam::record::Record = bam::Record::new();
 
-        let path = bam.path().to_string();
-        let stoit_name = bam.name().to_string().replace("/", ".");
+        // progress bar
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+        let pb1 = ProgressBar::new(bams.len() as u64);
+        pb1.set_style(sty.clone());
+        pb1.enable_steady_tick(500);
+        for bam_generator in bams {
+            let mut bam = bam_generator.start();
+            // bam.set_threads(std::cmp::max(n_threads / 2, 1));
 
-        pb1.set_message(format!(
-            "Processing sample: {}",
-            match &stoit_name[..4] {
-                ".tmp" => &stoit_name[15..],
-                _ => &stoit_name,
-            },
-        ));
+            let path = bam.path().to_string();
+            let stoit_name = bam.name().to_string().replace("/", ".");
 
-        let header = bam.header();
-        let mut tmp_header = bam::header::Header::from_template(&header);
-
-        // Check if bam already has read group, if it doesn't then add one by writing to a new bam
-        if !tmp_header.to_hashmap().contains_key("RG") {
-            let tmp_bam = tempfile::NamedTempFile::new().unwrap();
-            {
-                // Setup tmp bam writer
-                let mut tmp_header_record = bam::header::HeaderRecord::new("RG".as_bytes());
-                // Push tags
-                tmp_header_record.push_tag("ID".as_bytes(), &1);
-                tmp_header_record.push_tag("SM".as_bytes(), &1);
-                tmp_header_record.push_tag("LB".as_bytes(), &"N");
-                tmp_header_record.push_tag("PL".as_bytes(), &"N");
-                tmp_header_record.push_tag("PU".as_bytes(), &"N");
-
-                tmp_header.push_record(&tmp_header_record);
-
-                let mut bam_writer =
-                    bam::Writer::from_path(tmp_bam.path(), &tmp_header, bam::Format::Bam)
-                        .expect("Unable to create bam");
-
-                bam_writer
-                    .set_threads(std::cmp::max(n_threads / 2, 1))
-                    .expect("Unable to set threads for BAM writer");
-                bam_writer
-                    .set_compression_level(bam::CompressionLevel::Uncompressed)
-                    .expect("Unexpected compression level");
-
-                while bam.read(&mut record).is_some() {
-                    // push aux flags
-                    record.push_aux("RG".as_bytes(), bam::record::Aux::String("1"));
-
-                    // Write to bam
-                    bam_writer.write(&record).expect("Unable to write to BAM");
-                }
-            }
-
-            bam.finish();
-
-            std::fs::copy(&tmp_bam.path(), &path).expect("Unable to move BAM");
-
-            // index the bam file
-            bam::index::build(
-                &path,
-                Some(&format!("{}.bai", path)),
-                bam::index::Type::Bai,
-                n_threads as u32,
-            )
-            .expect("Unable to index BAM");
-        } else {
-            // while bam
-            //     .read(&mut record)
-            //     .expect("Error while reading BAM record")
-            //     == true
-            // {
-            //     do nothing
-            // }
-
-            debug!(
-                "Read groups already present for sample {}",
+            pb1.set_message(format!(
+                "Processing sample: {}",
                 match &stoit_name[..4] {
-                    "lori" => &stoit_name[16..],
+                    ".tmp" => &stoit_name[15..],
                     _ => &stoit_name,
-                }
-            );
+                },
+            ));
+
+            // while bam.read(&mut record).is_some() {
+            //     continue
+            // }
+            //
+            // bam.finish();
 
             if !Path::new(&format!("{}.bai", path)).exists() {
                 bam::index::build(
@@ -106,12 +56,102 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     bam::index::Type::Bai,
                     n_threads as u32,
                 )
-                .expect(&format!("Unable to index bam at {}", &path));
+                    .expect(&format!("Unable to index bam at {}", &path));
             }
+            // }
+            pb1.inc(1);
         }
-        pb1.inc(1);
+        pb1.finish_with_message(format!("Reads and BAM files processed..."));
+    } else {
+        // we need to subset the bams
+        let mut record: bam::record::Record = bam::Record::new();
+
+        // progress bar
+        let sty = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+        let pb1 = Arc::new(Mutex::new(ProgressBar::new(bams.len() as u64)));
+        {
+            let mut pb1 = pb1.lock().unwrap();
+            pb1.set_style(sty.clone());
+            pb1.enable_steady_tick(500);
+            pb1.set_message(
+                "Splitting bam files per reference..."
+            );
+        }
+        let mut paths = Vec::with_capacity(bams.len());
+
+        for bam_generator in bams {
+            let mut bam = bam_generator.start();
+            // bam.set_threads(std::cmp::max(n_threads / 2, 1));
+
+            let path = bam.path().to_string();
+
+            paths.push(path);
+            // while bam.read(&mut record).is_some() {
+            //     continue
+            // }
+            // bam.finish();
+        }
+        paths.into_par_iter()
+            .for_each(|path| {
+                let mut record: bam::record::Record = bam::Record::new();
+
+                let mut bam = generate_named_bam_readers_from_bam_files(
+                    vec![&path]
+                ).into_iter().next().unwrap();
+                let header = bam.header();
+                let stoit_name = bam.name().to_string().replace("/", ".");
+                let path_prefix = path.rsplitn(2, "/").skip(1).next().unwrap();
+                let mut tmp_header = bam::header::Header::from_template(&header);
+                let mut need_to_write = false;
+                let mut writers = references.genomes.iter().map(|ref_stub| {
+                    let output_path = format!("{}/{}", &path_prefix, ref_stub);
+                    create_dir_all(&output_path);
+                    let bam_path = format!("{}/{}.bam", output_path, &stoit_name);
+                    let mut out = None;
+                    if !Path::new(&bam_path).exists() {
+                        out = Some(bam::Writer::from_path(&bam_path, &tmp_header, bam::Format::Bam).unwrap());
+                        need_to_write = true;
+                    }
+                    out
+                }).collect::<Vec<Option<bam::Writer>>>();
+
+                if need_to_write {
+                    while bam.read(&mut record).is_some() {
+                        if !record.is_unmapped() {
+                            let header = bam.header();
+                            let contig_name = std::str::from_utf8(header.tid2name(record.tid() as u32))
+                                .unwrap().to_string()
+                                .split_once("~").unwrap().1.to_string();
+                            let ref_idx = references.genome_index_of_contig(&contig_name);
+                            match ref_idx {
+                                Some(ref_idx) => {
+                                    match &mut writers[ref_idx] {
+                                        None => {
+                                            // bam file already written
+                                        },
+                                        Some(writer) => {
+                                            writer.write(&record).unwrap()
+                                        }
+                                    }
+                                },
+                                None => {}// shall pass
+                            }
+                        }
+                    }
+                    bam.finish();
+                }
+                {
+                    let mut pb1 = pb1.lock().unwrap();
+                    pb1.inc(1);
+                }
+            });
+        {
+            let mut pb1 = pb1.lock().unwrap();
+            pb1.finish_with_message(format!("Reads and BAM files processed..."));
+        }
     }
-    pb1.finish_with_message(format!("Reads and BAM files processed..."));
+
 }
 
 pub fn recover_bams(
@@ -122,9 +162,13 @@ pub fn recover_bams(
     genomes_and_contigs: &GenomesAndContigs,
     _n_threads: u32,
     tmp_bam_file_cache: &Option<String>,
+    bams_are_split: bool,
+    ref_idx: usize,
 ) -> Vec<String> {
     // Annoyingly read in bam file again
     let mut bam_readers = vec![];
+
+    debug!("Bams are split {}", bams_are_split);
 
     // This is going to catch cached longread bam files from mapping
     if m.is_present("bam-files") {
@@ -133,7 +177,18 @@ pub fn recover_bams(
             .unwrap()
             .map(|b| b.to_string())
             .collect::<Vec<String>>();
-        bam_readers.extend(bam_paths);
+        if !bams_are_split {
+            bam_readers.extend(bam_paths);
+        } else {
+            for path in bam_paths {
+                let mut path_split = path.rsplitn(2, "/");
+                let path_suffix = path_split.next().unwrap();
+                let path_prefix = path_split.next().unwrap();
+
+                bam_readers.push(format!(
+                    "{}/{}/{}", path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix))
+            }
+        }
     } else if m.is_present("read1")
         | m.is_present("single")
         | m.is_present("coupled")
@@ -144,7 +199,7 @@ pub fn recover_bams(
         match concatenated_genomes {
             Some(ref _tmp_file) => {
                 let cache = format!(
-                    "{}/short/*.bam",
+                    "{}/short/{}/*.bam",
                     match m.is_present("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
@@ -153,7 +208,13 @@ pub fn recover_bams(
                             m.value_of("bam-file-cache-directory").unwrap()
                         }
                     },
+                    if bams_are_split {
+                        &genomes_and_contigs.genomes[ref_idx]
+                    } else {
+                        ""
+                    }
                 );
+                debug!("Cache: {}", &cache);
                 let bam_paths = glob(&cache)
                     .expect("Failed to read cache")
                     .map(|p| {
@@ -179,6 +240,8 @@ pub fn recover_bams(
                         },
                         ref_name
                     );
+                    debug!("Cache: {}", &cache);
+
                     let bam_paths = glob(&cache)
                         .expect("Failed to read cache")
                         .map(|p| {
@@ -205,14 +268,25 @@ pub fn recover_bams(
             .unwrap()
             .map(|b| b.to_string())
             .collect::<Vec<String>>();
-        bam_readers.extend(bam_paths);
+        if !bams_are_split {
+            bam_readers.extend(bam_paths);
+        } else {
+            for path in bam_paths {
+                let mut path_split = path.rsplitn(2, "/");
+                let path_suffix = path_split.next().unwrap();
+                let path_prefix = path_split.next().unwrap();
+
+                bam_readers.push(format!(
+                    "{}/{}/{}", path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix))
+            }
+        }
     } else if m.is_present("longreads") {
         let mut all_bam_paths = vec![];
 
         match concatenated_genomes {
             Some(ref _tmp_file) => {
                 let cache = format!(
-                    "{}/long/*.bam",
+                    "{}/long/{}/*.bam",
                     match m.is_present("bam-file-cache-directory") {
                         false => {
                             tmp_bam_file_cache.as_ref().unwrap()
@@ -221,6 +295,11 @@ pub fn recover_bams(
                             m.value_of("bam-file-cache-directory").unwrap()
                         }
                     },
+                    if bams_are_split {
+                        &genomes_and_contigs.genomes[ref_idx]
+                    } else {
+                        ""
+                    }
                 );
                 let bam_paths = glob(&cache)
                     .expect("Failed to read cache")

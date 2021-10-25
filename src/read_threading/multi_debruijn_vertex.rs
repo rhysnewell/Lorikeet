@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 
 lazy_static! {
     static ref suffices_as_byte_array: Vec<Vec<u8>> = (0..=std::u8::MAX)
-        .into_par_iter()
+        .into_iter()
         .map(|i| { vec![i] })
         .collect::<Vec<Vec<u8>>>();
 }

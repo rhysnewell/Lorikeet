@@ -599,13 +599,12 @@ impl PairHMMLikelihoodCalculationEngine {
     ) {
         let read_max_length = per_sample_read_list
             .values()
-            .par_bridge()
-            .flat_map(|e| e.par_iter())
+            .flat_map(|e| e.iter())
             .map(|e| e.len())
             .max()
             .unwrap_or(0);
         let max_haplotype_length: usize = haplotypes
-            .par_iter()
+            .iter()
             .map(|hap| hap.allele.len())
             .max()
             .unwrap_or(0);

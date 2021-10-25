@@ -408,7 +408,7 @@ impl HaplotypeCallerEngine {
     ) {
         let mut bam_generated = bam_generator.start();
 
-        bam_generated.set_threads(split_threads);
+        // bam_generated.set_threads(split_threads);
 
         let header = bam_generated.header().clone(); // bam header
         let target_lens: Vec<u64> = (0..header.target_count())
@@ -550,8 +550,8 @@ impl HaplotypeCallerEngine {
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
             let per_contig_activity_profiles: HashMap<usize, BandPassActivityProfile> =
-                genotype_likelihoods[0]
-                    .par_iter()
+                genotype_likelihoods.into_iter().next().unwrap()
+                    .into_par_iter()
                     .map(|(tid, vec_of_ref_vs_any_result)| {
                         // Create bandpass
                         let mut activity_profile = BandPassActivityProfile::new(
@@ -561,12 +561,12 @@ impl HaplotypeCallerEngine {
                             BandPassActivityProfile::DEFAULT_SIGMA,
                             true,
                             ref_idx,
-                            *tid,
+                            tid,
                             *target_ids_and_lens.get(&tid).unwrap() as usize,
                         );
 
                         // for each position determine per locus activity and add to bandpass
-                        vec_of_ref_vs_any_result.iter().enumerate().for_each(
+                        vec_of_ref_vs_any_result.into_iter().enumerate().for_each(
                             |(pos, ref_vs_any_result)| {
                                 let is_active_prob = self
                                     .active_region_evaluation_genotyper_engine
@@ -577,12 +577,12 @@ impl HaplotypeCallerEngine {
                                     );
 
                                 let per_base_hq_soft_clips =
-                                    per_contig_per_base_hq_soft_clips.get(tid).unwrap();
+                                    per_contig_per_base_hq_soft_clips.get(&tid).unwrap();
 
                                 let hq_soft_clips = per_base_hq_soft_clips[pos];
 
                                 let activity_profile_state = ActivityProfileState::new(
-                                        ref_vs_any_result.loc.clone(),
+                                        ref_vs_any_result.loc,
                                         is_active_prob,
                                         Type::new(
                                             hq_soft_clips.mean(),
@@ -594,7 +594,7 @@ impl HaplotypeCallerEngine {
                             },
                         );
 
-                        (*tid, activity_profile)
+                        (tid, activity_profile)
                     })
                     .collect::<HashMap<usize, BandPassActivityProfile>>();
 
@@ -606,74 +606,81 @@ impl HaplotypeCallerEngine {
                 .par_iter()
                 .map(|(tid, length)| {
                     debug!("Calculating activity on {} of length {}", tid, length);
-                    let mut active_region_evaluation_genotyper_engine =
-                        self.active_region_evaluation_genotyper_engine.clone();
+
                     let per_base_hq_soft_clips =
                         per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
                     // Create bandpass
                     debug!("Created bandpass profile");
-                    let mut activity_profile = BandPassActivityProfile::new(
-                        max_prob_propagation,
-                        active_prob_threshold,
-                        BandPassActivityProfile::MAX_FILTER_SIZE,
-                        BandPassActivityProfile::DEFAULT_SIGMA,
-                        true,
-                        ref_idx,
-                        *tid,
-                        *target_ids_and_lens.get(&tid).unwrap() as usize,
-                    );
 
-                    for pos in 0..(*length as usize) {
-                        let mut genotypes = Vec::new();
 
-                        let hq_soft_clips = per_base_hq_soft_clips[pos];
+                    let activity_profile = BandPassActivityProfile::from_band_passes(
+                        (0..(*length as usize)).into_par_iter().chunks(10000).map(|positions| {
+                            let mut active_region_evaluation_genotyper_engine =
+                                self.active_region_evaluation_genotyper_engine.clone();
+                            let mut activity_profile = BandPassActivityProfile::new(
+                                max_prob_propagation,
+                                active_prob_threshold,
+                                BandPassActivityProfile::MAX_FILTER_SIZE,
+                                BandPassActivityProfile::DEFAULT_SIGMA,
+                                true,
+                                ref_idx,
+                                *tid,
+                                *target_ids_and_lens.get(&tid).unwrap() as usize,
+                            );
+                            for pos in positions {
+                                let mut genotypes = Vec::new();
 
-                        for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
-                            let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
-                            genotypes.push(Genotype::build(
-                                ploidy,
-                                result,
-                                sample_names[idx].clone(),
-                            ))
-                        }
+                                let hq_soft_clips = per_base_hq_soft_clips[pos];
 
-                        let fake_alleles = ByteArrayAllele::create_fake_alleles();
+                                for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
+                                    let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
+                                    genotypes.push(Genotype::build(
+                                        ploidy,
+                                        result,
+                                        sample_names[idx].clone(),
+                                    ))
+                                }
 
-                        let mut variant_context =
-                            VariantContext::build(*tid, pos, pos, fake_alleles);
+                                let fake_alleles = ByteArrayAllele::create_fake_alleles();
 
-                        variant_context.add_genotypes(genotypes);
+                                let mut variant_context =
+                                    VariantContext::build(*tid, pos, pos, fake_alleles);
 
-                        let vc_out = active_region_evaluation_genotyper_engine.calculate_genotypes(
-                            variant_context,
-                            ploidy,
-                            &self.genotype_prior_calculator,
-                            &placeholder_vec,
-                            self.stand_min_conf,
-                        );
+                                variant_context.add_genotypes(genotypes);
 
-                        let is_active_prob = match vc_out {
-                            Some(vc) => {
-                                QualityUtils::qual_to_prob(vc.get_phred_scaled_qual() as u8)
+                                let vc_out = active_region_evaluation_genotyper_engine.calculate_genotypes(
+                                    variant_context,
+                                    ploidy,
+                                    &self.genotype_prior_calculator,
+                                    &placeholder_vec,
+                                    self.stand_min_conf,
+                                );
+
+                                let is_active_prob = match vc_out {
+                                    Some(vc) => {
+                                        QualityUtils::qual_to_prob(vc.get_phred_scaled_qual() as u8)
+                                    }
+                                    None => 0.0,
+                                };
+
+                                let activity_profile_state = ActivityProfileState::new(
+                                    SimpleInterval::new(*tid, pos, pos),
+                                    is_active_prob,
+                                    Type::new(
+                                        hq_soft_clips.mean(),
+                                        HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
+                                    ),
+                                );
+                                activity_profile.add(activity_profile_state);
                             }
-                            None => 0.0,
-                        };
+                            activity_profile
+                        }).collect::<Vec<BandPassActivityProfile>>());
 
-                        let activity_profile_state = ActivityProfileState::new(
-                            SimpleInterval::new(*tid, pos, pos),
-                            is_active_prob,
-                            Type::new(
-                                hq_soft_clips.mean(),
-                                HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
-                            ),
-                        );
-                        activity_profile.add(activity_profile_state);
-                    }
+
                     debug!("Finished {} of length {}", tid, length);
                     (*tid, activity_profile)
-                })
-                .collect::<HashMap<usize, BandPassActivityProfile>>();
+                }).collect::<HashMap<usize, BandPassActivityProfile>>();
             return per_contig_activity_profiles;
         }
     }
@@ -786,7 +793,7 @@ impl HaplotypeCallerEngine {
         let read_stubs = assembly_result
             .region_for_genotyping
             .reads
-            .par_iter()
+            .iter()
             .filter(|r| {
                 debug!(
                     "read length {} read cigar {}",

@@ -345,7 +345,7 @@ impl HaplotypeCallerGenotypingEngine {
                 continue;
             };
             let new_list = original_list
-                .into_par_iter()
+                .into_iter()
                 .filter(|r| r.overlaps(&loc))
                 .map(|r| r.clone())
                 .collect::<Vec<BirdToolRead>>();

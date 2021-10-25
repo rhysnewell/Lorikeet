@@ -58,6 +58,7 @@ pub struct LorikeetEngine<'a> {
     progress_bars: &'a Vec<Elem>,
     threads: usize,
     mode: &'a str,
+    run_in_parallel: bool,
 }
 
 impl<'a> LorikeetEngine<'a> {
@@ -97,7 +98,7 @@ impl<'a> LorikeetEngine<'a> {
                 let progress_bars = &self.progress_bars;
                 let flag_filters = &self.flag_filters;
                 let reference_map = &self.reference_map;
-                let references = self.references.clone();
+                let references = &self.references;
                 let tmp_bam_file_cache = match self.tmp_bam_file_cache.as_ref() {
                     Some(cache) => Some(cache.path().to_str().unwrap().to_string()),
                     None => None,
@@ -190,10 +191,20 @@ impl<'a> LorikeetEngine<'a> {
                         &genomes_and_contigs,
                         n_threads as u32,
                         &tmp_bam_file_cache,
+                        self.run_in_parallel,
+                        ref_idx
                     );
 
+                    debug!("Indexed bam readers {:?}", &indexed_bam_readers);
+
+                    // let mut reference_reader = ReferenceReader::new(
+                    //     &Some(concatenated_genomes.as_ref().unwrap().to_string()),
+                    //     genomes_and_contigs.clone(),
+                    //     genomes_and_contigs.contig_to_genome.len(),
+                    // );
+
                     let mut reference_reader = ReferenceReader::new(
-                        &Some(concatenated_genomes.as_ref().unwrap().to_string()),
+                        &Some(references[ref_idx].to_string()),
                         genomes_and_contigs.clone(),
                         genomes_and_contigs.contig_to_genome.len(),
                     );
@@ -317,6 +328,7 @@ impl<'a> LorikeetEngine<'a> {
 
                         let (strain_ids_present, split_contexts) = abundance_calculator_engine
                             .run_abundance_calculator(n_strains, cleaned_sample_names.len());
+                        // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
 
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -339,7 +351,11 @@ impl<'a> LorikeetEngine<'a> {
                         }
                         let mut reference_writer =
                             ReferenceWriter::new(reference_reader, &output_prefix);
-                        reference_writer.generate_strains(split_contexts, ref_idx, strain_ids_present);
+                        reference_writer.generate_strains(
+                            split_contexts,
+                            ref_idx,
+                            strain_ids_present,
+                        );
                     } else if mode == "consensus" {
                         // Get sample distances
                         {
@@ -371,6 +387,17 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                         );
                     };
+
+                    // if self.args.is_present("bam-file-cache-directory") && self.run_in_parallel {
+                    //     // clean up split bam files
+                    //     if self.short_read_bam_count > 0 {
+                    //         let cmd_string = format!(
+                    //             "rm -rf {}/short/{}/",
+                    //             self.args.value_of("bam-file-cache-directory").unwrap(),
+                    //             &genomes_and_contigs.genomes[ref_idx]
+                    //         );
+                    //     }
+                    // }
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
@@ -530,14 +557,19 @@ pub fn start_lorikeet_engine<
         None => vec![],
     };
 
+    let parallel_genomes: usize = m.value_of("parallel-genomes").unwrap().parse().unwrap();
+    let mut run_in_parallel = false;
+    if parallel_genomes > 1 && reference_count > 1 {
+        run_in_parallel = true;
+    };
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
-        finish_bams(longreads, threads);
+        finish_bams(longreads, threads, &genomes_and_contigs, run_in_parallel);
     }
 
     info!("Processing short reads...");
-    finish_bams(bam_readers, threads);
+    finish_bams(bam_readers, threads, &genomes_and_contigs, run_in_parallel);
 
     let mut reference_map = HashMap::new();
 
@@ -588,6 +620,7 @@ pub fn start_lorikeet_engine<
             progress_bars: &progress_bars,
             threads,
             mode,
+            run_in_parallel
         };
 
         lorikeet_engine.apply_per_reference();

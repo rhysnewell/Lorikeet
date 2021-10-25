@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use coverm::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use coverm::bam_generator::IndexedNamedBamReader;
 use coverm::bam_generator::NamedBamReaderGenerator;
@@ -9,14 +10,13 @@ use ndarray::{Array1, Array2};
 use ordered_float::OrderedFloat;
 use petgraph::algo::{all_simple_paths, min_spanning_tree, tarjan_scc};
 use petgraph::data::{Element, FromElements};
-use petgraph::prelude::{NodeIndex, UnGraph};
+use petgraph::prelude::{EdgeRef, NodeIndex, UnGraph};
 use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
 use std::cmp::min;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use bstr::ByteSlice;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -59,14 +59,21 @@ impl<'a> LinkageEngine<'a> {
         mut self,
         indexed_bam_readers: &Vec<String>,
         n_threads: usize,
-    ) -> Vec<Vec<i32>> {
+    ) -> Vec<LinkedHashSet<i32>> {
         let read_ids_in_groups = self.get_reads_for_groups(indexed_bam_readers, n_threads);
         debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
         let graph = self.build_graph(read_ids_in_groups);
         debug!("Graph {:?}", &graph);
         if graph.edge_count() == 0 {
             // no connection formed, so each variant group is its own strain
-            return graph.node_weights().map(|n| vec![*n]).collect();
+            return graph
+                .node_weights()
+                .map(|n| {
+                    let mut new_strain = LinkedHashSet::with_capacity(1);
+                    new_strain.insert(*n);
+                    new_strain
+                })
+                .collect();
         }
         let connected_components = self.extract_connected_components(graph);
 
@@ -88,7 +95,7 @@ impl<'a> LinkageEngine<'a> {
     fn compute_strain_denominations(
         &self,
         connected_components: Vec<UnGraph<i32, f64>>,
-    ) -> Vec<Vec<i32>> {
+    ) -> Vec<LinkedHashSet<i32>> {
         let mut all_strains = Vec::new();
         for component_graph in connected_components {
             // compute the minimum spanning tree
@@ -115,10 +122,20 @@ impl<'a> LinkageEngine<'a> {
 
             starting_nodes_vec.par_sort_unstable();
 
+
             // summit - all paths must lead to here
             // This is the highest depth terminating node. i.e. This node is a tip of the tree
             // with the highest depth compared to all other tips
-            let highest_depth_node = starting_nodes_vec.first().unwrap().clone().1;
+            // let highest_depth_node = starting_nodes_vec.first().unwrap().clone().1;
+            // This is the highest depth node. Can be internal or external.
+            let highest_depth_node = mst.node_indices().max_by(|node_1, node_2| {
+                self.grouped_mean_read_depth.get(
+                    mst.node_weight(*node_1).unwrap()
+                ).unwrap().partial_cmp(
+                    self.grouped_mean_read_depth.get(
+                        mst.node_weight(*node_2).unwrap()
+                    ).unwrap()).unwrap()
+            }).unwrap();
 
             // Turn the vec into a BinaryHeap
             let mut starting_nodes = BinaryHeap::from(starting_nodes_vec);
@@ -167,35 +184,48 @@ impl<'a> LinkageEngine<'a> {
                     );
 
                     if paths.len() == 1 {
-                        strains.push(
-                            paths
-                                .into_iter()
-                                .next()
-                                .unwrap()
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, node)| {
-                                    let variant_group = *mst.node_weight(node).unwrap();
-                                    seen_nodes.insert(variant_group);
-                                    let node_cumulative_depth =
-                                        nodes_cumulative_depth.entry(node).or_insert(0.0);
-                                    // add the depth of the current node to this node
-                                    // subtract the cumulative depth as it has already
-                                    // been seen that many times
-                                    *node_cumulative_depth +=
-                                        (current_depth - current_node_cumulative_depth);
+                        let mut path = paths.into_iter().next().unwrap();
 
-                                    // check if this the next node in the path, if so append to
-                                    // binary heap as it will act as the next branch tip once current
-                                    // tips run out
-                                    if idx == 1 {
-                                        starting_nodes
-                                            .push((Reverse(OrderedFloat(current_depth)), node));
-                                    };
-                                    variant_group
-                                })
-                                .collect::<Vec<i32>>(),
+                        let consumed_node = self.check_node_depths(
+                            &mst,
+                            &path,
+                            &mut nodes_cumulative_depth,
+                            current_depth,
                         );
+
+                        match consumed_node {
+                            None => {
+                                // Nodes in path above the water table so proceed
+                                self.make_strain_and_update(
+                                    path,
+                                    &mut seen_nodes,
+                                    &mut nodes_cumulative_depth,
+                                    &mut starting_nodes,
+                                    &mut strains,
+                                    current_depth,
+                                    current_node_cumulative_depth,
+                                    &mst,
+                                )
+                            }
+                            Some(consumed_node) => {
+                                // This path has a node that is already at capacity. So we need to
+                                // merge it with it's next closest relative and stop it from
+                                // flooding
+                                let group_at_capacity = *mst.node_weight(consumed_node).unwrap();
+                                self.merge_paths(
+                                    &mut strains,
+                                    path,
+                                    &mst,
+                                    &component_graph,
+                                    &mut seen_nodes,
+                                    &mut nodes_cumulative_depth,
+                                    group_at_capacity,
+                                    current_depth,
+                                    &mut starting_nodes,
+                                    current_node_cumulative_depth,
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -217,7 +247,9 @@ impl<'a> LinkageEngine<'a> {
             {
                 let variant_group = *mst.node_weight(highest_depth_node).unwrap();
                 seen_nodes.insert(variant_group);
-                strains.push(vec![variant_group]);
+                let mut new_strain = LinkedHashSet::with_capacity(1);
+                new_strain.insert(variant_group);
+                strains.push(new_strain);
             }
 
             all_strains.extend(strains)
@@ -226,7 +258,317 @@ impl<'a> LinkageEngine<'a> {
         all_strains
     }
 
-    // fn check_node_depths(&self, mst: &UnGraph<i32, f64>, path: &LinkedHashSet<NodeIndex>, nodes_cumulative_depth: )
+    fn make_strain_and_update(
+        &self,
+        path: LinkedHashSet<NodeIndex>,
+        seen_nodes: &mut HashSet<i32>,
+        nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
+        starting_nodes: &mut BinaryHeap<(Reverse<OrderedFloat<f64>>, NodeIndex)>,
+        strains: &mut Vec<LinkedHashSet<i32>>,
+        current_depth: f64,
+        current_node_cumulative_depth: f64,
+        mst: &UnGraph<i32, f64>,
+    ) {
+        strains.push(
+            path.into_iter()
+                .enumerate()
+                .map(|(idx, node)| {
+                    let variant_group = *mst.node_weight(node).unwrap();
+                    seen_nodes.insert(variant_group);
+                    let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
+                    // add the depth of the current node to this node
+                    // subtract the cumulative depth as it has already
+                    // been seen that many times
+                    *node_cumulative_depth += (current_depth - current_node_cumulative_depth);
+
+                    // check if this the next node in the path, if so append to
+                    // binary heap as it will act as the next branch tip once current
+                    // tips run out
+                    if idx == 1 {
+                        starting_nodes.push((Reverse(OrderedFloat(current_depth)), node));
+                    };
+                    variant_group
+                })
+                .collect::<LinkedHashSet<i32>>(),
+        );
+    }
+
+    /// Takes potential strain path that contains a node whose variant group is at capacity, i.e.
+    /// cannot be allocated to another unique strain, and finds the best already existing strain to
+    /// merge it with. This is dictated by a few things, first, the strain to merged into must contain
+    /// the node that is currently at capacity, and second, the strain to ber merged into must shared the
+    /// most nodes with the current path. If there are more than one strain that meets this criteria,
+    /// then we look back at the original component graph to see if there are any connections to between
+    /// nodes in the new strain path and previous strain paths. We then merge based on connectivity.
+    /// If they are again equal, we choose the longest path.
+    fn merge_paths(
+        &self,
+        strains: &mut Vec<LinkedHashSet<i32>>,
+        path: LinkedHashSet<NodeIndex>,
+        mst: &UnGraph<i32, f64>,
+        component_graph: &UnGraph<i32, f64>,
+        seen_nodes: &mut HashSet<i32>,
+        nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
+        group_at_capacity: i32,
+        current_depth: f64,
+        starting_nodes: &mut BinaryHeap<(Reverse<OrderedFloat<f64>>, NodeIndex)>,
+        current_node_cumulative_depth: f64,
+    ) {
+        // take the path and turn it into a linked hash set of variant group ids.
+        let groups_in_path = path
+            .iter()
+            .map(|node| *mst.node_weight(*node).unwrap())
+            .collect::<LinkedHashSet<i32>>();
+
+        // container with all the strains that are currently the best fit for this path
+        let mut current_closest_strain_indices = Vec::with_capacity(strains.len());
+
+        let mut current_max_shared_nodes = 0;
+        for (index, strain) in strains.iter().enumerate() {
+            if strain.contains(&group_at_capacity) {
+                let shared_nodes = groups_in_path.intersection(strain).count();
+                if shared_nodes == current_max_shared_nodes {
+                    // same amount of nodes as a previous strain so extend the possible options
+                    current_closest_strain_indices.push(index);
+                } else if shared_nodes > current_max_shared_nodes {
+                    // Update and reset the max shared nodes and current closest strain container
+                    current_max_shared_nodes = shared_nodes;
+                    current_closest_strain_indices.clear();
+                    current_closest_strain_indices.push(index);
+                }
+            }
+        }
+
+        if current_closest_strain_indices.len() == 1 {
+            // Only one strain shared the most nodes with this path, so easy merge
+            let strain_to_merge_into = current_closest_strain_indices.into_iter().next().unwrap();
+
+            debug!("Merging vgs {:?} into strain {}", &groups_in_path, strain_to_merge_into);
+
+            // merge and update cumulative depths for unseen nodes
+            self.merge_path_and_update_unseen(
+                path,
+                seen_nodes,
+                nodes_cumulative_depth,
+                &mut strains[strain_to_merge_into],
+                current_depth,
+                current_node_cumulative_depth,
+                mst,
+            );
+        } else if current_closest_strain_indices.len() > 1 {
+            debug!("Multiple close strains: {}", current_closest_strain_indices.len());
+            let original_node_indices_for_new_path = groups_in_path
+                .iter()
+                .map(|group| self.node_weight_to_node_index(component_graph, group))
+                .collect::<Vec<NodeIndex>>();
+
+            // Need to compare edges in original component graph to see which strain this new path
+            // is most closely related to
+            let mut index_of_max = 0;
+            let mut index_of_previous = 0;
+            let mut max_edge_count = 0;
+            let mut previous_max_edge_count = 0;
+            let mut cumulative_edge_weights_max = 0.0; // smaller cumualtive edge weights are better
+            let mut cumulative_edge_weights_previous = 0.0; // smaller cumualtive edge weights are better
+
+            for strain_index in current_closest_strain_indices.into_iter() {
+                let strain_variant_groups = &strains[strain_index];
+                let mut edge_count = 0;
+                let mut cumulative_edge_weights = 0.0;
+                for old_strain_group in strain_variant_groups {
+                    let old_group_node_index =
+                        self.node_weight_to_node_index(component_graph, old_strain_group);
+                    for new_group_node_index in &original_node_indices_for_new_path {
+                        // how many edges connect the old node and this node (with weights)
+                        let edges_connecting = component_graph
+                            .edges_connecting(old_group_node_index, *new_group_node_index);
+                        edges_connecting.into_iter().for_each(|edge| {
+                            edge_count += 1;
+                            cumulative_edge_weights += *edge.weight();
+                        });
+                    }
+                }
+
+                // update the best values
+                if edge_count >= max_edge_count {
+                    if edge_count == max_edge_count {
+                        if cumulative_edge_weights < cumulative_edge_weights_max {
+                            // update previous best
+                            index_of_previous = index_of_max;
+                            previous_max_edge_count = max_edge_count;
+                            cumulative_edge_weights_previous = cumulative_edge_weights_max;
+
+                            // update current best
+                            index_of_max = strain_index;
+                            max_edge_count = edge_count;
+                            cumulative_edge_weights_max = cumulative_edge_weights;
+                        } else {
+                            // update previous with current
+                            index_of_previous = strain_index;
+                            previous_max_edge_count = edge_count;
+                            cumulative_edge_weights_previous = cumulative_edge_weights;
+                        }
+                    } else {
+                        // update previous best
+                        index_of_previous = index_of_max;
+                        previous_max_edge_count = max_edge_count;
+                        cumulative_edge_weights_previous = cumulative_edge_weights_max;
+
+                        // update current best
+                        index_of_max = strain_index;
+                        max_edge_count = edge_count;
+                        cumulative_edge_weights_max = cumulative_edge_weights;
+                    }
+                } else if edge_count >= previous_max_edge_count {
+                    if edge_count == previous_max_edge_count {
+                        if cumulative_edge_weights < cumulative_edge_weights_previous {
+                            // update previous with current
+                            index_of_previous = strain_index;
+                            previous_max_edge_count = edge_count;
+                            cumulative_edge_weights_previous = cumulative_edge_weights;
+                        }
+                    } else {
+                        // update previous with current
+                        index_of_previous = strain_index;
+                        previous_max_edge_count = edge_count;
+                        cumulative_edge_weights_previous = cumulative_edge_weights;
+                    }
+                }
+            }
+
+            if max_edge_count >= previous_max_edge_count {
+                if max_edge_count == previous_max_edge_count {
+                    if cumulative_edge_weights_max <= cumulative_edge_weights_previous {
+                        debug!("using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                               max_edge_count, cumulative_edge_weights_max, &groups_in_path, index_of_max);
+
+                        // merge into this max
+                        self.merge_path_and_update_unseen(
+                            path,
+                            seen_nodes,
+                            nodes_cumulative_depth,
+                            &mut strains[index_of_max],
+                            current_depth,
+                            current_node_cumulative_depth,
+                            mst,
+                        );
+                    } else {
+
+                        debug!("using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                               previous_max_edge_count, cumulative_edge_weights_previous, &groups_in_path, index_of_previous);
+                        // merge into previous max
+                        self.merge_path_and_update_unseen(
+                            path,
+                            seen_nodes,
+                            nodes_cumulative_depth,
+                            &mut strains[index_of_previous],
+                            current_depth,
+                            current_node_cumulative_depth,
+                            mst,
+                        );
+                    }
+                } else {
+                    debug!("using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                           max_edge_count, cumulative_edge_weights_max, &groups_in_path, index_of_max);
+                    self.merge_path_and_update_unseen(
+                        path,
+                        seen_nodes,
+                        nodes_cumulative_depth,
+                        &mut strains[index_of_max],
+                        current_depth,
+                        current_node_cumulative_depth,
+                        mst,
+                    );
+                }
+            } else {
+                debug!("using max edge count {} weights {}: Merging vgs {:?} into strain {}",
+                       previous_max_edge_count, cumulative_edge_weights_previous, &groups_in_path, index_of_previous);
+                // should never reach here?
+                self.merge_path_and_update_unseen(
+                    path,
+                    seen_nodes,
+                    nodes_cumulative_depth,
+                    &mut strains[index_of_previous],
+                    current_depth,
+                    current_node_cumulative_depth,
+                    mst,
+                );
+            }
+        } else {
+            // weird edge case where variant group had no carry capacity?
+            debug!("Weird edge case");
+            self.make_strain_and_update(
+                path,
+                seen_nodes,
+                nodes_cumulative_depth,
+                starting_nodes,
+                strains,
+                current_depth,
+                current_node_cumulative_depth,
+                mst,
+            )
+        }
+    }
+
+    fn merge_path_and_update_unseen(
+        &self,
+        path: LinkedHashSet<NodeIndex>,
+        seen_nodes: &mut HashSet<i32>,
+        nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
+        strain_to_merge_into: &mut LinkedHashSet<i32>,
+        current_depth: f64,
+        current_node_cumulative_depth: f64,
+        mst: &UnGraph<i32, f64>,
+    ) {
+        // merge and update cumulative depths for unseen nodes
+        path.into_iter().enumerate().for_each(|(idx, node)| {
+            let variant_group = *mst.node_weight(node).unwrap();
+            if !seen_nodes.contains(&variant_group) {
+                seen_nodes.insert(variant_group);
+                let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
+                // add the depth of the current node to this node
+                // subtract the cumulative depth as it has already
+                // been seen that many times
+                *node_cumulative_depth += (current_depth - current_node_cumulative_depth);
+
+                strain_to_merge_into.insert(variant_group);
+            }
+        });
+    }
+
+    fn node_weight_to_node_index(&self, graph: &UnGraph<i32, f64>, node_weight: &i32) -> NodeIndex {
+        NodeIndex::new(
+            graph
+                .node_weights()
+                .position(|node| node == node_weight)
+                .unwrap(),
+        )
+    }
+
+    /// Checks all nodes in a path. If a node in a path has gone underneath the water table then it
+    /// is likely that this path was meant to be merged with another path. Thus, this function checks
+    /// that all nodes in the path are above the water table, if not then it returns the first node that
+    /// is below the water table. Otherwise None
+    fn check_node_depths(
+        &self,
+        mst: &UnGraph<i32, f64>,
+        path: &LinkedHashSet<NodeIndex>,
+        nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
+        _current_depth: f64,
+    ) -> Option<NodeIndex> {
+        for (idx, node) in path.into_iter().enumerate() {
+            let variant_group = *mst.node_weight(*node).unwrap();
+            let node_cumulative_depth = nodes_cumulative_depth.entry(*node).or_insert(0.0); // This nodes current capacity
+            let threshold = self.grouped_mean_read_depth.get(&variant_group).unwrap(); // This nodes maximum capcity
+
+            if *node_cumulative_depth / *threshold >= 1.0 {
+                debug!("Node at capacity {:?} vg {} cumulative depth {} capacity {}", node, variant_group, *node_cumulative_depth, *threshold);
+                return Some(*node);
+            }
+        }
+
+        None
+    }
 
     /// Extracts the connect components of the built graph and turns them into new independent graphs
     /// a connected component is defined as an induced subgraph in which any two vertices are
@@ -304,6 +646,8 @@ impl<'a> LinkageEngine<'a> {
         n_threads: usize,
     ) -> LinkedHashMap<i32, HashSet<String>> {
         let mut all_grouped_reads = LinkedHashMap::with_capacity(self.grouped_contexts.len());
+        let mut all_grouped_read_counts = LinkedHashMap::with_capacity(self.grouped_contexts.len());
+
         indexed_bam_readers
             .par_iter()
             .enumerate()
@@ -319,9 +663,10 @@ impl<'a> LinkageEngine<'a> {
 
                 let mut bam_generated = bam_generator.start();
 
-                bam_generated.set_threads(n_threads);
+                // bam_generated.set_threads(n_threads);
 
                 let mut grouped_reads = LinkedHashMap::with_capacity(self.grouped_contexts.len());
+                let mut grouped_read_counts = LinkedHashMap::with_capacity(self.grouped_contexts.len());
                 let mut record = Record::new();
                 for (group, variants) in self.grouped_contexts.iter() {
                     for variant in variants {
@@ -336,8 +681,8 @@ impl<'a> LinkageEngine<'a> {
                                 variant.loc.tid, variant.loc.start, variant.loc.end
                             ));
 
-                        let records = grouped_reads.entry(group.clone()).or_insert(HashSet::new()); // container for the records to be collected
-
+                        let records = grouped_reads.entry(*group).or_insert(HashSet::new()); // container for the records to be collected
+                        let counts = grouped_read_counts.entry(*group).or_insert(0.0);
                         while bam_generated.read(&mut record) == true {
                             // be very lenient with filtering
                             if record.is_unmapped() || record.seq_len() == 0 {
@@ -363,13 +708,14 @@ impl<'a> LinkageEngine<'a> {
                             }
 
                             let alternate_allele = variant.get_alternate_alleles()[0];
-                            if read_index as usize + alternate_allele.get_bases().len() <= record_seq.len()
+                            if read_index as usize + alternate_allele.get_bases().len()
+                                <= record_seq.len()
                                 && !partial_match
                             {
                                 if alternate_allele.get_bases()
                                     == &record_seq[read_index as usize
-                                    ..(read_index as usize
-                                    + alternate_allele.get_bases().len())]
+                                        ..(read_index as usize
+                                            + alternate_allele.get_bases().len())]
                                 {
                                     // Read containing potential alternate allele
                                     let read_id = format!(
@@ -378,10 +724,15 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
+                                    *counts += 1.0;
                                 }
                             } else if partial_match {
                                 // substring match
-                                let record_bases = &record_seq[read_index as usize..min(record_seq.len(), read_index as usize + alternate_allele.bases.len())];
+                                let record_bases = &record_seq[read_index as usize
+                                    ..min(
+                                        record_seq.len(),
+                                        read_index as usize + alternate_allele.bases.len(),
+                                    )];
                                 if alternate_allele.get_bases().contains_str(record_bases) {
                                     // Read containing potential alternate allele
                                     let read_id = format!(
@@ -390,29 +741,33 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
+                                    *counts += 1.0;
                                 }
                             }
                         }
                     }
                 }
 
-                grouped_reads
+                (grouped_reads, grouped_read_counts)
             })
-            .collect::<Vec<LinkedHashMap<i32, HashSet<String>>>>()
+            .collect::<Vec<(LinkedHashMap<i32, HashSet<String>>, LinkedHashMap<i32, f64>)>>()
             .into_iter()
-            .for_each(|sample_grouping| {
+            .for_each(|(sample_grouping, sample_counts)| {
                 for (vg, reads) in sample_grouping {
                     let all_result = all_grouped_reads.entry(vg).or_insert(HashSet::new());
                     all_result.par_extend(reads);
+
+                    let all_counts = all_grouped_read_counts.entry(vg).or_insert(0.0);
+                    *all_counts += *sample_counts.get(&vg).unwrap();
                 }
             });
 
-        let grouped_mean_read_depth = all_grouped_reads
+        let grouped_mean_read_depth = all_grouped_read_counts
             .iter()
-            .map(|(group, reads)| {
+            .map(|(group, counts)| {
                 (
-                    group.clone(),
-                    (reads.len() as f64) / self.grouped_contexts.get(group).unwrap().len() as f64,
+                    *group,
+                    counts / self.grouped_contexts.get(group).unwrap().len() as f64,
                 )
             })
             .collect::<LinkedHashMap<i32, f64>>();
@@ -465,7 +820,7 @@ impl<'a> LinkageEngine<'a> {
                         // generate the tree with lowest edge weights
                         let weight = 1.0 - (intersection / union);
 
-                        if weight < 0.99 {
+                        if weight < 0.97 || intersection >= 50.0 {
                             // variant groups connected by reads are favoured
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
@@ -477,8 +832,7 @@ impl<'a> LinkageEngine<'a> {
                             // have to be directly on top of the other variant group
                             // for the edge to be favoured in the MST
                             let weight = self.cluster_separations
-                                [[*group1 as usize - 1, *group2 as usize - 1]]
-                                / 1.5;
+                                [[*group1 as usize - 1, *group2 as usize - 1]];
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union

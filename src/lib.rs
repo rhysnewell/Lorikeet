@@ -4,7 +4,8 @@
     unused_mut,
     unused_imports,
     non_snake_case,
-    unused
+    unused,
+    non_camel_case_types
 )]
 extern crate openssl;
 extern crate openssl_sys;

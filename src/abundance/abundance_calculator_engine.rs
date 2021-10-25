@@ -108,9 +108,13 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     // We divide the total depth of variant here by the total amount of strains that
                     // variant occurs in. E.g. if a variant had a depth of 6
                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                    let total_depth = vc.genotypes.genotypes()[sample_index].ad.iter().sum::<i64>() as f64;
-                    let variant_depth = vc.genotypes.genotypes()[sample_index].ad[1] as f64 / total_depth;
-                    let weight = variant_depth;  // strains.len() as f64;
+                    let total_depth = vc.genotypes.genotypes()[sample_index]
+                        .ad
+                        .iter()
+                        .sum::<i64>() as f64;
+                    let variant_depth =
+                        vc.genotypes.genotypes()[sample_index].ad[1] as f64 / total_depth;
+                    let weight = variant_depth; // strains.len() as f64;
 
                     let mut strains_to_remove = HashSet::new();
                     for strain in strains.iter() {
@@ -157,7 +161,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         // We divide the total depth of variant here by the total amount of strains that
                         // variant occurs in. E.g. if a variant had a depth of 6
                         // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                        let reference_depth = vc.genotypes.genotypes()[sample_index].ad[0] as f64 / total_depth;
+                        let reference_depth =
+                            vc.genotypes.genotypes()[sample_index].ad[0] as f64 / total_depth;
                         let weight = reference_depth; // (n_strains - strains.len()) as f64;
 
                         let reference_strain_index = n_strains - 1;
@@ -222,9 +227,10 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .iter()
                         .enumerate()
                         .for_each(|(strain_index, calculator)| {
-                            if strain_present[strain_index] &&
-                                (calculator.abundance_weight <= eps
-                                    || calculator.abundance_weight.is_infinite()) {
+                            if strain_present[strain_index]
+                                && (calculator.abundance_weight <= eps
+                                    || calculator.abundance_weight.is_infinite())
+                            {
                                 strain_present[strain_index] = false;
                                 something_removed = true;
                             }
@@ -239,7 +245,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             for sample_vector in abundance_vectors.iter() {
                 for abundance_calculator in sample_vector.iter() {
                     if abundance_calculator.abundance_weight <= eps
-                        || abundance_calculator.abundance_weight.is_infinite() {
+                        || abundance_calculator.abundance_weight.is_infinite()
+                    {
                         strains_to_remove
                             [*abundance_key.get(&abundance_calculator.index).unwrap()] += 1;
                     }
@@ -272,9 +279,20 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             }
         }
 
+        self.normalize_weights(&mut abundance_vectors);
+
         self.print_strain_coverages(abundance_vectors);
 
         (strain_ids, self.variant_contexts)
+    }
+
+    fn normalize_weights(&self, abundance_vectors: &mut Vec<Vec<StrainAbundanceCalculator>>) {
+        for sample_vec in abundance_vectors {
+            let max_weight = sample_vec.iter().map(|g| g.abundance_weight).max_by(|g1, g2| {
+                g1.partial_cmp(&g2).unwrap()
+            }).unwrap();
+            sample_vec.iter_mut().for_each(|g| g.abundance_weight = g.abundance_weight / max_weight);
+        }
     }
 
     fn print_strain_coverages(&self, abundance_vectors: Vec<Vec<StrainAbundanceCalculator>>) {

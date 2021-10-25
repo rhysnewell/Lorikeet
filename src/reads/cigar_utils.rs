@@ -361,7 +361,7 @@ impl CigarUtils {
                 result_elements.push(Cigar::Del(total_leading_deletions_removed))
             }
 
-            result_elements.par_extend(left_alignment_result.cigar.0);
+            result_elements.extend(left_alignment_result.cigar.0);
             if total_trailing_deletions_removed > 0 {
                 result_elements.push(Cigar::Del(total_trailing_deletions_removed))
             }

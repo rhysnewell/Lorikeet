@@ -805,7 +805,7 @@ impl ReadThreadingAssembler {
      * @return  true if we should skip over this path
      */
     fn path_is_too_divergent_from_reference(c: &CigarString) -> bool {
-        return c.0.par_iter().any(|ce| match ce {
+        return c.0.iter().any(|ce| match ce {
             Cigar::RefSkip(_) => true,
             _ => false,
         });
