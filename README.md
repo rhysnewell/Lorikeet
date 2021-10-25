@@ -61,7 +61,7 @@ conda activate lorikeet
 
 Once you have created the conda environment download and install the latest release file from github
 ```
-wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0rc3.tar.gz;
+wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0rc5.tar.gz;
 tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
 cp release/lorikeet $CONDA_PREFIX/bin;
 cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
