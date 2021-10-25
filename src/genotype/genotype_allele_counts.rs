@@ -401,10 +401,6 @@ impl GenotypeAlleleCounts {
      * @return never {@code null}.
      */
     pub fn first(ploidy: usize) -> GenotypeAlleleCounts {
-        if ploidy < 0 {
-            panic!("Ploidy must be >= 0");
-        }
-
         if ploidy == 0 {
             return GenotypeAlleleCounts::build(0, 0, &[]);
         } else {
@@ -420,14 +416,10 @@ impl GenotypeAlleleCounts {
      * of each allele where the position in the array is equal to its index.
      */
     pub fn allele_counts_by_index(&self, maximum_allele_index: usize) -> Vec<i32> {
-        if maximum_allele_index < 0 {
-            panic!("The requested allele count cannot be less than 0")
-        } else {
-            let mut result = vec![0; maximum_allele_index + 1];
-            self.copy_allele_counts_by_index(&mut result, 0, 0, maximum_allele_index);
+        let mut result = vec![0; maximum_allele_index + 1];
+        self.copy_allele_counts_by_index(&mut result, 0, 0, maximum_allele_index);
 
-            return result;
-        }
+        return result;
     }
 
     /**

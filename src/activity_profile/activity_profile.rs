@@ -49,7 +49,7 @@ pub trait Profile {
 
     fn add(&mut self, state: ActivityProfileState);
 
-    fn process_state(&self, just_added_state: ActivityProfileState) -> Vec<ActivityProfileState>;
+    fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState>;
 
     fn incorporate_single_state(&mut self, state_to_add: ActivityProfileState);
 
@@ -236,7 +236,7 @@ impl Profile for ActivityProfile {
             }
             self.region_stop_loc = Some(loc.clone());
         }
-        let processed_states = self.process_state(state);
+        let processed_states = self.process_state(&state);
 
         for processed_state in processed_states.into_iter() {
             self.incorporate_single_state(processed_state)
@@ -296,7 +296,7 @@ impl Profile for ActivityProfile {
      * @param justAddedState the state our client provided to use to add to the list
      * @return a list of derived states that should actually be added to this profile's state list
      */
-    fn process_state(&self, just_added_state: ActivityProfileState) -> Vec<ActivityProfileState> {
+    fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState> {
         match just_added_state.get_result_state() {
             Type::HighQualitySoftClips(num_hq_clips) => {
                 // special code to deal with the problem that high quality soft clipped bases aren't added to pileups
@@ -323,7 +323,7 @@ impl Profile for ActivityProfile {
                 return states;
             }
             Type::None => {
-                vec![just_added_state]
+                vec![just_added_state.clone()]
             }
         }
     }
@@ -614,7 +614,7 @@ impl Profile for ActivityProfile {
     fn get_probabilities_as_array(&self) -> Vec<f64> {
         let probs = self
             .get_state_list()
-            .into_par_iter()
+            .into_iter()
             .map(|state| state.is_active_prob())
             .collect::<Vec<f64>>();
         return probs;

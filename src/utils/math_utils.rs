@@ -9,7 +9,7 @@ lazy_static! {
     static ref cache: Vec<f64> = (0..((JacobianLogTable::MAX_TOLERANCE
         / JacobianLogTable::TABLE_STEP)
         + 1.0) as usize)
-        .into_par_iter()
+        .into_iter()
         .map(|k| { (1.0 + (10.0_f64).powf(-(k as f64) * JacobianLogTable::TABLE_STEP)).log10() })
         .collect::<Vec<f64>>();
     pub static ref LOG10_ONE_HALF: f64 = (0.5 as f64).log10();
@@ -40,10 +40,10 @@ impl MathUtils {
     pub fn normalize_pls(pls: &[f64]) -> Vec<f64> {
         let mut new_pls = vec![0.0; pls.len()];
         let smallest = *pls
-            .par_iter()
+            .iter()
             .min_by_key(|x| OrderedFloat(**x))
             .unwrap_or(&std::f64::NAN);
-        new_pls.par_iter_mut().enumerate().for_each(|(i, pl)| {
+        new_pls.iter_mut().enumerate().for_each(|(i, pl)| {
             *pl = pls[i] - smallest;
         });
 
@@ -62,8 +62,8 @@ impl MathUtils {
      */
     pub fn ebe_add<T: Send + Sync + Add + Copy + Add<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
         let z = a
-            .par_iter()
-            .zip(b.par_iter())
+            .iter()
+            .zip(b.iter())
             .map(|(aval, bval)| *aval + *bval)
             .collect::<Vec<T>>();
         z
@@ -74,8 +74,8 @@ impl MathUtils {
      */
     pub fn ebe_subtract<T: Send + Sync + Sub + Copy + Sub<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
         let z = a
-            .par_iter()
-            .zip(b.par_iter())
+            .iter()
+            .zip(b.iter())
             .map(|(aval, bval)| *aval - *bval)
             .collect::<Vec<T>>();
         z
@@ -86,8 +86,8 @@ impl MathUtils {
      */
     pub fn ebe_multiply<T: Send + Sync + Mul + Copy + Mul<Output = T>>(a: &[T], b: &[T]) -> Vec<T> {
         let z = a
-            .into_par_iter()
-            .zip(b.par_iter())
+            .into_iter()
+            .zip(b.iter())
             .map(|(aval, bval)| *aval * *bval)
             .collect::<Vec<T>>();
         z
@@ -102,7 +102,7 @@ impl MathUtils {
         a: &[T],
         b: &[T],
     ) -> T {
-        Self::ebe_multiply(a, b).into_par_iter().sum::<T>()
+        Self::ebe_multiply(a, b).into_iter().sum::<T>()
     }
 
     /**
@@ -144,9 +144,9 @@ impl MathUtils {
 
     pub fn normalize_log10(mut array: Vec<f64>, take_log10_of_output: bool) -> Vec<f64> {
         let log10_sum = MathUtils::log10_sum_log10(&array, 0, array.len());
-        array.par_iter_mut().for_each(|x| *x = *x - log10_sum);
+        array.iter_mut().for_each(|x| *x = *x - log10_sum);
         if !take_log10_of_output {
-            array.par_iter_mut().for_each(|x| *x = 10.0_f64.powf(*x))
+            array.iter_mut().for_each(|x| *x = 10.0_f64.powf(*x))
         }
         return array;
     }
@@ -166,7 +166,7 @@ impl MathUtils {
 
         let sum_tot = 1.0
             + log10_values[start..finish]
-                .par_iter()
+                .iter()
                 .enumerate()
                 .filter(|(index, value)| {
                     *index != max_element_index && **value != std::f64::NEG_INFINITY
@@ -224,11 +224,11 @@ impl MathUtils {
      */
     pub fn scale_log_space_array_for_numeric_stability(array: &[f64]) -> Vec<f64> {
         let max_value: f64 = *array
-            .par_iter()
+            .iter()
             .max_by_key(|x| OrderedFloat(**x))
             .unwrap_or(&std::f64::NAN);
         let result = array
-            .par_iter()
+            .iter()
             .map(|x| *x - max_value)
             .collect::<Vec<f64>>();
         result
@@ -252,27 +252,27 @@ impl MathUtils {
         // for precision purposes, we need to add (or really subtract, since they're
         // all negative) the largest value; also, we need to convert to normal-space.
         let max_value: f64 = *array
-            .par_iter()
+            .iter()
             .max_by_key(|x| OrderedFloat(**x))
             .unwrap_or(&std::f64::NAN);
 
         // we may decide to just normalize in log space without converting to linear space
         if keep_in_log_space {
             let array: Vec<f64> = array
-                .par_iter()
+                .iter()
                 .map(|x| *x - max_value)
                 .collect::<Vec<f64>>();
             return array;
         }
         // default case: go to linear space
         let mut normalized: Vec<f64> = (0..array.len())
-            .into_par_iter()
+            .into_iter()
             .map(|i| 10.0_f64.powf(array[i] - max_value))
             .collect::<Vec<f64>>();
 
-        let sum: f64 = normalized.par_iter().sum::<f64>();
+        let sum: f64 = normalized.iter().sum::<f64>();
 
-        normalized.par_iter_mut().enumerate().for_each(|(i, x)| {
+        normalized.iter_mut().enumerate().for_each(|(i, x)| {
             *x = *x / sum;
             if take_log10_of_output {
                 *x = x.log10();
@@ -403,12 +403,12 @@ impl MathUtils {
             return array;
         }
 
-        let sum = array.par_iter().sum::<f64>();
+        let sum = array.iter().sum::<f64>();
         assert!(
             sum >= 0.0,
             "Values in probability array sum to a negative number"
         );
-        array.par_iter_mut().for_each(|x| *x = *x / sum);
+        array.iter_mut().for_each(|x| *x = *x / sum);
 
         return array;
     }

@@ -34,12 +34,12 @@ impl Clone for ReferenceReader {
 
         Self {
             indexed_reader,
-            current_sequence: Vec::new(),
+            current_sequence: self.current_sequence.clone(),
             genomes_and_contigs: self.genomes_and_contigs.clone(),
             reference_index_to_tid: self.reference_index_to_tid.clone(),
             target_names: self.target_names.clone(),
             target_lens: self.target_lens.clone(),
-            genome_path: None,
+            genome_path: self.genome_path.clone(),
         }
     }
 }
@@ -67,21 +67,84 @@ impl ReferenceReader {
         concatenated_genomes: &Option<String>,
         genomes_and_contigs: GenomesAndContigs,
         target_names: Vec<&[u8]>,
-    ) -> ReferenceReader {
+    ) -> Self {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(concatenated_genomes);
 
-        ReferenceReader {
+        Self {
             indexed_reader,
             current_sequence: Vec::new(),
             reference_index_to_tid: HashMap::new(),
             target_names: target_names
-                .into_par_iter()
+                .into_iter()
                 .enumerate()
                 .map(|(tid, target)| (tid, target.to_vec()))
                 .collect::<HashMap<usize, Vec<u8>>>(),
             genomes_and_contigs: genomes_and_contigs,
             target_lens: HashMap::new(),
             genome_path: concatenated_genomes.clone(),
+        }
+
+    }
+
+    /// Somewhat efficient cloning function. Only takes the info needed for a given ref idx
+    pub fn new_from_reader_with_reference_index(reader: &Self, ref_idx: usize) -> Self {
+        let indexed_reader = ReferenceReaderUtils::retrieve_reference(&reader.genome_path);
+
+        if reader.reference_index_to_tid.contains_key(&ref_idx) {
+            let ref_tids = reader.reference_index_to_tid.get(&ref_idx).unwrap().clone();
+            let mut target_names = HashMap::with_capacity(ref_tids.len());
+            let mut target_lens = HashMap::with_capacity(ref_tids.len());
+            ref_tids.iter().map(|tid| {
+                target_names.insert(*tid, reader.target_names.get(tid).unwrap().clone());
+                target_lens.insert(*tid, reader.target_lens.get(tid).unwrap().clone());
+            });
+
+            let mut ref_idx_to_tid = HashMap::new();
+            ref_idx_to_tid.insert(ref_idx, ref_tids);
+
+            let genomes_and_contigs = GenomesAndContigs::new();
+
+            Self {
+                indexed_reader,
+                current_sequence: Vec::new(),
+                reference_index_to_tid: ref_idx_to_tid,
+                genomes_and_contigs,
+                target_lens,
+                target_names,
+                genome_path: reader.genome_path.clone()
+            }
+        } else {
+            reader.clone()
+        }
+    }
+
+    pub fn new_from_reader_with_tid_and_rid(reader: &ReferenceReader, ref_idx: usize, tid: usize) -> Self {
+        let indexed_reader = ReferenceReaderUtils::retrieve_reference(&reader.genome_path);
+
+        if reader.reference_index_to_tid.contains_key(&ref_idx) {
+            let mut target_names = HashMap::with_capacity(1);
+            let mut target_lens = HashMap::with_capacity(1);
+            target_names.insert(tid, reader.target_names.get(&tid).unwrap().clone());
+            target_lens.insert(tid, reader.target_lens.get(&tid).unwrap().clone());
+
+            let mut ref_idx_to_tid = HashMap::new();
+            let mut tids = LinkedHashSet::with_capacity(1);
+            tids.insert(tid);
+            ref_idx_to_tid.insert(ref_idx, tids);
+
+            let genomes_and_contigs = GenomesAndContigs::new();
+
+            Self {
+                indexed_reader,
+                current_sequence: Vec::new(),
+                reference_index_to_tid: ref_idx_to_tid,
+                genomes_and_contigs,
+                target_lens,
+                target_names,
+                genome_path: reader.genome_path.clone()
+            }
+        } else {
+            reader.clone()
         }
     }
 
@@ -151,21 +214,21 @@ impl ReferenceReader {
         {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
-                "{}~{}",
-                self.genomes_and_contigs.genomes[ref_idx],
-                std::str::from_utf8(contig_name).unwrap()
+                "{}",
+                std::str::from_utf8(contig_name).unwrap().splitn(2, "~").skip(1).next().unwrap()
             )) {
                 Ok(reference) => reference,
-                Err(e) => {
-                    panic!(
-                        "Cannot read sequence from reference {} {:?}",
-                        format!(
-                            "{}~{}",
-                            &self.genomes_and_contigs.genomes[ref_idx],
-                            std::str::from_utf8(contig_name).unwrap()
-                        ),
-                        e,
-                    );
+                Err(_e) => {
+                    match self.indexed_reader.fetch_all(&format!(
+                        "{}~{}",
+                        self.genomes_and_contigs.genomes[ref_idx],
+                        std::str::from_utf8(contig_name).unwrap()
+                    )) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            panic!("Cannot read sequence from {}: {}", std::str::from_utf8(contig_name).unwrap(), e)
+                        }
+                    }
                 }
             },
         };
@@ -178,21 +241,21 @@ impl ReferenceReader {
         {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
-                "{}~{}",
-                self.genomes_and_contigs.genomes[ref_idx],
-                std::str::from_utf8(&self.target_names[&tid]).unwrap()
+                "{}",
+                std::str::from_utf8(&self.target_names[&tid]).unwrap().splitn(2, "~").skip(1).next().unwrap()
             )) {
                 Ok(reference) => reference,
-                Err(e) => {
-                    panic!(
-                        "Cannot read sequence from reference {} {:?}",
-                        format!(
-                            "{}~{}",
-                            &self.genomes_and_contigs.genomes[ref_idx],
-                            std::str::from_utf8(&self.target_names[&tid]).unwrap()
-                        ),
-                        e,
-                    );
+                Err(_e) => {
+                    match self.indexed_reader.fetch_all(&format!(
+                        "{}~{}",
+                        self.genomes_and_contigs.genomes[ref_idx],
+                        std::str::from_utf8(&self.target_names[&tid]).unwrap()
+                    )) {
+                        Ok(reference) => reference,
+                        Err(e) => {
+                            panic!("Cannot read sequence from {}: {}", std::str::from_utf8(&self.target_names[&tid]).unwrap(), e)
+                        }
+                    }
                 }
             },
         };
@@ -212,9 +275,8 @@ impl ReferenceReader {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch(
                 &format!(
-                    "{}~{}",
-                    self.genomes_and_contigs.genomes[ref_idx],
-                    std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap()
+                    "{}",
+                    std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap().splitn(2, "~").skip(1).next().unwrap()
                 ),
                 interval.get_start() as u64,
                 min(
@@ -223,17 +285,31 @@ impl ReferenceReader {
                 ),
             ) {
                 Ok(reference) => reference,
-                Err(e) => {
-                    panic!(
-                        "Cannot read sequence from reference {} {:?}",
-                        format!(
-                            "{}~{}",
-                            &self.genomes_and_contigs.genomes[ref_idx],
-                            std::str::from_utf8(&self.target_names[&interval.get_contig()])
-                                .unwrap()
-                        ),
-                        e,
-                    );
+                Err(_e) => match self.indexed_reader.fetch(
+                    &format!(
+                        "{}~{}",
+                        self.genomes_and_contigs.genomes[ref_idx],
+                        std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap()
+                    ),
+                    interval.get_start() as u64,
+                    min(
+                        (interval.get_end() + 1) as u64,
+                        *self.target_lens.get(&interval.get_contig()).unwrap(),
+                    ),
+                ) {
+                    Ok(reference) => reference,
+                    Err(e) => {
+                        panic!(
+                            "Cannot read sequence from reference {} {:?}",
+                            format!(
+                                "{}~{}",
+                                &self.genomes_and_contigs.genomes[ref_idx],
+                                std::str::from_utf8(&self.target_names[&interval.get_contig()])
+                                    .unwrap()
+                            ),
+                            e,
+                        );
+                    }
                 }
             },
         };
@@ -253,8 +329,8 @@ impl ReferenceReader {
      */
     pub fn split_contig_name<'b>(contig_name: &'b [u8], separator: u8) -> &'b [u8] {
         match contig_name
-            .into_par_iter()
-            .position_first(|&x| x == separator)
+            .into_iter()
+            .position(|&x| x == separator)
         {
             Some(position) => return &contig_name[position..contig_name.len()],
             None => return contig_name,

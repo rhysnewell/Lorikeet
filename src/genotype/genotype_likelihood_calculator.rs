@@ -373,7 +373,7 @@ impl GenotypeLikelihoodCalculator {
         // we multiply them all and the divide by ploidy^readCount (so substract readCount * log10(ploidy) )
         for g in 0..self.genotype_count as usize {
             result[g] = self.read_likelihoods_by_genotype_index[g][0..read_count]
-                .par_iter()
+                .iter()
                 .sum::<f64>()
                 - denominator;
         }

@@ -72,7 +72,8 @@ impl StrainAbundanceCalculator {
 
                 debug!(
                     "Index {} abundance weight {} variant weights",
-                    index, genotype.abundance_weight, //&genotype.variant_weights
+                    index,
+                    genotype.abundance_weight, //&genotype.variant_weights
                 );
 
                 if genotype.abundance_weight.is_nan()

@@ -198,7 +198,6 @@ impl AdaptiveChainPruner {
 
         return chains
             .iter()
-            .par_bridge()
             .filter(|c| !good_chains.contains(c))
             .collect::<HashSet<&Path>>();
     }
@@ -275,7 +274,6 @@ impl AdaptiveChainPruner {
 
         chains
             .iter()
-            .par_bridge()
             // .max_by(|l, r| comparator.compare(l, r))
             .max_by(|l, r| {
                 l.get_max_multiplicity(graph)
@@ -370,7 +368,7 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
             self.likely_error_chains(&chains, graph, self.initial_error_probability);
 
         let error_count = probable_error_chains
-            .into_par_iter()
+            .into_iter()
             .map(|chain| {
                 // chain
                 //     .get_edges()
@@ -385,11 +383,11 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
             })
             .sum::<usize>();
         let total_bases = chains
-            .par_iter()
+            .iter()
             .map(|chain| {
                 chain
                     .get_edges()
-                    .par_iter()
+                    .iter()
                     .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
                     .sum::<usize>()
             })
@@ -398,10 +396,9 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
 
         self.likely_error_chains(&chains, graph, error_rate)
             .into_iter()
-            .par_bridge()
             .filter(|c| {
                 !c.get_edges()
-                    .par_iter()
+                    .iter()
                     .any(|e| graph.graph.edge_weight(*e).unwrap().is_ref())
             })
             .collect::<Vec<&Path>>()

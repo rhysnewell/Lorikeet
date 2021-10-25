@@ -378,14 +378,13 @@ impl EventMap {
                 max_mnp_distance,
             ));
             hap_number += 1;
-            start_pos_key_set.par_extend(h.event_map.as_ref().unwrap().get_start_positions());
+            start_pos_key_set.extend(h.event_map.as_ref().unwrap().get_start_positions());
             // Assert that all of the events discovered have 2 alleles
             h.event_map
                 .as_ref()
                 .unwrap()
                 .map
                 .values()
-                .par_bridge()
                 .for_each(|vc| {
                     if vc.get_alleles().len() == 2 {
                         // pass
@@ -429,7 +428,7 @@ impl EventMap {
             .map(|(_, v)| v)
             .collect::<Vec<&'b VariantContext>>();
 
-        let contains_insertion_at_loc = overlapping_events.par_iter().any(|v| {
+        let contains_insertion_at_loc = overlapping_events.iter().any(|v| {
             v.variant_type.as_ref().unwrap() == &VariantType::Indel
                 && v.get_reference().length() == 1
         });
@@ -449,7 +448,7 @@ impl EventMap {
             // We are at the end of a deletion and the start of an insertion;
             // only the insertion should be kept in this case.
             return overlapping_events
-                .par_iter()
+                .iter()
                 .filter(|v| *v != &deletion_events_ending_at_loc[0])
                 .map(|v| *v)
                 .collect::<Vec<&VariantContext>>();

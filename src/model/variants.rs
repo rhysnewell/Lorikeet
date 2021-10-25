@@ -275,7 +275,7 @@ impl AbstractAllele {
         if bases.len() <= 1 {
             return false;
         }
-        return bases.iter().par_bridge().any(|base| {
+        return bases.iter().any(|base| {
             *base as char == Self::BREAKEND_EXTENDING_LEFT
                 || *base as char == Self::BREAKEND_EXTENDING_RIGHT
         });
@@ -299,7 +299,7 @@ impl AbstractAllele {
             return !is_ref;
         } else {
             // return true if there are any unacceptable bases, so take conjugate value
-            !bases.iter().par_bridge().any(|base| {
+            !bases.iter().any(|base| {
                 let base = *base as char;
                 match base {
                     'A' | 'C' | 'T' | 'G' | 'a' | 'c' | 't' | 'g' | 'N' | 'n' => false,

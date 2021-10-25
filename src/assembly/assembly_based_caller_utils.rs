@@ -269,7 +269,11 @@ impl AssemblyBasedCallerUtils {
         );
 
         let full_reference_with_padding = region
-            .get_assembly_region_reference(reference_reader, Self::REFERENCE_PADDING_FOR_ASSEMBLY, true)
+            .get_assembly_region_reference(
+                reference_reader,
+                Self::REFERENCE_PADDING_FOR_ASSEMBLY,
+                true,
+            )
             .to_vec();
         let padded_reference_loc = Self::get_padded_reference_loc(
             &region,
@@ -277,8 +281,12 @@ impl AssemblyBasedCallerUtils {
             &reference_reader,
         );
         debug!("Padded reference location {:?}", &padded_reference_loc);
-        let mut ref_haplotype =
-            Self::create_reference_haplotype(&region, &padded_reference_loc, reference_reader, true);
+        let mut ref_haplotype = Self::create_reference_haplotype(
+            &region,
+            &padded_reference_loc,
+            reference_reader,
+            true,
+        );
 
         let mut read_error_corrector;
 
@@ -608,7 +616,7 @@ impl AssemblyBasedCallerUtils {
         region: &AssemblyRegion,
         padded_reference_loc: &SimpleInterval,
         reference_reader: &mut ReferenceReader,
-        sequence_already_read_in: bool
+        sequence_already_read_in: bool,
     ) -> Haplotype<L> {
         return ReferenceConfidenceModel::create_reference_haplotype(
             region,

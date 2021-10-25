@@ -152,14 +152,14 @@ impl PairHMM {
         if !processed_reads.is_empty() {
             // (re)initialize the pairHMM only if necessary
             let max_read_length = processed_reads
-                .par_iter()
+                .iter()
                 .map(|r| r.len())
                 .max()
                 .unwrap_or(0);
             let max_haplotype_length = allele_likelihoods
                 .alleles
                 .as_list_of_alleles()
-                .par_iter()
+                .iter()
                 .map(|hap| hap.length())
                 .max()
                 .unwrap_or(0);
@@ -437,19 +437,19 @@ impl PairHMM {
         // this way we ignore all paths that ended in deletions! (huge)
         // but we have to sum all the paths ending in the M and I matrices, because they're no longer extended.
         let end_i = self.padded_read_length.unwrap() - 1;
-        // let mut final_sum_probabilities = 0.0;
-        // for j in 1..self.padded_haplotype_length.unwrap() {
-        //     final_sum_probabilities += self.match_matrix[[end_i, j]] + self.insertion_matrix[[end_i, j]];
-        // };
-        let match_matrix = &self.match_matrix;
-        let insertion_matrix = &self.insertion_matrix;
-        // potential parallel implementation
-        let final_sum_probabilities: f64 = (1..self.padded_haplotype_length.unwrap())
-            .into_par_iter()
-            .fold_with(0.0_f64, |a: f64, j: usize| {
-                a + (match_matrix[[end_i, j]] + insertion_matrix[[end_i, j]])
-            })
-            .sum::<f64>();
+        let mut final_sum_probabilities = 0.0;
+        for j in 1..self.padded_haplotype_length.unwrap() {
+            final_sum_probabilities += self.match_matrix[[end_i, j]] + self.insertion_matrix[[end_i, j]];
+        };
+        // let match_matrix = &self.match_matrix;
+        // let insertion_matrix = &self.insertion_matrix;
+        // // potential parallel implementation
+        // let final_sum_probabilities: f64 = (1..self.padded_haplotype_length.unwrap())
+        //     .into_par_iter()
+        //     .fold_with(0.0_f64, |a: f64, j: usize| {
+        //         a + (match_matrix[[end_i, j]] + insertion_matrix[[end_i, j]])
+        //     })
+        //     .sum::<f64>();
 
         return final_sum_probabilities.log10() - *INITIAL_CONDITION_LOG10;
     }

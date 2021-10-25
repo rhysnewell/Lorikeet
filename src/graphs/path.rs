@@ -90,7 +90,7 @@ impl Path {
 
         let mut edges_in_order = Vec::new();
         edges_in_order.push(edge);
-        edges_in_order.par_extend(self.edges_in_order.par_iter());
+        edges_in_order.extend(self.edges_in_order.iter());
         Self {
             last_vertex: self.last_vertex,
             edges_in_order,
@@ -112,7 +112,7 @@ impl Path {
         graph: &BaseGraph<V, E>,
     ) -> Path {
         assert!(
-            edges.par_iter().all(|edge| graph.contains_edge(*edge)),
+            edges.iter().all(|edge| graph.contains_edge(*edge)),
             "Graph does not contain an edge that attempted to be added to the path"
         );
 
@@ -124,7 +124,7 @@ impl Path {
             tmp_vertex = graph.get_edge_target(*edge)
         }
         let mut edges_in_order = self.edges_in_order.clone();
-        edges_in_order.par_extend(edges);
+        edges_in_order.extend(edges);
         Path {
             last_vertex: tmp_vertex,
             edges_in_order,
@@ -149,7 +149,7 @@ impl Path {
         v == self.get_first_vertex(graph)
             || self
                 .edges_in_order
-                .par_iter()
+                .iter()
                 .map(|e| graph.graph.edge_endpoints(*e).unwrap().1)
                 .any(|edge_target| edge_target == v)
     }
@@ -157,7 +157,7 @@ impl Path {
     pub fn to_string<V: BaseVertex, E: BaseEdge>(&self, graph: &BaseGraph<V, E>) -> String {
         let mut joined_path = self
             .get_vertices(graph)
-            .par_iter()
+            .iter()
             .map(|v| {
                 std::str::from_utf8(graph.graph.node_weight(*v).unwrap().get_sequence()).unwrap()
             })
@@ -190,9 +190,9 @@ impl Path {
     ) -> Vec<NodeIndex> {
         let mut result = Vec::with_capacity(self.edges_in_order.len() + 1);
         result.push(self.get_first_vertex(graph));
-        result.par_extend(
+        result.extend(
             self.edges_in_order
-                .par_iter()
+                .iter()
                 .map(|e| graph.graph.edge_endpoints(*e).unwrap().1)
                 .collect::<Vec<NodeIndex>>(),
         );
@@ -253,7 +253,7 @@ impl Path {
             .get_additional_sequence(true)
             .to_vec();
         for e in self.edges_in_order.iter() {
-            bases.par_extend(
+            bases.extend(
                 graph
                     .graph
                     .node_weight(graph.graph.edge_endpoints(*e).unwrap().1)

@@ -2,7 +2,7 @@ use annotator::variant_annotation::VariantAnnotations;
 use bird_tool_utils::command::finish_command_safely;
 use estimation::lorikeet_engine::Elem;
 use genotype::genotype_builder::AttributeObject;
-use hashlink::LinkedHashMap;
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use linkage::linkage_engine::LinkageEngine;
 use model::variant_context::VariantContext;
 use ndarray::{Array, Array1, Array2};
@@ -93,7 +93,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
 
     fn annotate_variant_contexts_with_strains(
         mut self,
-        potential_strains: Vec<Vec<i32>>,
+        potential_strains: Vec<LinkedHashSet<i32>>,
     ) -> Vec<VariantContext> {
         // regroup contexts but owned
         let mut grouped_contexts = LinkedHashMap::with_capacity(self.labels_set.len());
@@ -108,8 +108,12 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             }
         }
 
+        debug!("Number of groups {}", grouped_contexts.len());
+
         for (strain_idx, groups_in_strain) in potential_strains.into_iter().enumerate() {
+            debug!("Strain index {} groups in strain {:?}", strain_idx, &groups_in_strain);
             for group in groups_in_strain {
+                debug!("Group {}", group);
                 let variant_contexts = grouped_contexts.entry(group).or_insert(Vec::new());
                 for vc in variant_contexts {
                     let vc_strain = vc

@@ -233,11 +233,11 @@ impl GenotypingEngine {
         gc: &mut GenotypesContext,
     ) -> f64 {
         gc.genotypes_mut()
-            .par_iter_mut()
+            .iter_mut()
             .map(|mut gt| GenotypingEngine::extract_p_no_alt(alleles, &mut gt))
             .filter(|d| !d.is_nan())
             .fold(
-                || std::f64::NAN,
+                std::f64::NAN,
                 |a, b| {
                     if a.is_nan() {
                         b
@@ -248,7 +248,6 @@ impl GenotypingEngine {
                     }
                 },
             )
-            .sum::<f64>()
     }
 
     fn extract_p_no_alt(alleles: &Vec<ByteArrayAllele>, gt: &mut Genotype) -> f64 {
