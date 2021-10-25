@@ -17,6 +17,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     n_threads: usize,
     references: &GenomesAndContigs,
     parallel_genomes: bool,
+    mapping: bool,
 ) {
 
     if !parallel_genomes {
@@ -43,13 +44,15 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                 },
             ));
 
-            // while bam.read(&mut record).is_some() {
-            //     continue
-            // }
-            //
-            // bam.finish();
+            if mapping {
+                while bam.read(&mut record).is_some() {
+                    continue
+                }
 
-            if !Path::new(&format!("{}.bai", path)).exists() {
+                bam.finish();
+            }
+
+            if !Path::new(&format!("{}.bai", path)).exists() || mapping {
                 bam::index::build(
                     &path,
                     Some(&format!("{}.bai", path)),
@@ -87,10 +90,12 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             let path = bam.path().to_string();
 
             paths.push(path);
-            // while bam.read(&mut record).is_some() {
-            //     continue
-            // }
-            // bam.finish();
+            if mapping {
+                while bam.read(&mut record).is_some() {
+                    continue
+                }
+                bam.finish();
+            }
         }
         paths.into_par_iter()
             .for_each(|path| {

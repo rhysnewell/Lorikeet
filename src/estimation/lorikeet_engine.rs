@@ -565,11 +565,16 @@ pub fn start_lorikeet_engine<
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
-        finish_bams(longreads, threads, &genomes_and_contigs, run_in_parallel);
+        finish_bams(longreads, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("longread-bam-files"));
     }
 
-    info!("Processing short reads...");
-    finish_bams(bam_readers, threads, &genomes_and_contigs, run_in_parallel);
+    if m.is_present("coupled") || m.is_present("interleaved")
+        || m.is_present("read1") || m.is_present("read2") || m.is_present("single")
+        || m.is_present("bam-files") {
+        info!("Processing short reads...");
+        finish_bams(bam_readers, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("bam-files"));
+    }
+
 
     let mut reference_map = HashMap::new();
 
