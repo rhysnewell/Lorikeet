@@ -189,7 +189,7 @@ impl Profile for ActivityProfile {
         offset: i64,
     ) -> Option<SimpleInterval> {
         let start = relative_loc.get_start() as i64 + offset;
-        if start < 1 || start > self.contig_len as i64 {
+        if start < 0 || start > self.contig_len as i64 {
             return None;
         } else {
             return Some(SimpleInterval::new(
@@ -257,8 +257,8 @@ impl Profile for ActivityProfile {
         let position = state_to_add.get_offset(self.region_start_loc.as_ref().unwrap());
         if position > self.size() as i64 {
             panic!(
-                "Must add state contiguous to existing states: adding {:?}",
-                state_to_add
+                "Must add state contiguous to existing states: adding {:?} position {} size {}",
+                state_to_add, position, self.size()
             )
         }
 
