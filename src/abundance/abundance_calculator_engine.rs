@@ -288,10 +288,10 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
     fn normalize_weights(&self, abundance_vectors: &mut Vec<Vec<StrainAbundanceCalculator>>) {
         for sample_vec in abundance_vectors {
-            let max_weight = sample_vec.iter().map(|g| g.abundance_weight).max_by(|g1, g2| {
-                g1.partial_cmp(&g2).unwrap()
-            }).unwrap();
-            sample_vec.iter_mut().for_each(|g| g.abundance_weight = g.abundance_weight / max_weight);
+            // should contain no negative numbers so just divide by the sum of all weights
+            let weight_sum = sample_vec.iter().map(|a| a.abundance_weight).sum::<f64>();
+
+            sample_vec.iter_mut().for_each(|g| g.abundance_weight = g.abundance_weight / weight_sum);
         }
     }
 

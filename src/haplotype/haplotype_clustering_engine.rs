@@ -82,7 +82,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         let grouped_contexts = self.group_contexts();
         let mut linkage_engine =
             LinkageEngine::new(grouped_contexts, sample_names, &self.cluster_separation);
-        let mut potential_strains = linkage_engine.run_linkage(sample_names, n_threads);
+        let mut potential_strains = linkage_engine.run_linkage(sample_names, n_threads, &format!("{}/{}", self.output_prefix, self.ref_name));
         debug!("Potential strains {:?}", potential_strains);
 
         (
