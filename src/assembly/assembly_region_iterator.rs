@@ -7,6 +7,8 @@ use estimation::lorikeet_engine::ReadType;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::Record;
+use std::cmp::Reverse;
+use ordered_float::OrderedFloat;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -48,6 +50,7 @@ impl<'a> AssemblyRegionIterator<'a> {
         n_threads: u32,
         short_read_bam_count: usize,
         long_read_bam_count: usize,
+        max_input_depth: usize,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
@@ -98,6 +101,16 @@ impl<'a> AssemblyRegionIterator<'a> {
                 records
             })
             .collect::<Vec<BirdToolRead>>();
+
+        if records.len() > max_input_depth {
+            // sort the reads by decreasing mean base quality. Take the top n.
+            records.par_sort_by_key(|r| Reverse(
+                OrderedFloat(
+                    r.read.qual().iter().map(|bq| *bq as f64).sum::<f64>()
+                        / r.read.qual().len() as f64)));
+            records = records.into_iter().take(max_input_depth).collect();
+        }
+
         debug!("Adding {} reads to region", records.len());
         records.par_sort_unstable();
         region.add_all(records);

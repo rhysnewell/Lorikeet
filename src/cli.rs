@@ -60,6 +60,11 @@ Variant calling options (Basic):
                                                 base for calling. [default: 10]
   --base-quality-score-threshold                Base qualities below this threshold will
                                                 be reduced to the minimum (6). [default: 18]
+  --max-input-depth                             The maximum number of reads included within an
+                                                assembly region across all samples. Larger numbers
+                                                increase run time. If the depth of an assembly region
+                                                exceeds this value, then the reads will be filtered
+                                                by mean base quality. [default: 1000]
 
 Variant calling options (Advanced):
   --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
@@ -865,6 +870,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("100"),
                 )
                 .arg(
+                    Arg::with_name("max-input-depth")
+                        .long("max-input-depth")
+                        .short("i")
+                        .default_value("1000")
+                )
+                .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
                         .default_value("75"),
@@ -1496,6 +1507,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("100"),
                 )
                 .arg(
+                    Arg::with_name("max-input-depth")
+                        .long("max-input-depth")
+                        .short("i")
+                        .default_value("1000")
+                )
+                .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
                         .default_value("75"),
@@ -2097,6 +2114,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("100"),
                 )
                 .arg(
+                    Arg::with_name("max-input-depth")
+                        .long("max-input-depth")
+                        .short("i")
+                        .default_value("1000")
+                )
+                .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
                         .default_value("75"),
@@ -2696,6 +2719,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-unpruned-variants")
                         .long("max-unpruned-variants")
                         .default_value("100"),
+                )
+                .arg(
+                    Arg::with_name("max-input-depth")
+                        .long("max-input-depth")
+                        .short("i")
+                        .default_value("1000")
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")

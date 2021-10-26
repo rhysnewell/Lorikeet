@@ -107,6 +107,7 @@ impl AssemblyRegionWalker {
         sample_names: &'a Vec<String>,
         reference_reader: &'b mut ReferenceReader,
     ) -> Vec<VariantContext> {
+        let max_input_depth = args.value_of("max-input-depth").unwrap().parse().unwrap();
         let contexts = shards
             .into_par_iter()
             .flat_map(|(tid, mut activity_profile)| {
@@ -129,6 +130,7 @@ impl AssemblyRegionWalker {
                     self.short_read_bam_count,
                     self.long_read_bam_count,
                     &self.evaluator,
+                    max_input_depth,
                 )
                 .into_par_iter()
             })
@@ -149,6 +151,7 @@ impl AssemblyRegionWalker {
         short_read_bam_count: usize,
         long_read_bam_count: usize,
         evaluator: &HaplotypeCallerEngine,
+        max_input_depth: usize,
     ) -> Vec<VariantContext> {
         let mut assembly_region_iter = AssemblyRegionIterator::new(sample_names, n_threads);
 
@@ -181,6 +184,7 @@ impl AssemblyRegionWalker {
                                 n_threads,
                                 short_read_bam_count,
                                 long_read_bam_count,
+                                max_input_depth,
                             );
 
                             let vcf_rid = VariantContext::get_contig_vcf_tid(
@@ -230,6 +234,7 @@ impl AssemblyRegionWalker {
                                 n_threads,
                                 short_read_bam_count,
                                 long_read_bam_count,
+                                max_input_depth,
                             );
                             evaluator
                                 .call_region(

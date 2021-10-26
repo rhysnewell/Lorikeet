@@ -19,7 +19,7 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use log::{log_enabled, Level};
 use std::path::Path;
-use std::fs::File;
+use std::fs::{File, read};
 use std::io::Write;
 use petgraph::dot::Dot;
 
@@ -740,7 +740,8 @@ impl<'a> LinkageEngine<'a> {
 
                         let records = grouped_reads.entry(*group).or_insert(HashSet::new()); // container for the records to be collected
                         let counts = grouped_read_counts.entry(*group).or_insert(0.0);
-                        *counts += variant.genotypes.genotypes()[sample_idx].ad[1] as f64;
+                        let allele_depth = variant.genotypes.genotypes()[sample_idx].ad[1] as f64;
+                        let mut read_count = 0.0;
                         while bam_generated.read(&mut record) == true {
                             // be very lenient with filtering
                             if record.is_unmapped() || record.seq_len() == 0 {
@@ -782,7 +783,7 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
-                                    // *counts += 1.0;
+                                    read_count += 1.0;
                                 }
                             } else if partial_match {
                                 // substring match
@@ -799,9 +800,15 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
-                                    // *counts += 1.0;
+                                    read_count += 1.0;
                                 }
                             }
+                        }
+
+                        if read_count > allele_depth {
+                            *counts = read_count;
+                        } else {
+                            *counts = allele_depth;
                         }
                     }
                 }
