@@ -615,7 +615,7 @@ impl HaplotypeCallerEngine {
 
 
                     let activity_profile = BandPassActivityProfile::from_band_passes(
-                        (0..(*length as usize)).into_par_iter().chunks(10000).map(|positions| {
+                        (0..(*length as usize)).into_par_iter().chunks(100000).map(|positions| {
                             let mut active_region_evaluation_genotyper_engine =
                                 self.active_region_evaluation_genotyper_engine.clone();
                             let mut activity_profile = BandPassActivityProfile::new(

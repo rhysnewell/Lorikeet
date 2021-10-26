@@ -17,6 +17,11 @@ use rust_htslib::bam::Record;
 use std::cmp::min;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use log::{log_enabled, Level};
+use std::path::Path;
+use std::fs::File;
+use std::io::Write;
+use petgraph::dot::Dot;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -59,11 +64,22 @@ impl<'a> LinkageEngine<'a> {
         mut self,
         indexed_bam_readers: &Vec<String>,
         n_threads: usize,
+        output_path: &str,
     ) -> Vec<LinkedHashSet<i32>> {
         let read_ids_in_groups = self.get_reads_for_groups(indexed_bam_readers, n_threads);
         debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
         let graph = self.build_graph(read_ids_in_groups);
         debug!("Graph {:?}", &graph);
+        if log_enabled!(Level::Debug) {
+            let output_dot = format!("{}_vg_graph.dot", output_path);
+            let file_path = Path::new(&output_dot);
+
+            let mut file_open = File::create(file_path).expect(
+                &format!("Unable to create dot file: {}", output_dot)
+            );
+
+            writeln!(file_open, "{:?}", Dot::new(&graph));
+        }
         if graph.edge_count() == 0 {
             // no connection formed, so each variant group is its own strain
             return graph
@@ -77,7 +93,7 @@ impl<'a> LinkageEngine<'a> {
         }
         let connected_components = self.extract_connected_components(graph);
 
-        self.compute_strain_denominations(connected_components)
+        self.compute_strain_denominations(connected_components, output_path)
     }
 
     /// Compute the different denominations of strain groupings from a given component.
@@ -95,12 +111,23 @@ impl<'a> LinkageEngine<'a> {
     fn compute_strain_denominations(
         &self,
         connected_components: Vec<UnGraph<i32, f64>>,
+        output_path: &str
     ) -> Vec<LinkedHashSet<i32>> {
         let mut all_strains = Vec::new();
-        for component_graph in connected_components {
+        for (idx, component_graph) in connected_components.into_iter().enumerate() {
             // compute the minimum spanning tree
             let mut mst = UnGraph::from_elements(min_spanning_tree(&component_graph));
             debug!("MST {:?}", &mst);
+            if log_enabled!(Level::Debug) {
+                let output_dot = format!("{}_mst_{}.dot", output_path, idx);
+                let file_path = Path::new(&output_dot);
+
+                let mut file_open = File::create(file_path).expect(
+                    &format!("Unable to create dot file: {}", output_dot)
+                );
+
+                writeln!(file_open, "{:?}", Dot::new(&mst));
+            }
 
             // sorted list of nodes in ascending order of read depth, only checking external nodes
             // i.e. nodes without incoming edges or outgoing edges. i.e. edge count <= 1
@@ -185,15 +212,15 @@ impl<'a> LinkageEngine<'a> {
 
                     if paths.len() == 1 {
                         let mut path = paths.into_iter().next().unwrap();
-
-                        let consumed_node = self.check_node_depths(
+                        // check if any of the nodes in this path have been consumed entirely
+                        let consumed_nodes = self.check_node_depths(
                             &mst,
                             &path,
                             &mut nodes_cumulative_depth,
                             current_depth,
                         );
 
-                        match consumed_node {
+                        match consumed_nodes {
                             None => {
                                 // Nodes in path above the water table so proceed
                                 self.make_strain_and_update(
@@ -207,23 +234,43 @@ impl<'a> LinkageEngine<'a> {
                                     &mst,
                                 )
                             }
-                            Some(consumed_node) => {
-                                // This path has a node that is already at capacity. So we need to
-                                // merge it with it's next closest relative and stop it from
-                                // flooding
-                                let group_at_capacity = *mst.node_weight(consumed_node).unwrap();
-                                self.merge_paths(
-                                    &mut strains,
-                                    path,
-                                    &mst,
-                                    &component_graph,
-                                    &mut seen_nodes,
-                                    &mut nodes_cumulative_depth,
-                                    group_at_capacity,
-                                    current_depth,
-                                    &mut starting_nodes,
-                                    current_node_cumulative_depth,
-                                );
+                            Some(consumed_nodes) => {
+
+                                if consumed_nodes.len() > 1 {
+                                    // This path has multiple nodes that are already at capacity. So we need to
+                                    // merge it with it's next closest relative and stop it from
+                                    // flooding
+                                    let groups_at_capacity = consumed_nodes.iter()
+                                        .map(|consumed_node|{
+                                            *mst.node_weight(*consumed_node).unwrap()
+                                        }).collect::<Vec<i32>>();
+                                    self.merge_paths(
+                                        &mut strains,
+                                        path,
+                                        &mst,
+                                        &component_graph,
+                                        &mut seen_nodes,
+                                        &mut nodes_cumulative_depth,
+                                        groups_at_capacity,
+                                        current_depth,
+                                        &mut starting_nodes,
+                                        current_node_cumulative_depth,
+                                    );
+                                } else {
+                                    // This path had one node at capacity. Attempt to bridge the gap
+                                    // over this node
+                                    path.remove(consumed_nodes.iter().next().unwrap());
+                                    self.make_strain_and_update(
+                                        path,
+                                        &mut seen_nodes,
+                                        &mut nodes_cumulative_depth,
+                                        &mut starting_nodes,
+                                        &mut strains,
+                                        current_depth,
+                                        current_node_cumulative_depth,
+                                        &mst,
+                                    )
+                                }
                             }
                         }
                     }
@@ -277,15 +324,16 @@ impl<'a> LinkageEngine<'a> {
                     seen_nodes.insert(variant_group);
                     let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
                     // add the depth of the current node to this node
-                    // subtract the cumulative depth as it has already
-                    // been seen that many times
-                    *node_cumulative_depth += (current_depth - current_node_cumulative_depth);
+                    *node_cumulative_depth += current_depth;
 
                     // check if this the next node in the path, if so append to
                     // binary heap as it will act as the next branch tip once current
                     // tips run out
                     if idx == 1 {
-                        starting_nodes.push((Reverse(OrderedFloat(current_depth)), node));
+                        starting_nodes.push((Reverse(OrderedFloat(
+                            *self.grouped_mean_read_depth.get(
+                                mst.node_weight(node).unwrap()
+                            ).unwrap())), node));
                     };
                     variant_group
                 })
@@ -309,7 +357,7 @@ impl<'a> LinkageEngine<'a> {
         component_graph: &UnGraph<i32, f64>,
         seen_nodes: &mut HashSet<i32>,
         nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
-        group_at_capacity: i32,
+        groups_at_capacity: Vec<i32>,
         current_depth: f64,
         starting_nodes: &mut BinaryHeap<(Reverse<OrderedFloat<f64>>, NodeIndex)>,
         current_node_cumulative_depth: f64,
@@ -325,7 +373,7 @@ impl<'a> LinkageEngine<'a> {
 
         let mut current_max_shared_nodes = 0;
         for (index, strain) in strains.iter().enumerate() {
-            if strain.contains(&group_at_capacity) {
+            if strain.iter().any(|vg| groups_at_capacity.contains(vg)) {
                 let shared_nodes = groups_in_path.intersection(strain).count();
                 if shared_nodes == current_max_shared_nodes {
                     // same amount of nodes as a previous strain so extend the possible options
@@ -368,7 +416,7 @@ impl<'a> LinkageEngine<'a> {
             let mut index_of_previous = 0;
             let mut max_edge_count = 0;
             let mut previous_max_edge_count = 0;
-            let mut cumulative_edge_weights_max = 0.0; // smaller cumualtive edge weights are better
+            let mut cumulative_edge_weights_max = 0.0; // smaller cumulative edge weights are better
             let mut cumulative_edge_weights_previous = 0.0; // smaller cumualtive edge weights are better
 
             for strain_index in current_closest_strain_indices.into_iter() {
@@ -555,7 +603,9 @@ impl<'a> LinkageEngine<'a> {
         path: &LinkedHashSet<NodeIndex>,
         nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
         _current_depth: f64,
-    ) -> Option<NodeIndex> {
+    ) -> Option<Vec<NodeIndex>> {
+        let mut nodes_at_capacity = None;
+
         for (idx, node) in path.into_iter().enumerate() {
             let variant_group = *mst.node_weight(*node).unwrap();
             let node_cumulative_depth = nodes_cumulative_depth.entry(*node).or_insert(0.0); // This nodes current capacity
@@ -563,11 +613,18 @@ impl<'a> LinkageEngine<'a> {
 
             if *node_cumulative_depth / *threshold >= 1.0 {
                 debug!("Node at capacity {:?} vg {} cumulative depth {} capacity {}", node, variant_group, *node_cumulative_depth, *threshold);
-                return Some(*node);
+                match &mut nodes_at_capacity {
+                    None => {
+                        nodes_at_capacity = Some(vec![*node])
+                    },
+                    Some(nodes_at_capacity) => {
+                        nodes_at_capacity.push(*node)
+                    }
+                }
             }
         }
 
-        None
+        nodes_at_capacity
     }
 
     /// Extracts the connect components of the built graph and turns them into new independent graphs
@@ -683,6 +740,7 @@ impl<'a> LinkageEngine<'a> {
 
                         let records = grouped_reads.entry(*group).or_insert(HashSet::new()); // container for the records to be collected
                         let counts = grouped_read_counts.entry(*group).or_insert(0.0);
+                        *counts += variant.genotypes.genotypes()[sample_idx].ad[1] as f64;
                         while bam_generated.read(&mut record) == true {
                             // be very lenient with filtering
                             if record.is_unmapped() || record.seq_len() == 0 {
@@ -724,7 +782,7 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
-                                    *counts += 1.0;
+                                    // *counts += 1.0;
                                 }
                             } else if partial_match {
                                 // substring match
@@ -741,7 +799,7 @@ impl<'a> LinkageEngine<'a> {
                                         std::str::from_utf8(record.qname()).unwrap()
                                     );
                                     records.insert(read_id);
-                                    *counts += 1.0;
+                                    // *counts += 1.0;
                                 }
                             }
                         }
