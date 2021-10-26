@@ -62,7 +62,7 @@ pest = "2"
 pest_derive = "2"
 petgraph = {version = "0.6.0", features = ["stable_graph"]}
 rand = "0.6"
-rayon = "1.2"
+rayon = "1.5.1"
 rust-htslib = "0.38.2"
 seq_io = "0.3.*"
 strum = "0.17.1"
