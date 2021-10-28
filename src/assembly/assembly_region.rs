@@ -124,7 +124,7 @@ impl AssemblyRegion {
             active_span.get_end() + padding,
             contig_length,
         )
-        .unwrap_or(active_span.clone())
+        .unwrap_or_else(|| active_span.clone())
     }
 
     pub fn new_with_padded_span(

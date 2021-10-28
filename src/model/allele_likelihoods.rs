@@ -553,18 +553,16 @@ impl<A: Allele> AlleleLikelihoods<A> {
                         let mut number_of_qualified_allele_likelihoods = 0;
                         for i in 0..allele_count {
                             let allele_likelihood = sample_values[[i, r]];
-                            if !allele_likelihood.is_nan() {
-                                if i != non_ref_allele_index
-                                    && allele_likelihood < best_allele.likelihood
-                                    && alleles_to_consider
-                                        .index_of_allele(self.alleles().get_allele(i))
-                                        .is_some()
-                                {
-                                    qualified_allele_likelihoods
-                                        [number_of_qualified_allele_likelihoods] =
-                                        allele_likelihood;
-                                    number_of_qualified_allele_likelihoods += 1;
-                                }
+                            if !allele_likelihood.is_nan()
+                                && i != non_ref_allele_index
+                                && allele_likelihood < best_allele.likelihood
+                                && alleles_to_consider
+                                    .index_of_allele(self.alleles().get_allele(i))
+                                    .is_some()
+                            {
+                                qualified_allele_likelihoods
+                                    [number_of_qualified_allele_likelihoods] = allele_likelihood;
+                                number_of_qualified_allele_likelihoods += 1;
                             }
                         }
                         let non_ref_likelihood = qualified_allele_likelihoods.median();
@@ -805,7 +803,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         let mut sample_evidence = self
             .evidence_by_sample_index
             .entry(sample_index)
-            .or_insert(Vec::new());
+            .or_insert_with(Vec::new);
         sample_evidence.extend(new_sample_evidence);
     }
 
@@ -888,7 +886,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         let filtered = self
             .filtered_evidence_by_sample_index
             .entry(sample_index)
-            .or_insert(Vec::new());
+            .or_insert_with(Vec::new);
         let num_to_remove = evidences_to_remove.len();
         if num_to_remove > 0 {
             let old_evidence_count = self.number_of_evidences[sample_index];
@@ -898,7 +896,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             let mut old_evidence = self
                 .evidence_by_sample_index
                 .remove(&sample_index)
-                .unwrap_or(Vec::new());
+                .unwrap_or_default();
             let mut new_evidence = Vec::new();
             let mut num_removed = 0;
             for (n, read) in old_evidence.into_iter().enumerate() {
@@ -995,11 +993,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .map(|a| (tie_breaking_priority)(a))
                 .collect::<Vec<i32>>(),
         );
-        let evidence_count = self
-            .number_of_evidences[sample_index];
-            // .get(&sample_index)
-            // .unwrap()
-            // .len();
+        let evidence_count = self.number_of_evidences[sample_index];
+        // .get(&sample_index)
+        // .unwrap()
+        // .len();
 
         return (0..evidence_count)
             .into_par_iter()
@@ -1059,7 +1056,7 @@ impl BestAllele {
         likelihood: f64,
         second_best_likelihood: f64,
     ) -> Self {
-        let confidence = if likelihood == second_best_likelihood {
+        let confidence = if (likelihood - second_best_likelihood).abs() < f64::EPSILON {
             0.0
         } else {
             likelihood - second_best_likelihood

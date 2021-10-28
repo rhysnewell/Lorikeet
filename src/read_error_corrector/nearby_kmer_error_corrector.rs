@@ -227,10 +227,10 @@ impl NearbyKmerErrorCorrector {
             self.read_error_correction_stats.num_reads_corrected += 1;
             let name = input_read.read.qname().to_vec();
             let mut corrected_read = input_read;
-            corrected_read.read.set(
+            corrected_read.update(
                 name.as_slice(),
                 Some(corrected_read.read.cigar().deref()),
-                &corrected_bases,
+                corrected_bases,
                 &corrected_quals,
             );
 

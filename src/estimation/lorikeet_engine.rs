@@ -121,7 +121,9 @@ impl<'a> LorikeetEngine<'a> {
                 );
 
                 if Path::new(&output_prefix).exists() && !self.args.is_present("force") {
-                    let cache = glob::glob(&format!("{}/*{}", &output_prefix,
+                    let cache = glob::glob(&format!(
+                        "{}/*{}",
+                        &output_prefix,
                         if mode == "call" {
                             ".vcf"
                         } else if mode == "genotype" {
@@ -132,15 +134,14 @@ impl<'a> LorikeetEngine<'a> {
                             ".vcf"
                         }
                     ))
-                        .expect("failed to interpret glob")
-                        .map(|p| {
-                            p.expect("Failed to read cached vcf path")
-                                .to_str()
-                                .unwrap()
-                                .to_string()
-                        })
-                        .collect::<Vec<String>>();
-                    if cache.len() > 0 {
+                    .expect("failed to interpret glob")
+                    .map(|p| {
+                        p.expect("Failed to read cached vcf path")
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    });
+                    if cache.count() > 0 {
                         {
                             let elem = &progress_bars[ref_idx + 2];
                             let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
@@ -168,8 +169,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(
-                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) * 2
-                                    + 1,
+                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) + 1,
                             );
                             pb.progress_bar.reset_eta();
                             let pos = pb.progress_bar.position();
@@ -202,7 +202,7 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads as u32,
                         &tmp_bam_file_cache,
                         self.run_in_parallel,
-                        ref_idx
+                        ref_idx,
                     );
 
                     debug!("Indexed bam readers {:?}", &indexed_bam_readers);
@@ -313,6 +313,7 @@ impl<'a> LorikeetEngine<'a> {
                         );
                         let (n_strains, split_contexts) = clustering_engine.perform_clustering(
                             &indexed_bam_readers,
+                            flag_filters,
                             n_threads,
                             tree,
                         );
@@ -484,7 +485,7 @@ impl<'a> LorikeetEngine<'a> {
             debug!("Reference {}", reference,);
             reference_map
                 .entry(ref_idx)
-                .or_insert(reference.to_string());
+                .or_insert_with(|| reference.to_string());
         }
 
         progress_bars[0] = Elem {
@@ -504,7 +505,7 @@ impl<'a> LorikeetEngine<'a> {
         progress_bars
             .par_iter()
             .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
-        progress_bars[0].progress_bar.set_style(sty_eta.clone());
+        progress_bars[0].progress_bar.set_style(sty_eta);
 
         return progress_bars;
     }
@@ -575,16 +576,31 @@ pub fn start_lorikeet_engine<
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
-        finish_bams(longreads, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("longread-bam-files"));
+        finish_bams(
+            longreads,
+            threads,
+            &genomes_and_contigs,
+            run_in_parallel,
+            !m.is_present("longread-bam-files"),
+        );
     }
 
-    if m.is_present("coupled") || m.is_present("interleaved")
-        || m.is_present("read1") || m.is_present("read2") || m.is_present("single")
-        || m.is_present("bam-files") {
+    if m.is_present("coupled")
+        || m.is_present("interleaved")
+        || m.is_present("read1")
+        || m.is_present("read2")
+        || m.is_present("single")
+        || m.is_present("bam-files")
+    {
         info!("Processing short reads...");
-        finish_bams(bam_readers, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("bam-files"));
+        finish_bams(
+            bam_readers,
+            threads,
+            &genomes_and_contigs,
+            run_in_parallel,
+            !m.is_present("bam-files"),
+        );
     }
-
 
     let mut reference_map = HashMap::new();
 
@@ -635,7 +651,7 @@ pub fn start_lorikeet_engine<
             progress_bars: &progress_bars,
             threads,
             mode,
-            run_in_parallel
+            run_in_parallel,
         };
 
         lorikeet_engine.apply_per_reference();

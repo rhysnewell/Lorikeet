@@ -194,7 +194,7 @@ impl HaplotypeCallerEngine {
                 .parse()
                 .unwrap(),
             ref_idx,
-            assembly_engine: assembly_engine,
+            assembly_engine,
             assembly_region_trimmer: AssemblyRegionTrimmer::new(
                 args.value_of("assembly-region-padding")
                     .unwrap()
@@ -267,6 +267,12 @@ impl HaplotypeCallerEngine {
             .parse::<f64>()
             .unwrap();
 
+        let min_contig_length = m
+            .value_of("min-contig-size")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+
         let limiting_interval = Self::parse_limiting_interval(m);
 
         // let min_variant_quality = m
@@ -310,6 +316,7 @@ impl HaplotypeCallerEngine {
                         reference_reader,
                         &limiting_interval,
                         &mut genotype_likelihoods,
+                        min_contig_length,
                     );
                 } else if (m.is_present("longreads") || m.is_present("longread-bam-files"))
                     && sample_idx >= short_sample_count
@@ -332,6 +339,7 @@ impl HaplotypeCallerEngine {
                         reference_reader,
                         &limiting_interval,
                         &mut genotype_likelihoods,
+                        min_contig_length,
                     );
                 }
                 {
@@ -366,13 +374,14 @@ impl HaplotypeCallerEngine {
             active_prob_thresh,
             ref_idx,
             indexed_bam_readers,
+            min_contig_length,
         );
     }
 
     fn parse_limiting_interval(args: &ArgMatches) -> Option<SimpleInterval> {
         if args.is_present("limiting-interval") {
             let interval_str = args.value_of("limiting-interval").unwrap();
-            let split = interval_str.split("-").collect::<Vec<&str>>();
+            let split = interval_str.split('-').collect::<Vec<&str>>();
             if split.len() == 1 {
                 None
             } else {
@@ -405,6 +414,7 @@ impl HaplotypeCallerEngine {
         reference_reader: &mut ReferenceReader,
         limiting_interval: &Option<SimpleInterval>,
         current_likelihoods: &mut Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
+        min_contig_length: u64,
     ) {
         let mut bam_generated = bam_generator.start();
 
@@ -438,86 +448,89 @@ impl HaplotypeCallerEngine {
                             reference_reader.add_target(contig_name, tid);
                             let target_len = target_lens[tid];
                             reference_reader.add_length(tid, target_len);
-                            let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
-                            // The raw activity profile.
-                            // Frequency of bases not matching reference compared
-                            // to depth
-                            let likelihoods = genotype_likelihoods.entry(tid)
-                                .or_insert((0..target_len as usize).into_iter()
-                                    .map(|pos| {
-                                        RefVsAnyResult::new(likelihoodcount, pos, tid)
-                                    }).collect::<Vec<RefVsAnyResult>>());
 
-                            {
-                                match limiting_interval {
-                                    Some(limiting_interval) => {
-                                        bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).expect(&format!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
-                                    },
-                                    None => {
-                                        bam_generated.fetch(tid as u32).expect(&format!("Failed to fetch tid {}", tid))
-                                    }
-                                };
+                            if target_len >= min_contig_length {
+                                let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert_with(|| vec![RunningAverage::new(); target_len as usize]);
+                                // The raw activity profile.
+                                // Frequency of bases not matching reference compared
+                                // to depth
+                                let likelihoods = genotype_likelihoods.entry(tid)
+                                    .or_insert_with(|| (0..target_len as usize).into_iter()
+                                        .map(|pos| {
+                                            RefVsAnyResult::new(likelihoodcount, pos, tid)
+                                        }).collect::<Vec<RefVsAnyResult>>());
 
-                                // Position based - Loop through the positions in the genome
-                                // Calculate likelihood of activity being present at this position
-                                match bam_generated.pileup() {
-                                    Some(pileups) => {
-                                        reference_reader.update_current_sequence_capacity(target_len as usize);
-                                        // Update all contig information
-                                        reference_reader.fetch_contig_from_reference_by_contig_name(
-                                            &contig_name.to_vec(),
-                                            ref_idx as usize,
-                                        );
+                                {
+                                    match limiting_interval {
+                                        Some(limiting_interval) => {
+                                            bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).unwrap_or_else(|_| panic!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
+                                        },
+                                        None => {
+                                            bam_generated.fetch(tid as u32).unwrap_or_else(|_| panic!("Failed to fetch tid {}", tid))
+                                        }
+                                    };
 
-                                        reference_reader.read_sequence_to_vec();
-                                        for p in pileups {
-                                            let pileup = p.unwrap();
-                                            let pos = pileup.pos() as usize;
-                                            let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
-                                            let refr_base = reference_reader.current_sequence[pos];
-                                            let mut result = &mut likelihoods[pos];
-                                            for alignment in pileup.alignments() {
-                                                let record = alignment.record();
-                                                if (!flag_filters.include_supplementary
-                                                    && record.is_supplementary()
-                                                    && readtype != ReadType::Long)
-                                                    || (!flag_filters.include_secondary
-                                                    && record.is_secondary())
-                                                    || (!flag_filters.include_improper_pairs
-                                                    && !record.is_proper_pair()
-                                                    && readtype != ReadType::Long)
-                                                {
-                                                    continue;
-                                                } else if !flag_filters.include_secondary
-                                                    && record.is_secondary()
-                                                    && readtype == ReadType::Long
-                                                {
-                                                    continue;
-                                                } else {
-                                                    HaplotypeCallerEngine::alignment_context_creation(
-                                                        &alignment,
-                                                        result,
-                                                        hq_soft_clips,
-                                                        log10ploidy,
-                                                        likelihoodcount,
-                                                        min_soft_clip_qual,
-                                                        refr_base,
-                                                        bq,
-                                                    )
+                                    // Position based - Loop through the positions in the genome
+                                    // Calculate likelihood of activity being present at this position
+                                    match bam_generated.pileup() {
+                                        Some(pileups) => {
+                                            reference_reader.update_current_sequence_capacity(target_len as usize);
+                                            // Update all contig information
+                                            reference_reader.fetch_contig_from_reference_by_contig_name(
+                                                &contig_name.to_vec(),
+                                                ref_idx as usize,
+                                            );
+
+                                            reference_reader.read_sequence_to_vec();
+                                            for p in pileups {
+                                                let pileup = p.unwrap();
+                                                let pos = pileup.pos() as usize;
+                                                let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
+                                                let refr_base = reference_reader.current_sequence[pos];
+                                                let mut result = &mut likelihoods[pos];
+                                                for alignment in pileup.alignments() {
+                                                    let record = alignment.record();
+                                                    if (!flag_filters.include_supplementary
+                                                        && record.is_supplementary()
+                                                        && readtype != ReadType::Long)
+                                                        || (!flag_filters.include_secondary
+                                                        && record.is_secondary())
+                                                        || (!flag_filters.include_improper_pairs
+                                                        && !record.is_proper_pair()
+                                                        && readtype != ReadType::Long)
+                                                    {
+                                                        continue;
+                                                    } else if !flag_filters.include_secondary
+                                                        && record.is_secondary()
+                                                        && readtype == ReadType::Long
+                                                    {
+                                                        continue;
+                                                    } else {
+                                                        HaplotypeCallerEngine::alignment_context_creation(
+                                                            &alignment,
+                                                            result,
+                                                            hq_soft_clips,
+                                                            log10ploidy,
+                                                            likelihoodcount,
+                                                            min_soft_clip_qual,
+                                                            refr_base,
+                                                            bq,
+                                                        )
+                                                    }
                                                 }
-                                            }
 
-                                            let denominator = result.read_counts as f64 * log10ploidy;
-                                            for i in 0..likelihoodcount {
-                                                result.genotype_likelihoods[i] -= denominator
+                                                let denominator = result.read_counts as f64 * log10ploidy;
+                                                for i in 0..likelihoodcount {
+                                                    result.genotype_likelihoods[i] -= denominator
+                                                }
+
                                             }
 
                                         }
-
-                                    }
-                                    None => println!("no bam for pileups"),
+                                        None => println!("no bam for pileups"),
+                                    };
                                 };
-                            };
+                            }
                         }
                     });
             }
@@ -546,6 +559,7 @@ impl HaplotypeCallerEngine {
         active_prob_threshold: f64,
         ref_idx: usize,
         sample_names: &Vec<String>,
+        min_contig_length: u64,
     ) -> HashMap<usize, BandPassActivityProfile> {
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
@@ -604,9 +618,9 @@ impl HaplotypeCallerEngine {
             let placeholder_vec = Vec::new();
             let per_contig_activity_profiles = target_ids_and_lens
                 .par_iter()
+                .filter(|(_, length)| *length >= &min_contig_length)
                 .map(|(tid, length)| {
                     debug!("Calculating activity on {} of length {}", tid, length);
-
                     let per_base_hq_soft_clips =
                         per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
@@ -1189,7 +1203,7 @@ impl HaplotypeCallerEngine {
                 true,
                 Format::Vcf,
             )
-            .expect(format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+            .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
 
             for vc in variant_contexts {
                 vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());

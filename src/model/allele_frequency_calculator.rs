@@ -113,7 +113,8 @@ impl AlleleFrequencyCalculator {
                 0,
                 log10_genotype_likelihoods.len(),
             ) == 0
-            && (log10_genotype_likelihoods[0] != 0.5 && log10_genotype_likelihoods.len() == 2)
+            && ((log10_genotype_likelihoods[0] - 0.5).abs() > f64::EPSILON
+                && log10_genotype_likelihoods.len() == 2)
         {
             return 0.;
         }
@@ -236,7 +237,7 @@ impl AlleleFrequencyCalculator {
                 log10_p_no_variant +=
                     log10_genotype_posteriors[AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX];
             } else {
-                let non_variant_indices = non_variant_indices_by_ploidy.entry(ploidy).or_insert(
+                let non_variant_indices = non_variant_indices_by_ploidy.entry(ploidy).or_insert_with(||
                     AlleleFrequencyCalculator::genotype_indices_with_only_ref_and_span_del(
                         ploidy, alleles,
                     ),
@@ -352,7 +353,7 @@ impl AlleleFrequencyCalculator {
                 .unwrap();
             let result = (0..ploidy + 1)
                 .into_iter()
-                .map(|n| gl_calc.allele_counts_to_index(&vec![0, ploidy - n, span_del_index, n]))
+                .map(|n| gl_calc.allele_counts_to_index(&[0, ploidy - n, span_del_index, n]))
                 .collect::<Vec<usize>>();
 
             return result;

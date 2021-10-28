@@ -252,8 +252,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
      *         list will always contain at least zipStart as the first element.
      */
     fn trace_linear_chain(&self, zip_start: NodeIndex) -> Vec<NodeIndex> {
-        let mut linear_chain = Vec::new();
-        linear_chain.push(zip_start);
+        let mut linear_chain = vec![zip_start];
 
         let mut last_is_ref = self.base_graph.is_reference_node(zip_start); // remember because this calculation is expensive
         let mut last = zip_start;

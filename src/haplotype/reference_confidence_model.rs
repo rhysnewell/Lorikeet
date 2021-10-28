@@ -34,8 +34,7 @@ impl ReferenceConfidenceModel {
         }
         let mut ref_haplotype = Haplotype::new(ref_bases, true);
         ref_haplotype.set_alignment_start_hap_wrt_ref(alignment_start as usize);
-        let mut c = Vec::new();
-        c.push(Cigar::Match(ref_haplotype.get_bases().len() as u32));
+        let mut c = vec![Cigar::Match(ref_haplotype.get_bases().len() as u32)];
         ref_haplotype.set_cigar(c);
 
         return ref_haplotype;

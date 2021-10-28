@@ -2,7 +2,7 @@ use estimation::lorikeet_engine::ReadType;
 use reads::cigar_utils::CigarUtils;
 use reads::read_utils::ReadUtils;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use rust_htslib::bam::record::{Cigar, Record};
+use rust_htslib::bam::record::{Cigar, CigarString, Record};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -29,16 +29,30 @@ pub struct BirdToolRead {
     pub sample_index: usize,
     pub read_type: ReadType,
     pub transient_attributes: HashMap<String, Vec<u8>>,
+    pub bases: Vec<u8>,
 }
 
 impl BirdToolRead {
     pub fn new(read: Record, sample_index: usize, read_type: ReadType) -> BirdToolRead {
+        let bases = read.seq().as_bytes();
         BirdToolRead {
             read,
             sample_index,
             read_type,
             transient_attributes: HashMap::new(),
+            bases,
         }
+    }
+
+    pub fn update(
+        &mut self,
+        name: &[u8],
+        cigar: Option<&CigarString>,
+        bases: Vec<u8>,
+        quals: &[u8],
+    ) {
+        self.read.set(name, cigar, &bases, quals);
+        self.bases = bases;
     }
 
     // pub fn get_start(&self) -> usize {
@@ -213,7 +227,7 @@ impl Hash for BirdToolRead {
         self.read.qname().hash(state);
         self.read.qual().hash(state);
         self.sample_index.hash(state);
-        self.read.seq().encoded.hash(state);
+        self.bases.hash(state);
     }
 }
 

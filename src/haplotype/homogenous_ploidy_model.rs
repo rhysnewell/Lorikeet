@@ -101,7 +101,7 @@ impl HeterogeneousPloidyModel {
 impl PloidyModel for HeterogeneousPloidyModel {
     fn sample_ploidy(&self, sample_index: usize) -> usize {
         assert!(
-            sample_index <= self.sample_list.len() - 1,
+            sample_index < self.sample_list.len(),
             "Index out of bounds for ploidy list"
         );
         self.ploidies[sample_index]

@@ -60,11 +60,11 @@ impl VariantStats {
             variance: 0.00,
             observed_contig_length: 0,
             num_covered_bases: 0,
-            contig_end_exclusion: contig_end_exclusion,
+            contig_end_exclusion,
             num_mapped_reads: 0,
             total_mismatches: 0,
-            min: min,
-            max: max,
+            min,
+            max,
             method: "".to_string(),
             regression: (0., 0., 0.),
         }
@@ -209,7 +209,7 @@ impl VariantFunctions for VariantStats {
             } => {
                 // convert depth to f64 for this to work
                 let depth_64: Vec<f64> = depth.par_iter().map(|x| *x as f64).collect();
-                let data = vec![("Y", variant_count.clone()), ("X", depth_64.clone())];
+                let data = vec![("Y", variant_count.clone()), ("X", depth_64)];
 
                 let data = RegressionDataBuilder::new()
                     .build_from(data)

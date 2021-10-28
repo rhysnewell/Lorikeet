@@ -12,6 +12,7 @@ use reference::reference_reader::ReferenceReader;
 use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
+use coverm::FlagFilter;
 
 /// HaplotypeClusteringEngine provides a suite of functions that takes a list of VariantContexts
 /// And clusters them using the flight python module. It will then read in the results of flight
@@ -44,7 +45,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             ref_name: &reference_reader.genomes_and_contigs.genomes[ref_idx],
             n_samples,
             allowed_threads,
-            labels: Array::default((0)),
+            labels: Array::default(0),
             labels_set: HashSet::new(),
             cluster_separation: Array::default((0, 0)),
         }
@@ -56,6 +57,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
     pub fn perform_clustering(
         mut self,
         sample_names: &Vec<String>,
+        flag_filters: &FlagFilter,
         n_threads: usize,
         tree: &Arc<Mutex<Vec<&Elem>>>,
     ) -> (usize, Vec<VariantContext>) {
@@ -82,7 +84,12 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         let grouped_contexts = self.group_contexts();
         let mut linkage_engine =
             LinkageEngine::new(grouped_contexts, sample_names, &self.cluster_separation);
-        let mut potential_strains = linkage_engine.run_linkage(sample_names, n_threads, &format!("{}/{}", self.output_prefix, self.ref_name));
+        let mut potential_strains = linkage_engine.run_linkage(
+            sample_names,
+            n_threads,
+            &format!("{}/{}", self.output_prefix, self.ref_name),
+            flag_filters,
+        );
         debug!("Potential strains {:?}", potential_strains);
 
         (
@@ -111,7 +118,10 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         debug!("Number of groups {}", grouped_contexts.len());
 
         for (strain_idx, groups_in_strain) in potential_strains.into_iter().enumerate() {
-            debug!("Strain index {} groups in strain {:?}", strain_idx, &groups_in_strain);
+            debug!(
+                "Strain index {} groups in strain {:?}",
+                strain_idx, &groups_in_strain
+            );
             for group in groups_in_strain {
                 debug!("Group {}", group);
                 let variant_contexts = grouped_contexts.entry(group).or_insert(Vec::new());
@@ -143,13 +153,19 @@ impl<'a> HaplotypeClusteringEngine<'a> {
     fn group_contexts(&self) -> LinkedHashMap<i32, Vec<&VariantContext>> {
         let mut grouped_contexts = LinkedHashMap::with_capacity(self.labels_set.len());
         for context in self.variants.iter() {
-            if let AttributeObject::I32(val) = context
+            match context
                 .attributes
-                .get(VariantAnnotations::VariantGroup.to_key())
-                .unwrap()
-            {
-                let group = grouped_contexts.entry(*val).or_insert(Vec::new());
-                group.push(context);
+                .get(VariantAnnotations::VariantGroup.to_key()) {
+                None => continue,
+                Some(attribute) => {
+                    if let AttributeObject::I32(val) = attribute
+                    {
+                        if *val != -1 {
+                            let group = grouped_contexts.entry(*val).or_insert(Vec::new());
+                            group.push(context);
+                        }
+                    }
+                }
             }
         }
 

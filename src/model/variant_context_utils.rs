@@ -315,10 +315,10 @@ impl VariantContextUtils {
             return None;
         }
 
-        if priority_list_of_vcs.is_some() {
-            if priority_list_of_vcs.as_ref().unwrap().len() != original_num_of_vcs {
-                panic!("the number of the original VariantContexts must be the same as the number of VariantContexts in the priority list")
-            };
+        if priority_list_of_vcs.is_some()
+            && priority_list_of_vcs.as_ref().unwrap().len() != original_num_of_vcs
+        {
+            panic!("the number of the original VariantContexts must be the same as the number of VariantContexts in the priority list")
         };
 
         let pre_filtered_vcs = Self::sort_variant_contexts_by_priority(
@@ -354,7 +354,7 @@ impl VariantContextUtils {
 
         let mut longest_vc = VCs[0].loc.clone();
         let mut depth = 0.0;
-        let mut log10_p_error = 1.0;
+        let mut log10_p_error: f64 = 1.0;
         let mut any_vc_had_filters_applied = false;
         let mut genotypes = GenotypesContext::create(10);
 
@@ -386,7 +386,7 @@ impl VariantContextUtils {
                 genotype_merge_options == GenotypeMergeType::Uniquify,
             );
             // We always take the QUAL of the first VC with a non-MISSING qual for the combined value
-            if log10_p_error == 1.0 {
+            if (log10_p_error - 1.0).abs() < f64::EPSILON {
                 log10_p_error = vc.get_log10_p_error();
             };
 

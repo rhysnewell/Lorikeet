@@ -115,8 +115,7 @@ impl EventMap {
                             // if the insertion isn't completely resolved in the haplotype, skip it
                             // note this used to emit SYMBOLIC_UNASSEMBLED_EVENT_ALLELE but that seems dangerous
                         } else {
-                            let mut insertion_bases = Vec::new();
-                            insertion_bases.push(reference[ref_pos - 1]); // add the padding base
+                            let mut insertion_bases = vec![reference[ref_pos - 1]]; // add the padding base
                             insertion_bases.extend_from_slice(
                                 &alignment[alignment_pos..(alignment_pos + *len as usize)],
                             );
@@ -380,18 +379,13 @@ impl EventMap {
             hap_number += 1;
             start_pos_key_set.extend(h.event_map.as_ref().unwrap().get_start_positions());
             // Assert that all of the events discovered have 2 alleles
-            h.event_map
-                .as_ref()
-                .unwrap()
-                .map
-                .values()
-                .for_each(|vc| {
-                    if vc.get_alleles().len() == 2 {
-                        // pass
-                    } else {
-                        panic!("Error Haplotype event map Variant Context has too many alleles")
-                    }
-                });
+            h.event_map.as_ref().unwrap().map.values().for_each(|vc| {
+                if vc.get_alleles().len() == 2 {
+                    // pass
+                } else {
+                    panic!("Error Haplotype event map Variant Context has too many alleles")
+                }
+            });
 
             debug!("{:?}", &h.genome_location);
             debug!("> Cigar {:?}", &h.cigar);

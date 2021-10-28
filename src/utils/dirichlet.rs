@@ -8,7 +8,7 @@ pub struct Dirichlet<'a> {
 
 impl<'a> Dirichlet<'a> {
     pub fn new(alpha: &'a [f64]) -> Dirichlet<'a> {
-        Dirichlet { alpha: alpha }
+        Dirichlet { alpha }
     }
 
     // in variational Bayes one often needs the effective point estimate of a multinomial distribution with a
@@ -51,11 +51,7 @@ impl<'a> Dirichlet<'a> {
 
     pub fn mean_weights(&self) -> Vec<f64> {
         let sum = self.alpha.iter().sum::<f64>();
-        let result = self
-            .alpha
-            .iter()
-            .map(|x| *x / sum)
-            .collect::<Vec<f64>>();
+        let result = self.alpha.iter().map(|x| *x / sum).collect::<Vec<f64>>();
 
         return result;
     }

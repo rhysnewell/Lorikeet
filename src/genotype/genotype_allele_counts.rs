@@ -87,7 +87,7 @@ impl GenotypeAlleleCounts {
             && self.index == 0
             && self.sorted_allele_counts.len() == 0
             && self.distinct_allele_count == 0
-            && self.log10_combination_count == -1.0
+            && (self.log10_combination_count - -1.0).abs() < f64::EPSILON
         {
             true
         } else {
@@ -598,12 +598,10 @@ impl GenotypeAlleleCounts {
             let only_index = self.sorted_allele_counts[from << 1] as usize;
             if only_index == index {
                 return from as i64;
+            } else if only_index > index {
+                return -(from as i64) - 1;
             } else {
-                if only_index > index {
-                    return -(from as i64) - 1;
-                } else {
-                    return -(to as i64) - 1;
-                }
+                return -(to as i64) - 1;
             }
         }
 

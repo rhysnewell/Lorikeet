@@ -10,6 +10,7 @@ use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use smith_waterman::bindings::SWParameters;
+use std::fmt::Debug;
 use utils::simple_interval::Locatable;
 
 /**
@@ -17,7 +18,7 @@ use utils::simple_interval::Locatable;
  */
 
 // TODO: Change this to an enum with two options, ReadThreadGraph & JunctionTreeLinkedDeBruijnGraph
-pub trait AbstractReadThreadingGraph: Sized + Send + Sync {
+pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
     fn get_base_graph(&self) -> &BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>;
 
     fn get_base_graph_mut(&mut self) -> &mut BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>;

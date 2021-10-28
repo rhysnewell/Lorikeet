@@ -48,7 +48,7 @@ impl AlignmentUtils {
         let soft_clipped_bases = original_read.len() - read_minus_soft_clips.len();
         let read_to_haplotype_sw_alignment = SmithWatermanAligner::align(
             haplotype.get_bases(),
-            read_minus_soft_clips.read.seq().as_bytes().as_slice(),
+            read_minus_soft_clips.bases.as_slice(),
             &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
             SWOverhangStrategy::SoftClip,
         );
@@ -114,7 +114,7 @@ impl AlignmentUtils {
         let left_aligned_read_to_ref_cigar_result = Self::left_align_indels(
             read_to_ref_cigar,
             ref_haplotype.get_bases(),
-            read_minus_soft_clips.read.seq().as_bytes().as_slice(),
+            read_minus_soft_clips.bases.as_slice(),
             read_start_on_reference_haplotype,
         );
         let left_aligned_read_to_ref_cigar = &left_aligned_read_to_ref_cigar_result.cigar;
@@ -138,7 +138,7 @@ impl AlignmentUtils {
         copied_read.read.set(
             original_read.read.qname(),
             Some(&new_cigar),
-            original_read.read.seq().as_bytes().as_slice(),
+            original_read.bases.as_slice(),
             original_read.read.qual(),
         );
 
@@ -852,7 +852,7 @@ impl AlignmentUtils {
 
         let mut read_idx = 0;
         let end_on_read = start_on_read + n_read_bases - 1; // index of the last base on read we want to count (note we are including soft-clipped bases with this math)
-        let read_seq = r.read.seq().as_bytes();
+        let read_seq = r.bases.as_slice();
         let c = r.read.cigar();
         let read_quals = r.read.qual();
 

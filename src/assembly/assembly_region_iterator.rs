@@ -4,11 +4,11 @@ use coverm::bam_generator::{
 };
 use coverm::FlagFilter;
 use estimation::lorikeet_engine::ReadType;
+use ordered_float::OrderedFloat;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::Record;
 use std::cmp::Reverse;
-use ordered_float::OrderedFloat;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -89,6 +89,9 @@ impl<'a> AssemblyRegionIterator<'a> {
                         && read_type != ReadType::Long) // We want supp alignments for longreads
                         || (!flag_filters.include_secondary
                         && record.is_secondary())
+                        || (read_type == ReadType::Short
+                        && !record.is_proper_pair()
+                        && !flag_filters.include_improper_pairs)
                         || record.is_unmapped()
                     // Check against filter flags and current sample type
                     {
@@ -104,10 +107,12 @@ impl<'a> AssemblyRegionIterator<'a> {
 
         if records.len() > max_input_depth {
             // sort the reads by decreasing mean base quality. Take the top n.
-            records.par_sort_by_key(|r| Reverse(
-                OrderedFloat(
+            records.par_sort_by_key(|r| {
+                Reverse(OrderedFloat(
                     r.read.qual().iter().map(|bq| *bq as f64).sum::<f64>()
-                        / r.read.qual().len() as f64)));
+                        / r.read.qual().len() as f64,
+                ))
+            });
             records = records.into_iter().take(max_input_depth).collect();
         }
 

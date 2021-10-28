@@ -217,7 +217,7 @@ impl VariantContext {
     }
 
     pub fn has_log10_p_error(&self) -> bool {
-        self.log10_p_error != 1.0
+        (self.log10_p_error - 1.0).abs() > f64::EPSILON
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -1019,13 +1019,13 @@ impl VariantContext {
         match self.attributes.get(VariantAnnotations::Strain.to_key()) {
             None => {
                 // Strain annotation not present so panic
-                panic!("This VariantContext has not been annotated with any strains")
+                false
             }
             Some(attribute) => {
                 if let AttributeObject::VecUnsize(vec) = attribute {
-                    return vec.contains(&strain_id);
+                    vec.contains(&strain_id)
                 } else {
-                    panic!("Strain key has value not contained in AttributeObject::VecUnsize")
+                    false
                 }
             }
         }
@@ -1122,7 +1122,7 @@ impl VariantContext {
                 record
                     .push_info_float(
                         VariantAnnotations::QualByDepth.to_key().as_bytes(),
-                        &vec![*val as f32],
+                        &[*val as f32],
                     )
                     .expect("Cannot push info tag");
             }
@@ -1190,7 +1190,7 @@ impl VariantContext {
                 record
                     .push_info_integer(
                         VariantAnnotations::VariantGroup.to_key().as_bytes(),
-                        &vec![*val],
+                        &[*val],
                     )
                     .expect("Cannot push info tag");
             }
@@ -1232,7 +1232,7 @@ impl VariantContext {
                     Some(pgt) => {
                         match pgt {
                             AttributeObject::String(string) => {
-                                let slash = string.contains("/");
+                                let slash = string.contains('/');
                                 for (idx, byte) in string.as_bytes().into_iter().enumerate() {
                                     let val = if *byte == 48 {
                                         // utf8 to int

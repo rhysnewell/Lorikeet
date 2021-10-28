@@ -236,18 +236,15 @@ impl GenotypingEngine {
             .iter_mut()
             .map(|mut gt| GenotypingEngine::extract_p_no_alt(alleles, &mut gt))
             .filter(|d| !d.is_nan())
-            .fold(
-                std::f64::NAN,
-                |a, b| {
-                    if a.is_nan() {
-                        b
-                    } else if b.is_nan() {
-                        a
-                    } else {
-                        a + b
-                    }
-                },
-            )
+            .fold(std::f64::NAN, |a, b| {
+                if a.is_nan() {
+                    b
+                } else if b.is_nan() {
+                    a
+                } else {
+                    a + b
+                }
+            })
     }
 
     fn extract_p_no_alt(alleles: &Vec<ByteArrayAllele>, gt: &mut Genotype) -> f64 {
@@ -288,7 +285,7 @@ impl GenotypingEngine {
             let mut non_variant_log10_posteriors = (0..ploidy)
                 .into_iter()
                 .map(|n| {
-                    gl_calc.allele_counts_to_index(&vec![0, ploidy - n, span_del_index, n]);
+                    gl_calc.allele_counts_to_index(&[0, ploidy - n, span_del_index, n]);
                     posteriors[n]
                 })
                 .collect::<Vec<f64>>();

@@ -88,10 +88,12 @@ fn check_for_external_command_presence(executable_name: &str, testing_cmd: &str)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let mut process = cmd.spawn().expect("Unable to execute bash");
-    let es = process.wait().expect(&format!(
-        "Failed to glean exitstatus while checking for presence of {}",
-        executable_name
-    ));
+    let es = process.wait().unwrap_or_else(|_| {
+        panic!(
+            "Failed to glean exitstatus while checking for presence of {}",
+            executable_name
+        )
+    });
     if !es.success() {
         error!(
             "Could not find an available {} executable.",

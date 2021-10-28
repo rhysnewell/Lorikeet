@@ -103,10 +103,8 @@ impl PairHMM {
     }
 
     pub fn set_logless(&mut self, logless: bool) {
-        if logless {
-            if self.do_exact_log10 {
-                self.do_exact_log10 = false
-            }
+        if logless && self.do_exact_log10 {
+            self.do_exact_log10 = false
         }
         self.logless = logless
     }
@@ -151,11 +149,7 @@ impl PairHMM {
     ) {
         if !processed_reads.is_empty() {
             // (re)initialize the pairHMM only if necessary
-            let max_read_length = processed_reads
-                .iter()
-                .map(|r| r.len())
-                .max()
-                .unwrap_or(0);
+            let max_read_length = processed_reads.iter().map(|r| r.len()).max().unwrap_or(0);
             let max_haplotype_length = allele_likelihoods
                 .alleles
                 .as_list_of_alleles()
@@ -177,7 +171,7 @@ impl PairHMM {
             let mut idx = 0;
             let mut read_index = 0;
             for read in processed_reads {
-                let read_bases = read.read.seq().as_bytes();
+                let read_bases = read.bases.as_slice();
                 let read_quals = read.read.qual();
                 let read_ins_quals = input_score_imputator.ins_open_penalties(&read);
                 let read_del_quals = input_score_imputator.del_open_penalties(&read);
@@ -194,7 +188,7 @@ impl PairHMM {
                     };
                     let lk = self.compute_read_likelihood_given_haplotype_log10(
                         allele_bases,
-                        read_bases.as_slice(),
+                        read_bases,
                         read_quals,
                         &read_ins_quals,
                         &read_del_quals,
@@ -439,8 +433,9 @@ impl PairHMM {
         let end_i = self.padded_read_length.unwrap() - 1;
         let mut final_sum_probabilities = 0.0;
         for j in 1..self.padded_haplotype_length.unwrap() {
-            final_sum_probabilities += self.match_matrix[[end_i, j]] + self.insertion_matrix[[end_i, j]];
-        };
+            final_sum_probabilities +=
+                self.match_matrix[[end_i, j]] + self.insertion_matrix[[end_i, j]];
+        }
         // let match_matrix = &self.match_matrix;
         // let insertion_matrix = &self.insertion_matrix;
         // // potential parallel implementation
@@ -476,9 +471,7 @@ impl PairHMM {
 
         // Potential parallel implementation
         Zip::indexed(&mut self.prior).par_for_each(|(i, j), value| {
-            if (i > 0 && i <= read_bases.len())
-                && (j >= start_index + 1 && j <= haplotype_bases.len())
-            {
+            if (i > 0 && i <= read_bases.len()) && (j > start_index && j <= haplotype_bases.len()) {
                 let x = read_bases[i - 1];
                 let qual = read_quals[i - 1];
                 let y = haplotype_bases[j - 1];

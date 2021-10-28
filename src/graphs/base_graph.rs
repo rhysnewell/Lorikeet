@@ -356,7 +356,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         }
 
         // edge case: if the graph only has one node then it's a ref source, otherwise it's not
-        return self.graph.node_indices().collect::<Vec<NodeIndex>>().len() == 1;
+        return self.graph.node_indices().count() == 1;
     }
 
     /**
@@ -383,7 +383,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         }
 
         // edge case: if the graph only has one node then it's a ref source, otherwise it's not
-        return self.graph.node_indices().collect::<Vec<NodeIndex>>().len() == 1;
+        return self.graph.node_indices().count() == 1;
     }
 
     /**
@@ -412,7 +412,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             .graph
             .node_indices()
             .filter(|v| self.is_ref_source(*v))
-            .nth(0);
+            .next();
     }
 
     /**
@@ -423,7 +423,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
             .graph
             .node_indices()
             .filter(|v| self.is_ref_sink(*v))
-            .nth(0);
+            .next();
     }
 
     /**
@@ -467,9 +467,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                 edges
             }
             None => {
-                let edges = outgoing_edges
-                    .map(|e| e.id())
-                    .collect::<Vec<EdgeIndex>>();
+                let edges = outgoing_edges.map(|e| e.id()).collect::<Vec<EdgeIndex>>();
                 edges
             }
         };

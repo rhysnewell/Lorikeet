@@ -209,7 +209,8 @@ impl SimpleInterval {
 // instead of a max-heap.
 impl Ord for SimpleInterval {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.tid.cmp(&other.tid)
+        self.tid
+            .cmp(&other.tid)
             .then_with(|| other.end.cmp(&self.end))
             .then_with(|| self.start.cmp(&other.start))
     }
