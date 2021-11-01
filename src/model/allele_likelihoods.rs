@@ -897,7 +897,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .evidence_by_sample_index
                 .remove(&sample_index)
                 .unwrap_or_default();
-            let mut new_evidence = Vec::new();
+            let mut new_evidence = Vec::with_capacity(new_evidence_count);
             let mut num_removed = 0;
             for (n, read) in old_evidence.into_iter().enumerate() {
                 if num_removed < num_to_remove && n == evidences_to_remove[num_removed] {

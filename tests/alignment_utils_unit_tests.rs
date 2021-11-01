@@ -203,7 +203,7 @@ fn make_read_aligned_to_ref_data() {
         let qual = read.read.qual().to_vec();
         let cigar = read.read.cigar().take();
         let qname = read.read.qname().to_vec();
-        read.read.set(&qname, Some(&cigar), &bases, &qual);
+        read.update(&qname, Some(&cigar), bases, &qual);
         test_read_aligned_to_ref(
             &read,
             &all_M,

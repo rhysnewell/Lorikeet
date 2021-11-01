@@ -110,12 +110,19 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             // We divide the total depth of variant here by the total amount of strains that
                             // variant occurs in. E.g. if a variant had a depth of 6
                             // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                            let total_depth = vc.genotypes.genotypes()[sample_index]
-                                .ad
-                                .iter()
-                                .sum::<i64>() as f64;
+                            let mut total_depth = vc.genotypes.genotypes()[sample_index]
+                                .dp as f64;
+
+                            // catch sample where no mapping occured at this location
+                            // 0.0 dp causes NaN, so just change it to 1.0 so we get 0.0 weight
+                            // instead
+                            if total_depth <= f64::EPSILON {
+                                total_depth = 1.0;
+                            }
+
                             let variant_depth =
                                 vc.genotypes.genotypes()[sample_index].ad[1] as f64 / total_depth;
+                            // debug!("Variant depth {} Total depth {}", variant_depth, total_depth);
                             let weight = variant_depth; // strains.len() as f64;
 
                             let mut strains_to_remove = HashSet::new();
@@ -221,6 +228,11 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     debug!("Genotype Vector after EM {} {:?}", idx, sample_calculators);
                 });
 
+            // Vector of counters for each genotype
+            // If the counter reaches the same value as the number of samples
+            // Then that genotype had an abundance weighting of 0 in
+            // every sample and therefore does not exist so remove it.
+            let mut strains_to_remove = vec![0; n_strains];
             let mut something_removed = false;
             abundance_vectors
                 .iter()
@@ -231,31 +243,18 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .iter()
                         .enumerate()
                         .for_each(|(strain_index, calculator)| {
-                            if strain_present[strain_index]
-                                && (calculator.abundance_weight <= eps
-                                    || calculator.abundance_weight.is_infinite())
+                            if calculator.abundance_weight <= eps
+                                    || calculator.abundance_weight.is_infinite()
                             {
-                                strain_present[strain_index] = false;
-                                something_removed = true;
+                                strains_to_remove
+                                    [*abundance_key.get(&calculator.index).unwrap()] += 1;
+                                if strain_present[strain_index] {
+                                    strain_present[strain_index] = false;
+                                    // something_removed = true;
+                                }
                             }
                         })
                 });
-
-            // Vector of counters for each genotype
-            // If the counter reaches the same value as the number of samples
-            // Then that genotype had an abundance weighting of 0 in
-            // every sample and therefore does not exist so remove it.
-            let mut strains_to_remove = vec![0; n_strains];
-            for sample_vector in abundance_vectors.iter() {
-                for abundance_calculator in sample_vector.iter() {
-                    if abundance_calculator.abundance_weight <= eps
-                        || abundance_calculator.abundance_weight.is_infinite()
-                    {
-                        strains_to_remove
-                            [*abundance_key.get(&abundance_calculator.index).unwrap()] += 1;
-                    }
-                }
-            }
 
             debug!("strain removal counts {:?}", &strains_to_remove);
 
@@ -285,7 +284,11 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
         self.normalize_weights(&mut abundance_vectors);
 
-        self.print_strain_coverages(abundance_vectors);
+        if strain_ids.len() > 0 {
+            self.print_strain_coverages(abundance_vectors);
+        } else {
+            self.print_single_strain_coverage();
+        }
 
         (strain_ids, self.variant_contexts)
     }
@@ -360,6 +363,53 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             }
             writeln!(file_open).unwrap();
         }
+    }
+
+    pub fn print_single_strain_coverage(&self) {
+        debug!("Printing strain coverages {}", self.reference_name);
+        let file_name = format!(
+            "{}/{}_strain_coverages.tsv",
+            self.output_prefix, self.reference_name,
+        );
+
+        let file_path = Path::new(&file_name);
+
+        let mut file_open = match File::create(file_path) {
+            Ok(coverage_file) => coverage_file,
+            Err(e) => {
+                println!("Cannot create file {:?}", e);
+                std::process::exit(1)
+            }
+        };
+
+        writeln!(
+            file_open,
+            "##source=lorikeet-v{}",
+            env!("CARGO_PKG_VERSION")
+        );
+        for (sample_idx, sample_name) in self.sample_names.iter().enumerate() {
+            // remove tmp file name from sample id
+            writeln!(
+                file_open,
+                "##sample=<ID={}, name={}>",
+                sample_idx + 1,
+                sample_name
+            );
+        }
+
+        // Print header line
+        write!(file_open, "{: <10}", "strainID").unwrap();
+        for sample in 0..self.sample_names.len() {
+            write!(file_open, "\t{: <6}", sample + 1).unwrap();
+        }
+        writeln!(file_open).unwrap();
+
+        write!(file_open, "strain_{}", 0,).unwrap();
+
+        for _ in 0..self.sample_names.len() {
+            write!(file_open, "\t{:.2}", 1.0).unwrap();
+        }
+        writeln!(file_open).unwrap();
     }
 
     fn reference_strain_potentially_present(&self, n_samples: usize) -> bool {

@@ -299,74 +299,96 @@ impl<'a> LorikeetEngine<'a> {
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
                         // alleles
-                        let split_contexts = VariantContextUtils::split_contexts(contexts);
-
-                        // Perform UMAP and HDBSCAN clustering followed by variant group
-                        // read linkage clustering.
-                        let mut clustering_engine = HaplotypeClusteringEngine::new(
-                            output_prefix.as_str(),
-                            split_contexts,
-                            &reference_reader,
-                            ref_idx,
-                            indexed_bam_readers.len(),
-                            n_threads,
-                        );
-                        let (n_strains, split_contexts) = clustering_engine.perform_clustering(
-                            &indexed_bam_readers,
-                            flag_filters,
-                            n_threads,
-                            tree,
-                        );
-                        debug!(
-                            "example variant after clustering {:?}",
-                            &split_contexts.first()
+                        let split_contexts = VariantContextUtils::split_contexts(
+                            contexts,
+                            self.args.value_of("qual-by-depth-filter").unwrap().parse().unwrap()
                         );
 
-                        // Get strain abundances
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Calculating genotype abundances...",
-                                &reference,
-                            ));
+                        if split_contexts.len() >= 1 {
+                            // Perform UMAP and HDBSCAN clustering followed by variant group
+                            // read linkage clustering.
+                            let mut clustering_engine = HaplotypeClusteringEngine::new(
+                                output_prefix.as_str(),
+                                split_contexts,
+                                &reference_reader,
+                                ref_idx,
+                                indexed_bam_readers.len(),
+                                n_threads,
+                            );
+                            let (n_strains, split_contexts) = clustering_engine.perform_clustering(
+                                &indexed_bam_readers,
+                                flag_filters,
+                                n_threads,
+                                tree,
+                            );
+                            debug!(
+                                "example variant after clustering {:?}",
+                                &split_contexts.first()
+                            );
+
+                            // Get strain abundances
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating genotype abundances...",
+                                    &reference,
+                                ));
+                            }
+                            let mut abundance_calculator_engine = AbundanceCalculatorEngine::new(
+                                split_contexts,
+                                &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                &output_prefix,
+                                &cleaned_sample_names,
+                            );
+
+                            let (mut strain_ids_present, split_contexts) = abundance_calculator_engine
+                                .run_abundance_calculator(n_strains, cleaned_sample_names.len());
+                            // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(format!("{}: Generating VCF file...", &reference,));
+                            }
+                            assembly_engine.evaluator.write_vcf(
+                                &output_prefix,
+                                &split_contexts,
+                                &cleaned_sample_names,
+                                &reference_reader,
+                                true,
+                            );
+
+                            // Write genotypes to disk, reference specific
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(format!("{}: Writing strains...", &reference,));
+                            }
+                            let mut reference_writer =
+                                ReferenceWriter::new(reference_reader, &output_prefix);
+                            reference_writer.generate_strains(
+                                split_contexts,
+                                ref_idx,
+                                if strain_ids_present.len() > 0 {
+                                    strain_ids_present
+                                } else {
+                                    vec![0]
+                                },
+                            );
+                        } else {
+                            // Write genotypes to disk, reference specific
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(format!("{}: Writing reference strain...", &reference,));
+                            }
+                            let mut reference_writer =
+                                ReferenceWriter::new(reference_reader, &output_prefix);
+                            reference_writer.generate_strains(
+                                split_contexts,
+                                ref_idx,
+                                vec![0],
+                            );
                         }
-                        let mut abundance_calculator_engine = AbundanceCalculatorEngine::new(
-                            split_contexts,
-                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                            &output_prefix,
-                            &cleaned_sample_names,
-                        );
-
-                        let (strain_ids_present, split_contexts) = abundance_calculator_engine
-                            .run_abundance_calculator(n_strains, cleaned_sample_names.len());
-                        // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
-
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Generating VCF file...", &reference,));
-                        }
-                        assembly_engine.evaluator.write_vcf(
-                            &output_prefix,
-                            &split_contexts,
-                            &cleaned_sample_names,
-                            &reference_reader,
-                            true,
-                        );
-
-                        // Write genotypes to disk, reference specific
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Writing strains...", &reference,));
-                        }
-                        let mut reference_writer =
-                            ReferenceWriter::new(reference_reader, &output_prefix);
-                        reference_writer.generate_strains(
-                            split_contexts,
-                            ref_idx,
-                            strain_ids_present,
-                        );
                     } else if mode == "consensus" {
                         // Get sample distances
                         {

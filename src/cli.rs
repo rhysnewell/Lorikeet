@@ -242,8 +242,8 @@ pub fn genotype_full_help() -> String {
 
 Genotyping arguments (optional):
 
-  --min-contig-size                     The minimum contig size to call variants on that are included
-                                        in the genotyping process. [default: 2500]
+  --qual-by-depth-filter                The minimum QD value for a variant to have for it to be
+                                        included in the genotyping analysis. [default: 20]
 {}
         ",
     ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP)
@@ -1606,6 +1606,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("base-quality-score-threshold")
                         .long("base-quality-score-threshold")
                         .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20")
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")

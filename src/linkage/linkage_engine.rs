@@ -37,7 +37,7 @@ pub struct LinkageEngine<'a> {
 }
 
 impl<'a> LinkageEngine<'a> {
-    const MIN_DETECTABLE_DEPTH_EPSILON: f64 = 0.25;
+    const MIN_DETECTABLE_DEPTH_EPSILON: f64 = 0.35;
 
     pub fn new(
         grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
@@ -842,9 +842,9 @@ impl<'a> LinkageEngine<'a> {
                         }
 
                         if read_count > allele_depth {
-                            *counts = read_count;
+                            *counts += read_count;
                         } else {
-                            *counts = allele_depth;
+                            *counts += allele_depth;
                         }
                     }
                 }

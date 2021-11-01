@@ -35,15 +35,17 @@ impl StrainAbundanceCalculator {
         // the difference between theta curr and theta prev
         let mut omega = 1.;
 
+        let mut theta_prev;
         let mut theta_curr = vec![1.; sample_genotypes.len()];
         let mut n = 0;
 
         while omega > eps {
             // Update theta values
             theta_prev_mean = theta_curr_mean;
+            theta_prev = theta_curr.clone();
 
             for (index, genotype) in sample_genotypes.iter_mut().enumerate() {
-                if genotype.abundance_weight == 0. || genotype.abundance_weight.is_infinite() {
+                if (genotype.abundance_weight - eps).abs() <= f64::EPSILON || genotype.abundance_weight.is_infinite() {
                     continue;
                 }
 
@@ -53,14 +55,19 @@ impl StrainAbundanceCalculator {
                     .par_iter()
                     .enumerate()
                     .map(|(variant_index, w)| {
-                        let pooled_weights = genotype.variant_genotype_ids[variant_index]
+                        let mut pooled_weights = genotype.variant_genotype_ids[variant_index]
                             .iter()
                             .map(|genotype_index| theta_curr[*genotype_index])
                             .sum::<f64>();
+
+                        if pooled_weights <= f64::EPSILON {
+                            pooled_weights = 1.0;
+                        }
                         debug!(
                             "Variant index {} weight {} pooled weight {}",
                             variant_index, w, pooled_weights
                         );
+                        // if variant weights are between 0 and 1
                         let w = w * (genotype.abundance_weight / pooled_weights);
                         w
                     })
