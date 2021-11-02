@@ -301,7 +301,11 @@ impl<'a> LorikeetEngine<'a> {
                         // alleles
                         let split_contexts = VariantContextUtils::split_contexts(
                             contexts,
-                            self.args.value_of("qual-by-depth-filter").unwrap().parse().unwrap()
+                            self.args
+                                .value_of("qual-by-depth-filter")
+                                .unwrap()
+                                .parse()
+                                .unwrap(),
                         );
 
                         if split_contexts.len() >= 1 {
@@ -341,13 +345,18 @@ impl<'a> LorikeetEngine<'a> {
                                 &cleaned_sample_names,
                             );
 
-                            let (mut strain_ids_present, split_contexts) = abundance_calculator_engine
-                                .run_abundance_calculator(n_strains, cleaned_sample_names.len());
+                            let (mut strain_ids_present, split_contexts) =
+                                abundance_calculator_engine.run_abundance_calculator(
+                                    n_strains,
+                                    cleaned_sample_names.len(),
+                                );
                             // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar
-                                    .set_message(format!("{}: Generating VCF file...", &reference,));
+                                    .set_message(
+                                        format!("{}: Generating VCF file...", &reference,),
+                                    );
                             }
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
@@ -378,16 +387,14 @@ impl<'a> LorikeetEngine<'a> {
                             // Write genotypes to disk, reference specific
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
-                                pb.progress_bar
-                                    .set_message(format!("{}: Writing reference strain...", &reference,));
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Writing reference strain...",
+                                    &reference,
+                                ));
                             }
                             let mut reference_writer =
                                 ReferenceWriter::new(reference_reader, &output_prefix);
-                            reference_writer.generate_strains(
-                                split_contexts,
-                                ref_idx,
-                                vec![0],
-                            );
+                            reference_writer.generate_strains(split_contexts, ref_idx, vec![0]);
                         }
                     } else if mode == "consensus" {
                         // Get sample distances

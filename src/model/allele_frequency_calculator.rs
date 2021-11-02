@@ -237,11 +237,13 @@ impl AlleleFrequencyCalculator {
                 log10_p_no_variant +=
                     log10_genotype_posteriors[AlleleFrequencyCalculator::HOM_REF_GENOTYPE_INDEX];
             } else {
-                let non_variant_indices = non_variant_indices_by_ploidy.entry(ploidy).or_insert_with(||
-                    AlleleFrequencyCalculator::genotype_indices_with_only_ref_and_span_del(
-                        ploidy, alleles,
-                    ),
-                );
+                let non_variant_indices = non_variant_indices_by_ploidy
+                    .entry(ploidy)
+                    .or_insert_with(|| {
+                        AlleleFrequencyCalculator::genotype_indices_with_only_ref_and_span_del(
+                            ploidy, alleles,
+                        )
+                    });
 
                 let non_variant_log10_posteriors = non_variant_indices
                     .iter()

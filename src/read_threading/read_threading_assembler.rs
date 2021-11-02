@@ -1173,13 +1173,7 @@ impl ReadThreadingAssembler {
             ref_haplotype.genome_location.as_ref().unwrap().get_start(),
             ref_haplotype.genome_location.as_ref().unwrap().get_end(),
         ));
-        if seq_graph
-            .base_graph
-            .graph
-            .node_indices()
-            .count()
-            == 1
-        {
+        if seq_graph.base_graph.graph.node_indices().count() == 1 {
             // we've perfectly assembled into a single reference haplotype, add a empty seq vertex to stop
             // the code from blowing up.
             // TODO -- ref properties should really be on the vertices, not the graph itself

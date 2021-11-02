@@ -250,7 +250,6 @@ impl<'a> ReferenceWriter<'a> {
                 new_bases[((vc.loc.start as i64 + *offset) as usize)] = consensus_allele.bases[0];
             }
             VariantType::Indel => {
-
                 let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + 1 + *offset) as usize)
@@ -275,12 +274,10 @@ impl<'a> ReferenceWriter<'a> {
 
                 if vc.loc.get_length_on_reference() < allele_len {
                     // gaining bases so increase offset
-                    *offset += allele_len as i64 - 1
-                        - vc.loc.get_length_on_reference() as i64;
+                    *offset += allele_len as i64 - 1 - vc.loc.get_length_on_reference() as i64;
                 } else {
                     // losing bases so decrease offset
-                    *offset -= vc.loc.get_length_on_reference() as i64
-                        - allele_len as i64 - 1;
+                    *offset -= vc.loc.get_length_on_reference() as i64 - allele_len as i64 - 1;
                 }
             }
             VariantType::Mixed => {

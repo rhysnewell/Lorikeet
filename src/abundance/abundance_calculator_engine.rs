@@ -98,21 +98,19 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
             for (sample_index, sample_vector) in abundance_vectors.iter_mut().enumerate() {
                 for vc in self.variant_contexts.iter_mut() {
-                    match vc
-                        .attributes
-                        .get_mut(VariantAnnotations::Strain.to_key()) {
+                    match vc.attributes.get_mut(VariantAnnotations::Strain.to_key()) {
                         None => continue,
                         Some(attribute) => {
-                            let strains = match attribute
-                            {
+                            let strains = match attribute {
                                 AttributeObject::VecUnsize(vec) => vec,
-                                _ => panic!("Strain annotation was not the correct AttributeObject"),
+                                _ => {
+                                    panic!("Strain annotation was not the correct AttributeObject")
+                                }
                             };
                             // We divide the total depth of variant here by the total amount of strains that
                             // variant occurs in. E.g. if a variant had a depth of 6
                             // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                            let mut total_depth = vc.genotypes.genotypes()[sample_index]
-                                .dp as f64;
+                            let mut total_depth = vc.genotypes.genotypes()[sample_index].dp as f64;
 
                             // catch sample where no mapping occured at this location
                             // 0.0 dp causes NaN, so just change it to 1.0 so we get 0.0 weight
@@ -162,27 +160,31 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
                             // Remove the strains that weren't present
                             for to_remove in strains_to_remove.into_iter() {
-                                let strain_index = strains.iter().position(|i| *i == to_remove).unwrap();
+                                let strain_index =
+                                    strains.iter().position(|i| *i == to_remove).unwrap();
                                 strains.remove(strain_index);
                             }
 
-                            let mut reference_present = &mut per_sample_reference_presence[sample_index];
+                            let mut reference_present =
+                                &mut per_sample_reference_presence[sample_index];
                             if *reference_present {
                                 // We divide the total depth of variant here by the total amount of strains that
                                 // variant occurs in. E.g. if a variant had a depth of 6
                                 // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                let reference_depth =
-                                    vc.genotypes.genotypes()[sample_index].ad[0] as f64 / total_depth;
+                                let reference_depth = vc.genotypes.genotypes()[sample_index].ad[0]
+                                    as f64
+                                    / total_depth;
                                 let weight = reference_depth; // (n_strains - strains.len()) as f64;
 
                                 let reference_strain_index = n_strains - 1;
-                                let abundance_index = match abundance_key.get(&reference_strain_index) {
-                                    Some(idx) => *idx,
-                                    None => {
-                                        *reference_present = false;
-                                        continue;
-                                    }
-                                };
+                                let abundance_index =
+                                    match abundance_key.get(&reference_strain_index) {
+                                        Some(idx) => *idx,
+                                        None => {
+                                            *reference_present = false;
+                                            continue;
+                                        }
+                                    };
 
                                 sample_vector[abundance_index].variant_weights.push(weight);
 
@@ -245,7 +247,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                         .enumerate()
                         .for_each(|(strain_index, calculator)| {
                             if calculator.abundance_weight <= eps
-                                    || calculator.abundance_weight.is_infinite()
+                                || calculator.abundance_weight.is_infinite()
                             {
                                 strains_to_remove
                                     [*abundance_key.get(&calculator.index).unwrap()] += 1;
@@ -439,13 +441,10 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         for sample_index in 0..n_samples {
             let mut per_strain_variant_count = vec![false; n_strains];
             for vc in self.variant_contexts.iter() {
-                match vc
-                    .attributes
-                    .get(VariantAnnotations::Strain.to_key()) {
+                match vc.attributes.get(VariantAnnotations::Strain.to_key()) {
                     None => continue,
                     Some(attribute) => {
-                        let strains = match attribute
-                        {
+                        let strains = match attribute {
                             AttributeObject::VecUnsize(vec) => vec,
                             _ => panic!("Strain annotation was not the correct AttributeObject"),
                         };

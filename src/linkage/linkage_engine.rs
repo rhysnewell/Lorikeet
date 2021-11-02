@@ -2,6 +2,7 @@ use bstr::ByteSlice;
 use coverm::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use coverm::bam_generator::IndexedNamedBamReader;
 use coverm::bam_generator::NamedBamReaderGenerator;
+use coverm::FlagFilter;
 use hashlink::{LinkedHashMap, LinkedHashSet};
 use itertools::Itertools;
 use log::{log_enabled, Level};
@@ -22,7 +23,6 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::{read, File};
 use std::io::Write;
 use std::path::Path;
-use coverm::FlagFilter;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -35,7 +35,7 @@ pub struct LinkageEngine<'a> {
     samples: &'a Vec<String>,
     cluster_separations: &'a Array2<f64>,
     previous_groups: &'a HashMap<i32, i32>,
-    exclusive_groups: &'a HashMap<i32, HashSet<i32>>
+    exclusive_groups: &'a HashMap<i32, HashSet<i32>>,
 }
 
 impl<'a> LinkageEngine<'a> {
@@ -46,7 +46,7 @@ impl<'a> LinkageEngine<'a> {
         samples: &'a Vec<String>,
         cluster_separations: &'a Array2<f64>,
         previous_groups: &'a HashMap<i32, i32>,
-        exclusive_groups: &'a HashMap<i32, HashSet<i32>>
+        exclusive_groups: &'a HashMap<i32, HashSet<i32>>,
     ) -> LinkageEngine<'a> {
         Self {
             grouped_contexts,
@@ -54,7 +54,7 @@ impl<'a> LinkageEngine<'a> {
             samples,
             cluster_separations,
             previous_groups,
-            exclusive_groups
+            exclusive_groups,
         }
     }
 
@@ -74,7 +74,8 @@ impl<'a> LinkageEngine<'a> {
         output_path: &str,
         flag_filters: &FlagFilter,
     ) -> Vec<LinkedHashSet<i32>> {
-        let read_ids_in_groups = self.get_reads_for_groups(indexed_bam_readers, flag_filters, n_threads);
+        let read_ids_in_groups =
+            self.get_reads_for_groups(indexed_bam_readers, flag_filters, n_threads);
         debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
         let graph = self.build_graph(read_ids_in_groups);
         debug!("Graph {:?}", &graph);
@@ -200,10 +201,12 @@ impl<'a> LinkageEngine<'a> {
                 let current_node_cumulative_depth =
                     *nodes_cumulative_depth.entry(current_node).or_insert(0.0);
 
-                let mut depth_being_added_to_other_nodes = current_depth - current_node_cumulative_depth;
+                let mut depth_being_added_to_other_nodes =
+                    current_depth - current_node_cumulative_depth;
 
                 if ((1.0 - (current_node_cumulative_depth / current_depth))
-                    >= Self::MIN_DETECTABLE_DEPTH_EPSILON && depth_being_added_to_other_nodes > 0.0)
+                    >= Self::MIN_DETECTABLE_DEPTH_EPSILON
+                    && depth_being_added_to_other_nodes > 0.0)
                     || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
                 {
                     let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
@@ -216,10 +219,7 @@ impl<'a> LinkageEngine<'a> {
                     .collect::<Vec<LinkedHashSet<NodeIndex>>>();
                     debug!(
                         "Paths {:?} current node {:?} depth {} cumulative depth {}",
-                        &paths,
-                        current_node,
-                        current_depth,
-                        current_node_cumulative_depth,
+                        &paths, current_node, current_depth, current_node_cumulative_depth,
                     );
 
                     if paths.len() == 1 {
@@ -230,7 +230,7 @@ impl<'a> LinkageEngine<'a> {
                             &mut path,
                             &mut nodes_cumulative_depth,
                             depth_being_added_to_other_nodes,
-                            current_node
+                            current_node,
                         );
 
                         match consumed_nodes {
@@ -392,7 +392,6 @@ impl<'a> LinkageEngine<'a> {
 
         let mut current_max_shared_nodes = 0;
         for (index, strain) in strains.iter().enumerate() {
-
             // Check if this strain should be excluded
             let mut exclude_this_option = false;
             for group in groups_in_path.iter() {
@@ -402,7 +401,7 @@ impl<'a> LinkageEngine<'a> {
                         for group_in_strain in strain {
                             if exclusive_groups.contains(group_in_strain) {
                                 exclude_this_option = true;
-                                break
+                                break;
                             }
                         }
                     }
@@ -660,7 +659,7 @@ impl<'a> LinkageEngine<'a> {
         path: &mut LinkedHashSet<NodeIndex>,
         nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
         depth_being_added_to_nodes: f64,
-        current_node: NodeIndex
+        current_node: NodeIndex,
     ) -> Option<Vec<NodeIndex>> {
         let mut nodes_at_capacity = None;
         let current_group = *mst.node_weight(current_node).unwrap();
@@ -672,11 +671,11 @@ impl<'a> LinkageEngine<'a> {
             match &excluded_groups {
                 None => {
                     // good to go
-                },
+                }
                 Some(excluded_groups) => {
                     if excluded_groups.contains(&variant_group) {
                         to_remove.insert(*node);
-                        continue
+                        continue;
                     }
                 }
             }
@@ -684,7 +683,10 @@ impl<'a> LinkageEngine<'a> {
             let threshold = self.grouped_mean_read_depth.get(&variant_group).unwrap(); // This nodes maximum capcity
             let updated_depth = *node_cumulative_depth + depth_being_added_to_nodes;
 
-            if (*node_cumulative_depth - *threshold).abs() <= f64::EPSILON || &updated_depth > threshold { // more efficient than division
+            if (*node_cumulative_depth - *threshold).abs() <= f64::EPSILON
+                || &updated_depth > threshold
+            {
+                // more efficient than division
                 debug!(
                     "Node at capacity {:?} vg {} cumulative depth {} capacity {}",
                     node, variant_group, *node_cumulative_depth, *threshold
@@ -929,7 +931,7 @@ impl<'a> LinkageEngine<'a> {
         let mut node_indices = LinkedHashMap::with_capacity(grouped_reads.len());
         for (group1, reads1) in grouped_reads.iter() {
             if *group1 < 0 {
-                continue
+                continue;
             }
             let node1 = if node_indices.contains_key(group1) {
                 *node_indices.get(group1).unwrap()
@@ -966,7 +968,7 @@ impl<'a> LinkageEngine<'a> {
                 if ind1 == ind2 {
                     // don't form edges between identical groups/indices
                     // the previous group of one of the current groups is the same as other group
-                    continue
+                    continue;
                 }
 
                 // Don't count twice
@@ -975,9 +977,7 @@ impl<'a> LinkageEngine<'a> {
                     let intersection = reads1.intersection(reads2).count() as f64;
 
                     let mut under_sep_thresh = false;
-                    under_sep_thresh = self.cluster_separations
-                        [[ind1, ind2]]
-                        < 3.0;
+                    under_sep_thresh = self.cluster_separations[[ind1, ind2]] < 3.0;
                     if intersection > 0.0 || under_sep_thresh {
                         let union = reads1.union(reads2).count() as f64;
 
@@ -997,8 +997,7 @@ impl<'a> LinkageEngine<'a> {
                             // We will form an edge here but it will essentially
                             // have to be directly on top of the other variant group
                             // for the edge to be favoured in the MST
-                            let weight = self.cluster_separations
-                                [[ind1, ind2]];
+                            let weight = self.cluster_separations[[ind1, ind2]];
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union
@@ -1017,13 +1016,13 @@ impl<'a> LinkageEngine<'a> {
         // check that neither group1 or group2 is exclusive of each other
         if self.exclusive_groups.contains_key(group1) {
             if self.exclusive_groups.get(group1).unwrap().contains(group2) {
-                return true
+                return true;
             }
         }
 
         if self.exclusive_groups.contains_key(group2) {
             if self.exclusive_groups.get(group2).unwrap().contains(group1) {
-                return true
+                return true;
             }
         }
 

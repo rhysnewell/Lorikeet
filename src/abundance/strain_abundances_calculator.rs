@@ -40,7 +40,9 @@ impl StrainAbundanceCalculator {
             theta_prev = theta_curr.clone();
 
             for (index, genotype) in sample_genotypes.iter_mut().enumerate() {
-                if (genotype.abundance_weight - eps).abs() <= f64::EPSILON || genotype.abundance_weight.is_infinite() {
+                if (genotype.abundance_weight - eps).abs() <= f64::EPSILON
+                    || genotype.abundance_weight.is_infinite()
+                {
                     continue;
                 }
 
@@ -91,7 +93,11 @@ impl StrainAbundanceCalculator {
             }
 
             // Update omega
-            omega = theta_curr.iter().zip(theta_prev.iter()).map(|(curr, prev)| (curr - prev).abs()).sum::<f64>();
+            omega = theta_curr
+                .iter()
+                .zip(theta_prev.iter())
+                .map(|(curr, prev)| (curr - prev).abs())
+                .sum::<f64>();
 
             debug!(
                 "Theta Current {:?} Prev {:?} Omega {}",

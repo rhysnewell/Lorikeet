@@ -1,5 +1,6 @@
 use annotator::variant_annotation::VariantAnnotations;
 use bird_tool_utils::command::finish_command_safely;
+use coverm::FlagFilter;
 use estimation::lorikeet_engine::Elem;
 use genotype::genotype_builder::AttributeObject;
 use hashlink::{LinkedHashMap, LinkedHashSet};
@@ -12,7 +13,6 @@ use reference::reference_reader::ReferenceReader;
 use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
-use coverm::FlagFilter;
 use utils::simple_interval::Locatable;
 
 /// HaplotypeClusteringEngine provides a suite of functions that takes a list of VariantContexts
@@ -29,7 +29,7 @@ pub struct HaplotypeClusteringEngine<'a> {
     labels_set: HashSet<i32>,
     cluster_separation: Array2<f64>,
     previous_groups: HashMap<i32, i32>,
-    exclusive_groups: HashMap<i32, HashSet<i32>>
+    exclusive_groups: HashMap<i32, HashSet<i32>>,
 }
 
 impl<'a> HaplotypeClusteringEngine<'a> {
@@ -52,7 +52,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             labels_set: HashSet::new(),
             cluster_separation: Array::default((0, 0)),
             previous_groups: HashMap::new(),
-            exclusive_groups: HashMap::new()
+            exclusive_groups: HashMap::new(),
         }
     }
 
@@ -88,14 +88,13 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         debug!("separation {:?}", &self.cluster_separation);
         let grouped_contexts = self.group_contexts();
 
-        let mut linkage_engine =
-            LinkageEngine::new(
-                grouped_contexts,
-                sample_names,
-                &self.cluster_separation,
-                &self.previous_groups,
-                &self.exclusive_groups,
-            );
+        let mut linkage_engine = LinkageEngine::new(
+            grouped_contexts,
+            sample_names,
+            &self.cluster_separation,
+            &self.previous_groups,
+            &self.exclusive_groups,
+        );
         let mut potential_strains = linkage_engine.run_linkage(
             sample_names,
             n_threads,
@@ -167,11 +166,11 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         for context in self.variants.iter() {
             match context
                 .attributes
-                .get(VariantAnnotations::VariantGroup.to_key()) {
+                .get(VariantAnnotations::VariantGroup.to_key())
+            {
                 None => continue,
                 Some(attribute) => {
-                    if let AttributeObject::I32(val) = attribute
-                    {
+                    if let AttributeObject::I32(val) = attribute {
                         if *val != -1 {
                             let group = grouped_contexts.entry(*val).or_insert(Vec::new());
                             group.push(context);
@@ -208,8 +207,12 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                 // self.previous_groups.insert(new_label, variant_group);
                 // variant_group = new_label;
                 // new_label += 1;
-                let position_to_update = need_updating.entry(variant_group).or_insert_with(|| HashMap::new());
-                let indices_to_update = position_to_update.entry(prev_pos).or_insert_with(|| Vec::new());
+                let position_to_update = need_updating
+                    .entry(variant_group)
+                    .or_insert_with(|| HashMap::new());
+                let indices_to_update = position_to_update
+                    .entry(prev_pos)
+                    .or_insert_with(|| Vec::new());
                 indices_to_update.push(idx)
             } else {
                 vc.attributes.insert(
@@ -225,7 +228,6 @@ impl<'a> HaplotypeClusteringEngine<'a> {
 
         for (vg, position_map) in need_updating {
             for (position, indices) in position_map {
-
                 let mut exclusive_groups = HashSet::with_capacity(indices.len());
 
                 for index in indices.iter() {
@@ -240,7 +242,10 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                 }
 
                 for group in exclusive_groups.iter() {
-                    let exclusive_group = self.exclusive_groups.entry(*group).or_insert_with(|| exclusive_groups.clone());
+                    let exclusive_group = self
+                        .exclusive_groups
+                        .entry(*group)
+                        .or_insert_with(|| exclusive_groups.clone());
                     exclusive_group.remove(group);
                 }
             }

@@ -246,7 +246,8 @@ Genotyping arguments (optional):
                                         included in the genotyping analysis. [default: 20]
 {}
         ",
-    ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP)
+        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
+    )
 }
 
 pub fn call_full_help() -> String {
@@ -1610,7 +1611,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")

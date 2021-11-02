@@ -347,7 +347,9 @@ impl AssemblyBasedCallerUtils {
             .get_variation_events(max_mnp_distance)
             .into_iter()
             .for_each(|vc| {
-                let pos = grouped_by.entry(vc.loc.get_start()).or_insert_with(Vec::new);
+                let pos = grouped_by
+                    .entry(vc.loc.get_start())
+                    .or_insert_with(Vec::new);
                 pos.push(vc);
             });
         let mut assembled_variants = grouped_by

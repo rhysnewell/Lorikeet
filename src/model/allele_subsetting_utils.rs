@@ -189,12 +189,14 @@ impl AlleleSubsettingUtils {
 
             let subsetted_likelihoods_indices = subsetted_likelihood_indices_by_ploidy
                 .entry(ploidy)
-                .or_insert_with(|| AlleleSubsettingUtils::subsetted_pl_indices(
-                    ploidy,
-                    original_alleles,
-                    alleles_to_keep,
-                    g,
-                ));
+                .or_insert_with(|| {
+                    AlleleSubsettingUtils::subsetted_pl_indices(
+                        ploidy,
+                        original_alleles,
+                        alleles_to_keep,
+                        g,
+                    )
+                });
 
             let expected_num_likelihoods =
                 g.num_likelihoods(original_alleles.len() as i64, ploidy as i64);

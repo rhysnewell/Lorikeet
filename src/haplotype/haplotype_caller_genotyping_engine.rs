@@ -487,12 +487,12 @@ impl HaplotypeCallerGenotypingEngine {
         let practical_allele_count = self
             .practical_allele_count_for_ploidy
             .entry(ploidy)
-            .or_insert_with(||
+            .or_insert_with(|| {
                 GenotypeLikelihoodCalculators::compute_max_acceptable_allele_count(
                     ploidy,
                     max_genotype_count_to_enumerate,
-                ),
-            );
+                )
+            });
 
         if original_allele_count > *practical_allele_count {
             let mut alleles_to_keep = Self::which_alleles_to_keep_based_on_hap_scores(

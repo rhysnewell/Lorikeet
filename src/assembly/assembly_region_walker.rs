@@ -178,52 +178,52 @@ impl AssemblyRegionWalker {
                     //
                     //     chunk
                     //         .into_iter()
-                            .flat_map(|mut assembly_region| {
-                                let mut reference_reader = reference_reader.clone();
-                                let mut evaluator = evaluator.clone();
-                                // Indexed readers don't have sync so we cannot parallelize this
-                                // indexed_vcf_reader.set_threads(self.n_threads as usize);
-                                let mut indexed_vcf_reader =
-                                    VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
-                                assembly_region_iter.fill_next_assembly_region_with_reads(
-                                    &mut assembly_region,
-                                    flag_filters,
-                                    n_threads,
-                                    short_read_bam_count,
-                                    long_read_bam_count,
-                                    max_input_depth,
-                                );
+                    .flat_map(|mut assembly_region| {
+                        let mut reference_reader = reference_reader.clone();
+                        let mut evaluator = evaluator.clone();
+                        // Indexed readers don't have sync so we cannot parallelize this
+                        // indexed_vcf_reader.set_threads(self.n_threads as usize);
+                        let mut indexed_vcf_reader =
+                            VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
+                        assembly_region_iter.fill_next_assembly_region_with_reads(
+                            &mut assembly_region,
+                            flag_filters,
+                            n_threads,
+                            short_read_bam_count,
+                            long_read_bam_count,
+                            max_input_depth,
+                        );
 
-                                let vcf_rid = VariantContext::get_contig_vcf_tid(
-                                    indexed_vcf_reader.header(),
-                                    reference_reader
-                                        .retrieve_contig_name_from_tid(assembly_region.get_contig())
-                                        .unwrap(),
-                                );
+                        let vcf_rid = VariantContext::get_contig_vcf_tid(
+                            indexed_vcf_reader.header(),
+                            reference_reader
+                                .retrieve_contig_name_from_tid(assembly_region.get_contig())
+                                .unwrap(),
+                        );
 
-                                let feature_variants = match vcf_rid {
-                                    Some(rid) => VariantContext::process_vcf_in_region(
-                                        &mut indexed_vcf_reader,
-                                        rid,
-                                        assembly_region.get_start() as u64,
-                                        assembly_region.get_end() as u64,
-                                    ),
-                                    None => Vec::new(),
-                                };
+                        let feature_variants = match vcf_rid {
+                            Some(rid) => VariantContext::process_vcf_in_region(
+                                &mut indexed_vcf_reader,
+                                rid,
+                                assembly_region.get_start() as u64,
+                                assembly_region.get_end() as u64,
+                            ),
+                            None => Vec::new(),
+                        };
 
-                                debug!("Feature variants {:?}", &feature_variants);
-                                evaluator
-                                    .call_region(
-                                        assembly_region,
-                                        &mut reference_reader,
-                                        feature_variants,
-                                        args,
-                                        sample_names,
-                                    )
-                                    .into_par_iter()
-                            // })
-                            // .collect::<Vec<VariantContext>>()
-                            // .into_par_iter()
+                        debug!("Feature variants {:?}", &feature_variants);
+                        evaluator
+                            .call_region(
+                                assembly_region,
+                                &mut reference_reader,
+                                feature_variants,
+                                args,
+                                sample_names,
+                            )
+                            .into_par_iter()
+                        // })
+                        // .collect::<Vec<VariantContext>>()
+                        // .into_par_iter()
                     })
                     .collect::<Vec<VariantContext>>();
 
@@ -236,31 +236,31 @@ impl AssemblyRegionWalker {
                     // .flat_map(|chunk| {
                     //     let mut reference_reader = reference_reader.clone();
                     //     let mut evaluator = evaluator.clone();
-                        // chunk
-                        //     .into_iter()
-                            .flat_map(|mut assembly_region| {
-                                let mut reference_reader = reference_reader.clone();
-                                let mut evaluator = evaluator.clone();
-                                assembly_region_iter.fill_next_assembly_region_with_reads(
-                                    &mut assembly_region,
-                                    flag_filters,
-                                    n_threads,
-                                    short_read_bam_count,
-                                    long_read_bam_count,
-                                    max_input_depth,
-                                );
-                                evaluator
-                                    .call_region(
-                                        assembly_region,
-                                        &mut reference_reader,
-                                        Vec::new(),
-                                        args,
-                                        sample_names,
-                                    )
-                                    .into_par_iter()
-                            })
-                            // .collect::<Vec<VariantContext>>()
-                            // .into_par_iter()
+                    // chunk
+                    //     .into_iter()
+                    .flat_map(|mut assembly_region| {
+                        let mut reference_reader = reference_reader.clone();
+                        let mut evaluator = evaluator.clone();
+                        assembly_region_iter.fill_next_assembly_region_with_reads(
+                            &mut assembly_region,
+                            flag_filters,
+                            n_threads,
+                            short_read_bam_count,
+                            long_read_bam_count,
+                            max_input_depth,
+                        );
+                        evaluator
+                            .call_region(
+                                assembly_region,
+                                &mut reference_reader,
+                                Vec::new(),
+                                args,
+                                sample_names,
+                            )
+                            .into_par_iter()
+                    })
+                    // .collect::<Vec<VariantContext>>()
+                    // .into_par_iter()
                     // })
                     .collect::<Vec<VariantContext>>();
 

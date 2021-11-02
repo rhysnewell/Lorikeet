@@ -1,9 +1,9 @@
 #![allow(
-non_upper_case_globals,
-unused_parens,
-unused_mut,
-unused_imports,
-non_snake_case
+    non_upper_case_globals,
+    unused_parens,
+    unused_mut,
+    unused_imports,
+    non_snake_case
 )]
 
 extern crate lorikeet_genome;
@@ -39,16 +39,21 @@ fn test_indel_offsetting() {
         snp_allele.clone(),
         &mut snp_vc,
         VariantType::Snp,
-        &mut offset
+        &mut offset,
     );
 
     assert_eq!(offset, 0);
-    assert_eq!(&expected_bases, &bases, "\n Expected:\n {:?} \n Actual:\n {:?}",
-               std::str::from_utf8(&expected_bases).unwrap(),
-               std::str::from_utf8(&bases).unwrap());
+    assert_eq!(
+        &expected_bases,
+        &bases,
+        "\n Expected:\n {:?} \n Actual:\n {:?}",
+        std::str::from_utf8(&expected_bases).unwrap(),
+        std::str::from_utf8(&bases).unwrap()
+    );
 
     let insertion_allele = ByteArrayAllele::new(b"ACCCCCC", false);
-    let mut insertion_vc = VariantContext::build(0, 1, 1, vec![ref_allele.clone(), insertion_allele.clone()]);
+    let mut insertion_vc =
+        VariantContext::build(0, 1, 1, vec![ref_allele.clone(), insertion_allele.clone()]);
 
     expected_bases.splice(2..2, vec!['C' as u8; 6].into_iter());
 
@@ -57,19 +62,28 @@ fn test_indel_offsetting() {
         insertion_allele.clone(),
         &mut insertion_vc,
         VariantType::Indel,
-        &mut offset
+        &mut offset,
     );
 
     assert_eq!(offset, 6);
-    assert_eq!(&expected_bases, &bases, "\n Expected:\n {:?} \n Actual:\n {:?}",
-               std::str::from_utf8(&expected_bases).unwrap(),
-               std::str::from_utf8(&bases).unwrap());
-    assert_eq!(bases.len(), 106, "\n Expected:\n {:?} \n Actual:\n {:?}",
-               std::str::from_utf8(&expected_bases).unwrap(),
-               std::str::from_utf8(&bases).unwrap());
+    assert_eq!(
+        &expected_bases,
+        &bases,
+        "\n Expected:\n {:?} \n Actual:\n {:?}",
+        std::str::from_utf8(&expected_bases).unwrap(),
+        std::str::from_utf8(&bases).unwrap()
+    );
+    assert_eq!(
+        bases.len(),
+        106,
+        "\n Expected:\n {:?} \n Actual:\n {:?}",
+        std::str::from_utf8(&expected_bases).unwrap(),
+        std::str::from_utf8(&bases).unwrap()
+    );
 
     let deletion_allele = ByteArrayAllele::new(b"A", false);
-    let mut deletion_vc = VariantContext::build(0, 2, 7, vec![ref_allele.clone(), deletion_allele.clone()]);
+    let mut deletion_vc =
+        VariantContext::build(0, 2, 7, vec![ref_allele.clone(), deletion_allele.clone()]);
 
     expected_bases.splice(9..=13, vec!['A' as u8; 1].into_iter().skip(1));
 
@@ -78,17 +92,24 @@ fn test_indel_offsetting() {
         deletion_allele.clone(),
         &mut deletion_vc,
         VariantType::Indel,
-        &mut offset
+        &mut offset,
     );
 
     assert_eq!(offset, 1);
-    assert_eq!(&expected_bases, &bases, "\n Expected:\n {:?} \n Actual:\n {:?}",
-               std::str::from_utf8(&expected_bases).unwrap(),
-               std::str::from_utf8(&bases).unwrap());
-    assert_eq!(bases.len(), 101,
-               "\n Expected:\n {:?} \n Actual:\n {:?}",
-               std::str::from_utf8(&expected_bases).unwrap(),
-               std::str::from_utf8(&bases).unwrap());
+    assert_eq!(
+        &expected_bases,
+        &bases,
+        "\n Expected:\n {:?} \n Actual:\n {:?}",
+        std::str::from_utf8(&expected_bases).unwrap(),
+        std::str::from_utf8(&bases).unwrap()
+    );
+    assert_eq!(
+        bases.len(),
+        101,
+        "\n Expected:\n {:?} \n Actual:\n {:?}",
+        std::str::from_utf8(&expected_bases).unwrap(),
+        std::str::from_utf8(&bases).unwrap()
+    );
 
     println!("{}", std::str::from_utf8(&original_bases).unwrap());
     println!("{}", std::str::from_utf8(&expected_bases).unwrap());

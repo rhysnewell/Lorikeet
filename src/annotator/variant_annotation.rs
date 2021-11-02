@@ -106,18 +106,23 @@ impl VariantAnnotations {
                         let mut genotype = genotype.unwrap();
                         if !genotype.has_ad() {
                             // if there is no AD value calculate it now using likelihoods
-                            Self::DepthPerAlleleBySample.annotate(vc, Some(genotype), likelihoods, annotation_type);
+                            Self::DepthPerAlleleBySample.annotate(
+                                vc,
+                                Some(genotype),
+                                likelihoods,
+                                annotation_type,
+                            );
                         };
                         let total_ad: i64 = genotype.ad.iter().sum();
                         genotype.dp = total_ad;
-                        return AttributeObject::None
-                    },
+                        return AttributeObject::None;
+                    }
                     AnnotationType::Info => {
                         if likelihoods.evidence_count() == 0 {
-                            return AttributeObject::None
+                            return AttributeObject::None;
                         } else {
                             let depth = likelihoods.evidence_count();
-                            return AttributeObject::UnsizedInteger(depth)
+                            return AttributeObject::UnsizedInteger(depth);
                         }
                     }
                 }
@@ -139,7 +144,12 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 } else {
                     // if there is no AD value calculate it now using likelihoods
-                    Self::DepthPerAlleleBySample.annotate(vc, Some(genotype), likelihoods, annotation_type);
+                    Self::DepthPerAlleleBySample.annotate(
+                        vc,
+                        Some(genotype),
+                        likelihoods,
+                        annotation_type,
+                    );
                     let allele_fractions = MathUtils::normalize_sum_to_one(
                         genotype
                             .get_ad()
@@ -165,7 +175,12 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 } else {
                     // if there is no AD value calculate it now using likelihoods
-                    Self::DepthPerAlleleBySample.annotate(vc, Some(genotype), likelihoods, annotation_type);
+                    Self::DepthPerAlleleBySample.annotate(
+                        vc,
+                        Some(genotype),
+                        likelihoods,
+                        annotation_type,
+                    );
                     let allele_counts = genotype.get_ad().into_iter().filter(|ad| **ad > 0).count();
                     genotype.attribute(
                         self.to_key().to_string(),
@@ -486,7 +501,9 @@ impl Annotation {
         genotype: Option<&mut Genotype>,
         likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
     ) -> Self {
-        self.value = self.annotation.annotate(vc, genotype, likelihoods, self.annotation_type);
+        self.value = self
+            .annotation
+            .annotate(vc, genotype, likelihoods, self.annotation_type);
         self
     }
 
