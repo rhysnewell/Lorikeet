@@ -1252,24 +1252,4 @@ impl HaplotypeCallerEngine {
 
         VariantAnnotationEngine::populate_vcf_header(header, strain_info);
     }
-
-    pub fn haplotype_clustering(
-        &self,
-        output_prefix: &str,
-        variant_contexts: Vec<VariantContext>,
-        sample_names: &Vec<&str>,
-        ref_idx: usize,
-        n_samples: usize,
-        reference_reader: &ReferenceReader,
-    ) -> Vec<VariantContext> {
-        // let mut haplotype_custering_engine = HaplotypeClusteringEngine::new(
-        //     output_prefix,
-        //     variant_contexts,
-        //     reference_reader,
-        //     ref_idx,
-        //     n_samples
-        // );
-
-        return variant_contexts;
-    }
 }

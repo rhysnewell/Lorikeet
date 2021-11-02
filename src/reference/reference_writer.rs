@@ -227,7 +227,7 @@ impl<'a> ReferenceWriter<'a> {
             .collect()
     }
 
-    fn modify_reference_bases_based_on_variant_type(
+    pub fn modify_reference_bases_based_on_variant_type(
         new_bases: &mut Vec<u8>,
         consensus_allele: ByteArrayAllele,
         vc: &mut VariantContext,
@@ -239,46 +239,49 @@ impl<'a> ReferenceWriter<'a> {
                 if consensus_allele.is_span_del() {
                     // delete from reference, replace with nothing
                     new_bases.splice(
-                        ((vc.loc.start as i64 + *offset) as usize)
+                        ((vc.loc.start as i64 + 1 + *offset) as usize)
                             ..=((vc.loc.end as i64 + *offset) as usize),
                         (0..0).into_iter(),
                     );
-                    *offset -= vc.loc.get_length_on_reference() as i64;
+                    *offset -= vc.loc.get_length_on_reference() as i64 - 1;
                 };
             }
             VariantType::Snp => {
                 new_bases[((vc.loc.start as i64 + *offset) as usize)] = consensus_allele.bases[0];
             }
             VariantType::Indel => {
+
+                let allele_len = consensus_allele.bases.len();
+                new_bases.splice(
+                    ((vc.loc.start as i64 + 1 + *offset) as usize)
+                        ..=((vc.loc.end as i64 + *offset) as usize),
+                    consensus_allele.bases.into_iter().skip(1),
+                );
+
                 if vc.loc.get_length_on_reference() == 1 {
                     // insertion
-                    *offset += consensus_allele.bases.len() as i64
+                    *offset += allele_len as i64 - 1;
                 } else {
-                    *offset -= vc.loc.get_length_on_reference() as i64;
+                    *offset -= vc.loc.get_length_on_reference() as i64 - 1;
                 };
-
+            }
+            VariantType::Mnp => {
+                let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + *offset) as usize)
                         ..=((vc.loc.end as i64 + *offset) as usize),
                     consensus_allele.bases.into_iter(),
                 );
-            }
-            VariantType::Mnp => {
-                if vc.loc.get_length_on_reference() < consensus_allele.bases.len() {
+
+                if vc.loc.get_length_on_reference() < allele_len {
                     // gaining bases so increase offset
-                    *offset += consensus_allele.bases.len() as i64
+                    *offset += allele_len as i64 - 1
                         - vc.loc.get_length_on_reference() as i64;
                 } else {
                     // losing bases so decrease offset
                     *offset -= vc.loc.get_length_on_reference() as i64
-                        - consensus_allele.bases.len() as i64;
+                        - allele_len as i64 - 1;
                 }
-
-                new_bases.splice(
-                    ((vc.loc.start as i64 + *offset) as usize)
-                        ..=((vc.loc.end as i64 + *offset) as usize),
-                    consensus_allele.bases.into_iter(),
-                );
             }
             VariantType::Mixed => {
                 // need to determine the type the actual allele came out as

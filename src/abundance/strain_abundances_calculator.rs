@@ -28,10 +28,6 @@ impl StrainAbundanceCalculator {
     }
 
     pub fn calculate_abundances(sample_genotypes: &mut Vec<Self>, eps: f64) {
-        // Placeholder stopping criterion vector
-        // Going to check for small changes between theta_prev and theta_curr
-        let mut theta_prev_mean: f64;
-        let mut theta_curr_mean: f64 = 1.;
         // the difference between theta curr and theta prev
         let mut omega = 1.;
 
@@ -41,7 +37,6 @@ impl StrainAbundanceCalculator {
 
         while omega > eps {
             // Update theta values
-            theta_prev_mean = theta_curr_mean;
             theta_prev = theta_curr.clone();
 
             for (index, genotype) in sample_genotypes.iter_mut().enumerate() {
@@ -95,13 +90,12 @@ impl StrainAbundanceCalculator {
                 theta_curr[index] = genotype.abundance_weight;
             }
 
-            // Update theta_curr_mean and omega
-            theta_curr_mean = theta_curr.iter().sum::<f64>() / theta_curr.len() as f64;
-            omega = (theta_curr_mean - theta_prev_mean).abs();
+            // Update omega
+            omega = theta_curr.iter().zip(theta_prev.iter()).map(|(curr, prev)| (curr - prev).abs()).sum::<f64>();
 
             debug!(
-                "Theta Current {:?} mean {} theta prev mean {} Omega {}",
-                &theta_curr, theta_curr_mean, &theta_prev_mean, &omega,
+                "Theta Current {:?} Prev {:?} Omega {}",
+                &theta_curr, &theta_prev, &omega,
             );
             n += 1;
         }

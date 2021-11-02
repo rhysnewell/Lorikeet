@@ -22,6 +22,7 @@ pub struct AbundanceCalculatorEngine<'a> {
 
 impl<'a> AbundanceCalculatorEngine<'a> {
     // Welcome. To the house... of Abundance
+    const EPSILON: f64 = 10e-10;
 
     pub fn new(
         variant_contexts: Vec<VariantContext>,
@@ -52,7 +53,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         let mut strain_ids = (0..n_strains).into_iter().collect::<Vec<usize>>();
         let mut abundance_key = HashMap::with_capacity(n_strains);
         let mut strain_id_key = HashMap::with_capacity(n_strains);
-        let eps = 0.01;
+        let eps = Self::EPSILON;
         // the per sample strain presence vec, true if suspected of being present
         // false if not. Used to detect if a suspected strain disappears from a sample between
         // iterations

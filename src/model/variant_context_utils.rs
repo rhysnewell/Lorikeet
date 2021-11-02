@@ -481,7 +481,7 @@ impl VariantContextUtils {
             match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()) {
                 Some(qbd) => {
                     if let &AttributeObject::f64(qbd) = qbd { // Filter by qbd value
-                        if qbd >= min_qual_by_depth {
+                        if qbd >= min_qual_by_depth && vc.log10_p_error <= -10.0 {
                             let n_alts = vc.get_alternate_alleles().len();
                             if n_alts == 1 {
                                 split_vcs.push(vc)

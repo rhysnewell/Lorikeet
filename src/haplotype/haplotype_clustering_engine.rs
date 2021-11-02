@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
 use coverm::FlagFilter;
+use utils::simple_interval::Locatable;
 
 /// HaplotypeClusteringEngine provides a suite of functions that takes a list of VariantContexts
 /// And clusters them using the flight python module. It will then read in the results of flight
@@ -27,6 +28,8 @@ pub struct HaplotypeClusteringEngine<'a> {
     labels: Array1<i32>,
     labels_set: HashSet<i32>,
     cluster_separation: Array2<f64>,
+    previous_groups: HashMap<i32, i32>,
+    exclusive_groups: HashMap<i32, HashSet<i32>>
 }
 
 impl<'a> HaplotypeClusteringEngine<'a> {
@@ -48,6 +51,8 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             labels: Array::default(0),
             labels_set: HashSet::new(),
             cluster_separation: Array::default((0, 0)),
+            previous_groups: HashMap::new(),
+            exclusive_groups: HashMap::new()
         }
     }
 
@@ -82,8 +87,15 @@ impl<'a> HaplotypeClusteringEngine<'a> {
 
         debug!("separation {:?}", &self.cluster_separation);
         let grouped_contexts = self.group_contexts();
+
         let mut linkage_engine =
-            LinkageEngine::new(grouped_contexts, sample_names, &self.cluster_separation);
+            LinkageEngine::new(
+                grouped_contexts,
+                sample_names,
+                &self.cluster_separation,
+                &self.previous_groups,
+                &self.exclusive_groups,
+            );
         let mut potential_strains = linkage_engine.run_linkage(
             sample_names,
             n_threads,
@@ -173,13 +185,65 @@ impl<'a> HaplotypeClusteringEngine<'a> {
     }
 
     fn apply_clusters(&mut self) {
+        let max_label = self.labels.iter().max().unwrap();
+
+        let mut prev_pos = -1;
+        let mut prev_tid = -1;
+        let mut prev_vg = -1;
+        let mut new_label = *max_label + 1;
+
+        // indices of variants that need to have their variant groups updated
+        // i.e. they shared position with another variant in the group. So neither of the variants
+        //      can exist in this group.
+        // variant group to (pos to vector of indices key pair) key pair
+        let mut need_updating = HashMap::new();
         for (idx, vc) in self.variants.iter_mut().enumerate() {
             let mut variant_group = self.labels[[idx]];
+            if vc.loc.tid() == prev_tid
+                && vc.loc.start as i32 == prev_pos
+                && variant_group == prev_vg
+                && variant_group != -1
+            {
+                // keep track of what group it originally came from
+                // self.previous_groups.insert(new_label, variant_group);
+                // variant_group = new_label;
+                // new_label += 1;
+                let position_to_update = need_updating.entry(variant_group).or_insert_with(|| HashMap::new());
+                let indices_to_update = position_to_update.entry(prev_pos).or_insert_with(|| Vec::new());
+                indices_to_update.push(idx)
+            } else {
+                vc.attributes.insert(
+                    VariantAnnotations::VariantGroup.to_key().to_string(),
+                    AttributeObject::I32(variant_group),
+                );
+            }
 
-            vc.attributes.insert(
-                VariantAnnotations::VariantGroup.to_key().to_string(),
-                AttributeObject::I32(variant_group),
-            );
+            prev_vg = variant_group;
+            prev_tid = vc.loc.tid();
+            prev_pos = vc.loc.start as i32;
+        }
+
+        for (vg, position_map) in need_updating {
+            for (position, indices) in position_map {
+
+                let mut exclusive_groups = HashSet::with_capacity(indices.len());
+
+                for index in indices.iter() {
+                    let mut vc_to_update = &mut self.variants[*index];
+                    vc_to_update.attributes.insert(
+                        VariantAnnotations::VariantGroup.to_key().to_string(),
+                        AttributeObject::I32(new_label),
+                    );
+                    self.previous_groups.insert(new_label, vg);
+                    exclusive_groups.insert(new_label);
+                    new_label += 1;
+                }
+
+                for group in exclusive_groups.iter() {
+                    let exclusive_group = self.exclusive_groups.entry(*group).or_insert_with(|| exclusive_groups.clone());
+                    exclusive_group.remove(group);
+                }
+            }
         }
     }
 
@@ -195,7 +259,7 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         // information for the reference and alternate alleles. Thus each sample is represented by two
         // columns. The reference allele always comes first.
         let mut var_depth_array: Array2<i32> =
-            Array::from_elem((self.variants.len(), self.n_samples * 2), 0);
+            Array::from_elem((self.variants.len(), self.n_samples * 2 + 2), 0);
 
         for (row_id, var) in self.variants.iter().enumerate() {
             debug!(
@@ -209,10 +273,12 @@ impl<'a> HaplotypeClusteringEngine<'a> {
                     .map(|g| &g.ad)
                     .collect::<Vec<&Vec<i64>>>()
             );
+            var_depth_array[[row_id, 0]] = var.loc.tid();
+            var_depth_array[[row_id, 1]] = var.loc.start as i32;
             for (sample_index, genotype) in var.genotypes.genotypes().into_iter().enumerate() {
                 for (offset, val) in genotype.ad_i32().iter().enumerate() {
                     if offset < 2 {
-                        var_depth_array[[row_id, sample_index * 2 + offset]] = *val
+                        var_depth_array[[row_id, sample_index * 2 + offset + 2]] = *val
                     }
                 }
             }

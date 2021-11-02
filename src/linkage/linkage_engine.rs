@@ -34,6 +34,8 @@ pub struct LinkageEngine<'a> {
     grouped_mean_read_depth: LinkedHashMap<i32, f64>,
     samples: &'a Vec<String>,
     cluster_separations: &'a Array2<f64>,
+    previous_groups: &'a HashMap<i32, i32>,
+    exclusive_groups: &'a HashMap<i32, HashSet<i32>>
 }
 
 impl<'a> LinkageEngine<'a> {
@@ -43,12 +45,16 @@ impl<'a> LinkageEngine<'a> {
         grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
         samples: &'a Vec<String>,
         cluster_separations: &'a Array2<f64>,
+        previous_groups: &'a HashMap<i32, i32>,
+        exclusive_groups: &'a HashMap<i32, HashSet<i32>>
     ) -> LinkageEngine<'a> {
         Self {
             grouped_contexts,
             grouped_mean_read_depth: LinkedHashMap::new(),
             samples,
             cluster_separations,
+            previous_groups,
+            exclusive_groups
         }
     }
 
@@ -194,8 +200,10 @@ impl<'a> LinkageEngine<'a> {
                 let current_node_cumulative_depth =
                     *nodes_cumulative_depth.entry(current_node).or_insert(0.0);
 
-                if (1.0 - (current_node_cumulative_depth / current_depth))
-                    >= Self::MIN_DETECTABLE_DEPTH_EPSILON
+                let mut depth_being_added_to_other_nodes = current_depth - current_node_cumulative_depth;
+
+                if ((1.0 - (current_node_cumulative_depth / current_depth))
+                    >= Self::MIN_DETECTABLE_DEPTH_EPSILON && depth_being_added_to_other_nodes > 0.0)
                     || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
                 {
                     let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
@@ -207,22 +215,22 @@ impl<'a> LinkageEngine<'a> {
                     )
                     .collect::<Vec<LinkedHashSet<NodeIndex>>>();
                     debug!(
-                        "Paths {:?} current node {:?} depth {} cumulative depth {} value {}",
+                        "Paths {:?} current node {:?} depth {} cumulative depth {}",
                         &paths,
                         current_node,
                         current_depth,
                         current_node_cumulative_depth,
-                        (1.0 - (current_node_cumulative_depth / current_depth))
                     );
 
                     if paths.len() == 1 {
                         let mut path = paths.into_iter().next().unwrap();
                         // check if any of the nodes in this path have been consumed entirely
-                        let consumed_nodes = self.check_node_depths(
+                        let consumed_nodes = self.check_nodes_in_path(
                             &mst,
-                            &path,
+                            &mut path,
                             &mut nodes_cumulative_depth,
-                            current_depth,
+                            depth_being_added_to_other_nodes,
+                            current_node
                         );
 
                         match consumed_nodes {
@@ -234,7 +242,7 @@ impl<'a> LinkageEngine<'a> {
                                     &mut nodes_cumulative_depth,
                                     &mut starting_nodes,
                                     &mut strains,
-                                    current_depth,
+                                    depth_being_added_to_other_nodes,
                                     current_node_cumulative_depth,
                                     &mst,
                                 )
@@ -258,7 +266,7 @@ impl<'a> LinkageEngine<'a> {
                                         &mut seen_nodes,
                                         &mut nodes_cumulative_depth,
                                         groups_at_capacity,
-                                        current_depth,
+                                        depth_being_added_to_other_nodes,
                                         &mut starting_nodes,
                                         current_node_cumulative_depth,
                                     );
@@ -272,7 +280,7 @@ impl<'a> LinkageEngine<'a> {
                                         &mut nodes_cumulative_depth,
                                         &mut starting_nodes,
                                         &mut strains,
-                                        current_depth,
+                                        depth_being_added_to_other_nodes,
                                         current_node_cumulative_depth,
                                         &mst,
                                     )
@@ -384,7 +392,24 @@ impl<'a> LinkageEngine<'a> {
 
         let mut current_max_shared_nodes = 0;
         for (index, strain) in strains.iter().enumerate() {
-            if strain.iter().any(|vg| groups_at_capacity.contains(vg)) {
+
+            // Check if this strain should be excluded
+            let mut exclude_this_option = false;
+            for group in groups_in_path.iter() {
+                match self.exclusive_groups.get(group) {
+                    None => continue,
+                    Some(exclusive_groups) => {
+                        for group_in_strain in strain {
+                            if exclusive_groups.contains(group_in_strain) {
+                                exclude_this_option = true;
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            if strain.iter().any(|vg| groups_at_capacity.contains(vg)) && !exclude_this_option {
                 let shared_nodes = groups_in_path.intersection(strain).count();
                 if shared_nodes == current_max_shared_nodes {
                     // same amount of nodes as a previous strain so extend the possible options
@@ -576,8 +601,7 @@ impl<'a> LinkageEngine<'a> {
                 );
             }
         } else {
-            // weird edge case where variant group had no carry capacity?
-            debug!("Weird edge case");
+            // next closest strain had conflicting variant groups so just make this a new strain
             self.make_strain_and_update(
                 path,
                 seen_nodes,
@@ -597,7 +621,7 @@ impl<'a> LinkageEngine<'a> {
         seen_nodes: &mut HashSet<i32>,
         nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
         strain_to_merge_into: &mut LinkedHashSet<i32>,
-        current_depth: f64,
+        depth_being_added_to_nodes: f64,
         current_node_cumulative_depth: f64,
         mst: &UnGraph<i32, f64>,
     ) {
@@ -606,14 +630,14 @@ impl<'a> LinkageEngine<'a> {
             let variant_group = *mst.node_weight(node).unwrap();
             if !seen_nodes.contains(&variant_group) {
                 seen_nodes.insert(variant_group);
-                let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
-                // add the depth of the current node to this node
-                // subtract the cumulative depth as it has already
-                // been seen that many times
-                *node_cumulative_depth += (current_depth - current_node_cumulative_depth);
-
-                strain_to_merge_into.insert(variant_group);
             }
+            let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
+            // add the depth of the current node to this node
+            // subtract the cumulative depth as it has already
+            // been seen that many times
+            *node_cumulative_depth += depth_being_added_to_nodes;
+
+            strain_to_merge_into.insert(variant_group);
         });
     }
 
@@ -630,21 +654,37 @@ impl<'a> LinkageEngine<'a> {
     /// is likely that this path was meant to be merged with another path. Thus, this function checks
     /// that all nodes in the path are above the water table, if not then it returns the first node that
     /// is below the water table. Otherwise None
-    fn check_node_depths(
+    fn check_nodes_in_path(
         &self,
         mst: &UnGraph<i32, f64>,
-        path: &LinkedHashSet<NodeIndex>,
+        path: &mut LinkedHashSet<NodeIndex>,
         nodes_cumulative_depth: &mut HashMap<NodeIndex, f64>,
-        _current_depth: f64,
+        depth_being_added_to_nodes: f64,
+        current_node: NodeIndex
     ) -> Option<Vec<NodeIndex>> {
         let mut nodes_at_capacity = None;
+        let current_group = *mst.node_weight(current_node).unwrap();
 
-        for (idx, node) in path.into_iter().enumerate() {
+        let excluded_groups = self.exclusive_groups.get(&current_group);
+        let mut to_remove = HashSet::new();
+        for (idx, node) in path.iter().enumerate() {
             let variant_group = *mst.node_weight(*node).unwrap();
+            match &excluded_groups {
+                None => {
+                    // good to go
+                },
+                Some(excluded_groups) => {
+                    if excluded_groups.contains(&variant_group) {
+                        to_remove.insert(*node);
+                        continue
+                    }
+                }
+            }
             let node_cumulative_depth = nodes_cumulative_depth.entry(*node).or_insert(0.0); // This nodes current capacity
             let threshold = self.grouped_mean_read_depth.get(&variant_group).unwrap(); // This nodes maximum capcity
+            let updated_depth = *node_cumulative_depth + depth_being_added_to_nodes;
 
-            if *node_cumulative_depth / *threshold >= 1.0 {
+            if (*node_cumulative_depth - *threshold).abs() <= f64::EPSILON || &updated_depth > threshold { // more efficient than division
                 debug!(
                     "Node at capacity {:?} vg {} cumulative depth {} capacity {}",
                     node, variant_group, *node_cumulative_depth, *threshold
@@ -655,6 +695,10 @@ impl<'a> LinkageEngine<'a> {
                 }
             }
         }
+
+        to_remove.into_iter().for_each(|remove_node| {
+            path.remove(&remove_node);
+        });
 
         nodes_at_capacity
     }
@@ -894,10 +938,18 @@ impl<'a> LinkageEngine<'a> {
                 node_indices.insert(*group1, node);
                 node
             };
+
+            // Use the previous grouping values for the purpose of linking by distance
+            let mut ind1 = *group1 as usize;
+            if self.previous_groups.contains_key(group1) {
+                ind1 = *self.previous_groups.get(group1).unwrap() as usize
+            }
+
             for (group2, reads2) in grouped_reads.iter() {
-                if group1 == group2 || *group2 < 0 {
+                if group1 == group2 || *group2 < 0 || self.check_exclusion(group1, group2) {
                     continue;
                 }
+
                 let node2 = if node_indices.contains_key(group2) {
                     *node_indices.get(group2).unwrap()
                 } else {
@@ -906,13 +958,25 @@ impl<'a> LinkageEngine<'a> {
                     node
                 };
 
+                let mut ind2 = *group2 as usize;
+                if self.previous_groups.contains_key(group2) {
+                    ind2 = *self.previous_groups.get(group2).unwrap() as usize
+                }
+
+                if ind1 == ind2 {
+                    // don't form edges between identical groups/indices
+                    // the previous group of one of the current groups is the same as other group
+                    continue
+                }
+
                 // Don't count twice
                 if !graph.contains_edge(node1, node2) {
                     // How many read ids are shared
                     let intersection = reads1.intersection(reads2).count() as f64;
+
                     let mut under_sep_thresh = false;
                     under_sep_thresh = self.cluster_separations
-                        [[*group1 as usize, *group2 as usize]]
+                        [[ind1, ind2]]
                         < 3.0;
                     if intersection > 0.0 || under_sep_thresh {
                         let union = reads1.union(reads2).count() as f64;
@@ -934,7 +998,7 @@ impl<'a> LinkageEngine<'a> {
                             // have to be directly on top of the other variant group
                             // for the edge to be favoured in the MST
                             let weight = self.cluster_separations
-                                [[*group1 as usize, *group2 as usize]];
+                                [[ind1, ind2]];
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union
@@ -947,6 +1011,23 @@ impl<'a> LinkageEngine<'a> {
         }
 
         graph
+    }
+
+    fn check_exclusion(&self, group1: &i32, group2: &i32) -> bool {
+        // check that neither group1 or group2 is exclusive of each other
+        if self.exclusive_groups.contains_key(group1) {
+            if self.exclusive_groups.get(group1).unwrap().contains(group2) {
+                return true
+            }
+        }
+
+        if self.exclusive_groups.contains_key(group2) {
+            if self.exclusive_groups.get(group2).unwrap().contains(group1) {
+                return true
+            }
+        }
+
+        false
     }
 
     fn extract_node(
