@@ -252,9 +252,9 @@ impl<'a> ReferenceWriter<'a> {
             VariantType::Indel => {
                 let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
-                    ((vc.loc.start as i64 + 1 + *offset) as usize)
-                        ..=((vc.loc.end as i64 + *offset) as usize),
-                    consensus_allele.bases.into_iter().skip(1),
+                    ((vc.loc.start as i64 + *offset) as usize)
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
+                    consensus_allele.bases.into_iter(),
                 );
 
                 if vc.loc.get_length_on_reference() == 1 {
@@ -268,7 +268,7 @@ impl<'a> ReferenceWriter<'a> {
                 let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + *offset) as usize)
-                        ..=((vc.loc.end as i64 + *offset) as usize),
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
                     consensus_allele.bases.into_iter(),
                 );
 

@@ -171,10 +171,12 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                 // We divide the total depth of variant here by the total amount of strains that
                                 // variant occurs in. E.g. if a variant had a depth of 6
                                 // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                let reference_depth = vc.genotypes.genotypes()[sample_index].ad[0]
+                                let mut reference_depth = vc.genotypes.genotypes()[sample_index].ad[0]
                                     as f64
                                     / total_depth;
+
                                 let weight = reference_depth; // (n_strains - strains.len()) as f64;
+
 
                                 let reference_strain_index = n_strains - 1;
                                 let abundance_index =
@@ -253,7 +255,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     [*abundance_key.get(&calculator.index).unwrap()] += 1;
                                 if strain_present[strain_index] {
                                     strain_present[strain_index] = false;
-                                    // something_removed = true;
+                                    something_removed = true;
                                 }
                             }
                         })
@@ -427,7 +429,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
         reference_presence_counters
             .iter()
-            .any(|count| *count == self.variant_contexts.len())
+            .any(|count| *count >= (self.variant_contexts.len() as f64 * 0.97) as usize)
     }
 
     fn determine_if_strain_is_present(

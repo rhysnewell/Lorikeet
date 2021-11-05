@@ -11,6 +11,7 @@ extern crate openssl;
 extern crate openssl_sys;
 
 pub mod abundance;
+pub mod ani_calculator;
 pub mod activity_profile;
 pub mod annotator;
 pub mod assembly;

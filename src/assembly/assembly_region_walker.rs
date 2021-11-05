@@ -219,6 +219,7 @@ impl AssemblyRegionWalker {
                                 feature_variants,
                                 args,
                                 sample_names,
+                                flag_filters
                             )
                             .into_par_iter()
                         // })
@@ -256,6 +257,7 @@ impl AssemblyRegionWalker {
                                 Vec::new(),
                                 args,
                                 sample_names,
+                                flag_filters
                             )
                             .into_par_iter()
                     })

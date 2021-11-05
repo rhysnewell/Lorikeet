@@ -244,6 +244,10 @@ Genotyping arguments (optional):
 
   --qual-by-depth-filter                The minimum QD value for a variant to have for it to be
                                         included in the genotyping analysis. [default: 20]
+  --min-variant-depth-for-genotyping    The minimum total depth of a variant - across all samples -
+                                        for it to be included in the strain genotyping process.
+                                        Lower values tend to confuse and break the UMAP embedding
+                                        and strain abundance calculation. [default: 5]
 {}
         ",
         ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
@@ -1614,6 +1618,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("min-variant-depth-for-genotyping")
+                        .long("min-variant-depth-for-genotyping")
+                        .default_value("5")
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -2141,6 +2150,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("kmer-length-for-read-error-correction")
                         .default_value("25")
                         .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-observations-for-kmers-to-be-solid")
+                        .long("min-observations-for-kmers-to-be-solid")
+                        .default_value("20")
+                        .hidden(true)
                 )
                 .arg(
                     Arg::with_name("max-mnp-distance")

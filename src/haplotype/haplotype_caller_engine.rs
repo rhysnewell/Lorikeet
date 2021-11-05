@@ -713,6 +713,7 @@ impl HaplotypeCallerEngine {
         given_alleles: Vec<VariantContext>,
         args: &'b clap::ArgMatches,
         sample_names: &'b Vec<String>,
+        flag_filters: &'b FlagFilter,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
         debug!(
@@ -836,7 +837,7 @@ impl HaplotypeCallerEngine {
         //TODO - on the originalActiveRegion?
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
-        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result);
+        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result, flag_filters);
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
@@ -920,6 +921,7 @@ impl HaplotypeCallerEngine {
     fn filter_non_passing_reads(
         &self,
         mut assembly_result: AssemblyResultSet<ReadThreadingGraph>,
+        flag_filters: &FlagFilter,
     ) -> (AssemblyResultSet<ReadThreadingGraph>, Vec<BirdToolRead>) {
         let reads_to_remove = assembly_result
             .region_for_genotyping
@@ -928,7 +930,11 @@ impl HaplotypeCallerEngine {
             .filter(|r| {
                 if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
-                    || (!r.read.is_proper_pair() && r.read_type != ReadType::Long)
+                    || (!r.read.is_proper_pair()
+                        && r.read_type != ReadType::Long
+                        && !flag_filters.include_improper_pairs)
+                    || (!flag_filters.include_secondary
+                        && r.read.is_secondary())
                 {
                     debug!("Removing read {:?}", r);
                     true

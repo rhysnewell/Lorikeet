@@ -470,6 +470,44 @@ impl VariantContext {
         current_consensus
     }
 
+    /// Returns index of the consensus allele at this position,
+    /// that is the allele with highest sequencing depth in the specified sample index.
+    pub fn get_consensus_allele_index(&self, sample_index: usize) -> Option<usize> {
+        let mut current_max_depth = std::i64::MIN;
+        let mut current_consensus = None;
+        for (i, dp) in self.genotypes.genotypes()[sample_index]
+            .ad
+            .iter()
+            .enumerate()
+        {
+            if dp > &current_max_depth {
+                current_max_depth = *dp;
+                current_consensus = Some(i);
+            }
+        }
+
+        debug!(
+            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+            current_max_depth,
+            self.genotypes.genotypes()[sample_index],
+            &current_consensus,
+            self.genotypes.genotypes()
+        );
+
+        if current_max_depth == 0 {
+            // no variant was found in this sample
+            return None;
+        }
+
+        current_consensus
+    }
+
+    pub fn alleles_present_in_sample(&self, sample_index: usize) -> Vec<bool> {
+        (0..self.get_n_alleles()).map(|allele_index| {
+            self.genotypes.genotypes()[sample_index].ad[allele_index] > 0
+        }).collect::<Vec<bool>>()
+    }
+
     fn get_gq_log10_from_posteriors(best_genotype_index: usize, log10_posteriors: &[f64]) -> f64 {
         match log10_posteriors.len() {
             0 | 1 => 1.0,

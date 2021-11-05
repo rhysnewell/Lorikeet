@@ -1,4 +1,5 @@
 use std::hash::{Hash, Hasher};
+use std::cmp::min;
 
 /**
  * Fast wrapper for byte[] kmers
@@ -75,7 +76,7 @@ impl Kmer {
     pub fn bases(&mut self) -> &[u8] {
         if self.start != 0 || self.bases.len() != self.length {
             // update operation.  Rip out the exact byte[] and update start so we don't ever do this again
-            self.bases = self.bases[self.start..self.start + self.length].to_vec();
+            self.bases = self.bases[self.start..min((self.start + self.length), self.bases.len())].to_vec();
             self.start = 0;
         }
 
@@ -141,8 +142,8 @@ impl Kmer {
 
 impl PartialEq for Kmer {
     fn eq(&self, other: &Self) -> bool {
-        self.bases[self.start..(self.start + self.length)]
-            == other.bases[other.start..(other.start + other.length)]
+        self.bases[self.start..min((self.start + self.length), self.bases.len())]
+            == other.bases[other.start..min((other.start + other.length), other.bases.len())]
     }
 }
 
@@ -150,6 +151,6 @@ impl Eq for Kmer {}
 
 impl Hash for Kmer {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.bases[self.start..(self.start + self.length)].hash(state)
+        self.bases[self.start..min((self.start + self.length), self.bases.len())].hash(state)
     }
 }

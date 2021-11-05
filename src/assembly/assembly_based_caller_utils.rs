@@ -297,7 +297,7 @@ impl AssemblyBasedCallerUtils {
                     .parse::<usize>()
                     .unwrap(),
                 HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
-                args.value_of("min-observations-for-kmers-to-be-solid")
+                args.value_of("min-observation-for-kmer-to-be-solid")
                     .unwrap()
                     .parse::<usize>()
                     .unwrap(),

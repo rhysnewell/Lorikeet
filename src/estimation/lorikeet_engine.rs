@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use utils::utils::get_cleaned_sample_names;
+use ani_calculator::ani_calculator::ANICalculator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -273,7 +274,20 @@ impl<'a> LorikeetEngine<'a> {
 
                     // ensure output path exists
                     create_dir_all(&output_prefix).expect("Unable to create output directory");
+
+                    let genome_size = reference_reader.target_lens.iter().map(|(_, length)| length).sum::<u64>();
+
                     if mode == "call" {
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
+                            &contexts,
+                            &output_prefix,
+                            &cleaned_sample_names,
+                            reference,
+                            genome_size
+                        );
+
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
@@ -306,6 +320,21 @@ impl<'a> LorikeetEngine<'a> {
                                 .unwrap()
                                 .parse()
                                 .unwrap(),
+                            self.args
+                                .value_of("min-variant-depth-for-genotyping")
+                                .unwrap()
+                                .parse()
+                                .unwrap()
+                        );
+
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
+                            &split_contexts,
+                            &output_prefix,
+                            &cleaned_sample_names,
+                            reference,
+                            genome_size
                         );
 
                         if split_contexts.len() >= 1 {
@@ -397,6 +426,15 @@ impl<'a> LorikeetEngine<'a> {
                             reference_writer.generate_strains(split_contexts, ref_idx, vec![0]);
                         }
                     } else if mode == "consensus" {
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
+                            &contexts,
+                            &output_prefix,
+                            &cleaned_sample_names,
+                            reference,
+                            genome_size
+                        );
                         // Get sample distances
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
