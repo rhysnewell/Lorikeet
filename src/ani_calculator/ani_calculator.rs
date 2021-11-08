@@ -21,6 +21,14 @@ use std::io::Write;
 /// at a position then this is, for all intents and purposes, the same as the reference/other sample
 /// for popANI.
 ///
+/// Subpopulation ANI is an extension of PopulationANI, where a difference is measured if the two
+/// populations being compared don't share all the same alleles
+///
+/// To summarize:
+/// Consensus ANI - Share the same consensus Allele
+/// Population ANI - Share at least one common allele
+/// Subpopulation ANI - Share all alleles
+///
 /// Since lorikeet calls Indels, we compare the length of the allele rather than just the position
 /// So the rather than alleles different, it is bases different.
 pub struct ANICalculator {
@@ -28,6 +36,7 @@ pub struct ANICalculator {
     // saying they recovered the reference. Whomever reads this is now cursed for seven years with
     // restless leg syndrome.
     popANI: Array2<f64>,
+    subpopANI: Array2<f64>,
     conANI: Array2<f64>,
 }
 
@@ -35,6 +44,7 @@ impl ANICalculator {
     pub fn new(n_samples: usize) -> Self {
         Self {
             popANI: Array2::default((n_samples, n_samples)),
+            subpopANI: Array2::default((n_samples, n_samples)),
             conANI: Array2::default((n_samples, n_samples))
         }
     }
@@ -51,6 +61,7 @@ impl ANICalculator {
 
         Self::write_ani_tables(output_prefix, sample_names, reference_name, &self.conANI, "consensus_ani");
         Self::write_ani_tables(output_prefix, sample_names, reference_name, &self.popANI, "population_ani");
+        Self::write_ani_tables(output_prefix, sample_names, reference_name, &self.subpopANI, "subpopulation_ani");
     }
 
     /// Takes refernce to a vec of variant contexts and compares the consensus and population
@@ -114,26 +125,34 @@ impl ANICalculator {
                             }
                         }
 
-                        if allele_present_1 != allele_present_2 {
 
-                            let mut bases_different = 0.0;
-                            let mut divisor = 0.0;
-                            for (idx, (present_1, present_2)) in allele_present_1.iter().zip(allele_present_2.iter()).enumerate() {
-                                if present_1 != present_2 {
-                                    bases_different += context.alleles[idx].len() as f64;
-                                    divisor += 1.0;
-                                }
+                        let mut bases_different = 0.0;
+                        let mut divisor = 0.0;
+                        for (idx, (present_1, present_2)) in allele_present_1.iter().zip(allele_present_2.iter()).enumerate() {
+                            if present_1 != present_2 {
+                                bases_different += context.alleles[idx].len() as f64;
+                                divisor += 1.0;
                             }
+                        }
 
-                            bases_different = bases_different /
-                                if divisor > 0.0 {
-                                    divisor
-                                } else {
-                                    1.0
-                                };
+                        bases_different = bases_different /
+                            if divisor > 0.0 {
+                                divisor
+                            } else {
+                                1.0
+                            };
+
+                        if !allele_present_1.iter().zip(allele_present_2.iter()).any(|(present_1, present_2)| {
+                            *present_1 && *present_2
+                        }) { // if they share ANY alleles, then popANI does not change
 
                             self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
                         }
+
+                        if allele_present_1 != allele_present_2 {
+                            self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                        }
+
                     } else {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
                         let allele_present_1 = &present_alleles[sample_idx_1];
@@ -166,6 +185,7 @@ impl ANICalculator {
                                 };
 
                             self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
                         }
                     }
 
@@ -175,6 +195,10 @@ impl ANICalculator {
 
         let length = genome_size as f64;
         self.popANI.iter_mut().for_each(|val| {
+            *val = 1.0 - (*val / length);
+        });
+
+        self.subpopANI.iter_mut().for_each(|val| {
             *val = 1.0 - (*val / length);
         });
 
@@ -225,7 +249,7 @@ impl ANICalculator {
         // Print header line
         write!(file_open, "{: <10}", "SampleID").unwrap();
         for sample in 0..sample_names.len() {
-            write!(file_open, "\t{: <6}", sample + 1).unwrap();
+            write!(file_open, "\t{: <8}", sample + 1).unwrap();
         }
         writeln!(file_open).unwrap();
 
@@ -234,7 +258,7 @@ impl ANICalculator {
             write!(file_open, "{}", counter + 1).unwrap();
             counter += 1;
             for ani in ani_vals {
-                write!(file_open, "\t{:.6}", ani).unwrap();
+                write!(file_open, "\t{:.8}", ani).unwrap();
             }
             writeln!(file_open).unwrap();
         }

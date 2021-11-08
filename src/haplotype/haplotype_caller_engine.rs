@@ -346,7 +346,7 @@ impl HaplotypeCallerEngine {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
 
                     pb.progress_bar.set_message(format!(
-                        "{}: Finding active regions in sample: {}",
+                        "{}: Finding active regions in sample: {:.50}...",
                         pb.key,
                         clean_sample_name(sample_idx, indexed_bam_readers),
                     ));
