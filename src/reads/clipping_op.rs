@@ -216,15 +216,14 @@ impl ClippingOp {
 
             let copy_start = if start == 0 { stop + 1 } else { 0 };
 
-            let quals = read.read.qname().to_vec();
+            let name = read.read.qname().to_vec();
             let new_bases =
                 read.read.seq().as_bytes()[copy_start..(new_length + copy_start)].to_vec();
             let new_quals = read.read.qual()[copy_start..(new_length + copy_start)].to_vec();
 
             // let mut hard_clipped_read = read.clone();
 
-            read.read
-                .set(&quals[..], Some(&new_cigar), &new_bases, &new_quals);
+            read.update(&name[..], Some(&new_cigar), new_bases, &new_quals);
 
             if start == 0 && !read.read.is_unmapped() {
                 read.read.set_pos(

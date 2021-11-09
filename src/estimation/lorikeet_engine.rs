@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use utils::utils::get_cleaned_sample_names;
+use ani_calculator::ani_calculator::ANICalculator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -121,7 +122,9 @@ impl<'a> LorikeetEngine<'a> {
                 );
 
                 if Path::new(&output_prefix).exists() && !self.args.is_present("force") {
-                    let cache = glob::glob(&format!("{}/*{}", &output_prefix,
+                    let cache = glob::glob(&format!(
+                        "{}/*{}",
+                        &output_prefix,
                         if mode == "call" {
                             ".vcf"
                         } else if mode == "genotype" {
@@ -132,15 +135,14 @@ impl<'a> LorikeetEngine<'a> {
                             ".vcf"
                         }
                     ))
-                        .expect("failed to interpret glob")
-                        .map(|p| {
-                            p.expect("Failed to read cached vcf path")
-                                .to_str()
-                                .unwrap()
-                                .to_string()
-                        })
-                        .collect::<Vec<String>>();
-                    if cache.len() > 0 {
+                    .expect("failed to interpret glob")
+                    .map(|p| {
+                        p.expect("Failed to read cached vcf path")
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                    });
+                    if cache.count() > 0 {
                         {
                             let elem = &progress_bars[ref_idx + 2];
                             let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
@@ -168,8 +170,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(
-                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) * 2
-                                    + 1,
+                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) + 1,
                             );
                             pb.progress_bar.reset_eta();
                             let pos = pb.progress_bar.position();
@@ -202,7 +203,7 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads as u32,
                         &tmp_bam_file_cache,
                         self.run_in_parallel,
-                        ref_idx
+                        ref_idx,
                     );
 
                     debug!("Indexed bam readers {:?}", &indexed_bam_readers);
@@ -273,7 +274,20 @@ impl<'a> LorikeetEngine<'a> {
 
                     // ensure output path exists
                     create_dir_all(&output_prefix).expect("Unable to create output directory");
+
+                    let genome_size = reference_reader.target_lens.iter().map(|(_, length)| length).sum::<u64>();
+
                     if mode == "call" {
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
+                            &contexts,
+                            &output_prefix,
+                            &cleaned_sample_names,
+                            reference,
+                            genome_size
+                        );
+
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
@@ -299,74 +313,128 @@ impl<'a> LorikeetEngine<'a> {
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
                         // alleles
-                        let split_contexts = VariantContextUtils::split_contexts(contexts);
-
-                        // Perform UMAP and HDBSCAN clustering followed by variant group
-                        // read linkage clustering.
-                        let mut clustering_engine = HaplotypeClusteringEngine::new(
-                            output_prefix.as_str(),
-                            split_contexts,
-                            &reference_reader,
-                            ref_idx,
-                            indexed_bam_readers.len(),
-                            n_threads,
-                        );
-                        let (n_strains, split_contexts) = clustering_engine.perform_clustering(
-                            &indexed_bam_readers,
-                            n_threads,
-                            tree,
-                        );
-                        debug!(
-                            "example variant after clustering {:?}",
-                            &split_contexts.first()
+                        let split_contexts = VariantContextUtils::split_contexts(
+                            contexts,
+                            self.args
+                                .value_of("qual-by-depth-filter")
+                                .unwrap()
+                                .parse()
+                                .unwrap(),
+                            self.args
+                                .value_of("min-variant-depth-for-genotyping")
+                                .unwrap()
+                                .parse()
+                                .unwrap()
                         );
 
-                        // Get strain abundances
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Calculating genotype abundances...",
-                                &reference,
-                            ));
-                        }
-                        let mut abundance_calculator_engine = AbundanceCalculatorEngine::new(
-                            split_contexts,
-                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                            &output_prefix,
-                            &cleaned_sample_names,
-                        );
-
-                        let (strain_ids_present, split_contexts) = abundance_calculator_engine
-                            .run_abundance_calculator(n_strains, cleaned_sample_names.len());
-                        // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
-
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Generating VCF file...", &reference,));
-                        }
-                        assembly_engine.evaluator.write_vcf(
-                            &output_prefix,
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
                             &split_contexts,
+                            &output_prefix,
                             &cleaned_sample_names,
-                            &reference_reader,
-                            true,
+                            reference,
+                            genome_size
                         );
 
-                        // Write genotypes to disk, reference specific
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Writing strains...", &reference,));
+                        if split_contexts.len() >= 1 {
+                            // Perform UMAP and HDBSCAN clustering followed by variant group
+                            // read linkage clustering.
+                            let mut clustering_engine = HaplotypeClusteringEngine::new(
+                                output_prefix.as_str(),
+                                split_contexts,
+                                &reference_reader,
+                                ref_idx,
+                                indexed_bam_readers.len(),
+                                n_threads,
+                            );
+                            let (n_strains, split_contexts) = clustering_engine.perform_clustering(
+                                &indexed_bam_readers,
+                                flag_filters,
+                                n_threads,
+                                tree,
+                            );
+                            debug!(
+                                "example variant after clustering {:?}",
+                                &split_contexts.first()
+                            );
+
+                            // Get strain abundances
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating genotype abundances...",
+                                    &reference,
+                                ));
+                            }
+                            let mut abundance_calculator_engine = AbundanceCalculatorEngine::new(
+                                split_contexts,
+                                &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                &output_prefix,
+                                &cleaned_sample_names,
+                            );
+
+                            let (mut strain_ids_present, split_contexts) =
+                                abundance_calculator_engine.run_abundance_calculator(
+                                    n_strains,
+                                    cleaned_sample_names.len(),
+                                );
+                            // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(
+                                        format!("{}: Generating VCF file...", &reference,),
+                                    );
+                            }
+                            assembly_engine.evaluator.write_vcf(
+                                &output_prefix,
+                                &split_contexts,
+                                &cleaned_sample_names,
+                                &reference_reader,
+                                true,
+                            );
+
+                            // Write genotypes to disk, reference specific
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar
+                                    .set_message(format!("{}: Writing strains...", &reference,));
+                            }
+                            let mut reference_writer =
+                                ReferenceWriter::new(reference_reader, &output_prefix);
+                            reference_writer.generate_strains(
+                                split_contexts,
+                                ref_idx,
+                                if strain_ids_present.len() > 0 {
+                                    strain_ids_present
+                                } else {
+                                    vec![0]
+                                },
+                            );
+                        } else {
+                            // Write genotypes to disk, reference specific
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Writing reference strain...",
+                                    &reference,
+                                ));
+                            }
+                            let mut reference_writer =
+                                ReferenceWriter::new(reference_reader, &output_prefix);
+                            reference_writer.generate_strains(split_contexts, ref_idx, vec![0]);
                         }
-                        let mut reference_writer =
-                            ReferenceWriter::new(reference_reader, &output_prefix);
-                        reference_writer.generate_strains(
-                            split_contexts,
-                            ref_idx,
-                            strain_ids_present,
-                        );
                     } else if mode == "consensus" {
+                        // calculate ANI statistics
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        ani_calculator.run_calculator(
+                            &contexts,
+                            &output_prefix,
+                            &cleaned_sample_names,
+                            reference,
+                            genome_size
+                        );
                         // Get sample distances
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -484,7 +552,7 @@ impl<'a> LorikeetEngine<'a> {
             debug!("Reference {}", reference,);
             reference_map
                 .entry(ref_idx)
-                .or_insert(reference.to_string());
+                .or_insert_with(|| reference.to_string());
         }
 
         progress_bars[0] = Elem {
@@ -504,7 +572,7 @@ impl<'a> LorikeetEngine<'a> {
         progress_bars
             .par_iter()
             .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
-        progress_bars[0].progress_bar.set_style(sty_eta.clone());
+        progress_bars[0].progress_bar.set_style(sty_eta);
 
         return progress_bars;
     }
@@ -575,16 +643,31 @@ pub fn start_lorikeet_engine<
     // Finish each BAM source
     if m.is_present("longreads") || m.is_present("longread-bam-files") {
         info!("Processing long reads...");
-        finish_bams(longreads, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("longread-bam-files"));
+        finish_bams(
+            longreads,
+            threads,
+            &genomes_and_contigs,
+            run_in_parallel,
+            !m.is_present("longread-bam-files"),
+        );
     }
 
-    if m.is_present("coupled") || m.is_present("interleaved")
-        || m.is_present("read1") || m.is_present("read2") || m.is_present("single")
-        || m.is_present("bam-files") {
+    if m.is_present("coupled")
+        || m.is_present("interleaved")
+        || m.is_present("read1")
+        || m.is_present("read2")
+        || m.is_present("single")
+        || m.is_present("bam-files")
+    {
         info!("Processing short reads...");
-        finish_bams(bam_readers, threads, &genomes_and_contigs, run_in_parallel, !m.is_present("bam-files"));
+        finish_bams(
+            bam_readers,
+            threads,
+            &genomes_and_contigs,
+            run_in_parallel,
+            !m.is_present("bam-files"),
+        );
     }
-
 
     let mut reference_map = HashMap::new();
 
@@ -635,7 +718,7 @@ pub fn start_lorikeet_engine<
             progress_bars: &progress_bars,
             threads,
             mode,
-            run_in_parallel
+            run_in_parallel,
         };
 
         lorikeet_engine.apply_per_reference();

@@ -315,10 +315,10 @@ impl VariantContextUtils {
             return None;
         }
 
-        if priority_list_of_vcs.is_some() {
-            if priority_list_of_vcs.as_ref().unwrap().len() != original_num_of_vcs {
-                panic!("the number of the original VariantContexts must be the same as the number of VariantContexts in the priority list")
-            };
+        if priority_list_of_vcs.is_some()
+            && priority_list_of_vcs.as_ref().unwrap().len() != original_num_of_vcs
+        {
+            panic!("the number of the original VariantContexts must be the same as the number of VariantContexts in the priority list")
         };
 
         let pre_filtered_vcs = Self::sort_variant_contexts_by_priority(
@@ -354,7 +354,7 @@ impl VariantContextUtils {
 
         let mut longest_vc = VCs[0].loc.clone();
         let mut depth = 0.0;
-        let mut log10_p_error = 1.0;
+        let mut log10_p_error: f64 = 1.0;
         let mut any_vc_had_filters_applied = false;
         let mut genotypes = GenotypesContext::create(10);
 
@@ -386,7 +386,7 @@ impl VariantContextUtils {
                 genotype_merge_options == GenotypeMergeType::Uniquify,
             );
             // We always take the QUAL of the first VC with a non-MISSING qual for the combined value
-            if log10_p_error == 1.0 {
+            if (log10_p_error - 1.0).abs() < f64::EPSILON {
                 log10_p_error = vc.get_log10_p_error();
             };
 
@@ -472,64 +472,113 @@ impl VariantContextUtils {
         return Some(builder);
     }
 
-    pub fn split_contexts(vcs: Vec<VariantContext>) -> Vec<VariantContext> {
+    // fn update_variant_context_genotype()
+
+    /// Takes a set of variant contexts and filters them by their Qual By Depth value. If a variant
+    /// context contains 2 or more alternate alleles, then that context is split up into multiple
+    /// contexts. One for each alternate allele.
+    pub fn split_contexts(vcs: Vec<VariantContext>, min_qual_by_depth: f64, min_variant_depth: i64) -> Vec<VariantContext> {
         let mut split_vcs = Vec::new();
         for vc in vcs {
-            let n_alts = vc.get_alternate_alleles().len();
-            if n_alts == 1 {
-                split_vcs.push(vc);
-            } else if n_alts > 1 {
-                let ref_allele = vc.get_reference();
-                let mut new_vcs = Vec::with_capacity(vc.get_alternate_alleles().len());
+            match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()) {
+                Some(qbd) => {
+                    if let &AttributeObject::f64(qbd) = qbd {
+                        // Filter by qbd value
+                        if qbd >= min_qual_by_depth && vc.log10_p_error <= -10.0 {
+                            let n_alts = vc.get_alternate_alleles().len();
+                            if n_alts == 1 {
+                                let depth_sum: i64 = vc.get_genotypes().genotypes().iter().map(|g| g.ad[1]).sum();
 
-                for alt_index in 0..n_alts {
-                    let alt_allele = vc.get_alternate_alleles()[alt_index];
-                    let mut per_sample_genotypes = Vec::with_capacity(vc.get_genotypes().len());
-                    let mut new_depth = 0;
-                    for old_genotype in vc.get_genotypes().genotypes() {
-                        let mut new_genotype = Genotype::build_from_alleles(
-                            vec![ref_allele.clone(), alt_allele.clone()],
-                            old_genotype.sample_name.clone(),
-                        );
+                                // Only include variants which exceed the min variant depth
+                                // for genotyping
+                                if depth_sum >= min_variant_depth {
+                                    split_vcs.push(vc)
+                                }
+                            } else if n_alts > 1 {
+                                let ref_allele = vc.get_reference();
+                                let mut new_vcs =
+                                    Vec::with_capacity(vc.get_alternate_alleles().len());
 
-                        debug!("Old genotype {:?}", old_genotype);
-                        let new_depths = vec![old_genotype.ad[0], old_genotype.ad[alt_index + 1]];
-                        let new_pls = vec![old_genotype.pl[0], old_genotype.pl[alt_index + 1]];
-                        new_depth += new_depths.iter().sum::<i64>();
-                        new_genotype.dp = old_genotype.ad[alt_index + 1];
-                        new_genotype.gq = old_genotype.gq;
-                        new_genotype.ploidy = old_genotype.ploidy;
-                        new_genotype.ad = new_depths;
-                        new_genotype.pl = new_pls;
-                        debug!("New genotype {:?}", &new_genotype);
+                                for alt_index in 0..n_alts {
+                                    let alt_allele = vc.get_alternate_alleles()[alt_index];
+                                    let mut per_sample_genotypes =
+                                        Vec::with_capacity(vc.get_genotypes().len());
+                                    let mut new_depth = 0;
+                                    let mut variant_depth = 0;
+                                    for old_genotype in vc.get_genotypes().genotypes() {
+                                        let mut new_genotype = Genotype::build_from_alleles(
+                                            vec![ref_allele.clone(), alt_allele.clone()],
+                                            old_genotype.sample_name.clone(),
+                                        );
+                                        if old_genotype.gq >= 100 {
+                                            debug!("Old genotype {:?}", old_genotype);
+                                            let new_depths = vec![
+                                                old_genotype.ad[0],
+                                                old_genotype.ad[alt_index + 1],
+                                            ];
+                                            let new_pls = vec![
+                                                old_genotype.pl[0],
+                                                old_genotype.pl[alt_index + 1],
+                                            ];
+                                            new_depth += new_depths.iter().sum::<i64>();
+                                            variant_depth += new_depths[1];
+                                            new_genotype.dp = old_genotype.dp;
+                                            new_genotype.gq = old_genotype.gq;
+                                            new_genotype.ploidy = old_genotype.ploidy;
+                                            new_genotype.ad = new_depths;
+                                            new_genotype.pl = new_pls;
+                                            debug!("New genotype {:?}", &new_genotype);
+                                        } else {
+                                            debug!("Old genotype {:?}", old_genotype);
+                                            let new_depths = vec![
+                                                old_genotype.ad[0],
+                                                0,
+                                            ];
+                                            let new_pls = vec![
+                                                old_genotype.pl[0],
+                                                0,
+                                            ];
 
-                        per_sample_genotypes.push(new_genotype);
+                                            new_genotype.dp = old_genotype.ad[0];
+                                            new_genotype.gq = -1;
+                                            new_genotype.ploidy = old_genotype.ploidy;
+                                            new_genotype.ad = new_depths;
+                                            new_genotype.pl = new_pls;
+                                            debug!("New genotype {:?}", &new_genotype);
+                                        }
+
+
+                                        per_sample_genotypes.push(new_genotype);
+                                    }
+
+                                    if variant_depth >= min_variant_depth {
+                                        let mut new_vc = VariantContext::build(
+                                            vc.loc.tid,
+                                            vc.loc.start,
+                                            vc.loc.end,
+                                            vec![ref_allele.clone(), alt_allele.clone()],
+                                        );
+                                        new_vc.attributes = vc.attributes.clone();
+                                        debug!("Old vc attributes {:?}", &new_vc.attributes);
+                                        new_vc.set_attribute(
+                                            VariantAnnotations::Depth.to_key().to_string(),
+                                            AttributeObject::UnsizedInteger(new_depth as usize),
+                                        );
+                                        new_vc.remove_attributes_for_alt_by_index(alt_index + 1);
+                                        debug!("New vc attributes {:?}", &new_vc.attributes);
+                                        new_vc.genotypes = GenotypesContext::new(per_sample_genotypes);
+                                        new_vc.log10_p_error = vc.log10_p_error;
+
+                                        new_vcs.push(new_vc);
+                                    }
+                                }
+
+                                split_vcs.extend(new_vcs);
+                            }
+                        }
                     }
-
-                    let mut new_vc = VariantContext::build(
-                        vc.loc.tid,
-                        vc.loc.start,
-                        vc.loc.end,
-                        vec![ref_allele.clone(), alt_allele.clone()],
-                    );
-                    new_vc.attributes = vc.attributes.clone();
-                    debug!("Old vc attributes {:?}", &new_vc.attributes);
-                    new_vc.set_attribute(
-                        VariantAnnotations::Depth.to_key().to_string(),
-                        AttributeObject::UnsizedInteger(new_depth as usize),
-                    );
-                    new_vc.remove_attributes_for_alt_by_index(alt_index + 1);
-                    debug!("New vc attributes {:?}", &new_vc.attributes);
-                    new_vc.genotypes = GenotypesContext::new(per_sample_genotypes);
-                    new_vc.log10_p_error = vc.log10_p_error;
-
-                    new_vcs.push(new_vc);
                 }
-
-                split_vcs.extend(new_vcs);
-            } else {
-                // this shouldn't happen but this vc has no alternate
-                split_vcs.push(vc);
+                None => continue,
             }
         }
 

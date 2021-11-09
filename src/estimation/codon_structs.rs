@@ -163,7 +163,7 @@ impl Translations for CodonTable {
                 for codon in codon_sequence.iter() {
                     if String::from_utf8(codon.clone())
                         .expect("Unable to interpret codon")
-                        .contains("N")
+                        .contains('N')
                         || codon.len() != 3
                     {
                         continue;
@@ -198,7 +198,7 @@ impl Translations for CodonTable {
                     let codon_cursor = gene_cursor % 3;
                     if String::from_utf8(codon.clone())
                         .expect("Unable to interpret codon")
-                        .contains("N")
+                        .contains('N')
                     {
                         continue;
                     }
@@ -266,8 +266,7 @@ impl Translations for CodonTable {
                         if codon.len() != 3 {
                             continue;
                         }
-                        new_codons = Vec::new();
-                        new_codons.push(codon.clone());
+                        new_codons = vec![codon.clone()];
                     }
                     if variant_set.len() > 0 {
                         debug!("variant map {:?}", variant_set);

@@ -26,6 +26,7 @@ use utils::simple_interval::SimpleInterval;
  * @original_author Valentin Ruano-Rubio &lt;valentin@broadinstitute.com&gt;
  * @author Rhys Newell; rhys.newell@hdr.qut.edu.au; Rust re-implementation
  */
+#[derive(Debug)]
 pub struct AssemblyResultSet<A: AbstractReadThreadingGraph> {
     // kmer size and assembly_results index hashmap
     pub(crate) assembly_result_by_kmer_size: HashMap<usize, usize>,
@@ -58,13 +59,13 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
 
         Self {
             assembly_result_by_kmer_size: HashMap::new(),
-            haplotypes: haplotypes,
+            haplotypes,
             assembly_result_by_haplotype: HashMap::new(),
             region_for_genotyping: assembly_region,
-            full_reference_with_padding: full_reference_with_padding,
+            full_reference_with_padding,
             padded_reference_loc: ref_loc,
             variation_present: false,
-            ref_haplotype: ref_haplotype,
+            ref_haplotype,
             kmer_sizes: BTreeSet::new(),
             variation_events: BTreeSet::new(),
             last_max_mnp_distance_used: None,

@@ -227,10 +227,7 @@ impl MathUtils {
             .iter()
             .max_by_key(|x| OrderedFloat(**x))
             .unwrap_or(&std::f64::NAN);
-        let result = array
-            .iter()
-            .map(|x| *x - max_value)
-            .collect::<Vec<f64>>();
+        let result = array.iter().map(|x| *x - max_value).collect::<Vec<f64>>();
         result
     }
 
@@ -258,10 +255,7 @@ impl MathUtils {
 
         // we may decide to just normalize in log space without converting to linear space
         if keep_in_log_space {
-            let array: Vec<f64> = array
-                .iter()
-                .map(|x| *x - max_value)
-                .collect::<Vec<f64>>();
+            let array: Vec<f64> = array.iter().map(|x| *x - max_value).collect::<Vec<f64>>();
             return array;
         }
         // default case: go to linear space

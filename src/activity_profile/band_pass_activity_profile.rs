@@ -71,10 +71,13 @@ impl BandPassActivityProfile {
         let mut passes_iter = passes.into_iter();
         let mut result = passes_iter.next().unwrap();
         for pass in passes_iter {
-            result.activity_profile.state_list.extend(pass.activity_profile.state_list);
+            result
+                .activity_profile
+                .state_list
+                .extend(pass.activity_profile.state_list);
         }
 
-        return result
+        return result;
     }
 
     fn make_kernel(filter_size: usize, sigma: f64) -> Vec<f64> {
@@ -255,10 +258,7 @@ impl Profile for BandPassActivityProfile {
     fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState> {
         let mut states = Vec::new();
 
-        for super_state in self
-            .activity_profile
-            .process_state(just_added_state)
-        {
+        for super_state in self.activity_profile.process_state(just_added_state) {
             if super_state.is_active_prob() > 0.0 {
                 for i in (-(self.filter_size as i64)..=(self.filter_size as i64)).into_iter() {
                     let loc = self.get_loc_for_offset(&just_added_state.get_loc(), i);

@@ -62,8 +62,7 @@ impl CigarBuilder {
                     Cigar::Del(_) => true,
                     _ => false,
                 }
-            {
-                if match self.last_operator {
+                && match self.last_operator {
                     None => true,
                     Some(operator) => match operator {
                         Cigar::SoftClip(_) | Cigar::HardClip(_) => true,
@@ -80,11 +79,11 @@ impl CigarBuilder {
                         }
                         _ => false,
                     },
-                } {
-                    self.leading_deletion_bases_removed += element.len();
-                    return Ok(());
-                };
-            }
+                }
+            {
+                self.leading_deletion_bases_removed += element.len();
+                return Ok(());
+            };
 
             let advance_result = self.advance_section_and_validate_cigar_order(&element);
             if advance_result.is_err() {

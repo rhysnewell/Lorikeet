@@ -82,7 +82,7 @@ impl KmerCounter {
         let mut counts_from_map = self
             .counts_by_kmer
             .entry(kmer.clone())
-            .or_insert(CountedKmer::new(kmer));
+            .or_insert_with(|| CountedKmer::new(kmer));
         counts_from_map.count += kmer_count;
     }
 }

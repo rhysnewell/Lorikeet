@@ -272,7 +272,7 @@ impl AssemblyBasedCallerUtils {
             .get_assembly_region_reference(
                 reference_reader,
                 Self::REFERENCE_PADDING_FOR_ASSEMBLY,
-                true,
+                false,
             )
             .to_vec();
         let padded_reference_loc = Self::get_padded_reference_loc(
@@ -285,7 +285,7 @@ impl AssemblyBasedCallerUtils {
             &region,
             &padded_reference_loc,
             reference_reader,
-            true,
+            false,
         );
 
         let mut read_error_corrector;
@@ -297,7 +297,7 @@ impl AssemblyBasedCallerUtils {
                     .parse::<usize>()
                     .unwrap(),
                 HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
-                args.value_of("min-observations-for-kmers-to-be-solid")
+                args.value_of("min-observation-for-kmer-to-be-solid")
                     .unwrap()
                     .parse::<usize>()
                     .unwrap(),
@@ -347,7 +347,9 @@ impl AssemblyBasedCallerUtils {
             .get_variation_events(max_mnp_distance)
             .into_iter()
             .for_each(|vc| {
-                let pos = grouped_by.entry(vc.loc.get_start()).or_insert(Vec::new());
+                let pos = grouped_by
+                    .entry(vc.loc.get_start())
+                    .or_insert_with(Vec::new);
                 pos.push(vc);
             });
         let mut assembled_variants = grouped_by
@@ -744,34 +746,32 @@ impl AssemblyBasedCallerUtils {
                             // because we're in GGA mode and it's not an allele we want
                             continue;
                         }
-                    } else {
-                        if emit_spanning_dels {
-                            // the event starts prior to the current location, so it's a spanning deletion
-                            let index = merged_vc
-                                .alleles
-                                .iter()
-                                .position(|a| a == &*SPAN_DEL_ALLELE);
-                            match index {
-                                None => {
-                                    // I guess pass? We can't exactly insert it into merged_vc
-                                    result.get_mut(&ref_index).unwrap().push(h);
-                                    break;
-                                }
-                                Some(index) => {
-                                    result.get_mut(&index).unwrap().push(h);
-                                    break;
-                                }
+                    } else if emit_spanning_dels {
+                        // the event starts prior to the current location, so it's a spanning deletion
+                        let index = merged_vc
+                            .alleles
+                            .iter()
+                            .position(|a| a == &*SPAN_DEL_ALLELE);
+                        match index {
+                            None => {
+                                // I guess pass? We can't exactly insert it into merged_vc
+                                result.get_mut(&ref_index).unwrap().push(h);
+                                break;
                             }
-                            // if !result.contains_key(&*SPAN_DEL_ALLELE) {
-                            //     result.insert(*SPAN_DEL_ALLELE.clone(), Vec::new());
-                            // }
-                            //
-                            // result.get_mut(&*SPAN_DEL_ALLELE).unwrap().push(h);
-                            // break
-                        } else {
-                            result.get_mut(&ref_index).unwrap().push(h);
-                            break;
+                            Some(index) => {
+                                result.get_mut(&index).unwrap().push(h);
+                                break;
+                            }
                         }
+                        // if !result.contains_key(&*SPAN_DEL_ALLELE) {
+                        //     result.insert(*SPAN_DEL_ALLELE.clone(), Vec::new());
+                        // }
+                        //
+                        // result.get_mut(&*SPAN_DEL_ALLELE).unwrap().push(h);
+                        // break
+                    } else {
+                        result.get_mut(&ref_index).unwrap().push(h);
+                        break;
                     }
                 }
             }
@@ -848,11 +848,11 @@ impl AssemblyBasedCallerUtils {
     ) -> HashMap<usize, Vec<BirdToolRead>> {
         let mut return_map = HashMap::new();
         (0..n_samples).into_iter().for_each(|sample_index| {
-            return_map.entry(sample_index).or_insert(Vec::new());
+            return_map.entry(sample_index).or_insert_with(Vec::new);
         });
 
         for read in reads.into_iter() {
-            let read_vec = return_map.entry(read.sample_index).or_insert(Vec::new());
+            let read_vec = return_map.entry(read.sample_index).or_insert_with(Vec::new);
             read_vec.push(read);
         }
 
@@ -957,10 +957,10 @@ impl AssemblyBasedCallerUtils {
             let mut indexes = Vec::new();
             for index in 0..original_calls.len() {
                 let call = &original_calls[index];
-                if phase_set_mapping.contains_key(&index) {
-                    if phase_set_mapping.get(&index).unwrap().0 == count {
-                        indexes.push(index)
-                    }
+                if phase_set_mapping.contains_key(&index)
+                    && phase_set_mapping.get(&index).unwrap().0 == count
+                {
+                    indexes.push(index)
                 }
             }
 

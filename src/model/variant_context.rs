@@ -217,7 +217,7 @@ impl VariantContext {
     }
 
     pub fn has_log10_p_error(&self) -> bool {
-        self.log10_p_error != 1.0
+        (self.log10_p_error - 1.0).abs() > f64::EPSILON
     }
 
     pub fn get_log10_p_error(&self) -> f64 {
@@ -468,6 +468,44 @@ impl VariantContext {
         }
 
         current_consensus
+    }
+
+    /// Returns index of the consensus allele at this position,
+    /// that is the allele with highest sequencing depth in the specified sample index.
+    pub fn get_consensus_allele_index(&self, sample_index: usize) -> Option<usize> {
+        let mut current_max_depth = std::i64::MIN;
+        let mut current_consensus = None;
+        for (i, dp) in self.genotypes.genotypes()[sample_index]
+            .ad
+            .iter()
+            .enumerate()
+        {
+            if dp > &current_max_depth {
+                current_max_depth = *dp;
+                current_consensus = Some(i);
+            }
+        }
+
+        debug!(
+            "Max Depth {} All depths {:?} Consensus {:?} genotypes {:?}",
+            current_max_depth,
+            self.genotypes.genotypes()[sample_index],
+            &current_consensus,
+            self.genotypes.genotypes()
+        );
+
+        if current_max_depth == 0 {
+            // no variant was found in this sample
+            return None;
+        }
+
+        current_consensus
+    }
+
+    pub fn alleles_present_in_sample(&self, sample_index: usize) -> Vec<bool> {
+        (0..self.get_n_alleles()).map(|allele_index| {
+            self.genotypes.genotypes()[sample_index].ad[allele_index] > 0
+        }).collect::<Vec<bool>>()
     }
 
     fn get_gq_log10_from_posteriors(best_genotype_index: usize, log10_posteriors: &[f64]) -> f64 {
@@ -1019,13 +1057,13 @@ impl VariantContext {
         match self.attributes.get(VariantAnnotations::Strain.to_key()) {
             None => {
                 // Strain annotation not present so panic
-                panic!("This VariantContext has not been annotated with any strains")
+                false
             }
             Some(attribute) => {
                 if let AttributeObject::VecUnsize(vec) = attribute {
-                    return vec.contains(&strain_id);
+                    vec.contains(&strain_id)
                 } else {
-                    panic!("Strain key has value not contained in AttributeObject::VecUnsize")
+                    false
                 }
             }
         }
@@ -1122,7 +1160,7 @@ impl VariantContext {
                 record
                     .push_info_float(
                         VariantAnnotations::QualByDepth.to_key().as_bytes(),
-                        &vec![*val as f32],
+                        &[*val as f32],
                     )
                     .expect("Cannot push info tag");
             }
@@ -1190,7 +1228,7 @@ impl VariantContext {
                 record
                     .push_info_integer(
                         VariantAnnotations::VariantGroup.to_key().as_bytes(),
-                        &vec![*val],
+                        &[*val],
                     )
                     .expect("Cannot push info tag");
             }
@@ -1232,7 +1270,7 @@ impl VariantContext {
                     Some(pgt) => {
                         match pgt {
                             AttributeObject::String(string) => {
-                                let slash = string.contains("/");
+                                let slash = string.contains('/');
                                 for (idx, byte) in string.as_bytes().into_iter().enumerate() {
                                     let val = if *byte == 48 {
                                         // utf8 to int

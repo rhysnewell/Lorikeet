@@ -335,67 +335,78 @@ impl PairHMMLikelihoodCalculationEngine {
      * @return processedReads. A new list of reads, in the same order, whose qualities have been altered by PCR error model and minimal quality thresholding
      */
     fn modify_read_qualities(&self, reads: &mut Vec<BirdToolRead>) -> Vec<BirdToolRead> {
-        let mut result = Vec::new();
+        reads
+            .par_iter_mut()
+            .map(|read| {
+                if self.modify_soft_clipped_bases {
+                    // let bases = &read.bases[..];
+                    let mut read_quals = read.read.qual().to_vec();
+                    let mut read_ins_quals = ReadUtils::get_base_insertion_qualities(read);
+                    let mut read_del_quals = ReadUtils::get_base_deletion_qualities(read);
+                    self.apply_pcr_error_model(
+                        &read.bases[..],
+                        &mut read_ins_quals,
+                        &mut read_del_quals,
+                    );
 
-        for read in reads.iter_mut() {
-            if self.modify_soft_clipped_bases {
-                let bases = read.read.seq().as_bytes();
-                let mut read_quals = read.read.qual().to_vec();
-                let mut read_ins_quals = ReadUtils::get_base_insertion_qualities(read);
-                let mut read_del_quals = ReadUtils::get_base_deletion_qualities(read);
-                self.apply_pcr_error_model(&bases, &mut read_ins_quals, &mut read_del_quals);
+                    Self::cap_minimum_read_qualities(
+                        read,
+                        &mut read_quals,
+                        &mut read_ins_quals,
+                        &mut read_del_quals,
+                        self.base_quality_score_threshold,
+                        self.disable_cap_read_qualities_to_mapq,
+                    );
 
-                Self::cap_minimum_read_qualities(
-                    read,
-                    &mut read_quals,
-                    &mut read_ins_quals,
-                    &mut read_del_quals,
-                    self.base_quality_score_threshold,
-                    self.disable_cap_read_qualities_to_mapq,
-                );
+                    // Store the actual qualities
+                    read.set_transient_attribute(
+                        format!("HMM_BASE_QUALITIES_TAG"),
+                        read_quals.clone(),
+                    );
+                    // Create a new copy of the read and sets its base qualities to the modified versions.
+                    Self::create_quality_modified_read(
+                        &read,
+                        &read.bases[..],
+                        read_quals,
+                        read_ins_quals,
+                        read_del_quals,
+                    )
+                } else {
+                    let maybe_unclipped = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
+                    let bases = maybe_unclipped.bases.as_slice();
 
-                // Store the actual qualities
-                read.set_transient_attribute(format!("HMM_BASE_QUALITIES_TAG"), read_quals.clone());
-                // Create a new copy of the read and sets its base qualities to the modified versions.
-                result.push(Self::create_quality_modified_read(
-                    &read,
-                    bases,
-                    read_quals,
-                    read_ins_quals,
-                    read_del_quals,
-                ));
-            } else {
-                let maybe_unclipped = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
-                let bases = maybe_unclipped.read.seq().as_bytes();
+                    let mut read_quals = maybe_unclipped.read.qual().to_vec();
+                    let mut read_ins_quals =
+                        ReadUtils::get_base_insertion_qualities(&maybe_unclipped);
+                    let mut read_del_quals =
+                        ReadUtils::get_base_deletion_qualities(&maybe_unclipped);
+                    self.apply_pcr_error_model(&bases, &mut read_ins_quals, &mut read_del_quals);
 
-                let mut read_quals = maybe_unclipped.read.qual().to_vec();
-                let mut read_ins_quals = ReadUtils::get_base_insertion_qualities(&maybe_unclipped);
-                let mut read_del_quals = ReadUtils::get_base_deletion_qualities(&maybe_unclipped);
-                self.apply_pcr_error_model(&bases, &mut read_ins_quals, &mut read_del_quals);
+                    Self::cap_minimum_read_qualities(
+                        &maybe_unclipped,
+                        &mut read_quals,
+                        &mut read_ins_quals,
+                        &mut read_del_quals,
+                        self.base_quality_score_threshold,
+                        self.disable_cap_read_qualities_to_mapq,
+                    );
 
-                Self::cap_minimum_read_qualities(
-                    &maybe_unclipped,
-                    &mut read_quals,
-                    &mut read_ins_quals,
-                    &mut read_del_quals,
-                    self.base_quality_score_threshold,
-                    self.disable_cap_read_qualities_to_mapq,
-                );
-
-                // Store the actual qualities
-                read.set_transient_attribute(format!("HMM_BASE_QUALITIES_TAG"), read_quals.clone());
-                // Create a new copy of the read and sets its base qualities to the modified versions.
-                result.push(Self::create_quality_modified_read(
-                    &read,
-                    bases,
-                    read_quals,
-                    read_ins_quals,
-                    read_del_quals,
-                ));
-            }
-        }
-
-        return result;
+                    // Store the actual qualities
+                    read.set_transient_attribute(
+                        format!("HMM_BASE_QUALITIES_TAG"),
+                        read_quals.clone(),
+                    );
+                    // Create a new copy of the read and sets its base qualities to the modified versions.
+                    Self::create_quality_modified_read(
+                        &read,
+                        bases,
+                        read_quals,
+                        read_ins_quals,
+                        read_del_quals,
+                    )
+                }
+            })
+            .collect()
     }
 
     fn cap_minimum_read_qualities(
@@ -460,13 +471,13 @@ impl PairHMMLikelihoodCalculationEngine {
      */
     fn create_quality_modified_read(
         read: &BirdToolRead,
-        read_bases: Vec<u8>,
+        read_bases: &[u8],
         base_qualities: Vec<u8>,
         base_insertion_qualities: Vec<u8>,
         base_deletion_qualities: Vec<u8>,
     ) -> BirdToolRead {
         let mut processed_read =
-            ReadUtils::empty_read_with_quals_and_bases(&read, &base_qualities, &read_bases);
+            ReadUtils::empty_read_with_quals_and_bases(&read, &base_qualities, read_bases);
         ReadUtils::set_insertion_base_qualities(&mut processed_read, &base_insertion_qualities);
         ReadUtils::set_deletion_base_qualities(&mut processed_read, &base_deletion_qualities);
         return processed_read;

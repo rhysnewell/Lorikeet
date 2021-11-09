@@ -101,28 +101,26 @@ impl GraphBasedKBestHaplotypeFinder {
                 .contains(&vertex_to_extend)
             {
                 result.push(path_to_extend);
-            } else {
-                if vertex_counts.contains_key(&vertex_to_extend) {
-                    let vertex_count = vertex_counts.entry(vertex_to_extend).or_insert(0);
-                    *vertex_count += 1;
+            } else if vertex_counts.contains_key(&vertex_to_extend) {
+                let vertex_count = vertex_counts.entry(vertex_to_extend).or_insert(0);
+                *vertex_count += 1;
 
-                    if *vertex_count < max_number_of_haplotypes {
-                        let outgoing_edges =
-                            graph.edges_directed(vertex_to_extend, Direction::Outgoing);
-                        debug!("Outgoing edges {:?}", &outgoing_edges);
-                        let mut total_outgoing_multiplicity = 0;
-                        for edge in outgoing_edges.iter() {
-                            total_outgoing_multiplicity +=
-                                graph.graph.edge_weight(*edge).unwrap().get_multiplicity();
-                        }
+                if *vertex_count < max_number_of_haplotypes {
+                    let outgoing_edges =
+                        graph.edges_directed(vertex_to_extend, Direction::Outgoing);
+                    debug!("Outgoing edges {:?}", &outgoing_edges);
+                    let mut total_outgoing_multiplicity = 0;
+                    for edge in outgoing_edges.iter() {
+                        total_outgoing_multiplicity +=
+                            graph.graph.edge_weight(*edge).unwrap().get_multiplicity();
+                    }
 
-                        for edge in outgoing_edges.iter() {
-                            queue.push(path_to_extend.new_from_edge(
-                                *edge,
-                                total_outgoing_multiplicity,
-                                graph,
-                            ));
-                        }
+                    for edge in outgoing_edges.iter() {
+                        queue.push(path_to_extend.new_from_edge(
+                            *edge,
+                            total_outgoing_multiplicity,
+                            graph,
+                        ));
                     }
                 }
             }

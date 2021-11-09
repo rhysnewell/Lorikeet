@@ -50,8 +50,8 @@ impl ReferenceReaderUtils {
     pub fn extract_genome<'a>(tid: u32, target_names: &'a Vec<&[u8]>, split_char: u8) -> &'a [u8] {
         let target_name = target_names[tid as usize];
         trace!("target name {:?}, separator {:?}", target_name, split_char);
-        let offset = find_first(target_name, split_char).expect(
-            &format!("Contig name {} does not contain split symbol, so cannot determine which genome it belongs to",
+        let offset = find_first(target_name, split_char).unwrap_or_else(|_|
+            panic!("Contig name {} does not contain split symbol, so cannot determine which genome it belongs to",
                      std::str::from_utf8(target_name).unwrap()));
         return &target_name[(0..offset)];
     }
@@ -69,11 +69,13 @@ impl ReferenceReaderUtils {
         let genome_from_contig = || -> &'a String {
             genomes_and_contigs
                 .genome_of_contig(&std::str::from_utf8(&target_name).unwrap().to_string())
-                .expect(&format!(
-                    "Found invalid contig in bam, {:?}. \
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Found invalid contig in bam, {:?}. \
                 Please provide corresponding reference genomes",
-                    std::str::from_utf8(&target_name).unwrap()
-                ))
+                        std::str::from_utf8(&target_name).unwrap()
+                    )
+                })
         };
 
         // Concatenated references have the reference file name in front of the contig name
@@ -81,7 +83,7 @@ impl ReferenceReaderUtils {
         // TODO: Parse as a separator value to this function
         let reference_stem = match std::str::from_utf8(&target_name)
             .unwrap()
-            .splitn(2, "~")
+            .splitn(2, '~')
             .next()
         {
             Some(ref_stem) => ref_stem,
@@ -108,10 +110,9 @@ impl ReferenceReaderUtils {
     pub fn split_contig_name(target_name: &Vec<u8>) -> String {
         String::from_utf8(target_name.clone())
             .unwrap()
-            .splitn(2, "~")
-            .skip(1)
-            .next()
-            .unwrap_or(std::str::from_utf8(&target_name).unwrap())
+            .splitn(2, '~')
+            .nth(1)
+            .unwrap_or_else(|| std::str::from_utf8(&target_name).unwrap())
             .to_string()
     }
 

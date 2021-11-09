@@ -100,6 +100,7 @@ impl VariantAnnotationEngine {
     /// Annotations added to the Genotype of VariantContexts
     pub fn genotype_annotations() -> Vec<Annotation> {
         vec![
+            Annotation::new(VariantAnnotations::Depth, AnnotationType::Format),
             Annotation::new(
                 VariantAnnotations::DepthPerAlleleBySample,
                 AnnotationType::Format,
@@ -112,7 +113,6 @@ impl VariantAnnotationEngine {
     /// Annotations that are precalculated or calculated through other annotations
     pub fn precalculated_annotations() -> Vec<Annotation> {
         vec![
-            Annotation::new(VariantAnnotations::Depth, AnnotationType::Format),
             Annotation::new(VariantAnnotations::Genotype, AnnotationType::Format),
             Annotation::new(VariantAnnotations::GenotypeQuality, AnnotationType::Format),
             Annotation::new(VariantAnnotations::PhredLikelihoods, AnnotationType::Format),

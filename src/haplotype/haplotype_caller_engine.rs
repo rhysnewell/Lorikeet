@@ -20,6 +20,7 @@ use haplotype::haplotype::Haplotype;
 use haplotype::haplotype_caller_genotyping_engine::HaplotypeCallerGenotypingEngine;
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use haplotype::ref_vs_any_result::RefVsAnyResult;
+use itertools::Itertools;
 use mathru::special::gamma::{digamma, ln_gamma};
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::ByteArrayAllele;
@@ -43,6 +44,7 @@ use utils::natural_log_utils::NaturalLogUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::utils::clean_sample_name;
+use std::cmp::min;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine {
@@ -194,7 +196,7 @@ impl HaplotypeCallerEngine {
                 .parse()
                 .unwrap(),
             ref_idx,
-            assembly_engine: assembly_engine,
+            assembly_engine,
             assembly_region_trimmer: AssemblyRegionTrimmer::new(
                 args.value_of("assembly-region-padding")
                     .unwrap()
@@ -267,6 +269,12 @@ impl HaplotypeCallerEngine {
             .parse::<f64>()
             .unwrap();
 
+        let min_contig_length = m
+            .value_of("min-contig-size")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+
         let limiting_interval = Self::parse_limiting_interval(m);
 
         // let min_variant_quality = m
@@ -287,13 +295,13 @@ impl HaplotypeCallerEngine {
             .enumerate()
             .for_each(|(sample_idx, bam_generator)| {
                 // Get the appropriate sample index based on how many references we are using
-                let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
-                    vec![&bam_generator],
-                    n_threads as u32,
-                )
-                .into_iter()
-                .next()
-                .unwrap();
+                // let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
+                //     vec![&bam_generator],
+                //     n_threads as u32,
+                // )
+                // .into_iter()
+                // .next()
+                // .unwrap();
                 if sample_idx < short_sample_count {
                     HaplotypeCallerEngine::update_activity_profile(
                         bam_generator,
@@ -310,6 +318,7 @@ impl HaplotypeCallerEngine {
                         reference_reader,
                         &limiting_interval,
                         &mut genotype_likelihoods,
+                        min_contig_length,
                     );
                 } else if (m.is_present("longreads") || m.is_present("longread-bam-files"))
                     && sample_idx >= short_sample_count
@@ -332,13 +341,14 @@ impl HaplotypeCallerEngine {
                         reference_reader,
                         &limiting_interval,
                         &mut genotype_likelihoods,
+                        min_contig_length,
                     );
                 }
                 {
                     let pb = &tree.lock().unwrap()[ref_idx + 2];
 
                     pb.progress_bar.set_message(format!(
-                        "{}: Finding active regions in sample: {}",
+                        "{}: Finding active regions in sample: {:.50}...",
                         pb.key,
                         clean_sample_name(sample_idx, indexed_bam_readers),
                     ));
@@ -366,13 +376,14 @@ impl HaplotypeCallerEngine {
             active_prob_thresh,
             ref_idx,
             indexed_bam_readers,
+            min_contig_length,
         );
     }
 
     fn parse_limiting_interval(args: &ArgMatches) -> Option<SimpleInterval> {
         if args.is_present("limiting-interval") {
             let interval_str = args.value_of("limiting-interval").unwrap();
-            let split = interval_str.split("-").collect::<Vec<&str>>();
+            let split = interval_str.split('-').collect::<Vec<&str>>();
             if split.len() == 1 {
                 None
             } else {
@@ -388,10 +399,10 @@ impl HaplotypeCallerEngine {
 
     pub fn update_activity_profile<
         'b,
-        R: IndexedNamedBamReader + Send,
-        G: NamedBamReaderGenerator<R> + Send,
+        // R: IndexedNamedBamReader + Send,
+        // G: NamedBamReaderGenerator<R> + Send,
     >(
-        bam_generator: G,
+        bam_generator: &str,
         split_threads: usize,
         ref_idx: usize,
         readtype: ReadType,
@@ -405,128 +416,199 @@ impl HaplotypeCallerEngine {
         reference_reader: &mut ReferenceReader,
         limiting_interval: &Option<SimpleInterval>,
         current_likelihoods: &mut Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
+        min_contig_length: u64,
     ) {
-        let mut bam_generated = bam_generator.start();
 
-        // bam_generated.set_threads(split_threads);
-
-        let header = bam_generated.header().clone(); // bam header
-        let target_lens: Vec<u64> = (0..header.target_count())
-            .into_iter()
-            .map(|tid| header.target_len(tid).unwrap())
-            .collect();
-        let target_names = header.target_names();
+        let mut tids: Vec<usize> = Vec::new();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
+
+        {
+            // Get the appropriate sample index based on how many references we are using
+            let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
+                vec![&bam_generator],
+                split_threads as u32,
+            )
+                .into_iter()
+                .next()
+                .unwrap();
+            // get reference stats
+            // let bam_generator = bam_generator.start();
+            let header = bam_generator.header(); // bam header
+            let header_names = header.target_names();
+            header_names.into_iter().enumerate().for_each(|(tid, contig_name)| {
+                let target_name = std::str::from_utf8(contig_name).unwrap();
+                if target_name.contains(&reference)
+                    || reference_reader.match_target_name_and_ref_idx(ref_idx, target_name) {
+                    // Get contig stats
+                    reference_reader.update_ref_index_tids(ref_idx, tid);
+                    reference_reader.add_target(contig_name, tid);
+                    let target_len = header.target_len(tid as u32).unwrap();
+                    reference_reader.add_length(tid, target_len);
+                    tids.push(tid);
+                }
+            })
+        }
+
+
 
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
         let mut genotype_likelihoods = HashMap::new();
+        let chunk_size = 10000;
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
         match readtype {
             ReadType::Short | ReadType::Long => {
-                target_names
-                    .iter()
-                    .enumerate()
-                    .for_each(|(tid, contig_name)| {
-                        let target_name = String::from_utf8(contig_name.to_vec()).unwrap();
-                        if target_name.contains(&reference)
-                            || reference_reader.match_target_name_and_ref_idx(ref_idx, &target_name)
+                tids
+                    .into_iter()
+                    .for_each(|tid| {
                         {
-                            // Get contig stats
-                            reference_reader.update_ref_index_tids(ref_idx, tid);
-                            reference_reader.add_target(contig_name, tid);
-                            let target_len = target_lens[tid];
-                            reference_reader.add_length(tid, target_len);
-                            let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert(vec![RunningAverage::new(); target_len as usize]);
-                            // The raw activity profile.
-                            // Frequency of bases not matching reference compared
-                            // to depth
-                            let likelihoods = genotype_likelihoods.entry(tid)
-                                .or_insert((0..target_len as usize).into_iter()
-                                    .map(|pos| {
-                                        RefVsAnyResult::new(likelihoodcount, pos, tid)
-                                    }).collect::<Vec<RefVsAnyResult>>());
+                            let target_len = reference_reader.target_lens[&tid];
+                            if target_len >= min_contig_length {
 
-                            {
-                                match limiting_interval {
-                                    Some(limiting_interval) => {
-                                        bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).expect(&format!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
-                                    },
-                                    None => {
-                                        bam_generated.fetch(tid as u32).expect(&format!("Failed to fetch tid {}", tid))
-                                    }
-                                };
+                                reference_reader.update_current_sequence_capacity(target_len as usize);
+                                // Update all contig information
+                                reference_reader.fetch_contig_from_reference_by_tid(
+                                    tid,
+                                    ref_idx as usize,
+                                );
+                                reference_reader.read_sequence_to_vec();
 
-                                // Position based - Loop through the positions in the genome
-                                // Calculate likelihood of activity being present at this position
-                                match bam_generated.pileup() {
-                                    Some(pileups) => {
-                                        reference_reader.update_current_sequence_capacity(target_len as usize);
-                                        // Update all contig information
-                                        reference_reader.fetch_contig_from_reference_by_contig_name(
-                                            &contig_name.to_vec(),
-                                            ref_idx as usize,
-                                        );
+                                let per_base_hq_soft_clips = per_contig_per_base_hq_soft_clips.entry(tid).or_insert_with(|| vec![RunningAverage::new(); target_len as usize]);
+                                // The raw activity profile.
+                                // Frequency of bases not matching reference compared
+                                // to depth
+                                let likelihoods = genotype_likelihoods.entry(tid)
+                                    .or_insert_with(|| (0..target_len as usize).into_iter()
+                                        .map(|pos| {
+                                            RefVsAnyResult::new(likelihoodcount, pos, tid)
+                                        }).collect::<Vec<RefVsAnyResult>>());
 
-                                        reference_reader.read_sequence_to_vec();
-                                        for p in pileups {
-                                            let pileup = p.unwrap();
-                                            let pos = pileup.pos() as usize;
-                                            let hq_soft_clips = &mut per_base_hq_soft_clips[pos];
-                                            let refr_base = reference_reader.current_sequence[pos];
-                                            let mut result = &mut likelihoods[pos];
-                                            for alignment in pileup.alignments() {
-                                                let record = alignment.record();
-                                                if (!flag_filters.include_supplementary
-                                                    && record.is_supplementary()
-                                                    && readtype != ReadType::Long)
-                                                    || (!flag_filters.include_secondary
-                                                    && record.is_secondary())
-                                                    || (!flag_filters.include_improper_pairs
-                                                    && !record.is_proper_pair()
-                                                    && readtype != ReadType::Long)
-                                                {
-                                                    continue;
-                                                } else if !flag_filters.include_secondary
-                                                    && record.is_secondary()
-                                                    && readtype == ReadType::Long
-                                                {
-                                                    continue;
-                                                } else {
-                                                    HaplotypeCallerEngine::alignment_context_creation(
-                                                        &alignment,
-                                                        result,
-                                                        hq_soft_clips,
-                                                        log10ploidy,
-                                                        likelihoodcount,
-                                                        min_soft_clip_qual,
-                                                        refr_base,
-                                                        bq,
-                                                    )
+                                per_base_hq_soft_clips.par_iter_mut().zip(likelihoods.par_iter_mut())
+                                    .chunks(chunk_size)
+                                    .enumerate()
+                                    .for_each(|(chunk_idx, mut positions)| {
+
+                                        // multiplier to help us map between chunk position
+                                        // and actual reference position. This value represents the
+                                        // starting reference base index of this chunk.
+                                        let chunk_multiplier = chunk_idx * chunk_size;
+
+                                        // Get the appropriate sample index based on how many references we are using
+                                        let bam_generator = generate_indexed_named_bam_readers_from_bam_files(
+                                            vec![&bam_generator],
+                                            split_threads as u32,
+                                        )
+                                            .into_iter()
+                                            .next()
+                                            .unwrap();
+                                        let mut bam_generated = bam_generator.start();
+                                        bam_generated
+                                            .fetch((
+                                                tid as i32,
+                                                chunk_multiplier as i64,
+                                                min(chunk_multiplier + chunk_size, target_len as usize) as i64)
+                                            ).unwrap_or_else(|_|
+                                                panic!(
+                                                    "Failed to fetch interval {}:{}-{}", tid,
+                                                    chunk_multiplier as i64,
+                                                    min(
+                                                        chunk_multiplier + chunk_size,
+                                                        target_len as usize
+                                                    ) as i64
+                                                )
+                                            );
+
+                                        // match limiting_interval {
+                                        //     Some(limiting_interval) => {
+                                        //         bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).unwrap_or_else(|_| panic!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
+                                        //     },
+                                        //     None => {
+                                        //         bam_generated.fetch(tid as u32).unwrap_or_else(|_| panic!("Failed to fetch tid {}", tid))
+                                        //     }
+                                        // };
+
+                                        // Position based - Loop through the positions in the genome
+                                        // Calculate likelihood of activity being present at this position
+                                        match bam_generated.pileup() {
+                                            Some(pileups) => {
+
+                                                for p in pileups {
+                                                    let pileup = p.unwrap();
+                                                    let pos = pileup.pos() as usize;
+
+                                                    // overlapping reads in the fetched region might
+                                                    // get counted twice. So check that this position
+                                                    // is within the chunk
+                                                    if pos < chunk_multiplier || pos >= min(
+                                                        chunk_multiplier + chunk_size,
+                                                        target_len as usize
+                                                    ) {
+                                                        debug!("Pileup {}: {} - {} Position {} Fixed {}", tid,
+                                                               chunk_multiplier,
+                                                               min(
+                                                                   chunk_multiplier + chunk_size,
+                                                                   target_len as usize
+                                                               ),
+                                                               pos, pos - chunk_idx * chunk_size);
+                                                        continue
+                                                    }
+
+                                                    let (hq_soft_clips, result) = &mut positions[pos - chunk_idx * chunk_size];
+                                                    // let result = &mut positions[pos - chunk_idx * chunk_size].1;
+
+                                                    let refr_base = reference_reader.current_sequence[pos];
+
+                                                    for alignment in pileup.alignments() {
+                                                        let record = alignment.record();
+                                                        if (!flag_filters.include_supplementary
+                                                            && record.is_supplementary()
+                                                            && readtype != ReadType::Long)
+                                                            || (!flag_filters.include_secondary
+                                                            && record.is_secondary())
+                                                            || (!flag_filters.include_improper_pairs
+                                                            && !record.is_proper_pair()
+                                                            && readtype != ReadType::Long)
+                                                        {
+                                                            continue;
+                                                        } else if !flag_filters.include_secondary
+                                                            && record.is_secondary()
+                                                            && readtype == ReadType::Long
+                                                        {
+                                                            continue;
+                                                        } else {
+                                                            HaplotypeCallerEngine::alignment_context_creation(
+                                                                &alignment,
+                                                                *result,
+                                                                *hq_soft_clips,
+                                                                log10ploidy,
+                                                                likelihoodcount,
+                                                                min_soft_clip_qual,
+                                                                refr_base,
+                                                                bq,
+                                                            )
+                                                        }
+                                                    }
+
+                                                    let denominator = result.read_counts as f64 * log10ploidy;
+                                                    for i in 0..likelihoodcount {
+                                                        result.genotype_likelihoods[i] -= denominator
+                                                    }
+
                                                 }
+
                                             }
-
-                                            let denominator = result.read_counts as f64 * log10ploidy;
-                                            for i in 0..likelihoodcount {
-                                                result.genotype_likelihoods[i] -= denominator
-                                            }
-
-                                        }
-
-                                    }
-                                    None => println!("no bam for pileups"),
+                                            None => println!("no bam for pileups"),
+                                        };
+                                    });
                                 };
-                            };
-                        }
-                    });
-            }
+                            }
+                        });
+                }
             _ => {}
         }
 
         current_likelihoods.push(genotype_likelihoods);
-
-        bam_generated.finish();
     }
 
     /**
@@ -546,6 +628,7 @@ impl HaplotypeCallerEngine {
         active_prob_threshold: f64,
         ref_idx: usize,
         sample_names: &Vec<String>,
+        min_contig_length: u64,
     ) -> HashMap<usize, BandPassActivityProfile> {
         if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
@@ -604,9 +687,9 @@ impl HaplotypeCallerEngine {
             let placeholder_vec = Vec::new();
             let per_contig_activity_profiles = target_ids_and_lens
                 .par_iter()
+                .filter(|(_, length)| *length >= &min_contig_length)
                 .map(|(tid, length)| {
                     debug!("Calculating activity on {} of length {}", tid, length);
-
                     let per_base_hq_soft_clips =
                         per_contig_per_base_hq_soft_clips.get(tid).unwrap();
 
@@ -699,6 +782,7 @@ impl HaplotypeCallerEngine {
         given_alleles: Vec<VariantContext>,
         args: &'b clap::ArgMatches,
         sample_names: &'b Vec<String>,
+        flag_filters: &'b FlagFilter,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
         debug!(
@@ -822,7 +906,7 @@ impl HaplotypeCallerEngine {
         //TODO - on the originalActiveRegion?
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
-        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result);
+        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result, flag_filters);
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
@@ -906,6 +990,7 @@ impl HaplotypeCallerEngine {
     fn filter_non_passing_reads(
         &self,
         mut assembly_result: AssemblyResultSet<ReadThreadingGraph>,
+        flag_filters: &FlagFilter,
     ) -> (AssemblyResultSet<ReadThreadingGraph>, Vec<BirdToolRead>) {
         let reads_to_remove = assembly_result
             .region_for_genotyping
@@ -914,7 +999,11 @@ impl HaplotypeCallerEngine {
             .filter(|r| {
                 if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
-                    || (!r.read.is_proper_pair() && r.read_type != ReadType::Long)
+                    || (!r.read.is_proper_pair()
+                        && r.read_type != ReadType::Long
+                        && !flag_filters.include_improper_pairs)
+                    || (!flag_filters.include_secondary
+                        && r.read.is_secondary())
                 {
                     debug!("Removing read {:?}", r);
                     true
@@ -1189,7 +1278,7 @@ impl HaplotypeCallerEngine {
                 true,
                 Format::Vcf,
             )
-            .expect(format!("Unable to create VCF output: {}.vcf", output_prefix).as_str());
+            .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
 
             for vc in variant_contexts {
                 vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());
@@ -1237,25 +1326,5 @@ impl HaplotypeCallerEngine {
         }
 
         VariantAnnotationEngine::populate_vcf_header(header, strain_info);
-    }
-
-    pub fn haplotype_clustering(
-        &self,
-        output_prefix: &str,
-        variant_contexts: Vec<VariantContext>,
-        sample_names: &Vec<&str>,
-        ref_idx: usize,
-        n_samples: usize,
-        reference_reader: &ReferenceReader,
-    ) -> Vec<VariantContext> {
-        // let mut haplotype_custering_engine = HaplotypeClusteringEngine::new(
-        //     output_prefix,
-        //     variant_contexts,
-        //     reference_reader,
-        //     ref_idx,
-        //     n_samples
-        // );
-
-        return variant_contexts;
     }
 }

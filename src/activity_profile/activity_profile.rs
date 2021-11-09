@@ -110,7 +110,7 @@ impl ActivityProfile {
             region_stop_loc: Some(SimpleInterval::new(0, 0, 0)),
             contig_len,
             tid,
-            ref_idx: ref_idx,
+            ref_idx,
         }
     }
 }
@@ -258,7 +258,9 @@ impl Profile for ActivityProfile {
         if position > self.size() as i64 {
             panic!(
                 "Must add state contiguous to existing states: adding {:?} position {} size {}",
-                state_to_add, position, self.size()
+                state_to_add,
+                position,
+                self.size()
             )
         }
 
@@ -600,10 +602,8 @@ impl Profile for ActivityProfile {
      * @return true if prob at state is a minimum, false otherwise
      */
     fn is_minimum(&self, index: usize) -> bool {
-        if index == self.state_list.len() - 1 {
+        if index == self.state_list.len() - 1 || index < 1 {
             // we cannot be at a minimum if the current position is the last in the state list
-            return false;
-        } else if index < 1 {
             return false;
         } else {
             let index_p = self.get_prob(index);

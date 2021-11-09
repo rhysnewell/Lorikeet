@@ -76,8 +76,7 @@ impl ReadThreadingGraph {
         let base_graph = BaseGraph::new(kmer_size);
         Self {
             non_unique_kmers: HashSet::new(),
-            min_matching_bases_to_dangling_end_recovery:
-                min_matching_bases_to_dangling_end_recovery,
+            min_matching_bases_to_dangling_end_recovery,
             counter: 0,
             pending: LinkedHashMap::new(),
             kmer_to_vertex_map: LinkedHashMap::new(),
@@ -90,7 +89,7 @@ impl ReadThreadingGraph {
             max_mismatches_in_dangling_head: -1,
             increase_counts_through_branches: false,
             num_pruning_samples: min_pruning_samples,
-            base_graph: base_graph,
+            base_graph,
         }
     }
 
@@ -918,12 +917,10 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             Some(dangling_head_merge_result) => {
                 if !Self::cigar_is_okay_to_merge(&dangling_head_merge_result.cigar, true, false) {
                     return 0;
+                } else if self.min_matching_bases_to_dangling_end_recovery >= 0 {
+                    self.merge_dangling_head(dangling_head_merge_result)
                 } else {
-                    if self.min_matching_bases_to_dangling_end_recovery >= 0 {
-                        self.merge_dangling_head(dangling_head_merge_result)
-                    } else {
-                        self.merge_dangling_head_legacy(dangling_head_merge_result)
-                    }
+                    self.merge_dangling_head_legacy(dangling_head_merge_result)
                 }
             }
         }

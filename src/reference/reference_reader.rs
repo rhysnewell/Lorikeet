@@ -34,7 +34,8 @@ impl Clone for ReferenceReader {
 
         Self {
             indexed_reader,
-            current_sequence: self.current_sequence.clone(),
+            // current_sequence: self.current_sequence.clone(),
+            current_sequence: Vec::new(),
             genomes_and_contigs: self.genomes_and_contigs.clone(),
             reference_index_to_tid: self.reference_index_to_tid.clone(),
             target_names: self.target_names.clone(),
@@ -58,7 +59,7 @@ impl ReferenceReader {
             reference_index_to_tid: HashMap::new(),
             target_names: HashMap::new(),
             target_lens: HashMap::new(),
-            genomes_and_contigs: genomes_and_contigs,
+            genomes_and_contigs,
             genome_path: concatenated_genomes.clone(),
         }
     }
@@ -79,11 +80,10 @@ impl ReferenceReader {
                 .enumerate()
                 .map(|(tid, target)| (tid, target.to_vec()))
                 .collect::<HashMap<usize, Vec<u8>>>(),
-            genomes_and_contigs: genomes_and_contigs,
+            genomes_and_contigs,
             target_lens: HashMap::new(),
             genome_path: concatenated_genomes.clone(),
         }
-
     }
 
     /// Somewhat efficient cloning function. Only takes the info needed for a given ref idx
@@ -111,14 +111,18 @@ impl ReferenceReader {
                 genomes_and_contigs,
                 target_lens,
                 target_names,
-                genome_path: reader.genome_path.clone()
+                genome_path: reader.genome_path.clone(),
             }
         } else {
             reader.clone()
         }
     }
 
-    pub fn new_from_reader_with_tid_and_rid(reader: &ReferenceReader, ref_idx: usize, tid: usize) -> Self {
+    pub fn new_from_reader_with_tid_and_rid(
+        reader: &ReferenceReader,
+        ref_idx: usize,
+        tid: usize,
+    ) -> Self {
         let indexed_reader = ReferenceReaderUtils::retrieve_reference(&reader.genome_path);
 
         if reader.reference_index_to_tid.contains_key(&ref_idx) {
@@ -141,7 +145,7 @@ impl ReferenceReader {
                 genomes_and_contigs,
                 target_lens,
                 target_names,
-                genome_path: reader.genome_path.clone()
+                genome_path: reader.genome_path.clone(),
             }
         } else {
             reader.clone()
@@ -160,7 +164,7 @@ impl ReferenceReader {
         let tids = self
             .reference_index_to_tid
             .entry(ref_index)
-            .or_insert(LinkedHashSet::new());
+            .or_insert_with(LinkedHashSet::new);
         tids.insert(tid);
     }
 
@@ -192,7 +196,7 @@ impl ReferenceReader {
         self.current_sequence = Vec::new();
     }
 
-    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &String) -> bool {
+    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &str) -> bool {
         match self.genomes_and_contigs.contig_to_genome.get(target_name) {
             Some(ref_id) => *ref_id == ref_idx,
             None => false,
@@ -215,7 +219,11 @@ impl ReferenceReader {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
                 "{}",
-                std::str::from_utf8(contig_name).unwrap().splitn(2, "~").skip(1).next().unwrap()
+                std::str::from_utf8(contig_name)
+                    .unwrap()
+                    .splitn(2, '~')
+                    .nth(1)
+                    .unwrap()
             )) {
                 Ok(reference) => reference,
                 Err(_e) => {
@@ -226,7 +234,11 @@ impl ReferenceReader {
                     )) {
                         Ok(reference) => reference,
                         Err(e) => {
-                            panic!("Cannot read sequence from {}: {}", std::str::from_utf8(contig_name).unwrap(), e)
+                            panic!(
+                                "Cannot read sequence from {}: {}",
+                                std::str::from_utf8(contig_name).unwrap(),
+                                e
+                            )
                         }
                     }
                 }
@@ -242,7 +254,11 @@ impl ReferenceReader {
             Ok(reference) => reference,
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
                 "{}",
-                std::str::from_utf8(&self.target_names[&tid]).unwrap().splitn(2, "~").skip(1).next().unwrap()
+                std::str::from_utf8(&self.target_names[&tid])
+                    .unwrap()
+                    .splitn(2, '~')
+                    .nth(1)
+                    .unwrap()
             )) {
                 Ok(reference) => reference,
                 Err(_e) => {
@@ -253,7 +269,11 @@ impl ReferenceReader {
                     )) {
                         Ok(reference) => reference,
                         Err(e) => {
-                            panic!("Cannot read sequence from {}: {}", std::str::from_utf8(&self.target_names[&tid]).unwrap(), e)
+                            panic!(
+                                "Cannot read sequence from {}: {}",
+                                std::str::from_utf8(&self.target_names[&tid]).unwrap(),
+                                e
+                            )
                         }
                     }
                 }
@@ -276,7 +296,11 @@ impl ReferenceReader {
             Err(_e) => match self.indexed_reader.fetch(
                 &format!(
                     "{}",
-                    std::str::from_utf8(&self.target_names[&interval.get_contig()]).unwrap().splitn(2, "~").skip(1).next().unwrap()
+                    std::str::from_utf8(&self.target_names[&interval.get_contig()])
+                        .unwrap()
+                        .splitn(2, '~')
+                        .nth(1)
+                        .unwrap()
                 ),
                 interval.get_start() as u64,
                 min(
@@ -310,7 +334,7 @@ impl ReferenceReader {
                             e,
                         );
                     }
-                }
+                },
             },
         };
     }
@@ -328,10 +352,7 @@ impl ReferenceReader {
      * Takes a contig name &[u8] and splits around a suspected separator character
      */
     pub fn split_contig_name<'b>(contig_name: &'b [u8], separator: u8) -> &'b [u8] {
-        match contig_name
-            .into_iter()
-            .position(|&x| x == separator)
-        {
+        match contig_name.into_iter().position(|&x| x == separator) {
             Some(position) => return &contig_name[position..contig_name.len()],
             None => return contig_name,
         }

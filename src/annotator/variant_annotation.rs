@@ -16,7 +16,7 @@ use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 /// Determine whether the annotation appears in the info or format field of the VCF
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AnnotationType {
     Info,
     Format,
@@ -97,14 +97,34 @@ impl VariantAnnotations {
         vc: &mut VariantContext,
         genotype: Option<&mut Genotype>,
         likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        annotation_type: AnnotationType,
     ) -> AttributeObject {
         match self {
             Self::Depth => {
-                if likelihoods.evidence_count() == 0 {
-                    return AttributeObject::None;
-                } else {
-                    let depth = likelihoods.evidence_count();
-                    return AttributeObject::UnsizedInteger(depth);
+                match annotation_type {
+                    AnnotationType::Format => {
+                        let mut genotype = genotype.unwrap();
+                        if !genotype.has_ad() {
+                            // if there is no AD value calculate it now using likelihoods
+                            Self::DepthPerAlleleBySample.annotate(
+                                vc,
+                                Some(genotype),
+                                likelihoods,
+                                annotation_type,
+                            );
+                        };
+                        let total_ad: i64 = genotype.ad.iter().sum();
+                        genotype.dp = total_ad;
+                        return AttributeObject::None;
+                    }
+                    AnnotationType::Info => {
+                        if likelihoods.evidence_count() == 0 {
+                            return AttributeObject::None;
+                        } else {
+                            let depth = likelihoods.evidence_count();
+                            return AttributeObject::UnsizedInteger(depth);
+                        }
+                    }
                 }
             }
             Self::AlleleFraction => {
@@ -124,7 +144,12 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 } else {
                     // if there is no AD value calculate it now using likelihoods
-                    Self::DepthPerAlleleBySample.annotate(vc, Some(genotype), likelihoods);
+                    Self::DepthPerAlleleBySample.annotate(
+                        vc,
+                        Some(genotype),
+                        likelihoods,
+                        annotation_type,
+                    );
                     let allele_fractions = MathUtils::normalize_sum_to_one(
                         genotype
                             .get_ad()
@@ -150,7 +175,12 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 } else {
                     // if there is no AD value calculate it now using likelihoods
-                    Self::DepthPerAlleleBySample.annotate(vc, Some(genotype), likelihoods);
+                    Self::DepthPerAlleleBySample.annotate(
+                        vc,
+                        Some(genotype),
+                        likelihoods,
+                        annotation_type,
+                    );
                     let allele_counts = genotype.get_ad().into_iter().filter(|ad| **ad > 0).count();
                     genotype.attribute(
                         self.to_key().to_string(),
@@ -338,9 +368,7 @@ impl VariantAnnotations {
             // if we have the AD values for this sample, let's make sure that the variant depth is greater than 1!
             if genotype.has_ad() {
                 let total_ad: i64 = genotype.ad.iter().sum();
-                if !genotype.has_dp() {
-                    genotype.dp = total_ad;
-                }
+                genotype.dp = total_ad;
                 if total_ad != 0 {
                     if total_ad - genotype.ad[0] > 1 {
                         AD_restrict_depth += total_ad;
@@ -473,7 +501,9 @@ impl Annotation {
         genotype: Option<&mut Genotype>,
         likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
     ) -> Self {
-        self.value = self.annotation.annotate(vc, genotype, likelihoods);
+        self.value = self
+            .annotation
+            .annotate(vc, genotype, likelihoods, self.annotation_type);
         self
     }
 

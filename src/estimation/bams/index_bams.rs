@@ -2,12 +2,12 @@ use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use glob::glob;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 use rust_htslib::bam;
-use std::path::Path;
 use std::fs::create_dir_all;
 use std::io::Write;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
-use rayon::prelude::*;
 
 /// Ensures mapping is completed for provided bams. If multiple references are provided and
 /// the user has asked to run genomes in parallel, then the bams are split per reference to
@@ -19,7 +19,6 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     parallel_genomes: bool,
     mapping: bool,
 ) {
-
     if !parallel_genomes {
         let mut record: bam::record::Record = bam::Record::new();
 
@@ -27,7 +26,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let sty = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
         let pb1 = ProgressBar::new(bams.len() as u64);
-        pb1.set_style(sty.clone());
+        pb1.set_style(sty);
         pb1.enable_steady_tick(500);
         for bam_generator in bams {
             let mut bam = bam_generator.start();
@@ -46,7 +45,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
 
             if mapping {
                 while bam.read(&mut record).is_some() {
-                    continue
+                    continue;
                 }
 
                 bam.finish();
@@ -59,7 +58,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
                     bam::index::Type::Bai,
                     n_threads as u32,
                 )
-                    .expect(&format!("Unable to index bam at {}", &path));
+                .unwrap_or_else(|_| panic!("Unable to index bam at {}", &path));
             }
             // }
             pb1.inc(1);
@@ -75,11 +74,9 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let pb1 = Arc::new(Mutex::new(ProgressBar::new(bams.len() as u64)));
         {
             let mut pb1 = pb1.lock().unwrap();
-            pb1.set_style(sty.clone());
+            pb1.set_style(sty);
             pb1.enable_steady_tick(500);
-            pb1.set_message(
-                "Splitting bam files per reference..."
-            );
+            pb1.set_message("Splitting bam files per reference...");
         }
         let mut paths = Vec::with_capacity(bams.len());
 
@@ -92,71 +89,79 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             paths.push(path);
             if mapping {
                 while bam.read(&mut record).is_some() {
-                    continue
+                    continue;
                 }
                 bam.finish();
             }
         }
-        paths.into_par_iter()
-            .for_each(|path| {
-                let mut record: bam::record::Record = bam::Record::new();
+        paths.into_par_iter().for_each(|path| {
+            let mut record: bam::record::Record = bam::Record::new();
 
-                let mut bam = generate_named_bam_readers_from_bam_files(
-                    vec![&path]
-                ).into_iter().next().unwrap();
-                let header = bam.header();
-                let stoit_name = bam.name().to_string().replace("/", ".");
-                let path_prefix = path.rsplitn(2, "/").skip(1).next().unwrap();
-                let mut tmp_header = bam::header::Header::from_template(&header);
-                let mut need_to_write = false;
-                let mut writers = references.genomes.iter().map(|ref_stub| {
+            let mut bam = generate_named_bam_readers_from_bam_files(vec![&path])
+                .into_iter()
+                .next()
+                .unwrap();
+            let header = bam.header();
+            let stoit_name = bam.name().to_string().replace('/', ".");
+            let path_prefix = path.rsplitn(2, '/').nth(1).unwrap();
+            let mut tmp_header = bam::header::Header::from_template(&header);
+            let mut need_to_write = false;
+            let mut writers = references
+                .genomes
+                .iter()
+                .map(|ref_stub| {
                     let output_path = format!("{}/{}", &path_prefix, ref_stub);
                     create_dir_all(&output_path);
                     let bam_path = format!("{}/{}.bam", output_path, &stoit_name);
                     let mut out = None;
                     if !Path::new(&bam_path).exists() {
-                        out = Some(bam::Writer::from_path(&bam_path, &tmp_header, bam::Format::Bam).unwrap());
+                        out = Some(
+                            bam::Writer::from_path(&bam_path, &tmp_header, bam::Format::Bam)
+                                .unwrap(),
+                        );
                         need_to_write = true;
                     }
                     out
-                }).collect::<Vec<Option<bam::Writer>>>();
+                })
+                .collect::<Vec<Option<bam::Writer>>>();
 
-                if need_to_write {
-                    while bam.read(&mut record).is_some() {
-                        if !record.is_unmapped() {
-                            let header = bam.header();
-                            let contig_name = std::str::from_utf8(header.tid2name(record.tid() as u32))
-                                .unwrap().to_string()
-                                .split_once("~").unwrap().1.to_string();
-                            let ref_idx = references.genome_index_of_contig(&contig_name);
-                            match ref_idx {
-                                Some(ref_idx) => {
-                                    match &mut writers[ref_idx] {
-                                        None => {
-                                            // bam file already written
-                                        },
-                                        Some(writer) => {
-                                            writer.write(&record).unwrap()
-                                        }
+            if need_to_write {
+                while bam.read(&mut record).is_some() {
+                    if !record.is_unmapped() {
+                        let header = bam.header();
+                        let contig_name = std::str::from_utf8(header.tid2name(record.tid() as u32))
+                            .unwrap()
+                            .to_string()
+                            .split_once("~")
+                            .unwrap()
+                            .1
+                            .to_string();
+                        let ref_idx = references.genome_index_of_contig(&contig_name);
+                        match ref_idx {
+                            Some(ref_idx) => {
+                                match &mut writers[ref_idx] {
+                                    None => {
+                                        // bam file already written
                                     }
-                                },
-                                None => {}// shall pass
+                                    Some(writer) => writer.write(&record).unwrap(),
+                                }
                             }
+                            None => {} // shall pass
                         }
                     }
-                    bam.finish();
                 }
-                {
-                    let mut pb1 = pb1.lock().unwrap();
-                    pb1.inc(1);
-                }
-            });
+                bam.finish();
+            }
+            {
+                let mut pb1 = pb1.lock().unwrap();
+                pb1.inc(1);
+            }
+        });
         {
             let mut pb1 = pb1.lock().unwrap();
             pb1.finish_with_message(format!("Reads and BAM files processed..."));
         }
     }
-
 }
 
 pub fn recover_bams(
@@ -186,12 +191,14 @@ pub fn recover_bams(
             bam_readers.extend(bam_paths);
         } else {
             for path in bam_paths {
-                let mut path_split = path.rsplitn(2, "/");
+                let mut path_split = path.rsplitn(2, '/');
                 let path_suffix = path_split.next().unwrap();
                 let path_prefix = path_split.next().unwrap();
 
                 bam_readers.push(format!(
-                    "{}/{}/{}", path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix))
+                    "{}/{}/{}",
+                    path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix
+                ))
             }
         }
     } else if m.is_present("read1")
@@ -277,12 +284,14 @@ pub fn recover_bams(
             bam_readers.extend(bam_paths);
         } else {
             for path in bam_paths {
-                let mut path_split = path.rsplitn(2, "/");
+                let mut path_split = path.rsplitn(2, '/');
                 let path_suffix = path_split.next().unwrap();
                 let path_prefix = path_split.next().unwrap();
 
                 bam_readers.push(format!(
-                    "{}/{}/{}", path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix))
+                    "{}/{}/{}",
+                    path_prefix, &genomes_and_contigs.genomes[ref_idx], path_suffix
+                ))
             }
         }
     } else if m.is_present("longreads") {
@@ -361,6 +370,6 @@ pub fn recover_bams(
             bam_readers.len(),
         )
     }
-    let bam_readers = bam_readers.into_iter().map(|b| b.to_string()).collect();
+
     return bam_readers;
 }

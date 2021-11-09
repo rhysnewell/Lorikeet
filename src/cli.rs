@@ -14,7 +14,7 @@ const LONGREAD_MAPPING_SOFTWARE_LIST: &[&str] =
     &["minimap2-ont", "minimap2-pb", "ngmlr-ont", "ngmlr-pb"];
 const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "minimap2-ont";
 
-const MAPPER_HELP: &'static str = "
+const MAPPER_HELP: &str = "
 Read mapping options:
   -p, --mapper <NAME>             Underlying mapping software used
                                   (\"minimap2-sr\", \"bwa-mem\",
@@ -41,7 +41,7 @@ Read mapping options:
                                   that usage of this parameter has security
                                   implications if untrusted input is specified.\n";
 
-const VARIANT_CALLING_HELP: &'static str = "
+const VARIANT_CALLING_HELP: &str = "
 Variant calling options (Basic):
   -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
                                                 Multiple values at once are accepted and encouraged
@@ -65,6 +65,12 @@ Variant calling options (Basic):
                                                 increase run time. If the depth of an assembly region
                                                 exceeds this value, then the reads will be filtered
                                                 by mean base quality. [default: 1000]
+  --min-contig-size                             The minimum contig size to call variants on. Smaller
+                                                contigs can often contain highly variable regions that
+                                                mostly represent noise. Call variants on them can often
+                                                be slow and not produce anything fruitful. If you
+                                                wish to call variants on all available contigs,
+                                                then set this to 0. [default: 2500]
 
 Variant calling options (Advanced):
   --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
@@ -119,7 +125,7 @@ Variant calling options (Advanced):
                                                 and 2000 bp span on each provided contig.
   --force                                       Forcefully overwrite previous runs.\n";
 
-const ALIGNMENT_OPTIONS: &'static str = "
+const ALIGNMENT_OPTIONS: &str = "
 Define mapping(s) (required):
   Either define BAM:
    -b, --bam-files <PATH> ..             Path to BAM file(s). These must be
@@ -188,14 +194,14 @@ Alignment filtering (optional):
                                          bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
-                                         Conflicts --proper-pairs-only. [default 0.0]
+                                         Conflicts --allow-improper-pairs. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                          identity e.g. 0.95 for 95%.
-                                         Conflicts --proper-pairs-only. [default 0.0]
+                                         Conflicts --allow-improper-pairs. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
                                          bases must be aligned.
-                                         Conflicts --proper-pairs-only. [default 0.0]
+                                         Conflicts --allow-improper-pairs. [default 0.0]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -206,13 +212,13 @@ Alignment filtering (optional):
                                          [default: 0.05]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
-   --proper-pairs-only                   Allows reads to be mapped as improper pairs
+   --allow-improper-pairs                Allows reads to be mapped as improper pairs
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
 ";
 
-const GENERAL_HELP: &'static str = "
+const GENERAL_HELP: &str = "
 General options:
   -t, --threads                         Maximum number of threads used. [default: 8]
   -p, --parallel-genomes                Number of genomes to run in parallel.
@@ -236,15 +242,16 @@ pub fn genotype_full_help() -> String {
 
 Genotyping arguments (optional):
 
-   --n-components <INT>                  Number of components for the UMAP algorithm to embed into. [default: 2]
-   -n, --n-neighbors <INT>               Number of neighbors used in the UMAP algorithm. [default: 20]
-   -s, --cluster-distance <FLOAT>        The cluster distance used to decide if two or more clusters
-                                         should be combined into a genotype. [default: 0.15]
-   --minimum-reads-in-link <INT>         Minimum amount of reads required to be shared between two
-                                         variants before they are counted as 'linked'. [default: 5]
+  --qual-by-depth-filter                The minimum QD value for a variant to have for it to be
+                                        included in the genotyping analysis. [default: 20]
+  --min-variant-depth-for-genotyping    The minimum total depth of a variant - across all samples -
+                                        for it to be included in the strain genotyping process.
+                                        Lower values tend to confuse and break the UMAP embedding
+                                        and strain abundance calculation. [default: 5]
 {}
         ",
-    ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP)
+        ALIGNMENT_OPTIONS, MAPPER_HELP, VARIANT_CALLING_HELP, GENERAL_HELP
+    )
 }
 
 pub fn call_full_help() -> String {
@@ -299,7 +306,7 @@ See lorikeet consensus --full-help for further options and further detail.
             ansi_term::Colour::Purple.paint(
                 "Example: Calculate variant positions using MetaBAT adjusted coverage from a sorted BAM file, saving
     the unfiltered BAM files in the saved_bam_files folder:")
-        ).to_string();
+        );
 
         static ref EVOLVE_HELP: String = format!(
             "
@@ -325,7 +332,7 @@ See lorikeet evolve --full-help for further options and further detail.
                 "Example: Calculate gene dN/dS values from reads and assembly:"),
             ansi_term::Colour::Purple.paint(
                 "Example: Calculate gene dN/dS values from reads against many genomes in a directory and cache bams and save output to directory:")
-        ).to_string();
+        );
 
 
         static ref SUMMARIZE_HELP: String = format!(
@@ -352,7 +359,7 @@ See lorikeet summarize --full-help for further options and further detail.
                 "Example: Map paired reads to a reference and generate contig stats across samples using a 1kb window size"),
             ansi_term::Colour::Purple.paint(
                 "Example: Summarizes genomic variation across contigs in genomes in directory using long and short reads:"),
-        ).to_string();
+        );
 
         static ref GENOTYPE_HELP: String = format!(
             "
@@ -378,7 +385,7 @@ See lorikeet genotype --full-help for further options and further detail.
                 "Example: Map paired reads to a reference and generate genotypes"),
             ansi_term::Colour::Purple.paint(
                 "Example: Generate strain-level genotypes from read mappings compared to reference from a sorted BAM file and plots the results:"),
-        ).to_string();
+        );
 
         static ref CALL_HELP: String = format!(
             "
@@ -404,7 +411,7 @@ See lorikeet genotype --full-help for further options and further detail.
                 "Example: Map paired reads to a reference and generate genotypes"),
             ansi_term::Colour::Purple.paint(
                 "Example: Perform read read mapping and variant calling on an entire directory of genomes and save the bam files:"),
-        ).to_string();
+        );
     }
 
     return App::new("lorikeet")
@@ -665,19 +672,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -873,7 +880,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000")
+                        .default_value("1000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -1024,7 +1031,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -1266,19 +1273,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -1304,25 +1311,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("0.0"),
                 )
                 .arg(
-                    Arg::with_name("n-neighbors")
-                        .long("n-neighbors")
-                        .short("n")
-                        .default_value("100"),
-                )
-                .arg(
-                    Arg::with_name("n-components")
-                        .long("n-components")
-                        .default_value("2"),
-                )
-                .arg(
-                    Arg::with_name("minimum-reads-in-link")
-                        .long("minimum-reads-in-link")
-                        .default_value("5"),
-                )
-                .arg(
-                    Arg::with_name("cluster-distance")
-                        .long("cluster-distance")
-                        .default_value("0.35"),
+                    Arg::with_name("min-contig-size")
+                        .long("min-contig-size")
+                        .default_value("2500"),
                 )
                 .arg(
                     Arg::with_name("phred-scaled-global-read-mismapping-rate")
@@ -1510,7 +1501,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000")
+                        .default_value("1000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -1622,6 +1613,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("18"),
                 )
                 .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("min-variant-depth-for-genotyping")
+                        .long("min-variant-depth-for-genotyping")
+                        .default_value("5")
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -1661,7 +1662,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -1903,19 +1904,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -1930,6 +1931,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-covered-fraction")
                         .long("min-covered-fraction")
                         .default_value("0.0"),
+                )
+                .arg(
+                    Arg::with_name("min-contig-size")
+                        .long("min-contig-size")
+                        .default_value("2500"),
                 )
                 .arg(
                     Arg::with_name("phred-scaled-global-read-mismapping-rate")
@@ -2117,7 +2123,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000")
+                        .default_value("1000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2144,6 +2150,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("kmer-length-for-read-error-correction")
                         .default_value("25")
                         .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-observations-for-kmers-to-be-solid")
+                        .long("min-observations-for-kmers-to-be-solid")
+                        .default_value("20")
+                        .hidden(true)
                 )
                 .arg(
                     Arg::with_name("max-mnp-distance")
@@ -2268,7 +2280,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -2510,19 +2522,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("proper-pairs-only"),
+                        .conflicts_with("allow-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -2537,6 +2549,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-covered-fraction")
                         .long("min-covered-fraction")
                         .default_value("0.0"),
+                )
+                .arg(
+                    Arg::with_name("min-contig-size")
+                        .long("min-contig-size")
+                        .default_value("2500"),
                 )
                 .arg(
                     Arg::with_name("phred-scaled-global-read-mismapping-rate")
@@ -2724,7 +2741,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000")
+                        .default_value("1000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2875,7 +2892,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
+                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(

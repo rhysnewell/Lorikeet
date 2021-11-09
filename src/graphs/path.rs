@@ -88,8 +88,8 @@ impl Path {
             "Edges added to path must be contiguous."
         );
 
-        let mut edges_in_order = Vec::new();
-        edges_in_order.push(edge);
+        let mut edges_in_order = vec![edge];
+
         edges_in_order.extend(self.edges_in_order.iter());
         Self {
             last_vertex: self.last_vertex,

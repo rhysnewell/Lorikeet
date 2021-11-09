@@ -176,37 +176,32 @@ impl GenotypeLikelihoodCalculator {
                 "Invalid likelihood index {} >= {} (Genotype count for n-alleles = {} and {}",
                 index, self.genotype_count, self.allele_count, self.ploidy
             );
+        } else if index < self.genotype_allele_counts.len() {
+            return &mut self.genotype_allele_counts[index];
+        } else if self.last_overhead_counts.is_null() || self.last_overhead_counts.index() > index {
+            let mut result = self.genotype_allele_counts
+                [GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1]
+                .clone();
+
+            // let mut result = &mut self.genotype_allele_counts[index];
+            //
+            result.increase(
+                index as i32
+                    - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY as i32
+                    + 1,
+            );
+
+            // self.genotype_allele_counts.push(result);
+            // result.increase(1);
+            //
+            self.last_overhead_counts = result;
+            // return result;
+            return &mut self.last_overhead_counts;
         } else {
-            if index < self.genotype_allele_counts.len() {
-                return &mut self.genotype_allele_counts[index];
-            } else if self.last_overhead_counts.is_null()
-                || self.last_overhead_counts.index() > index
-            {
-                let mut result = self.genotype_allele_counts
-                    [GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY - 1]
-                    .clone();
-
-                // let mut result = &mut self.genotype_allele_counts[index];
-                //
-                result.increase(
-                    index as i32
-                        - GenotypeLikelihoodCalculators::MAXIMUM_STRONG_REF_GENOTYPE_PER_PLOIDY
-                            as i32
-                        + 1,
-                );
-
-                // self.genotype_allele_counts.push(result);
-                // result.increase(1);
-                //
-                self.last_overhead_counts = result;
-                // return result;
-                return &mut self.last_overhead_counts;
-            } else {
-                self.last_overhead_counts
-                    .increase(index as i32 - self.last_overhead_counts.index() as i32);
-                return &mut self.last_overhead_counts;
-                // return &mut self.genotype_allele_counts[index]
-            }
+            self.last_overhead_counts
+                .increase(index as i32 - self.last_overhead_counts.index() as i32);
+            return &mut self.last_overhead_counts;
+            // return &mut self.genotype_allele_counts[index]
         }
     }
 
@@ -452,20 +447,24 @@ impl GenotypeLikelihoodCalculator {
                 return index + 1;
             }
             Some(cmp) => {
-                if cmp == 0 {
-                    result = self.genotype_allele_counts[index].clone();
-                    result.increase(1);
-                    self.genotype_allele_counts.push(result);
-                    return index + 1;
-                } else {
-                    // allele_counts.increase(1);
-                    // result = allele_counts;
-                    // return result
-                    result = self.genotype_allele_counts[index].clone();
-                    result.increase(1);
-                    self.genotype_allele_counts.push(result);
-                    return index + 1;
-                }
+                // if cmp == 0 {
+                //     result = self.genotype_allele_counts[index].clone();
+                //     result.increase(1);
+                //     self.genotype_allele_counts.push(result);
+                //     return index + 1;
+                // } else {
+                //     // allele_counts.increase(1);
+                //     // result = allele_counts;
+                //     // return result
+                //     result = self.genotype_allele_counts[index].clone();
+                //     result.increase(1);
+                //     self.genotype_allele_counts.push(result);
+                //     return index + 1;
+                // }
+                result = self.genotype_allele_counts[index].clone();
+                result.increase(1);
+                self.genotype_allele_counts.push(result);
+                return index + 1;
             }
         }
     }
@@ -485,11 +484,13 @@ impl GenotypeLikelihoodCalculator {
             &mut self.genotype_allele_counts[genotype_allele_counts_index];
         let allele = genotype_allele_counts.allele_index_at(0);
         // the count of the only component must be = ploidy.
-        let mut offset = (allele * (self.ploidy + 1) + self.ploidy) * read_count;
-        for r in 0..read_count {
-            likelihood_by_read[r] = self.read_allele_likelihood_by_allele_count[offset];
-            offset += 1;
-        }
+        // let mut offset = (allele * (self.ploidy + 1) + self.ploidy) * read_count;
+        likelihood_by_read[..read_count].clone_from_slice(
+            &self.read_allele_likelihood_by_allele_count[((allele * (self.ploidy + 1)
+                + self.ploidy)
+                * read_count)
+                ..(read_count + (allele * (self.ploidy + 1) + self.ploidy) * read_count)],
+        );
     }
 
     /**

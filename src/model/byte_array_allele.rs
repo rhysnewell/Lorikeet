@@ -177,11 +177,8 @@ impl ByteArrayAllele {
             !bases.iter().any(|base| {
                 let base = *base as char;
                 match base {
-                    'A' | 'C' | 'T' | 'G' |
-                    'a' | 'c' | 't' | 'g' |
-                    'N' | 'n' | 'R' | 'Y' |
-                    'K' | 'M' | 'S' | 'W' |
-                    'B' | 'D' | 'H' | 'V' | 'U' => false,
+                    'A' | 'C' | 'T' | 'G' | 'a' | 'c' | 't' | 'g' | 'N' | 'n' | 'R' | 'Y' | 'K'
+                    | 'M' | 'S' | 'W' | 'B' | 'D' | 'H' | 'V' | 'U' => false,
                     _ => true,
                 }
             })

@@ -61,7 +61,7 @@ impl HaplotypeCallerGenotypingEngine {
             genotyping_engine,
             do_physical_phasing,
             genotyping_model: IndependentSamplesGenotypesModel::default(),
-            ploidy_model: HomogeneousPloidyModel::new(samples.clone(), sample_ploidy),
+            ploidy_model: HomogeneousPloidyModel::new(samples, sample_ploidy),
             max_genotype_count_to_enumerate: 1024,
             snp_heterozygosity: args
                 .value_of("snp-heterozygosity")
@@ -301,19 +301,23 @@ impl HaplotypeCallerGenotypingEngine {
                             );
                             debug!("Annotated call {:?}", &annotated_call);
 
-                            return_calls.push(annotated_call);
-                            call.alleles
-                                .into_iter()
-                                .enumerate()
-                                .map(|(idx, a)| allele_mapper.remove(&idx))
-                                .for_each(|a| {
-                                    match a {
-                                        None => {
-                                            // do nothing
+                            if annotated_call.get_genotypes().genotypes().iter().map(|g| g.dp - g.ad[0]).sum::<i64>() >= 2 {
+                                // at least two supporting reads
+                                return_calls.push(annotated_call);
+                                call.alleles
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(idx, a)| allele_mapper.remove(&idx))
+                                    .for_each(|a| {
+                                        match a {
+                                            None => {
+                                                // do nothing
+                                            }
+                                            Some(a) => called_haplotypes.extend(a.into_iter().cloned()),
                                         }
-                                        Some(a) => called_haplotypes.extend(a.into_iter().cloned()),
-                                    }
-                                });
+                                    });
+                            }
+
                         }
                     }
                 }
@@ -483,15 +487,16 @@ impl HaplotypeCallerGenotypingEngine {
         merged_vc: &mut VariantContext,
     ) {
         let original_allele_count = allele_mapper.len();
+        let max_genotype_count_to_enumerate = self.max_genotype_count_to_enumerate;
         let practical_allele_count = self
             .practical_allele_count_for_ploidy
             .entry(ploidy)
-            .or_insert(
+            .or_insert_with(|| {
                 GenotypeLikelihoodCalculators::compute_max_acceptable_allele_count(
                     ploidy,
-                    self.max_genotype_count_to_enumerate,
-                ),
-            );
+                    max_genotype_count_to_enumerate,
+                )
+            });
 
         if original_allele_count > *practical_allele_count {
             let mut alleles_to_keep = Self::which_alleles_to_keep_based_on_hap_scores(
@@ -706,7 +711,9 @@ impl<'a> Ord for AlleleScoredByHaplotype<'a> {
             return Ordering::Less;
         } else if self.best_haplotype_score < other.best_haplotype_score {
             return Ordering::Greater;
-        } else if self.second_best_haplotype_score != other.second_best_haplotype_score {
+        } else if (self.second_best_haplotype_score - other.second_best_haplotype_score).abs()
+            > f64::EPSILON
+        {
             if self.second_best_haplotype_score > other.second_best_haplotype_score {
                 return Ordering::Less;
             } else {

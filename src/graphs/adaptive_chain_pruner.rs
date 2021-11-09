@@ -164,13 +164,13 @@ impl AdaptiveChainPruner {
                 continue;
             }
 
-            for vertex in vec![
+            for vertex in &[
                 chain.path.get_first_vertex(graph),
                 chain.path.get_last_vertex(),
             ] {
-                if !processed_vertices.contains(&vertex) {
+                if !processed_vertices.contains(vertex) {
                     vertex_to_good_outgoing_chains
-                        .get_vec(&vertex)
+                        .get_vec(vertex)
                         .unwrap_or(&vec![])
                         .into_iter()
                         .for_each(|chain| {
@@ -181,7 +181,7 @@ impl AdaptiveChainPruner {
                             )))
                         });
                     vertex_to_good_incoming_chains
-                        .get_vec(&vertex)
+                        .get_vec(vertex)
                         .unwrap_or(&vec![])
                         .into_iter()
                         .for_each(|chain| {
@@ -191,7 +191,7 @@ impl AdaptiveChainPruner {
                                 graph,
                             )))
                         });
-                    processed_vertices.insert(vertex);
+                    processed_vertices.insert(*vertex);
                 }
             }
         }
@@ -328,8 +328,7 @@ impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPr
      * @return a fully extended linear path
      */
     fn find_chain(start_edge: EdgeIndex, graph: &BaseGraph<V, E>) -> Path {
-        let mut edges = Vec::new();
-        edges.push(start_edge);
+        let mut edges = vec![start_edge];
         let start_edge_endpoints = graph.graph.edge_endpoints(start_edge).unwrap();
         let first_vertex_id = start_edge_endpoints.0;
         let mut last_vertex_id = start_edge_endpoints.1;

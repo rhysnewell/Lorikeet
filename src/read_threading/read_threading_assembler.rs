@@ -26,6 +26,7 @@ use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
 
 #[derive(Debug, Clone)]
@@ -86,7 +87,7 @@ impl ReadThreadingAssembler {
             "num_best_haplotypes_per_graph should be >= 1 but got {}",
             max_allowed_paths_for_read_threading_assembler
         );
-        kmer_sizes.sort();
+        kmer_sizes.sort_unstable();
 
         let chain_pruner = AdaptiveChainPruner::new(
             initial_error_rate_for_pruning,
@@ -192,31 +193,32 @@ impl ReadThreadingAssembler {
         // let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
         let active_region_extended_location = assembly_region.get_padded_span();
         ref_haplotype.set_genome_location(active_region_extended_location.clone());
-        let mut result_set = AssemblyResultSet::new(
+
+        let mut result_set = Arc::new(Mutex::new(AssemblyResultSet::new(
             assembly_region,
             full_reference_with_padding,
             ref_loc.clone(),
             ref_haplotype.clone(),
-        );
+        )));
         // either follow the old method for building graphs and then assembling or assemble and haplotype call before expanding kmers
 
         if self.generate_seq_graph {
             self.assemble_kmer_graphs_and_haplotype_call(
-                ref_haplotype,
+                &ref_haplotype,
                 &ref_loc,
                 &corrected_reads,
-                &mut result_set,
+                &result_set,
                 &active_region_extended_location,
                 sample_names,
                 &dangling_end_sw_parameters,
                 &reference_to_haplotype_sw_parameters,
-            )
+            );
         } else {
             self.assemble_graphs_and_expand_kmers_given_haplotypes(
-                ref_haplotype,
+                &ref_haplotype,
                 &ref_loc,
                 &corrected_reads,
-                &mut result_set,
+                &result_set,
                 &active_region_extended_location,
                 sample_names,
                 &dangling_end_sw_parameters,
@@ -226,25 +228,10 @@ impl ReadThreadingAssembler {
 
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
-        if result_set.haplotypes.is_empty() {
-            debug!("Graph at position {:?} failed to assemble anything informative; emitting just reference here", result_set.padded_reference_loc);
-        };
-
-        // print the graphs if the appropriate debug option has been turned on
-        // match self.graph_output_path {
-        //     Some(path) => {
-        //         if self.generate_seq_graph {
-        //             self.print_seq_graphs(self.non_ref_seq_graphs);
-        //         } else {
-        //             // pass for now
-        //         }
-        //     },
-        //     None => {
-        //         // pass
-        //     }
-        // };
-
-        return result_set;
+        Arc::try_unwrap(result_set)
+            .expect("Lock on result set still has multiple owners")
+            .into_inner()
+            .expect("Lock won't release assembly result set")
     }
 
     /**
@@ -253,26 +240,25 @@ impl ReadThreadingAssembler {
      */
     fn assemble_kmer_graphs_and_haplotype_call<'b>(
         &mut self,
-        ref_haplotype: &'b mut Haplotype<SimpleInterval>,
+        ref_haplotype: &'b Haplotype<SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         corrected_reads: &'b Vec<BirdToolRead>,
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
-        result_set: &'b mut AssemblyResultSet<ReadThreadingGraph>,
+        result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
         dangling_end_sw_parameters: &SWParameters,
         reference_to_haplotype_sw_parameters: &SWParameters,
     ) {
         // create the graphs by calling our subclass assemble method
-        for mut result in self
-            .assemble(
-                &corrected_reads,
-                ref_haplotype,
-                sample_names,
-                dangling_end_sw_parameters,
-            )
-            .into_iter()
-        {
+        self.assemble(
+            &corrected_reads,
+            ref_haplotype,
+            sample_names,
+            dangling_end_sw_parameters,
+        )
+        .into_par_iter()
+        .for_each(|mut result| {
             // debug!("graph after assembly {:?}", &result.graph.as_ref().unwrap().base_graph);
             debug!(
                 "Result loc {:?} Status {:?} haps {:?}",
@@ -294,7 +280,7 @@ impl ReadThreadingAssembler {
                 // non_ref_seq_graphs.push(result.graph.unwrap());
                 // result_set.add_haplotype(result);
             }
-        }
+        });
     }
 
     /**
@@ -313,29 +299,32 @@ impl ReadThreadingAssembler {
         sample_names: &'b Vec<String>,
         dangling_end_sw_parameters: &SWParameters,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
-        let mut results = Vec::new();
-
         // first, try using the requested kmer sizes
-        for kmer_size in self.kmer_sizes.clone().into_iter() {
-            match self.create_graph(
-                reads,
-                ref_haplotype,
-                kmer_size,
-                self.dont_increase_kmer_sizes_for_cycles,
-                self.allow_non_unique_kmers_in_ref,
-                sample_names,
-                dangling_end_sw_parameters,
-            ) {
-                None => continue,
-                Some(assembly_result) => {
-                    debug!(
-                        "Found assembly result (No increase) graph -> {:?}",
-                        assembly_result.graph.as_ref().unwrap().base_graph
-                    );
-                    results.push(assembly_result)
-                }
-            }
-        }
+        let mut results = self
+            .kmer_sizes
+            .par_iter()
+            .filter_map(|kmer_size| {
+                self.create_graph(
+                    reads,
+                    ref_haplotype,
+                    *kmer_size,
+                    self.dont_increase_kmer_sizes_for_cycles,
+                    self.allow_non_unique_kmers_in_ref,
+                    sample_names,
+                    dangling_end_sw_parameters,
+                )
+                // {
+                //     None => continue,
+                //     Some(assembly_result) => {
+                //         debug!(
+                //             "Found assembly result (No increase) graph -> {:?}",
+                //             assembly_result.graph.as_ref().unwrap().base_graph
+                //         );
+                //         results.push(assembly_result)
+                //     }
+                // }
+            })
+            .collect::<Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>>>();
 
         if results.is_empty() && !self.dont_increase_kmer_sizes_for_cycles {
             let mut kmer_size =
@@ -378,10 +367,10 @@ impl ReadThreadingAssembler {
      */
     fn assemble_graphs_and_expand_kmers_given_haplotypes<'b>(
         &mut self,
-        ref_haplotype: &'b mut Haplotype<SimpleInterval>,
+        ref_haplotype: &'b Haplotype<SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         corrected_reads: &'b Vec<BirdToolRead>,
-        result_set: &'b mut AssemblyResultSet<ReadThreadingGraph>,
+        result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
         dangling_end_sw_parameters: &SWParameters,
@@ -455,6 +444,7 @@ impl ReadThreadingAssembler {
                                 // we have found our workable kmer size so lets add the results and finish
                                 let assembled_result = saved_assembly_results.last().unwrap();
                                 if !assembled_result.contains_suspect_haploptypes {
+                                    let mut result_set = result_set.lock().unwrap();
                                     for h in assembled_result.discovered_haplotypes.clone() {
                                         result_set.add_haplotype(h);
                                     }
@@ -480,6 +470,7 @@ impl ReadThreadingAssembler {
             saved_assembly_results.reverse();
             for result in saved_assembly_results {
                 if result.discovered_haplotypes.len() > 1 {
+                    let mut result_set = result_set.lock().unwrap();
                     let ar_index = result_set.add_assembly_result(result);
                     for h in result_set.assembly_results[ar_index]
                         .discovered_haplotypes
@@ -615,11 +606,11 @@ impl ReadThreadingAssembler {
         &self,
         // graph: &BaseGraph<V, E>,
         assembly_result: &'b mut AssemblyResult<SimpleInterval, A>,
-        ref_haplotype: &'b mut Haplotype<SimpleInterval>,
+        ref_haplotype: &'b Haplotype<SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
         haplotype_to_reference_sw_parameters: &SWParameters,
-        result_set: &mut AssemblyResultSet<A>,
+        result_set: &Arc<Mutex<AssemblyResultSet<A>>>,
     ) {
         // add the reference haplotype separately from all the others to ensure
         // that it is present in the list of haplotypes
@@ -677,9 +668,9 @@ impl ReadThreadingAssembler {
                         active_region_window, &h
                     );
                     // TODO this score seems to be irrelevant at this point...
-                    if k_best_haplotype.is_reference {
-                        ref_haplotype.score = OrderedFloat(k_best_haplotype.score);
-                    };
+                    // if k_best_haplotype.is_reference {
+                    //     ref_haplotype.score = OrderedFloat(k_best_haplotype.score);
+                    // };
 
                     debug!("+++++++++==================================== Candidates ====================================+++++++++");
                     debug!(
@@ -774,6 +765,7 @@ impl ReadThreadingAssembler {
                             );
                             return_haplotypes.insert(h.clone());
                             // result set would get added to here
+                            let mut result_set = result_set.lock().unwrap();
                             result_set.add_haplotype(h);
                         }
                     }
@@ -823,7 +815,7 @@ impl ReadThreadingAssembler {
      * @return sequence graph or null if one could not be created (e.g. because it contains cycles or too many paths or is low complexity)
      */
     fn create_graph<'b>(
-        &mut self,
+        &self,
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
         kmer_size: usize,
@@ -1181,14 +1173,7 @@ impl ReadThreadingAssembler {
             ref_haplotype.genome_location.as_ref().unwrap().get_start(),
             ref_haplotype.genome_location.as_ref().unwrap().get_end(),
         ));
-        if seq_graph
-            .base_graph
-            .graph
-            .node_indices()
-            .collect::<Vec<NodeIndex>>()
-            .len()
-            == 1
-        {
+        if seq_graph.base_graph.graph.node_indices().count() == 1 {
             // we've perfectly assembled into a single reference haplotype, add a empty seq vertex to stop
             // the code from blowing up.
             // TODO -- ref properties should really be on the vertices, not the graph itself

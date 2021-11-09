@@ -101,8 +101,8 @@ impl<'a> ReferenceWriter<'a> {
 
                 // write out the actual contig
                 for line in new_bases[..].chunks(60).into_iter() {
-                    file_open.write(line).unwrap();
-                    file_open.write(b"\n").unwrap();
+                    file_open.write_all(line).unwrap();
+                    file_open.write_all(b"\n").unwrap();
                 }
             }
         }
@@ -128,13 +128,17 @@ impl<'a> ReferenceWriter<'a> {
                 "{}/{}_consensus_{}.fna",
                 self.output_prefix,
                 self.reference_reader.genomes_and_contigs.genomes[ref_idx],
-                &sample_name.rsplitn(2, "/").next().unwrap(),
+                &sample_name.rsplitn(2, '/').next().unwrap(),
             );
             let file_path = Path::new(&file_name);
             debug!("File path {}", &file_name);
             // Open new reference file or create one
-            let mut file_open =
-                File::create(file_path).expect(&format!("No Read or Write Permission in current directory: {:?}", file_path));
+            let mut file_open = File::create(file_path).unwrap_or_else(|_| {
+                panic!(
+                    "No Read or Write Permission in current directory: {:?}",
+                    file_path
+                )
+            });
             for tid in tids.iter() {
                 self.reference_reader
                     .fetch_contig_from_reference_by_tid(*tid, ref_idx);
@@ -196,8 +200,8 @@ impl<'a> ReferenceWriter<'a> {
 
                 // write out the actual contig
                 for line in new_bases[..].chunks(60).into_iter() {
-                    file_open.write(line).unwrap();
-                    file_open.write(b"\n").unwrap();
+                    file_open.write_all(line).unwrap();
+                    file_open.write_all(b"\n").unwrap();
                 }
             }
         }
@@ -213,7 +217,7 @@ impl<'a> ReferenceWriter<'a> {
         for vc in variant_contexts {
             let vcs_on_contig = grouped_variant_contexts
                 .entry(vc.loc.get_contig())
-                .or_insert(BinaryHeap::new());
+                .or_insert_with(BinaryHeap::new);
             vcs_on_contig.push(vc);
         }
 
@@ -223,7 +227,7 @@ impl<'a> ReferenceWriter<'a> {
             .collect()
     }
 
-    fn modify_reference_bases_based_on_variant_type(
+    pub fn modify_reference_bases_based_on_variant_type(
         new_bases: &mut Vec<u8>,
         consensus_allele: ByteArrayAllele,
         vc: &mut VariantContext,
@@ -235,46 +239,46 @@ impl<'a> ReferenceWriter<'a> {
                 if consensus_allele.is_span_del() {
                     // delete from reference, replace with nothing
                     new_bases.splice(
-                        ((vc.loc.start as i64 + *offset) as usize)
+                        ((vc.loc.start as i64 + 1 + *offset) as usize)
                             ..=((vc.loc.end as i64 + *offset) as usize),
                         (0..0).into_iter(),
                     );
-                    *offset -= vc.loc.get_length_on_reference() as i64;
+                    *offset -= vc.loc.get_length_on_reference() as i64 - 1;
                 };
             }
             VariantType::Snp => {
                 new_bases[((vc.loc.start as i64 + *offset) as usize)] = consensus_allele.bases[0];
             }
             VariantType::Indel => {
+                let allele_len = consensus_allele.bases.len();
+                new_bases.splice(
+                    ((vc.loc.start as i64 + *offset) as usize)
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
+                    consensus_allele.bases.into_iter(),
+                );
+
                 if vc.loc.get_length_on_reference() == 1 {
                     // insertion
-                    *offset += consensus_allele.bases.len() as i64
+                    *offset += allele_len as i64 - 1;
                 } else {
-                    *offset -= vc.loc.get_length_on_reference() as i64;
+                    *offset -= vc.loc.get_length_on_reference() as i64 - 1;
                 };
-
-                new_bases.splice(
-                    ((vc.loc.start as i64 + *offset) as usize)
-                        ..=((vc.loc.end as i64 + *offset) as usize),
-                    consensus_allele.bases.clone().into_iter(),
-                );
             }
             VariantType::Mnp => {
-                if vc.loc.get_length_on_reference() < consensus_allele.bases.len() {
-                    // gaining bases so increase offset
-                    *offset += consensus_allele.bases.len() as i64
-                        - vc.loc.get_length_on_reference() as i64;
-                } else {
-                    // losing bases so decrease offset
-                    *offset -= vc.loc.get_length_on_reference() as i64
-                        - consensus_allele.bases.len() as i64;
-                }
-
+                let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + *offset) as usize)
-                        ..=((vc.loc.end as i64 + *offset) as usize),
-                    consensus_allele.bases.clone().into_iter(),
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
+                    consensus_allele.bases.into_iter(),
                 );
+
+                if vc.loc.get_length_on_reference() < allele_len {
+                    // gaining bases so increase offset
+                    *offset += allele_len as i64 - 1 - vc.loc.get_length_on_reference() as i64;
+                } else {
+                    // losing bases so decrease offset
+                    *offset -= vc.loc.get_length_on_reference() as i64 - allele_len as i64 - 1;
+                }
             }
             VariantType::Mixed => {
                 // need to determine the type the actual allele came out as

@@ -74,10 +74,8 @@ impl KBestHaplotypeFinder {
     ) {
         if keep_cycles {
             // pass
-        } else {
-            if is_cyclic_directed(&graph.graph) {
-                self.remove_cycles_and_vertices_that_dont_lead_to_sinks(graph)
-            }
+        } else if is_cyclic_directed(&graph.graph) {
+            self.remove_cycles_and_vertices_that_dont_lead_to_sinks(graph)
         }
     }
 
