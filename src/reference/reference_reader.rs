@@ -196,7 +196,7 @@ impl ReferenceReader {
         self.current_sequence = Vec::new();
     }
 
-    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &String) -> bool {
+    pub fn match_target_name_and_ref_idx(&self, ref_idx: usize, target_name: &str) -> bool {
         match self.genomes_and_contigs.contig_to_genome.get(target_name) {
             Some(ref_id) => *ref_id == ref_idx,
             None => false,
