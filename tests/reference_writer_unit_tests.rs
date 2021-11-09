@@ -82,6 +82,7 @@ fn test_indel_offsetting() {
     );
 
     let deletion_allele = ByteArrayAllele::new(b"A", false);
+    let ref_allele = ByteArrayAllele::new(b"AAAAAA", true);
     let mut deletion_vc =
         VariantContext::build(0, 2, 7, vec![ref_allele.clone(), deletion_allele.clone()]);
 
