@@ -85,12 +85,12 @@ impl ANICalculator {
                     present_alleles.push(context.alleles_present_in_sample(sample_idx_1));
                 }
 
-                // check that this region has any depth
-                // If there are no alleles found here, then we can't really compare it to another
-                // sample. This location should not count towards ANI calcs for this sample
-                if !present_alleles[sample_idx_1].iter().any(|present| *present) {
-                    continue
-                }
+                // // check that this region has any depth
+                // // If there are no alleles found here, then we can't really compare it to another
+                // // sample. This location should not count towards ANI calcs for this sample
+                // if !present_alleles[sample_idx_1].iter().any(|present| *present) {
+                //     continue
+                // }
 
                 for sample_idx_2 in 0..n_samples {
                     if consenus_allele_indices.len() == sample_idx_2 {
@@ -100,12 +100,12 @@ impl ANICalculator {
                         present_alleles.push(context.alleles_present_in_sample(sample_idx_2));
                     }
 
-                    // check that this region has any depth
-                    // If there are no alleles found here, then we can't really compare it to another
-                    // sample. This location should not count towards ANI calcs for this sample
-                    if !present_alleles[sample_idx_2].iter().any(|present| *present) {
-                        continue
-                    }
+                    // // check that this region has any depth
+                    // // If there are no alleles found here, then we can't really compare it to another
+                    // // sample. This location should not count towards ANI calcs for this sample
+                    // if !present_alleles[sample_idx_2].iter().any(|present| *present) {
+                    //     continue
+                    // }
 
                     if sample_idx_1 != sample_idx_2 {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
