@@ -82,30 +82,28 @@ impl ANICalculator {
                     // get consensus of first sample, default to ref
                     consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_1).unwrap_or_default());
                     // which alleles are present in first sample
-                    present_alleles.push(context.alleles_present_in_sample(sample_idx_1));
+                    let mut which_are_present = context.alleles_present_in_sample(sample_idx_1);
+                    if !which_are_present.iter().any(|val| *val) {
+                        // No alleles, reference or variant were found so we default to reference
+                        which_are_present[0] = true;
+                    }
+                    present_alleles.push(which_are_present);
                 }
 
-                // // check that this region has any depth
-                // // If there are no alleles found here, then we can't really compare it to another
-                // // sample. This location should not count towards ANI calcs for this sample
-                // if !present_alleles[sample_idx_1].iter().any(|present| *present) {
-                //     continue
-                // }
 
                 for sample_idx_2 in 0..n_samples {
                     if consenus_allele_indices.len() == sample_idx_2 {
                         // get consensus of first sample, default to ref
                         consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_2).unwrap_or_default());
                         // which alleles are present in first sample
-                        present_alleles.push(context.alleles_present_in_sample(sample_idx_2));
+                        let mut which_are_present = context.alleles_present_in_sample(sample_idx_2);
+                        if !which_are_present.iter().any(|val| *val) {
+                            // No alleles, reference or variant were found so we default to reference
+                            which_are_present[0] = true;
+                        }
+                        present_alleles.push(which_are_present);
                     }
 
-                    // // check that this region has any depth
-                    // // If there are no alleles found here, then we can't really compare it to another
-                    // // sample. This location should not count towards ANI calcs for this sample
-                    // if !present_alleles[sample_idx_2].iter().any(|present| *present) {
-                    //     continue
-                    // }
 
                     if sample_idx_1 != sample_idx_2 {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
