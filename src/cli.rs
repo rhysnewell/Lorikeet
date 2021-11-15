@@ -880,6 +880,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
+                        .takes_value(true)
                         .default_value("5000"),
                 )
                 .arg(
@@ -1501,6 +1502,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
+                        .takes_value(true)
                         .default_value("5000"),
                 )
                 .arg(
@@ -2123,6 +2125,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
+                        .takes_value(true)
                         .default_value("5000"),
                 )
                 .arg(
@@ -2741,6 +2744,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
+                        .takes_value(true)
                         .default_value("5000"),
                 )
                 .arg(
