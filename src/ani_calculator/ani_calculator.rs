@@ -79,15 +79,16 @@ impl ANICalculator {
             for sample_idx_1 in 0..n_samples {
 
                 if consenus_allele_indices.len() == sample_idx_1 {
-                    // get consensus of first sample, default to ref
+                    // get consensus of first sample
                     consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_1).unwrap_or_default());
                     // which alleles are present in first sample
                     let mut which_are_present = context.alleles_present_in_sample(sample_idx_1);
-                    if !which_are_present.iter().any(|val| *val) {
-                        // No alleles, reference or variant were found so we default to reference
-                        which_are_present[0] = true;
-                    }
+
                     present_alleles.push(which_are_present);
+                }
+
+                if !present_alleles[sample_idx_1].iter().any(|val| *val) {
+                    continue // nothing present here
                 }
 
 
@@ -97,13 +98,12 @@ impl ANICalculator {
                         consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_2).unwrap_or_default());
                         // which alleles are present in first sample
                         let mut which_are_present = context.alleles_present_in_sample(sample_idx_2);
-                        if !which_are_present.iter().any(|val| *val) {
-                            // No alleles, reference or variant were found so we default to reference
-                            which_are_present[0] = true;
-                        }
                         present_alleles.push(which_are_present);
                     }
 
+                    if !present_alleles[sample_idx_2].iter().any(|val| *val) {
+                        continue // nothing present here
+                    }
 
                     if sample_idx_1 != sample_idx_2 {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
