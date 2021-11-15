@@ -769,7 +769,7 @@ impl AlignmentUtils {
         let mut bases_start = None;
         let mut bases_stop = None;
         let mut done = false;
-
+        println!("DEBUG: ref start {} ref stop {} base start {} cigar {:?}", ref_start, ref_end, bases_start_on_ref, &bases_to_ref_cigar);
         let mut iii = 0;
         while iii < bases_to_ref_cigar.0.len() && !done {
             let ce = &bases_to_ref_cigar.0[iii];
@@ -787,6 +787,7 @@ impl AlignmentUtils {
                             done = true;
                             break;
                         }
+                        println!("DEBUG: ref pos {} bases {} start {} end {}", ref_pos, bases_pos, ref_start, ref_end);
                         ref_pos += 1;
                         bases_pos += 1;
                     }
