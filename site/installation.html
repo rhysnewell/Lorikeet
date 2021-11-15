@@ -11,16 +11,16 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Source+Sans+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
 
-    <link rel="stylesheet" type="text/css" href="/assets/normalize.css?v=1636976639" media="screen" />
-    <link rel="stylesheet" type="text/css" href="/assets/doctave-style.css?v=1636976639" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/normalize.css?v=1637013275" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/doctave-style.css?v=1637013275" media="screen" />
 
-    <link rel="stylesheet" type="text/css" href="/assets/prism-ghcolors.css?v=1636976639" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/prism-ghcolors.css?v=1637013275" media="screen" />
 
     
 
     <script>
-        var DOCTAVE_TIMESTAMP = "1636976639";
-        var BASE_PATH = "/";
+        var DOCTAVE_TIMESTAMP = "1637013275";
+        var BASE_PATH = "/Lorikeet/";
         var color = localStorage.getItem('doctave-color')
 
         if (color === 'dark') {
@@ -45,7 +45,7 @@
             <div class='logo'>
                 
                 <h2 class='project-name'>
-                    <a href="/">
+                    <a href="/Lorikeet/">
                         Lorikeet
                     </a>
                 </h2>
@@ -66,30 +66,30 @@
                 <nav class='site-nav'>
     <ul>
         
-            <li><a class="active" href="/installation">Installation</a></li>
+            <li><a class="active" href="/Lorikeet/installation">Installation</a></li>
             
         
-            <li><a href="/usage">Usage</a></li>
+            <li><a href="/Lorikeet/usage">Usage</a></li>
             
                 <ul>
     
-        <li><a href="/usage/variant_calling">Call</a></li>
+        <li><a href="/Lorikeet/usage/variant_calling">Call</a></li>
         
     
-        <li><a href="/usage/genotyping">Genotype</a></li>
+        <li><a href="/Lorikeet/usage/genotyping">Genotype</a></li>
         
     
 </ul>
 
             
         
-            <li><a href="/concepts">Concepts</a></li>
+            <li><a href="/Lorikeet/concepts">Concepts</a></li>
             
         
-            <li><a href="/examples">Examples</a></li>
+            <li><a href="/Lorikeet/examples">Examples</a></li>
             
         
-            <li><a href="/comparisons">Comparisons</a></li>
+            <li><a href="/Lorikeet/comparisons">Comparisons</a></li>
             
         
     </ul>
@@ -111,7 +111,7 @@
 <h4 id="recommended-3">Recommended</h4>
 <p>You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
 conda environment using the lorikeet.yml.</p>
-<pre><code>git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+<pre><code>GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml;
 conda activate lorikeet
@@ -127,7 +127,7 @@ cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 paths in the your conda environment if they can't properly be found on your system. This method also assumes you have 
 previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
 versions need to be used for installation.</p>
-<pre><code>git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+<pre><code>GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml; 
 conda activate lorikeet;
@@ -137,7 +137,7 @@ lorikeet genotype -h
 </code></pre>
 <p>Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
 If you see something like this you may be behind a proxy that blocks access to standard git:// port (9418).</p>
-<pre><code>$ git clone --recursive git://github.com/rhysnewell/Lorikeet.git
+<pre><code>$ GIT_LFS_SKIP_SMUDGE=1 git clone --recursive git://github.com/rhysnewell/Lorikeet.git
 Cloning into 'Lorikeet'...
 fatal: Unable to look up github.com (port 9418) (Name or service not known)
 </code></pre>
@@ -200,10 +200,10 @@ conda activate lorikeet
             </div>
         </div>
     </div>
-    <script type="text/javascript" src="/assets/mermaid.js?v=1636976639"></script>
-    <script type="text/javascript" src="/assets/elasticlunr.js?v=1636976639"></script>
-    <script type="text/javascript" src="/assets/doctave-app.js?v=1636976639"></script>
-    <script type="text/javascript" src="/assets/prism.js?v=1636976639"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/mermaid.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/elasticlunr.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/doctave-app.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/prism.js?v=1637013275"></script>
 </body>
 
 </html>
