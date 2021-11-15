@@ -1,6 +1,6 @@
 ---
 title: "Lorikeet"
-
+base_path: /Lorikeet
 navigation:
   - path: docs/installation.md
   - path: docs/usage

@@ -75,7 +75,7 @@ impl ANICalculator {
 
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
-            if vc.log10_p_error <= -10.0 { // don't consider poor quality variant sites
+            if context.log10_p_error <= -10.0 { // don't consider poor quality variant sites
                 for sample_idx_1 in 0..n_samples {
 
                     if consenus_allele_indices.len() == sample_idx_1 {
