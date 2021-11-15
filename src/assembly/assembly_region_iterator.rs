@@ -70,7 +70,7 @@ impl<'a> AssemblyRegionIterator<'a> {
 
                 bam_generated.fetch((
                     region.get_contig() as i32,
-                    region.get_padded_span().start as i64, // fetch is possibly 1-based
+                    region.get_padded_span().start as i64,
                     region.get_padded_span().end as i64,
                 ));
 
