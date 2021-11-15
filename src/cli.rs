@@ -64,7 +64,7 @@ Variant calling options (Basic):
                                                 assembly region across all samples. Larger numbers
                                                 increase run time. If the depth of an assembly region
                                                 exceeds this value, then the reads will be filtered
-                                                by mean base quality. [default: 1000]
+                                                by mean base quality. [default: 5000]
   --min-contig-size                             The minimum contig size to call variants on. Smaller
                                                 contigs can often contain highly variable regions that
                                                 mostly represent noise. Call variants on them can often
@@ -880,7 +880,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .default_value("5000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -1501,7 +1501,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .default_value("5000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2123,7 +2123,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .default_value("5000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2741,7 +2741,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .default_value("5000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")

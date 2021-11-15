@@ -6,7 +6,7 @@ use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use rayon::prelude::*;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::CigarString;
-use smith_waterman::bindings::SWOverhangStrategy;
+use gkl::smithwaterman::OverhangStrategy;
 use smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use std::cmp::Ordering;
 use std::fmt::Debug;
@@ -291,7 +291,7 @@ impl Path {
         return CigarUtils::calculate_cigar(
             ref_seq,
             &self.get_bases(graph),
-            SWOverhangStrategy::SoftClip,
+            OverhangStrategy::SoftClip,
             &*NEW_SW_PARAMETERS,
         )
         .unwrap();

@@ -282,6 +282,7 @@ impl PairHMM {
             self.hap_start_index
         };
 
+
         // Pre-compute the difference between the current haplotype and the next one to be run
         // Looking ahead is necessary for the ArrayLoglessPairHMM implementation
         let next_hap_start_index = match next_haplotype_bases {

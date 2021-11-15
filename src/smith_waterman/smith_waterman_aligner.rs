@@ -1,16 +1,17 @@
 use ndarray::{Array2, Axis};
 use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use smith_waterman::bindings::*;
+// use smith_waterman::bindings::*;
 use std::cmp::max;
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 
 lazy_static! {
-    pub static ref ORIGINAL_DEFAULT: SWParameters = SWParameters::new(3, -1, -4, -3);
-    pub static ref STANDARD_NGS: SWParameters = SWParameters::new(25, -50, -110, -6);
+    pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
+    pub static ref STANDARD_NGS: Parameters = Parameters::new(25, -50, -110, -6);
         // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    pub static ref NEW_SW_PARAMETERS: SWParameters = SWParameters::new(200, -150, -260, -11);
+    pub static ref NEW_SW_PARAMETERS: Parameters = Parameters::new(200, -150, -260, -11);
     // FROM GATK COMMENTS:
     // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
     // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
@@ -18,7 +19,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(10, -15, -30, -5);
+    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Parameters = Parameters::new(10, -15, -30, -5);
 }
 
 pub struct SmithWatermanAligner {}
@@ -43,8 +44,8 @@ impl SmithWatermanAligner {
     pub fn align(
         reference: &[u8],
         alternate: &[u8],
-        parameters: &SWParameters,
-        overhang_strategy: SWOverhangStrategy,
+        parameters: &Parameters,
+        overhang_strategy: OverhangStrategy,
     ) -> SmithWatermanAlignmentResult {
         assert!(
             reference.len() > 0 && alternate.len() > 0,
@@ -52,8 +53,8 @@ impl SmithWatermanAligner {
         );
 
         let mut match_index = None;
-        if overhang_strategy == SWOverhangStrategy::SoftClip
-            || overhang_strategy == SWOverhangStrategy::Ignore
+        if overhang_strategy == OverhangStrategy::SoftClip
+            || overhang_strategy == OverhangStrategy::Ignore
         {
             // Use a substring search to find an exact match of the alternate in the reference
             // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
@@ -105,8 +106,8 @@ impl SmithWatermanAligner {
         alternate: &[u8],
         sw: &mut Array2<i32>,
         btrack: &mut Array2<i32>,
-        overhang_strategy: &SWOverhangStrategy,
-        parameters: &SWParameters,
+        overhang_strategy: &OverhangStrategy,
+        parameters: &Parameters,
     ) {
         if reference.len() == 0 || alternate.len() == 0 {
             panic!("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
@@ -122,8 +123,8 @@ impl SmithWatermanAligner {
         let mut gap_size_h = vec![0; nrow + 1];
 
         // we need to initialize the SW matrix with gap penalties if we want to keep track of indels at the edges of alignments
-        if overhang_strategy == &SWOverhangStrategy::Indel
-            || overhang_strategy == &SWOverhangStrategy::LeadingIndel
+        if overhang_strategy == &OverhangStrategy::InDel
+            || overhang_strategy == &OverhangStrategy::LeadingInDel
         {
             let current_value = parameters.gap_open_penalty;
 
@@ -249,7 +250,7 @@ impl SmithWatermanAligner {
     fn calculate_cigar(
         sw: &Array2<i32>,
         btrack: &Array2<i32>,
-        overhang_strategy: &SWOverhangStrategy,
+        overhang_strategy: &OverhangStrategy,
     ) -> SmithWatermanAlignmentResult {
         // p holds the position we start backtracking from; we will be assembling a cigar in the backwards order
         let mut p1 = 0;
@@ -262,7 +263,7 @@ impl SmithWatermanAligner {
         let mut segment_length = 0; // length of the segment (continuous matches, insertions or deletions)
 
         // if we want to consider overhangs as legitimate operators, then just start from the corner of the matrix
-        if overhang_strategy == &SWOverhangStrategy::Indel {
+        if overhang_strategy == &OverhangStrategy::InDel {
             p1 = ref_length;
             p2 = alt_length;
         } else {
@@ -281,7 +282,7 @@ impl SmithWatermanAligner {
             }
 
             // now look for a larger score on the bottom-most row
-            if overhang_strategy != &SWOverhangStrategy::LeadingIndel {
+            if overhang_strategy != &OverhangStrategy::LeadingInDel {
                 let bottom_row = sw.row(ref_length);
                 for j in 1..bottom_row.len() {
                     let cur_score = bottom_row[j];
@@ -300,7 +301,7 @@ impl SmithWatermanAligner {
         }
 
         let mut lce = Vec::new();
-        if segment_length > 0 && overhang_strategy == &SWOverhangStrategy::SoftClip {
+        if segment_length > 0 && overhang_strategy == &OverhangStrategy::SoftClip {
             lce.push(Cigar::SoftClip(segment_length as u32));
             segment_length = 0;
         };
@@ -370,13 +371,13 @@ impl SmithWatermanAligner {
         // DO_SOFTCLIP is false or 2S3M if DO_SOFTCLIP is true.
         // The consumers need to check for the alignment offset and deal with it properly.
         let mut alignment_offset = 0;
-        if overhang_strategy == &SWOverhangStrategy::SoftClip {
+        if overhang_strategy == &OverhangStrategy::SoftClip {
             lce.push(Self::make_element(state, segment_length as u32));
             if p2 > 0 {
                 lce.push(Self::make_element(State::Clip, p2 as u32));
             }
             alignment_offset = p1;
-        } else if overhang_strategy == &SWOverhangStrategy::Ignore {
+        } else if overhang_strategy == &OverhangStrategy::Ignore {
             lce.push(Self::make_element(state, (segment_length + p2) as u32));
             alignment_offset = p1 - p2;
         } else {

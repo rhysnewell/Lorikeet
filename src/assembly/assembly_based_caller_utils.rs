@@ -30,7 +30,8 @@ use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+// use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -473,7 +474,7 @@ impl AssemblyBasedCallerUtils {
                         let cigar = CigarUtils::calculate_cigar(
                             ref_haplotype.get_bases(),
                             inserted_haplotype.get_bases(),
-                            SWOverhangStrategy::Indel,
+                            OverhangStrategy::InDel,
                             &haplotype_to_reference_sw_parameters,
                         );
                         inserted_haplotype.set_cigar(cigar.unwrap().0);

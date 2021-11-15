@@ -1381,7 +1381,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             ref_bases.as_bytes(),
             alt_bases.as_bytes(),
             dangling_tail_sw_parameters,
-            SWOverhangStrategy::LeadingIndel,
+            OverhangStrategy::LeadingInDel,
         );
 
         return Some(DanglingChainMergeHelper::new(
@@ -1443,7 +1443,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             ref_bases.as_bytes(),
             alt_bases.as_bytes(),
             dangling_head_sw_parameters,
-            SWOverhangStrategy::LeadingIndel,
+            OverhangStrategy::LeadingInDel,
         );
 
         return Some(DanglingChainMergeHelper::new(

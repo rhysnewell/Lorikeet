@@ -24,7 +24,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
@@ -160,8 +160,8 @@ impl ReadThreadingAssembler {
         ref_loc: SimpleInterval,
         read_error_corrector: Option<NearbyKmerErrorCorrector>,
         sample_names: &'b Vec<String>,
-        dangling_end_sw_parameters: SWParameters,
-        reference_to_haplotype_sw_parameters: SWParameters,
+        dangling_end_sw_parameters: Parameters,
+        reference_to_haplotype_sw_parameters: Parameters,
     ) -> AssemblyResultSet<ReadThreadingGraph> {
         assert!(
             full_reference_with_padding.len() == ref_loc.size(),
@@ -247,8 +247,8 @@ impl ReadThreadingAssembler {
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
-        dangling_end_sw_parameters: &SWParameters,
-        reference_to_haplotype_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
+        reference_to_haplotype_sw_parameters: &Parameters,
     ) {
         // create the graphs by calling our subclass assemble method
         self.assemble(
@@ -297,7 +297,7 @@ impl ReadThreadingAssembler {
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
         sample_names: &'b Vec<String>,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
         // first, try using the requested kmer sizes
         let mut results = self
@@ -373,8 +373,8 @@ impl ReadThreadingAssembler {
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b Vec<String>,
-        dangling_end_sw_parameters: &SWParameters,
-        reference_to_haplotype_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
+        reference_to_haplotype_sw_parameters: &Parameters,
     ) {
         let mut saved_assembly_results = Vec::new();
 
@@ -609,7 +609,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &'b Haplotype<SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
-        haplotype_to_reference_sw_parameters: &SWParameters,
+        haplotype_to_reference_sw_parameters: &Parameters,
         result_set: &Arc<Mutex<AssemblyResultSet<A>>>,
     ) {
         // add the reference haplotype separately from all the others to ensure
@@ -682,7 +682,7 @@ impl ReadThreadingAssembler {
                     let cigar = CigarUtils::calculate_cigar(
                         ref_haplotype.get_bases(),
                         h.get_bases(),
-                        SWOverhangStrategy::SoftClip,
+                        OverhangStrategy::SoftClip,
                         haplotype_to_reference_sw_parameters,
                     );
 
@@ -721,7 +721,7 @@ impl ReadThreadingAssembler {
                                 let cigar_with_indel_strategy = CigarUtils::calculate_cigar(
                                     ref_haplotype.get_bases(),
                                     h.get_bases(),
-                                    SWOverhangStrategy::Indel,
+                                    OverhangStrategy::InDel,
                                     haplotype_to_reference_sw_parameters,
                                 );
 
@@ -822,7 +822,7 @@ impl ReadThreadingAssembler {
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
         sample_names: &'b Vec<String>,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     ) -> Option<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
@@ -950,7 +950,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &Haplotype<SimpleInterval>,
         kmer_size: usize,
         mut rt_graph: A,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     ) -> AssemblyResult<SimpleInterval, A> {
         if !self.prune_before_cycle_counting {
             self.chain_pruner
