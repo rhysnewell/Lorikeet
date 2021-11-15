@@ -26,6 +26,8 @@ Other options:
 Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
 ```
 
+# Quick Start
+
 As a simple example, imagine we have a single sample where the reads have previously mapped to our metagenome or set
 of references using [CoverM](https://github.com/wwood/coverm) or Lorikeet:
 
@@ -43,4 +45,19 @@ Additionally you can provide both long and short read samples to Lorikeet with e
 
 ```
 lorikeet call -r input_genomes/*.fna -1 forward_reads/*_1.fastq -2 reverse_reads/*_2.fastq -l longreads/*.bam --parallel-genome 8 --threads 24
+```
+
+# Output
+
+Lorikeet will create an output for each input reference genome within the supplied output folder:
+```
+lorikeet_output --
+                 | - Genome1
+                 | - Genome2
+                ...
+                 | - GenomeN --
+                              |
+                              | - VCF
+                              | - Consensus, Population, Subpopulation ANI
+                              | - Optional Reconstructed Strain Genomes and Strain Relative Abundances    
 ```

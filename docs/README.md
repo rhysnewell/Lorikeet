@@ -17,37 +17,12 @@ Lorikeet has a variety of subcommands with the main being `call` and `genotype`.
 of input genomes and samples and perform robust variant calling and ANI calculations. The `genotype` algorithm takes this
 a step further and attempts to reconstruct strain haplotypes from the called variants and return complete strain genomes.
 
-## Let's add another page
+## Additional resources
 
-All of your documentation lives under the `docs` directory. You can start adding markdown files, and
-when running the `serve` command you will see changes automatically updated in the browser.
+The variant calling algorithm is basically a one-to-one re-implementation of the algorithm used in GATK HaplotypeCaller.
+As such, many of the FAQs and documentation for HaplotypeCaller can be useful in understanding how Lorikeet actually
+finds variants. An overview of the HaplotypeCaller pipeline can be found here: [HaplotypeCaller Docs](https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller).
 
-Try it - add a new markdown file under `docs`, paste the content below, and watch what happens.
-
-```markdown
----
-title: Another page
----
-
-Adding new pages is that simple
-===============================
-
-```
-
-When you hit save, you should see the left side navigation has updated, and a link to your new page
-shows up.
-
-## What next?
-
-There are plenty of resources to learn more about Doctave and how to use it effectively. Here are
-some articles to get you started:
-
-* [The official tutorial](https://cli.doctave.com/tutorial)
-* [Deployment instructions](https://cli.doctave.com/deployment)
-* [Doctave docs](https://cli.doctave.com/)
-
-## Where can I get help?
-
-Feel free to open issues on the [Github Repo](https://github.com/Doctave/doctave), especially if
-you did not find an answer to a question in our documentation. You can also reach out directly to
-the maintainer via [Twitter](https://twitter.com/NiklasBegley) or email at nik@doctave.com.
+Lorikeet makes use of a couple new and daunting algorithms. UMAP in particular is an amazing algorithm but might be cause 
+for concern since it is difficult to understand how it works and what it is doing. So please look over this amazing article 
+by Andy Coenen and Adam Pearce: [Understanding UMAP](https://pair-code.github.io/understanding-umap/)

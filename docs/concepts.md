@@ -88,14 +88,44 @@ Subpopulation ANI, `subpopANI`, also measures changes in the shared allelic comp
 `subpopANI` deviates away from 1.0 if those two communities do not share all the exact same alleles at a given position.
 As such, it is much more sensitive changes in positions where more than two alleles are present in the community.
 
-# Microdiversity
+As an example, please refer to the following table displaying when each ANI measurement would deviated away from 1.0:
+![](/figures/ani_table.png)
 
 # Strains
 
+It has been said that "there is no universally accepted definition for the terms 'strain', 'variant', and 'isolate' in 
+the virology community, and most virologists simply copy the usage of terms from others".[1](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3535543/)
+
+For the purposes of Lorikeet, A strain is a genetic variant or subtype of a microorganism (e.g., a virus, bacterium or fungus).
+Within a microbial community, multiple strains of the same species can be present and can be measured by analyzing what variants
+are present in the community when compared to some reference genome. Ideally, this reference genome has been created from the
+microbial community being examined but this is not always possible.
+
 ## Variant
 
-### SNP
+Variants are the main tool with which we have to observe strains. They represent changes in our community compared to some
+reference genome. Variant can come in a variety of forms but the main three that Lorikeet identifies are:
 
-### INDEL
+### SNPs
+
+Single nucleotide polymorphisms (SNPs) represent single point changes against a reference. For example, the reference might
+contain an "A" at position 100 on contig 1, whilst a SNP at this position might suggest that a "G" is instead present here.
+SNPs are common and represent the vast majority of variants found within a community. If a SNP occurs within a coding region
+then it can be classified as either synonymous (No change in the encoded protein) or non-synonymous (changes the encoded protein).
+
+### INDELs
+
+Insertions and Deletions (INDELs) represent a much more destructive form of variant. Insertions represent positions where bases
+ have been "inserted" compared to the reference, while deletion represent "deleted" bases. INDELs can be small (only a couple of bases)
+or large (100s of bases), but even small INDELs can completely destroy a coding region.
+
+### MNVs
+
+Multinucleotide variants (MNVs) sit somewhere between a SNP and an INDEL. They represent multiple nucleotide changes that are
+consistently seen with each other. MNVs can be a short chain of SNPs, or SNPs and INDELs.
 
 ## Variant Group
+
+A variant group is a set of variants that appear to cluster together across samples. This suggests that these variants
+are typically seen together in the same organism. A variant group does not usually represent a strain, as strains are built from
+multiple variant groups.

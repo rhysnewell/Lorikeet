@@ -5,52 +5,32 @@ title: Examples
 Examples
 ========
 
-This page shows some of the special features that come out of the box in Doctave. You can view how
-this file is constructed by opening the `examples.md` file in your `docs` folder.
+## Forcing Variant Calls
 
-## Diagrams
+Through use of the `-f, --features-vcf` argument it is possible to provide lorikeet with a list of known variants or variants of concern that will be forcibly called by
+the algorithm if there is any activity occurring at that genomic location in the provided samples. It is possible that lorikeet
+will also call any potential variation events surrounding a given location as well. This can be useful if you are more 
+interested in the activity occurring around some given locations rather than specific variation events.
 
-Doctave comes with Mermaid.js support, which means you can create intricate diagrams directly in
-your Markdown files:
-
-```mermaid
-graph TD;
-    A-->B;
-    A-->C;
-    B-->D;
-    C-->D;
-
+The list of variants must be provided in VCF format with some caveats on how the variant locations are written. E.g.
+```
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##source=lorikeet-v0.6.0
+##contig=<ID=random10000~random_sequence_length_10000_1,length=10000>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER
+random10000~random_sequence_length_10000_1	223	.	G	C	1445.63	.
+random10000~random_sequence_length_10000_1	435	.	G	C	1941.63	.
+random10000~random_sequence_length_10000_1	949	.	T	A	383.629	.
 ```
 
-You can read more about Mermaid JS in the [Doctave
-docs](https://cli.doctave.com/features/mermaid-js) or by going through the Mermaid JS
-[tutorials](https://mermaid-js.github.io/mermaid/diagrams-and-syntax-and-examples/n00b-syntaxReference.html).
-
-## Syntax highlighting
-
-Syntax highlighting is provided by [Prism](https://prismjs.com/) and Doctave supports most popular
-languages out of the box.
-
-```rust
-impl Watcher {
-    fn notify<S: Into<String>>(&self, path: PathBuf, msg: S) -> bool {
-        self.channel.send((path, msg.into())).is_ok()
-    }
-}
+Note that you need to specific both the genome name and contig name in the `CHROM` column separated by the `~` character
+ e.g. `random10000~random_sequence_length_10000_1`. Additionally, the standard `FORMAT` and `INFO` columns are optional when
+ provding a VCF file.
+ 
+Finally, the provided VCF file must be compressed using `bgzip` and indexed using `bcftools index` e.g.
 ```
-
-You can refer to the Doctave [Markdown reference](https://cli.doctave.com/features/markdown) to see
-how to use syntax highlighting.
-
-## Search
-
-Doctave automatically indexes all your pages and allows you to search for them without any 3rd party
-services. You can see the search bar at the top of the page - hit the `s` key, and you can start
-searching all the content of the site.
-
-Note - the results are keyboard-friendly. Use either the tab key or arrow keys to navigate them.
-
-## Dark mode
-
-You can turn on dark mode by clicking on the button on the left side of the page - the one with the
-moon icon. Your browser will remember your selection for each Doctave site.
+bgzip -c random10000.vcf > random10000.vcf;
+bcftools index random10000.vcf.gz;
+lorikeet call -r random10000.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam -f random10000.vcf.gz
+```
