@@ -9,7 +9,7 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use smith_waterman::bindings::SWParameters;
+use gkl::smithwaterman::Parameters;
 use std::fmt::Debug;
 use utils::simple_interval::Locatable;
 
@@ -222,7 +222,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     );
 
     /**
@@ -238,7 +238,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     );
 
     /**
@@ -256,7 +256,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_tail_sw_parameters: &SWParameters,
+        dangling_tail_sw_parameters: &Parameters,
     ) -> usize;
 
     /**
@@ -275,7 +275,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_head_sw_parameters: &SWParameters,
+        dangling_head_sw_parameters: &Parameters,
     ) -> usize;
 
     /**
@@ -376,7 +376,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_tail_sw_parameters: &SWParameters,
+        dangling_tail_sw_parameters: &Parameters,
     ) -> Option<DanglingChainMergeHelper>;
 
     /**
@@ -395,7 +395,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_head_sw_parameters: &SWParameters,
+        dangling_head_sw_parameters: &Parameters,
     ) -> Option<DanglingChainMergeHelper>;
 
     /**

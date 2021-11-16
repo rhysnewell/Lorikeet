@@ -119,6 +119,8 @@ Variant calling options (Advanced):
   --max-mnp-distance                            Two or more phased substitutions separated by
                                                 this distance or less are merged into MNPs. [default: 0]
   --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
+  --disable-avx                                 Disable the use of the GKL-rs AVX acceleration components
+                                                for PairHMM and Smith-Waterman calculations.
   --limiting-interval                           Mainly used for debugging purposes. Only call variants
                                                 within this given span on all contigs. E.g. providing
                                                 '1000-2000' would only call variants between the 1000
@@ -1031,6 +1033,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -1663,6 +1666,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -2282,6 +2286,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -2895,6 +2900,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))

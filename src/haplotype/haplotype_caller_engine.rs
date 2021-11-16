@@ -47,19 +47,19 @@ use utils::utils::clean_sample_name;
 use std::cmp::min;
 
 #[derive(Debug, Clone)]
-pub struct HaplotypeCallerEngine {
+pub struct HaplotypeCallerEngine<'c> {
     active_region_evaluation_genotyper_engine: GenotypingEngine,
     genotyping_engine: HaplotypeCallerGenotypingEngine,
     genotype_prior_calculator: GenotypePriorCalculator,
     assembly_region_trimmer: AssemblyRegionTrimmer,
     assembly_engine: ReadThreadingAssembler,
-    likelihood_calculation_engine: PairHMMLikelihoodCalculationEngine,
+    likelihood_calculation_engine: PairHMMLikelihoodCalculationEngine<'c>,
     ref_idx: usize,
     stand_min_conf: f64,
     mapping_quality_threshold: u8,
 }
 
-impl HaplotypeCallerEngine {
+impl<'c> HaplotypeCallerEngine<'c> {
     pub const MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION: u8 = 6;
     /**
      * Minimum (exclusive) average number of high quality bases per soft-clip to consider that a set of soft-clips is a
@@ -104,7 +104,7 @@ impl HaplotypeCallerEngine {
         samples: Vec<String>,
         do_allele_specific_calcs: bool,
         sample_ploidy: usize,
-    ) -> HaplotypeCallerEngine {
+    ) -> HaplotypeCallerEngine<'c> {
         let mut assembly_engine = ReadThreadingAssembler::new(
             args.value_of("max-allowed-path-for-read-threading-assembler")
                 .unwrap()
@@ -249,7 +249,7 @@ impl HaplotypeCallerEngine {
         flag_filters: &FlagFilter,
         tree: &Arc<Mutex<Vec<&Elem>>>,
         reference_reader: &mut ReferenceReader,
-    ) -> HashMap<usize, BandPassActivityProfile> {
+    ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
         // minimum PHRED base quality
         let bq = m
             .value_of("min-base-quality")
@@ -629,10 +629,10 @@ impl HaplotypeCallerEngine {
         ref_idx: usize,
         sample_names: &Vec<String>,
         min_contig_length: u64,
-    ) -> HashMap<usize, BandPassActivityProfile> {
-        if genotype_likelihoods.len() == 1 {
+    ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
+        if genotype_likelihoods.len() == 0 {
             // Faster implementation for single sample analysis
-            let per_contig_activity_profiles: HashMap<usize, BandPassActivityProfile> =
+            let per_contig_activity_profiles: HashMap<usize, Vec<BandPassActivityProfile>> =
                 genotype_likelihoods.into_iter().next().unwrap()
                     .into_par_iter()
                     .map(|(tid, vec_of_ref_vs_any_result)| {
@@ -677,9 +677,9 @@ impl HaplotypeCallerEngine {
                             },
                         );
 
-                        (tid, activity_profile)
+                        (tid, vec![activity_profile])
                     })
-                    .collect::<HashMap<usize, BandPassActivityProfile>>();
+                    .collect::<HashMap<usize, Vec<BandPassActivityProfile>>>();
 
             return per_contig_activity_profiles;
         } else {
@@ -697,8 +697,8 @@ impl HaplotypeCallerEngine {
                     debug!("Created bandpass profile");
 
 
-                    let activity_profile = BandPassActivityProfile::from_band_passes(
-                        (0..(*length as usize)).into_par_iter().chunks(100000).map(|positions| {
+                    let activity_profile =
+                        (0..(*length as usize)).into_par_iter().chunks(50000).map(|positions| {
                             let mut active_region_evaluation_genotyper_engine =
                                 self.active_region_evaluation_genotyper_engine.clone();
                             let mut activity_profile = BandPassActivityProfile::new(
@@ -758,12 +758,12 @@ impl HaplotypeCallerEngine {
                                 activity_profile.add(activity_profile_state);
                             }
                             activity_profile
-                        }).collect::<Vec<BandPassActivityProfile>>());
+                        }).collect::<Vec<BandPassActivityProfile>>();
 
 
                     debug!("Finished {} of length {}", tid, length);
                     (*tid, activity_profile)
-                }).collect::<HashMap<usize, BandPassActivityProfile>>();
+                }).collect::<HashMap<usize, Vec<BandPassActivityProfile>>>();
             return per_contig_activity_profiles;
         }
     }

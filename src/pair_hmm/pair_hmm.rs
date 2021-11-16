@@ -12,6 +12,7 @@ use haplotype::haplotype::Haplotype;
 use utils::simple_interval::SimpleInterval;
 use std::collections::HashMap;
 use gkl::pairhmm::forward;
+use rayon::prelude::*;
 
 lazy_static! {
     static ref INITIAL_CONDITION: f64 = 2.0_f64.powf(1020.0);
@@ -62,10 +63,10 @@ impl<'a> PairHMM<'a> {
      * @throws IllegalArgumentException if haplotypeMaxLength is less than or equal to zero
      */
     pub fn initialize(
-        haplotypes: &Vec<Haplotype<SimpleInterval>>,
+        haplotypes: &'a Vec<Haplotype<SimpleInterval>>,
         per_sample_read_list: &HashMap<usize, Vec<BirdToolRead>>,
         avx_mode: AVXMode
-    ) -> PairHMM {
+    ) -> PairHMM<'a> {
         match avx_mode {
             AVXMode::AVX => {
                 let num_haplotypes = haplotypes.len();
@@ -75,8 +76,9 @@ impl<'a> PairHMM<'a> {
 
                 for (idx, curr_haplotype) in haplotypes.into_iter().enumerate() {
                     m_haplotype_data_array.push(curr_haplotype.get_bases());
-                    haplotype_to_haplotype_list_index_map.insert(curr_haplotype, idx)
+                    haplotype_to_haplotype_list_index_map.insert(curr_haplotype, idx);
                 }
+                // println!("Haplotye data {:?}", &m_haplotype_data_array);
 
                 PairHMM {
                     max_read_length: 0,
@@ -106,55 +108,60 @@ impl<'a> PairHMM<'a> {
                 }
             },
             _ => {
-                let read_max_length = per_sample_read_list
+                let max_read_length = per_sample_read_list
                     .values()
                     .flat_map(|e| e.iter())
                     .map(|e| e.len())
                     .max()
                     .unwrap_or(0);
-                let max_haplotype_length: usize = haplotypes
+                let haplotype_max_length: usize = haplotypes
                     .iter()
                     .map(|hap| hap.allele.len())
                     .max()
                     .unwrap_or(0);
 
-                // M, X, and Y arrays are of size read and haplotype + 1 because of an extra column for
-                // initial conditions and + 1 to consider the final base in a non-global alignment
-                let padded_max_read_length = max_read_length + 1;
-                let padded_max_haplotype_length = haplotype_max_length + 1;
-
-                let mut initialized = true;
-                if max_read_length == 0 && haplotype_max_length == 0 {
-                    initialized = false;
-                }
-
-                PairHMM {
-                    max_read_length,
-                    max_haplotype_length: haplotype_max_length,
-                    padded_max_read_length,
-                    padded_max_haplotype_length,
-                    match_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
-                    insertion_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
-                    deletion_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
-                    transition: PairHMMModel::create_transition_matrix(max_read_length),
-                    prior: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
-                    initialized,
-                    do_not_use_tristate_correction: false,
-                    m_log_likelihood_array: Vec::new(),
-                    m_haplotype_data_array: Vec::new(),
-                    haplotype_to_haplotype_list_index_map: HashMap::new(),
-                    do_profiling: true,
-                    previous_haplotype_length: None,
-                    constants_are_initialized: false,
-                    model: PairHMMModel::new(),
-                    padded_haplotype_length: None,
-                    padded_read_length: None,
-                    hap_start_index: None,
-                    do_exact_log10: false,
-                    logless: true,
-                    avx_mode
-                }
+                Self::quick_initialize(max_read_length, haplotype_max_length)
             }
+        }
+    }
+
+    /// Ease of use function that quickly initializes a non AVX accelerated PairHMM
+    pub fn quick_initialize(max_read_length: usize, haplotype_max_length: usize) -> Self {
+        // M, X, and Y arrays are of size read and haplotype + 1 because of an extra column for
+        // initial conditions and + 1 to consider the final base in a non-global alignment
+        let padded_max_read_length = max_read_length + 1;
+        let padded_max_haplotype_length = haplotype_max_length + 1;
+
+        let mut initialized = true;
+        if max_read_length == 0 && haplotype_max_length == 0 {
+            initialized = false;
+        }
+
+        PairHMM {
+            max_read_length,
+            max_haplotype_length: haplotype_max_length,
+            padded_max_read_length,
+            padded_max_haplotype_length,
+            match_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
+            insertion_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
+            deletion_matrix: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
+            transition: PairHMMModel::create_transition_matrix(max_read_length),
+            prior: Array2::zeros((padded_max_read_length, padded_max_haplotype_length)),
+            initialized,
+            do_not_use_tristate_correction: false,
+            m_log_likelihood_array: Vec::new(),
+            m_haplotype_data_array: Vec::new(),
+            haplotype_to_haplotype_list_index_map: HashMap::new(),
+            do_profiling: true,
+            previous_haplotype_length: None,
+            constants_are_initialized: false,
+            model: PairHMMModel::new(),
+            padded_haplotype_length: None,
+            padded_read_length: None,
+            hap_start_index: None,
+            do_exact_log10: false,
+            logless: true,
+            avx_mode: AVXMode::None
         }
     }
 
@@ -209,10 +216,10 @@ impl<'a> PairHMM<'a> {
      * @param logLikelihoods where to store the log likelihoods where position [a][r] is reserved for the log likelihood of {@code reads[r]}
      *             conditional to {@code alleles[a]}.
      */
-    pub fn compute_log10_likelihoods<A: Allele>(
+    pub fn compute_log10_likelihoods(
         &mut self,
         sample_index: usize,
-        allele_likelihoods: &mut AlleleLikelihoods<A>,
+        allele_likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
         processed_reads: Vec<BirdToolRead>,
         input_score_imputator: &PairHMMInputScoreImputator,
     ) {
@@ -236,21 +243,25 @@ impl<'a> PairHMM<'a> {
                         )
                     }
 
+                    // println!("Read data holders {:?}", &read_data_array);
+
                     // self.m_log_likelihood_array = vec![0.0; read_list_size * num_haplotypes];
                     self.compute_likelihoods(read_data_array);
 
-                    for read_index in 0..read_list_size {
-                        let mut hap_idx = 0;
-                        for allele in allele_likelihoods.alleles().list.iter() {
+                    let mut read_index = 0;
+                    for r in 0..read_list_size {
+                        for allele_index in 0..allele_likelihoods.number_of_alleles() {
                             //Since the order of haplotypes in the List<Haplotype> and alleleHaplotypeMap is different,
                             //get idx of current haplotype in the list and use this idx to get the right likelihoodValue
-                            let idx_inside_haplotype_list = self.haplotype_to_haplotype_list_index_map.get(allele).unwrap();
+                            let idx_inside_haplotype_list =
+                                self.haplotype_to_haplotype_list_index_map
+                                    .get(&allele_likelihoods.alleles.get_allele(allele_index)).unwrap();
                             allele_likelihoods
-                                .values_by_sample_index[sample_index][[hap_idx, read_index]] =
+                                .values_by_sample_index[sample_index][[allele_index, r]] =
                                 self.m_log_likelihood_array[read_index + *idx_inside_haplotype_list];
 
-                            hap_idx += 1;
                         }
+                        read_index += num_haplotypes;
                     }
                 },
                 _ => {
@@ -324,15 +335,22 @@ impl<'a> PairHMM<'a> {
             AVXMode::AVX => {
                 let avx_function = forward().unwrap();
                 self.m_log_likelihood_array = read_data_array.into_iter().flat_map(|read| {
-                    self.m_haplotype_data_array.iter().map(|hap_bases| {
+                    // let read = &read;
+                    let likelihoods = self.m_haplotype_data_array.iter().map(|hap_bases| {
+
+                        println!("hap {} read {}", std::str::from_utf8(hap_bases).unwrap(), std::str::from_utf8(read.read_bases).unwrap());
+                        println!("quals {:?} i {:?} c {:?}", read.read_quals, &read.insertion_gop, &read.overall_gcp);
                         avx_function(
                             hap_bases,
                             read.read_bases,
                             read.read_quals,
                             &read.insertion_gop,
                             &read.deletion_gop,
-                            &read.overall_gcp)
-                    }).collect::<Vec<f64>>()
+                            &read.overall_gcp
+                        )
+                    }).collect::<Vec<f64>>();
+                    println!("Likelihoods {:?}", &likelihoods);
+                    likelihoods
                 }).collect::<Vec<f64>>();
             },
             _ => {
@@ -686,6 +704,7 @@ impl<'a> PairHMM<'a> {
     }
 }
 
+#[derive(Debug)]
 struct ReadDataHolder<'a> {
     read_bases: &'a [u8],
     read_quals: &'a [u8],

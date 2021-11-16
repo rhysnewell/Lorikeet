@@ -15,9 +15,7 @@ use model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
 };
 use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    PCRErrorModel, PairHMMLikelihoodCalculationEngine,
-};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{PCRErrorModel, PairHMMLikelihoodCalculationEngine, AVXMode};
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
@@ -338,7 +336,7 @@ impl AssemblyBasedCallerUtils {
         assembly_region_start: usize,
         given_alleles: &Vec<VariantContext>,
         max_mnp_distance: usize,
-        haplotype_to_reference_sw_parameters: SWParameters,
+        haplotype_to_reference_sw_parameters: Parameters,
         ref_haplotype: &Haplotype<SimpleInterval>,
         assembly_result_set: &mut AssemblyResultSet<A>,
     ) {
@@ -868,7 +866,7 @@ impl AssemblyBasedCallerUtils {
     pub fn create_likelihood_calculation_engine(
         args: &clap::ArgMatches,
         handle_soft_clips: bool,
-    ) -> PairHMMLikelihoodCalculationEngine {
+    ) -> PairHMMLikelihoodCalculationEngine<'static> {
         //AlleleLikelihoods::normalizeLikelihoods uses std::f64::NEGATIVE_INFINITY as a flag to disable capping
         let log10_global_read_mismapping_rate = if args
             .value_of("phred-scaled-global-read-mismapping-rate")
@@ -910,6 +908,11 @@ impl AssemblyBasedCallerUtils {
             !args.is_present("disable-symmetric-hmm-normalizing"),
             args.is_present("disable-cap-base-qualities-to-map-quality"),
             handle_soft_clips,
+            if args.is_present("disable-avx") {
+                AVXMode::None
+            } else {
+                AVXMode::detect_mode()
+            }
         )
     }
 
