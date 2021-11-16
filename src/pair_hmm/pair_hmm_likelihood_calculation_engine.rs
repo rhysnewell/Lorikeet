@@ -608,19 +608,12 @@ impl PairHMMLikelihoodCalculationEngine {
         haplotypes: &Vec<Haplotype<SimpleInterval>>,
         per_sample_read_list: &HashMap<usize, Vec<BirdToolRead>>,
     ) {
-        let read_max_length = per_sample_read_list
-            .values()
-            .flat_map(|e| e.iter())
-            .map(|e| e.len())
-            .max()
-            .unwrap_or(0);
-        let max_haplotype_length: usize = haplotypes
-            .iter()
-            .map(|hap| hap.allele.len())
-            .max()
-            .unwrap_or(0);
-        // initialize arrays to hold the probabilities of being in the match, insertion and deletion cases
-        self.pair_hmm = PairHMM::initialize(read_max_length, max_haplotype_length);
+        let avx_mode = AVXMode::detect_mode();
+        self.pair_hmm = PairHMM::initialize(
+            haplotypes,
+            per_sample_read_list,
+            avx_mode
+        );
     }
 }
 
@@ -644,5 +637,24 @@ impl PairHMMInputScoreImputator {
 
     pub fn gap_continuation_penalties(&self, read: &BirdToolRead) -> Vec<u8> {
         vec![self.constant_gcp; read.len()]
+    }
+}
+
+#[derive(Debug, Copy)]
+pub enum AVXMode {
+    AVX,
+    None,
+}
+
+impl AVXMode {
+    pub fn detect_mode() -> Self {
+        if is_x86_feature_detected!("avx512f")
+            || is_x86_feature_detected!("avx512dq")
+            || is_x86_feature_detected!("avx512vl")
+            || is_x86_feature_detected!("avx") {
+            Self::AVX
+        } else {
+            Self::None
+        }
     }
 }
