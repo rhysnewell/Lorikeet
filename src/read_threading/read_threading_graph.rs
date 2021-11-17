@@ -24,6 +24,7 @@ use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS}
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use utils::simple_interval::Locatable;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -57,6 +58,7 @@ pub struct ReadThreadingGraph {
     increase_counts_through_branches: bool,
     num_pruning_samples: usize,
     pub(crate) base_graph: BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>,
+    avx_mode: AVXMode,
 }
 
 impl ReadThreadingGraph {
@@ -72,6 +74,7 @@ impl ReadThreadingGraph {
         min_base_quality_to_use_in_assembly: u8,
         min_pruning_samples: usize,
         min_matching_bases_to_dangling_end_recovery: i32,
+        avx_mode: AVXMode
     ) -> Self {
         let base_graph = BaseGraph::new(kmer_size);
         Self {
@@ -90,6 +93,7 @@ impl ReadThreadingGraph {
             increase_counts_through_branches: false,
             num_pruning_samples: min_pruning_samples,
             base_graph,
+            avx_mode,
         }
     }
 
@@ -1382,6 +1386,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             alt_bases.as_bytes(),
             dangling_tail_sw_parameters,
             OverhangStrategy::LeadingInDel,
+            self.avx_mode,
         );
 
         return Some(DanglingChainMergeHelper::new(
@@ -1444,6 +1449,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             alt_bases.as_bytes(),
             dangling_head_sw_parameters,
             OverhangStrategy::LeadingInDel,
+            self.avx_mode,
         );
 
         return Some(DanglingChainMergeHelper::new(

@@ -316,6 +316,11 @@ impl AssemblyBasedCallerUtils {
             sample_names,
             *STANDARD_NGS,
             *NEW_SW_PARAMETERS,
+            if args.is_present("disable-avx") {
+                AVXMode::None
+            } else {
+                AVXMode::detect_mode()
+            }
         );
 
         if !given_alleles.is_empty() {

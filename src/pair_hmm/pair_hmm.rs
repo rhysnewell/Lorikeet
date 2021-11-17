@@ -334,7 +334,7 @@ impl<'a> PairHMM<'a> {
         match self.avx_mode {
             AVXMode::AVX => {
                 let avx_function = forward().unwrap();
-                self.m_log_likelihood_array = read_data_array.into_iter().flat_map(|read| {
+                self.m_log_likelihood_array = read_data_array.into_par_iter().flat_map(|read| {
                     // let read = &read;
                     let likelihoods = self.m_haplotype_data_array.iter().map(|hap_bases| {
 

@@ -3,7 +3,9 @@ use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 // use smith_waterman::bindings::*;
 use std::cmp::max;
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
+use gkl::smithwaterman::{OverhangStrategy, Parameters, align};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use reads::cigar_builder::CigarBuilder;
 
 lazy_static! {
     pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
@@ -46,54 +48,66 @@ impl SmithWatermanAligner {
         alternate: &[u8],
         parameters: &Parameters,
         overhang_strategy: OverhangStrategy,
+        avx_mode: AVXMode
     ) -> SmithWatermanAlignmentResult {
-        assert!(
-            reference.len() > 0 && alternate.len() > 0,
-            "non-empty sequences are required for the Smith-Waterman calculation"
-        );
-
-        let mut match_index = None;
-        match &overhang_strategy {
-            OverhangStrategy::SoftClip
-            | OverhangStrategy::Ignore => {
-                // Use a substring search to find an exact match of the alternate in the reference
-                // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
-                match_index = AlignmentUtils::last_index_of(reference, alternate);
+        match avx_mode {
+            AVXMode::AVX => {
+                let avx_aligner = align().unwrap();
+                let (cigar, offset) = avx_aligner(reference, alternate, *parameters, overhang_strategy);
+                let cigar = CigarString::try_from(&cigar).unwrap();
+                let result = SmithWatermanAlignmentResult::new(cigar, offset as i32);
+                return result
             },
-            _ => {
-                // pass
-            }
-        }
-
-        let mut alignment_result;
-
-        match match_index {
-            None => {
-                // run full smith-waterman
-                let n = reference.len() + 1;
-                let m = alternate.len() + 1;
-                let mut sw = Array2::<i32>::zeros((n, m));
-                let mut btrack = Array2::<i32>::zeros((n, m));
-
-                Self::calculate_matrix(
-                    reference,
-                    alternate,
-                    &mut sw,
-                    &mut btrack,
-                    &overhang_strategy,
-                    &parameters,
+            AVXMode::None => {
+                assert!(
+                    reference.len() > 0 && alternate.len() > 0,
+                    "non-empty sequences are required for the Smith-Waterman calculation"
                 );
-                alignment_result = Self::calculate_cigar(&sw, &btrack, &overhang_strategy);
-            }
-            Some(match_index) => {
-                alignment_result = SmithWatermanAlignmentResult::new(
-                    CigarString::from(vec![Cigar::Match(alternate.len() as u32)]),
-                    match_index as i32,
-                )
+
+                let mut match_index = None;
+                match &overhang_strategy {
+                    OverhangStrategy::SoftClip
+                    | OverhangStrategy::Ignore => {
+                        // Use a substring search to find an exact match of the alternate in the reference
+                        // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
+                        match_index = AlignmentUtils::last_index_of(reference, alternate);
+                    },
+                    _ => {
+                        // pass
+                    }
+                }
+
+                let mut alignment_result;
+
+                match match_index {
+                    None => {
+                        // run full smith-waterman
+                        let n = reference.len() + 1;
+                        let m = alternate.len() + 1;
+                        let mut sw = Array2::<i32>::zeros((n, m));
+                        let mut btrack = Array2::<i32>::zeros((n, m));
+
+                        Self::calculate_matrix(
+                            reference,
+                            alternate,
+                            &mut sw,
+                            &mut btrack,
+                            &overhang_strategy,
+                            &parameters,
+                        );
+                        alignment_result = Self::calculate_cigar(&sw, &btrack, &overhang_strategy);
+                    }
+                    Some(match_index) => {
+                        alignment_result = SmithWatermanAlignmentResult::new(
+                            CigarString::from(vec![Cigar::Match(alternate.len() as u32)]),
+                            match_index as i32,
+                        )
+                    }
+                }
+
+                return alignment_result
             }
         }
-
-        return alignment_result;
     }
 
     /**
