@@ -1,16 +1,20 @@
 use ndarray::{Array2, Axis};
 use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use smith_waterman::bindings::*;
+// use smith_waterman::bindings::*;
 use std::cmp::max;
+use gkl::smithwaterman::{OverhangStrategy, Parameters, align};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use reads::cigar_builder::CigarBuilder;
+use std::convert::TryFrom;
 
 lazy_static! {
-    pub static ref ORIGINAL_DEFAULT: SWParameters = SWParameters::new(3, -1, -4, -3);
-    pub static ref STANDARD_NGS: SWParameters = SWParameters::new(25, -50, -110, -6);
+    pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
+    pub static ref STANDARD_NGS: Parameters = Parameters::new(25, -50, -110, -6);
         // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    pub static ref NEW_SW_PARAMETERS: SWParameters = SWParameters::new(200, -150, -260, -11);
+    pub static ref NEW_SW_PARAMETERS: Parameters = Parameters::new(200, -150, -260, -11);
     // FROM GATK COMMENTS:
     // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
     // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
@@ -18,7 +22,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(10, -15, -30, -5);
+    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Parameters = Parameters::new(10, -15, -30, -5);
 }
 
 pub struct SmithWatermanAligner {}
@@ -43,52 +47,68 @@ impl SmithWatermanAligner {
     pub fn align(
         reference: &[u8],
         alternate: &[u8],
-        parameters: &SWParameters,
-        overhang_strategy: SWOverhangStrategy,
+        parameters: &Parameters,
+        overhang_strategy: OverhangStrategy,
+        avx_mode: AVXMode
     ) -> SmithWatermanAlignmentResult {
-        assert!(
-            reference.len() > 0 && alternate.len() > 0,
-            "non-empty sequences are required for the Smith-Waterman calculation"
-        );
-
-        let mut match_index = None;
-        if overhang_strategy == SWOverhangStrategy::SoftClip
-            || overhang_strategy == SWOverhangStrategy::Ignore
-        {
-            // Use a substring search to find an exact match of the alternate in the reference
-            // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
-            match_index = AlignmentUtils::last_index_of(reference, alternate);
-        }
-
-        let mut alignment_result;
-
-        match match_index {
-            None => {
-                // run full smith-waterman
-                let n = reference.len() + 1;
-                let m = alternate.len() + 1;
-                let mut sw = Array2::<i32>::zeros((n, m));
-                let mut btrack = Array2::<i32>::zeros((n, m));
-
-                Self::calculate_matrix(
-                    reference,
-                    alternate,
-                    &mut sw,
-                    &mut btrack,
-                    &overhang_strategy,
-                    &parameters,
+        match avx_mode {
+            AVXMode::AVX => {
+                let avx_aligner = align().unwrap();
+                let (cigar, offset) = avx_aligner(reference, alternate, *parameters, overhang_strategy).unwrap();
+                let cigar = CigarString::try_from(std::str::from_utf8(cigar.as_slice()).unwrap()).unwrap();
+                let result = SmithWatermanAlignmentResult::new(cigar, offset as i32);
+                return result
+            },
+            AVXMode::None => {
+                assert!(
+                    reference.len() > 0 && alternate.len() > 0,
+                    "non-empty sequences are required for the Smith-Waterman calculation"
                 );
-                alignment_result = Self::calculate_cigar(&sw, &btrack, &overhang_strategy);
-            }
-            Some(match_index) => {
-                alignment_result = SmithWatermanAlignmentResult::new(
-                    CigarString::from(vec![Cigar::Match(alternate.len() as u32)]),
-                    match_index as i32,
-                )
+
+                let mut match_index = None;
+                match &overhang_strategy {
+                    OverhangStrategy::SoftClip
+                    | OverhangStrategy::Ignore => {
+                        // Use a substring search to find an exact match of the alternate in the reference
+                        // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
+                        match_index = AlignmentUtils::last_index_of(reference, alternate);
+                    },
+                    _ => {
+                        // pass
+                    }
+                }
+
+                let mut alignment_result;
+
+                match match_index {
+                    None => {
+                        // run full smith-waterman
+                        let n = reference.len() + 1;
+                        let m = alternate.len() + 1;
+                        let mut sw = Array2::<i32>::zeros((n, m));
+                        let mut btrack = Array2::<i32>::zeros((n, m));
+
+                        Self::calculate_matrix(
+                            reference,
+                            alternate,
+                            &mut sw,
+                            &mut btrack,
+                            &overhang_strategy,
+                            &parameters,
+                        );
+                        alignment_result = Self::calculate_cigar(&sw, &btrack, &overhang_strategy);
+                    }
+                    Some(match_index) => {
+                        alignment_result = SmithWatermanAlignmentResult::new(
+                            CigarString::from(vec![Cigar::Match(alternate.len() as u32)]),
+                            match_index as i32,
+                        )
+                    }
+                }
+
+                return alignment_result
             }
         }
-
-        return alignment_result;
     }
 
     /**
@@ -105,8 +125,8 @@ impl SmithWatermanAligner {
         alternate: &[u8],
         sw: &mut Array2<i32>,
         btrack: &mut Array2<i32>,
-        overhang_strategy: &SWOverhangStrategy,
-        parameters: &SWParameters,
+        overhang_strategy: &OverhangStrategy,
+        parameters: &Parameters,
     ) {
         if reference.len() == 0 || alternate.len() == 0 {
             panic!("Non-null, non-empty sequences are required for the Smith-Waterman calculation");
@@ -122,36 +142,40 @@ impl SmithWatermanAligner {
         let mut gap_size_h = vec![0; nrow + 1];
 
         // we need to initialize the SW matrix with gap penalties if we want to keep track of indels at the edges of alignments
-        if overhang_strategy == &SWOverhangStrategy::Indel
-            || overhang_strategy == &SWOverhangStrategy::LeadingIndel
-        {
-            let current_value = parameters.gap_open_penalty;
+        match overhang_strategy {
+            OverhangStrategy::InDel
+            | OverhangStrategy::LeadingInDel => {
+                let current_value = parameters.gap_open_penalty;
 
-            // initialize the first row
-            {
-                let mut top_row = sw.row_mut(0);
-                // .accumulate_axis_inplace(Axis(1), |&prev, curr| *curr = prev + current_value);
-                let mut current_value = parameters.gap_open_penalty;
-                top_row[1] = current_value;
-                for i in 2..top_row.len() {
-                    current_value += parameters.gap_extend_penalty;
-                    top_row[i] = current_value;
+                // initialize the first row
+                {
+                    let mut top_row = sw.row_mut(0);
+                    // .accumulate_axis_inplace(Axis(1), |&prev, curr| *curr = prev + current_value);
+                    let mut current_value = parameters.gap_open_penalty;
+                    top_row[1] = current_value;
+                    for i in 2..top_row.len() {
+                        current_value += parameters.gap_extend_penalty;
+                        top_row[i] = current_value;
+                    }
                 }
-            }
-            debug!("Top row values {:?}", &sw.row(0));
+                debug!("Top row values {:?}", &sw.row(0));
 
-            // initialize the first column
-            {
-                sw[[1, 0]] = parameters.gap_open_penalty;
-                let mut current_value = parameters.gap_open_penalty;
-                for i in 2..sw.nrows() {
-                    current_value += parameters.gap_extend_penalty;
-                    sw[[i, 0]] = current_value;
+                // initialize the first column
+                {
+                    sw[[1, 0]] = parameters.gap_open_penalty;
+                    let mut current_value = parameters.gap_open_penalty;
+                    for i in 2..sw.nrows() {
+                        current_value += parameters.gap_extend_penalty;
+                        sw[[i, 0]] = current_value;
+                    }
                 }
+                // sw.column_mut(0)
+                //     .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
+                debug!("first column values {:?}", &sw.column(0));
+            },
+            _ => {
+                // pass
             }
-            // sw.column_mut(0)
-            //     .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
-            debug!("first column values {:?}", &sw.column(0));
         }
 
         // build smith-waterman matrix and keep backtrack info:
@@ -249,7 +273,7 @@ impl SmithWatermanAligner {
     fn calculate_cigar(
         sw: &Array2<i32>,
         btrack: &Array2<i32>,
-        overhang_strategy: &SWOverhangStrategy,
+        overhang_strategy: &OverhangStrategy,
     ) -> SmithWatermanAlignmentResult {
         // p holds the position we start backtracking from; we will be assembling a cigar in the backwards order
         let mut p1 = 0;
@@ -262,47 +286,62 @@ impl SmithWatermanAligner {
         let mut segment_length = 0; // length of the segment (continuous matches, insertions or deletions)
 
         // if we want to consider overhangs as legitimate operators, then just start from the corner of the matrix
-        if overhang_strategy == &SWOverhangStrategy::Indel {
-            p1 = ref_length;
-            p2 = alt_length;
-        } else {
-            // look for the largest score on the rightmost column. we use >= combined with the traversal direction
-            // to ensure that if two scores are equal, the one closer to diagonal gets picked
-            //Note: this is not technically smith-waterman, as by only looking for max values on the right we are
-            //excluding high scoring local alignments
-            p2 = alt_length;
+        match overhang_strategy {
+            OverhangStrategy::InDel => {
+                p1 = ref_length;
+                p2 = alt_length;
+            },
+            _ => {
+                // look for the largest score on the rightmost column. we use >= combined with the traversal direction
+                // to ensure that if two scores are equal, the one closer to diagonal gets picked
+                //Note: this is not technically smith-waterman, as by only looking for max values on the right we are
+                //excluding high scoring local alignments
+                p2 = alt_length;
 
-            for i in 1..sw.nrows() {
-                let cur_score = sw[[i, alt_length]];
-                if cur_score >= max_score {
-                    p1 = i;
-                    max_score = cur_score;
-                };
-            }
-
-            // now look for a larger score on the bottom-most row
-            if overhang_strategy != &SWOverhangStrategy::LeadingIndel {
-                let bottom_row = sw.row(ref_length);
-                for j in 1..bottom_row.len() {
-                    let cur_score = bottom_row[j];
-                    // data_offset is the offset of [n][j]
-                    if cur_score > max_score
-                        || (cur_score == max_score
-                            && (ref_length as i32 - j as i32).abs() < (p1 as i32 - p2 as i32).abs())
-                    {
-                        p1 = ref_length;
-                        p2 = j;
+                for i in 1..sw.nrows() {
+                    let cur_score = sw[[i, alt_length]];
+                    if cur_score >= max_score {
+                        p1 = i;
                         max_score = cur_score;
-                        segment_length = alt_length as i32 - j as i32; // end of sequence 2 is overhanging; we will just record it as 'M' segment
+                    };
+                }
+
+                // now look for a larger score on the bottom-most row
+                match overhang_strategy {
+                    OverhangStrategy::LeadingInDel => {
+                        // pass
+                    },
+                    _ => {
+                        let bottom_row = sw.row(ref_length);
+                        for j in 1..bottom_row.len() {
+                            let cur_score = bottom_row[j];
+                            // data_offset is the offset of [n][j]
+                            if cur_score > max_score
+                                || (cur_score == max_score
+                                && (ref_length as i32 - j as i32).abs() < (p1 as i32 - p2 as i32).abs())
+                            {
+                                p1 = ref_length;
+                                p2 = j;
+                                max_score = cur_score;
+                                segment_length = alt_length as i32 - j as i32; // end of sequence 2 is overhanging; we will just record it as 'M' segment
+                            }
+                        }
                     }
                 }
             }
         }
 
         let mut lce = Vec::new();
-        if segment_length > 0 && overhang_strategy == &SWOverhangStrategy::SoftClip {
-            lce.push(Cigar::SoftClip(segment_length as u32));
-            segment_length = 0;
+        if segment_length > 0 {
+            match overhang_strategy {
+                OverhangStrategy::SoftClip => {
+                    lce.push(Cigar::SoftClip(segment_length as u32));
+                    segment_length = 0;
+                },
+                _ => {
+                    // pass
+                }
+            }
         };
 
         // we will be placing all insertions and deletions into sequence b, so the states are named w/regard
@@ -370,27 +409,31 @@ impl SmithWatermanAligner {
         // DO_SOFTCLIP is false or 2S3M if DO_SOFTCLIP is true.
         // The consumers need to check for the alignment offset and deal with it properly.
         let mut alignment_offset = 0;
-        if overhang_strategy == &SWOverhangStrategy::SoftClip {
-            lce.push(Self::make_element(state, segment_length as u32));
-            if p2 > 0 {
-                lce.push(Self::make_element(State::Clip, p2 as u32));
-            }
-            alignment_offset = p1;
-        } else if overhang_strategy == &SWOverhangStrategy::Ignore {
-            lce.push(Self::make_element(state, (segment_length + p2) as u32));
-            alignment_offset = p1 - p2;
-        } else {
-            // overhangStrategy == OverhangStrategy.INDEL || overhangStrategy == OverhangStrategy.LEADING_INDEL
-            // take care of the actual alignment
-            lce.push(Self::make_element(state, segment_length as u32));
-            // take care of overhangs at the beginning of the alignment
-            if p1 > 0 {
-                lce.push(Self::make_element(State::Deletion, p1 as u32));
-            } else if p2 > 0 {
-                lce.push(Self::make_element(State::Insertion, p2 as u32));
-            }
+        match overhang_strategy {
+            OverhangStrategy::SoftClip => {
+                lce.push(Self::make_element(state, segment_length as u32));
+                if p2 > 0 {
+                    lce.push(Self::make_element(State::Clip, p2 as u32));
+                }
+                alignment_offset = p1;
+            },
+            OverhangStrategy::Ignore => {
+                lce.push(Self::make_element(state, (segment_length + p2) as u32));
+                alignment_offset = p1 - p2;
+            },
+            _ => {
+                // overhangStrategy == OverhangStrategy.INDEL || overhangStrategy == OverhangStrategy.LEADING_INDEL
+                // take care of the actual alignment
+                lce.push(Self::make_element(state, segment_length as u32));
+                // take care of overhangs at the beginning of the alignment
+                if p1 > 0 {
+                    lce.push(Self::make_element(State::Deletion, p1 as u32));
+                } else if p2 > 0 {
+                    lce.push(Self::make_element(State::Insertion, p2 as u32));
+                }
 
-            alignment_offset = 0;
+                alignment_offset = 0;
+            }
         }
 
         // reverse the cigar string

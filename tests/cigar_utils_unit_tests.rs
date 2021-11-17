@@ -17,26 +17,29 @@ extern crate bio;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate gkl;
 
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
-use lorikeet_genome::smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::convert::TryFrom;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 
 lazy_static! {
-    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: SWParameters = *NEW_SW_PARAMETERS;
+    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
 }
 
 fn test_compute_cigar(s1: &str, s2: &str, expected_cigar: &str) {
     let actual_cigar = CigarUtils::calculate_cigar(
         s1.as_bytes(),
         s2.as_bytes(),
-        SWOverhangStrategy::Indel,
+        OverhangStrategy::InDel,
         &*HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS,
+        AVXMode::detect_mode()
     );
     let expected = CigarString::try_from(expected_cigar).unwrap();
 

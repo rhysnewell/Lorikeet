@@ -2,15 +2,16 @@ use rayon::prelude::*;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
-use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     static ref SW_PAD: String = format!("NNNNNNNNNN");
     // FROM GATK COMMENTS:
     // used in the bubble state machine to apply Smith-Waterman to the bubble sequence
     // these values were chosen via optimization against the NA12878 knowledge base
-    pub static ref NEW_SW_PARAMETERS: SWParameters = SWParameters::new(200, -150, -260, -11);
+    pub static ref NEW_SW_PARAMETERS: Parameters = Parameters::new(200, -150, -260, -11);
     // FROM GATK COMMENTS:
     // In Mutect2 and HaplotypeCaller reads are realigned to their *best* haplotypes, which is very different from a generic alignment.
     // The {@code NEW_SW_PARAMETERS} penalize a substitution error more than an indel up to a length of 9 bases!
@@ -18,7 +19,7 @@ lazy_static! {
     // would prefer to extend a deletion until the next T on the reference is found in order to avoid the substitution, which is absurd.
     // Since these parameters are for aligning a read to the biological sequence we believe it comes from, the parameters
     // we choose should correspond to sequencer error.  They *do not* have anything to do with the prevalence of true variation!
-    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: SWParameters = SWParameters::new(10, -15, -30, -5);
+    pub static ref ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS: Parameters = Parameters::new(10, -15, -30, -5);
 }
 
 pub struct CigarUtils {}
@@ -273,8 +274,9 @@ impl CigarUtils {
     pub fn calculate_cigar(
         ref_seq: &[u8],
         alt_seq: &[u8],
-        strategy: SWOverhangStrategy,
-        sw_parameters: &SWParameters,
+        strategy: OverhangStrategy,
+        sw_parameters: &Parameters,
+        avx_mode: AVXMode,
     ) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
@@ -315,6 +317,7 @@ impl CigarUtils {
             padded_path.as_bytes(),
             sw_parameters,
             strategy,
+            avx_mode
         );
 
         if Self::is_s_w_failure(&alignment) {

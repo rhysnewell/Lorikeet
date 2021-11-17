@@ -7,11 +7,13 @@ use reads::cigar_utils::CigarUtils;
 use reads::cigar_utils::ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Aux, Cigar, CigarString, CigarStringView};
-use smith_waterman::bindings::SWOverhangStrategy;
 use smith_waterman::smith_waterman_aligner::SmithWatermanAligner;
 use std::hash::Hash;
 use std::ops::Range;
 use utils::simple_interval::SimpleInterval;
+use gkl::smithwaterman::OverhangStrategy;
+use std::cmp::min;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     pub static ref HAPLOTYPE_TAG: String = format!("HC");
@@ -41,6 +43,7 @@ impl AlignmentUtils {
         ref_haplotype: &Haplotype<SimpleInterval>,
         reference_start: usize,
         is_informative: bool,
+        avx_mode: AVXMode,
     ) -> BirdToolRead {
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
         let read_minus_soft_clips = ReadClipper::new(original_read).hard_clip_soft_clipped_bases();
@@ -50,7 +53,8 @@ impl AlignmentUtils {
             haplotype.get_bases(),
             read_minus_soft_clips.bases.as_slice(),
             &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
-            SWOverhangStrategy::SoftClip,
+            OverhangStrategy::SoftClip,
+            avx_mode,
         );
 
         if read_to_haplotype_sw_alignment.alignment_offset == -1 {
@@ -769,7 +773,7 @@ impl AlignmentUtils {
         let mut bases_start = None;
         let mut bases_stop = None;
         let mut done = false;
-
+        // println!("DEBUG: ref start {} ref stop {} base start {} cigar {:?}", ref_start, ref_end, bases_start_on_ref, &bases_to_ref_cigar);
         let mut iii = 0;
         while iii < bases_to_ref_cigar.0.len() && !done {
             let ce = &bases_to_ref_cigar.0[iii];
@@ -787,6 +791,7 @@ impl AlignmentUtils {
                             done = true;
                             break;
                         }
+                        // println!("DEBUG: ref pos {} bases {} start {} end {}", ref_pos, bases_pos, ref_start, ref_end);
                         ref_pos += 1;
                         bases_pos += 1;
                     }
@@ -806,14 +811,21 @@ impl AlignmentUtils {
             }
             iii += 1;
         }
-
+        if ref_pos == ref_start {
+           bases_start = Some(bases_pos);
+        };
+        if ref_pos == ref_end {
+           bases_stop = Some(bases_pos);
+           done = true;
+        }
+        // println!("DEBUG: ref pos {} bases {} start {} end {} bases start {:?} end {:?}", ref_pos, bases_pos, ref_start, ref_end, &bases_start, &bases_stop);
         if bases_start.is_none() || bases_stop.is_none() {
             panic!(
                 "Never found start {:?} or stop {:?} given cigar {:?}",
                 bases_start, bases_stop, bases_to_ref_cigar
             );
         };
-        return Some(&bases[bases_start.unwrap() as usize..bases_stop.unwrap() as usize + 1]);
+        return Some(&bases[bases_start.unwrap() as usize..min(bases_stop.unwrap() as usize + 1, bases.len())]);
     }
 
     /**

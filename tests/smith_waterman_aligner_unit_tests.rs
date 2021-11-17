@@ -16,6 +16,7 @@ extern crate approx;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate gkl;
 
 use itertools::Itertools;
 use lorikeet_genome::genotype::genotype_builder::Genotype;
@@ -28,12 +29,11 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::{
     CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
 };
-use lorikeet_genome::smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -54,6 +54,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
+use gkl::smithwaterman::{Parameters, OverhangStrategy};
 
 fn get_aligner() -> SmithWatermanAligner {
     SmithWatermanAligner::new()
@@ -63,7 +64,7 @@ fn print_alignment(
     reference: &[u8],
     read: &[u8],
     alignment: SmithWatermanAlignmentResult,
-    overhang_strategy: SWOverhangStrategy,
+    overhang_strategy: OverhangStrategy,
 ) {
     let mut b_read = String::new();
     let mut b_ref = String::new();
@@ -75,7 +76,7 @@ fn print_alignment(
     let offset = alignment.get_alignment_offset();
     let mut cigar = alignment.get_cigar();
 
-    if overhang_strategy != SWOverhangStrategy::SoftClip {
+    if let overhang_strategy = OverhangStrategy::SoftClip {
         // we need to go through all the hassle below only if we do not do soft-clipping;
         // otherwise offset is never negative
         if offset < 0 {
@@ -202,11 +203,11 @@ fn assert_alignment_matches_expected(
     read: &str,
     expected_start: i32,
     expected_cigar: &str,
-    weights: SWParameters,
-    strategy: SWOverhangStrategy,
+    weights: Parameters,
+    strategy: OverhangStrategy,
 ) {
     let alignment =
-        SmithWatermanAligner::align(reference.as_bytes(), read.as_bytes(), &weights, strategy);
+        SmithWatermanAligner::align(reference.as_bytes(), read.as_bytes(), &weights, strategy, AVXMode::detect_mode());
     print_alignment(
         reference.as_bytes(),
         read.as_bytes(),
@@ -237,7 +238,7 @@ fn test_read_alignment_to_ref_complex_alignment(
         expected_start,
         expected_cigar,
         *ORIGINAL_DEFAULT,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     )
 }
 
@@ -249,14 +250,14 @@ fn make_test_odd_no_alignment() {
     test_odd_no_alignment(
         ref_1,
         read_1,
-        SWParameters::new(50, -100, -220, -12),
+        Parameters::new(50, -100, -220, -12),
         1,
         "2M2I3M1D4M",
     );
     test_odd_no_alignment(
         ref_1,
         read_1,
-        SWParameters::new(200, -50, -300, -22),
+        Parameters::new(200, -50, -300, -22),
         0,
         "11M",
     );
@@ -265,7 +266,7 @@ fn make_test_odd_no_alignment() {
 fn test_odd_no_alignment(
     reference: &str,
     read: &str,
-    weights: SWParameters,
+    weights: Parameters,
     expected_start: i32,
     expected_cigar: &str,
 ) {
@@ -275,7 +276,7 @@ fn test_odd_no_alignment(
         expected_start,
         expected_cigar,
         weights,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     )
 }
 
@@ -292,7 +293,7 @@ fn test_indels_at_start_and_end() {
         expected_start,
         expected_cigar,
         *ORIGINAL_DEFAULT,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     );
 }
 
@@ -308,7 +309,7 @@ fn test_degenerate_alignment_with_indels_at_both_ends() {
         expected_start,
         expected_cigar,
         *STANDARD_NGS,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     );
 }
 
@@ -336,13 +337,15 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
         paddeds_ref.as_bytes(),
         paddeds_hap.as_bytes(),
         &*NEW_SW_PARAMETERS,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
+        AVXMode::detect_mode(),
     );
     let mut not_padded_alignment = SmithWatermanAligner::align(
         not_paddeds_ref.as_bytes(),
         not_paddeds_hap.as_bytes(),
         &*NEW_SW_PARAMETERS,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
+        AVXMode::detect_mode(),
     );
 
     //Now verify that the two sequences have the same alignment and not match positions.
@@ -372,13 +375,13 @@ fn test_for_identical_alignments_with_differing_flank_lengths() {
 
 #[test]
 fn get_substrings_match_tests() {
-    test_substring_match(3, "5M", SWOverhangStrategy::SoftClip);
-    test_substring_match(0, "3D5M", SWOverhangStrategy::Indel);
-    test_substring_match(0, "3D5M", SWOverhangStrategy::LeadingIndel);
-    test_substring_match(3, "5M", SWOverhangStrategy::Ignore);
+    test_substring_match(3, "5M", OverhangStrategy::SoftClip);
+    test_substring_match(0, "3D5M", OverhangStrategy::InDel);
+    test_substring_match(0, "3D5M", OverhangStrategy::LeadingInDel);
+    test_substring_match(3, "5M", OverhangStrategy::Ignore);
 }
 
-fn test_substring_match(expected_start: i32, expected_cigar: &str, strategy: SWOverhangStrategy) {
+fn test_substring_match(expected_start: i32, expected_cigar: &str, strategy: OverhangStrategy) {
     let matching_section = "CCCCC";
     let reference = "AAA".to_string() + matching_section;
     let read = matching_section;

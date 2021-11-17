@@ -17,6 +17,7 @@ extern crate bio;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate gkl;
 
 use bio::io::fasta::IndexedReader;
 use itertools::Itertools;
@@ -32,7 +33,7 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
 use lorikeet_genome::read_error_corrector::nearby_kmer_error_corrector::{
     CorrectionSet, NearbyKmerErrorCorrector,
 };
@@ -42,7 +43,7 @@ use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
-use lorikeet_genome::smith_waterman::bindings::SWParameters;
+use gkl::smithwaterman::Parameters;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -66,8 +67,8 @@ use std::ops::Deref;
 use std::sync::Mutex;
 
 lazy_static! {
-    static ref DANGLING_END_SW_PARAMETERS: SWParameters = *STANDARD_NGS;
-    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: SWParameters = *NEW_SW_PARAMETERS;
+    static ref DANGLING_END_SW_PARAMETERS: Parameters = *STANDARD_NGS;
+    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
 }
 
 // #[test]
@@ -174,6 +175,7 @@ fn assemble(
         &samples,
         *STANDARD_NGS,
         *NEW_SW_PARAMETERS,
+        AVXMode::detect_mode(),
     );
 
     return assembly_result_set;

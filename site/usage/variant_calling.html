@@ -1,0 +1,424 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+
+    <title>Call</title>
+    <meta name="description" content="Documentation for Lorikeet">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Source+Sans+Pro:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/normalize.css?v=1637013275" media="screen" />
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/doctave-style.css?v=1637013275" media="screen" />
+
+    <link rel="stylesheet" type="text/css" href="/Lorikeet/assets/prism-ghcolors.css?v=1637013275" media="screen" />
+
+    
+
+    <script>
+        var DOCTAVE_TIMESTAMP = "1637013275";
+        var BASE_PATH = "/Lorikeet/";
+        var color = localStorage.getItem('doctave-color')
+
+        if (color === 'dark') {
+            document.getElementsByTagName('html')[0].classList.remove('light');
+            document.getElementsByTagName('html')[0].classList.add('dark');
+        } else {
+            document.getElementsByTagName('html')[0].classList.remove('dark');
+            document.getElementsByTagName('html')[0].classList.add('light');
+        }
+    </script>
+
+    
+</head>
+
+<body>
+    <label for='menu-toggle-switch' class='menu-toggle-button'>
+        ☰
+    </label>
+    <input type="checkbox" id="menu-toggle-switch" value='0' />
+    <div class='page'>
+        <div class='header'>
+            <div class='logo'>
+                
+                <h2 class='project-name'>
+                    <a href="/Lorikeet/">
+                        Lorikeet
+                    </a>
+                </h2>
+            </div>
+            <div class='search'>
+                <form id='search-form'>
+    <input type='text' id='search-box' autocomplete="off" placeholder="Search..."></input>
+    <span class='search-icon'>S</span>
+    <ul id='search-results'></ul>
+</form>
+
+            </div>
+            <div class='header-dummy-right'>
+            </div>
+        </div>
+        <div class='container'>
+            <div class='sidebar-left'>
+                <nav class='site-nav'>
+    <ul>
+        
+            <li><a href="/Lorikeet/installation">Installation</a></li>
+            
+        
+            <li><a href="/Lorikeet/usage">Usage</a></li>
+            
+                <ul>
+    
+        <li><a class="active" href="/Lorikeet/usage/variant_calling">Call</a></li>
+        
+    
+        <li><a href="/Lorikeet/usage/genotyping">Genotype</a></li>
+        
+    
+</ul>
+
+            
+        
+            <li><a href="/Lorikeet/concepts">Concepts</a></li>
+            
+        
+            <li><a href="/Lorikeet/examples">Examples</a></li>
+            
+        
+            <li><a href="/Lorikeet/comparisons">Comparisons</a></li>
+            
+        
+    </ul>
+    <span id='light-dark-mode-switch'>
+        <svg xmlns="http://www.w3.org/2000/svg" id="dark-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+
+        <svg xmlns="http://www.w3.org/2000/svg" id="light-mode-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd" />
+        </svg>
+    </span>
+</nav>
+
+            </div>
+            <div class='content'>
+                <h1 id="call-1">Call</h1>
+<p>The <code>call</code> subcommand of Lorikeet is the primary method for users who wish to just call variants across one or more
+reference genomes. The variant calling process uses an algorithm based on <a href="https://gatk.broadinstitute.org/hc/en-us/articles/360037225632-HaplotypeCaller">GATK HaplotypeCaller</a> which 
+calls Single Nucleotide Polymorphisms (SNPs) and Insertions and Deletions (INDELs) via local re-assembly of haplotypes.</p>
+<h2 id="method-2">Method</h2>
+<p>Lorikeet first scans each input genome for regions showing signs of variation, it then discards the 
+existing mapping information and completely reassembles the reads in that region. This allows the Lorikeet to be 
+more accurate when calling regions that are traditionally difficult to call, for example when they contain different 
+types of variants close to each other. </p>
+<h3 id="1)	define-active-regions-3">1)	Define active regions</h3>
+<p>Variant calling focusses on regions across the input genome where there appears to be significant evidence that the 
+aligned reads do not match the reference genome. Such evidence can take the form of base mismatches in the read, the 
+presence of insertion of deletion markers, or soft clipped portions of the mapped reads with high base quality scores. 
+Each base is assigned an active probability based on the genotype likelihoods of the reference vs. any other possible 
+allele at this position (See figure 1.1). A heterozygosity prior is used for the genotype likelihood calculation, 0.001 
+for SNPs and 0.0001 for INDELs. The per base probabilities are smoothed across a region via process of convolution using 
+a gaussian kernel. These smoothed values are used to determine whether a contiguous span along the genome is active by 
+checking to see if the per base probability exceeds a given threshold (0.002 by default).</p>
+<h3 id="2)	perform-local-reassembly-of-active-regions-4">2)	Perform local reassembly of active regions</h3>
+<p>If a genomic region is deemed to be active, then all the reads that mapped to that region are collected. The reads are 
+then split in k-mers and reassembled using a “de Bruijn-like” graph structure using the reference sequence in this region 
+as a template (See figure 1.2). The graph is initialized by building a standard de Bruijn graph from the reference sequence. 
+This graph is ensured to only contain a single path by choosing a k-mer size such that there are no non-unique vertices present. 
+The paths in these graphs are then search for the most likely candidate haplotypes. The reads associated with the active 
+region are then threaded into the de Bruijn graph, creating new vertices as new k-mers are introduced. Edges in the graph 
+are assigned weights depending on how many reads were seen connecting those two vertices. Edges that have limited k-mer 
+support are systematically pruned from the graph using an adaptive chain pruning algorithm. Paths through the graph from 
+the starting vertex to the terminal vertex are treated as candidate haplotypes. Paths with fewer than two supporting reads are discarded.</p>
+<h3 id="3)	reassign-reads-to-haplotypes-and-determine-likelihoods-5">3)	Reassign reads to haplotypes and determine likelihoods</h3>
+<p>The previous step can produce a high number of candidate haplotypes (See figure 1.3), so it is necessary to filter out unlikely haplotypes. 
+A pair-wise Hidden Markov Model (PairHMM) is used in order to achieve this. In the PairHMM algorithm each read is aligned 
+against each haplotype and produces a likelihood score of that read being assigned to that haplotype (See figure 1.4). 
+These per read scores are then used to filter out the least likely haplotypes and return the reference haplotype and any associated variants at this location.</p>
+<p>A complete breakdown of the HaplotypeCaller algorithm can be found in their paper18. However, there are a few steps in 
+the algorithm where Lorikeet differs. For instance, Lorikeet does not make use of the Reference Confidence Model devised 
+by the GATK team to speed up their pipeline when thousands of samples are included. Instead, Lorikeet relies on the speed 
+of the Rust programming language and takes a highly parallel approach to calculating variant calls. </p>
+<p><img src="/Lorikeet/figures/variant_calling_diagram.png" alt="">
+Figure 1) Steps involveded in the variant calling procedure</p>
+<h2 id="help-6">Help</h2>
+<pre><code>lorikeet call: Call variants using local reassembly across multiple genomes and samples
+
+
+Define mapping(s) (required):
+  Either define BAM:
+   -b, --bam-files &lt;PATH&gt; ..             Path to BAM file(s). These must be
+                                         reference sorted (e.g. with samtools sort)
+                                         unless --sharded is specified, in which
+                                         case they must be read name sorted (e.g.
+                                         with samtools sort -n).
+   -l, --longread-bam-files &lt;PATH&gt; ..    Path to BAM files(s) generated from longreads.
+                                         Must be reference sorted.
+   --query-assembly-bam-files &lt;PATH&gt;     The results of mapping one or more metagenome assemblies
+                                         back on to your MAGs.
+
+  Or do mapping:
+   -r, --reference &lt;PATH&gt; ..             FASTA file of contigs or BWA index stem
+                                         e.g. concatenated genomes or assembly.
+                                         If multiple reference FASTA files are
+                                         provided and --sharded is specified,
+                                         then reads will be mapped to reference
+                                         separately as sharded BAMs
+   -d, --genome-fasta-directory &lt;PATH&gt;   Directory containing FASTA files to be analyzed
+   -x, --genome-fasta-extension &lt;STR&gt;    FASTA file extension in --genome-fasta-directory
+                                         [default "fna"]
+                                         Increases memory usage linearly.
+                                         [default 1]
+   -1 &lt;PATH&gt; ..                          Forward FASTA/Q file(s) for mapping
+   -2 &lt;PATH&gt; ..                          Reverse FASTA/Q file(s) for mapping
+   -c, --coupled &lt;PATH&gt; &lt;PATH&gt; ..        One or more pairs of forward and reverse
+                                         FASTA/Q files for mapping in order
+                                         &lt;sample1_R1.fq.gz&gt; &lt;sample1_R2.fq.gz&gt;
+                                         &lt;sample2_R1.fq.gz&gt; &lt;sample2_R2.fq.gz&gt; ..
+   --interleaved &lt;PATH&gt; ..               Interleaved FASTA/Q files(s) for mapping.
+   --single &lt;PATH&gt; ..                    Unpaired FASTA/Q files(s) for mapping.
+   --longreads &lt;PATH&gt; ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
+   --bam-file-cache-directory            Directory to store cached BAM files. BAM files are stored
+                                         in /tmp by default.
+   -d, --output-directory                Output directory
+   -o, --output-prefix &lt;STRING&gt;          Output prefix for files. [default: output]
+
+
+
+Sharding i.e. multiple reference sets (optional):
+  --sharded                              If -b/--bam-files was used:
+                                           Input BAM files are read-sorted alignments
+                                           of a set of reads mapped to multiple
+                                           reference contig sets. Choose the best
+                                           hit for each read pair.
+
+                                         Otherwise if mapping was carried out:
+                                           Map reads to each reference, choosing the
+                                             best hit for each pair.
+
+Alignment filtering (optional):
+   -m, --method &lt;METHOD&gt;                 Method for calculating coverage.
+                                         One or more (space separated) of:
+                                           trimmed_mean
+                                           mean
+                                           metabat ("MetaBAT adjusted coverage")
+                                         A more thorough description of the different
+                                         methods is available at
+                                         https://github.com/rhysnewell/lorikeet
+   --min-read-aligned-length &lt;INT&gt;            Exclude reads with smaller numbers of
+                                         aligned bases [default: 0]
+   --min-read-percent-identity &lt;FLOAT&gt;        Exclude reads by overall percent
+                                         identity e.g. 0.95 for 95%. [default 0.0]
+   --min-read-aligned-percent &lt;FLOAT&gt;         Exclude reads by percent aligned
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned. [default 0.97]
+   --min-read-aligned-length-pair &lt;INT&gt;       Exclude pairs with smaller numbers of
+                                         aligned bases.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-percent-identity-pair &lt;FLOAT&gt;   Exclude pairs by overall percent
+                                         identity e.g. 0.95 for 95%.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --min-read-aligned-percent-pair &lt;FLOAT&gt;    Exclude reads by percent aligned
+                                         bases e.g. 0.95 means 95% of the read's
+                                         bases must be aligned.
+                                         Conflicts --allow-improper-pairs. [default 0.0]
+   --min-covered-fraction FRACTION       Contigs with less coverage than this
+                                         reported as having zero coverage.
+                                         [default: 0.0]
+   --contig-end-exclusion                Exclude bases at the ends of reference
+                                         sequences from calculation [default: 75]
+   --trim-min FRACTION                   Remove this smallest fraction of positions
+                                         when calculating trimmed_mean
+                                         [default: 0.05]
+   --trim-max FRACTION                   Maximum fraction for trimmed_mean
+                                         calculations [default: 0.95]
+   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+   --include-supplementary               Includes read alignments flagged as supplementary
+   --include-secondary                   Includes read alignments flagged as secondary
+   --discard-unmapped                    Exclude unmapped reads from cached BAM files.
+
+
+Read mapping options:
+  -p, --mapper &lt;NAME&gt;             Underlying mapping software used
+                                  ("minimap2-sr", "bwa-mem",
+                                  "ngmlr-ont", "ngmlr-pb", "minimap2-ont",
+                                  "minimap2-pb", or "minimap2-no-preset").
+                                  minimap2 -sr, -ont, -pb, -no-preset specify
+                                  '-x' preset of minimap2 to be used
+                                  (with map-ont, map-pb for -ont, -pb).
+                                  [default: "minimap2-sr"]
+
+  --minimap2-params PARAMS        Extra parameters to provide to minimap2,
+                                  both indexing command (if used) and for
+                                  mapping. Note that usage of this parameter
+                                  has security implications if untrusted input
+                                  is specified. '-a' is always specified.
+                                  [default ""]
+
+  --minimap2-reference-is-index   Treat reference as a minimap2 database, not
+                                  as a FASTA file.
+
+  --bwa-params PARAMS             Extra parameters to provide to BWA. Note
+                                  that usage of this parameter has security
+                                  implications if untrusted input is specified.
+                                  [default ""]
+
+  --ngmlr-params PARAMS           Extra parameters to provide to NGMLR.
+                                  --bam-fix, -x ont, -t are already set. Note
+                                  that usage of this parameter has security
+                                  implications if untrusted input is specified.
+
+
+Variant calling options (Basic):
+  -k, --kmer-sizes &lt;INT&gt;                        K-mer sizes used to generate DeBruijn Graphs.
+                                                Multiple values at once are accepted and encouraged
+                                                e.g. 10 25 [default: 25]
+
+  --ploidy &lt;INT&gt;                                Sets the default ploidy for the analysis to N.
+                                                [default: 1]
+
+  -f, --features-vcf                            The set of alleles to force-call regardless
+                                                of evidence. Note: The sight containing these alleles
+                                                has to be called as 'active' in order for them to appear
+                                                in the final VCF. Addtionally, Provided file must be
+                                                compressed using bgzip and indexed using bcftools index. If no index
+                                                is present, and index will be attempted to be created.
+                                                If the file is not properly compressed, Lorikeet will
+                                                segfault with no error message.
+  -q, --min-base-quality                        Minimum base quality required to consider a
+                                                base for calling. [default: 10]
+  --base-quality-score-threshold                Base qualities below this threshold will
+                                                be reduced to the minimum (6). [default: 18]
+  --max-input-depth                             The maximum number of reads included within an
+                                                assembly region across all samples. Larger numbers
+                                                increase run time. If the depth of an assembly region
+                                                exceeds this value, then the reads will be filtered
+                                                by mean base quality. [default: 1000]
+  --min-contig-size                             The minimum contig size to call variants on. Smaller
+                                                contigs can often contain highly variable regions that
+                                                mostly represent noise. Call variants on them can often
+                                                be slow and not produce anything fruitful. If you
+                                                wish to call variants on all available contigs,
+                                                then set this to 0. [default: 2500]
+
+Variant calling options (Advanced):
+  --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
+  --pair-hmm-gap-continuation-penalty           Flat gap continuation penalty for use in the Pair HMM. [default: 10]
+  --pcr-indel-model                             The PCR indel model to use. [default: conservative]
+  --heterozygosity                              Heterozygosity value used to compute prior
+                                                likelihoods for any locus. [default: 0.001]
+  --heterozygosity-stdev                        Standard deviation of heterozygosity for SNP and
+                                                indel calling. [default: 0.01]
+  --indel-heterozygosity                        Heterozygosity for indel calling. [default: 0.000125]
+  -C, --standard-min-confidence-threshold-for-calling
+                                                The minimum phred-scaled confidence threshold at
+                                                which variants should be called. [default: 30.0]
+  --use-posteriors-to-calculate-qual            if available, use the genotype posterior
+                                                probabilities to calculate the site QUAL.
+  --annotate-with-num-discovered-alleles        If provided, we will annotate records with the
+                                                number of alternate alleles that were discovered
+                                                (but not necessarily genotyped) at a given site.
+  --active-probability-threshold                Minimum probability for a locus to be
+                                                considered active. [default: 0.002]
+  --min-assembly-region-size                    Minimum size of an assembly region. [default: 50]
+  --max-assembly-region-size                    Maximum size of an assembly region. [default: 300]
+  --assembly-region-padding                     Number of additional bases of context to
+                                                include around each assembly region. [default: 100]
+  --dont-increase-kmer-sizes-for-cycles         Disable iterating over kmer sizes when
+                                                graph cycles are detected.
+  --allow-non-unique-kmers-in-ref               Allow graphs that have non-unique kmers in the reference.
+  --do-not-run-physical-phasing                 Disable physical phasing.
+  --recover-all-dangling-branches               Recover all dangling branches.
+  --min-dangling-branch-length                  Minimum length of a dangling branch to
+                                                attempt recovery. [default: 4]
+  --graph-output                                Write debug assembly graph information to this file.
+  --num-pruning-samples                         Number of samples that must pass the
+                                                min_pruning threshold [default: 1]
+  --dont-use-soft-clipped-bases                 Do not analyze soft clipped bases in the reads.
+  --initial-error-rate-for-pruning              Initial base error rate estimate for adaptive
+                                                pruning. [default: 0.001]
+  --pruning-log-odds-threshold                  Likelihood ratio threshold for adaptive
+                                                pruning algorithm. This value will be converted to
+                                                log odds value. [default: 1.0]
+  --max-unpruned-variants                       Maximum number of variants in graph the
+                                                adaptive pruner will allow. [default: 100]
+  --max-prob-propagation-distance               Upper limit on how many bases away probability mass
+                                                can be moved around when calculating the boundaries
+                                                between active and inactive assembly regions. [default: 50]
+  --max-mnp-distance                            Two or more phased substitutions separated by
+                                                this distance or less are merged into MNPs. [default: 0]
+  --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
+  --limiting-interval                           Mainly used for debugging purposes. Only call variants
+                                                within this given span on all contigs. E.g. providing
+                                                '1000-2000' would only call variants between the 1000
+                                                and 2000 bp span on each provided contig.
+  --force                                       Forcefully overwrite previous runs.
+
+
+General options:
+  -t, --threads                         Maximum number of threads used. [default: 8]
+  -p, --parallel-genomes                Number of genomes to run in parallel.
+                                        Increases memory usage linearly.
+                                        Thread usage qill not exceed the value
+                                        provided by --threads [default 4]
+  -v, --verbose                         Print extra debugging information
+  -q, --quiet                           Unless there is an error, do not print
+                                        log messages
+
+Author: Rhys J. P. Newell &lt;rhys.newell near hdr.qut.edu.au&gt;
+</code></pre>
+
+            </div>
+            <div class='sidebar-right'>
+                <div class='page-nav' id='page-nav'>
+                    <p class='page-nav-header'>On this page</p>
+                    <ul>
+                        
+                            <li class='page-nav-level-1'>
+                                <a href='#call-1'>Call</a>
+                            </li>
+                        
+                            <li class='page-nav-level-2'>
+                                <a href='#method-2'>Method</a>
+                            </li>
+                        
+                            <li class='page-nav-level-3'>
+                                <a href='#1)	define-active-regions-3'>1)	Define active regions</a>
+                            </li>
+                        
+                            <li class='page-nav-level-3'>
+                                <a href='#2)	perform-local-reassembly-of-active-regions-4'>2)	Perform local reassembly of active regions</a>
+                            </li>
+                        
+                            <li class='page-nav-level-3'>
+                                <a href='#3)	reassign-reads-to-haplotypes-and-determine-likelihoods-5'>3)	Reassign reads to haplotypes and determine likelihoods</a>
+                            </li>
+                        
+                            <li class='page-nav-level-2'>
+                                <a href='#help-6'>Help</a>
+                            </li>
+                        
+                    </ul>
+                </div>
+            </div>
+            <div class='wave-container'>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+                    <path fill-opacity="0.35" d="M0,192L60,213.3C120,235,240,277,360,277.3C480,277,600,235,720,192C840,149,960,107,1080,122.7C1200,139,1320,213,1380,250.7L1440,288L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+                    <path fill-opacity="0.5" d="M0,160L60,181.3C120,203,240,245,360,229.3C480,213,600,139,720,138.7C840,139,960,213,1080,229.3C1200,245,1320,203,1380,181.3L1440,160L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+                    <path fill-opacity="0.2" d="M0,224L60,197.3C120,171,240,117,360,117.3C480,117,600,171,720,186.7C840,203,960,181,1080,186.7C1200,192,1320,224,1380,240L1440,256L1440,320L1380,320C1320,320,1200,320,1080,320C960,320,840,320,720,320C600,320,480,320,360,320C240,320,120,320,60,320L0,320Z"></path>
+                </svg>
+                <p>Powered by <a href='https://cli.doctave.com' target='_blank'>Doctave</a></p>
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript" src="/Lorikeet/assets/mermaid.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/elasticlunr.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/doctave-app.js?v=1637013275"></script>
+    <script type="text/javascript" src="/Lorikeet/assets/prism.js?v=1637013275"></script>
+</body>
+
+</html>

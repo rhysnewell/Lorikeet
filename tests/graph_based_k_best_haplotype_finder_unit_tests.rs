@@ -20,6 +20,7 @@ extern crate rand;
 extern crate term;
 #[macro_use]
 extern crate ntest;
+extern crate gkl;
 
 use lorikeet_genome::graphs::base_edge::BaseEdge;
 use lorikeet_genome::graphs::base_edge::BaseEdgeStruct;
@@ -30,7 +31,6 @@ use lorikeet_genome::graphs::seq_graph::SeqGraph;
 use lorikeet_genome::graphs::seq_vertex::SeqVertex;
 use lorikeet_genome::model::byte_array_allele::Allele;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
-use lorikeet_genome::smith_waterman::bindings::SWParameters;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -38,9 +38,11 @@ use lorikeet_genome::utils::simple_interval::SimpleInterval;
 use petgraph::prelude::NodeIndex;
 use rust_htslib::bam::record::Cigar;
 use std::collections::HashSet;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use gkl::smithwaterman::Parameters;
 
 lazy_static! {
-    static ref PATH_TO_REFERENCE_SW_PARAMETERS: SWParameters = *NEW_SW_PARAMETERS;
+    static ref PATH_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
 }
 
 #[test]
@@ -366,7 +368,7 @@ fn test_basic_bubble_data(ref_bubble_length: usize, alt_bubble_length: usize) {
 
     let reference = (pre_ref.to_string() + v2_ref.get_sequence_string()) + post_ref;
     assert_eq!(
-        path.calculate_cigar(reference.as_bytes(), &graph.base_graph)
+        path.calculate_cigar(reference.as_bytes(), &graph.base_graph, AVXMode::detect_mode())
             .to_string(),
         expected_cigar.make(false).unwrap().to_string(),
         "Cigar string mismatch"
@@ -555,7 +557,7 @@ fn test_triple_bubble_data(
     };
 
     assert_eq!(
-        path.calculate_cigar(reference.as_bytes(), &graph.base_graph).to_string(),
+        path.calculate_cigar(reference.as_bytes(), &graph.base_graph, AVXMode::detect_mode()).to_string(),
         expected_cigar.make(false).unwrap().to_string(),
         "Cigar string mismatch ref bubble len {} alt bubble len {} off ref beginning {} off ref ending {}",
         ref_bubble_length,
@@ -628,7 +630,7 @@ fn test_intra_node_insertion_deletion() {
     assert_eq!(
         ref_path
             .path
-            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph)
+            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph, AVXMode::detect_mode())
             .to_string()
             .as_str(),
         "10M"
@@ -636,7 +638,7 @@ fn test_intra_node_insertion_deletion() {
     assert_eq!(
         alt_path
             .path
-            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph)
+            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph, AVXMode::detect_mode())
             .to_string()
             .as_str(),
         "1M3I5M3D1M"
@@ -793,7 +795,7 @@ fn test_hard_sw_path() {
     assert_eq!(
         ref_path
             .path
-            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph)
+            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph, AVXMode::detect_mode())
             .to_string()
             .as_str(),
         "51M"
@@ -801,7 +803,7 @@ fn test_hard_sw_path() {
     assert_eq!(
         alt_path
             .path
-            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph)
+            .calculate_cigar(ref_string.as_bytes(), &graph.base_graph, AVXMode::detect_mode())
             .to_string()
             .as_str(),
         "3M6I48M"

@@ -19,11 +19,12 @@ use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::Cigar;
-use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use utils::simple_interval::Locatable;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -57,6 +58,7 @@ pub struct ReadThreadingGraph {
     increase_counts_through_branches: bool,
     num_pruning_samples: usize,
     pub(crate) base_graph: BaseGraph<MultiDeBruijnVertex, MultiSampleEdge>,
+    avx_mode: AVXMode,
 }
 
 impl ReadThreadingGraph {
@@ -72,6 +74,7 @@ impl ReadThreadingGraph {
         min_base_quality_to_use_in_assembly: u8,
         min_pruning_samples: usize,
         min_matching_bases_to_dangling_end_recovery: i32,
+        avx_mode: AVXMode
     ) -> Self {
         let base_graph = BaseGraph::new(kmer_size);
         Self {
@@ -90,11 +93,12 @@ impl ReadThreadingGraph {
             increase_counts_through_branches: false,
             num_pruning_samples: min_pruning_samples,
             base_graph,
+            avx_mode,
         }
     }
 
     pub fn default_with_kmer_size(kmer_size: usize) -> Self {
-        Self::new(kmer_size, false, 6, 1, -1)
+        Self::new(kmer_size, false, 6, 1, -1, AVXMode::detect_mode())
     }
 
     /**
@@ -757,7 +761,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_end_sw_parameters: &SWParameters,
+        dangling_end_sw_parameters: &Parameters,
     ) {
         if !self.already_built {
             panic!("recover_dangling_tails requires that graph already be built")
@@ -801,7 +805,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_head_sw_parameters: &SWParameters,
+        dangling_head_sw_parameters: &Parameters,
     ) {
         if !self.already_built {
             panic!("recover_dangling_tails requires that graph already be built")
@@ -848,7 +852,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_tail_sw_parameters: &SWParameters,
+        dangling_tail_sw_parameters: &Parameters,
     ) -> usize {
         if self.base_graph.out_degree_of(vertex) != 0 {
             panic!(
@@ -894,7 +898,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_head_sw_parameters: &SWParameters,
+        dangling_head_sw_parameters: &Parameters,
     ) -> usize {
         if self.base_graph.in_degree_of(vertex) != 0 {
             panic!(
@@ -1345,7 +1349,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_tail_sw_parameters: &SWParameters,
+        dangling_tail_sw_parameters: &Parameters,
     ) -> Option<DanglingChainMergeHelper> {
         let min_tail_path_length = max(1, min_dangling_branch_length); // while heads can be 0, tails absolutely cannot
 
@@ -1381,7 +1385,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             ref_bases.as_bytes(),
             alt_bases.as_bytes(),
             dangling_tail_sw_parameters,
-            SWOverhangStrategy::LeadingIndel,
+            OverhangStrategy::LeadingInDel,
+            self.avx_mode,
         );
 
         return Some(DanglingChainMergeHelper::new(
@@ -1409,7 +1414,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         prune_factor: usize,
         min_dangling_branch_length: i32,
         recover_all: bool,
-        dangling_head_sw_parameters: &SWParameters,
+        dangling_head_sw_parameters: &Parameters,
     ) -> Option<DanglingChainMergeHelper> {
         // find the highest common descendant path between vertex and the reference source if available
         let alt_path = self.find_path_downwards_to_highest_common_desendant_of_reference(
@@ -1443,7 +1448,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             ref_bases.as_bytes(),
             alt_bases.as_bytes(),
             dangling_head_sw_parameters,
-            SWOverhangStrategy::LeadingIndel,
+            OverhangStrategy::LeadingInDel,
+            self.avx_mode,
         );
 
         return Some(DanglingChainMergeHelper::new(

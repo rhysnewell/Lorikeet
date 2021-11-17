@@ -64,7 +64,7 @@ Variant calling options (Basic):
                                                 assembly region across all samples. Larger numbers
                                                 increase run time. If the depth of an assembly region
                                                 exceeds this value, then the reads will be filtered
-                                                by mean base quality. [default: 1000]
+                                                by mean base quality. [default: 200000]
   --min-contig-size                             The minimum contig size to call variants on. Smaller
                                                 contigs can often contain highly variable regions that
                                                 mostly represent noise. Call variants on them can often
@@ -119,6 +119,8 @@ Variant calling options (Advanced):
   --max-mnp-distance                            Two or more phased substitutions separated by
                                                 this distance or less are merged into MNPs. [default: 0]
   --disable-optimizations                       Don't skip calculations in ActiveRegions with no variants
+  --disable-avx                                 Disable the use of the GKL-rs AVX acceleration components
+                                                for PairHMM and Smith-Waterman calculations.
   --limiting-interval                           Mainly used for debugging purposes. Only call variants
                                                 within this given span on all contigs. E.g. providing
                                                 '1000-2000' would only call variants between the 1000
@@ -880,7 +882,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .takes_value(true)
+                        .default_value("200000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -1030,6 +1033,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -1501,7 +1505,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .takes_value(true)
+                        .default_value("200000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -1661,6 +1666,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -2123,7 +2129,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .takes_value(true)
+                        .default_value("200000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2279,6 +2286,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
@@ -2741,7 +2749,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("max-input-depth")
                         .long("max-input-depth")
                         .short("i")
-                        .default_value("1000"),
+                        .takes_value(true)
+                        .default_value("200000"),
                 )
                 .arg(
                     Arg::with_name("contig-end-exclusion")
@@ -2891,6 +2900,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
+                .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))

@@ -40,10 +40,10 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-pub struct PairHMMLikelihoodCalculationEngine {
+pub struct PairHMMLikelihoodCalculationEngine<'a> {
     constant_gcp: u8,
     log10_global_read_mismapping_rate: f64,
-    pair_hmm: PairHMM,
+    pair_hmm: Option<PairHMM<'a>>,
     dynamic_disqualification: bool,
     read_disqualification_scale: f64,
     expected_error_rate_per_base: f64,
@@ -54,6 +54,7 @@ pub struct PairHMMLikelihoodCalculationEngine {
     base_quality_score_threshold: u8,
     pcr_indel_error_model_cache: Vec<u8>,
     input_score_imputator: PairHMMInputScoreImputator,
+    avx_mode: AVXMode,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -92,7 +93,7 @@ impl PCRErrorModel {
     }
 }
 
-impl PairHMMLikelihoodCalculationEngine {
+impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
     const DEFAULT_DYNAMIC_DISQUALIFICATION_SCALE_FACTOR: f64 = 1.0;
     const MAX_STR_UNIT_LENGTH: usize = 8;
     const MAX_REPEAT_LENGTH: usize = 20;
@@ -136,7 +137,8 @@ impl PairHMMLikelihoodCalculationEngine {
         symmetrically_normalize_alleles_to_reference: bool,
         disable_cap_read_qualities_to_mapq: bool,
         modify_soft_clipped_bases: bool,
-    ) -> PairHMMLikelihoodCalculationEngine {
+        avx_mode: AVXMode
+    ) -> PairHMMLikelihoodCalculationEngine<'static> {
         assert!(
             base_quality_score_threshold >= QualityUtils::MIN_USABLE_Q_SCORE,
             "base_quality_score_threshold must be greater than or equal to 6"
@@ -145,7 +147,7 @@ impl PairHMMLikelihoodCalculationEngine {
         let mut result = PairHMMLikelihoodCalculationEngine {
             constant_gcp,
             log10_global_read_mismapping_rate,
-            pair_hmm: PairHMM::initialize(0, 0),
+            pair_hmm: None,
             dynamic_disqualification: dynamic_read_disqualification,
             read_disqualification_scale,
             expected_error_rate_per_base,
@@ -156,6 +158,7 @@ impl PairHMMLikelihoodCalculationEngine {
             base_quality_score_threshold,
             pcr_indel_error_model_cache: Vec::new(),
             input_score_imputator: PairHMMInputScoreImputator::new(constant_gcp),
+            avx_mode,
         };
 
         result.initialize_pcr_error_model();
@@ -200,13 +203,15 @@ impl PairHMMLikelihoodCalculationEngine {
             .iter()
             .cloned()
             .collect::<Vec<Haplotype<SimpleInterval>>>();
-        self.initialize_pair_hmm(&haplotypes, &per_sample_read_list);
+        let mut pair_hmm = self.initialize_pair_hmm(&haplotypes, &per_sample_read_list);
         // Add likelihoods for each sample's reads to our result
         let sample_count = samples.len();
-        let mut result = AlleleLikelihoods::new(haplotypes, samples, per_sample_read_list);
+
+        // clone so we can borrow haplotypes in pair_hmm
+        let mut result = AlleleLikelihoods::new(haplotypes.clone(), samples, per_sample_read_list);
 
         for i in 0..sample_count {
-            self.compute_read_likelihoods_in_matrix(i, &mut result);
+            self.compute_read_likelihoods_in_matrix(i, &mut result, &mut pair_hmm);
         }
         result.normalize_likelihoods(
             self.log10_global_read_mismapping_rate,
@@ -304,10 +309,11 @@ impl PairHMMLikelihoodCalculationEngine {
         })
     }
 
-    fn compute_read_likelihoods_in_matrix<A: Allele>(
+    fn compute_read_likelihoods_in_matrix<'b>(
         &mut self,
         sample_index: usize,
-        likelihoods: &mut AlleleLikelihoods<A>,
+        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        pair_hmm: &mut PairHMM<'b>
     ) {
         // Modify the read qualities by applying the PCR error model and capping the minimum base,
         // insertion,deletion qualities
@@ -318,12 +324,14 @@ impl PairHMMLikelihoodCalculationEngine {
                 .unwrap(),
         );
 
-        self.pair_hmm.compute_log10_likelihoods(
+
+        pair_hmm.compute_log10_likelihoods(
             sample_index,
             likelihoods,
             processed_reads,
             &self.input_score_imputator,
         );
+
     }
 
     /**
@@ -603,24 +611,16 @@ impl PairHMMLikelihoodCalculationEngine {
      * @return processedReads. A new list of reads, in the same order, whose qualities have been altered by PCR error model and minimal quality thresholding
      */
 
-    fn initialize_pair_hmm(
+    fn initialize_pair_hmm<'b>(
         &mut self,
-        haplotypes: &Vec<Haplotype<SimpleInterval>>,
+        haplotypes: &'b Vec<Haplotype<SimpleInterval>>,
         per_sample_read_list: &HashMap<usize, Vec<BirdToolRead>>,
-    ) {
-        let read_max_length = per_sample_read_list
-            .values()
-            .flat_map(|e| e.iter())
-            .map(|e| e.len())
-            .max()
-            .unwrap_or(0);
-        let max_haplotype_length: usize = haplotypes
-            .iter()
-            .map(|hap| hap.allele.len())
-            .max()
-            .unwrap_or(0);
-        // initialize arrays to hold the probabilities of being in the match, insertion and deletion cases
-        self.pair_hmm = PairHMM::initialize(read_max_length, max_haplotype_length);
+    ) -> PairHMM<'b> {
+        PairHMM::initialize(
+            haplotypes,
+            per_sample_read_list,
+            self.avx_mode
+        )
     }
 }
 
@@ -644,5 +644,24 @@ impl PairHMMInputScoreImputator {
 
     pub fn gap_continuation_penalties(&self, read: &BirdToolRead) -> Vec<u8> {
         vec![self.constant_gcp; read.len()]
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AVXMode {
+    AVX,
+    None,
+}
+
+impl AVXMode {
+    pub fn detect_mode() -> Self {
+        if is_x86_feature_detected!("avx512f")
+            || is_x86_feature_detected!("avx512dq")
+            || is_x86_feature_detected!("avx512vl")
+            || is_x86_feature_detected!("avx") {
+            Self::AVX
+        } else {
+            Self::None
+        }
     }
 }

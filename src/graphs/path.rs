@@ -6,12 +6,13 @@ use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use rayon::prelude::*;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::CigarString;
-use smith_waterman::bindings::SWOverhangStrategy;
+use gkl::smithwaterman::OverhangStrategy;
 use smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use utils::base_utils::BaseUtils;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 /**
  * A path thought a BaseGraph
@@ -287,12 +288,14 @@ impl Path {
         &self,
         ref_seq: &[u8],
         graph: &BaseGraph<V, E>,
+        avx_mode: AVXMode,
     ) -> CigarString {
         return CigarUtils::calculate_cigar(
             ref_seq,
             &self.get_bases(graph),
-            SWOverhangStrategy::SoftClip,
+            OverhangStrategy::SoftClip,
             &*NEW_SW_PARAMETERS,
+            avx_mode,
         )
         .unwrap();
     }

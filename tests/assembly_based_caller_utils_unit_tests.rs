@@ -18,6 +18,7 @@ extern crate hashlink;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate gkl;
 
 use hashlink::LinkedHashMap;
 use lorikeet_genome::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
@@ -29,7 +30,6 @@ use lorikeet_genome::haplotype::haplotype::Haplotype;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
-use lorikeet_genome::smith_waterman::bindings::SWParameters;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -39,9 +39,10 @@ use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::{bam, bam::Read};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use gkl::smithwaterman::Parameters;
 
 lazy_static! {
-    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: SWParameters = *NEW_SW_PARAMETERS;
+    static ref HAPLOTYPE_TO_REFERENCE_SW_PARAMETERS: Parameters = *NEW_SW_PARAMETERS;
 }
 
 // In finalizeRegion(), the base qualities of overlapped read clips pairs are adjusted.

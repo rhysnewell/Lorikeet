@@ -502,9 +502,10 @@ impl VariantContext {
         current_consensus
     }
 
-    pub fn alleles_present_in_sample(&self, sample_index: usize) -> Vec<bool> {
+    /// Detects if alleles are present in a sample given sample index and the read coverage threshold
+    pub fn alleles_present_in_sample(&self, sample_index: usize, threshold: i64) -> Vec<bool> {
         (0..self.get_n_alleles()).map(|allele_index| {
-            self.genotypes.genotypes()[sample_index].ad[allele_index] > 0
+            self.genotypes.genotypes()[sample_index].ad[allele_index] >= threshold
         }).collect::<Vec<bool>>()
     }
 

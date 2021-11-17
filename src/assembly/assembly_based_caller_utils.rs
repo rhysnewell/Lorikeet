@@ -15,9 +15,7 @@ use model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
 };
 use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    PCRErrorModel, PairHMMLikelihoodCalculationEngine,
-};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{PCRErrorModel, PairHMMLikelihoodCalculationEngine, AVXMode};
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
@@ -30,7 +28,8 @@ use reads::read_clipper::ReadClipper;
 use reads::read_utils::ReadUtils;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::ext::BamRecordExtensions;
-use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+// use smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
@@ -182,6 +181,7 @@ impl AssemblyBasedCallerUtils {
         original_read_likelihoods: &AlleleLikelihoods<Haplotype<SimpleInterval>>,
         ref_haplotype: &Haplotype<SimpleInterval>,
         padded_reference_loc: &SimpleInterval,
+        avx_mode: AVXMode,
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
@@ -203,6 +203,7 @@ impl AssemblyBasedCallerUtils {
                     ref_haplotype,
                     padded_reference_loc.get_start(),
                     is_informative,
+                    avx_mode,
                 );
                 (
                     ReadIndexer::new(best_allele.sample_index, best_allele.evidence_index),
@@ -317,6 +318,11 @@ impl AssemblyBasedCallerUtils {
             sample_names,
             *STANDARD_NGS,
             *NEW_SW_PARAMETERS,
+            if args.is_present("disable-avx") {
+                AVXMode::None
+            } else {
+                AVXMode::detect_mode()
+            }
         );
 
         if !given_alleles.is_empty() {
@@ -327,6 +333,11 @@ impl AssemblyBasedCallerUtils {
                 *NEW_SW_PARAMETERS,
                 &ref_haplotype,
                 &mut assembly_result_set,
+                if args.is_present("disable-avx") {
+                    AVXMode::None
+                } else {
+                    AVXMode::detect_mode()
+                }
             );
         }
 
@@ -337,9 +348,10 @@ impl AssemblyBasedCallerUtils {
         assembly_region_start: usize,
         given_alleles: &Vec<VariantContext>,
         max_mnp_distance: usize,
-        haplotype_to_reference_sw_parameters: SWParameters,
+        haplotype_to_reference_sw_parameters: Parameters,
         ref_haplotype: &Haplotype<SimpleInterval>,
         assembly_result_set: &mut AssemblyResultSet<A>,
+        avx_mode: AVXMode,
     ) {
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut grouped_by = HashMap::new(); // vcs grouped by start
@@ -473,8 +485,9 @@ impl AssemblyBasedCallerUtils {
                         let cigar = CigarUtils::calculate_cigar(
                             ref_haplotype.get_bases(),
                             inserted_haplotype.get_bases(),
-                            SWOverhangStrategy::Indel,
+                            OverhangStrategy::InDel,
                             &haplotype_to_reference_sw_parameters,
+                            avx_mode,
                         );
                         inserted_haplotype.set_cigar(cigar.unwrap().0);
                         inserted_haplotype.set_genome_location(
@@ -867,7 +880,7 @@ impl AssemblyBasedCallerUtils {
     pub fn create_likelihood_calculation_engine(
         args: &clap::ArgMatches,
         handle_soft_clips: bool,
-    ) -> PairHMMLikelihoodCalculationEngine {
+    ) -> PairHMMLikelihoodCalculationEngine<'static> {
         //AlleleLikelihoods::normalizeLikelihoods uses std::f64::NEGATIVE_INFINITY as a flag to disable capping
         let log10_global_read_mismapping_rate = if args
             .value_of("phred-scaled-global-read-mismapping-rate")
@@ -909,6 +922,11 @@ impl AssemblyBasedCallerUtils {
             !args.is_present("disable-symmetric-hmm-normalizing"),
             args.is_present("disable-cap-base-qualities-to-map-quality"),
             handle_soft_clips,
+            if args.is_present("disable-avx") {
+                AVXMode::None
+            } else {
+                AVXMode::detect_mode()
+            }
         )
     }
 
