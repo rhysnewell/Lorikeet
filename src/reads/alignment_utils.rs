@@ -14,6 +14,7 @@ use utils::simple_interval::SimpleInterval;
 use gkl::smithwaterman::OverhangStrategy;
 use std::cmp::min;
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
+use std::intrinsics::offset;
 
 lazy_static! {
     pub static ref HAPLOTYPE_TAG: String = format!("HC");
@@ -811,18 +812,18 @@ impl AlignmentUtils {
             }
             iii += 1;
         }
-        if ref_pos == ref_start {
-           bases_start = Some(bases_pos);
-        };
-        if ref_pos == ref_end {
-           bases_stop = Some(bases_pos);
-           done = true;
-        }
+        // if ref_pos == ref_start {
+        //    bases_start = Some(bases_pos);
+        // };
+        // if ref_pos == ref_end {
+        //    bases_stop = Some(bases_pos);
+        //    done = true;
+        // }
         // println!("DEBUG: ref pos {} bases {} start {} end {} bases start {:?} end {:?}", ref_pos, bases_pos, ref_start, ref_end, &bases_start, &bases_stop);
         if bases_start.is_none() || bases_stop.is_none() {
             panic!(
-                "Never found start {:?} or stop {:?} given cigar {:?}",
-                bases_start, bases_stop, bases_to_ref_cigar
+                "Never found start {:?} or stop {:?} given cigar {:?} ref start {} ref end {} offset {} bases {}",
+                bases_start, bases_stop, bases_to_ref_cigar, ref_start, ref_end, bases_start_on_ref, std::str::from_utf8(bases).unwrap()
             );
         };
         return Some(&bases[bases_start.unwrap() as usize..min(bases_stop.unwrap() as usize + 1, bases.len())]);
