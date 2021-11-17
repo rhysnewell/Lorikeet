@@ -14,7 +14,6 @@ use utils::simple_interval::SimpleInterval;
 use gkl::smithwaterman::OverhangStrategy;
 use std::cmp::min;
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
-use std::intrinsics::offset;
 
 lazy_static! {
     pub static ref HAPLOTYPE_TAG: String = format!("HC");
