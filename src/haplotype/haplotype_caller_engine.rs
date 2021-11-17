@@ -1275,15 +1275,15 @@ impl<'c> HaplotypeCallerEngine<'c> {
             // Initiate writer
             let mut bcf_writer = Writer::from_path(
                 format!(
-                    "{}/{}.vcf",
+                    "{}/{}.bcf",
                     output_prefix, &reference_reader.genomes_and_contigs.genomes[self.ref_idx],
                 )
                 .as_str(),
                 &header,
                 true,
-                Format::Vcf,
+                Format::Bcf, // compressed
             )
-            .unwrap_or_else(|_| panic!("Unable to create VCF output: {}.vcf", output_prefix));
+            .unwrap_or_else(|_| panic!("Unable to create BCF output: {}.bcf", output_prefix));
 
             for vc in variant_contexts {
                 vc.write_as_vcf_record(&mut bcf_writer, reference_reader, sample_names.len());

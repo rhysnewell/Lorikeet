@@ -114,7 +114,7 @@ impl AssemblyRegionTrimmer {
 
             min_start = min(
                 min_start,
-                vc.loc.get_start().checked_sub(padding).unwrap_or(0),
+                vc.loc.get_start().saturating_sub(padding),
             );
             max_end = max(max_end, vc.loc.get_end() + padding);
         }

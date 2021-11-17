@@ -291,7 +291,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
                             pb.progress_bar
-                                .set_message(format!("{}: Generating VCF file...", &reference,));
+                                .set_message(format!("{}: Generating VCF file of {} variant positions...", &reference, contexts.len()));
                         }
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,

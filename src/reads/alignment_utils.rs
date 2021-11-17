@@ -346,7 +346,7 @@ impl AlignmentUtils {
 
         // these variables track the inclusive start and exclusive end of the current cigar element in reference (if byReference) or read (otherwise) coordinates
         let mut element_start; // inclusive
-        let mut element_end = 0; // exclusive -- start of next element
+        let mut element_end = 0; // exclusive -- start of next element -- inclusive if at end of contig??
         for elt in cigar.iter() {
             element_start = element_end;
             element_end = element_start
@@ -376,7 +376,7 @@ impl AlignmentUtils {
         }
 
         assert!(
-            element_end > end,
+            element_end >= end,
             "Cigar elements don't reach end position (inclusive)"
         );
 
@@ -811,13 +811,13 @@ impl AlignmentUtils {
             }
             iii += 1;
         }
-        // if ref_pos == ref_start {
-        //    bases_start = Some(bases_pos);
-        // };
-        // if ref_pos == ref_end {
-        //    bases_stop = Some(bases_pos);
-        //    done = true;
-        // }
+        if ref_pos == ref_start {
+           bases_start = Some(bases_pos);
+        };
+        if ref_pos == ref_end { // base is last position in the sequence
+           bases_stop = Some(bases_pos);
+           done = true;
+        }
         // println!("DEBUG: ref pos {} bases {} start {} end {} bases start {:?} end {:?}", ref_pos, bases_pos, ref_start, ref_end, &bases_start, &bases_stop);
         if bases_start.is_none() || bases_stop.is_none() {
             panic!(

@@ -977,7 +977,7 @@ impl<'a> LinkageEngine<'a> {
                     let intersection = reads1.intersection(reads2).count() as f64;
 
                     let mut under_sep_thresh = false;
-                    under_sep_thresh = self.cluster_separations[[ind1, ind2]] < 3.0;
+                    under_sep_thresh = self.cluster_separations[[ind1, ind2]] < 2.5;
                     if intersection > 0.0 || under_sep_thresh {
                         let union = reads1.union(reads2).count() as f64;
 

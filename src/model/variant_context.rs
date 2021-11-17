@@ -1082,7 +1082,7 @@ impl VariantContext {
         let rid = bcf_writer
             .header()
             .name2rid(reference_reader.get_target_name(self.loc.get_contig()))
-            .expect("Contig name not present in VCF header");
+            .expect("Contig name not present in BCF header");
         record.set_rid(Some(rid));
         record.set_pos(self.loc.start as i64); // 0-based
         record.set_qual(-10.0 * self.log10_p_error as f32);
