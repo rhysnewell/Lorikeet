@@ -29,7 +29,7 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMInputScoreImputator;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
 use lorikeet_genome::reads::alignment_utils::AlignmentUtils;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
@@ -489,6 +489,7 @@ fn make_complex_read_aligned_to_ref() {
             hap.seq.as_bytes(),
             &*ORIGINAL_DEFAULT,
             SWOverhangStrategy::SoftClip,
+            AVXMode::detect_mode(),
         );
         haplotype.set_alignment_start_hap_wrt_ref(align.get_alignment_offset() as usize);
         haplotype.set_cigar(align.get_cigar().0);
