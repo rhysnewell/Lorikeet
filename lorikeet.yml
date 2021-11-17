@@ -22,3 +22,5 @@ dependencies:
   - numba
   - pynndescent
   - pip
+  - pip:
+      - cmake>=3.21

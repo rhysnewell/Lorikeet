@@ -16,6 +16,7 @@ extern crate approx;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate gkl;
 
 use itertools::Itertools;
 use lorikeet_genome::estimation::lorikeet_engine::ReadType;
@@ -36,7 +37,6 @@ use lorikeet_genome::reads::cigar_builder::CigarBuilder;
 use lorikeet_genome::reads::cigar_utils::{
     CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
 };
-use lorikeet_genome::smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -58,6 +58,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 
 static DEBUG: bool = true;
 
@@ -166,6 +167,7 @@ fn test_read_aligned_to_ref(
                 ref_haplotype,
                 ref_start,
                 true,
+                AVXMode::detect_mode()
             );
             println!(
                 "aligned read {} expected cigar {}",
@@ -452,7 +454,7 @@ fn test_read_aligned_to_ref_complex_alignment(
 ) {
     let ref_haplotype = Haplotype::new(reference.as_bytes(), true);
     let aligned_read =
-        AlignmentUtils::create_read_aligned_to_ref(read, haplotype, &ref_haplotype, 0, true);
+        AlignmentUtils::create_read_aligned_to_ref(read, haplotype, &ref_haplotype, 0, true, AVXMode::detect_mode());
     let mismatches = AlignmentUtils::get_mismatch_count(
         &aligned_read,
         reference.as_bytes(),
@@ -488,7 +490,7 @@ fn make_complex_read_aligned_to_ref() {
             padded_reference.as_bytes(),
             hap.seq.as_bytes(),
             &*ORIGINAL_DEFAULT,
-            SWOverhangStrategy::SoftClip,
+            OverhangStrategy::SoftClip,
             AVXMode::detect_mode(),
         );
         haplotype.set_alignment_start_hap_wrt_ref(align.get_alignment_offset() as usize);

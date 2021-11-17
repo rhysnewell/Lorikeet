@@ -181,6 +181,7 @@ impl AssemblyBasedCallerUtils {
         original_read_likelihoods: &AlleleLikelihoods<Haplotype<SimpleInterval>>,
         ref_haplotype: &Haplotype<SimpleInterval>,
         padded_reference_loc: &SimpleInterval,
+        avx_mode: AVXMode,
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
@@ -202,6 +203,7 @@ impl AssemblyBasedCallerUtils {
                     ref_haplotype,
                     padded_reference_loc.get_start(),
                     is_informative,
+                    avx_mode,
                 );
                 (
                     ReadIndexer::new(best_allele.sample_index, best_allele.evidence_index),
@@ -331,6 +333,11 @@ impl AssemblyBasedCallerUtils {
                 *NEW_SW_PARAMETERS,
                 &ref_haplotype,
                 &mut assembly_result_set,
+                if args.is_present("disable-avx") {
+                    AVXMode::None
+                } else {
+                    AVXMode::detect_mode()
+                }
             );
         }
 
@@ -344,6 +351,7 @@ impl AssemblyBasedCallerUtils {
         haplotype_to_reference_sw_parameters: Parameters,
         ref_haplotype: &Haplotype<SimpleInterval>,
         assembly_result_set: &mut AssemblyResultSet<A>,
+        avx_mode: AVXMode,
     ) {
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut grouped_by = HashMap::new(); // vcs grouped by start
@@ -479,6 +487,7 @@ impl AssemblyBasedCallerUtils {
                             inserted_haplotype.get_bases(),
                             OverhangStrategy::InDel,
                             &haplotype_to_reference_sw_parameters,
+                            avx_mode,
                         );
                         inserted_haplotype.set_cigar(cigar.unwrap().0);
                         inserted_haplotype.set_genome_location(

@@ -34,7 +34,6 @@ use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::{
     CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
 };
-use lorikeet_genome::smith_waterman::bindings::{SWOverhangStrategy, SWParameters};
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     SmithWatermanAligner, SmithWatermanAlignmentResult, ORIGINAL_DEFAULT, STANDARD_NGS,
 };
@@ -77,7 +76,7 @@ fn print_alignment(
     let offset = alignment.get_alignment_offset();
     let mut cigar = alignment.get_cigar();
 
-    if overhang_strategy != SWOverhangStrategy::SoftClip {
+    if let overhang_strategy = OverhangStrategy::SoftClip {
         // we need to go through all the hassle below only if we do not do soft-clipping;
         // otherwise offset is never negative
         if offset < 0 {
@@ -239,7 +238,7 @@ fn test_read_alignment_to_ref_complex_alignment(
         expected_start,
         expected_cigar,
         *ORIGINAL_DEFAULT,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     )
 }
 
@@ -251,14 +250,14 @@ fn make_test_odd_no_alignment() {
     test_odd_no_alignment(
         ref_1,
         read_1,
-        SWParameters::new(50, -100, -220, -12),
+        Parameters::new(50, -100, -220, -12),
         1,
         "2M2I3M1D4M",
     );
     test_odd_no_alignment(
         ref_1,
         read_1,
-        SWParameters::new(200, -50, -300, -22),
+        Parameters::new(200, -50, -300, -22),
         0,
         "11M",
     );
@@ -267,7 +266,7 @@ fn make_test_odd_no_alignment() {
 fn test_odd_no_alignment(
     reference: &str,
     read: &str,
-    weights: SWParameters,
+    weights: Parameters,
     expected_start: i32,
     expected_cigar: &str,
 ) {
@@ -277,7 +276,7 @@ fn test_odd_no_alignment(
         expected_start,
         expected_cigar,
         weights,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     )
 }
 
@@ -294,7 +293,7 @@ fn test_indels_at_start_and_end() {
         expected_start,
         expected_cigar,
         *ORIGINAL_DEFAULT,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     );
 }
 
@@ -310,7 +309,7 @@ fn test_degenerate_alignment_with_indels_at_both_ends() {
         expected_start,
         expected_cigar,
         *STANDARD_NGS,
-        SWOverhangStrategy::SoftClip,
+        OverhangStrategy::SoftClip,
     );
 }
 

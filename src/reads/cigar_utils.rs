@@ -4,6 +4,7 @@ use reads::cigar_builder::CigarBuilder;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
 use gkl::smithwaterman::{OverhangStrategy, Parameters};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     static ref SW_PAD: String = format!("NNNNNNNNNN");
@@ -275,6 +276,7 @@ impl CigarUtils {
         alt_seq: &[u8],
         strategy: OverhangStrategy,
         sw_parameters: &Parameters,
+        avx_mode: AVXMode,
     ) -> Option<CigarString> {
         if alt_seq.len() == 0 {
             // horrible edge case from the unit tests, where this path has no bases
@@ -315,6 +317,7 @@ impl CigarUtils {
             padded_path.as_bytes(),
             sw_parameters,
             strategy,
+            avx_mode
         );
 
         if Self::is_s_w_failure(&alignment) {

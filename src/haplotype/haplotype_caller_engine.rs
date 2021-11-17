@@ -26,7 +26,7 @@ use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::ByteArrayAllele;
 use model::variant_context::VariantContext;
 use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::PairHMMLikelihoodCalculationEngine;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMLikelihoodCalculationEngine, AVXMode};
 use rayon::prelude::*;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
@@ -947,6 +947,11 @@ impl<'c> HaplotypeCallerEngine<'c> {
             &mut read_likelihoods,
             &assembly_result.ref_haplotype,
             &assembly_result.padded_reference_loc,
+            if args.is_present("disable-avx") {
+                AVXMode::None
+            } else {
+                AVXMode::detect_mode()
+            }
         );
         read_likelihoods.change_evidence(read_alignments);
         debug!(

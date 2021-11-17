@@ -282,6 +282,7 @@ impl ReadThreadingAssembler {
                     active_region_extended_location,
                     reference_to_haplotype_sw_parameters,
                     result_set,
+                    avx_mode,
                 );
                 // non_ref_seq_graphs.push(result.graph.unwrap());
                 // result_set.add_haplotype(result);
@@ -438,6 +439,7 @@ impl ReadThreadingAssembler {
                                 active_region_extended_location,
                                 reference_to_haplotype_sw_parameters,
                                 result_set,
+                                avx_mode,
                             );
 
                             saved_assembly_results.push(assembled_result);
@@ -622,6 +624,7 @@ impl ReadThreadingAssembler {
         active_region_window: &'b SimpleInterval,
         haplotype_to_reference_sw_parameters: &Parameters,
         result_set: &Arc<Mutex<AssemblyResultSet<A>>>,
+        avx_mode: AVXMode,
     ) {
         // add the reference haplotype separately from all the others to ensure
         // that it is present in the list of haplotypes
@@ -695,6 +698,7 @@ impl ReadThreadingAssembler {
                         h.get_bases(),
                         OverhangStrategy::SoftClip,
                         haplotype_to_reference_sw_parameters,
+                        avx_mode
                     );
 
                     match cigar {
@@ -734,6 +738,7 @@ impl ReadThreadingAssembler {
                                     h.get_bases(),
                                     OverhangStrategy::InDel,
                                     haplotype_to_reference_sw_parameters,
+                                    avx_mode
                                 );
 
                                 match cigar_with_indel_strategy {

@@ -13,6 +13,7 @@ use std::ops::Range;
 use utils::simple_interval::SimpleInterval;
 use gkl::smithwaterman::OverhangStrategy;
 use std::cmp::min;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     pub static ref HAPLOTYPE_TAG: String = format!("HC");
@@ -42,6 +43,7 @@ impl AlignmentUtils {
         ref_haplotype: &Haplotype<SimpleInterval>,
         reference_start: usize,
         is_informative: bool,
+        avx_mode: AVXMode,
     ) -> BirdToolRead {
         // compute the smith-waterman alignment of read -> haplotype //TODO use more efficient than the read clipper here
         let read_minus_soft_clips = ReadClipper::new(original_read).hard_clip_soft_clipped_bases();
@@ -52,6 +54,7 @@ impl AlignmentUtils {
             read_minus_soft_clips.bases.as_slice(),
             &*ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS,
             OverhangStrategy::SoftClip,
+            avx_mode,
         );
 
         if read_to_haplotype_sw_alignment.alignment_offset == -1 {
@@ -808,13 +811,13 @@ impl AlignmentUtils {
             }
             iii += 1;
         }
-        //if ref_pos == ref_start {
-        //    bases_start = Some(bases_pos);
-        //};
-        //if ref_pos == ref_end {
-        //    bases_stop = Some(bases_pos - 1);
-        //    done = true;
-        //}
+        if ref_pos == ref_start {
+           bases_start = Some(bases_pos);
+        };
+        if ref_pos == ref_end {
+           bases_stop = Some(bases_pos);
+           done = true;
+        }
         // println!("DEBUG: ref pos {} bases {} start {} end {} bases start {:?} end {:?}", ref_pos, bases_pos, ref_start, ref_end, &bases_start, &bases_stop);
         if bases_start.is_none() || bases_stop.is_none() {
             panic!(

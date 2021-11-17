@@ -19,9 +19,7 @@ use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
 use lorikeet_genome::estimation::lorikeet_engine::ReadType;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
-    PCRErrorModel, PairHMMLikelihoodCalculationEngine,
-};
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PCRErrorModel, PairHMMLikelihoodCalculationEngine, AVXMode};
 use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
@@ -43,6 +41,7 @@ fn test_compute_likelihoods() {
         true,
         false,
         true,
+        AVXMode::None,
     );
 
     let mut per_sample_read_list = HashMap::new();

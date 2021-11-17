@@ -6,6 +6,7 @@ use std::cmp::max;
 use gkl::smithwaterman::{OverhangStrategy, Parameters, align};
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use reads::cigar_builder::CigarBuilder;
+use std::convert::TryFrom;
 
 lazy_static! {
     pub static ref ORIGINAL_DEFAULT: Parameters = Parameters::new(3, -1, -4, -3);
@@ -53,8 +54,8 @@ impl SmithWatermanAligner {
         match avx_mode {
             AVXMode::AVX => {
                 let avx_aligner = align().unwrap();
-                let (cigar, offset) = avx_aligner(reference, alternate, *parameters, overhang_strategy);
-                let cigar = CigarString::try_from(&cigar).unwrap();
+                let (cigar, offset) = avx_aligner(reference, alternate, *parameters, overhang_strategy).unwrap();
+                let cigar = CigarString::try_from(std::str::from_utf8(cigar.as_slice()).unwrap()).unwrap();
                 let result = SmithWatermanAlignmentResult::new(cigar, offset as i32);
                 return result
             },

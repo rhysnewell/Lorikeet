@@ -98,7 +98,7 @@ impl ReadThreadingGraph {
     }
 
     pub fn default_with_kmer_size(kmer_size: usize) -> Self {
-        Self::new(kmer_size, false, 6, 1, -1)
+        Self::new(kmer_size, false, 6, 1, -1, AVXMode::detect_mode())
     }
 
     /**
