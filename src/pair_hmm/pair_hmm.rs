@@ -336,10 +336,9 @@ impl<'a> PairHMM<'a> {
                 let avx_function = forward().unwrap();
                 self.m_log_likelihood_array = read_data_array.into_par_iter().flat_map(|read| {
                     // let read = &read;
-                    let likelihoods = self.m_haplotype_data_array.iter().map(|hap_bases| {
-
-                        println!("hap {} read {}", std::str::from_utf8(hap_bases).unwrap(), std::str::from_utf8(read.read_bases).unwrap());
-                        println!("quals {:?} i {:?} c {:?}", read.read_quals, &read.insertion_gop, &read.overall_gcp);
+                    self.m_haplotype_data_array.iter().map(|hap_bases| {
+                        //println!("hap {} read {}", std::str::from_utf8(hap_bases).unwrap(), std::str::from_utf8(read.read_bases).unwrap());
+                        //println!("quals {:?} i {:?} c {:?}", read.read_quals, &read.insertion_gop, &read.overall_gcp);
                         avx_function(
                             hap_bases,
                             read.read_bases,
@@ -348,9 +347,7 @@ impl<'a> PairHMM<'a> {
                             &read.deletion_gop,
                             &read.overall_gcp
                         )
-                    }).collect::<Vec<f64>>();
-                    println!("Likelihoods {:?}", &likelihoods);
-                    likelihoods
+                    }).collect::<Vec<f64>>()
                 }).collect::<Vec<f64>>();
             },
             _ => {
