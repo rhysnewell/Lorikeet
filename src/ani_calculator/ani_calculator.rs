@@ -82,7 +82,7 @@ impl ANICalculator {
                         // get consensus of first sample
                         consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_1).unwrap_or_default());
                         // which alleles are present in first sample
-                        let mut which_are_present = context.alleles_present_in_sample(sample_idx_1, 2);
+                        let mut which_are_present = context.alleles_present_in_sample(sample_idx_1, 1);
 
                         present_alleles.push(which_are_present);
                     }
@@ -97,7 +97,7 @@ impl ANICalculator {
                             // get consensus of first sample, default to ref
                             consenus_allele_indices.push(context.get_consensus_allele_index(sample_idx_2).unwrap_or_default());
                             // which alleles are present in first sample with at least two supporting reads
-                            let mut which_are_present = context.alleles_present_in_sample(sample_idx_2, 2);
+                            let mut which_are_present = context.alleles_present_in_sample(sample_idx_2, 1);
                             present_alleles.push(which_are_present);
                         }
 
