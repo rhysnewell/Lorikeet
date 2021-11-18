@@ -57,7 +57,7 @@ lorikeet_output --
                 ...
                  | - GenomeN --
                               |
-                              | - VCF
+                              | - BCF
                               | - Consensus, Population, Subpopulation ANI
                               | - Optional Reconstructed Strain Genomes and Strain Relative Abundances    
 ```
