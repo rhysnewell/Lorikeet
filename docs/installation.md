@@ -8,17 +8,23 @@ Installation
 ## Option 1: Install static binary 
 #### Recommended
 You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
-conda environment using the lorikeet.yml.
+conda environment using the lorikeet.yml. This will also install the latest `dev` branch of the `flight` submodule which 
+is necessary to perform strain genome recovery.
 ```
 GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml;
-conda activate lorikeet
+conda activate lorikeet;
+cd flight;
+git checkout dev;
+pip install .
 ```
 
-Once you have created the conda environment download and install the latest release file from github
+Once you have created the conda environment download and install the latest release file from github. Please make sure
+you are installing the latest release by checking what is available in the release tab of GitHub, as I'm often slow to update
+this README when changes occur.
 ```
-wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0rc5.tar.gz;
+wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0rc8.tar.gz;
 tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
 cp release/lorikeet $CONDA_PREFIX/bin;
 cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;

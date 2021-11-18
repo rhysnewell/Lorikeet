@@ -26,3 +26,7 @@ finds variants. An overview of the HaplotypeCaller pipeline can be found here: [
 Lorikeet makes use of a couple new and daunting algorithms. UMAP in particular is an amazing algorithm but might be cause 
 for concern since it is difficult to understand how it works and what it is doing. So please look over this amazing article 
 by Andy Coenen and Adam Pearce: [Understanding UMAP](https://pair-code.github.io/understanding-umap/)
+
+## Citation
+
+On its way :P
