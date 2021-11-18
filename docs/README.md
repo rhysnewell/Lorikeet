@@ -30,3 +30,7 @@ by Andy Coenen and Adam Pearce: [Understanding UMAP](https://pair-code.github.io
 ## Citation
 
 On its way :P
+
+## License
+
+Code is [GPL-3.0](LICENSE)
