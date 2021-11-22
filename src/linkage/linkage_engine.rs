@@ -17,12 +17,13 @@ use petgraph::prelude::{EdgeRef, NodeIndex, UnGraph};
 use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
-use std::cmp::min;
+use std::cmp::{min, max};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::{read, File};
 use std::io::Write;
 use std::path::Path;
+use petgraph::graph::EdgeIndex;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -79,7 +80,7 @@ impl<'a> LinkageEngine<'a> {
         debug!("group mean read depths {:?}", &self.grouped_mean_read_depth);
         let graph = self.build_graph(read_ids_in_groups);
         debug!("Graph {:?}", &graph);
-        if log_enabled!(Level::Info) {
+        if log_enabled!(Level::Debug) {
             let output_dot = format!("{}_vg_graph.dot", output_path);
             let file_path = Path::new(&output_dot);
 
@@ -122,11 +123,28 @@ impl<'a> LinkageEngine<'a> {
         output_path: &str,
     ) -> Vec<LinkedHashSet<i32>> {
         let mut all_strains = Vec::new();
-        for (idx, component_graph) in connected_components.into_iter().enumerate() {
+        for (idx, mut component_graph) in connected_components.into_iter().enumerate() {
+            // let max_depth_of_component = self.max_depth_of_graph(&component_graph);
+            // let min_depth_of_component = self.min_depth_of_graph(&component_graph);
+            // (0..component_graph.edge_count()).for_each(|ei| {
+            //
+            //     // Alter the edge weights by the depth of the connected nodes in order to push
+            //     // low weight nodes to externals of MST
+            //     let node1 = component_graph.raw_edges()[ei].source();
+            //     let node2 = component_graph.raw_edges()[ei].target();
+            //     let mut mean_depth =
+            //         *self.grouped_mean_read_depth.get(component_graph.node_weight(node1).unwrap()).unwrap() +
+            //         *self.grouped_mean_read_depth.get(component_graph.node_weight(node2).unwrap()).unwrap();
+            //     mean_depth = mean_depth / 2.0;
+            //     let depth_factor = min_depth_of_component / mean_depth; // closer to the minimum means the edge weight gets close to be doubles
+            //     let ew = component_graph.edge_weight_mut(EdgeIndex::new(ei)).unwrap();
+            //     *ew = *ew + *ew * depth_factor;
+            // });
+
             // compute the minimum spanning tree
             let mut mst = UnGraph::from_elements(min_spanning_tree(&component_graph));
             debug!("MST {:?}", &mst);
-            if log_enabled!(Level::Info) {
+            if log_enabled!(Level::Debug) {
                 let output_dot = format!("{}_mst_{}.dot", output_path, idx);
                 let file_path = Path::new(&output_dot);
 
@@ -684,7 +702,7 @@ impl<'a> LinkageEngine<'a> {
             let updated_depth = *node_cumulative_depth + depth_being_added_to_nodes;
 
             if (*node_cumulative_depth - *threshold).abs() <= f64::EPSILON
-                || &updated_depth > threshold
+                || (&updated_depth > threshold && *node_cumulative_depth > 0.0)
             {
                 // more efficient than division
                 debug!(
@@ -984,24 +1002,35 @@ impl<'a> LinkageEngine<'a> {
                         // The weight needs to be low for highly connected nodes and
                         // high for poorly connected nodes. This is because minimum spanning trees
                         // generate the tree with lowest edge weights
-                        let weight = 1.0 - (intersection / union);
+                        let mut weight = 1.0 - (intersection / union);
 
-                        if weight < 0.97 || intersection >= 50.0 {
+                        // We will form an edge here but it will essentially
+                        // have to be directly on top of the other variant group
+                        // for the edge to be favoured in the MST
+                        let depth_1 = *self.grouped_mean_read_depth.get(group1).unwrap();
+                        let depth_2 = *self.grouped_mean_read_depth.get(group2).unwrap();
+
+                        let depth_factor = 1.0 - min(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln() / max(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln();
+
+                        if weight < 1.00 || intersection >= 50.0 {
                             // variant groups connected by reads are favoured
+
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union
                             );
+                            weight = weight + weight * depth_factor;
+                            debug!("updated weight {}", weight);
                             graph.add_edge(node1, node2, weight);
                         } else if under_sep_thresh {
-                            // We will form an edge here but it will essentially
-                            // have to be directly on top of the other variant group
-                            // for the edge to be favoured in the MST
-                            let weight = self.cluster_separations[[ind1, ind2]];
+
+                            let mut weight = self.cluster_separations[[ind1, ind2]];
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
                                 group1, group2, weight, intersection, union
                             );
+                            weight = weight + weight * depth_factor;
+                            debug!("updated weight {}", weight);
                             graph.add_edge(node1, node2, weight);
                         }
                     }
@@ -1044,5 +1073,17 @@ impl<'a> LinkageEngine<'a> {
             already_seen.insert(node, new_node);
             new_node
         }
+    }
+
+    fn max_depth_of_graph(&self, component_graph: &UnGraph<i32, f64>) -> f64 {
+        component_graph.node_weights().into_iter().map(|vg| {
+            OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap())
+        }).max().unwrap().0
+    }
+
+    fn min_depth_of_graph(&self, component_graph: &UnGraph<i32, f64>) -> f64 {
+        component_graph.node_weights().into_iter().map(|vg| {
+            OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap())
+        }).min().unwrap().0
     }
 }
