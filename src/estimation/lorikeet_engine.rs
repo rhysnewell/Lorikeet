@@ -126,13 +126,13 @@ impl<'a> LorikeetEngine<'a> {
                         "{}/*{}",
                         &output_prefix,
                         if mode == "call" {
-                            ".vcf"
+                            ".bcf"
                         } else if mode == "genotype" {
                             "strain_coverages.tsv"
                         } else if mode == "consensus" {
                             "consensus_*.fna"
                         } else {
-                            ".vcf"
+                            ".bcf"
                         }
                     ))
                     .expect("failed to interpret glob")

@@ -544,13 +544,13 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                         chunk_multiplier + chunk_size,
                                                         target_len as usize
                                                     ) {
-                                                        debug!("Pileup {}: {} - {} Position {} Fixed {}", tid,
-                                                               chunk_multiplier,
-                                                               min(
-                                                                   chunk_multiplier + chunk_size,
-                                                                   target_len as usize
-                                                               ),
-                                                               pos, pos - chunk_idx * chunk_size);
+                                                        // debug!("Pileup {}: {} - {} Position {} Fixed {}", tid,
+                                                        //        chunk_multiplier,
+                                                        //        min(
+                                                        //            chunk_multiplier + chunk_size,
+                                                        //            target_len as usize
+                                                        //        ),
+                                                        //        pos, pos - chunk_idx * chunk_size);
                                                         continue
                                                     }
 

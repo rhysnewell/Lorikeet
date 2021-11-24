@@ -195,61 +195,61 @@ impl<'a> HaplotypeClusteringEngine<'a> {
         // i.e. they shared position with another variant in the group. So neither of the variants
         //      can exist in this group.
         // variant group to (pos to vector of indices key pair) key pair
-        let mut need_updating = HashMap::new();
+        // let mut need_updating = HashMap::new();
         for (idx, vc) in self.variants.iter_mut().enumerate() {
             let mut variant_group = self.labels[[idx]];
-            if vc.loc.tid() == prev_tid
-                && vc.loc.start as i32 == prev_pos
-                && variant_group == prev_vg
-                && variant_group != -1
-            {
-                // keep track of what group it originally came from
-                // self.previous_groups.insert(new_label, variant_group);
-                // variant_group = new_label;
-                // new_label += 1;
-                let position_to_update = need_updating
-                    .entry(variant_group)
-                    .or_insert_with(|| HashMap::new());
-                let indices_to_update = position_to_update
-                    .entry(prev_pos)
-                    .or_insert_with(|| Vec::new());
-                indices_to_update.push(idx)
-            } else {
-                vc.attributes.insert(
-                    VariantAnnotations::VariantGroup.to_key().to_string(),
-                    AttributeObject::I32(variant_group),
-                );
-            }
+            // if vc.loc.tid() == prev_tid
+            //     && vc.loc.start as i32 == prev_pos
+            //     && variant_group == prev_vg
+            //     && variant_group != -1
+            // {
+            //     // keep track of what group it originally came from
+            //     // self.previous_groups.insert(new_label, variant_group);
+            //     // variant_group = new_label;
+            //     // new_label += 1;
+            //     let position_to_update = need_updating
+            //         .entry(variant_group)
+            //         .or_insert_with(|| HashMap::new());
+            //     let indices_to_update = position_to_update
+            //         .entry(prev_pos)
+            //         .or_insert_with(|| Vec::new());
+            //     indices_to_update.push(idx)
+            // } else {
+            vc.attributes.insert(
+                VariantAnnotations::VariantGroup.to_key().to_string(),
+                AttributeObject::I32(variant_group),
+            );
+            // }
 
             prev_vg = variant_group;
             prev_tid = vc.loc.tid();
             prev_pos = vc.loc.start as i32;
         }
 
-        for (vg, position_map) in need_updating {
-            for (position, indices) in position_map {
-                let mut exclusive_groups = HashSet::with_capacity(indices.len());
-
-                for index in indices.iter() {
-                    let mut vc_to_update = &mut self.variants[*index];
-                    vc_to_update.attributes.insert(
-                        VariantAnnotations::VariantGroup.to_key().to_string(),
-                        AttributeObject::I32(new_label),
-                    );
-                    self.previous_groups.insert(new_label, vg);
-                    exclusive_groups.insert(new_label);
-                    new_label += 1;
-                }
-
-                for group in exclusive_groups.iter() {
-                    let exclusive_group = self
-                        .exclusive_groups
-                        .entry(*group)
-                        .or_insert_with(|| exclusive_groups.clone());
-                    exclusive_group.remove(group);
-                }
-            }
-        }
+        // for (vg, position_map) in need_updating {
+        //     for (position, indices) in position_map {
+        //         let mut exclusive_groups = HashSet::with_capacity(indices.len());
+        //
+        //         for index in indices.iter() {
+        //             let mut vc_to_update = &mut self.variants[*index];
+        //             vc_to_update.attributes.insert(
+        //                 VariantAnnotations::VariantGroup.to_key().to_string(),
+        //                 AttributeObject::I32(new_label),
+        //             );
+        //             self.previous_groups.insert(new_label, vg);
+        //             exclusive_groups.insert(new_label);
+        //             new_label += 1;
+        //         }
+        //
+        //         for group in exclusive_groups.iter() {
+        //             let exclusive_group = self
+        //                 .exclusive_groups
+        //                 .entry(*group)
+        //                 .or_insert_with(|| exclusive_groups.clone());
+        //             exclusive_group.remove(group);
+        //         }
+        //     }
+        // }
     }
 
     /// Writes out a variant by sample depth array from the provided collection of variant contexts
