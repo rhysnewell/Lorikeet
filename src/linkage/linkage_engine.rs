@@ -222,24 +222,24 @@ impl<'a> LinkageEngine<'a> {
                 let mut depth_being_added_to_other_nodes =
                     current_depth - current_node_cumulative_depth;
 
+                let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
+                    &mst,
+                    current_node,
+                    highest_depth_node,
+                    0,
+                    None,
+                )
+                    .collect::<Vec<LinkedHashSet<NodeIndex>>>();
+                debug!(
+                    "Paths {:?} current node {:?} depth {} cumulative depth {} detection {}",
+                    &paths, current_node, current_depth, current_node_cumulative_depth, 1.0 - (current_node_cumulative_depth / current_depth)
+                );
                 if ((1.0 - (current_node_cumulative_depth / current_depth))
                     >= Self::MIN_DETECTABLE_DEPTH_EPSILON
                     && depth_being_added_to_other_nodes > 0.0)
                     || !seen_nodes.contains(mst.node_weight(current_node).unwrap())
                 {
-                    let paths = all_simple_paths::<LinkedHashSet<NodeIndex>, _>(
-                        &mst,
-                        current_node,
-                        highest_depth_node,
-                        0,
-                        None,
-                    )
-                    .collect::<Vec<LinkedHashSet<NodeIndex>>>();
-                    debug!(
-                        "Paths {:?} current node {:?} depth {} cumulative depth {}",
-                        &paths, current_node, current_depth, current_node_cumulative_depth,
-                    );
-
+                    debug!("Potential new strain");
                     if paths.len() == 1 {
                         let mut path = paths.into_iter().next().unwrap();
                         // check if any of the nodes in this path have been consumed entirely
@@ -305,6 +305,35 @@ impl<'a> LinkageEngine<'a> {
                                 }
                             }
                         }
+                    }
+                } else {
+                    debug!("Node below the water. Update cumulative depths...");
+                    if paths.len() == 1 {
+                        let mut path = paths.into_iter().next().unwrap();
+                        path.into_iter()
+                            .enumerate()
+                            .for_each(|(idx, node)| {
+                                let variant_group = *mst.node_weight(node).unwrap();
+                                seen_nodes.insert(variant_group);
+                                let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
+                                // add the depth of the current node to this node
+                                *node_cumulative_depth += depth_being_added_to_other_nodes;
+
+                                // check if this the next node in the path, if so append to
+                                // binary heap as it will act as the next branch tip once current
+                                // tips run out
+                                if idx == 1 {
+                                    starting_nodes.push((
+                                        Reverse(OrderedFloat(
+                                            *self
+                                                .grouped_mean_read_depth
+                                                .get(mst.node_weight(node).unwrap())
+                                                .unwrap(),
+                                        )),
+                                        node,
+                                    ));
+                                };
+                            });
                     }
                 }
             }
