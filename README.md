@@ -23,23 +23,7 @@ For detailed documentation of Lorikeet and the various algorithms and concepts i
 
 ### Installation
 
-#### Option 1: Conda *Only for version <= 0.5.0*
-
-*NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
-up to date version, follow the instruction in option 2. 
-
-Install into current conda environment:
-```
-conda install -c bioconda lorikeet-genome
-```
-
-Create fresh conda environment and install lorikeet there:
-```
-conda create -n lorikeet -c bioconda lorikeet-genome && \
-conda activate lorikeet
-```
-
-#### Option 2: Install static binary
+#### Option 1: Install static binary
 You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
 conda environment using the lorikeet.yml.
 ```
@@ -57,7 +41,7 @@ cp release/lorikeet $CONDA_PREFIX/bin;
 cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 ```
 
-#### Option 3: Build manually
+#### Option 2: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system. This method also assumes you have 
 previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
@@ -86,6 +70,23 @@ If you have access to https:// on port 443, then you can use this 'magic' comman
 
 ```
 git config --global url.https://github.com/.insteadOf git://github.com/
+```
+
+#### Option 3: Conda *Only for version <= 0.5.0* 
+#### Not recommended yet
+
+*NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
+up to date version, follow the instruction in option 2. 
+
+Install into current conda environment:
+```
+conda install -c bioconda lorikeet-genome
+```
+
+Create fresh conda environment and install lorikeet there:
+```
+conda create -n lorikeet -c bioconda lorikeet-genome && \
+conda activate lorikeet
 ```
 
 ## Usage
