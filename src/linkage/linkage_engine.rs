@@ -319,20 +319,20 @@ impl<'a> LinkageEngine<'a> {
                                 // add the depth of the current node to this node
                                 *node_cumulative_depth += depth_being_added_to_other_nodes;
 
-                                // // check if this the next node in the path, if so append to
-                                // // binary heap as it will act as the next branch tip once current
-                                // // tips run out
-                                // if idx == 1 {
-                                //     starting_nodes.push((
-                                //         Reverse(OrderedFloat(
-                                //             *self
-                                //                 .grouped_mean_read_depth
-                                //                 .get(mst.node_weight(node).unwrap())
-                                //                 .unwrap(),
-                                //         )),
-                                //         node,
-                                //     ));
-                                // };
+                                // check if this the next node in the path, if so append to
+                                // binary heap as it will act as the next branch tip once current
+                                // tips run out
+                                if idx == 1 {
+                                    starting_nodes.push((
+                                        Reverse(OrderedFloat(
+                                            *self
+                                                .grouped_mean_read_depth
+                                                .get(mst.node_weight(node).unwrap())
+                                                .unwrap(),
+                                        )),
+                                        node,
+                                    ));
+                                };
                             });
                     }
                 }
