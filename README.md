@@ -27,7 +27,7 @@ For detailed documentation of Lorikeet and the various algorithms and concepts i
 You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
 conda environment using the lorikeet.yml.
 ```
-git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml;
 conda activate lorikeet
@@ -47,7 +47,7 @@ paths in the your conda environment if they can't properly be found on your syst
 previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
 versions need to be used for installation.
 ```
-git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml; 
 conda activate lorikeet;
