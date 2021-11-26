@@ -308,7 +308,7 @@ impl<'a> LinkageEngine<'a> {
                     }
                 } else {
                     debug!("Node below the water. Update cumulative depths...");
-                    if paths.len() == 1 {
+                    if paths.len() == 1 && current_node != highest_depth_node {
                         let mut path = paths.into_iter().next().unwrap();
                         path.into_iter()
                             .enumerate()
