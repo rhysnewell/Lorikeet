@@ -78,32 +78,7 @@ impl StrainAbundanceCalculator {
                         let mut pooled_weights = sample_genotypes[index].variant_genotype_ids[variant_index]
                             .iter()
                             .map(|genotype_index| {
-
-                                debug!("outer index {}", sample_genotypes[index].index_variant_map.get(&variant_index).unwrap());
-                                debug!("inner index {:?}",
-                                       sample_genotypes[*genotype_index].variant_index_map.get(
-                                           sample_genotypes[index].index_variant_map.get(&variant_index).unwrap()
-                                       )
-                                );
-
-                                match
-                                    sample_genotypes[*genotype_index].variant_index_map.get(
-                                        sample_genotypes[index].index_variant_map.get(&variant_index).unwrap()
-                                    ) {
-                                    Some(matching_variant_index) => {
-                                        theta_curr[*genotype_index] //* sample_genotypes[*genotype_index].variant_weights[*matching_variant_index]
-                                    },
-                                    None => {
-                                        debug!(
-                                            "index {} trying to find {} from {:?}",
-                                            index,
-                                            sample_genotypes[index].index_variant_map.get(&variant_index).unwrap(),
-                                            &sample_genotypes[*genotype_index].variant_index_map
-                                        );
-                                        0.0
-                                    }
-                                }
-
+                                theta_curr[*genotype_index]
                             })
                             .sum::<f64>();
 
