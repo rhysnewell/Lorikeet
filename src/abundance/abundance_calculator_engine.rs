@@ -309,8 +309,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     //     vec.remove(position_of_strain_id);
                     // });
 
-                    // something_removed = true;
-                    // n_strains -= 1;
+                    something_removed = true;
+                    n_strains -= 1;
                 }
             }
 
