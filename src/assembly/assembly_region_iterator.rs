@@ -56,7 +56,7 @@ impl<'a> AssemblyRegionIterator<'a> {
         // should retrieve all reads regardles of if they have been seen before
         let mut records: Vec<BirdToolRead> = self
             .indexed_bam_readers
-            .par_iter()
+            .iter()
             .enumerate()
             .flat_map(|(sample_idx, bam_generator)| {
                 let mut record = Record::new(); // Empty bam record
@@ -68,6 +68,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                 .next()
                 .unwrap();
 
+                debug!("samples: {} -> {}: {} - {}", bam_generator, region.get_contig(), region.get_padded_span().start, region.get_padded_span().end);
                 bam_generated.fetch((
                     region.get_contig() as i32,
                     region.get_padded_span().start as i64,

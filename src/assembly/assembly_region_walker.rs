@@ -257,6 +257,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                     .flat_map(|mut assembly_region| {
                         let mut reference_reader = reference_reader.clone();
                         let mut evaluator = evaluator.clone();
+                        debug!("Filling with reads...");
                         assembly_region_iter.fill_next_assembly_region_with_reads(
                             &mut assembly_region,
                             flag_filters,
