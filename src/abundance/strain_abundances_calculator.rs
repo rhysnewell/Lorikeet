@@ -91,10 +91,15 @@ impl StrainAbundanceCalculator {
                                         sample_genotypes[index].index_variant_map.get(&variant_index).unwrap()
                                     ) {
                                     Some(matching_variant_index) => {
-                                        theta_curr[*genotype_index] * sample_genotypes[*genotype_index].variant_weights[*matching_variant_index]
+                                        theta_curr[*genotype_index] //* sample_genotypes[*genotype_index].variant_weights[*matching_variant_index]
                                     },
                                     None => {
-                                        debug!("index {} trying to find {} from {:?}", index, sample_genotypes[index].index_variant_map.get(&variant_index).unwrap(), &sample_genotypes[*genotype_index].variant_index_map);
+                                        debug!(
+                                            "index {} trying to find {} from {:?}",
+                                            index,
+                                            sample_genotypes[index].index_variant_map.get(&variant_index).unwrap(),
+                                            &sample_genotypes[*genotype_index].variant_index_map
+                                        );
                                         0.0
                                     }
                                 }

@@ -127,52 +127,55 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             // debug!("Variant depth {} Total depth {}", variant_depth, total_depth);
                             let weight = variant_depth / strains.len() as f64;
 
-                            let mut strains_to_remove = HashSet::new();
-                            for strain in strains.iter() {
-                                let abundance_index = match abundance_key.get(strain) {
-                                    Some(idx) => *idx,
-                                    None => {
-                                        strains_to_remove.insert(*strain);
-                                        continue;
-                                    }
-                                };
+                            if weight > 0.0 {
+                                let mut strains_to_remove = HashSet::new();
+                                for strain in strains.iter() {
+                                    let abundance_index = match abundance_key.get(strain) {
+                                        Some(idx) => *idx,
+                                        None => {
+                                            strains_to_remove.insert(*strain);
+                                            continue;
+                                        }
+                                    };
 
-                                if strain_presences[sample_index][*strain] {
-                                    let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
-                                    sample_vector[abundance_index].variant_index_map.insert(vi, sample_vector_variant_index);
-                                    sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi);
+                                    if strain_presences[sample_index][*strain] {
+                                        let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
+                                        sample_vector[abundance_index].variant_index_map.insert(vi, sample_vector_variant_index);
+                                        sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi);
 
-                                    sample_vector[abundance_index].variant_weights.push(weight);
+                                        sample_vector[abundance_index].variant_weights.push(weight);
 
-                                    // Collect the other abundance indices that this variant is associated with
-                                    let other_abundance_indices = strains
-                                        .iter()
-                                        .filter_map(|idx| match abundance_key.get(idx) {
-                                            Some(a_idx) => {
-                                                if strain_presences[sample_index][*a_idx] {
-                                                    Some(*a_idx)
-                                                } else {
-                                                    None
+                                        // Collect the other abundance indices that this variant is associated with
+                                        let other_abundance_indices = strains
+                                            .iter()
+                                            .filter_map(|idx| match abundance_key.get(idx) {
+                                                Some(a_idx) => {
+                                                    if strain_presences[sample_index][*a_idx] {
+                                                        Some(*a_idx)
+                                                    } else {
+                                                        None
+                                                    }
                                                 }
-                                            }
-                                            None => None,
-                                        })
-                                        .collect();
+                                                None => None,
+                                            })
+                                            .collect();
 
-                                    sample_vector[abundance_index]
-                                        .variant_genotype_ids
-                                        .push(other_abundance_indices);
+                                        sample_vector[abundance_index]
+                                            .variant_genotype_ids
+                                            .push(other_abundance_indices);
+                                    }
+                                }
+
+                                // vi += 1;
+
+                                // Remove the strains that weren't present
+                                for to_remove in strains_to_remove.into_iter() {
+                                    let strain_index =
+                                        strains.iter().position(|i| *i == to_remove).unwrap();
+                                    strains.remove(strain_index);
                                 }
                             }
 
-                            // vi += 1;
-
-                            // Remove the strains that weren't present
-                            for to_remove in strains_to_remove.into_iter() {
-                                let strain_index =
-                                    strains.iter().position(|i| *i == to_remove).unwrap();
-                                strains.remove(strain_index);
-                            }
 
                             let mut reference_present =
                                 &mut per_sample_reference_presence[sample_index];
@@ -193,58 +196,58 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                         as f64 / total_depth;
 
                                     let weight = reference_depth / (n_strains - strains.len()) as f64;
-
-
-                                    // let reference_strain_index = n_strains - 1;
-                                    let abundance_index =
-                                        match abundance_key.get(&reference_strain_index) {
-                                            Some(idx) => *idx,
-                                            None => {
-                                                // if n_strains - 1 == reference_strain_index {
-                                                //     *reference_present = false;
-                                                // }
-                                                continue;
-                                            }
-                                        };
-
-                                    let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
-                                    sample_vector[abundance_index].variant_index_map.insert(vi + 1, sample_vector_variant_index);
-                                    sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi + 1);
-                                    // vi += 1;
-
-                                    sample_vector[abundance_index].variant_weights.push(weight);
-
-                                    // Collect the other abundance indices that this variant is associated with
-                                    // For the refernce variant this is the strain ids that aren't currently in
-                                    // strains vector
-                                    let other_abundance_indices = (0..n_strains)
-                                        .into_iter()
-                                        .filter_map(|idx| {
-                                            if !strains.contains(&idx) {
-                                                match abundance_key.get(&idx) {
-                                                    Some(a_idx) => {
-                                                        if strain_presences[sample_index][*a_idx] {
-                                                            // let sample_vector_variant_index = sample_vector[*a_idx].variant_weights.len();
-                                                            // sample_vector[*a_idx].variant_index_map.insert(vi + 1, sample_vector_variant_index);
-                                                            // sample_vector[*a_idx].index_variant_map.insert(sample_vector_variant_index, vi + 1);
-                                                            // // vi += 1;
-                                                            // sample_vector[*a_idx].variant_weights.push(weight);
-                                                            Some(*a_idx)
-                                                        } else {
-                                                            None
-                                                        }
-                                                    }
-                                                    None => None,
+                                    if weight > 0.0 {
+                                        // let reference_strain_index = n_strains - 1;
+                                        let abundance_index =
+                                            match abundance_key.get(&reference_strain_index) {
+                                                Some(idx) => *idx,
+                                                None => {
+                                                    // if n_strains - 1 == reference_strain_index {
+                                                    //     *reference_present = false;
+                                                    // }
+                                                    continue;
                                                 }
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .collect();
+                                            };
 
-                                    sample_vector[abundance_index]
-                                        .variant_genotype_ids
-                                        .push(other_abundance_indices);
+                                        let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
+                                        sample_vector[abundance_index].variant_index_map.insert(vi + 1, sample_vector_variant_index);
+                                        sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi + 1);
+                                        // vi += 1;
+
+                                        sample_vector[abundance_index].variant_weights.push(weight);
+
+                                        // Collect the other abundance indices that this variant is associated with
+                                        // For the refernce variant this is the strain ids that aren't currently in
+                                        // strains vector
+                                        let other_abundance_indices = (0..n_strains)
+                                            .into_iter()
+                                            .filter_map(|idx| {
+                                                if !strains.contains(&idx) {
+                                                    match abundance_key.get(&idx) {
+                                                        Some(a_idx) => {
+                                                            if strain_presences[sample_index][*a_idx] {
+                                                                // let sample_vector_variant_index = sample_vector[*a_idx].variant_weights.len();
+                                                                // sample_vector[*a_idx].variant_index_map.insert(vi + 1, sample_vector_variant_index);
+                                                                // sample_vector[*a_idx].index_variant_map.insert(sample_vector_variant_index, vi + 1);
+                                                                // // vi += 1;
+                                                                // sample_vector[*a_idx].variant_weights.push(weight);
+                                                                Some(*a_idx)
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }
+                                                        None => None,
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            })
+                                            .collect();
+
+                                        sample_vector[abundance_index]
+                                            .variant_genotype_ids
+                                            .push(other_abundance_indices);
+                                    }
                                 }
                             }
                         }
@@ -286,7 +289,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     [*abundance_key.get(&calculator.index).unwrap()] += 1;
                                 if strain_present[strain_index] {
                                     strain_present[strain_index] = false;
-                                    something_removed = true;
+                                    // something_removed = true;
                                 }
                             }
                         })
