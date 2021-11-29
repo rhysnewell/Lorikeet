@@ -47,15 +47,21 @@ impl StrainAbundanceCalculator {
             // Update theta values
             theta_prev = theta_curr.clone();
 
+            let mut new_weights = Vec::with_capacity(sample_genotypes.len());
+            let mut updated_thetas = Vec::with_capacity(sample_genotypes.len());
+
             for index in 0..sample_genotypes.len() {
                 if (sample_genotypes[index].abundance_weight - eps).abs() <= f64::EPSILON
                     || sample_genotypes[index].abundance_weight.is_infinite()
                 {
+                    updated_thetas.push(0.0);
+                    new_weights.push(None);
                     continue;
                 }
 
                 // Step 1: update variant weights
-                sample_genotypes[index].variant_weights = sample_genotypes[index]
+                // sample_genotypes[index].variant_weights
+                let variant_weights: Vec<f64> = sample_genotypes[index]
                     .variant_weights
                     .par_iter()
                     .enumerate()
@@ -111,29 +117,44 @@ impl StrainAbundanceCalculator {
 
                 // Step 2: update abundance weight based on mean of variant weights
                 let denominator = sample_genotypes.par_iter().map(|other_genotypes| {
-                    other_genotypes.variant_weights.iter().sum::<f64>() / other_genotypes.variant_weights.len() as f64
+                    other_genotypes.variant_weights.iter().sum::<f64>()
                 }).sum::<f64>();
-                sample_genotypes[index].abundance_weight = (sample_genotypes[index].variant_weights.iter().sum::<f64>()
-                    / sample_genotypes[index].variant_weights.len() as f64) / denominator;
+                // sample_genotypes[index].abundance_weight
+                let mut abundance_weight = (variant_weights.iter().sum::<f64>()) / denominator;
 
                 debug!(
                     "Index {} abundance weight {} variant weights",
                     index,
-                    sample_genotypes[index].abundance_weight, //&genotype.variant_weights
+                    abundance_weight, //&genotype.variant_weights
                 );
 
-                if sample_genotypes[index].abundance_weight.is_nan()
+                if abundance_weight.is_nan()
                     // || genotype.variant_weights.contains(&0.0)
-                    || sample_genotypes[index].abundance_weight.is_infinite()
-                    || sample_genotypes[index].abundance_weight < eps
+                    || abundance_weight.is_infinite()
+                    || abundance_weight < eps
                 {
-                    sample_genotypes[index].abundance_weight = 0.;
+                    abundance_weight = 0.;
                     // sample_genotypes[index].variant_weights = vec![];
                 }
 
                 // Update list of theta_curr
-                theta_curr[index] = sample_genotypes[index].abundance_weight;
+                // theta_curr[index] = sample_genotypes[index].abundance_weight;
+                updated_thetas.push(abundance_weight);
+                new_weights.push(Some(variant_weights));
             }
+            for (index, weights) in new_weights.into_iter().enumerate() {
+                match weights {
+                    None => {
+                        // pass
+                    },
+                    Some(weights) => {
+                        sample_genotypes[index].variant_weights = weights;
+                        sample_genotypes[index].abundance_weight = updated_thetas[index];
+                        theta_curr[index] = updated_thetas[index];
+                    }
+                }
+            }
+
 
             // Update omega
             omega = theta_curr
@@ -141,6 +162,7 @@ impl StrainAbundanceCalculator {
                 .zip(theta_prev.iter())
                 .map(|(curr, prev)| (curr - prev).abs())
                 .sum::<f64>();
+
 
             debug!(
                 "Theta Current {:?} Prev {:?} Omega {}",

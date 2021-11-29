@@ -22,7 +22,7 @@ pub struct AbundanceCalculatorEngine<'a> {
 
 impl<'a> AbundanceCalculatorEngine<'a> {
     // Welcome. To the house... of Abundance
-    const EPSILON: f64 = 1e-3;
+    const EPSILON: f64 = 1e-10;
 
     pub fn new(
         variant_contexts: Vec<VariantContext>,
@@ -286,7 +286,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     [*abundance_key.get(&calculator.index).unwrap()] += 1;
                                 if strain_present[strain_index] {
                                     strain_present[strain_index] = false;
-                                    // something_removed = true;
+                                    something_removed = true;
                                 }
                             }
                         })
