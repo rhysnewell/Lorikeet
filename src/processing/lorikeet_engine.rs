@@ -675,7 +675,8 @@ pub fn start_lorikeet_engine<
         &mut reference_map,
         &genomes_and_contigs,
         short_read_bam_count,
-        long_read_bam_count,
+        // long_read_bam_count,
+        0
     );
 
     let tree: Arc<Mutex<Vec<&Elem>>> =
