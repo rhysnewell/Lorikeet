@@ -3,9 +3,9 @@
 //
 // // use bio::stats::{LogProb, PHREDProb};
 // use coverm::bam_generator::*;
-// use estimation::codon_structs::*;
-// use estimation::contig_variants::*;
-// use estimation::variant_matrix::*;
+// use processing::codon_structs::*;
+// use processing::contig_variants::*;
+// use processing::variant_matrix::*;
 // use model::variants::*;
 // use rayon::prelude::*;
 // use utils::utils::*;

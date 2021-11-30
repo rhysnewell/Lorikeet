@@ -4,7 +4,7 @@ use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
-use estimation::bams::index_bams::*;
+use processing::bams::index_bams::*;
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use model::variant_context::VariantContext;
