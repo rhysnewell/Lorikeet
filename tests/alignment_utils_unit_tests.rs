@@ -19,7 +19,7 @@ extern crate term;
 extern crate gkl;
 
 use itertools::Itertools;
-use lorikeet_genome::estimation::lorikeet_engine::ReadType;
+use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::genotype::genotype_builder::Genotype;
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;

@@ -23,7 +23,7 @@ use bio::io::fasta::IndexedReader;
 use bio::utils::Interval;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
-use lorikeet_genome::estimation::lorikeet_engine::ReadType;
+use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reference::reference_reader::ReferenceReader;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;

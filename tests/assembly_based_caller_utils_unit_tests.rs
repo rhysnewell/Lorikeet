@@ -23,7 +23,7 @@ extern crate gkl;
 use hashlink::LinkedHashMap;
 use lorikeet_genome::assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
-use lorikeet_genome::estimation::lorikeet_engine::ReadType;
+use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::genotype::genotype_builder::{Genotype, GenotypesContext};
 use lorikeet_genome::haplotype::event_map::EventMap;
 use lorikeet_genome::haplotype::haplotype::Haplotype;
