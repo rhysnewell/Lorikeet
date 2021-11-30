@@ -20,7 +20,7 @@ pub struct StrainAbundanceCalculator {
     // in this calculator
     pub variant_index_map: HashMap<usize, usize>,
     // Reverse of variant index map
-    pub index_variant_map: HashMap<usize, usize>
+    pub index_variant_map: HashMap<usize, usize>,
 }
 
 impl StrainAbundanceCalculator {
@@ -31,7 +31,7 @@ impl StrainAbundanceCalculator {
             variant_genotype_ids: Vec::with_capacity(capacity),
             abundance_weight: 1.,
             variant_index_map: HashMap::with_capacity(capacity),
-            index_variant_map: HashMap::with_capacity(capacity)
+            index_variant_map: HashMap::with_capacity(capacity),
         }
     }
 
@@ -66,20 +66,19 @@ impl StrainAbundanceCalculator {
                     .par_iter()
                     .enumerate()
                     .map(|(variant_index, w)| {
-
-                        debug!("All weights for {}: {:?} -> {:?}",
-                               variant_index,
-                               &sample_genotypes[index].variant_genotype_ids[variant_index],
-                               sample_genotypes[index].variant_genotype_ids[variant_index]
-                                   .iter()
-                                   .map(|genotype_index| theta_curr[*genotype_index])
-                                   .collect::<Vec<f64>>()
+                        debug!(
+                            "All weights for {}: {:?} -> {:?}",
+                            variant_index,
+                            &sample_genotypes[index].variant_genotype_ids[variant_index],
+                            sample_genotypes[index].variant_genotype_ids[variant_index]
+                                .iter()
+                                .map(|genotype_index| theta_curr[*genotype_index])
+                                .collect::<Vec<f64>>()
                         );
-                        let mut pooled_weights = sample_genotypes[index].variant_genotype_ids[variant_index]
+                        let mut pooled_weights = sample_genotypes[index].variant_genotype_ids
+                            [variant_index]
                             .iter()
-                            .map(|genotype_index| {
-                                theta_curr[*genotype_index]
-                            })
+                            .map(|genotype_index| theta_curr[*genotype_index])
                             .sum::<f64>();
 
                         if pooled_weights <= f64::EPSILON {
@@ -87,7 +86,11 @@ impl StrainAbundanceCalculator {
                         }
                         debug!(
                             "Variant index {} weight {} pooled weight {} theta curr {} {}",
-                            variant_index, w, pooled_weights, theta_curr[index], theta_curr[index] / pooled_weights
+                            variant_index,
+                            w,
+                            pooled_weights,
+                            theta_curr[index],
+                            theta_curr[index] / pooled_weights
                         );
                         // if variant weights are between 0 and 1
                         let w = (w * sample_genotypes[index].abundance_weight) / (pooled_weights);
@@ -96,9 +99,10 @@ impl StrainAbundanceCalculator {
                     .collect();
 
                 // Step 2: update abundance weight based on mean of variant weights
-                let denominator = sample_genotypes.par_iter().map(|other_genotypes| {
-                    other_genotypes.variant_weights.iter().sum::<f64>()
-                }).sum::<f64>();
+                let denominator = sample_genotypes
+                    .par_iter()
+                    .map(|other_genotypes| other_genotypes.variant_weights.iter().sum::<f64>())
+                    .sum::<f64>();
                 // sample_genotypes[index].abundance_weight
                 let mut abundance_weight = (variant_weights.iter().sum::<f64>()) / denominator;
 
@@ -126,7 +130,7 @@ impl StrainAbundanceCalculator {
                 match weights {
                     None => {
                         // pass
-                    },
+                    }
                     Some(weights) => {
                         sample_genotypes[index].variant_weights = weights;
                         sample_genotypes[index].abundance_weight = updated_thetas[index];
@@ -135,14 +139,12 @@ impl StrainAbundanceCalculator {
                 }
             }
 
-
             // Update omega
             omega = theta_curr
                 .iter()
                 .zip(theta_prev.iter())
                 .map(|(curr, prev)| (curr - prev).abs())
                 .sum::<f64>();
-
 
             debug!(
                 "Theta Current {:?} Prev {:?} Omega {}",

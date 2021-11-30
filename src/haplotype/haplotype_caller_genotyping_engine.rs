@@ -301,7 +301,14 @@ impl HaplotypeCallerGenotypingEngine {
                             );
                             debug!("Annotated call {:?}", &annotated_call);
 
-                            if annotated_call.get_genotypes().genotypes().iter().map(|g| g.dp - g.ad[0]).sum::<i64>() >= 2 {
+                            if annotated_call
+                                .get_genotypes()
+                                .genotypes()
+                                .iter()
+                                .map(|g| g.dp - g.ad[0])
+                                .sum::<i64>()
+                                >= 2
+                            {
                                 // at least two supporting reads
                                 return_calls.push(annotated_call);
                                 call.alleles
@@ -313,11 +320,12 @@ impl HaplotypeCallerGenotypingEngine {
                                             None => {
                                                 // do nothing
                                             }
-                                            Some(a) => called_haplotypes.extend(a.into_iter().cloned()),
+                                            Some(a) => {
+                                                called_haplotypes.extend(a.into_iter().cloned())
+                                            }
                                         }
                                     });
                             }
-
                         }
                     }
                 }

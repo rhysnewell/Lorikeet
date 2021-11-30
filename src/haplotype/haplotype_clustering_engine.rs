@@ -1,13 +1,13 @@
 use annotator::variant_annotation::VariantAnnotations;
 use bird_tool_utils::command::finish_command_safely;
 use coverm::FlagFilter;
-use processing::lorikeet_engine::Elem;
 use genotype::genotype_builder::AttributeObject;
 use hashlink::{LinkedHashMap, LinkedHashSet};
 use linkage::linkage_engine::LinkageEngine;
 use model::variant_context::VariantContext;
 use ndarray::{Array, Array1, Array2};
 use ndarray_npy::{read_npy, write_npy};
+use processing::lorikeet_engine::Elem;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use std::collections::{HashMap, HashSet};

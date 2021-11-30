@@ -1,18 +1,18 @@
+use gkl::smithwaterman::OverhangStrategy;
 use graphs::base_edge::BaseEdge;
 use graphs::base_graph::BaseGraph;
 use graphs::base_vertex::BaseVertex;
 use ordered_float::OrderedFloat;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use rayon::prelude::*;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::CigarString;
-use gkl::smithwaterman::OverhangStrategy;
 use smith_waterman::smith_waterman_aligner::NEW_SW_PARAMETERS;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use utils::base_utils::BaseUtils;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 /**
  * A path thought a BaseGraph

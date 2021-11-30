@@ -3,10 +3,10 @@ use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use processing::lorikeet_engine::Elem;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use itertools::Itertools;
 use model::variant_context::VariantContext;
+use processing::lorikeet_engine::Elem;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
@@ -114,7 +114,6 @@ impl<'c> AssemblyRegionWalker<'c> {
                 // read in entire contig
                 // let mut inner_reader = reference_reader.clone();
 
-
                 // inner_reader.fetch_contig_from_reference_by_tid(tid, self.ref_idx);
                 // inner_reader.read_sequence_to_vec();
 
@@ -127,31 +126,32 @@ impl<'c> AssemblyRegionWalker<'c> {
                 let long_read_bam_count = &self.long_read_bam_count;
                 let evaluator = &self.evaluator;
                 let reference_reader = &reference_reader;
-                activity_profiles.into_par_iter().flat_map(move |mut activity_profile| {
+                activity_profiles
+                    .into_par_iter()
+                    .flat_map(move |mut activity_profile| {
+                        let mut inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
+                            reference_reader,
+                            *ref_idx,
+                            tid,
+                        );
 
-                    let mut inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
-                        reference_reader,
-                        *ref_idx,
-                        tid,
-                    );
-
-
-                    Self::process_shard(
-                        &mut activity_profile,
-                        flag_filters,
-                        args,
-                        sample_names,
-                        &inner_reader,
-                        *n_threads,
-                        *assembly_region_padding,
-                        *min_assembly_region_size,
-                        *max_assembly_region_size,
-                        *short_read_bam_count,
-                        *long_read_bam_count,
-                        &evaluator,
-                        max_input_depth,
-                    ).into_par_iter()
-                })
+                        Self::process_shard(
+                            &mut activity_profile,
+                            flag_filters,
+                            args,
+                            sample_names,
+                            &inner_reader,
+                            *n_threads,
+                            *assembly_region_padding,
+                            *min_assembly_region_size,
+                            *max_assembly_region_size,
+                            *short_read_bam_count,
+                            *long_read_bam_count,
+                            &evaluator,
+                            max_input_depth,
+                        )
+                        .into_par_iter()
+                    })
             })
             .collect::<Vec<VariantContext>>();
         return contexts;
@@ -234,7 +234,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 feature_variants,
                                 args,
                                 sample_names,
-                                flag_filters
+                                flag_filters,
                             )
                             .into_par_iter()
                         // })
@@ -273,7 +273,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 Vec::new(),
                                 args,
                                 sample_names,
-                                flag_filters
+                                flag_filters,
                             )
                             .into_par_iter()
                     })

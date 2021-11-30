@@ -1,14 +1,15 @@
 use abundance::abundance_calculator_engine::AbundanceCalculatorEngine;
+use ani_calculator::ani_calculator::ANICalculator;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
-use processing::bams::index_bams::*;
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use model::variant_context::VariantContext;
 use model::variant_context_utils::VariantContextUtils;
+use processing::bams::index_bams::*;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
@@ -22,7 +23,6 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use utils::utils::get_cleaned_sample_names;
-use ani_calculator::ani_calculator::ANICalculator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -275,7 +275,11 @@ impl<'a> LorikeetEngine<'a> {
                     // ensure output path exists
                     create_dir_all(&output_prefix).expect("Unable to create output directory");
 
-                    let genome_size = reference_reader.target_lens.iter().map(|(_, length)| length).sum::<u64>();
+                    let genome_size = reference_reader
+                        .target_lens
+                        .iter()
+                        .map(|(_, length)| length)
+                        .sum::<u64>();
 
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
@@ -285,13 +289,16 @@ impl<'a> LorikeetEngine<'a> {
                             &output_prefix,
                             &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
-                            genome_size
+                            genome_size,
                         );
 
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar
-                                .set_message(format!("{}: Generating VCF file of {} variant positions...", &reference, contexts.len()));
+                            pb.progress_bar.set_message(format!(
+                                "{}: Generating VCF file of {} variant positions...",
+                                &reference,
+                                contexts.len()
+                            ));
                         }
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
@@ -324,7 +331,7 @@ impl<'a> LorikeetEngine<'a> {
                                 .value_of("min-variant-depth-for-genotyping")
                                 .unwrap()
                                 .parse()
-                                .unwrap()
+                                .unwrap(),
                         );
 
                         // calculate ANI statistics
@@ -334,7 +341,7 @@ impl<'a> LorikeetEngine<'a> {
                             &output_prefix,
                             &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
-                            genome_size
+                            genome_size,
                         );
 
                         if split_contexts.len() >= 1 {
@@ -432,7 +439,7 @@ impl<'a> LorikeetEngine<'a> {
                             &output_prefix,
                             &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
-                            genome_size
+                            genome_size,
                         );
                         // Get sample distances
                         {
@@ -464,7 +471,6 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names[0..self.short_read_bam_count],
                         );
                     };
-
 
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];

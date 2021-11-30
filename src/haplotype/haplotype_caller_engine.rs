@@ -11,8 +11,6 @@ use clap::ArgMatches;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use processing::lorikeet_engine::Elem;
-use processing::lorikeet_engine::ReadType;
 use genotype::genotype_builder::Genotype;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
@@ -26,7 +24,11 @@ use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::ByteArrayAllele;
 use model::variant_context::VariantContext;
 use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMLikelihoodCalculationEngine, AVXMode};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMLikelihoodCalculationEngine,
+};
+use processing::lorikeet_engine::Elem;
+use processing::lorikeet_engine::ReadType;
 use rayon::prelude::*;
 use read_orientation::beta_distribution_shape::BetaDistributionShape;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
@@ -36,6 +38,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use reference::reference_reader::ReferenceReader;
 use rust_htslib::bam::{self, record::Cigar, Record};
 use rust_htslib::bcf::{Format, Header, Writer};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fs::create_dir_all;
 use std::sync::{Arc, Mutex};
@@ -44,7 +47,6 @@ use utils::natural_log_utils::NaturalLogUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::utils::clean_sample_name;
-use std::cmp::min;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine<'c> {
@@ -418,7 +420,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
         current_likelihoods: &mut Vec<HashMap<usize, Vec<RefVsAnyResult>>>,
         min_contig_length: u64,
     ) {
-
         let mut tids: Vec<usize> = Vec::new();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
 
@@ -428,28 +429,30 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 vec![&bam_generator],
                 split_threads as u32,
             )
-                .into_iter()
-                .next()
-                .unwrap();
+            .into_iter()
+            .next()
+            .unwrap();
             // get reference stats
             // let bam_generator = bam_generator.start();
             let header = bam_generator.header(); // bam header
             let header_names = header.target_names();
-            header_names.into_iter().enumerate().for_each(|(tid, contig_name)| {
-                let target_name = std::str::from_utf8(contig_name).unwrap();
-                if target_name.contains(&reference)
-                    || reference_reader.match_target_name_and_ref_idx(ref_idx, target_name) {
-                    // Get contig stats
-                    reference_reader.update_ref_index_tids(ref_idx, tid);
-                    reference_reader.add_target(contig_name, tid);
-                    let target_len = header.target_len(tid as u32).unwrap();
-                    reference_reader.add_length(tid, target_len);
-                    tids.push(tid);
-                }
-            })
+            header_names
+                .into_iter()
+                .enumerate()
+                .for_each(|(tid, contig_name)| {
+                    let target_name = std::str::from_utf8(contig_name).unwrap();
+                    if target_name.contains(&reference)
+                        || reference_reader.match_target_name_and_ref_idx(ref_idx, target_name)
+                    {
+                        // Get contig stats
+                        reference_reader.update_ref_index_tids(ref_idx, tid);
+                        reference_reader.add_target(contig_name, tid);
+                        let target_len = header.target_len(tid as u32).unwrap();
+                        reference_reader.add_length(tid, target_len);
+                        tids.push(tid);
+                    }
+                })
         }
-
-
 
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
@@ -604,7 +607,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                 };
                             }
                         });
-                }
+            }
             _ => {}
         }
 
@@ -906,7 +909,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
         //TODO - on the originalActiveRegion?
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
-        let (mut assembly_result, filtered_reads) = self.filter_non_passing_reads(assembly_result, flag_filters);
+        let (mut assembly_result, filtered_reads) =
+            self.filter_non_passing_reads(assembly_result, flag_filters);
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
@@ -951,7 +955,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 AVXMode::None
             } else {
                 AVXMode::detect_mode()
-            }
+            },
         );
         read_likelihoods.change_evidence(read_alignments);
         debug!(
@@ -1007,8 +1011,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                     || (!r.read.is_proper_pair()
                         && r.read_type != ReadType::Long
                         && !flag_filters.include_improper_pairs)
-                    || (!flag_filters.include_secondary
-                        && r.read.is_secondary())
+                    || (!flag_filters.include_secondary && r.read.is_secondary())
                 {
                     debug!("Removing read {:?}", r);
                     true

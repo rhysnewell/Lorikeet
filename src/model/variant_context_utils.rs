@@ -477,7 +477,11 @@ impl VariantContextUtils {
     /// Takes a set of variant contexts and filters them by their Qual By Depth value. If a variant
     /// context contains 2 or more alternate alleles, then that context is split up into multiple
     /// contexts. One for each alternate allele.
-    pub fn split_contexts(vcs: Vec<VariantContext>, min_qual_by_depth: f64, min_variant_depth: i64) -> Vec<VariantContext> {
+    pub fn split_contexts(
+        vcs: Vec<VariantContext>,
+        min_qual_by_depth: f64,
+        min_variant_depth: i64,
+    ) -> Vec<VariantContext> {
         let mut split_vcs = Vec::new();
         for vc in vcs {
             match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()) {
@@ -487,7 +491,8 @@ impl VariantContextUtils {
                         if qbd >= min_qual_by_depth && vc.log10_p_error <= -10.0 {
                             let n_alts = vc.get_alternate_alleles().len();
                             if n_alts == 1 {
-                                let depth_sum: i64 = vc.get_genotypes().genotypes().iter().map(|g| g.ad[1]).sum();
+                                let depth_sum: i64 =
+                                    vc.get_genotypes().genotypes().iter().map(|g| g.ad[1]).sum();
 
                                 // Only include variants which exceed the min variant depth
                                 // for genotyping
@@ -530,14 +535,8 @@ impl VariantContextUtils {
                                             debug!("New genotype {:?}", &new_genotype);
                                         } else {
                                             debug!("Old genotype {:?}", old_genotype);
-                                            let new_depths = vec![
-                                                old_genotype.ad[0],
-                                                0,
-                                            ];
-                                            let new_pls = vec![
-                                                old_genotype.pl[0],
-                                                0,
-                                            ];
+                                            let new_depths = vec![old_genotype.ad[0], 0];
+                                            let new_pls = vec![old_genotype.pl[0], 0];
 
                                             new_genotype.dp = old_genotype.ad[0];
                                             new_genotype.gq = -1;
@@ -546,7 +545,6 @@ impl VariantContextUtils {
                                             new_genotype.pl = new_pls;
                                             debug!("New genotype {:?}", &new_genotype);
                                         }
-
 
                                         per_sample_genotypes.push(new_genotype);
                                     }
@@ -566,7 +564,8 @@ impl VariantContextUtils {
                                         );
                                         new_vc.remove_attributes_for_alt_by_index(alt_index + 1);
                                         debug!("New vc attributes {:?}", &new_vc.attributes);
-                                        new_vc.genotypes = GenotypesContext::new(per_sample_genotypes);
+                                        new_vc.genotypes =
+                                            GenotypesContext::new(per_sample_genotypes);
                                         new_vc.log10_p_error = vc.log10_p_error;
 
                                         new_vcs.push(new_vc);

@@ -1,6 +1,7 @@
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_result::{AssemblyResult, Status};
 use assembly::assembly_result_set::AssemblyResultSet;
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
 use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use graphs::base_graph::BaseGraph;
@@ -14,6 +15,7 @@ use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashSet;
 use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
@@ -24,11 +26,9 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
@@ -253,7 +253,7 @@ impl ReadThreadingAssembler {
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) {
         // create the graphs by calling our subclass assemble method
         self.assemble(
@@ -698,7 +698,7 @@ impl ReadThreadingAssembler {
                         h.get_bases(),
                         OverhangStrategy::SoftClip,
                         haplotype_to_reference_sw_parameters,
-                        avx_mode
+                        avx_mode,
                     );
 
                     match cigar {
@@ -738,7 +738,7 @@ impl ReadThreadingAssembler {
                                     h.get_bases(),
                                     OverhangStrategy::InDel,
                                     haplotype_to_reference_sw_parameters,
-                                    avx_mode
+                                    avx_mode,
                                 );
 
                                 match cigar_with_indel_strategy {
@@ -839,7 +839,7 @@ impl ReadThreadingAssembler {
         allow_non_unique_kmers_in_ref: bool,
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) -> Option<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small

@@ -100,7 +100,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
             for (sample_index, sample_vector) in abundance_vectors.iter_mut().enumerate() {
                 let mut vi = 0; // variant index
-                for vc in self.variant_contexts.iter_mut(){
+                for vc in self.variant_contexts.iter_mut() {
                     match vc.attributes.get_mut(VariantAnnotations::Strain.to_key()) {
                         None => continue,
                         Some(attribute) => {
@@ -113,7 +113,11 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             // We divide the total depth of variant here by the total amount of strains that
                             // variant occurs in. E.g. if a variant had a depth of 6
                             // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                            let mut total_depth = vc.genotypes.genotypes()[sample_index].ad.iter().sum::<i64>() as f64;
+                            let mut total_depth = vc.genotypes.genotypes()[sample_index]
+                                .ad
+                                .iter()
+                                .sum::<i64>()
+                                as f64;
 
                             // catch sample where no mapping occured at this location
                             // 0.0 dp causes NaN, so just change it to 1.0 so we get 0.0 weight
@@ -139,9 +143,14 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     };
 
                                     if strain_presences[sample_index][*strain] {
-                                        let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
-                                        sample_vector[abundance_index].variant_index_map.insert(vi, sample_vector_variant_index);
-                                        sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi);
+                                        let sample_vector_variant_index =
+                                            sample_vector[abundance_index].variant_weights.len();
+                                        sample_vector[abundance_index]
+                                            .variant_index_map
+                                            .insert(vi, sample_vector_variant_index);
+                                        sample_vector[abundance_index]
+                                            .index_variant_map
+                                            .insert(sample_vector_variant_index, vi);
 
                                         sample_vector[abundance_index].variant_weights.push(weight);
 
@@ -176,26 +185,29 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                 }
                             }
 
-
                             let mut reference_present =
                                 &mut per_sample_reference_presence[sample_index];
 
-                            let strains_using_reference_allele = (0..n_strains).filter_map(|strain_idx| {
-                                if strains.contains(&strain_idx) {
-                                    None
-                                } else {
-                                    Some(strain_idx)
-                                }
-                            }).collect::<Vec<usize>>();
+                            let strains_using_reference_allele = (0..n_strains)
+                                .filter_map(|strain_idx| {
+                                    if strains.contains(&strain_idx) {
+                                        None
+                                    } else {
+                                        Some(strain_idx)
+                                    }
+                                })
+                                .collect::<Vec<usize>>();
                             {
                                 for reference_strain_index in strains_using_reference_allele {
                                     // We divide the total depth of variant here by the total amount of strains that
                                     // variant occurs in. E.g. if a variant had a depth of 6
                                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                    let mut reference_depth = vc.genotypes.genotypes()[sample_index].ad[0]
-                                        as f64 / total_depth;
+                                    let mut reference_depth =
+                                        vc.genotypes.genotypes()[sample_index].ad[0] as f64
+                                            / total_depth;
 
-                                    let weight = reference_depth / (n_strains - strains.len()) as f64;
+                                    let weight =
+                                        reference_depth / (n_strains - strains.len()) as f64;
                                     if weight > 0.0 {
                                         // let reference_strain_index = n_strains - 1;
                                         let abundance_index =
@@ -209,9 +221,14 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                                 }
                                             };
 
-                                        let sample_vector_variant_index = sample_vector[abundance_index].variant_weights.len();
-                                        sample_vector[abundance_index].variant_index_map.insert(vi + 1, sample_vector_variant_index);
-                                        sample_vector[abundance_index].index_variant_map.insert(sample_vector_variant_index, vi + 1);
+                                        let sample_vector_variant_index =
+                                            sample_vector[abundance_index].variant_weights.len();
+                                        sample_vector[abundance_index]
+                                            .variant_index_map
+                                            .insert(vi + 1, sample_vector_variant_index);
+                                        sample_vector[abundance_index]
+                                            .index_variant_map
+                                            .insert(sample_vector_variant_index, vi + 1);
                                         // vi += 1;
 
                                         sample_vector[abundance_index].variant_weights.push(weight);
@@ -225,7 +242,9 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                                 if !strains.contains(&idx) {
                                                     match abundance_key.get(&idx) {
                                                         Some(a_idx) => {
-                                                            if strain_presences[sample_index][*a_idx] {
+                                                            if strain_presences[sample_index]
+                                                                [*a_idx]
+                                                            {
                                                                 // let sample_vector_variant_index = sample_vector[*a_idx].variant_weights.len();
                                                                 // sample_vector[*a_idx].variant_index_map.insert(vi + 1, sample_vector_variant_index);
                                                                 // sample_vector[*a_idx].index_variant_map.insert(sample_vector_variant_index, vi + 1);

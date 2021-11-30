@@ -1633,7 +1633,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-variant-depth-for-genotyping")
                         .long("min-variant-depth-for-genotyping")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -2170,7 +2170,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-observations-for-kmers-to-be-solid")
                         .long("min-observations-for-kmers-to-be-solid")
                         .default_value("20")
-                        .hidden(true)
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("max-mnp-distance")

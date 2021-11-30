@@ -137,7 +137,7 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         symmetrically_normalize_alleles_to_reference: bool,
         disable_cap_read_qualities_to_mapq: bool,
         modify_soft_clipped_bases: bool,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) -> PairHMMLikelihoodCalculationEngine<'static> {
         assert!(
             base_quality_score_threshold >= QualityUtils::MIN_USABLE_Q_SCORE,
@@ -313,7 +313,7 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         &mut self,
         sample_index: usize,
         likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
-        pair_hmm: &mut PairHMM<'b>
+        pair_hmm: &mut PairHMM<'b>,
     ) {
         // Modify the read qualities by applying the PCR error model and capping the minimum base,
         // insertion,deletion qualities
@@ -324,14 +324,12 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
                 .unwrap(),
         );
 
-
         pair_hmm.compute_log10_likelihoods(
             sample_index,
             likelihoods,
             processed_reads,
             &self.input_score_imputator,
         );
-
     }
 
     /**
@@ -616,11 +614,7 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         haplotypes: &'b Vec<Haplotype<SimpleInterval>>,
         per_sample_read_list: &HashMap<usize, Vec<BirdToolRead>>,
     ) -> PairHMM<'b> {
-        PairHMM::initialize(
-            haplotypes,
-            per_sample_read_list,
-            self.avx_mode
-        )
+        PairHMM::initialize(haplotypes, per_sample_read_list, self.avx_mode)
     }
 }
 
@@ -658,7 +652,8 @@ impl AVXMode {
         if is_x86_feature_detected!("avx512f")
             || is_x86_feature_detected!("avx512dq")
             || is_x86_feature_detected!("avx512vl")
-            || is_x86_feature_detected!("avx") {
+            || is_x86_feature_detected!("avx")
+        {
             Self::AVX
         } else {
             Self::None

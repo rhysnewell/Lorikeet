@@ -1,14 +1,14 @@
 use assembly::assembly_region::AssemblyRegion;
+use coverm::bam_generator::{
+    generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
+};
 use coverm::FlagFilter;
-use processing::lorikeet_engine::ReadType;
 use ordered_float::OrderedFloat;
+use processing::lorikeet_engine::ReadType;
 use rayon::prelude::*;
 use reads::bird_tool_reads::BirdToolRead;
 use std::cmp::Reverse;
 use std::fs::File;
-use coverm::bam_generator::{
-    generate_indexed_named_bam_readers_from_bam_files, IndexedNamedBamReader,
-};
 
 use rust_htslib::bam::Record;
 
@@ -74,17 +74,21 @@ impl<'a> AssemblyRegionIterator<'a> {
                             vec![&bam_generator],
                             n_threads,
                         )
-                            .into_iter()
-                            .next()
-                            .unwrap();
-                        debug!("samples: {} -> {}: {} - {}", bam_generator, region.get_contig(), region.get_padded_span().start, region.get_padded_span().end);
+                        .into_iter()
+                        .next()
+                        .unwrap();
+                        debug!(
+                            "samples: {} -> {}: {} - {}",
+                            bam_generator,
+                            region.get_contig(),
+                            region.get_padded_span().start,
+                            region.get_padded_span().end
+                        );
                         bam_generated.fetch((
                             region.get_contig() as i32,
                             region.get_padded_span().start as i64,
                             region.get_padded_span().end as i64,
                         ));
-
-
 
                         let mut records = Vec::new(); // container for the records to be collected
 
@@ -103,17 +107,18 @@ impl<'a> AssemblyRegionIterator<'a> {
                             {
                                 continue;
                             } else {
-                                records.push(BirdToolRead::new(record.clone(), sample_idx, read_type));
+                                records.push(BirdToolRead::new(
+                                    record.clone(),
+                                    sample_idx,
+                                    read_type,
+                                ));
                             };
                         }
 
                         records
-                    },
-                    _ => {
-                        Vec::new()
                     }
+                    _ => Vec::new(),
                 }
-
             })
             .collect::<Vec<BirdToolRead>>();
 

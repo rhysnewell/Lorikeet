@@ -1,8 +1,8 @@
-use processing::lorikeet_engine::ReadType;
 use haplotype::haplotype::Haplotype;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use num::abs;
+use processing::lorikeet_engine::ReadType;
 use reads::bird_tool_reads::BirdToolRead;
 use std::collections::HashMap;
 use test_utils::allele_list_unit_tester::AlleleListUnitTester;

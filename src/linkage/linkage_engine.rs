@@ -13,17 +13,17 @@ use ordered_float::OrderedFloat;
 use petgraph::algo::{all_simple_paths, min_spanning_tree, tarjan_scc};
 use petgraph::data::{Element, FromElements};
 use petgraph::dot::Dot;
+use petgraph::graph::EdgeIndex;
 use petgraph::prelude::{EdgeRef, NodeIndex, UnGraph};
 use petgraph::{Direction, Undirected};
 use rayon::prelude::*;
 use rust_htslib::bam::Record;
-use std::cmp::{min, max};
 use std::cmp::Reverse;
+use std::cmp::{max, min};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fs::{read, File};
 use std::io::Write;
 use std::path::Path;
-use petgraph::graph::EdgeIndex;
 
 /// LinkageEngine aims to take a set of variant clusters and link them back together into likely
 /// strain genomes. It does this by taking all of the reads that mapped to all of the variants in a
@@ -229,10 +229,14 @@ impl<'a> LinkageEngine<'a> {
                     0,
                     None,
                 )
-                    .collect::<Vec<LinkedHashSet<NodeIndex>>>();
+                .collect::<Vec<LinkedHashSet<NodeIndex>>>();
                 debug!(
                     "Paths {:?} current node {:?} depth {} cumulative depth {} detection {}",
-                    &paths, current_node, current_depth, current_node_cumulative_depth, 1.0 - (current_node_cumulative_depth / current_depth)
+                    &paths,
+                    current_node,
+                    current_depth,
+                    current_node_cumulative_depth,
+                    1.0 - (current_node_cumulative_depth / current_depth)
                 );
                 if ((1.0 - (current_node_cumulative_depth / current_depth))
                     >= Self::MIN_DETECTABLE_DEPTH_EPSILON
@@ -310,30 +314,29 @@ impl<'a> LinkageEngine<'a> {
                     debug!("Node below the water. Update cumulative depths...");
                     if paths.len() == 1 && current_node != highest_depth_node {
                         let mut path = paths.into_iter().next().unwrap();
-                        path.into_iter()
-                            .enumerate()
-                            .for_each(|(idx, node)| {
-                                let variant_group = *mst.node_weight(node).unwrap();
-                                seen_nodes.insert(variant_group);
-                                let node_cumulative_depth = nodes_cumulative_depth.entry(node).or_insert(0.0);
-                                // add the depth of the current node to this node
-                                *node_cumulative_depth += depth_being_added_to_other_nodes;
+                        path.into_iter().enumerate().for_each(|(idx, node)| {
+                            let variant_group = *mst.node_weight(node).unwrap();
+                            seen_nodes.insert(variant_group);
+                            let node_cumulative_depth =
+                                nodes_cumulative_depth.entry(node).or_insert(0.0);
+                            // add the depth of the current node to this node
+                            *node_cumulative_depth += depth_being_added_to_other_nodes;
 
-                                // check if this the next node in the path, if so append to
-                                // binary heap as it will act as the next branch tip once current
-                                // tips run out
-                                if idx == 1 {
-                                    starting_nodes.push((
-                                        Reverse(OrderedFloat(
-                                            *self
-                                                .grouped_mean_read_depth
-                                                .get(mst.node_weight(node).unwrap())
-                                                .unwrap(),
-                                        )),
-                                        node,
-                                    ));
-                                };
-                            });
+                            // check if this the next node in the path, if so append to
+                            // binary heap as it will act as the next branch tip once current
+                            // tips run out
+                            if idx == 1 {
+                                starting_nodes.push((
+                                    Reverse(OrderedFloat(
+                                        *self
+                                            .grouped_mean_read_depth
+                                            .get(mst.node_weight(node).unwrap())
+                                            .unwrap(),
+                                    )),
+                                    node,
+                                ));
+                            };
+                        });
                     }
                 }
             }
@@ -1039,7 +1042,9 @@ impl<'a> LinkageEngine<'a> {
                         let depth_1 = *self.grouped_mean_read_depth.get(group1).unwrap();
                         let depth_2 = *self.grouped_mean_read_depth.get(group2).unwrap();
 
-                        let depth_factor = 1.0 - min(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln() / max(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln();
+                        let depth_factor = 1.0
+                            - min(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln()
+                                / max(OrderedFloat(depth_1), OrderedFloat(depth_2)).0.ln();
 
                         if weight < 1.00 || intersection >= 50.0 {
                             // variant groups connected by reads are favoured
@@ -1052,7 +1057,6 @@ impl<'a> LinkageEngine<'a> {
                             debug!("updated weight {}", weight);
                             graph.add_edge(node1, node2, weight);
                         } else if under_sep_thresh {
-
                             let mut weight = self.cluster_separations[[ind1, ind2]];
                             debug!(
                                 "{}:{} weight {} intersection {} union {}",
@@ -1105,14 +1109,22 @@ impl<'a> LinkageEngine<'a> {
     }
 
     fn max_depth_of_graph(&self, component_graph: &UnGraph<i32, f64>) -> f64 {
-        component_graph.node_weights().into_iter().map(|vg| {
-            OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap())
-        }).max().unwrap().0
+        component_graph
+            .node_weights()
+            .into_iter()
+            .map(|vg| OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap()))
+            .max()
+            .unwrap()
+            .0
     }
 
     fn min_depth_of_graph(&self, component_graph: &UnGraph<i32, f64>) -> f64 {
-        component_graph.node_weights().into_iter().map(|vg| {
-            OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap())
-        }).min().unwrap().0
+        component_graph
+            .node_weights()
+            .into_iter()
+            .map(|vg| OrderedFloat(*self.grouped_mean_read_depth.get(vg).unwrap()))
+            .min()
+            .unwrap()
+            .0
     }
 }
