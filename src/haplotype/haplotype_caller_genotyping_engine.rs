@@ -113,7 +113,7 @@ impl HaplotypeCallerGenotypingEngine {
         given_alleles: Vec<VariantContext>,
         emit_reference_confidence: bool,
         max_mnp_distance: usize,
-        header: &'b Vec<String>,
+        header: &'b [String],
         ploidy: usize,
         args: &'b clap::ArgMatches,
         reference_reader: &'b ReferenceReader,

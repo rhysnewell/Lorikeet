@@ -1,4 +1,4 @@
-use estimation::lorikeet_engine::ReadType;
+use processing::lorikeet_engine::ReadType;
 use haplotype::haplotype::Haplotype;
 use model::allele_likelihoods::AlleleLikelihoods;
 use model::byte_array_allele::{Allele, ByteArrayAllele};

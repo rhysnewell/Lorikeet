@@ -3,7 +3,7 @@ use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use estimation::lorikeet_engine::Elem;
+use processing::lorikeet_engine::Elem;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use itertools::Itertools;
 use model::variant_context::VariantContext;
@@ -31,13 +31,13 @@ impl<'c> AssemblyRegionWalker<'c> {
         ref_idx: usize,
         short_read_bam_count: usize,
         long_read_bam_count: usize,
-        indexed_bam_readers: &'c Vec<String>,
+        indexed_bam_readers: &'c [String],
         n_threads: usize,
     ) -> AssemblyRegionWalker<'c> {
         let mut hc_engine = HaplotypeCallerEngine::new(
             args,
             ref_idx,
-            indexed_bam_readers.clone(),
+            indexed_bam_readers.to_vec(),
             false,
             args.value_of("ploidy").unwrap().parse().unwrap(),
         );
@@ -73,7 +73,7 @@ impl<'c> AssemblyRegionWalker<'c> {
     pub fn collect_shards(
         &mut self,
         args: &clap::ArgMatches,
-        indexed_bam_readers: &Vec<String>,
+        indexed_bam_readers: &[String],
         genomes_and_contigs: &GenomesAndContigs,
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
@@ -104,7 +104,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         mut shards: HashMap<usize, Vec<BandPassActivityProfile>>,
         flag_filters: &'a FlagFilter,
         args: &'a clap::ArgMatches,
-        sample_names: &'a Vec<String>,
+        sample_names: &'a [String],
         reference_reader: &'b mut ReferenceReader,
     ) -> Vec<VariantContext> {
         let max_input_depth = args.value_of("max-input-depth").unwrap().parse().unwrap();
@@ -161,7 +161,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         shard: &'b mut BandPassActivityProfile,
         flag_filters: &'a FlagFilter,
         args: &clap::ArgMatches,
-        sample_names: &'a Vec<String>,
+        sample_names: &'a [String],
         reference_reader: &ReferenceReader,
         n_threads: u32,
         assembly_region_padding: usize,

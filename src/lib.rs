@@ -16,7 +16,7 @@ pub mod activity_profile;
 pub mod annotator;
 pub mod assembly;
 pub mod cli;
-pub mod estimation;
+pub mod processing;
 pub mod external_command_checker;
 pub mod genotype;
 pub mod graphs;
@@ -46,8 +46,6 @@ extern crate coverm;
 extern crate galah;
 
 // Stats
-extern crate kodama;
-extern crate linregress;
 #[macro_use]
 extern crate ndarray;
 extern crate mathru;

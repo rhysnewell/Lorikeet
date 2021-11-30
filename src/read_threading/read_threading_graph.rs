@@ -320,7 +320,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: &BirdToolRead, sample_names: &Vec<String>) {
+    fn add_read(&mut self, read: &BirdToolRead, sample_names: &[String]) {
         let sequence = read.read.seq();
         let qualities = read.read.qual();
 

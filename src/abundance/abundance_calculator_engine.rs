@@ -17,7 +17,7 @@ pub struct AbundanceCalculatorEngine<'a> {
     variant_contexts: Vec<VariantContext>,
     reference_name: &'a str,
     output_prefix: &'a str,
-    sample_names: &'a Vec<&'a str>,
+    sample_names: &'a [&'a str],
 }
 
 impl<'a> AbundanceCalculatorEngine<'a> {
@@ -28,7 +28,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         variant_contexts: Vec<VariantContext>,
         reference_name: &'a str,
         output_prefix: &'a str,
-        sample_names: &'a Vec<&'a str>,
+        sample_names: &'a [&'a str],
     ) -> Self {
         Self {
             variant_contexts,
@@ -113,7 +113,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                             // We divide the total depth of variant here by the total amount of strains that
                             // variant occurs in. E.g. if a variant had a depth of 6
                             // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                            let mut total_depth = vc.genotypes.genotypes()[sample_index].dp as f64;
+                            let mut total_depth = vc.genotypes.genotypes()[sample_index].ad.iter().sum::<i64>() as f64;
 
                             // catch sample where no mapping occured at this location
                             // 0.0 dp causes NaN, so just change it to 1.0 so we get 0.0 weight
@@ -470,7 +470,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
         &self,
         n_strains: usize,
         n_samples: usize,
-        per_sample_reference_presence: &Vec<bool>,
+        per_sample_reference_presence: &[bool],
     ) -> Vec<Vec<bool>> {
         let mut per_sample_strain_presence = Vec::with_capacity(n_samples);
 

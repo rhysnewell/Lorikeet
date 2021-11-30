@@ -33,7 +33,7 @@ use petgraph::graph::EdgeIndex;
 pub struct LinkageEngine<'a> {
     grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
     grouped_mean_read_depth: LinkedHashMap<i32, f64>,
-    samples: &'a Vec<String>,
+    samples: &'a [String],
     cluster_separations: &'a Array2<f64>,
     previous_groups: &'a HashMap<i32, i32>,
     exclusive_groups: &'a HashMap<i32, HashSet<i32>>,
@@ -44,7 +44,7 @@ impl<'a> LinkageEngine<'a> {
 
     pub fn new(
         grouped_contexts: LinkedHashMap<i32, Vec<&'a VariantContext>>,
-        samples: &'a Vec<String>,
+        samples: &'a [String],
         cluster_separations: &'a Array2<f64>,
         previous_groups: &'a HashMap<i32, i32>,
         exclusive_groups: &'a HashMap<i32, HashSet<i32>>,
@@ -70,7 +70,7 @@ impl<'a> LinkageEngine<'a> {
     /// that are associated with the corresponding variant context
     pub fn run_linkage(
         mut self,
-        indexed_bam_readers: &Vec<String>,
+        indexed_bam_readers: &[String],
         n_threads: usize,
         output_path: &str,
         flag_filters: &FlagFilter,
@@ -824,7 +824,7 @@ impl<'a> LinkageEngine<'a> {
     /// group
     fn get_reads_for_groups(
         &mut self,
-        indexed_bam_readers: &Vec<String>,
+        indexed_bam_readers: &[String],
         flag_filters: &FlagFilter,
         n_threads: usize,
     ) -> LinkedHashMap<i32, HashSet<String>> {

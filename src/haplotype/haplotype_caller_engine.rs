@@ -11,8 +11,8 @@ use clap::ArgMatches;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use estimation::lorikeet_engine::Elem;
-use estimation::lorikeet_engine::ReadType;
+use processing::lorikeet_engine::Elem;
+use processing::lorikeet_engine::ReadType;
 use genotype::genotype_builder::Genotype;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
@@ -238,7 +238,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
     pub fn collect_activity_profile(
         &mut self,
-        indexed_bam_readers: &Vec<String>,
+        indexed_bam_readers: &[String],
         short_sample_count: usize,
         long_sample_count: usize,
         n_threads: usize,
@@ -627,7 +627,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         max_prob_propagation: usize,
         active_prob_threshold: f64,
         ref_idx: usize,
-        sample_names: &Vec<String>,
+        sample_names: &[String],
         min_contig_length: u64,
     ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
         if genotype_likelihoods.len() == 0 {
@@ -781,7 +781,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         reference_reader: &'b mut ReferenceReader,
         given_alleles: Vec<VariantContext>,
         args: &'b clap::ArgMatches,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         flag_filters: &'b FlagFilter,
     ) -> Vec<VariantContext> {
         let vc_priors = Vec::new();
@@ -936,7 +936,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
-            .compute_read_likelihoods(&mut assembly_result, sample_names.clone(), reads);
+            .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
         debug!(
             "Read likelihoods first {:?}",
             read_likelihoods.alleles.len()
@@ -1259,7 +1259,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         &self,
         output_prefix: &str,
         variant_contexts: &Vec<VariantContext>,
-        sample_names: &Vec<&str>,
+        sample_names: &[&str],
         reference_reader: &ReferenceReader,
         strain_info: bool,
     ) {
@@ -1293,7 +1293,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
     fn populate_vcf_header(
         &self,
-        sample_names: &Vec<&str>,
+        sample_names: &[&str],
         reference_reader: &ReferenceReader,
         header: &mut Header,
         strain_info: bool,

@@ -160,7 +160,7 @@ impl ReadThreadingAssembler {
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
         read_error_corrector: Option<NearbyKmerErrorCorrector>,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: Parameters,
         reference_to_haplotype_sw_parameters: Parameters,
         avx_mode: AVXMode,
@@ -250,7 +250,7 @@ impl ReadThreadingAssembler {
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
         avx_mode: AVXMode
@@ -303,7 +303,7 @@ impl ReadThreadingAssembler {
         &mut self,
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         avx_mode: AVXMode,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
@@ -382,7 +382,7 @@ impl ReadThreadingAssembler {
         corrected_reads: &'b Vec<BirdToolRead>,
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
         avx_mode: AVXMode,
@@ -837,7 +837,7 @@ impl ReadThreadingAssembler {
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         avx_mode: AVXMode
     ) -> Option<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {

@@ -115,7 +115,7 @@ impl<'a> ReferenceWriter<'a> {
         &mut self,
         variant_contexts: Vec<VariantContext>,
         ref_idx: usize,
-        samples: &Vec<&str>,
+        samples: &[&str],
     ) {
         let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
         let mut tids = self

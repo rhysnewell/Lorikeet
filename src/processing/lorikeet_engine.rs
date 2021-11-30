@@ -232,14 +232,14 @@ impl<'a> LorikeetEngine<'a> {
                         self.args,
                         ref_idx,
                         self.short_read_bam_count,
-                        self.long_read_bam_count,
-                        &indexed_bam_readers,
+                        0,
+                        &indexed_bam_readers[0..self.short_read_bam_count],
                         n_threads,
                     );
 
                     let mut shards = assembly_engine.collect_shards(
                         self.args,
-                        &indexed_bam_readers,
+                        &indexed_bam_readers[0..self.short_read_bam_count],
                         &genomes_and_contigs,
                         &concatenated_genomes,
                         flag_filters,
@@ -259,7 +259,7 @@ impl<'a> LorikeetEngine<'a> {
                         shards,
                         flag_filters,
                         self.args,
-                        &indexed_bam_readers,
+                        &indexed_bam_readers[0..self.short_read_bam_count],
                         &mut reference_reader,
                     );
                     debug!("example variant {:?}", &contexts.first());
@@ -278,12 +278,12 @@ impl<'a> LorikeetEngine<'a> {
                     let genome_size = reference_reader.target_lens.iter().map(|(_, length)| length).sum::<u64>();
 
                     if mode == "call" {
-                        // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        // calculate ANI statistics for short reads only
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
                         ani_calculator.run_calculator(
                             &contexts,
                             &output_prefix,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
                             genome_size
                         );
@@ -296,7 +296,7 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                             &reference_reader,
                             false,
                         )
@@ -328,11 +328,11 @@ impl<'a> LorikeetEngine<'a> {
                         );
 
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
                         ani_calculator.run_calculator(
                             &split_contexts,
                             &output_prefix,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
                             genome_size
                         );
@@ -345,7 +345,7 @@ impl<'a> LorikeetEngine<'a> {
                                 split_contexts,
                                 &reference_reader,
                                 ref_idx,
-                                indexed_bam_readers.len(),
+                                indexed_bam_readers[0..self.short_read_bam_count].len(),
                                 n_threads,
                             );
                             let (n_strains, split_contexts) = clustering_engine.perform_clustering(
@@ -371,15 +371,14 @@ impl<'a> LorikeetEngine<'a> {
                                 split_contexts,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                 &output_prefix,
-                                &cleaned_sample_names,
+                                &cleaned_sample_names[0..self.short_read_bam_count],
                             );
 
                             let (mut strain_ids_present, split_contexts) =
                                 abundance_calculator_engine.run_abundance_calculator(
                                     n_strains,
-                                    cleaned_sample_names.len(),
+                                    cleaned_sample_names[0..self.short_read_bam_count].len(),
                                 );
-                            // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar
@@ -390,7 +389,7 @@ impl<'a> LorikeetEngine<'a> {
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
                                 &split_contexts,
-                                &cleaned_sample_names,
+                                &cleaned_sample_names[0..self.short_read_bam_count],
                                 &reference_reader,
                                 true,
                             );
@@ -427,11 +426,11 @@ impl<'a> LorikeetEngine<'a> {
                         }
                     } else if mode == "consensus" {
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count + self.long_read_bam_count);
+                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
                         ani_calculator.run_calculator(
                             &contexts,
                             &output_prefix,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                             reference,
                             genome_size
                         );
@@ -444,7 +443,7 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                             &reference_reader,
                             false,
                         );
@@ -462,20 +461,11 @@ impl<'a> LorikeetEngine<'a> {
                         reference_writer.generate_consensus(
                             contexts,
                             ref_idx,
-                            &cleaned_sample_names,
+                            &cleaned_sample_names[0..self.short_read_bam_count],
                         );
                     };
 
-                    // if self.args.is_present("bam-file-cache-directory") && self.run_in_parallel {
-                    //     // clean up split bam files
-                    //     if self.short_read_bam_count > 0 {
-                    //         let cmd_string = format!(
-                    //             "rm -rf {}/short/{}/",
-                    //             self.args.value_of("bam-file-cache-directory").unwrap(),
-                    //             &genomes_and_contigs.genomes[ref_idx]
-                    //         );
-                    //     }
-                    // }
+
                     {
                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                         pb.progress_bar
@@ -505,7 +495,6 @@ impl<'a> LorikeetEngine<'a> {
                 });
             }
 
-            // pb_main.finish_with_message("All genomes staged...");
             self.multi.join().unwrap();
         });
     }

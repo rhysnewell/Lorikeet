@@ -248,7 +248,7 @@ impl AssemblyBasedCallerUtils {
         reference_reader: &mut ReferenceReader,
         assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
-        sample_names: &Vec<String>,
+        sample_names: &[String],
     ) -> AssemblyResultSet<ReadThreadingGraph> {
         Self::finalize_regions(
             &mut region,

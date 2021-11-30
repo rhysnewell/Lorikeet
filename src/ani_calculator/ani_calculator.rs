@@ -51,9 +51,9 @@ impl ANICalculator {
 
     pub fn run_calculator(
         &mut self,
-        contexts: &Vec<VariantContext>,
+        contexts: &[VariantContext],
         output_prefix: &str,
-        sample_names: &Vec<&str>,
+        sample_names: &[&str],
         reference_name: &str,
         genome_size: u64
     ) {
@@ -67,7 +67,7 @@ impl ANICalculator {
     /// Takes refernce to a vec of variant contexts and compares the consensus and population
     /// ANI between each sample. The input contexts need to be non split i.e. prior to being
     /// put through genotyping pipeline
-    fn calculate_from_contexts(&mut self, contexts: &Vec<VariantContext>, genome_size: u64) {
+    fn calculate_from_contexts(&mut self, contexts: &[VariantContext], genome_size: u64) {
         let n_samples = self.conANI.ncols();
 
         for context in contexts {
@@ -208,7 +208,7 @@ impl ANICalculator {
 
     fn write_ani_tables(
         output_prefix: &str,
-        sample_names: &Vec<&str>,
+        sample_names: &[&str],
         reference_name: &str,
         table: &Array2<f64>,
         table_name: &str,
