@@ -441,7 +441,12 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 .enumerate()
                 .for_each(|(tid, contig_name)| {
                     let target_name = std::str::from_utf8(contig_name).unwrap();
-                    if target_name.contains(&reference)
+                    let target_match = if target_name.contains("~") {
+                        target_name.split_once("~").unwrap().0 == reference.as_str()
+                    } else {
+                        target_name.contains(&reference)
+                    };
+                    if target_match
                         || reference_reader.match_target_name_and_ref_idx(ref_idx, target_name)
                     {
                         // Get contig stats

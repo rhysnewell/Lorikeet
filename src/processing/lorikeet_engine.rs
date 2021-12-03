@@ -193,6 +193,8 @@ impl<'a> LorikeetEngine<'a> {
                         "Preparing variants",
                     );
 
+                    debug!("Reference: {} {}", &reference, references[ref_idx]);
+
                     // Read BAMs back in as indexed
                     let mut indexed_bam_readers = recover_bams(
                         &self.args,
@@ -203,6 +205,7 @@ impl<'a> LorikeetEngine<'a> {
                         n_threads as u32,
                         &tmp_bam_file_cache,
                         self.run_in_parallel,
+                        // false,
                         ref_idx,
                     );
 
@@ -642,7 +645,8 @@ pub fn start_lorikeet_engine<
             longreads,
             threads,
             &genomes_and_contigs,
-            run_in_parallel,
+            // run_in_parallel,
+            m.is_present("split-bams"),
             !m.is_present("longread-bam-files"),
         );
     }
@@ -659,7 +663,8 @@ pub fn start_lorikeet_engine<
             bam_readers,
             threads,
             &genomes_and_contigs,
-            run_in_parallel,
+            // run_in_parallel,
+            false,
             !m.is_present("bam-files"),
         );
     }
@@ -714,7 +719,7 @@ pub fn start_lorikeet_engine<
             progress_bars: &progress_bars,
             threads,
             mode,
-            run_in_parallel,
+            run_in_parallel: m.is_present("split-bams"),
         };
 
         lorikeet_engine.apply_per_reference();
