@@ -20,7 +20,9 @@ use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 use lorikeet_genome::model::allele_list::AlleleList;
 use lorikeet_genome::model::byte_array_allele::ByteArrayAllele;
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMInputScoreImputator,
+};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::test_utils::read_likelihoods_unit_tester::ReadLikelihoodsUnitTester;

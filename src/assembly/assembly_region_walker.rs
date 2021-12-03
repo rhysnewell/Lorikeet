@@ -3,10 +3,10 @@ use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use estimation::lorikeet_engine::Elem;
 use haplotype::haplotype_caller_engine::HaplotypeCallerEngine;
 use itertools::Itertools;
 use model::variant_context::VariantContext;
+use processing::lorikeet_engine::Elem;
 use rayon::prelude::*;
 use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
@@ -31,13 +31,13 @@ impl<'c> AssemblyRegionWalker<'c> {
         ref_idx: usize,
         short_read_bam_count: usize,
         long_read_bam_count: usize,
-        indexed_bam_readers: &'c Vec<String>,
+        indexed_bam_readers: &'c [String],
         n_threads: usize,
     ) -> AssemblyRegionWalker<'c> {
         let mut hc_engine = HaplotypeCallerEngine::new(
             args,
             ref_idx,
-            indexed_bam_readers.clone(),
+            indexed_bam_readers.to_vec(),
             false,
             args.value_of("ploidy").unwrap().parse().unwrap(),
         );
@@ -73,7 +73,7 @@ impl<'c> AssemblyRegionWalker<'c> {
     pub fn collect_shards(
         &mut self,
         args: &clap::ArgMatches,
-        indexed_bam_readers: &Vec<String>,
+        indexed_bam_readers: &[String],
         genomes_and_contigs: &GenomesAndContigs,
         concatenated_genomes: &Option<String>,
         flag_filters: &FlagFilter,
@@ -104,7 +104,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         mut shards: HashMap<usize, Vec<BandPassActivityProfile>>,
         flag_filters: &'a FlagFilter,
         args: &'a clap::ArgMatches,
-        sample_names: &'a Vec<String>,
+        sample_names: &'a [String],
         reference_reader: &'b mut ReferenceReader,
     ) -> Vec<VariantContext> {
         let max_input_depth = args.value_of("max-input-depth").unwrap().parse().unwrap();
@@ -113,7 +113,6 @@ impl<'c> AssemblyRegionWalker<'c> {
             .flat_map(|(tid, mut activity_profiles)| {
                 // read in entire contig
                 // let mut inner_reader = reference_reader.clone();
-
 
                 // inner_reader.fetch_contig_from_reference_by_tid(tid, self.ref_idx);
                 // inner_reader.read_sequence_to_vec();
@@ -127,31 +126,32 @@ impl<'c> AssemblyRegionWalker<'c> {
                 let long_read_bam_count = &self.long_read_bam_count;
                 let evaluator = &self.evaluator;
                 let reference_reader = &reference_reader;
-                activity_profiles.into_par_iter().flat_map(move |mut activity_profile| {
+                activity_profiles
+                    .into_par_iter()
+                    .flat_map(move |mut activity_profile| {
+                        let mut inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
+                            reference_reader,
+                            *ref_idx,
+                            tid,
+                        );
 
-                    let mut inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
-                        reference_reader,
-                        *ref_idx,
-                        tid,
-                    );
-
-
-                    Self::process_shard(
-                        &mut activity_profile,
-                        flag_filters,
-                        args,
-                        sample_names,
-                        &inner_reader,
-                        *n_threads,
-                        *assembly_region_padding,
-                        *min_assembly_region_size,
-                        *max_assembly_region_size,
-                        *short_read_bam_count,
-                        *long_read_bam_count,
-                        &evaluator,
-                        max_input_depth,
-                    ).into_par_iter()
-                })
+                        Self::process_shard(
+                            &mut activity_profile,
+                            flag_filters,
+                            args,
+                            sample_names,
+                            &inner_reader,
+                            *n_threads,
+                            *assembly_region_padding,
+                            *min_assembly_region_size,
+                            *max_assembly_region_size,
+                            *short_read_bam_count,
+                            *long_read_bam_count,
+                            &evaluator,
+                            max_input_depth,
+                        )
+                        .into_par_iter()
+                    })
             })
             .collect::<Vec<VariantContext>>();
         return contexts;
@@ -161,7 +161,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         shard: &'b mut BandPassActivityProfile,
         flag_filters: &'a FlagFilter,
         args: &clap::ArgMatches,
-        sample_names: &'a Vec<String>,
+        sample_names: &'a [String],
         reference_reader: &ReferenceReader,
         n_threads: u32,
         assembly_region_padding: usize,
@@ -234,7 +234,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 feature_variants,
                                 args,
                                 sample_names,
-                                flag_filters
+                                flag_filters,
                             )
                             .into_par_iter()
                         // })
@@ -257,6 +257,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                     .flat_map(|mut assembly_region| {
                         let mut reference_reader = reference_reader.clone();
                         let mut evaluator = evaluator.clone();
+                        debug!("Filling with reads...");
                         assembly_region_iter.fill_next_assembly_region_with_reads(
                             &mut assembly_region,
                             flag_filters,
@@ -272,7 +273,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 Vec::new(),
                                 args,
                                 sample_names,
-                                flag_filters
+                                flag_filters,
                             )
                             .into_par_iter()
                     })

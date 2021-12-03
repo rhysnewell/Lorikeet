@@ -1,4 +1,4 @@
-use estimation::lorikeet_engine::ReadType;
+use processing::lorikeet_engine::ReadType;
 use reads::cigar_utils::CigarUtils;
 use reads::read_utils::ReadUtils;
 use rust_htslib::bam::ext::BamRecordExtensions;

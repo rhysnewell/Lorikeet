@@ -1,4 +1,4 @@
-use estimation::lorikeet_engine::ReadType;
+use processing::lorikeet_engine::ReadType;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use rust_htslib::bam::{Read, Reader, Record};

@@ -16,7 +16,7 @@ const DEFAULT_LONGREAD_MAPPING_SOFTWARE: &str = "minimap2-ont";
 
 const MAPPER_HELP: &str = "
 Read mapping options:
-  -p, --mapper <NAME>             Underlying mapping software used
+  --mapper <NAME>                 Underlying mapping software used for short reads
                                   (\"minimap2-sr\", \"bwa-mem\",
                                   \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
                                   \"minimap2-pb\", or \"minimap2-no-preset\").
@@ -24,6 +24,14 @@ Read mapping options:
                                   '-x' preset of minimap2 to be used
                                   (with map-ont, map-pb for -ont, -pb).
                                   [default: \"minimap2-sr\"] \n
+  --longread-mapper <NAME>        Underlying mapping software used for long reads
+                                  (\"minimap2-sr\", \"bwa-mem\",
+                                  \"ngmlr-ont\", \"ngmlr-pb\", \"minimap2-ont\",
+                                  \"minimap2-pb\", or \"minimap2-no-preset\").
+                                  minimap2 -sr, -ont, -pb, -no-preset specify
+                                  '-x' preset of minimap2 to be used
+                                  (with map-ont, map-pb for -ont, -pb).
+                                  [default: \"minimap2-ont\"] \n
   --minimap2-params PARAMS        Extra parameters to provide to minimap2,
                                   both indexing command (if used) and for
                                   mapping. Note that usage of this parameter
@@ -218,6 +226,10 @@ Alignment filtering (optional):
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
+   --split-bams                          Split the mapped read files up per reference.
+                                         Useful if you think run time is being hampered
+                                         by I/O. Most of the time this will not improve
+                                         performance and instead just increase disk usage.
 ";
 
 const GENERAL_HELP: &str = "
@@ -653,6 +665,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
+                )
+                .arg(
+                    Arg::with_name("split-bams")
+                        .long("split-bams")
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-length")
@@ -1258,6 +1274,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("bam-file-cache-directory"),
                 )
                 .arg(
+                    Arg::with_name("split-bams")
+                        .long("split-bams")
+                )
+                .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
                         .takes_value(true),
@@ -1625,7 +1645,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-variant-depth-for-genotyping")
                         .long("min-variant-depth-for-genotyping")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -1889,6 +1909,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
+                )
+                .arg(
+                    Arg::with_name("split-bams")
+                        .long("split-bams")
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-length")
@@ -2162,7 +2186,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-observations-for-kmers-to-be-solid")
                         .long("min-observations-for-kmers-to-be-solid")
                         .default_value("20")
-                        .hidden(true)
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("max-mnp-distance")
@@ -2509,6 +2533,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
+                )
+                .arg(
+                    Arg::with_name("split-bams")
+                        .long("split-bams")
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-length")

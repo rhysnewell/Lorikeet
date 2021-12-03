@@ -3,7 +3,7 @@ use coverm::bam_generator::*;
 use coverm::mapping_index_maintenance;
 use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
-use estimation::lorikeet_engine::ReadType;
+use processing::lorikeet_engine::ReadType;
 
 use rayon::prelude::*;
 use std::str;
@@ -67,7 +67,7 @@ pub fn cons<T>(elt: T, l: Vec<T>) -> Vec<T> {
     return l2;
 }
 
-pub fn clean_sample_name(sample_idx: usize, samples: &Vec<String>) -> &str {
+pub fn clean_sample_name(sample_idx: usize, samples: &[String]) -> &str {
     if samples[sample_idx].contains(".tmp") {
         samples[sample_idx]
             .split("/.tmp")
@@ -83,7 +83,7 @@ pub fn clean_sample_name(sample_idx: usize, samples: &Vec<String>) -> &str {
     }
 }
 
-pub fn get_cleaned_sample_names(samples: &Vec<String>) -> Vec<&str> {
+pub fn get_cleaned_sample_names(samples: &[String]) -> Vec<&str> {
     (0..samples.len())
         .into_iter()
         .map(|i| clean_sample_name(i, samples))

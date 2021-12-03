@@ -1,20 +1,22 @@
+extern crate gkl;
 extern crate lorikeet_genome;
 extern crate rust_htslib;
-extern crate gkl;
 
-use std::fs::File;
-use std::io::BufReader;
-use std::io::BufRead;
-use std::cmp::max;
-use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::haplotype::haplotype::Haplotype;
-use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
-use rust_htslib::bam::record::{CigarString, Cigar};
-use lorikeet_genome::reads::read_utils::ReadUtils;
-use std::collections::HashMap;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{AVXMode, PairHMMInputScoreImputator};
-use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
 use gkl::pairhmm::{forward, forward_avx};
+use lorikeet_genome::haplotype::haplotype::Haplotype;
+use lorikeet_genome::model::allele_likelihoods::AlleleLikelihoods;
+use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMInputScoreImputator,
+};
+use lorikeet_genome::reads::read_utils::ReadUtils;
+use lorikeet_genome::utils::artificial_read_utils::ArtificialReadUtils;
+use rust_htslib::bam::record::{Cigar, CigarString};
+use std::cmp::max;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
 
 #[test]
 fn test_likelihoods_avx() {
@@ -53,16 +55,22 @@ fn test_likelihoods_avx() {
             base_quals,
             insertion_quals,
             deletion_quals,
-            gcp
+            gcp,
         );
 
         println!("Direct result {}", result);
         // This should work but doesn't??
         assert!((result - expected_result).abs() < 1e-5);
 
-
-        println!("quals {:?} {:?} {:?} {:?}", &base_quals, &insertion_quals, &deletion_quals, &gcp);
-        let mut read = ArtificialReadUtils::create_artificial_read(bases, base_quals, CigarString::from(vec![Cigar::Match(read_length as u32)]));
+        println!(
+            "quals {:?} {:?} {:?} {:?}",
+            &base_quals, &insertion_quals, &deletion_quals, &gcp
+        );
+        let mut read = ArtificialReadUtils::create_artificial_read(
+            bases,
+            base_quals,
+            CigarString::from(vec![Cigar::Match(read_length as u32)]),
+        );
         ReadUtils::set_insertion_base_qualities(&mut read, insertion_quals);
         ReadUtils::set_deletion_base_qualities(&mut read, deletion_quals);
 
@@ -71,7 +79,8 @@ fn test_likelihoods_avx() {
 
         let hap_vec = vec![hap.clone()];
         let mut hmm = PairHMM::initialize(&hap_vec, &read_map, AVXMode::AVX);
-        let mut likelihoods = AlleleLikelihoods::new(hap_vec.clone(), vec!["sample".to_string()], read_map);
+        let mut likelihoods =
+            AlleleLikelihoods::new(hap_vec.clone(), vec!["sample".to_string()], read_map);
 
         let score_imputator = PairHMMInputScoreImputator::new(gcp[0]);
 

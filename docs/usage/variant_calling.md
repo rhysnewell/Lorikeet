@@ -153,7 +153,7 @@ Alignment filtering (optional):
 
 
 Read mapping options:
-  -p, --mapper <NAME>             Underlying mapping software used
+  --mapper <NAME>                 Underlying mapping software used for short reads
                                   ("minimap2-sr", "bwa-mem",
                                   "ngmlr-ont", "ngmlr-pb", "minimap2-ont",
                                   "minimap2-pb", or "minimap2-no-preset").
@@ -161,6 +161,15 @@ Read mapping options:
                                   '-x' preset of minimap2 to be used
                                   (with map-ont, map-pb for -ont, -pb).
                                   [default: "minimap2-sr"]
+
+  --longread-mapper <NAME>        Underlying mapping software used for long reads
+                                  ("minimap2-sr", "bwa-mem",
+                                  "ngmlr-ont", "ngmlr-pb", "minimap2-ont",
+                                  "minimap2-pb", or "minimap2-no-preset").
+                                  minimap2 -sr, -ont, -pb, -no-preset specify
+                                  '-x' preset of minimap2 to be used
+                                  (with map-ont, map-pb for -ont, -pb).
+                                  [default: "minimap2-ont"]
 
   --minimap2-params PARAMS        Extra parameters to provide to minimap2,
                                   both indexing command (if used) and for

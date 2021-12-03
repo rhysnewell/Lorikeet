@@ -15,7 +15,9 @@ use model::variant_context_utils::{
     FilteredRecordMergeType, GenotypeMergeType, VariantContextUtils,
 };
 use model::variants::*;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::{PCRErrorModel, PairHMMLikelihoodCalculationEngine, AVXMode};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PCRErrorModel, PairHMMLikelihoodCalculationEngine,
+};
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
@@ -248,7 +250,7 @@ impl AssemblyBasedCallerUtils {
         reference_reader: &mut ReferenceReader,
         assembly_engine: &mut ReadThreadingAssembler,
         correct_overlapping_base_qualities: bool,
-        sample_names: &Vec<String>,
+        sample_names: &[String],
     ) -> AssemblyResultSet<ReadThreadingGraph> {
         Self::finalize_regions(
             &mut region,
@@ -322,7 +324,7 @@ impl AssemblyBasedCallerUtils {
                 AVXMode::None
             } else {
                 AVXMode::detect_mode()
-            }
+            },
         );
 
         if !given_alleles.is_empty() {
@@ -337,7 +339,7 @@ impl AssemblyBasedCallerUtils {
                     AVXMode::None
                 } else {
                     AVXMode::detect_mode()
-                }
+                },
             );
         }
 
@@ -926,7 +928,7 @@ impl AssemblyBasedCallerUtils {
                 AVXMode::None
             } else {
                 AVXMode::detect_mode()
-            }
+            },
         )
     }
 

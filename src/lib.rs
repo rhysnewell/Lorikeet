@@ -11,12 +11,11 @@ extern crate openssl;
 extern crate openssl_sys;
 
 pub mod abundance;
-pub mod ani_calculator;
 pub mod activity_profile;
+pub mod ani_calculator;
 pub mod annotator;
 pub mod assembly;
 pub mod cli;
-pub mod estimation;
 pub mod external_command_checker;
 pub mod genotype;
 pub mod graphs;
@@ -24,6 +23,7 @@ pub mod haplotype;
 pub mod linkage;
 pub mod model;
 pub mod pair_hmm;
+pub mod processing;
 pub mod read_error_corrector;
 pub mod read_orientation;
 pub mod read_threading;
@@ -46,8 +46,6 @@ extern crate coverm;
 extern crate galah;
 
 // Stats
-extern crate kodama;
-extern crate linregress;
 #[macro_use]
 extern crate ndarray;
 extern crate mathru;

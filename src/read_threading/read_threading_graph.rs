@@ -1,5 +1,6 @@
 use assembly::kmer::Kmer;
 use compare::{Compare, Extract};
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use graphs::base_edge::BaseEdge;
 use graphs::base_edge::BaseEdgeStruct;
 use graphs::base_graph::BaseGraph;
@@ -7,6 +8,7 @@ use graphs::base_vertex::BaseVertex;
 use graphs::multi_sample_edge::MultiSampleEdge;
 use graphs::seq_graph::SeqGraph;
 use hashlink::{LinkedHashMap, LinkedHashSet};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::{EdgeIndex, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
@@ -19,12 +21,10 @@ use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::Cigar;
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashSet, VecDeque};
 use utils::simple_interval::Locatable;
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 /**
  * Note: not final but only intended to be subclassed for testing.
@@ -74,7 +74,7 @@ impl ReadThreadingGraph {
         min_base_quality_to_use_in_assembly: u8,
         min_pruning_samples: usize,
         min_matching_bases_to_dangling_end_recovery: i32,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) -> Self {
         let base_graph = BaseGraph::new(kmer_size);
         Self {
@@ -320,7 +320,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: &BirdToolRead, sample_names: &Vec<String>) {
+    fn add_read(&mut self, read: &BirdToolRead, sample_names: &[String]) {
         let sequence = read.read.seq();
         let qualities = read.read.qual();
 

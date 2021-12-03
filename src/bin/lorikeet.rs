@@ -31,7 +31,7 @@ extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
-use lorikeet_genome::estimation::lorikeet_engine::{start_lorikeet_engine, ReadType};
+use lorikeet_genome::processing::lorikeet_engine::{start_lorikeet_engine, ReadType};
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 
 fn main() {

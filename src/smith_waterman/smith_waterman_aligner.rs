@@ -2,10 +2,10 @@ use ndarray::{Array2, Axis};
 use reads::alignment_utils::AlignmentUtils;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 // use smith_waterman::bindings::*;
-use std::cmp::max;
-use gkl::smithwaterman::{OverhangStrategy, Parameters, align};
+use gkl::smithwaterman::{align, OverhangStrategy, Parameters};
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use reads::cigar_builder::CigarBuilder;
+use std::cmp::max;
 use std::convert::TryFrom;
 
 lazy_static! {
@@ -49,16 +49,18 @@ impl SmithWatermanAligner {
         alternate: &[u8],
         parameters: &Parameters,
         overhang_strategy: OverhangStrategy,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) -> SmithWatermanAlignmentResult {
         match avx_mode {
             AVXMode::AVX => {
                 let avx_aligner = align().unwrap();
-                let (cigar, offset) = avx_aligner(reference, alternate, *parameters, overhang_strategy).unwrap();
-                let cigar = CigarString::try_from(std::str::from_utf8(cigar.as_slice()).unwrap()).unwrap();
+                let (cigar, offset) =
+                    avx_aligner(reference, alternate, *parameters, overhang_strategy).unwrap();
+                let cigar =
+                    CigarString::try_from(std::str::from_utf8(cigar.as_slice()).unwrap()).unwrap();
                 let result = SmithWatermanAlignmentResult::new(cigar, offset as i32);
-                return result
-            },
+                return result;
+            }
             AVXMode::None => {
                 assert!(
                     reference.len() > 0 && alternate.len() > 0,
@@ -67,12 +69,11 @@ impl SmithWatermanAligner {
 
                 let mut match_index = None;
                 match &overhang_strategy {
-                    OverhangStrategy::SoftClip
-                    | OverhangStrategy::Ignore => {
+                    OverhangStrategy::SoftClip | OverhangStrategy::Ignore => {
                         // Use a substring search to find an exact match of the alternate in the reference
                         // NOTE: This approach only works for SOFTCLIP and IGNORE overhang strategies
                         match_index = AlignmentUtils::last_index_of(reference, alternate);
-                    },
+                    }
                     _ => {
                         // pass
                     }
@@ -106,7 +107,7 @@ impl SmithWatermanAligner {
                     }
                 }
 
-                return alignment_result
+                return alignment_result;
             }
         }
     }
@@ -143,8 +144,7 @@ impl SmithWatermanAligner {
 
         // we need to initialize the SW matrix with gap penalties if we want to keep track of indels at the edges of alignments
         match overhang_strategy {
-            OverhangStrategy::InDel
-            | OverhangStrategy::LeadingInDel => {
+            OverhangStrategy::InDel | OverhangStrategy::LeadingInDel => {
                 let current_value = parameters.gap_open_penalty;
 
                 // initialize the first row
@@ -172,7 +172,7 @@ impl SmithWatermanAligner {
                 // sw.column_mut(0)
                 //     .accumulate_axis_inplace(Axis(0), |&prev, curr| *curr = prev + current_value);
                 debug!("first column values {:?}", &sw.column(0));
-            },
+            }
             _ => {
                 // pass
             }
@@ -290,7 +290,7 @@ impl SmithWatermanAligner {
             OverhangStrategy::InDel => {
                 p1 = ref_length;
                 p2 = alt_length;
-            },
+            }
             _ => {
                 // look for the largest score on the rightmost column. we use >= combined with the traversal direction
                 // to ensure that if two scores are equal, the one closer to diagonal gets picked
@@ -310,7 +310,7 @@ impl SmithWatermanAligner {
                 match overhang_strategy {
                     OverhangStrategy::LeadingInDel => {
                         // pass
-                    },
+                    }
                     _ => {
                         let bottom_row = sw.row(ref_length);
                         for j in 1..bottom_row.len() {
@@ -318,7 +318,8 @@ impl SmithWatermanAligner {
                             // data_offset is the offset of [n][j]
                             if cur_score > max_score
                                 || (cur_score == max_score
-                                && (ref_length as i32 - j as i32).abs() < (p1 as i32 - p2 as i32).abs())
+                                    && (ref_length as i32 - j as i32).abs()
+                                        < (p1 as i32 - p2 as i32).abs())
                             {
                                 p1 = ref_length;
                                 p2 = j;
@@ -337,7 +338,7 @@ impl SmithWatermanAligner {
                 OverhangStrategy::SoftClip => {
                     lce.push(Cigar::SoftClip(segment_length as u32));
                     segment_length = 0;
-                },
+                }
                 _ => {
                     // pass
                 }
@@ -416,11 +417,11 @@ impl SmithWatermanAligner {
                     lce.push(Self::make_element(State::Clip, p2 as u32));
                 }
                 alignment_offset = p1;
-            },
+            }
             OverhangStrategy::Ignore => {
                 lce.push(Self::make_element(state, (segment_length + p2) as u32));
                 alignment_offset = p1 - p2;
-            },
+            }
             _ => {
                 // overhangStrategy == OverhangStrategy.INDEL || overhangStrategy == OverhangStrategy.LEADING_INDEL
                 // take care of the actual alignment
