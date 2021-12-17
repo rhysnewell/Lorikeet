@@ -24,3 +24,4 @@ dependencies:
   - pip
   - pip:
       - cmake>=3.21
+      - flight-genome>=1.3

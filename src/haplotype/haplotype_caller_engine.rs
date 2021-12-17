@@ -67,7 +67,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
      * Minimum (exclusive) average number of high quality bases per soft-clip to consider that a set of soft-clips is a
      * high quality set.
      */
-    const AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD: f64 = 6.0;
+    const AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD: f32 = 6.0;
 
     /**
      * Maximum-mininum confidence on a variant to exist to consider the position as a potential variant harbouring locus
@@ -268,7 +268,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let active_prob_thresh = m
             .value_of("active-probability-threshold")
             .unwrap()
-            .parse::<f64>()
+            .parse::<f32>()
             .unwrap();
 
         let min_contig_length = m
@@ -633,7 +633,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         target_ids_and_lens: &HashMap<usize, u64>,
         ploidy: usize,
         max_prob_propagation: usize,
-        active_prob_threshold: f64,
+        active_prob_threshold: f32,
         ref_idx: usize,
         sample_names: &[String],
         min_contig_length: u64,
@@ -674,9 +674,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                 let activity_profile_state = ActivityProfileState::new(
                                         ref_vs_any_result.loc,
-                                        is_active_prob,
+                                        is_active_prob as f32,
                                         Type::new(
-                                            hq_soft_clips.mean(),
+                                            hq_soft_clips.mean() as f32,
                                             HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
                                         )
                                     );
@@ -757,9 +757,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                 let activity_profile_state = ActivityProfileState::new(
                                     SimpleInterval::new(*tid, pos, pos),
-                                    is_active_prob,
+                                    is_active_prob as f32,
                                     Type::new(
-                                        hq_soft_clips.mean(),
+                                        hq_soft_clips.mean() as f32,
                                         HaplotypeCallerEngine::AVERAGE_HQ_SOFTCLIPS_HQ_BASES_THRESHOLD,
                                     ),
                                 );

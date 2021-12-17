@@ -36,7 +36,7 @@ impl BandPassActivityProfile {
      */
     pub fn new(
         max_prob_propagation_distance: usize,
-        active_prob_threshold: f64,
+        active_prob_threshold: f32,
         max_filter_size: usize,
         sigma: f64,
         adaptive_filter_size: bool,
@@ -265,7 +265,7 @@ impl Profile for BandPassActivityProfile {
                     match loc {
                         Some(loc) => {
                             let new_prob = super_state.is_active_prob()
-                                * self.gaussian_kernel[(i + self.filter_size as i64) as usize];
+                                * self.gaussian_kernel[(i + self.filter_size as i64) as usize] as f32;
                             states.push(ActivityProfileState::new(loc, new_prob, Type::None))
                         }
                         None => continue,
@@ -315,7 +315,7 @@ impl Profile for BandPassActivityProfile {
     }
 
     fn pop_ready_assembly_regions(
-        &mut self,
+        mut self,
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,
@@ -373,7 +373,7 @@ impl Profile for BandPassActivityProfile {
             .find_first_activity_boundary(is_active_region, max_region_size)
     }
 
-    fn get_prob(&self, index: usize) -> f64 {
+    fn get_prob(&self, index: usize) -> f32 {
         self.activity_profile.get_prob(index)
     }
 
@@ -381,7 +381,7 @@ impl Profile for BandPassActivityProfile {
         self.activity_profile.is_minimum(index)
     }
 
-    fn get_probabilities_as_array(&self) -> Vec<f64> {
+    fn get_probabilities_as_array(&self) -> Vec<f32> {
         self.activity_profile.get_probabilities_as_array()
     }
 }

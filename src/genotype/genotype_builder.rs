@@ -158,9 +158,16 @@ impl Genotype {
         GenotypeLikelihoods::from_pls(self.pl.clone())
     }
 
-    // pub fn get_likelihoods_mut(&mut self) -> &mut GenotypeLikelihoods {
-    //     &mut self.pl
-    // }
+    pub fn count_allele(&self, allele: &ByteArrayAllele) -> i32 {
+        let mut c = 0;
+        for a in self.alleles.iter() {
+            if allele == a {
+                c += 1;
+            };
+        };
+
+        c
+    }
 
     /**
      * Compute how many likelihood elements are associated with the given number of alleles
@@ -325,6 +332,8 @@ impl Genotype {
     pub fn is_hom_ref(&mut self) -> bool {
         return self.get_type() == &GenotypeType::HomRef;
     }
+
+    pub fn is_no_call(&mut self) -> bool { return self.get_type() == &GenotypeType::NoCall; }
 
     /**
      * @return true if all observed alleles are alt; if any alleles are no-calls, this method will return false.

@@ -999,6 +999,33 @@ impl VariantContext {
         return VariantType::Indel;
     }
 
+    pub fn get_called_chr_count(&self) -> i32 {
+        let mut n = 0;
+        let mut genotypes = self.get_genotypes();
+
+
+        for g in genotypes.genotypes() {
+            for a in g.alleles.iter() {
+                if !a.is_no_call() {
+                    n += 1;
+                }
+            };
+        };
+
+        n
+    }
+
+    pub fn get_called_chr_count_from_allele(&self, a: &ByteArrayAllele) -> i32 {
+        let mut n = 0;
+        let genotypes = self.get_genotypes();
+
+        for g in genotypes.genotypes() {
+            n += g.count_allele(a);
+        };
+
+        n
+    }
+
     /**
      * @return true if the alleles indicate a simple insertion (i.e., the reference allele is Null)
      */

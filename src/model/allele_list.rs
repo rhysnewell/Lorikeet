@@ -42,8 +42,8 @@ impl<A: Allele + Send + Sync> AlleleList<A> {
      * @throws IllegalArgumentException if index is negative or equal
      * to or higher than the number of elements in this AlleleList {@link AlleleList#numberOfAlleles()}).
      */
-    pub fn get_allele(&self, index: usize) -> &A {
-        &self.list[index]
+    pub fn get_allele(&self, index: usize) -> Option<&A> {
+        self.list.get_index(index)
     }
 
     /**
@@ -183,7 +183,12 @@ impl<T: Allele + Send + Sync + Hash> Permutation<T> {
             let is_partial = !non_permuted;
 
             for i in 0..to_size {
-                let original_index = original.index_of_allele(target.get_allele(i));
+                let original_index = original.index_of_allele(
+                    match target.get_allele(i) {
+                        Some(target_allele) => target_allele,
+                        None => panic!("Can't retrieve target allele {}", i)
+                    }
+                );
                 match original_index {
                     None => {
                         panic!("Target allele is not a permutation of the original allele list");
@@ -227,7 +232,12 @@ impl<T: Allele + Send + Sync + Hash> AlleleListPermutation<T> for Permutation<T>
         match self {
             Permutation::NonPermutation { .. } => Some(from_index),
             Permutation::ActualPermutation { to, from, .. } => {
-                to.index_of_allele(from.get_allele(from_index))
+                to.index_of_allele(
+                    match from.get_allele(from_index) {
+                        Some(from_allele) => from_allele,
+                        None => panic!("From allele not present: {}", from_index)
+                    }
+                )
             }
         }
     }
@@ -292,8 +302,18 @@ impl<T: Allele + Send + Sync + Hash> AlleleListPermutation<T> for Permutation<T>
 
     fn get_allele(&self, index: usize) -> &T {
         match self {
-            Permutation::NonPermutation { allele_list } => allele_list.get_allele(index),
-            Permutation::ActualPermutation { to, .. } => to.get_allele(index),
+            Permutation::NonPermutation { allele_list } => {
+                match allele_list.get_allele(index) {
+                    Some(non_permuted) => non_permuted,
+                    None => panic!("Could not find non-permuted index {}", index)
+                }
+            },
+            Permutation::ActualPermutation { to, .. } => {
+                match to.get_allele(index) {
+                    Some(permuted_allele) => permuted_allele,
+                    None => panic!("Could not find permuted index {}", index)
+                }
+            },
         }
     }
 }

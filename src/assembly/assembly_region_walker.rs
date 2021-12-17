@@ -136,7 +136,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                         );
 
                         Self::process_shard(
-                            &mut activity_profile,
+                            activity_profile,
                             flag_filters,
                             args,
                             sample_names,
@@ -158,7 +158,7 @@ impl<'c> AssemblyRegionWalker<'c> {
     }
 
     fn process_shard<'a, 'b>(
-        shard: &'b mut BandPassActivityProfile,
+        mut shard: BandPassActivityProfile,
         flag_filters: &'a FlagFilter,
         args: &clap::ArgMatches,
         sample_names: &'a [String],

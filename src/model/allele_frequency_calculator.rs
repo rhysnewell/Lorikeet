@@ -1,5 +1,5 @@
 use clap::ArgMatches;
-use genotype::genotype_builder::Genotype;
+use genotype::genotype_builder::{Genotype, GenotypeType};
 use genotype::genotype_likelihood_calculator::GenotypeLikelihoodCalculator;
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use model::allele_frequency_calculator_result::AFCalculationResult;
@@ -14,6 +14,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use utils::dirichlet::Dirichlet;
 use utils::math_utils::MathUtils;
+use genotype::genotype_likelihoods::GenotypeLikelihoods;
+
+lazy_static!{
+    //from the genotype likelihoods equations assuming the SNP ref conf model with no mismatches
+    //PL[2] = GQ; scaleFactor = PL[3]/GQ ~ -10 * DP * log10(P_error) / (-10 * DP * log10(1/ploidy)) where BASE_QUALITY = -10 * log10(P_error)
+    static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i64 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/0.5.log10()) as i64;
+}
 
 #[derive(Debug, Clone)]
 pub struct AlleleFrequencyCalculator {
@@ -26,6 +33,7 @@ pub struct AlleleFrequencyCalculator {
 impl AlleleFrequencyCalculator {
     const THRESHOLD_FOR_ALLELE_COUNT_CONVERGENCE: f64 = 0.1;
     const HOM_REF_GENOTYPE_INDEX: usize = 0;
+    const TYPICAL_BASE_QUALITY: i64 = 30;
 
     pub fn new(
         ref_pseudo_count: f64,
@@ -77,7 +85,42 @@ impl AlleleFrequencyCalculator {
         gl_calc: &mut GenotypeLikelihoodCalculator,
         log10_allele_frequencies: &mut [f64],
     ) -> Vec<f64> {
-        let log10_likelihoods = g.get_likelihoods().get_as_vector();
+        let mut log10_likelihoods;
+
+        if g.has_likelihoods() {
+            log10_likelihoods = g.get_likelihoods().get_as_vector();
+        } else if g.genotype_type == Some(GenotypeType::NoCall) || g.genotype_type == Some(GenotypeType::HomRef) {
+            if g.ploidy != 2 {
+                panic!("Likelihoods are required to calculate posteriors for hom-refs with ploidy != 2");
+            };
+
+            if g.has_gq() {
+                //for a hom-ref, as long as we have GQ we can make a very accurate QUAL calculation
+                // since the hom-var likelihood should make a minuscule contribution
+
+                let mut per_sample_indexes_of_relevant_alleles = vec![1; log10_allele_frequencies.len()];
+                per_sample_indexes_of_relevant_alleles[0] = 0; // ref still maps to ref
+
+                let gq = g.gq;
+                let ploidy = g.ploidy;
+
+                //use these values for diploid ref/ref, ref/alt, alt/alt likelihoods
+                let mut approx_likelihoods = vec![0, gq, *PLOIDY_2_HOM_VAR_SCALE_FACTOR * gq];
+
+                //map likelihoods for any other alts to biallelic ref/alt likelihoods above
+                let genotype_index_map_by_ploidy = GenotypeLikelihoodCalculators::get_instance(ploidy, log10_allele_frequencies.len()).genotype_index_map(&per_sample_indexes_of_relevant_alleles);
+                let mut PLs = vec![0; genotype_index_map_by_ploidy.len()];
+                for i in 0..PLs.len() {
+                    PLs[i] = approx_likelihoods[genotype_index_map_by_ploidy[i]]
+                }
+
+                log10_likelihoods = GenotypeLikelihoods::from_pls(PLs).get_as_vector();
+            } else {
+                panic!("Genotype does not contain the GQ necessary to calculate posteriors")
+            }
+        } else {
+            panic!("Genotype does not contain likelihoods necessary to calculate posteriors")
+        }
         let log10_posteriors = (0..gl_calc.genotype_count as usize)
             .into_iter()
             .map(|genotype_index| {

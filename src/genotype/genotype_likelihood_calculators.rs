@@ -96,13 +96,12 @@ impl GenotypeLikelihoodCalculators {
     //     }
     // }
 
-    fn calculate_genotype_count_using_tables(ploidy: usize, allele_count: usize) -> Array2<i32> {
+    fn calculate_genotype_count_using_tables(ploidy: usize, allele_count: usize) -> i32 {
         let result = GenotypeLikelihoodCalculators::build_allele_first_genotype_offset_table(
             ploidy,
             allele_count,
         );
-
-        return result;
+        result[[ploidy, allele_count]]
     }
 
     /**
@@ -336,5 +335,19 @@ impl GenotypeLikelihoodCalculators {
 
             panic!("Code should never reach here")
         }
+    }
+
+    /**
+     * Returns the number of possible genotypes given the ploidy and number of different alleles.
+     * @param ploidy the requested ploidy.
+     * @param alleleCount the requested number of alleles.
+     *
+     * @throws IllegalArgumentException if {@code ploidy} or {@code alleleCount} is negative or
+     *                                      the number of genotypes is too large (more than {@link Integer#MAX_VALUE}).
+     *
+     * @return the number of genotypes given ploidy and allele count (0 or greater).
+     */
+    pub fn genotype_count(ploidy: usize, allele_count: usize) -> i32 {
+        Self::calculate_genotype_count_using_tables(ploidy, allele_count)
     }
 }

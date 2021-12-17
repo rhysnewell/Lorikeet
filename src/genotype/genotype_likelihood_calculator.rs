@@ -664,4 +664,83 @@ impl GenotypeLikelihoodCalculator {
             frequency_1_offset += allele_data_size;
         }
     }
+
+    /**
+     * Composes a genotype index map given a allele index recoding.
+     *
+     * @param oldToNewAlleleIndexMap allele recoding. The ith entry indicates the index of the allele in original encoding
+     *                               that corresponds to the ith allele index in the final encoding.
+     *
+     * @throws IllegalArgumentException if this calculator cannot handle the recoding provided. This is
+     * the case when either {@code oldToNewAlleleIndexMap}'s length or any of its element (+ 1 as they are 0-based) is larger
+     * this calculator's {@link #alleleCount()}. Also if any {@code oldToNewAllelesIndexMap} element is negative.
+     *
+     * @return never {@code null}.
+     */
+    pub fn genotype_index_map(&mut self, old_to_new_allele_index_map: &[usize]) -> Vec<usize> {
+        let result_allele_count = old_to_new_allele_index_map.len();
+        assert!(result_allele_count <= self.allele_count, "This calculator does not have enough capacity for handling {} alleles", result_allele_count);
+
+        let result_length = if result_allele_count == self.allele_count {
+            self.genotype_count as usize
+        } else {
+            GenotypeLikelihoodCalculators::genotype_count(self.ploidy, result_allele_count) as usize
+        };
+
+        let mut result = vec![0; result_length];
+        let mut sorted_allele_counts = vec![0; max(self.ploidy, self.allele_count) << 1];
+        self.allele_heap.clear();
+        let mut allele_counts_index = 0;
+        for i in 0..result_length {
+            self.genotype_index_map_per_genotype_index(i, allele_counts_index, old_to_new_allele_index_map, &mut result, &mut sorted_allele_counts);
+            if i < result_length - 1 {
+                allele_counts_index = self.next_genotype_allele_counts(allele_counts_index);
+            }
+        }
+
+        result
+    }
+
+    /**
+     * Performs the genotype mapping per new genotype index.
+     *
+     * @param newGenotypeIndex the target new genotype index.
+     * @param alleleCounts tha correspond to {@code newGenotypeIndex}.
+     * @param oldToNewAlleleIndexMap the allele mapping.
+     * @param destination where to store the new genotype index mapping to old.
+     * @param sortedAlleleCountsBuffer a buffer to re-use to get the genotype-allele-count's sorted allele counts.
+     */
+    fn genotype_index_map_per_genotype_index(
+        &mut self,
+        new_genotype_index: usize,
+        allele_counts_index: usize,
+        old_to_new_allele_index_map: &[usize],
+        destination: &mut Vec<usize>,
+        sorted_allele_counts_buffer: &mut Vec<usize>,
+    ) {
+        let distinct_allele_count = self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
+
+        self.genotype_allele_counts[allele_counts_index].copy_allele_counts(destination, 0);
+
+        let mut jj = 0;
+        for _ in 0..distinct_allele_count {
+            let old_index = sorted_allele_counts_buffer[jj];
+            jj += 1;
+            let repeats = sorted_allele_counts_buffer[jj];
+            jj += 1;
+            let new_index = old_to_new_allele_index_map[jj];
+            jj += 1;
+
+            if new_index >= self.allele_count {
+                panic!("Found invalid new allele index ({}) for old index ({})", new_index, old_index);
+            };
+
+            for k in 0..repeats {
+                self.allele_heap.push(new_index);
+            }
+        }
+
+        let genotype_index = self.allele_heap_to_index();
+        destination[new_genotype_index] = genotype_index;
+    }
 }

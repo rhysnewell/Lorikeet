@@ -373,11 +373,17 @@ impl VariantContextUtils {
 
             n_filtered += if vc.is_filtered() { 1 } else { 0 };
             if vc.is_variant() {
-                variant_sources.insert(vc.source.clone());
+                if !variant_sources.contains(&vc.source) {
+                    variant_sources.insert(vc.source.clone());
+                }
             };
             let allele_mapping =
                 Self::resolve_incompatible_alleles(ref_allele.as_ref().unwrap(), &vc);
-            alleles.extend(allele_mapping.values().into_iter().cloned());
+            allele_mapping.values().into_iter().for_each(|allele| {
+                if !alleles.contains(allele) {
+                    alleles.insert(allele.clone());
+                }
+            });
 
             Self::merge_genotypes(
                 &mut genotypes,
@@ -444,7 +450,8 @@ impl VariantContextUtils {
 
             if Self::has_pl_incompatibilities(&alleles, &vc.alleles) {
                 Self::strip_pls_and_ad(&mut genotypes);
-                // TODO: Remove potentially stale AC and AF tags on the VC here
+
+                Self::calculate_chromosome_counts(vc, &mut attributes, true);
                 break;
             }
         }
@@ -472,7 +479,49 @@ impl VariantContextUtils {
         return Some(builder);
     }
 
-    // fn update_variant_context_genotype()
+    pub fn calculate_chromosome_counts(vc: &mut VariantContext, attributes: &mut LinkedHashMap<String, AttributeObject>, remove_stale_values: bool) {
+        let AN = vc.get_called_chr_count();
+        if AN == 0 && remove_stale_values {
+            if attributes.contains_key("AC") {
+                attributes.remove("AC");
+            }
+
+            if attributes.contains_key("AF") {
+                attributes.remove("AF");
+            }
+
+            if attributes.contains_key("AN") {
+                attributes.remove("AN");
+            }
+        } else {
+            if !vc.genotypes.is_empty() {
+                attributes.insert("AN".to_string(), AttributeObject::I32(AN));
+                if !vc.get_alternate_alleles().is_empty() {
+                    let mut allele_freqs = Vec::new();
+                    let mut allele_counts = Vec::new();
+                    let mut founders_allele_counts = Vec::new();
+                    let total_founder_chromosomes = AN as f64;
+                    for allele in vc.get_alternate_alleles().iter() {
+                        let founder_alt_chromosomes = vc.get_called_chr_count_from_allele(allele);
+                        allele_counts.push(founder_alt_chromosomes as usize);
+                        founders_allele_counts.push(founder_alt_chromosomes);
+                        if AN == 0 {
+                            allele_freqs.push(0.0);
+                        } else {
+                            let freq = founder_alt_chromosomes as f64 / total_founder_chromosomes;
+                            allele_freqs.push(freq);
+                        }
+                    }
+
+                    attributes.insert("AC".to_string(), AttributeObject::VecUnsize(allele_counts));
+                    attributes.insert("AF".to_string(), AttributeObject::Vecf64(allele_freqs));
+                } else {
+                    attributes.remove("AC");
+                    attributes.remove("AF");
+                }
+            }
+        }
+    }
 
     /// Takes a set of variant contexts and filters them by their Qual By Depth value. If a variant
     /// context contains 2 or more alternate alleles, then that context is split up into multiple
@@ -626,7 +675,6 @@ impl VariantContextUtils {
             if !merged_genotypes.contains_sample(&name) {
                 // only add if the name is new
                 let mut new_g = g.clone();
-
                 if uniquify_samples || allele_mapping.needs_remapping() {
                     if allele_mapping.needs_remapping() {
                         new_g.alleles = allele_mapping.remap_allele_list(&g.alleles);
@@ -661,7 +709,7 @@ impl VariantContextUtils {
                 vc.get_reference_and_index(),
                 vc.get_alternate_alleles_with_index(),
             );
-            map.insert(vc.get_reference_and_index().0, ref_allele.clone());
+            map.insert(vc.get_reference_and_index().1, ref_allele.clone());
             let mut am = AlleleMapper::default();
             am.set_map(Some(map));
             return am;
@@ -687,10 +735,10 @@ impl VariantContextUtils {
      * @return a non-null mapping of original alleles to new (extended) ones
      */
     pub fn create_allele_mapping<'a>(
-        ref_allele: &ByteArrayAllele,
-        input_ref: (usize, &ByteArrayAllele),
+        ref_allele: &'a ByteArrayAllele,
+        input_ref: (usize, &'a ByteArrayAllele),
         input_alleles: Vec<(usize, &'a ByteArrayAllele)>,
-    ) -> LinkedHashMap<usize, ByteArrayAllele> {
+    ) -> LinkedHashMap<&'a ByteArrayAllele, ByteArrayAllele> {
         assert!(
             ref_allele.len() > input_ref.1.len(),
             "BUG: Input ref is longer than ref_allele"
@@ -701,9 +749,9 @@ impl VariantContextUtils {
         for (idx, a) in input_alleles.into_iter() {
             if Self::is_non_symbolic_extendable_allele(a) {
                 let extended = ByteArrayAllele::extend(a, extra_bases);
-                map.insert(idx, extended);
+                map.insert(a, extended);
             } else if a == &*SPAN_DEL_ALLELE {
-                map.insert(idx, a.clone());
+                map.insert(a, a.clone());
             };
         }
 
@@ -1088,9 +1136,10 @@ pub enum FilteredRecordMergeType {
     KeepUnconditional,
 }
 
+#[derive(Debug, Clone)]
 pub struct AlleleMapper<'b> {
     vc: Option<&'b VariantContext>,
-    map: Option<LinkedHashMap<usize, ByteArrayAllele>>,
+    map: Option<LinkedHashMap<&'b ByteArrayAllele, ByteArrayAllele>>,
 }
 
 impl<'b> AlleleMapper<'b> {
@@ -1105,7 +1154,7 @@ impl<'b> AlleleMapper<'b> {
         self.vc = vc;
     }
 
-    pub fn set_map(&mut self, map: Option<LinkedHashMap<usize, ByteArrayAllele>>) {
+    pub fn set_map(&mut self, map: Option<LinkedHashMap<&'b ByteArrayAllele, ByteArrayAllele>>) {
         self.map = map;
     }
 
@@ -1129,8 +1178,8 @@ impl<'b> AlleleMapper<'b> {
         match &self.map {
             None => return a,
             Some(map) => {
-                if map.contains_key(&idx) {
-                    return map.get(&idx).unwrap();
+                if map.contains_key(&a) {
+                    return map.get(&a).unwrap();
                 } else {
                     return a;
                 }

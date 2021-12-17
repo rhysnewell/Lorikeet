@@ -178,11 +178,11 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                 // vi += 1;
 
                                 // Remove the strains that weren't present
-                                for to_remove in strains_to_remove.into_iter() {
-                                    let strain_index =
-                                        strains.iter().position(|i| *i == to_remove).unwrap();
-                                    strains.remove(strain_index);
-                                }
+                                // for to_remove in strains_to_remove.into_iter() {
+                                //     let strain_index =
+                                //         strains.iter().position(|i| *i == to_remove).unwrap();
+                                //     strains.remove(strain_index);
+                                // }
                             }
 
                             let mut reference_present =
@@ -316,22 +316,22 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
             debug!("strain removal counts {:?}", &strains_to_remove);
 
-            for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
-                if count == n_samples {
-                    let strain_id_to_remove = strain_id_key.get(&strain_index).unwrap();
-                    let position_of_strain_id = strain_ids
-                        .iter()
-                        .position(|s| s == strain_id_to_remove)
-                        .unwrap();
-                    strain_ids.remove(position_of_strain_id);
-                    // strain_presences.iter_mut().for_each(|vec| {
-                    //     vec.remove(position_of_strain_id);
-                    // });
-
-                    something_removed = true;
-                    n_strains -= 1;
-                }
-            }
+            // for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
+            //     if count == n_samples {
+            //         let strain_id_to_remove = strain_id_key.get(&strain_index).unwrap();
+            //         let position_of_strain_id = strain_ids
+            //             .iter()
+            //             .position(|s| s == strain_id_to_remove)
+            //             .unwrap();
+            //         strain_ids.remove(position_of_strain_id);
+            //         // strain_presences.iter_mut().for_each(|vec| {
+            //         //     vec.remove(position_of_strain_id);
+            //         // });
+            //
+            //         // something_removed = true;
+            //         n_strains -= 1;
+            //     }
+            // }
 
             if !something_removed {
                 break;

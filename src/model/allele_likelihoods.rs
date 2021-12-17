@@ -15,6 +15,7 @@ use std::hash::Hash;
 use test_utils::allele_list_unit_tester::AlleleListUnitTester;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
+use hashlink::LinkedHashSet;
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -557,7 +558,12 @@ impl<A: Allele> AlleleLikelihoods<A> {
                                 && i != non_ref_allele_index
                                 && allele_likelihood < best_allele.likelihood
                                 && alleles_to_consider
-                                    .index_of_allele(self.alleles().get_allele(i))
+                                    .index_of_allele(
+                                        match self.alleles().get_allele(i) {
+                                            Some(indexed_allele) => indexed_allele,
+                                            None => panic!("Indexed allele {} not present in allele likelihoods alleles to consider", i)
+                                        }
+                                    )
                                     .is_some()
                             {
                                 qualified_allele_likelihoods
@@ -615,17 +621,32 @@ impl<A: Allele> AlleleLikelihoods<A> {
         let new_likelihood_values = self.marginal_likelihoods(
             old_allele_count,
             new_allele_count,
-            old_to_new_allele_index_map,
+            &old_to_new_allele_index_map,
         );
 
         let sample_count = self.number_of_samples();
         debug!("new liklelihood values {:?}", &new_likelihood_values);
 
-        let new_allele_list = new_to_old_allele_map
-            .keys()
-            .map(|i| self.alleles.get_allele(*i).clone())
-            .collect::<Vec<A>>();
-
+        let new_allele_list = old_to_new_allele_index_map
+            .iter()
+            .filter(|i| {
+                i.is_some()
+            })
+            .map(|i| {
+                match self.alleles.get_allele(i.unwrap()) {
+                    Some(new_allele) => new_allele,
+                    None => panic!(
+                        "New allele {} not present: {:?} alleles {:?} old allele count {} new allele count {}",
+                        i.unwrap(),
+                        new_to_old_allele_map.iter().map(|(index, alleles)| (*index, alleles.len())).collect::<HashMap<usize, usize>>(),
+                        &self.alleles.len(),
+                        old_allele_count,
+                        new_allele_count
+                    )
+                }.clone()
+            })
+            .collect::<LinkedHashSet<A>>();
+        let new_allele_list = new_allele_list.into_iter().collect::<Vec<A>>();
         let mut result = Self::new_from_likelihoods(
             AlleleList::new(&new_allele_list),
             self.samples.clone(),
@@ -643,7 +664,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         &self,
         old_allele_count: usize,
         new_allele_count: usize,
-        old_to_new_allele_index_map: Vec<Option<usize>>,
+        old_to_new_allele_index_map: &[Option<usize>],
     ) -> Vec<Array2<f64>> {
         let sample_count = self.samples.len();
         let mut result = vec![Array2::zeros((0, 0)); sample_count];
