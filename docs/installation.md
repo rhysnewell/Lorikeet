@@ -24,7 +24,7 @@ Once you have created the conda environment download and install the latest rele
 you are installing the latest release by checking what is available in the release tab of GitHub, as I'm often slow to update
 this README when changes occur.
 ```
-wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.0.tar.gz;
+wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.1.tar.gz;
 tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
 cp release/lorikeet $CONDA_PREFIX/bin;
 cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
