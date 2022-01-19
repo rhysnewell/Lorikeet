@@ -359,15 +359,21 @@ impl AssemblyBasedCallerUtils {
     ) {
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut grouped_by = HashMap::new(); // vcs grouped by start
-        assembly_result_set
-            .get_variation_events(max_mnp_distance)
-            .into_iter()
-            .for_each(|vc| {
-                let pos = grouped_by
-                    .entry(vc.loc.get_start())
-                    .or_insert_with(Vec::new);
-                pos.push(vc);
-            });
+        match assembly_result_set
+            .get_variation_events(max_mnp_distance) {
+            Ok(result) => {
+                result
+                    .into_iter()
+                    .for_each(|vc| {
+                        let pos = grouped_by
+                            .entry(vc.loc.get_start())
+                            .or_insert_with(Vec::new);
+                        pos.push(vc);
+                    });
+            },
+            Err(error) => panic!("{:?}", error)
+        };
+
         let mut assembled_variants = grouped_by
             .into_iter()
             .map(|(i, vcs)| (i, Self::make_merged_variant_context(vcs).unwrap()))

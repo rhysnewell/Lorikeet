@@ -175,7 +175,11 @@ impl<T: Allele + Send + Sync + Hash> Permutation<T> {
             let from_size = original.number_of_alleles();
 
             if from_size < to_size {
-                panic!("Target allele list is not a permutation of the original allele list")
+                panic!(
+                    "Target allele list is not a permutation of the original allele list: {:?} -> target {:?}",
+                    original.list.iter().map(|a| std::str::from_utf8(a.get_bases()).unwrap()).collect::<Vec<&str>>(),
+                    target.list.iter().map(|a| std::str::from_utf8(a.get_bases()).unwrap()).collect::<Vec<&str>>()
+                )
             }
 
             let mut from_index = vec![0; to_size];

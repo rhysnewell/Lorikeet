@@ -21,6 +21,8 @@ dependencies:
   - biopython
   - numba
   - pynndescent
+  - svim
+  - bcftools
   - pip
   - pip:
       - cmake>=3.21

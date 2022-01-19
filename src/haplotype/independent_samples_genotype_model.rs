@@ -46,16 +46,16 @@ impl IndependentSamplesGenotypesModel {
         }
     }
 
-    pub fn calculate_likelihoods<A: Allele, P: PloidyModel>(
+    pub fn calculate_likelihoods<A: Allele, B: Allele, P: PloidyModel>(
         &mut self,
         genotyping_alleles: &AlleleList<A>,
-        read_likelihoods: &AlleleLikelihoods<A>,
+        read_likelihoods_alleles: AlleleList<A>,
+        read_likelihoods: &AlleleLikelihoods<B>,
         ploidy_model: &P,
         padded_reference: &[u8],
         offset_for_into_event: usize,
     ) -> Vec<GenotypeLikelihoods> {
-        let permutation = read_likelihoods
-            .get_allele_list()
+        let permutation = read_likelihoods_alleles
             .permutation(genotyping_alleles.clone());
         let mut allele_likelihood_matrix_mapper = AlleleLikelihoodMatrixMapper::new(permutation);
 

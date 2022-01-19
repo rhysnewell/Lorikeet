@@ -23,6 +23,10 @@ use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
 use utils::utils::get_cleaned_sample_names;
+use external_command_checker::{check_for_svim, check_for_bcftools};
+use bird_tool_utils::command::finish_command_safely;
+use std::process::{Command, Stdio};
+use num::Saturating;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -226,6 +230,23 @@ impl<'a> LorikeetEngine<'a> {
                     let mut per_reference_samples = 0;
                     let mut per_reference_short_samples = 0;
 
+                    if !self.args.is_present("do-not-call-svs") && self.long_read_bam_count > 0 {
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Collecting SVs using svim...",
+                                pb.key
+                            ));
+                        }
+
+                        Self::call_structural_variants(
+                            &indexed_bam_readers[self.short_read_bam_count..],
+                            &output_prefix,
+                            concatenated_genomes.as_ref().unwrap(),
+                            self.args,
+                        );
+                    }
+
                     debug!(
                         "Running SNP calling on {} samples",
                         indexed_bam_readers.len()
@@ -235,20 +256,9 @@ impl<'a> LorikeetEngine<'a> {
                         self.args,
                         ref_idx,
                         self.short_read_bam_count,
-                        0,
-                        &indexed_bam_readers[0..self.short_read_bam_count],
+                        self.long_read_bam_count,
+                        &indexed_bam_readers,
                         n_threads,
-                    );
-
-                    let mut shards = assembly_engine.collect_shards(
-                        self.args,
-                        &indexed_bam_readers[0..self.short_read_bam_count],
-                        &genomes_and_contigs,
-                        &concatenated_genomes,
-                        flag_filters,
-                        n_threads,
-                        tree,
-                        &mut reference_reader,
                     );
 
                     {
@@ -258,20 +268,48 @@ impl<'a> LorikeetEngine<'a> {
                             pb.key
                         ));
                     }
-                    let contexts = assembly_engine.traverse(
-                        shards,
-                        flag_filters,
-                        self.args,
-                        &indexed_bam_readers[0..self.short_read_bam_count],
-                        &mut reference_reader,
-                    );
-                    debug!("example variant {:?}", &contexts.first());
 
-                    {
-                        let pb = &tree.lock().unwrap()[ref_idx + 2];
-                        pb.progress_bar
-                            .set_message(format!("{}: Variant calling complete...", pb.key));
-                    }
+                    let contexts = if self.args.is_present("low-memory") {
+                        assembly_engine.collect_shards_low_mem(
+                            self.args,
+                            &indexed_bam_readers,
+                            &genomes_and_contigs,
+                            &concatenated_genomes,
+                            flag_filters,
+                            n_threads,
+                            &mut reference_reader,
+                            &output_prefix
+                        )
+                    } else {
+                        let mut shards = assembly_engine.collect_shards(
+                            self.args,
+                            &indexed_bam_readers,
+                            &genomes_and_contigs,
+                            &concatenated_genomes,
+                            flag_filters,
+                            n_threads,
+                            tree,
+                            &mut reference_reader,
+                        );
+
+                        {
+                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                            pb.progress_bar.set_message(format!(
+                                "{}: Performing variant calling on active regions...",
+                                pb.key
+                            ));
+                        }
+                        assembly_engine.traverse(
+                            shards,
+                            flag_filters,
+                            self.args,
+                            &indexed_bam_readers,
+                            &mut reference_reader,
+                            &output_prefix
+                        )
+                    };
+
+                    debug!("example variant {:?}", &contexts.first());
 
                     let cleaned_sample_names = get_cleaned_sample_names(&indexed_bam_readers);
 
@@ -286,11 +324,11 @@ impl<'a> LorikeetEngine<'a> {
 
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
+                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
                             &contexts,
                             &output_prefix,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                             reference,
                             genome_size,
                         );
@@ -306,19 +344,11 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                             &reference_reader,
                             false,
                         )
                     } else if mode == "genotype" {
-                        // Calculate the geometric mean values and CLR for each variant, reference specific
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Starting clustering engine...",
-                                &reference,
-                            ));
-                        }
 
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
@@ -338,11 +368,11 @@ impl<'a> LorikeetEngine<'a> {
                         );
 
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
+                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
                             &split_contexts,
                             &output_prefix,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                             reference,
                             genome_size,
                         );
@@ -355,7 +385,7 @@ impl<'a> LorikeetEngine<'a> {
                                 split_contexts,
                                 &reference_reader,
                                 ref_idx,
-                                indexed_bam_readers[0..self.short_read_bam_count].len(),
+                                indexed_bam_readers.len(),
                                 n_threads,
                             );
                             let (n_strains, split_contexts) = clustering_engine.perform_clustering(
@@ -381,13 +411,13 @@ impl<'a> LorikeetEngine<'a> {
                                 split_contexts,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                 &output_prefix,
-                                &cleaned_sample_names[0..self.short_read_bam_count],
+                                &cleaned_sample_names,
                             );
 
                             let (mut strain_ids_present, split_contexts) =
                                 abundance_calculator_engine.run_abundance_calculator(
                                     n_strains,
-                                    cleaned_sample_names[0..self.short_read_bam_count].len(),
+                                    cleaned_sample_names.len(),
                                 );
 
                             let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
@@ -401,7 +431,7 @@ impl<'a> LorikeetEngine<'a> {
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
                                 &split_contexts,
-                                &cleaned_sample_names[0..self.short_read_bam_count],
+                                &cleaned_sample_names,
                                 &reference_reader,
                                 true,
                             );
@@ -438,11 +468,11 @@ impl<'a> LorikeetEngine<'a> {
                         }
                     } else if mode == "consensus" {
                         // calculate ANI statistics
-                        let mut ani_calculator = ANICalculator::new(self.short_read_bam_count);
+                        let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
                             &contexts,
                             &output_prefix,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                             reference,
                             genome_size,
                         );
@@ -455,7 +485,7 @@ impl<'a> LorikeetEngine<'a> {
                         assembly_engine.evaluator.write_vcf(
                             &output_prefix,
                             &contexts,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                             &reference_reader,
                             false,
                         );
@@ -473,7 +503,7 @@ impl<'a> LorikeetEngine<'a> {
                         reference_writer.generate_consensus(
                             contexts,
                             ref_idx,
-                            &cleaned_sample_names[0..self.short_read_bam_count],
+                            &cleaned_sample_names,
                         );
                     };
 
@@ -508,6 +538,112 @@ impl<'a> LorikeetEngine<'a> {
 
             self.multi.join().unwrap();
         });
+    }
+
+    /// Uses svim to call potential structural variants along the current reference genome
+    /// Any retrieved structural variants are stored in their own VCF file but also
+    /// used as `feature` variants to guide potential short read calls of these variants
+    fn call_structural_variants(
+        indexed_longread_bam_readers: &[String],
+        output_prefix: &str,
+        reference: &str,
+        args: &clap::ArgMatches,
+    ) {
+        check_for_svim();
+        check_for_bcftools();
+        let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
+        let min_sv_qual = args.value_of("min-sv-qual").unwrap().parse::<u8>().unwrap();
+        debug!("bam readers {:?}", indexed_longread_bam_readers);
+        // use svim on each longread sample
+        indexed_longread_bam_readers
+            .into_par_iter()
+            .enumerate()
+            .for_each(|(idx, bam_reader)| {
+
+                // svim path is just output prefix with numbered svim
+                let svim_path = format!("{}/svim_{}", output_prefix, idx);
+
+                let cmd_string = format!(
+                    "set -e -o pipefail; \
+                    svim alignment \
+                    --skip_genotyping \
+                    --read_names \
+                    --min_mapq {} --sequence_alleles \
+                    {} {} {}; \
+                    bcftools sort {}/variants.vcf | bcftools view -i 'QUAL >= {}' > {}/variants_filtered_sorted.vcf; \
+                    bgzip {}/variants_filtered_sorted.vcf; bcftools index {}/variants_filtered_sorted.vcf.gz",
+                    min_mapq,
+                    &svim_path,
+                    bam_reader,
+                    reference,
+                    &svim_path,
+                    &min_sv_qual,
+                    &svim_path,
+                    &svim_path,
+                    &svim_path,
+                );
+
+                debug!("Queuing cmd string {}", &cmd_string);
+
+                // We do not want to capture any stdio from svim as it produces too much
+                // and we can't clear the buffer before it starts hanging: https://github.com/rust-lang/rust/issues/45572
+                finish_command_safely(
+                    Command::new("bash")
+                        .arg("-c")
+                        .arg(&cmd_string)
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .expect("Unable to execute svim command"),
+                    "svim"
+                );
+        });
+
+        if indexed_longread_bam_readers.len() > 1 {
+            // once svim has run on each sample, we need to merge the VCF files together
+            // the easiest way to do this is bcftools merge
+            let cmd_string = format!(
+                "set -e -o pipefail; \
+                bcftools merge {}/svim_*/variants_filtered_sorted.vcf.gz | bcftools sort > {}/structural_variants.vcf; \
+                bgzip {}/structural_variants.vcf; bcftools index {}/structural_variants.vcf.gz",
+                output_prefix,
+                output_prefix,
+                output_prefix,
+                output_prefix
+            );
+
+            debug!("Queuing cmd string {}", &cmd_string);
+            finish_command_safely(
+                Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .expect("Unable to execute bcftools command"),
+                "bcftools"
+            );
+        } else {
+            // if there is only one longread sample just use that one
+            let cmd_string = format!(
+                "set -e -o pipefail; \
+                mv {}/svim_0/variants_filtered_sorted.vcf.gz {}/structural_variants.vcf.gz; \
+                bcftools index {}/structural_variants.vcf.gz",
+                output_prefix,
+                output_prefix,
+                output_prefix
+            );
+
+            debug!("Queuing cmd string {}", &cmd_string);
+            finish_command_safely(
+                Command::new("bash")
+                    .arg("-c")
+                    .arg(&cmd_string)
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .expect("Unable to execute bcftools command"),
+                "mv"
+            );
+        }
+
     }
 
     pub fn setup_progress_bars(
@@ -547,7 +683,7 @@ impl<'a> LorikeetEngine<'a> {
             progress_bars[ref_idx + 2] = Elem {
                 key: genomes_and_contigs.genomes[ref_idx].clone(),
                 index: ref_idx,
-                progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64),
+                progress_bar: ProgressBar::new((short_sample_count + long_sample_count) as u64 + 1),
             };
             debug!("Reference {}", reference,);
             reference_map
@@ -681,9 +817,10 @@ pub fn start_lorikeet_engine<
         &references,
         &mut reference_map,
         &genomes_and_contigs,
-        short_read_bam_count,
+        // short_read_bam_count,
         // long_read_bam_count,
-        0
+        0,
+        0,
     );
 
     let tree: Arc<Mutex<Vec<&Elem>>> =

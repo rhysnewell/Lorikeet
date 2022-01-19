@@ -295,12 +295,12 @@ impl AlignmentUtils {
 
                 if haplotype_bases_consumed >= read_start_on_haplotype {
                     let excess = if CigarUtils::cigar_consumes_reference_bases(element) {
-                        haplotype_bases_consumed - read_start_on_haplotype
+                        haplotype_bases_consumed.saturating_sub(read_start_on_haplotype)
                     } else {
                         0
                     };
 
-                    return ref_bases_consumed_before_read_start - excess;
+                    return ref_bases_consumed_before_read_start.saturating_sub(excess);
                 };
             }
 
@@ -445,7 +445,8 @@ impl AlignmentUtils {
                 .sum::<u32>();
         assert!(
             necessary_ref_length <= ref_seq.len() as u32,
-            "Read goes past end of reference"
+            "Read goes past end of reference: rstart - {}, necessary length - {}, ref len - {}, cigar - {:?}, indel index - {}",
+            read_start, necessary_ref_length, ref_seq.len(), &cigar.0, last_indel
         );
 
         // at this point, we are one base past the end of the read.  Now we traverse the cigar from right to left

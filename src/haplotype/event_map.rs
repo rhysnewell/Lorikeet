@@ -6,6 +6,8 @@ use rust_htslib::bam::record::Cigar;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use utils::base_utils::BaseUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
+use hashlink::LinkedHashSet;
+use utils::errors::BirdToolError;
 
 // lazy_static! {
 //     pub static ref SYMBOLIC_UNASSEMBLED_EVENT_ALLELE = Allele
@@ -361,13 +363,13 @@ impl EventMap {
         reference: &[u8],
         ref_loc: &SimpleInterval,
         max_mnp_distance: usize,
-    ) -> BTreeSet<usize> {
+    ) -> Result<BTreeSet<usize>, BirdToolError> {
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let mut hap_number = 0;
         debug!("=== Best Haplotypes ===");
 
         let mut start_pos_key_set = BTreeSet::new();
-        for h in haplotypes.iter_mut() {
+        for h in haplotypes.into_iter() {
             // Walk along the alignment and turn any difference from the reference into an event
             h.event_map = Some(EventMap::new(
                 &h,
@@ -379,20 +381,25 @@ impl EventMap {
             hap_number += 1;
             start_pos_key_set.extend(h.event_map.as_ref().unwrap().get_start_positions());
             // Assert that all of the events discovered have 2 alleles
-            h.event_map.as_ref().unwrap().map.values().for_each(|vc| {
+            for vc in h.event_map.as_ref().unwrap().map.values() {
                 if vc.get_alleles().len() == 2 {
                     // pass
                 } else {
-                    panic!("Error Haplotype event map Variant Context has too many alleles")
+                    return Err(BirdToolError::InvalidVariationEvent(
+                        format!(
+                            "Error Haplotype event map Variant Context has too many alleles: {:?} {:?}",
+                            vc.alleles.iter().map(|a| a.is_ref).collect::<Vec<bool>>(),
+                            vc.alleles.iter().map(|a| std::str::from_utf8(a.get_bases()).unwrap()).collect::<Vec<&str>>())
+                    ))
                 }
-            });
+            };
 
             debug!("{:?}", &h.genome_location);
             debug!("> Cigar {:?}", &h.cigar);
             debug!(">> Events = {:?}", &h.event_map);
         }
 
-        return start_pos_key_set;
+        return Ok(start_pos_key_set);
     }
 
     /**
