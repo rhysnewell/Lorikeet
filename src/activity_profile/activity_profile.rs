@@ -12,11 +12,11 @@ use utils::simple_interval::{Locatable, SimpleInterval};
  *
  * @author Rhys Newell <rhys.newell@hdr.qut.edu.au>
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ActivityProfile {
     pub state_list: Vec<ActivityProfileState>,
     max_prob_propagation_distance: usize,
-    active_prob_threshold: f64,
+    active_prob_threshold: f32,
     pub region_start_loc: Option<SimpleInterval>,
     pub region_stop_loc: Option<SimpleInterval>,
     contig_len: usize,
@@ -54,7 +54,7 @@ pub trait Profile {
     fn incorporate_single_state(&mut self, state_to_add: ActivityProfileState);
 
     fn pop_ready_assembly_regions(
-        &mut self,
+        self,
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,
@@ -82,11 +82,11 @@ pub trait Profile {
     fn find_first_activity_boundary(&self, is_active_region: bool, max_region_size: usize)
         -> usize;
 
-    fn get_prob(&self, index: usize) -> f64;
+    fn get_prob(&self, index: usize) -> f32;
 
     fn is_minimum(&self, index: usize) -> bool;
 
-    fn get_probabilities_as_array(&self) -> Vec<f64>;
+    fn get_probabilities_as_array(&self) -> Vec<f32>;
 }
 
 impl ActivityProfile {
@@ -97,7 +97,7 @@ impl ActivityProfile {
      */
     pub fn new(
         max_prob_propagation_distance: usize,
-        active_prob_threshold: f64,
+        active_prob_threshold: f32,
         ref_idx: usize,
         tid: usize,
         contig_len: usize,
@@ -306,7 +306,7 @@ impl Profile for ActivityProfile {
                 // add no more than the max prob propagation distance num HQ clips
                 let num_hq_clips = std::cmp::min(
                     OrderedFloat(*num_hq_clips),
-                    OrderedFloat(self.max_prob_propagation_distance as f64),
+                    OrderedFloat(self.max_prob_propagation_distance as f32),
                 )
                 .into_inner() as i64;
                 for i in (-num_hq_clips..=num_hq_clips).into_iter() {
@@ -359,7 +359,7 @@ impl Profile for ActivityProfile {
      * @return a non-null list of active regions
      */
     fn pop_ready_assembly_regions(
-        &mut self,
+        mut self,
         assembly_region_extension: usize,
         min_region_size: usize,
         max_region_size: usize,
@@ -536,7 +536,7 @@ impl Profile for ActivityProfile {
         );
 
         let mut min_i = end_of_active_region - 1;
-        let mut min_p = std::f64::MAX;
+        let mut min_p = std::f32::MAX;
 
         for i in ((min_region_size - 1)..=min_i).into_iter().rev() {
             let cur = self.get_prob(i);
@@ -588,7 +588,7 @@ impl Profile for ActivityProfile {
      * @param index a valid offset into the state list
      * @return the isActiveProb of the state at index
      */
-    fn get_prob(&self, index: usize) -> f64 {
+    fn get_prob(&self, index: usize) -> f32 {
         return self.state_list[index].is_active_prob();
     }
 
@@ -611,12 +611,12 @@ impl Profile for ActivityProfile {
         }
     }
 
-    fn get_probabilities_as_array(&self) -> Vec<f64> {
+    fn get_probabilities_as_array(&self) -> Vec<f32> {
         let probs = self
             .get_state_list()
             .into_iter()
             .map(|state| state.is_active_prob())
-            .collect::<Vec<f64>>();
+            .collect::<Vec<f32>>();
         return probs;
     }
 }

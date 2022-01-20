@@ -14,12 +14,13 @@ extern crate lazy_static;
 #[macro_use]
 extern crate approx;
 extern crate bio;
+extern crate gkl;
 extern crate itertools;
 extern crate rand;
 extern crate term;
-extern crate gkl;
 
 use bio::io::fasta::IndexedReader;
+use gkl::smithwaterman::Parameters;
 use itertools::Itertools;
 use lorikeet_genome::assembly::assembly_region::AssemblyRegion;
 use lorikeet_genome::assembly::assembly_result_set::AssemblyResultSet;
@@ -33,7 +34,9 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMInputScoreImputator,
+};
 use lorikeet_genome::read_error_corrector::nearby_kmer_error_corrector::{
     CorrectionSet, NearbyKmerErrorCorrector,
 };
@@ -43,7 +46,6 @@ use lorikeet_genome::read_threading::read_threading_graph::ReadThreadingGraph;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::CigarUtils;
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
-use gkl::smithwaterman::Parameters;
 use lorikeet_genome::smith_waterman::smith_waterman_aligner::{
     ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS, ORIGINAL_DEFAULT, STANDARD_NGS,
 };

@@ -1,6 +1,7 @@
 use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_result::{AssemblyResult, Status};
 use assembly::assembly_result_set::AssemblyResultSet;
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use graphs::adaptive_chain_pruner::AdaptiveChainPruner;
 use graphs::base_edge::{BaseEdge, BaseEdgeStruct};
 use graphs::base_graph::BaseGraph;
@@ -14,6 +15,7 @@ use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashSet;
 use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
 use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
@@ -24,11 +26,9 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use reads::read_clipper::ReadClipper;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
@@ -160,7 +160,7 @@ impl ReadThreadingAssembler {
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
         read_error_corrector: Option<NearbyKmerErrorCorrector>,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: Parameters,
         reference_to_haplotype_sw_parameters: Parameters,
         avx_mode: AVXMode,
@@ -250,10 +250,10 @@ impl ReadThreadingAssembler {
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) {
         // create the graphs by calling our subclass assemble method
         self.assemble(
@@ -303,7 +303,7 @@ impl ReadThreadingAssembler {
         &mut self,
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         avx_mode: AVXMode,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
@@ -382,7 +382,7 @@ impl ReadThreadingAssembler {
         corrected_reads: &'b Vec<BirdToolRead>,
         result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
         active_region_extended_location: &'b SimpleInterval,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
         reference_to_haplotype_sw_parameters: &Parameters,
         avx_mode: AVXMode,
@@ -698,7 +698,7 @@ impl ReadThreadingAssembler {
                         h.get_bases(),
                         OverhangStrategy::SoftClip,
                         haplotype_to_reference_sw_parameters,
-                        avx_mode
+                        avx_mode,
                     );
 
                     match cigar {
@@ -738,7 +738,7 @@ impl ReadThreadingAssembler {
                                     h.get_bases(),
                                     OverhangStrategy::InDel,
                                     haplotype_to_reference_sw_parameters,
-                                    avx_mode
+                                    avx_mode,
                                 );
 
                                 match cigar_with_indel_strategy {
@@ -837,9 +837,9 @@ impl ReadThreadingAssembler {
         kmer_size: usize,
         allow_low_complexity_graphs: bool,
         allow_non_unique_kmers_in_ref: bool,
-        sample_names: &'b Vec<String>,
+        sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
-        avx_mode: AVXMode
+        avx_mode: AVXMode,
     ) -> Option<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small

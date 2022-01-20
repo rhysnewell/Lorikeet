@@ -282,7 +282,7 @@ fn test_best_alleles<A: Allele>(
     let number_of_alleles = alleles.len();
     let ref_index = original.alleles().index_of_reference();
     let ref_allele = if ref_index.is_some() {
-        Some(original.alleles().get_allele(ref_index.unwrap()).clone())
+        Some(original.alleles().get_allele(ref_index.unwrap()).unwrap().clone())
     } else {
         None
     };
@@ -368,7 +368,7 @@ fn test_best_alleles<A: Allele>(
                         alleles[best_index_array[read_index]].clone()
                     };
                     assert_eq!(
-                        original_alleles.get_allele(best_allele.allele_index.unwrap()),
+                        original_alleles.get_allele(best_allele.allele_index.unwrap()).unwrap(),
                         &new_ref_allele
                     );
 

@@ -1,15 +1,29 @@
 use model::variants;
 use rayon::prelude::*;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use utils::vcf_constants::VCFConstants;
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Clone, Ord, PartialOrd)]
 pub struct ByteArrayAllele {
     pub(crate) is_ref: bool,
     pub(crate) is_no_call: bool,
     pub(crate) is_symbolic: bool,
     pub(crate) bases: Vec<u8>,
 }
+
+impl Hash for ByteArrayAllele {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.bases.hash(state);
+    }
+}
+
+impl PartialEq for ByteArrayAllele {
+    fn eq(&self, other: &Self) -> bool {
+        self.bases == other.bases
+    }
+}
+
+impl Eq for ByteArrayAllele {}
 
 impl ByteArrayAllele {
     const SINGLE_BREAKEND_INDICATOR: char = '.';

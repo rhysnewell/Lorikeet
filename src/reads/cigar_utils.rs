@@ -1,10 +1,10 @@
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
+use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use rayon::prelude::*;
 use reads::alignment_utils::AlignmentUtils;
 use reads::cigar_builder::CigarBuilder;
 use rust_htslib::bam::record::{Cigar, CigarString, CigarStringView};
 use smith_waterman::smith_waterman_aligner::{SmithWatermanAligner, SmithWatermanAlignmentResult};
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
-use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 
 lazy_static! {
     static ref SW_PAD: String = format!("NNNNNNNNNN");
@@ -317,7 +317,7 @@ impl CigarUtils {
             padded_path.as_bytes(),
             sw_parameters,
             strategy,
-            avx_mode
+            avx_mode,
         );
 
         if Self::is_s_w_failure(&alignment) {

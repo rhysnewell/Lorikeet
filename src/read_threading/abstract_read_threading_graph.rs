@@ -1,4 +1,5 @@
 use assembly::kmer::Kmer;
+use gkl::smithwaterman::Parameters;
 use graphs::base_edge::BaseEdgeStruct;
 use graphs::base_graph::BaseGraph;
 use graphs::multi_sample_edge::MultiSampleEdge;
@@ -9,7 +10,6 @@ use read_threading::multi_debruijn_vertex::MultiDeBruijnVertex;
 use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
-use gkl::smithwaterman::Parameters;
 use std::fmt::Debug;
 use utils::simple_interval::Locatable;
 
@@ -136,7 +136,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: &BirdToolRead, sample_names: &Vec<String>);
+    fn add_read(&mut self, read: &BirdToolRead, sample_names: &[String]);
 
     // only add the new kmer to the map if it exists and isn't in our non-unique kmer list
     fn track_kmer(&mut self, kmer: Kmer, new_vertex: NodeIndex);

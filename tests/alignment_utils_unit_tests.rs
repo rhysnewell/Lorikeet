@@ -13,13 +13,13 @@ extern crate rust_htslib;
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
+extern crate gkl;
 extern crate itertools;
 extern crate rand;
 extern crate term;
-extern crate gkl;
 
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use itertools::Itertools;
-use lorikeet_genome::estimation::lorikeet_engine::ReadType;
 use lorikeet_genome::genotype::genotype_builder::Genotype;
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use lorikeet_genome::genotype::genotype_likelihoods::GenotypeLikelihoods;
@@ -30,7 +30,10 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMInputScoreImputator,
+};
+use lorikeet_genome::processing::lorikeet_engine::ReadType;
 use lorikeet_genome::reads::alignment_utils::AlignmentUtils;
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_builder::CigarBuilder;
@@ -58,7 +61,6 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
 
 static DEBUG: bool = true;
 
@@ -167,7 +169,7 @@ fn test_read_aligned_to_ref(
                 ref_haplotype,
                 ref_start,
                 true,
-                AVXMode::detect_mode()
+                AVXMode::detect_mode(),
             );
             println!(
                 "aligned read {} expected cigar {}",
@@ -453,8 +455,14 @@ fn test_read_aligned_to_ref_complex_alignment(
     expected_max_mismatches: usize,
 ) {
     let ref_haplotype = Haplotype::new(reference.as_bytes(), true);
-    let aligned_read =
-        AlignmentUtils::create_read_aligned_to_ref(read, haplotype, &ref_haplotype, 0, true, AVXMode::detect_mode());
+    let aligned_read = AlignmentUtils::create_read_aligned_to_ref(
+        read,
+        haplotype,
+        &ref_haplotype,
+        0,
+        true,
+        AVXMode::detect_mode(),
+    );
     let mismatches = AlignmentUtils::get_mismatch_count(
         &aligned_read,
         reference.as_bytes(),

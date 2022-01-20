@@ -13,11 +13,12 @@ extern crate rust_htslib;
 extern crate lazy_static;
 #[macro_use]
 extern crate approx;
+extern crate gkl;
 extern crate itertools;
 extern crate rand;
 extern crate term;
-extern crate gkl;
 
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use itertools::Itertools;
 use lorikeet_genome::genotype::genotype_builder::Genotype;
 use lorikeet_genome::genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
@@ -29,7 +30,9 @@ use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context::VariantContext;
 use lorikeet_genome::model::{allele_list::AlleleList, variants::SPAN_DEL_ALLELE};
 use lorikeet_genome::pair_hmm::pair_hmm::PairHMM;
-use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{PairHMMInputScoreImputator, AVXMode};
+use lorikeet_genome::pair_hmm::pair_hmm_likelihood_calculation_engine::{
+    AVXMode, PairHMMInputScoreImputator,
+};
 use lorikeet_genome::reads::bird_tool_reads::BirdToolRead;
 use lorikeet_genome::reads::cigar_utils::{
     CigarUtils, ALIGNMENT_TO_BEST_HAPLOTYPE_SW_PARAMETERS, NEW_SW_PARAMETERS,
@@ -54,7 +57,6 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
-use gkl::smithwaterman::{Parameters, OverhangStrategy};
 
 fn get_aligner() -> SmithWatermanAligner {
     SmithWatermanAligner::new()
@@ -206,8 +208,13 @@ fn assert_alignment_matches_expected(
     weights: Parameters,
     strategy: OverhangStrategy,
 ) {
-    let alignment =
-        SmithWatermanAligner::align(reference.as_bytes(), read.as_bytes(), &weights, strategy, AVXMode::detect_mode());
+    let alignment = SmithWatermanAligner::align(
+        reference.as_bytes(),
+        read.as_bytes(),
+        &weights,
+        strategy,
+        AVXMode::detect_mode(),
+    );
     print_alignment(
         reference.as_bytes(),
         read.as_bytes(),

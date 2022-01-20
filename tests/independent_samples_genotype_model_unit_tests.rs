@@ -45,7 +45,7 @@ fn test_calculate_likelihoods(
     let ploidy_model = HeterogeneousPloidyModel::new(sample_list.clone(), ploidies.to_vec());
     let mut model = IndependentSamplesGenotypesModel::default();
     let g_likelihoods =
-        model.calculate_likelihoods(&genotyping_allele_list, &likelihoods, &ploidy_model, b"", 0);
+        model.calculate_likelihoods(&genotyping_allele_list, likelihoods.get_allele_list_byte_array(), &likelihoods, &ploidy_model, b"", 0);
     // assert!(!g_likelihoods.is_empty());
     // AlleleListUnitTester::assert_allele_list(g_likelihoods)
     let sample_count = sample_list.len();

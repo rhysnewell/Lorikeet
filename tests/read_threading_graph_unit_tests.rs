@@ -22,6 +22,7 @@ extern crate term;
 extern crate ntest;
 extern crate gkl;
 
+use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use itertools::Itertools;
 use lorikeet_genome::assembly::kmer::Kmer;
 use lorikeet_genome::graphs::base_edge::BaseEdge;
@@ -46,7 +47,6 @@ use rust_htslib::bam::record::CigarString;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::convert::TryFrom;
-use gkl::smithwaterman::{OverhangStrategy, Parameters};
 
 lazy_static! {
     static ref DANGLING_END_SW_PARAMETERS: Parameters = *STANDARD_NGS;

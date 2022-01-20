@@ -27,7 +27,7 @@ use std::cmp::{max, min};
 use std::convert::TryFrom;
 
 const MAX_PROB_PROPAGATION_DISTANCE: usize = 50;
-const ACTIVE_PROB_THRESHOLD: f64 = 0.002;
+const ACTIVE_PROB_THRESHOLD: f32 = 0.002;
 static b37_reference_20_21: &str = "tests/resources/large/human_g1k_v37.20.21.fasta";
 
 #[derive(Debug, Clone, Copy)]
@@ -44,7 +44,7 @@ enum ActivityProfileType {
 
 #[derive(Debug, Clone)]
 struct BasicActivityProfileTestProvider {
-    probs: Vec<f64>,
+    probs: Vec<f32>,
     expected_regions: Vec<AssemblyRegion>,
     extension: usize,
     region_start: SimpleInterval,
@@ -56,7 +56,7 @@ struct BasicActivityProfileTestProvider {
 impl BasicActivityProfileTestProvider {
     pub fn new(
         profile_type: ProfileType,
-        probs: Vec<f64>,
+        probs: Vec<f32>,
         start_active: bool,
         region_start: SimpleInterval,
         contig_len: usize,
@@ -206,7 +206,7 @@ fn test_activity_profile(cfg: BasicActivityProfileTestProvider) {
     }
 }
 
-fn assert_probs_are_equal(actual: Vec<ActivityProfileState>, expected: Vec<f64>) {
+fn assert_probs_are_equal(actual: Vec<ActivityProfileState>, expected: Vec<f32>) {
     assert_eq!(actual.len(), expected.len());
 
     for i in 0..actual.len() {
@@ -317,7 +317,7 @@ fn test_region_creation(
         profile.add(state);
 
         if !wait_until_end {
-            let regions = profile.pop_ready_assembly_regions(0, 1, max_region_size, false);
+            let regions = profile.clone().pop_ready_assembly_regions(0, 1, max_region_size, false);
             assert_good_regions(
                 start,
                 regions,
@@ -330,7 +330,7 @@ fn test_region_creation(
     }
 
     if wait_until_end || force_conversion {
-        let regions = profile.pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
+        let regions = profile.clone().pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
         assert_good_regions(
             start,
             regions,
@@ -477,7 +477,7 @@ fn test_soft_clips(
     profile.add(ActivityProfileState::new(
         soft_clip_loc.clone(),
         1.0,
-        Type::HighQualitySoftClips(soft_clip_size as f64),
+        Type::HighQualitySoftClips(soft_clip_size as f32),
     ));
 
     let actual_num_of_soft_clips = min(soft_clip_size, profile.get_max_prob_propagation_distance());
@@ -541,7 +541,7 @@ fn run_test_soft_clips() {
 //
 // -------------------------------------------------------------------------------------
 
-fn add_prob(l: &mut Vec<f64>, v: f64) {
+fn add_prob(l: &mut Vec<f32>, v: f32) {
     l.push(v)
 }
 
@@ -550,13 +550,13 @@ fn make_gaussian(mean: f64, range: usize, sigma: f64) -> Vec<f64> {
 
     for iii in 0..range {
         gauss[iii] =
-            MathUtils::normal_distribution(mean, sigma, iii as f64) + ACTIVE_PROB_THRESHOLD;
+            MathUtils::normal_distribution(mean, sigma, iii as f64) + ACTIVE_PROB_THRESHOLD as f64;
     }
 
     return gauss;
 }
 
-fn find_cut_site_for_two_max_peaks(probs: &Vec<f64>, min_region_size: usize) -> Option<usize> {
+fn find_cut_site_for_two_max_peaks(probs: &Vec<f32>, min_region_size: usize) -> Option<usize> {
     for i in ((min_region_size + 1)..=(probs.len() - 2))
         .into_iter()
         .rev()
@@ -576,13 +576,13 @@ fn test_active_region_cuts(
     min_region_size: usize,
     max_region_size: usize,
     expected_region_size: usize,
-    probs: Vec<f64>,
+    probs: Vec<f32>,
     contig_len: usize,
 ) {
     // let profile = ActivityProfileState::new()
     let mut profile = ActivityProfile::new(
         MAX_PROB_PROPAGATION_DISTANCE,
-        ACTIVE_PROB_THRESHOLD,
+        ACTIVE_PROB_THRESHOLD as f32,
         0,
         0,
         contig_len,
@@ -657,7 +657,7 @@ fn make_active_region_cut_tests() {
                 for i in 0..active_region_size {
                     add_prob(
                         &mut probs,
-                        (1.0 * (i as f64 + 1.0)) / active_region_size as f64,
+                        (1.0 * (i as f32 + 1.0)) / active_region_size as f32,
                     );
                 }
                 test_active_region_cuts(
@@ -675,7 +675,7 @@ fn make_active_region_cut_tests() {
                 for i in 0..active_region_size {
                     add_prob(
                         &mut probs,
-                        1.0 - (1.0 * (i as f64 + 1.0)) / active_region_size as f64,
+                        1.0 - (1.0 * (i as f32 + 1.0)) / active_region_size as f32,
                     );
                 }
                 test_active_region_cuts(
@@ -701,7 +701,7 @@ fn make_active_region_cut_tests() {
                             );
                             let mut probs = Vec::new();
                             for i in 0..active_region_size {
-                                add_prob(&mut probs, gauss1[i] + gauss2[i]);
+                                add_prob(&mut probs, gauss1[i] as f32 + gauss2[i] as f32);
                             }
                             let cut_site = find_cut_site_for_two_max_peaks(&probs, min_region_size);
                             match cut_site {

@@ -10,6 +10,7 @@ use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use utils::simple_interval::SimpleInterval;
+use utils::errors::BirdToolError;
 
 /**
  * Collection of read assembly using several kmerSizes.
@@ -249,7 +250,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *                       at 10-12, a MNP at 14-15, and a SNP at 17.  May not be negative.
      * @return never {@code null}, but perhaps an empty collection.
      */
-    pub fn get_variation_events(&mut self, max_mnp_distance: usize) -> BTreeSet<VariantContext> {
+    pub fn get_variation_events(&mut self, max_mnp_distance: usize) -> Result<BTreeSet<VariantContext>, BirdToolError> {
         let same_mnp_distance = if self.last_max_mnp_distance_used.is_some() {
             if &max_mnp_distance == self.last_max_mnp_distance_used.as_ref().unwrap() {
                 true
@@ -268,27 +269,41 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
                 .iter()
                 .any(|hap| !hap.allele.is_ref && hap.event_map.is_none())
         {
-            self.regenerate_variation_events(max_mnp_distance);
+            match self.regenerate_variation_events(max_mnp_distance) {
+                Ok(_) => {
+                    // pass
+                },
+                Err(error) => return Err(error)
+            }
         }
 
-        return self.variation_events.clone();
+        return Ok(self.variation_events.clone());
     }
 
-    pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) {
-        let mut haplotype_list = self
+    pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) -> Result<(), BirdToolError> {
+        let haplotype_list = self
             .haplotypes
             .iter()
             .cloned()
-            .collect::<Vec<Haplotype<SimpleInterval>>>();
-        EventMap::build_event_maps_for_haplotypes(
+            .collect::<LinkedHashSet<Haplotype<SimpleInterval>>>();
+
+        let mut haplotype_list = haplotype_list.into_iter().collect::<Vec<Haplotype<SimpleInterval>>>();
+
+        match EventMap::build_event_maps_for_haplotypes(
             &mut haplotype_list,
             self.full_reference_with_padding.as_slice(),
             &self.padded_reference_loc,
             max_mnp_distance,
-        );
+        ) {
+            Ok(_) => {
+                // pass
+            },
+            Err(error) => return Err(error)
+        }
         self.variation_events = self.get_all_variant_contexts(&haplotype_list);
         self.last_max_mnp_distance_used = Some(max_mnp_distance);
         self.variation_present = haplotype_list.iter().any(|h| !h.allele.is_ref);
+        Ok(())
     }
 
     /**

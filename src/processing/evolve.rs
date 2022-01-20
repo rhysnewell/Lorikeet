@@ -3,10 +3,10 @@
 //
 // use bird_tool_utils::command;
 // use coverm::bam_generator::*;
-// use estimation::bams::{index_bams::*, process_bam::*};
-// use estimation::codon_structs::*;
-// use estimation::variant_matrix::*;
-// use estimation::vcfs::process_vcf::*;
+// use processing::bams::{index_bams::*, process_bam::*};
+// use processing::codon_structs::*;
+// use processing::variant_matrix::*;
+// use processing::vcfs::process_vcf::*;
 // use external_command_checker;
 // use utils::*;
 // use haplotype::active_regions;

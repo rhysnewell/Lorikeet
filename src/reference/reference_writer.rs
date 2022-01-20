@@ -115,7 +115,7 @@ impl<'a> ReferenceWriter<'a> {
         &mut self,
         variant_contexts: Vec<VariantContext>,
         ref_idx: usize,
-        samples: &Vec<&str>,
+        samples: &[&str],
     ) {
         let mut grouped_variant_contexts = Self::split_variant_contexts_by_tid(variant_contexts);
         let mut tids = self
@@ -253,7 +253,8 @@ impl<'a> ReferenceWriter<'a> {
                 let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + *offset) as usize)
-                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset)
+                            as usize),
                     consensus_allele.bases.into_iter(),
                 );
 
@@ -268,7 +269,8 @@ impl<'a> ReferenceWriter<'a> {
                 let allele_len = consensus_allele.bases.len();
                 new_bases.splice(
                     ((vc.loc.start as i64 + *offset) as usize)
-                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset) as usize),
+                        ..=(((vc.loc.start + vc.get_reference().bases.len() - 1) as i64 + *offset)
+                            as usize),
                     consensus_allele.bases.into_iter(),
                 );
 

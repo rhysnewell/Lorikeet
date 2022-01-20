@@ -25,6 +25,7 @@ use reference::reference_reader::ReferenceReader;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use utils::simple_interval::{Locatable, SimpleInterval};
+use utils::errors::BirdToolError;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerGenotypingEngine {
@@ -103,7 +104,7 @@ impl HaplotypeCallerGenotypingEngine {
      */
     pub fn assign_genotype_likelihoods<'b>(
         &mut self,
-        mut haplotypes: Vec<Haplotype<SimpleInterval>>,
+        mut haplotypes: LinkedHashSet<Haplotype<SimpleInterval>>,
         mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>>,
         per_sample_filtered_read_list: HashMap<usize, Vec<BirdToolRead>>,
         ref_bases: &'b [u8],
@@ -113,21 +114,25 @@ impl HaplotypeCallerGenotypingEngine {
         given_alleles: Vec<VariantContext>,
         emit_reference_confidence: bool,
         max_mnp_distance: usize,
-        header: &'b Vec<String>,
+        header: &'b [String],
         ploidy: usize,
         args: &'b clap::ArgMatches,
         reference_reader: &'b ReferenceReader,
         stand_min_confidence: f64,
         // with_bam_out: bool,
-    ) -> CalledHaplotypes {
+    ) -> Result<CalledHaplotypes, BirdToolError> {
+        let mut haplotypes = haplotypes.into_iter().collect::<Vec<Haplotype<SimpleInterval>>>();
         // update the haplotypes so we're ready to call, getting the ordered list of positions on the reference
         // that carry events among the haplotypes
-        let mut start_pos_key_set = EventMap::build_event_maps_for_haplotypes(
+        let mut start_pos_key_set = match EventMap::build_event_maps_for_haplotypes(
             &mut haplotypes,
             ref_bases,
             &ref_loc,
             max_mnp_distance,
-        );
+        ) {
+            Ok(result) => result,
+            Err(error) => return Err(error)
+        };
 
         // Walk along each position in the key set and create each event to be outputted
         let mut called_haplotypes = HashSet::new();
@@ -301,7 +306,14 @@ impl HaplotypeCallerGenotypingEngine {
                             );
                             debug!("Annotated call {:?}", &annotated_call);
 
-                            if annotated_call.get_genotypes().genotypes().iter().map(|g| g.dp - g.ad[0]).sum::<i64>() >= 2 {
+                            if annotated_call
+                                .get_genotypes()
+                                .genotypes()
+                                .iter()
+                                .map(|g| g.dp - g.ad[0])
+                                .sum::<i64>()
+                                >= 2
+                            {
                                 // at least two supporting reads
                                 return_calls.push(annotated_call);
                                 call.alleles
@@ -313,11 +325,12 @@ impl HaplotypeCallerGenotypingEngine {
                                             None => {
                                                 // do nothing
                                             }
-                                            Some(a) => called_haplotypes.extend(a.into_iter().cloned()),
+                                            Some(a) => {
+                                                called_haplotypes.extend(a.into_iter().cloned())
+                                            }
                                         }
                                     });
                             }
-
                         }
                     }
                 }
@@ -334,7 +347,7 @@ impl HaplotypeCallerGenotypingEngine {
             return_calls
         };
 
-        return CalledHaplotypes::new(phased_calls, called_haplotypes);
+        return Ok(CalledHaplotypes::new(phased_calls, called_haplotypes));
     }
 
     fn overlapping_filtered_reads(
@@ -430,18 +443,19 @@ impl HaplotypeCallerGenotypingEngine {
         offset_for_ref_into_event: usize,
     ) -> GenotypesContext {
         let vc_alleles = &merged_vc.alleles;
-        // let allele_list: AlleleList<ByteArrayAllele> = if read_likelihoods.number_of_alleles() == vc_alleles.len() {
-        //     read_likelihoods.get_allele_list_byte_array()
-        // } else {
-        //     AlleleList::new(vc_alleles)
-        // }; // Old version
-        let allele_list = read_likelihoods.alleles.clone();
+        let allele_list: AlleleList<ByteArrayAllele> = if read_likelihoods.number_of_alleles() == vc_alleles.len() {
+            read_likelihoods.get_allele_list_byte_array()
+        } else {
+            AlleleList::new(vc_alleles)
+        };
+        // let allele_list = read_likelihoods.alleles.clone();
         debug!(
             "Read likelihood {:#?}",
             read_likelihoods.values_by_sample_index
         );
         let likelihoods = self.genotyping_model.calculate_likelihoods(
             &allele_list,
+            read_likelihoods.get_allele_list_byte_array(),
             read_likelihoods,
             &self.ploidy_model,
             padded_reference,

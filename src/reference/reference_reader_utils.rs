@@ -264,6 +264,7 @@ impl ReferenceReaderUtils {
             )),
             false => Some(coverm::genome_parsing::read_genome_fasta_files(
                 &genome_fasta_files,
+                false
             )),
         }
     }
