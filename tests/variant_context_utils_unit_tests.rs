@@ -605,7 +605,7 @@ fn merge_genotypes_data() {
             ]
         )
     );
-    
+
 }
 
 fn test_merge_genotypes(cfg: MergeGenotypesTest) {

@@ -330,7 +330,7 @@ fn test_region_creation(
     }
 
     if wait_until_end || force_conversion {
-        let regions = profile.pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
+        let regions = profile.clone().pop_ready_assembly_regions(0, 1, max_region_size, force_conversion);
         assert_good_regions(
             start,
             regions,
@@ -545,12 +545,12 @@ fn add_prob(l: &mut Vec<f32>, v: f32) {
     l.push(v)
 }
 
-fn make_gaussian(mean: f32, range: usize, sigma: f32) -> Vec<f32> {
+fn make_gaussian(mean: f64, range: usize, sigma: f64) -> Vec<f64> {
     let mut gauss = vec![0.0; range];
 
     for iii in 0..range {
         gauss[iii] =
-            MathUtils::normal_distribution(mean, sigma, iii as f32) + ACTIVE_PROB_THRESHOLD;
+            MathUtils::normal_distribution(mean, sigma, iii as f64) + ACTIVE_PROB_THRESHOLD as f64;
     }
 
     return gauss;
@@ -582,7 +582,7 @@ fn test_active_region_cuts(
     // let profile = ActivityProfileState::new()
     let mut profile = ActivityProfile::new(
         MAX_PROB_PROPAGATION_DISTANCE,
-        ACTIVE_PROB_THRESHOLD,
+        ACTIVE_PROB_THRESHOLD as f32,
         0,
         0,
         contig_len,
@@ -693,15 +693,15 @@ fn make_active_region_cut_tests() {
                     for max_peak1 in 0..(active_region_size / 2) {
                         for max_peak2 in ((active_region_size / 2) + 1)..active_region_size {
                             let gauss1 =
-                                make_gaussian(max_peak1 as f32, active_region_size, root_sigma);
+                                make_gaussian(max_peak1 as f64, active_region_size, root_sigma);
                             let gauss2 = make_gaussian(
-                                max_peak2 as f32,
+                                max_peak2 as f64,
                                 active_region_size,
                                 root_sigma + 1.0,
                             );
                             let mut probs = Vec::new();
                             for i in 0..active_region_size {
-                                add_prob(&mut probs, gauss1[i] + gauss2[i]);
+                                add_prob(&mut probs, gauss1[i] as f32 + gauss2[i] as f32);
                             }
                             let cut_site = find_cut_site_for_two_max_peaks(&probs, min_region_size);
                             match cut_site {
