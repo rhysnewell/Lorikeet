@@ -187,13 +187,15 @@ impl AssemblyBasedCallerUtils {
     ) -> HashMap<ReadIndexer, BirdToolRead> {
         let best_alleles = original_read_likelihoods
             .best_alleles_breaking_ties_main(Self::haplotype_alignment_tiebreaking_priority());
-
         return best_alleles
             .iter()
             .map(|best_allele| {
-                let best_haplotype = &original_read_likelihoods
+                let best_haplotype = match original_read_likelihoods
                     .alleles
-                    .get_allele(best_allele.allele_index.unwrap());
+                    .get_allele(best_allele.allele_index.unwrap()) {
+                    Some(best_haplotype) => best_haplotype,
+                    None => panic!("Could not retrieve index of {:?}", best_allele)
+                };
                 let original_read = &original_read_likelihoods
                     .evidence_by_sample_index
                     .get(&best_allele.sample_index)
@@ -357,15 +359,21 @@ impl AssemblyBasedCallerUtils {
     ) {
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut grouped_by = HashMap::new(); // vcs grouped by start
-        assembly_result_set
-            .get_variation_events(max_mnp_distance)
-            .into_iter()
-            .for_each(|vc| {
-                let pos = grouped_by
-                    .entry(vc.loc.get_start())
-                    .or_insert_with(Vec::new);
-                pos.push(vc);
-            });
+        match assembly_result_set
+            .get_variation_events(max_mnp_distance) {
+            Ok(result) => {
+                result
+                    .into_iter()
+                    .for_each(|vc| {
+                        let pos = grouped_by
+                            .entry(vc.loc.get_start())
+                            .or_insert_with(Vec::new);
+                        pos.push(vc);
+                    });
+            },
+            Err(error) => panic!("{:?}", error)
+        };
+
         let mut assembled_variants = grouped_by
             .into_iter()
             .map(|(i, vcs)| (i, Self::make_merged_variant_context(vcs).unwrap()))
@@ -731,7 +739,7 @@ impl AssemblyBasedCallerUtils {
 
                             let remapped_spanning_event_alt_allele =
                                 spanning_event_allele_mapping_to_merge_vc
-                                    .get(&spanning_event.get_alternate_alleles_with_index()[0].0)
+                                    .get(&spanning_event.get_alternate_alleles_with_index()[0].1)
                                     .unwrap();
                             // in the case of GGA mode the spanning event might not match an allele in the mergedVC
                             let index = merged_vc

@@ -26,13 +26,13 @@ impl<T: Float + Copy> Type<T> {
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub struct ActivityProfileState {
     loc: SimpleInterval,
-    pub active_prob: f64,
-    result_state: Type<f64>,
+    pub active_prob: f32,
+    result_state: Type<f32>,
 }
 
 impl ActivityProfileState {
     // When range-checking probabilities, we allow this much tolerance.
-    pub const PROBABILITY_TOLERANCE: f64 = 0.01;
+    pub const PROBABILITY_TOLERANCE: f32 = 0.01;
 
     /**
      * Create a new ActivityProfileState at loc with probability of being active of activeProb that maintains some
@@ -46,8 +46,8 @@ impl ActivityProfileState {
      */
     pub fn new(
         loc: SimpleInterval,
-        active_prob: f64,
-        result_state: Type<f64>,
+        active_prob: f32,
+        result_state: Type<f32>,
     ) -> ActivityProfileState {
         if loc.size() != 1 {
             panic!(
@@ -63,7 +63,7 @@ impl ActivityProfileState {
         }
     }
 
-    pub fn is_active_prob(&self) -> f64 {
+    pub fn is_active_prob(&self) -> f32 {
         self.active_prob
     }
 
@@ -77,15 +77,15 @@ impl ActivityProfileState {
      *
      * @param activeProb probability (should be between 0.0 and 1.0) that the site is active
      */
-    pub fn set_is_active_prob(&mut self, active_prob: f64) {
+    pub fn set_is_active_prob(&mut self, active_prob: f32) {
         self.active_prob = active_prob
     }
 
-    pub fn get_result_state(&self) -> &Type<f64> {
+    pub fn get_result_state(&self) -> &Type<f32> {
         &self.result_state
     }
 
-    pub fn get_result_value(&self) -> f64 {
+    pub fn get_result_value(&self) -> f32 {
         match self.result_state {
             Type::None => 0.0,
             Type::HighQualitySoftClips(count) => count,

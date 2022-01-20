@@ -6,7 +6,7 @@ use genotype::genotype_builder::{
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
-use hashlink::LinkedHashMap;
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use itertools::Itertools;
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::{Filter, Variant, NON_REF_ALLELE};
@@ -75,7 +75,7 @@ impl Ord for VariantContext {
                     .length()
                     .cmp(&other.get_reference().length())
             })
-            .then_with(|| self.alleles[0].cmp(&other.alleles[0]))
+            .then_with(|| self.get_alternate_alleles()[0].cmp(&other.get_alternate_alleles()[0]))
     }
 }
 
@@ -125,7 +125,7 @@ impl VariantContext {
         end: usize,
         alleles: Vec<ByteArrayAllele>,
     ) -> VariantContext {
-        let alleles = Self::make_alleles(alleles);
+        let alleles = Self::make_alleles(alleles.into_iter().collect::<LinkedHashSet<ByteArrayAllele>>());
         VariantContext {
             loc: SimpleInterval::new(tid, start, end),
             alleles,
@@ -139,7 +139,7 @@ impl VariantContext {
     }
 
     pub fn build_from_vc(vc: &VariantContext) -> VariantContext {
-        let alleles = Self::make_alleles(vc.alleles.clone());
+        let alleles = Self::make_alleles(vc.alleles.iter().cloned().collect::<LinkedHashSet<ByteArrayAllele>>());
         VariantContext {
             loc: vc.loc.clone(),
             alleles,
@@ -152,7 +152,7 @@ impl VariantContext {
         }
     }
 
-    fn make_alleles(alleles: Vec<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
+    fn make_alleles(alleles: LinkedHashSet<ByteArrayAllele>) -> Vec<ByteArrayAllele> {
         let mut allele_list = Vec::new();
 
         let mut saw_ref = false;
@@ -840,28 +840,29 @@ impl VariantContext {
             alleles.iter().enumerate().for_each(|(i, alt_allele)| {
                 let is_reference = i == 0;
                 if alt_allele == b"<*>" {
-                    // dummy non-ref allele, signifying potential homozygous reference site
-                    if omit_snvs {
-                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-                    } else {
-                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-                    }
+                    // // dummy non-ref allele, signifying potential homozygous reference site
+                    // if omit_snvs {
+                    //     variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+                    // } else {
+                    //     variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+                    // }
                 } else if alt_allele == b"<DEL>" {
-                    if let Some(ref svlens) = svlens {
-                        if let Some(svlen) = svlens[i] {
-                            variant_vec.push(ByteArrayAllele::new("*".as_bytes(), is_reference))
-                        } else {
-                            // TODO fail with an error in this case
-                            variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-                        }
-                    } else {
-                        // TODO fail with an error in this case
-                        variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
-                    }
+                    // if let Some(ref svlens) = svlens {
+                    //     if let Some(svlen) = svlens[i] {
+                    //         variant_vec.push(ByteArrayAllele::new("*".as_bytes(), is_reference))
+                    //     } else {
+                    //         // TODO fail with an error in this case
+                    //         variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+                    //     }
+                    // } else {
+                    //     // TODO fail with an error in this case
+                    //     variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+                    // }
                 } else if alt_allele[0] == b'<' {
                     // TODO Catch <DUP> structural variants here
                     // skip any other special alleles
-                    variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+                    // variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
+
                 } else if alt_allele.len() == 1 && ref_allele.len() == 1 {
                     // SNV
                     if omit_snvs {
@@ -997,6 +998,33 @@ impl VariantContext {
         // is reserved for cases of multiple alternate alleles of different types).  Therefore, if we've reached this point
         // in the code (so we're not a SNP, MNP, or symbolic allele), we absolutely must be an INDEL.
         return VariantType::Indel;
+    }
+
+    pub fn get_called_chr_count(&self) -> i32 {
+        let mut n = 0;
+        let mut genotypes = self.get_genotypes();
+
+
+        for g in genotypes.genotypes() {
+            for a in g.alleles.iter() {
+                if !a.is_no_call() {
+                    n += 1;
+                }
+            };
+        };
+
+        n
+    }
+
+    pub fn get_called_chr_count_from_allele(&self, a: &ByteArrayAllele) -> i32 {
+        let mut n = 0;
+        let genotypes = self.get_genotypes();
+
+        for g in genotypes.genotypes() {
+            n += g.count_allele(a);
+        };
+
+        n
     }
 
     /**

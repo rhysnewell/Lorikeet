@@ -32,7 +32,7 @@ use std::cmp::{max, min};
 use std::convert::TryFrom;
 
 const MAX_PROB_PROPAGATION_DISTANCE: usize = 50;
-const ACTIVE_PROB_THRESHOLD: f64 = 0.002;
+const ACTIVE_PROB_THRESHOLD: f32 = 0.002;
 static b37_reference_20_21: &str = "tests/resources/large/human_g1k_v37.20.21.fasta";
 
 fn test_band_pass(
@@ -84,8 +84,8 @@ fn test_band_pass(
         let probs = profile.get_probabilities_as_array();
         assert!(
             relative_eq!(
-                probs.iter().sum::<f64>(),
-                1.0 * (n_preceding_sites as f64 * preceding_prob + 1.0),
+                probs.iter().sum::<f32>(),
+                1.0 * (n_preceding_sites as f32 * preceding_prob + 1.0),
                 epsilon = 1e-3
             ),
             "Activity profile doesn't sum to number of non-zero prob states"
@@ -123,7 +123,7 @@ fn make_band_pass_test() {
 fn band_pass_in_one_pass(
     profile: &BandPassActivityProfile,
     active_prob_array: &Vec<f64>,
-) -> Vec<f64> {
+) -> Vec<f32> {
     let mut band_pass_prob_array = vec![0.0; active_prob_array.len()];
 
     // apply the band pass filter for activeProbArray into filteredProbArray
@@ -143,7 +143,7 @@ fn band_pass_in_one_pass(
                     iii + profile.get_filtered_size() + 1,
                 )];
 
-        band_pass_prob_array[iii] = MathUtils::dot_product(active_prob_sub_array, kernel);
+        band_pass_prob_array[iii] = MathUtils::dot_product(active_prob_sub_array, kernel) as f32;
     }
 
     return band_pass_prob_array;

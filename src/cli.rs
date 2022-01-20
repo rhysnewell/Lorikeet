@@ -66,6 +66,8 @@ Variant calling options (Basic):
                                                 segfault with no error message.
   -q, --min-base-quality                        Minimum base quality required to consider a
                                                 base for calling. [default: 10]
+  --min-mapq                                    Minimum MAPQ score for longreads to be considered
+                                                during variant calling. [default: 60]
   --base-quality-score-threshold                Base qualities below this threshold will
                                                 be reduced to the minimum (6). [default: 18]
   --max-input-depth                             The maximum number of reads included within an
@@ -79,6 +81,13 @@ Variant calling options (Basic):
                                                 be slow and not produce anything fruitful. If you
                                                 wish to call variants on all available contigs,
                                                 then set this to 0. [default: 2500]
+  --do-not-call-svs                             Opts not to use svim to call structural variants
+                                                using provided longreads. If no longreads are provided
+                                                this has no effect.
+  --min-sv-qual                                 Minimum structural variants quality returned by svim
+                                                and used by lorikeet. Not PHRED-scaled quality, value
+                                                determined by number of supporting reads. Consult
+                                                svim documentation for details. [default: 3]
 
 Variant calling options (Advanced):
   --phred-scaled-global-read-mismapping-rate    The global assumed mismapping rate for reads. [default: 45]
@@ -226,6 +235,8 @@ Alignment filtering (optional):
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
+   --low-memory                          Run in low memory mode. Good for larger genomes e.g. hg19/38
+                                         but slower than standard mode.
    --split-bams                          Split the mapped read files up per reference.
                                          Useful if you think run time is being hampered
                                          by I/O. Most of the time this will not improve
@@ -662,6 +673,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("reference"),
                 )
                 .arg(
+                    Arg::with_name("low-memory")
+                        .long("low-memory")
+                )
+                .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
@@ -1000,6 +1015,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(
+                    Arg::with_name("min-sv-qual")
+                        .long("min-sv-qual")
+                        .default_value("3"),
+                )
+                .arg(
+                    Arg::with_name("do-not-call-svs")
+                        .long("do-not-call-svs"),
+                )
+                .arg(
+                    Arg::with_name("min-mapq")
+                        .long("min-mapq")
+                        .default_value("60"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short("q")
@@ -1267,6 +1296,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true)
                         .allow_hyphen_values(true)
                         .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("low-memory")
+                        .long("low-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -1627,6 +1660,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(
+                    Arg::with_name("min-sv-qual")
+                        .long("min-sv-qual")
+                        .default_value("3"),
+                )
+                .arg(
+                    Arg::with_name("do-not-call-svs")
+                        .long("do-not-call-svs"),
+                )
+                .arg(
+                    Arg::with_name("min-mapq")
+                        .long("min-mapq")
+                        .default_value("60"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short("q")
@@ -1904,6 +1951,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true)
                         .allow_hyphen_values(true)
                         .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("low-memory")
+                        .long("low-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -2261,6 +2312,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .hidden(true),
                 )
                 .arg(
+                    Arg::with_name("min-sv-qual")
+                        .long("min-sv-qual")
+                        .default_value("3"),
+                )
+                .arg(
+                    Arg::with_name("do-not-call-svs")
+                        .long("do-not-call-svs"),
+                )
+                .arg(
+                    Arg::with_name("min-mapq")
+                        .long("min-mapq")
+                        .default_value("60"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short("q")
@@ -2528,6 +2593,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true)
                         .allow_hyphen_values(true)
                         .requires("reference"),
+                )
+                .arg(
+                    Arg::with_name("low-memory")
+                        .long("low-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -2877,6 +2946,20 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("mapping-quality-threshold-for-genotyping")
                         .default_value("20")
                         .hidden(true),
+                )
+                .arg(
+                    Arg::with_name("min-sv-qual")
+                        .long("min-sv-qual")
+                        .default_value("3"),
+                )
+                .arg(
+                    Arg::with_name("do-not-call-svs")
+                        .long("do-not-call-svs"),
+                )
+                .arg(
+                    Arg::with_name("min-mapq")
+                        .long("min-mapq")
+                        .default_value("60"),
                 )
                 .arg(
                     Arg::with_name("min-base-quality")

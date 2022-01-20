@@ -250,9 +250,15 @@ impl<'a> PairHMM<'a> {
                         for allele_index in 0..allele_likelihoods.number_of_alleles() {
                             //Since the order of haplotypes in the List<Haplotype> and alleleHaplotypeMap is different,
                             //get idx of current haplotype in the list and use this idx to get the right likelihoodValue
+
                             let idx_inside_haplotype_list = self
                                 .haplotype_to_haplotype_list_index_map
-                                .get(&allele_likelihoods.alleles.get_allele(allele_index))
+                                .get(
+                                    &match allele_likelihoods.alleles.get_allele(allele_index) {
+                                        Some(new_order) => new_order,
+                                        None => panic!("Could not map new order {} to old order as new index was not present in new list", allele_index)
+                                    }
+                                )
                                 .unwrap();
                             allele_likelihoods.values_by_sample_index[sample_index]
                                 [[allele_index, r]] = self.m_log_likelihood_array
@@ -294,12 +300,18 @@ impl<'a> PairHMM<'a> {
                         // peek at the next haplotype in the list (necessary to get nextHaplotypeBases, which is required for caching in the array implementation)
                         let mut is_first_haplotype = true;
                         for a in 0..allele_count {
-                            let allele = &allele_likelihoods.alleles.get_allele(a);
+                            let allele = &match allele_likelihoods.alleles.get_allele(a) {
+                                Some(fetched_allele) => fetched_allele,
+                                None => panic!("Could not fetch allele for pairHMM")
+                            };
                             let allele_bases = allele.get_bases();
                             let next_allele_bases = if a == allele_count - 1 {
                                 None
                             } else {
-                                Some(allele_likelihoods.alleles.get_allele(a + 1).get_bases())
+                                Some(match allele_likelihoods.alleles.get_allele(a + 1) {
+                                    Some(next_allele) => next_allele,
+                                    None => panic!("Could not fetch next allele")
+                                }.get_bases())
                             };
                             let lk = self.compute_read_likelihood_given_haplotype_log10(
                                 allele_bases,

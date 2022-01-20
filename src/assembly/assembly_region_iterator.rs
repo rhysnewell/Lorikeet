@@ -53,9 +53,12 @@ impl<'a> AssemblyRegionIterator<'a> {
         short_read_bam_count: usize,
         long_read_bam_count: usize,
         max_input_depth: usize,
+        args: &clap::ArgMatches,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
         // should retrieve all reads regardles of if they have been seen before
+
+        let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
         let mut records: Vec<BirdToolRead> = self
             .indexed_bam_readers
             .par_iter()
@@ -102,6 +105,8 @@ impl<'a> AssemblyRegionIterator<'a> {
                                 || (read_type == ReadType::Short
                                 && !record.is_proper_pair()
                                 && !flag_filters.include_improper_pairs)
+                                || (read_type == ReadType::Long
+                                && record.mapq() < min_mapq)
                                 || record.is_unmapped()
                             // Check against filter flags and current sample type
                             {

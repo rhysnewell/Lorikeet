@@ -21,6 +21,9 @@ dependencies:
   - biopython
   - numba
   - pynndescent
+  - svim
+  - bcftools
   - pip
   - pip:
       - cmake>=3.21
+      - flight-genome>=1.3

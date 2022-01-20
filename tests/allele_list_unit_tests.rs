@@ -73,7 +73,7 @@ fn test_self_permutation(alleles1: &Vec<ByteArrayAllele>) {
     for i in 0..original_allele_list.number_of_alleles() {
         assert_eq!(
             self_permutation.get_allele(i),
-            original_allele_list.get_allele(i)
+            original_allele_list.get_allele(i).unwrap()
         );
         assert_eq!(self_permutation.from_index(i), i);
         assert_eq!(self_permutation.to_index(i).unwrap(), i);
@@ -116,7 +116,7 @@ fn test_subset_permutation(alleles1: &Vec<ByteArrayAllele>) {
         for i in 0..target_random_allele_list.number_of_alleles() {
             assert_eq!(
                 Some(subset.from_index(i)),
-                original_allele_list.index_of_allele(target_random_allele_list.get_allele(i))
+                original_allele_list.index_of_allele(target_random_allele_list.get_allele(i).unwrap())
             );
         }
 
@@ -124,7 +124,7 @@ fn test_subset_permutation(alleles1: &Vec<ByteArrayAllele>) {
             let allele = original_allele_list.get_allele(j);
             assert_eq!(
                 subset.to_index(j),
-                target_random_allele_list.index_of_allele(allele)
+                target_random_allele_list.index_of_allele(allele.unwrap())
             )
         }
     }
@@ -176,11 +176,11 @@ fn test_shuffle_permutation(alleles1: &Vec<ByteArrayAllele>) {
         for i in 0..permutation.from_size() {
             assert_eq!(
                 permutation.to_index(i),
-                target_allele_list.index_of_allele(original_allele_list.get_allele(i))
+                target_allele_list.index_of_allele(original_allele_list.get_allele(i).unwrap())
             );
             assert_eq!(
                 Some(permutation.from_index(i)),
-                original_allele_list.index_of_allele(target_allele_list.get_allele(i))
+                original_allele_list.index_of_allele(target_allele_list.get_allele(i).unwrap())
             );
             assert_eq!(permutation.from_index(i), from_index[i]);
         }

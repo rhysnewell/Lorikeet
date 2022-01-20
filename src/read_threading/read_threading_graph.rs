@@ -1215,7 +1215,8 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             + offset_for_ref_end_to_dangling_end
             + num_nodes_to_extend as i64;
 
-        if index_of_ref_node_to_use >= dangling_head_merge_result.reference_path.len() as i64 {
+        if index_of_ref_node_to_use >= dangling_head_merge_result.reference_path.len() as i64 ||
+            index_of_ref_node_to_use < 0 {
             return false;
         }
 

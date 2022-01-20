@@ -375,10 +375,10 @@ impl MathUtils {
      */
     pub fn normal_distribution(mean: f64, sd: f64, x: f64) -> f64 {
         assert!(sd >= 0.0, "Standard deviation must be >= 0.0");
-        assert!(
-            Self::well_formed_f64(mean) && Self::well_formed_f64(sd) && Self::well_formed_f64(x),
-            "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
-        );
+        // assert!(
+        //     Self::well_formed_f64(mean) && Self::well_formed_f64(sd) && Self::well_formed_f64(x),
+        //     "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
+        // );
 
         return (-((x - mean).powf(2.0)) / (2.0 * sd.powf(2.0))).exp() / (sd * *ROOT_TWO_PI);
     }

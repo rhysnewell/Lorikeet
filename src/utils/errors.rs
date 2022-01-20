@@ -7,4 +7,5 @@ pub enum BirdToolError {
     InvalidLocation(String),
     NonContiguousIntervals(String),
     SkipException(String),
+    InvalidVariationEvent(String)
 }
