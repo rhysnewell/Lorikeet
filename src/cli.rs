@@ -167,8 +167,6 @@ Define mapping(s) (required):
    -d, --genome-fasta-directory <PATH>   Directory containing FASTA files to be analyzed
    -x, --genome-fasta-extension <STR>    FASTA file extension in --genome-fasta-directory
                                          [default \"fna\"]
-                                         Increases memory usage linearly.
-                                         [default 1]
    -1 <PATH> ..                          Forward FASTA/Q file(s) for mapping
    -2 <PATH> ..                          Reverse FASTA/Q file(s) for mapping
    -c, --coupled <PATH> <PATH> ..        One or more pairs of forward and reverse

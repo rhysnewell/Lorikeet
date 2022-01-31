@@ -567,7 +567,6 @@ impl<'a> LorikeetEngine<'a> {
                     "set -e -o pipefail; \
                     svim alignment \
                     --skip_genotyping \
-                    --read_names \
                     --min_mapq {} --sequence_alleles \
                     {} {} {}; \
                     bcftools sort {}/variants.vcf | bcftools view -i 'QUAL >= {}' > {}/variants_filtered_sorted.vcf; \
