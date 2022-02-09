@@ -244,7 +244,7 @@ impl<L: Locatable> Haplotype<L> {
      * @param padSize how many additional Ms should be appended to the end of this cigar.  Must be >= 0
      * @return a newly allocated Cigar that consolidate(getCigar + padSize + M)
      */
-    pub fn get_consolidated_padded_ciagr(
+    pub fn get_consolidated_padded_cigar(
         &self,
         pad_size: usize,
     ) -> Result<CigarString, BirdToolError> {

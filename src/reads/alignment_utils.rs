@@ -82,7 +82,7 @@ impl AlignmentUtils {
 
         // compute here the read starts w.r.t. the reference from the SW result and the hap -> ref cigar
         let right_padded_haplotype_vs_ref_cigar = haplotype
-            .get_consolidated_padded_ciagr(1000)
+            .get_consolidated_padded_cigar(1000)
             .unwrap_or_else(|_| panic!("Unhandled error in haplotype"));
         // this computes the number of reference bases before the read starts, based on the haplotype vs ref cigar
         // This cigar corresponds exactly to the readToRefCigarRaw, below.  One might wonder whether readToRefCigarRaw and

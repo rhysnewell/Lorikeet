@@ -317,7 +317,8 @@ impl CigarUtils {
             padded_path.as_bytes(),
             sw_parameters,
             strategy,
-            avx_mode,
+            // avx_mode,
+            AVXMode::None,
         );
 
         if Self::is_s_w_failure(&alignment) {

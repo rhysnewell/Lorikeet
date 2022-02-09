@@ -1131,9 +1131,11 @@ impl VariantContext {
             .expect("Failed to set alleles");
         if !self.filters.is_empty() {
             for filter in &self.filters {
-                record
-                    .push_filter(filter.to_key().as_bytes())
-                    .expect("Failed to set filter");
+                if filter.to_key().as_bytes() != b"." {
+                    record
+                        .push_filter(filter.to_key().as_bytes())
+                        .expect("Failed to set filter");
+                }
             }
         }
 
