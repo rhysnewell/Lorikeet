@@ -49,7 +49,7 @@ impl AlignmentUtils {
         let read_minus_soft_clips = ReadClipper::new(original_read).hard_clip_soft_clipped_bases();
 
         let soft_clipped_bases = original_read.len() - read_minus_soft_clips.len();
-        let oh_strat = OverhangStrategy::SoftClip;
+
         let read_to_haplotype_sw_alignment = SmithWatermanAligner::align(
             haplotype.get_bases(),
             read_minus_soft_clips.bases.as_slice(),
@@ -121,9 +121,6 @@ impl AlignmentUtils {
             ref_haplotype.get_bases(),
             read_minus_soft_clips.bases.as_slice(),
             read_start_on_reference_haplotype,
-            haplotype.get_bases(),
-            read_minus_soft_clips.bases.as_slice(),
-            &oh_strat,
         );
         let left_aligned_read_to_ref_cigar = &left_aligned_read_to_ref_cigar_result.cigar;
 
@@ -429,9 +426,6 @@ impl AlignmentUtils {
         ref_seq: &[u8],
         read: &[u8],
         read_start: u32,
-        padded_ref: &[u8],
-        padded_read: &[u8],
-        overhang_strategy: &OverhangStrategy,
     ) -> CigarBuilderResult {
         if cigar.0.iter().all(|elem| !CigarUtils::is_indel(elem)) {
             return CigarBuilderResult::new(cigar, 0, 0);
@@ -453,11 +447,11 @@ impl AlignmentUtils {
         let ref_len = ref_seq.len();
         assert!(
             necessary_ref_length <= ref_seq.len() as u32,
-            "Read goes past end of reference: rstart - {}, necessary length - {}, ref len - {}, overhang_strat - {:?}, indel index - {} \n\
+            "Read goes past end of reference: rstart - {}, necessary length - {}, ref len - {},indel index - {} \n\
             {:?} \n\
             {:?} \n\
             {:?}",
-            read_start, necessary_ref_length, ref_len, overhang_strategy, last_indel,
+            read_start, necessary_ref_length, ref_len, last_indel,
             ref_seq,
             read,
             &cigar.0
