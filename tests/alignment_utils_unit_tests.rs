@@ -629,6 +629,9 @@ fn test_with_clips_and_reference_context(
                                 ref_bases.as_slice(),
                                 read_bases.as_slice(),
                                 extra_ref_in_front as u32,
+                                ref_bases.as_slice(),
+                                read_bases.as_slice(),
+                                &OverhangStrategy::Ignore
                             )
                             .cigar;
 

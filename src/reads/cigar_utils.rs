@@ -316,10 +316,11 @@ impl CigarUtils {
             padded_ref.as_bytes(),
             padded_path.as_bytes(),
             sw_parameters,
-            strategy,
-            // avx_mode,
-            AVXMode::None,
+            strategy.clone(), // temp clone for debugging purposes
+            avx_mode,
+            // AVXMode::None,
         );
+
 
         if Self::is_s_w_failure(&alignment) {
             return None;
@@ -347,6 +348,9 @@ impl CigarUtils {
             ref_seq,
             alt_seq,
             trimmed_cigar_and_deletions_removed.leading_deletion_bases_removed,
+            padded_ref.as_bytes(),
+            padded_path.as_bytes(),
+            &strategy
         );
 
         // we must account for possible leading deletions removed when trimming the padding and when left-aligning

@@ -1,7 +1,7 @@
 [package]
 
 name = "lorikeet-genome"
-version = "0.6.2"
+version = "0.6.3"
 authors = ["Rhys Newell <rhys.newell@hdr.qut.edu.au>"]
 license = "GPL-3.0"
 description = "Strain resolver and variant caller via local reassembly for metagenomics"
