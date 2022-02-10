@@ -74,7 +74,7 @@ statrs = "0.13"
 tempdir = "0.3"
 tempfile = "3.0"
 term = "0.7.0"
-indicatif = "^0.17.0"
+indicatif = "^0.16.0"
 scoped_threadpool = "^0.1.9"
 
 
