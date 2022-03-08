@@ -864,7 +864,7 @@ impl VariantContextUtils {
         trim_forward: bool,
         trim_reverse: bool,
     ) -> VariantContext {
-        if input_vc.get_n_alleles() <= 1 || input_vc.get_alleles().iter().any(|a| a.len() == 1) {
+        if input_vc.get_n_alleles() <= 1 || input_vc.get_alleles().iter().any(|a| a.len() == 1 && !a.is_symbolic) {
             return input_vc.clone();
         }
 

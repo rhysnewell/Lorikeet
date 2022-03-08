@@ -155,6 +155,7 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
+            // debug!("Did not pass emit threshold {} {}", phred_scaled_confidence, stand_min_conf);
             return None;
         }
 

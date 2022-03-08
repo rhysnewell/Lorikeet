@@ -299,6 +299,7 @@ impl Profile for ActivityProfile {
      * @return a list of derived states that should actually be added to this profile's state list
      */
     fn process_state(&self, just_added_state: &ActivityProfileState) -> Vec<ActivityProfileState> {
+        // debug!("Just added {:?}", just_added_state);
         match just_added_state.get_result_state() {
             Type::HighQualitySoftClips(num_hq_clips) => {
                 // special code to deal with the problem that high quality soft clipped bases aren't added to pileups
@@ -309,6 +310,7 @@ impl Profile for ActivityProfile {
                     OrderedFloat(self.max_prob_propagation_distance as f32),
                 )
                 .into_inner() as i64;
+                // debug!("Num HQ clips {:?}", num_hq_clips);
                 for i in (-num_hq_clips..=num_hq_clips).into_iter() {
                     let loc = self.get_loc_for_offset(just_added_state.get_loc(), i);
                     match loc {
@@ -426,6 +428,7 @@ impl Profile for ActivityProfile {
             }
         }
 
+        debug!("Active prob 0 {} 1 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.state_list[1].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,

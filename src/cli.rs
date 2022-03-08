@@ -178,8 +178,7 @@ Define mapping(s) (required):
    --longreads <PATH> ..                 pacbio or oxford nanopore long reads FASTA/Q files(s).
    --bam-file-cache-directory            Directory to store cached BAM files. BAM files are stored
                                          in /tmp by default.
-   -d, --output-directory                Output directory
-   -o, --output-prefix <STRING>          Output prefix for files. [default: output]\n
+   -o, --output-prefix <STRING>          Output directory prefix [default: output]\n
 
 
 Sharding i.e. multiple reference sets (optional):
@@ -211,14 +210,14 @@ Alignment filtering (optional):
                                          bases must be aligned. [default 0.97]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Require --discard-improper-pairs. [default 0.0]
    --min-read-percent-identity-pair <FLOAT>   Exclude pairs by overall percent
                                          identity e.g. 0.95 for 95%.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Require --discard-improper-pairs. [default 0.0]
    --min-read-aligned-percent-pair <FLOAT>    Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
                                          bases must be aligned.
-                                         Conflicts --allow-improper-pairs. [default 0.0]
+                                         Require --discard-improper-pairs. [default 0.0]
    --min-covered-fraction FRACTION       Contigs with less coverage than this
                                          reported as having zero coverage.
                                          [default: 0.0]
@@ -229,7 +228,7 @@ Alignment filtering (optional):
                                          [default: 0.05]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
                                          calculations [default: 0.95]
-   --allow-improper-pairs                Allows reads to be mapped as improper pairs
+   --discard-improper-pairs              Discard improperly mapped read pairs for variant calling.
    --include-supplementary               Includes read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
@@ -703,19 +702,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -1078,7 +1077,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
+                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -1328,19 +1327,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -1733,7 +1732,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
+                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -1983,19 +1982,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -2375,7 +2374,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
+                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(
@@ -2625,19 +2624,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .conflicts_with("allow-improper-pairs"),
+                        .requires("discard-improper-pairs"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -3011,7 +3010,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("allow-improper-pairs").long("allow-improper-pairs"))
+                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
                 .arg(

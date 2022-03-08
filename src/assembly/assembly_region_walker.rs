@@ -334,8 +334,10 @@ fn retrieve_feature_variants(
     reference_reader: &ReferenceReader,
     assembly_region: &AssemblyRegion
 ) -> Vec<VariantContext> {
+
     let mut indexed_vcf_reader =
         VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
+    debug!("Retrieved indexed VCF...");
 
     let vcf_rid = VariantContext::get_contig_vcf_tid(
         indexed_vcf_reader.header(),
@@ -343,6 +345,7 @@ fn retrieve_feature_variants(
             .retrieve_contig_name_from_tid(assembly_region.get_contig())
             .unwrap(),
     );
+    debug!("VCF Rid {:?}", &vcf_rid);
 
     match vcf_rid {
         Some(rid) => VariantContext::process_vcf_in_region(

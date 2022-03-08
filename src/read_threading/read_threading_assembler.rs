@@ -153,13 +153,13 @@ impl ReadThreadingAssembler {
      * @param aligner                   {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return                          the resulting assembly-result-set
      */
-    pub fn run_local_assembly<'b>(
+    pub fn run_local_assembly<'b, C: ReadErrorCorrector>(
         &mut self,
         mut assembly_region: AssemblyRegion,
         ref_haplotype: &'b mut Haplotype<SimpleInterval>,
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
-        read_error_corrector: Option<NearbyKmerErrorCorrector>,
+        read_error_corrector: Option<C>,
         sample_names: &'b [String],
         dangling_end_sw_parameters: Parameters,
         reference_to_haplotype_sw_parameters: Parameters,

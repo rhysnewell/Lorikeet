@@ -32,9 +32,6 @@ use std::path::Path;
 /// Since lorikeet calls Indels, we compare the length of the allele rather than just the position
 /// So the rather than alleles different, it is bases different.
 pub struct ANICalculator {
-    // let it be known in secret that I think popANI is kind of silly and is just a hacky way of them
-    // saying they recovered the reference. Whomever reads this is now cursed for seven years with
-    // restless leg syndrome.
     popANI: Array2<f64>,
     subpopANI: Array2<f64>,
     conANI: Array2<f64>,

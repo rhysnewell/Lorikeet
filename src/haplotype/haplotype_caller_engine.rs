@@ -36,7 +36,7 @@ use read_threading::read_threading_graph::ReadThreadingGraph;
 use reads::alignment_utils::AlignmentUtils;
 use reads::bird_tool_reads::BirdToolRead;
 use reference::reference_reader::ReferenceReader;
-use rust_htslib::bam::{self, record::Cigar, Record};
+use rust_htslib::bam::{self, record::Cigar, Record, pileup::Alignment};
 use rust_htslib::bcf::{Format, Header, Writer};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
@@ -50,6 +50,9 @@ use utils::utils::clean_sample_name;
 use assembly::assembly_region_walker::AssemblyRegionWalker;
 use hashlink::LinkedHashSet;
 use num::traits::SaturatingSub;
+use reads::cigar_utils::CigarUtils;
+use std::ops::Deref;
+use rust_htslib::bam::pileup::Indel;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine<'c> {
@@ -99,6 +102,14 @@ impl<'c> HaplotypeCallerEngine<'c> {
      */
     pub const DEFAULT_READ_QUALITY_FILTER_THRESHOLD: usize = 20;
 
+    /**
+     * Surrogate quality score for no base calls.
+     * <p>
+     * This is the quality assigned to deletion (so without its own base-call quality) pile-up elements,
+     * when assessing the confidence on the hom-ref call at that site.
+     * </p>
+     */
+    pub const REF_MODEL_DELETION_QUAL: u8 = 30;
     // pub const MIN_SOFT_CLIP_QUAL: usize = 29;
 
     // const NO_CALLS: Vec<Allele> = Vec::new();
@@ -587,14 +598,16 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     let refr_base = reference_reader.current_sequence[pos];
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
-                                        if (!flag_filters.include_supplementary
-                                            && record.is_supplementary()
-                                            && readtype != ReadType::Long)
-                                            || (!flag_filters.include_secondary
+                                        if (!flag_filters.include_secondary
                                             && record.is_secondary())
-                                            || (!flag_filters.include_improper_pairs
+                                            || (readtype == ReadType::Short
                                             && !record.is_proper_pair()
-                                            && readtype != ReadType::Long)
+                                            && !flag_filters.include_improper_pairs)
+                                            || record.is_unmapped()
+                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                            || record.is_quality_check_failed()
+                                            || record.is_duplicate()
+                                            || record.mapq() == 10
                                         {
                                             continue;
                                         } else if !flag_filters.include_secondary
@@ -845,7 +858,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
         let mut genotype_likelihoods = HashMap::new();
-        let chunk_size = 10000;
+        let chunk_size = 500000;
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
         match readtype {
@@ -945,21 +958,23 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                         continue
                                                     }
 
-                                                    let (hq_soft_clips, result) = &mut positions[pos - chunk_idx * chunk_size];
+                                                    let (hq_soft_clips, result) = &mut positions[pos - chunk_multiplier];
                                                     // let result = &mut positions[pos - chunk_idx * chunk_size].1;
 
                                                     let refr_base = reference_reader.current_sequence[pos];
 
                                                     for alignment in pileup.alignments() {
                                                         let record = alignment.record();
-                                                        if (!flag_filters.include_supplementary
-                                                            && record.is_supplementary()
-                                                            && readtype != ReadType::Long)
-                                                            || (!flag_filters.include_secondary
+                                                        if (!flag_filters.include_secondary
                                                             && record.is_secondary())
-                                                            || (!flag_filters.include_improper_pairs
+                                                            || (readtype == ReadType::Short
                                                             && !record.is_proper_pair()
-                                                            && readtype != ReadType::Long)
+                                                            && !flag_filters.include_improper_pairs)
+                                                            || record.is_unmapped()
+                                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                                            || record.is_quality_check_failed()
+                                                            || record.is_duplicate()
+                                                            || record.mapq() == 0
                                                         {
                                                             continue;
                                                         } else if !flag_filters.include_secondary
@@ -998,7 +1013,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             }
             _ => {}
         }
-
         current_likelihoods.push(genotype_likelihoods);
     }
 
@@ -1089,7 +1103,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
 
                     let activity_profile =
-                        (0..(*length as usize)).into_par_iter().chunks(100000).map(|positions| {
+                        (0..(*length as usize)).into_par_iter().chunks(500000).map(|positions| {
                             let mut active_region_evaluation_genotyper_engine =
                                 self.active_region_evaluation_genotyper_engine.clone();
                             let mut activity_profile = BandPassActivityProfile::new(
@@ -1316,7 +1330,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             region.padded_span.size(),
             region.reads.len()
         );
-        if !region.is_active() {
+        if !region.is_active() && given_alleles.is_empty() {
             debug!("Region was not active");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
@@ -1608,87 +1622,152 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let record = alignment.record();
 
         // query position in read
-        if !alignment.is_del() && !alignment.is_refskip() {
-            let qpos = alignment.qpos().unwrap();
-            let record_qual = record.qual()[qpos];
-            let mut is_alt = false;
-            if record_qual >= bq {
-                let read_char = alignment.record().seq()[qpos];
-                if refr_base != read_char {
-                    is_alt = true;
-                    result.non_ref_depth += 1;
-                    non_ref_likelihood = QualityUtils::qual_to_prob_log10(record_qual);
-                    ref_likelihood =
-                        QualityUtils::qual_to_error_prob_log10(record_qual) + (-(3.0_f64.log10()))
-                } else {
-                    result.ref_depth += 1;
-                    ref_likelihood = QualityUtils::qual_to_prob_log10(record_qual);
-                    non_ref_likelihood =
-                        QualityUtils::qual_to_error_prob_log10(record_qual) + (-(3.0_f64.log10()));
-                }
-
-                HaplotypeCallerEngine::update_heterozygous_likelihood(
-                    result,
-                    likelihoodcount,
-                    log10ploidy,
-                    ref_likelihood,
-                    non_ref_likelihood,
-                );
-            }
-
+        let qpos = alignment.qpos();
+        let record_qual = if alignment.is_del() || alignment.is_refskip() { Self::REF_MODEL_DELETION_QUAL } else { record.qual()[qpos.unwrap()] };
+        let mut is_alt = false;
+        if record_qual >= bq || alignment.is_del() {
+            is_alt = Self::is_alt(
+                alignment,
+                &record,
+                &qpos,
+                refr_base,
+                min_soft_clip_qual
+            );
             if is_alt {
-                let mut read_cursor = 0;
-                for cig in record.cigar().iter() {
-                    // Cigar immediately before current position
-                    // in read
-                    if qpos as i32 == read_cursor - 1 {
-                        match cig {
-                            Cigar::SoftClip(_) => hq_soft_clips.add(
+                result.non_ref_depth += 1;
+                non_ref_likelihood = QualityUtils::qual_to_prob_log10(record_qual);
+                ref_likelihood =
+                    QualityUtils::qual_to_error_prob_log10(record_qual) + (-(3.0_f64.log10()))
+            } else {
+                result.ref_depth += 1;
+                ref_likelihood = QualityUtils::qual_to_prob_log10(record_qual);
+                non_ref_likelihood =
+                    QualityUtils::qual_to_error_prob_log10(record_qual) + (-(3.0_f64.log10()));
+            }
+
+            HaplotypeCallerEngine::update_heterozygous_likelihood(
+                result,
+                likelihoodcount,
+                log10ploidy,
+                ref_likelihood,
+                non_ref_likelihood,
+            );
+        }
+
+        // add hq soft clips if possible
+        if is_alt && !(alignment.is_del() || alignment.is_refskip()) {
+            Self::next_to_soft_clip_or_indel(
+                &record,
+                qpos.unwrap(),
+                Some(hq_soft_clips),
+                false,
+                min_soft_clip_qual
+            );
+        }
+        result.read_counts += 1;
+
+    }
+
+    /// Determine whether a pileup alignment is considered alternative
+    /// conditions for alt are one of:
+    ///     - base does not match ref
+    ///     - is deletion
+    ///     - is before a deletion
+    ///     - is after a deletion
+    ///     - is before insertion
+    ///     - is after insertion
+    ///     - is next to softclip
+    fn is_alt(
+        alignment: &Alignment,
+        record: &Record,
+        qpos: &Option<usize>,
+        refr_base: u8,
+        min_soft_clip_qual: i32,
+    ) -> bool {
+        match qpos {
+            Some(qpos) => {
+                // there is a matching position in the read
+                let read_char = record.seq()[*qpos];
+                // is the alignment next to indel or softclip?
+                let next_to_sc_indel = Self::next_to_soft_clip_or_indel(
+                    record,
+                    *qpos,
+                    None,
+                    true,
+                    min_soft_clip_qual
+                );
+
+                if read_char != refr_base || next_to_sc_indel {
+                    return true;
+                }
+
+                return false;
+            },
+            None => {
+                // is deletion or ref_skip
+                return true;
+            }
+        }
+    }
+
+    /// Checks if an alignment position is next to (immediately before or after) a softclip
+    /// If so, return true otherwise false
+    /// If hq_soft_clips is not None, add high quality soft clips to mutable running average
+    /// If check indels is true, also return true when next INDEL
+    fn next_to_soft_clip_or_indel(
+        record: &Record,
+        qpos: usize,
+        mut hq_soft_clips: Option<&mut RunningAverage>,
+        check_indels: bool,
+        min_soft_clip_qual: i32,
+    ) -> bool {
+        let mut read_cursor = 0;
+        let mut next_to_soft_clip = false;
+        for cig in record.cigar().iter() {
+            // Cigar immediately before current position
+            // in read
+            if qpos as i32 == read_cursor - 1 || qpos as i32 == read_cursor + 1 {
+                match cig {
+                    Cigar::SoftClip(_) => {
+                        next_to_soft_clip = true;
+                        if let Some(ref mut hq_soft_clips) = hq_soft_clips {
+                            hq_soft_clips.add(
                                 HaplotypeCallerEngine::count_high_quality_soft_clips(
                                     &cig,
                                     &record,
                                     read_cursor as usize,
                                     min_soft_clip_qual,
                                 ),
-                            ),
-                            _ => {
-                                // Not a soft clip
-                            }
+                            )
                         }
-                    } else if qpos as i32 == read_cursor + 1 {
-                        match cig {
-                            Cigar::SoftClip(_) => hq_soft_clips.add(
-                                HaplotypeCallerEngine::count_high_quality_soft_clips(
-                                    &cig,
-                                    &record,
-                                    read_cursor as usize,
-                                    min_soft_clip_qual,
-                                ),
-                            ),
-                            _ => {
-                                // Not a soft clip
-                            }
+                    },
+                    Cigar::Ins(_) | Cigar::Del(_) => {
+                        if check_indels {
+                            next_to_soft_clip = true
                         }
-                    } else if read_cursor > qpos as i32 {
-                        // break out of loop since we have passed
-                        // the position
-                        break;
-                    }
-                    match cig {
-                        // Progress the cigar cursor
-                        Cigar::Match(_)
-                        | Cigar::Diff(_)
-                        | Cigar::Equal(_)
-                        | Cigar::Ins(_)
-                        | Cigar::SoftClip(_) => {
-                            read_cursor += cig.len() as i32;
-                        }
-                        _ => {}
+                    },
+                    _ => {
+                        // Not a soft clip
                     }
                 }
+            } else if read_cursor > qpos as i32 {
+                // break out of loop since we have passed
+                // the position
+                break;
             }
-            result.read_counts += 1;
+            match cig {
+                // Progress the cigar cursor
+                Cigar::Match(_)
+                | Cigar::Diff(_)
+                | Cigar::Equal(_)
+                | Cigar::Ins(_)
+                | Cigar::SoftClip(_) => {
+                    read_cursor += cig.len() as i32;
+                }
+                _ => {}
+            }
         }
+        return next_to_soft_clip
     }
 
     fn count_high_quality_soft_clips(

@@ -315,6 +315,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 >= 2
                             {
                                 // at least two supporting reads
+                                debug!(">= two supporting reads");
                                 return_calls.push(annotated_call);
                                 call.alleles
                                     .into_iter()

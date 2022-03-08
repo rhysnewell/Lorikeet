@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use rand::seq::index::sample;
 
 /// Calculates the per sample strain abundance for a list of variant contexts
 /// that have been annotated with their potential strain assignments
@@ -22,7 +23,7 @@ pub struct AbundanceCalculatorEngine<'a> {
 
 impl<'a> AbundanceCalculatorEngine<'a> {
     // Welcome. To the house... of Abundance
-    const EPSILON: f64 = 1e-10;
+    const EPSILON: f64 = 1e-2;
 
     pub fn new(
         variant_contexts: Vec<VariantContext>,
@@ -62,6 +63,8 @@ impl<'a> AbundanceCalculatorEngine<'a> {
             n_samples,
             &per_sample_reference_presence,
         );
+
+        debug!("Strain presences {:?}", &strain_presences);
 
         loop {
             abundance_key = HashMap::with_capacity(n_strains);
@@ -110,9 +113,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     panic!("Strain annotation was not the correct AttributeObject")
                                 }
                             };
-                            // We divide the total depth of variant here by the total amount of strains that
-                            // variant occurs in. E.g. if a variant had a depth of 6
-                            // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
+                            // Total depth of variant is its sum of reference + alt coverage
                             let mut total_depth = vc.genotypes.genotypes()[sample_index]
                                 .ad
                                 .iter()
@@ -126,6 +127,7 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                 total_depth = 1.0;
                             }
 
+                            // the variant depth frequency
                             let variant_depth =
                                 vc.genotypes.genotypes()[sample_index].ad[1] as f64 / total_depth;
                             // debug!("Variant depth {} Total depth {}", variant_depth, total_depth);
@@ -202,12 +204,13 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     // We divide the total depth of variant here by the total amount of strains that
                                     // variant occurs in. E.g. if a variant had a depth of 6
                                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                    let mut reference_depth =
+                                    let mut weight =
                                         vc.genotypes.genotypes()[sample_index].ad[0] as f64
                                             / total_depth;
 
-                                    let weight =
-                                        reference_depth / (n_strains - strains.len()) as f64;
+                                    // let weight =
+                                    //     reference_depth / (n_strains - strains.len()) as f64;
+                                    // let weight = reference_depth;
                                     if weight > 0.0 {
                                         // let reference_strain_index = n_strains - 1;
                                         let abundance_index =
@@ -316,22 +319,30 @@ impl<'a> AbundanceCalculatorEngine<'a> {
 
             debug!("strain removal counts {:?}", &strains_to_remove);
 
-            // for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
-            //     if count == n_samples {
-            //         let strain_id_to_remove = strain_id_key.get(&strain_index).unwrap();
-            //         let position_of_strain_id = strain_ids
-            //             .iter()
-            //             .position(|s| s == strain_id_to_remove)
-            //             .unwrap();
-            //         strain_ids.remove(position_of_strain_id);
-            //         // strain_presences.iter_mut().for_each(|vec| {
-            //         //     vec.remove(position_of_strain_id);
-            //         // });
-            //
-            //         // something_removed = true;
-            //         n_strains -= 1;
-            //     }
-            // }
+            for (strain_index, count) in strains_to_remove.into_iter().enumerate() {
+                if count == n_samples {
+                    let strain_id_to_remove = strain_id_key.get(&strain_index).unwrap();
+                    let position_of_strain_id = strain_ids
+                        .iter()
+                        .position(|s| s == strain_id_to_remove)
+                        .unwrap();
+                    strain_ids.remove(position_of_strain_id);
+                    // strain_presences.iter_mut().for_each(|vec| {
+                    //     vec.remove(position_of_strain_id);
+                    // });
+                    abundance_vectors = abundance_vectors.into_iter().map(|sample_calculator| {
+                        sample_calculator
+                            .into_iter()
+                            .filter(|strain_calculator| {
+                                strain_calculator.index != *strain_id_to_remove
+                            })
+                            .collect()
+                    }).collect();
+
+                    // something_removed = true;
+                    n_strains -= 1;
+                }
+            }
 
             if !something_removed {
                 break;

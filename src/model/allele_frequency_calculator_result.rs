@@ -103,10 +103,12 @@ impl AFCalculationResult {
     }
 
     pub fn log10_prob_only_ref_allele_exists(&self) -> f64 {
+        // debug!("Only ref prob {}", self.log10_posterior_of_no_variant);
         self.log10_posterior_of_no_variant
     }
 
     pub fn log10_prob_variant_present(&self) -> f64 {
+        // debug!("Variant present prob {}", MathUtils::log10_one_minus_pow10(self.log10_posterior_of_no_variant));
         MathUtils::log10_one_minus_pow10(self.log10_posterior_of_no_variant)
     }
 

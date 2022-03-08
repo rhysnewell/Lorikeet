@@ -209,8 +209,8 @@ impl VariantAnnotations {
                     allele_counts.insert(allele_index, 0);
                     subset.insert(allele_index, vec![allele]);
                 }
-                // let subsetted = likelihoods.marginalize(&subset);
-                let subsetted = likelihoods;
+                let subsetted = likelihoods.marginalize(&subset);
+                // let subsetted = likelihoods;
                 let sample_index = subsetted
                     .samples
                     .iter()
@@ -232,9 +232,11 @@ impl VariantAnnotations {
                     .into_iter()
                     .enumerate()
                 {
+                    debug!("{} {} \n {:?}", vec_index, allele_index, allele_counts.get(&allele_index));
                     counts[vec_index + 1] = *allele_counts.get(&allele_index).unwrap();
                 }
 
+                debug!("{:?}", &counts);
                 genotype.ad = counts;
 
                 return AttributeObject::None;
@@ -361,7 +363,8 @@ impl VariantAnnotations {
 
         for genotype in genotypes.genotypes_mut() {
             // we care only about variant calls with likelihoods
-            if !genotype.is_het() && !genotype.is_hom_var() {
+            if !genotype.is_het() && !genotype.is_hom_var() && !genotype.is_hom_ref() {
+                debug!("Skipping: {} {} {:?}", genotype.is_het(), genotype.is_hom_var(), genotype.genotype_type);
                 continue;
             }
 
@@ -370,8 +373,8 @@ impl VariantAnnotations {
                 let total_ad: i64 = genotype.ad.iter().sum();
                 genotype.dp = total_ad;
                 if total_ad != 0 {
-                    if total_ad - genotype.ad[0] > 1 {
-                        AD_restrict_depth += total_ad;
+                    if total_ad - genotype.ad[0] > 0 {
+                        AD_restrict_depth += genotype.ad[1];
                     }
                     depth += total_ad;
                     continue;
@@ -379,9 +382,11 @@ impl VariantAnnotations {
             }
 
             // if there is no AD value or it is a dummy value, we want to look to other means to get the depth
-            depth += likelihoods
-                .sample_evidence_count(likelihoods.index_of_sample(&genotype.sample_name))
-                as i64;
+            if let Some(sample_index) = likelihoods.index_of_sample(&genotype.sample_name) {
+                depth += likelihoods
+                    .sample_evidence_count(sample_index)
+                    as i64;
+            }
         }
 
         if AD_restrict_depth > 0 {

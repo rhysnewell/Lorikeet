@@ -745,6 +745,7 @@ impl VariantContext {
     }
 
     pub fn from_vcf_record(record: &mut Record) -> Option<VariantContext> {
+        debug!("Found VCF record with {:?} alleles", record.allele_count());
         let variants = Self::collect_variants(record, false, false, None);
         if variants.len() > 0 {
             // Get elements from record
@@ -868,6 +869,7 @@ impl VariantContext {
                     if omit_snvs {
                         variant_vec.push(ByteArrayAllele::new(".".as_bytes(), is_reference))
                     } else {
+                        // debug!("Reading in SNV {:?} {:?}", ref_allele, alt_allele);
                         variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     }
                 } else {
@@ -878,7 +880,7 @@ impl VariantContext {
                     if (omit_indels || !is_valid_len(indel_len))
                         && is_valid_mnv(ref_allele, alt_allele)
                     {
-                        // println!("MNV 1 {:?} {:?}", ref_allele, alt_allele);
+                        // debug!("Reading in MNV {:?} {:?}", ref_allele, alt_allele);
                         variant_vec.push(ByteArrayAllele::new(alt_allele, is_reference))
                     } else if is_valid_deletion_alleles(ref_allele, alt_allele) {
                         variant_vec.push(ByteArrayAllele::new("*".as_bytes(), is_reference))
@@ -904,6 +906,7 @@ impl VariantContext {
             Ok(rid) => return Some(rid),
             Err(_) => {
                 // Remove leading reference stem
+                debug!("Attempting to find {:?}", std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8)));
                 match vcf_header
                     .name2rid(ReferenceReader::split_contig_name(contig_name, '~' as u8))
                 {

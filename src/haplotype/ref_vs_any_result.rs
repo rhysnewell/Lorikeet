@@ -4,6 +4,7 @@ use utils::simple_interval::SimpleInterval;
 /**
  * Holds information about a genotype call of a single sample reference vs. any non-ref event
  */
+#[derive(Debug)]
 pub struct RefVsAnyResult {
     /**
      * The genotype likelihoods for ref/ref ref/non-ref non-ref/non-ref

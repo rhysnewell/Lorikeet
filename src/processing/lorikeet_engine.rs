@@ -420,7 +420,7 @@ impl<'a> LorikeetEngine<'a> {
                                     cleaned_sample_names.len(),
                                 );
 
-                            let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
+                            // let strain_ids_present = (0..n_strains).into_iter().collect::<Vec<usize>>();
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar

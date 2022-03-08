@@ -176,16 +176,16 @@ impl<A: Allele> AlleleLikelihoods<A> {
     }
 
     /**
-     * Returns sample name given its index.
+     * Returns sample index given its name.
      *
-     * @param sampleIndex query index.
+     * @param sample query name.
      *
      * @throws IllegalArgumentException if {@code sampleIndex} is negative.
      *
-     * @return never {@code null}.
+     * @return never Option<usize>.
      */
-    pub fn index_of_sample(&self, sample: &String) -> usize {
-        self.samples.iter().position(|s| s == sample).unwrap()
+    pub fn index_of_sample(&self, sample: &String) -> Option<usize> {
+        self.samples.iter().position(|s| s == sample)
     }
 
     /**

@@ -179,11 +179,11 @@ impl NearbyKmerErrorCorrector {
             // pass
         } else {
             // TODO: Change KMER to be a refernce to a sequence to avoid cloning
-            let read_bases = read.read.seq();
-            for offset in 0..=(read_bases.len() - self.kmer_length) {
+            let read_bases = read.read.seq().as_bytes();
+            for offset in 0..read_bases.len().saturating_sub(self.kmer_length) {
                 self.counts_by_kmer.add_kmer(
                     Kmer::new_with_start_and_length(
-                        read_bases.as_bytes(),
+                        read_bases.clone(),
                         offset,
                         self.kmer_length,
                     ),
@@ -260,9 +260,10 @@ impl NearbyKmerErrorCorrector {
         // array to store list of possible corrections for read
         let mut correction_set = CorrectionSet::new(corrected_bases.len());
 
-        for offset in 0..(corrected_bases.len() - self.kmer_length) {
+        for offset in 0..corrected_bases.len().saturating_sub(self.kmer_length) {
             let kmer =
                 Kmer::new_with_start_and_length(corrected_bases.to_vec(), offset, self.kmer_length);
+            debug!("Kmer setup: {:?}", &kmer);
             let new_kmer = self.kmer_correction_map.get(&kmer);
             match new_kmer {
                 None => continue,
@@ -309,6 +310,7 @@ impl NearbyKmerErrorCorrector {
         for stored_kmer in self.counts_by_kmer.get_counted_kmers().into_iter() {
             if stored_kmer.get_count() >= self.min_observations_for_kmer_to_be_solid {
                 // this kmer is good: map to itself
+                debug!("Kmer {:?} count {:?}", stored_kmer.get_kmer(), stored_kmer.get_count());
                 self.kmer_correction_map.insert(
                     stored_kmer.get_kmer().clone(),
                     stored_kmer.get_kmer().clone(),
@@ -324,6 +326,8 @@ impl NearbyKmerErrorCorrector {
                         self.read_error_correction_stats.num_uncorrectable_kmers += 1;
                     }
                     Some(neighbour) => {
+                        debug!("Stored kmer {:?}", stored_kmer.get_kmer());
+                        debug!("Neighbour {:?}", &neighbour);
                         self.kmer_correction_map
                             .insert(stored_kmer.get_kmer().clone(), neighbour);
                         self.kmer_differing_bases
@@ -372,6 +376,8 @@ impl NearbyKmerErrorCorrector {
                 &mut differing_indices,
                 &mut differing_bases,
             );
+
+            debug!("Hamming distance: {}", hamming_distance);
             if hamming_distance < 0 {
                 // can't compare kmer? skip
                 continue;

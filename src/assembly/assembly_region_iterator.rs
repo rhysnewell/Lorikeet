@@ -11,6 +11,9 @@ use std::cmp::Reverse;
 use std::fs::File;
 
 use rust_htslib::bam::Record;
+use reads::cigar_utils::CigarUtils;
+use std::ops::Deref;
+use reads::alignment_utils::AlignmentUtils;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -80,13 +83,13 @@ impl<'a> AssemblyRegionIterator<'a> {
                         .into_iter()
                         .next()
                         .unwrap();
-                        debug!(
-                            "samples: {} -> {}: {} - {}",
-                            bam_generator,
-                            region.get_contig(),
-                            region.get_padded_span().start,
-                            region.get_padded_span().end
-                        );
+                        // debug!(
+                        //     "samples: {} -> {}: {} - {}",
+                        //     bam_generator,
+                        //     region.get_contig(),
+                        //     region.get_padded_span().start,
+                        //     region.get_padded_span().end
+                        // );
                         bam_generated.fetch((
                             region.get_contig() as i32,
                             region.get_padded_span().start as i64,
@@ -96,11 +99,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            // TODO: Implement read filtering here
-                            if (!flag_filters.include_supplementary
-                                && record.is_supplementary()
-                                && read_type != ReadType::Long) // We want supp alignments for longreads
-                                || (!flag_filters.include_secondary
+                            if (!flag_filters.include_secondary
                                 && record.is_secondary())
                                 || (read_type == ReadType::Short
                                 && !record.is_proper_pair()
@@ -108,6 +107,10 @@ impl<'a> AssemblyRegionIterator<'a> {
                                 || (read_type == ReadType::Long
                                 && record.mapq() < min_mapq)
                                 || record.is_unmapped()
+                                || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                || record.is_quality_check_failed()
+                                || record.is_duplicate()
+                                || record.mapq() < 10
                             // Check against filter flags and current sample type
                             {
                                 continue;
@@ -138,7 +141,7 @@ impl<'a> AssemblyRegionIterator<'a> {
             records = records.into_iter().take(max_input_depth).collect();
         }
 
-        debug!("Adding {} reads to region", records.len());
+        debug!("Region {:?} No. reads {}", &region.padded_span, records.len());
         records.par_sort_unstable();
         region.add_all(records);
     }

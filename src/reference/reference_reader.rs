@@ -353,7 +353,7 @@ impl ReferenceReader {
      */
     pub fn split_contig_name<'b>(contig_name: &'b [u8], separator: u8) -> &'b [u8] {
         match contig_name.into_iter().position(|&x| x == separator) {
-            Some(position) => return &contig_name[position..contig_name.len()],
+            Some(position) => return &contig_name[(position+1)..contig_name.len()], // + 1 because we do  not want to include the sep
             None => return contig_name,
         }
     }
