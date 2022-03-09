@@ -307,6 +307,7 @@ impl<'a> LorikeetEngine<'a> {
                             &mut reference_reader,
                             &output_prefix
                         )
+
                     };
 
                     debug!("example variant {:?}", &contexts.first());

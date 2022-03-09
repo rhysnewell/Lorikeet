@@ -281,15 +281,20 @@ impl HaplotypeCallerGenotypingEngine {
                         &given_alleles,
                         stand_min_confidence,
                     );
-                    debug!("Call {:?}", &call);
 
                     match call {
                         None => continue, // pass,
                         Some(mut call) => {
-                            read_allele_likelihoods.retain_evidence(
-                                &Self::compose_read_qualifies_for_genotyping_predicate(),
-                                &variant_calling_relevant_overlap,
-                            );
+                            // read_allele_likelihoods = read_likelihoods.marginalize(&allele_mapper);
+                            // read_allele_likelihoods.retain_evidence(
+                            //     &Self::compose_read_qualifies_for_genotyping_predicate(),
+                            //     &variant_calling_relevant_overlap,
+                            // );
+
+                            // let mut read_allele_likelihoods;
+                            // if call.get_alleles().len() != read_allele_likelihoods.number_of_alleles() {
+                            //     dbg!(call.get_alleles().len(), read_allele_likelihoods.number_of_alleles());
+                            // };
 
                             // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
                             // right after a few lines of code below.

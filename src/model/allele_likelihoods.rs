@@ -167,6 +167,25 @@ impl<A: Allele> AlleleLikelihoods<A> {
         }
     }
 
+    pub fn consume_likelihoods<B: Allele>(
+        alleles: AlleleList<A>,
+        other: AlleleLikelihoods<B>
+    ) -> Self {
+        let reference_allele_index = Self::find_reference_allele_index(&alleles);
+        Self {
+            evidence_by_sample_index: other.evidence_by_sample_index,
+            filtered_evidence_by_sample_index: other.filtered_evidence_by_sample_index,
+            values_by_sample_index: other.values_by_sample_index,
+            likelihoods_matrix_evidence_capacity_by_sample_index: other.likelihoods_matrix_evidence_capacity_by_sample_index,
+            number_of_evidences: other.number_of_evidences,
+            samples: other.samples,
+            alleles,
+            reference_allele_index,
+            is_natural_log: other.is_natural_log,
+            subsetted_genomic_loc: other.subsetted_genomic_loc
+        }
+    }
+
     pub fn samples(&self) -> &Vec<String> {
         &self.samples
     }
@@ -318,7 +337,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             };
             number_of_evidences[s] = sample_evidence_count;
 
-            let sample_values = vec![vec![0.0; sample_evidence_count]; allele_count];
+            // let sample_values = vec![vec![0.0; sample_evidence_count]; allele_count];
             let sample_values = Array2::<f64>::zeros((allele_count, sample_evidence_count));
             likelihoods_matrix_evidence_by_sample_index[s] = sample_evidence_count;
             values_by_sample_index[s] = sample_values;
@@ -671,7 +690,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
         debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
-            let sample_evidence_count = self.sample_evidence_count(s);
+            let sample_evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
             let old_sample_values = &self.values_by_sample_index[s];
 
             let mut new_sample_values = Array2::zeros((new_allele_count, sample_evidence_count));
@@ -1014,10 +1033,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .map(|a| (tie_breaking_priority)(a))
                 .collect::<Vec<i32>>(),
         );
-        let evidence_count = self.number_of_evidences[sample_index];
-        // .get(&sample_index)
-        // .unwrap()
-        // .len();
+        let evidence_count = self.evidence_by_sample_index.get(&sample_index).unwrap().len();
 
         return (0..evidence_count)
             .into_par_iter()
