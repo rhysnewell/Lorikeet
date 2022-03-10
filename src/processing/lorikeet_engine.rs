@@ -174,7 +174,7 @@ impl<'a> LorikeetEngine<'a> {
                         {
                             let pb = &tree.lock().unwrap()[0];
                             pb.progress_bar.inc(
-                                ((self.short_read_bam_count + self.long_read_bam_count) as u64) + 1,
+                                1
                             );
                             pb.progress_bar.reset_eta();
                             let pos = pb.progress_bar.position();

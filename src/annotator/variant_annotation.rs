@@ -211,8 +211,13 @@ impl VariantAnnotations {
                     allele_counts.insert(allele_index, 0);
                     subset.insert(allele_index, vec![allele]);
                 }
+                likelihoods.values_by_sample_index.iter().enumerate().for_each(|(i, array)| {
+                    debug!("likelihoods: {} {} {}", i, array.nrows(), array.ncols())
+                });
                 let subsetted = likelihoods.marginalize(&subset);
                 // let subsetted = likelihoods;
+
+
                 let sample_index = subsetted
                     .samples
                     .iter()

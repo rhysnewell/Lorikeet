@@ -690,13 +690,17 @@ impl<A: Allele> AlleleLikelihoods<A> {
         debug!("new allele count {}", new_allele_count);
 
         for s in 0..sample_count {
-            let sample_evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
-            let old_sample_values = &self.values_by_sample_index[s];
 
+            let old_sample_values = &self.values_by_sample_index[s];
+            debug!("OLD: s -> {} rows -> {} cols -> {}", s, old_sample_values.nrows(), old_sample_values.ncols());
+            let sample_evidence_count = std::cmp::min(
+                self.evidence_by_sample_index.get(&s).unwrap().len(),
+                old_sample_values.ncols()
+            );
             let mut new_sample_values = Array2::zeros((new_allele_count, sample_evidence_count));
             // We initiate all likelihoods to -Inf.
             new_sample_values.fill(f64::NEG_INFINITY);
-
+            debug!("NEW: s -> {} rows -> {} cols -> {}", s, new_sample_values.nrows(), new_sample_values.ncols());
             // For each old allele and read we update the new table keeping the maximum likelihood.
             for r in 0..sample_evidence_count {
                 for a in 0..old_allele_count {
@@ -1033,7 +1037,10 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .map(|a| (tie_breaking_priority)(a))
                 .collect::<Vec<i32>>(),
         );
-        let evidence_count = self.evidence_by_sample_index.get(&sample_index).unwrap().len();
+        let evidence_count = std::cmp::min(
+            self.evidence_by_sample_index.get(&sample_index).unwrap().len(),
+            self.values_by_sample_index[sample_index].ncols()
+        );
 
         return (0..evidence_count)
             .into_par_iter()
