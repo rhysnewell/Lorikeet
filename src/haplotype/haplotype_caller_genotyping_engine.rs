@@ -291,24 +291,60 @@ impl HaplotypeCallerGenotypingEngine {
                             //     &variant_calling_relevant_overlap,
                             // );
 
-                            // let mut read_allele_likelihoods;
-                            // if call.get_alleles().len() != read_allele_likelihoods.number_of_alleles() {
-                            //     dbg!(call.get_alleles().len(), read_allele_likelihoods.number_of_alleles());
-                            // };
 
-                            // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
-                            // right after a few lines of code below.
-                            let overlapping_filtered_reads = Self::overlapping_filtered_reads(
-                                &per_sample_filtered_read_list,
-                                variant_calling_relevant_overlap,
-                            );
-                            read_allele_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
+                            let mut annotated_call;
+                            if call.get_alleles().len() != read_allele_likelihoods.number_of_alleles() {
+                                let mut read_allele_likelihoods = AlleleLikelihoods::consume_likelihoods(
+                                    AlleleList::new(&call.alleles),
+                                    read_allele_likelihoods
+                                );
 
-                            let annotated_call = self.make_annotated_call(
-                                merged_alleles_list_size_before_possible_trimming,
-                                &mut read_allele_likelihoods,
-                                &mut call,
-                            );
+                                let non_ref_index = if call.get_alternate_alleles_with_index().len() > 0 {
+                                    Some(call.get_alternate_alleles_with_index()[0].0)
+                                } else {
+                                    None
+                                };
+                                read_allele_likelihoods.update_non_ref_allele_likelihoods(
+                                    AlleleList::new(&call.alleles),
+                                    None
+                                );
+
+                                // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
+                                // right after a few lines of code below.
+                                debug!("Called allele {:?}", &call.alleles);
+                                debug!("Called genotypes {:?}", &call.genotypes);
+                                let overlapping_filtered_reads = Self::overlapping_filtered_reads(
+                                    &per_sample_filtered_read_list,
+                                    variant_calling_relevant_overlap,
+                                );
+                                debug!("Overlapping filtered reads {:?}", overlapping_filtered_reads.iter().map(|(_, v)| v.len()).collect::<Vec<usize>>());
+                                read_allele_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
+
+                                annotated_call = self.make_annotated_call(
+                                    merged_alleles_list_size_before_possible_trimming,
+                                    &mut read_allele_likelihoods,
+                                    &mut call,
+                                );
+                            } else {
+
+                                // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
+                                // right after a few lines of code below.
+                                debug!("Called allele {:?}", &call.alleles);
+                                debug!("Called genotypes {:?}", &call.genotypes);
+                                let overlapping_filtered_reads = Self::overlapping_filtered_reads(
+                                    &per_sample_filtered_read_list,
+                                    variant_calling_relevant_overlap,
+                                );
+                                debug!("Overlapping filtered reads {:?}", overlapping_filtered_reads.iter().map(|(_, v)| v.len()).collect::<Vec<usize>>());
+                                read_allele_likelihoods.add_evidence(overlapping_filtered_reads, 0.0);
+
+                                annotated_call = self.make_annotated_call(
+                                    merged_alleles_list_size_before_possible_trimming,
+                                    &mut read_allele_likelihoods,
+                                    &mut call,
+                                );
+                            };
+
                             debug!("Annotated call {:?}", &annotated_call);
 
                             if annotated_call
@@ -320,7 +356,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 >= 2
                             {
                                 // at least two supporting reads
-                                debug!(">= two supporting reads");
+                                debug!(">= 2 supporting reads");
                                 return_calls.push(annotated_call);
                                 call.alleles
                                     .into_iter()
@@ -381,7 +417,7 @@ impl HaplotypeCallerGenotypingEngine {
         return overlapping_filtered_reads;
     }
 
-    fn make_annotated_call<'b>(
+    fn make_annotated_call<'b, A: Allele>(
         &self,
         // ref_seq: &[u8],
         // ref_loc: &SimpleInterval,
@@ -390,7 +426,7 @@ impl HaplotypeCallerGenotypingEngine {
         // samples: &Vec<String>,
         // merged_vc: &VariantContext,
         merged_alleles_list_size_before_possible_trimming: usize,
-        read_allele_likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        read_allele_likelihoods: &mut AlleleLikelihoods<A>,
         call: &'b mut VariantContext,
         // annotation_engine: VariantAnnotationEnging
     ) -> VariantContext {

@@ -1,9 +1,9 @@
 use assembly::assembly_based_caller_utils::AssemblyBasedCallerUtils;
 use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
 use haplotype::haplotype::Haplotype;
-use hashlink::LinkedHashMap;
+use hashlink::{LinkedHashMap, LinkedHashSet};
 use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::Allele;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
 use rand::distributions::{Distribution, Normal};
 use rand::rngs::ThreadRng;
@@ -92,11 +92,11 @@ impl VariantAnnotations {
         }
     }
 
-    pub fn annotate(
+    pub fn annotate<A: Allele>(
         &self,
         vc: &mut VariantContext,
         genotype: Option<&mut Genotype>,
-        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        likelihoods: &mut AlleleLikelihoods<A>,
         annotation_type: AnnotationType,
     ) -> AttributeObject {
         match self {
@@ -191,7 +191,7 @@ impl VariantAnnotations {
             }
             Self::DepthPerAlleleBySample => {
                 let mut genotype = genotype.unwrap();
-                let alleles = likelihoods.get_allele_list_haplotypes();
+                let alleles = likelihoods.get_allele_list().list.into_iter().collect::<LinkedHashSet<_>>();
                 debug!("Depth per allele alleles {:?}", &alleles);
                 alleles.iter().for_each(|a| {
                     // type difference mean we can't check if this allele is in the array at this point
@@ -202,7 +202,9 @@ impl VariantAnnotations {
                         a
                     )
                 });
-
+                if likelihoods.number_of_alleles() <= 1 {
+                    return AttributeObject::None
+                }
                 let mut allele_counts = LinkedHashMap::new();
                 let mut subset = LinkedHashMap::new();
                 for (allele_index, allele) in alleles.iter().enumerate() {
@@ -246,7 +248,7 @@ impl VariantAnnotations {
 
                 likelihoods
                     .best_alleles_breaking_ties_main(Box::new(
-                        |allele: &Haplotype<SimpleInterval>| {
+                        |allele: &A| {
                             if allele.is_reference() {
                                 1
                             } else {
@@ -500,11 +502,11 @@ impl Annotation {
         }
     }
 
-    pub fn annotate(
+    pub fn annotate<A: Allele>(
         mut self,
         vc: &mut VariantContext,
         genotype: Option<&mut Genotype>,
-        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        likelihoods: &mut AlleleLikelihoods<A>,
     ) -> Self {
         self.value = self
             .annotation

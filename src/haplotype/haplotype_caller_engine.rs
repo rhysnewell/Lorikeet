@@ -110,7 +110,12 @@ impl<'c> HaplotypeCallerEngine<'c> {
      * </p>
      */
     pub const REF_MODEL_DELETION_QUAL: u8 = 30;
-    // pub const MIN_SOFT_CLIP_QUAL: usize = 29;
+
+    /**
+     * Only base calls with quality strictly greater than this constant,
+     * will be considered high quality if they are part of a soft-clip.
+     */
+    const HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD: u8 = 28;
 
     // const NO_CALLS: Vec<Allele> = Vec::new();
 
@@ -299,17 +304,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
         let limiting_interval = Self::parse_limiting_interval(m);
 
-        // let min_variant_quality = m
-        //     .value_of("min-variant-quality")
-        //     .unwrap()
-        //     .parse::<i32>()
-        //     .unwrap();
-        let min_soft_clip_qual = 29;
-
         let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
-
-
-
 
         let mut tids: HashSet<usize> = HashSet::new();
         let reference = reference_reader.retrieve_reference_stem(ref_idx);
@@ -402,7 +397,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     ReadType::Short,
                                     ploidy,
                                     bq,
-                                    min_soft_clip_qual,
                                     genomes_and_contigs,
                                     concatenated_genomes,
                                     flag_filters,
@@ -429,7 +423,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     ReadType::Long,
                                     ploidy,
                                     bq,
-                                    min_soft_clip_qual,
                                     genomes_and_contigs,
                                     concatenated_genomes,
                                     flag_filters,
@@ -511,7 +504,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
         readtype: ReadType,
         ploidy: usize,
         bq: u8,
-        min_soft_clip_qual: i32,
         genomes_and_contigs: &'b GenomesAndContigs,
         concatenated_genomes: &'b Option<String>,
         flag_filters: &'b FlagFilter,
@@ -593,7 +585,10 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     ) {
                                         continue
                                     }
-                                    let (hq_soft_clips, result) = &mut positions[pos.saturating_sub(min(outer_chunk_location.start + chunk_multiplier, target_len as usize) + 1)];
+                                    let (hq_soft_clips, result) = &mut positions[pos
+                                        .saturating_sub(
+                                            min(outer_chunk_location.start + chunk_multiplier,
+                                                target_len as usize))];
 
                                     let refr_base = reference_reader.current_sequence[pos];
                                     for alignment in pileup.alignments() {
@@ -607,7 +602,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                             || CigarUtils::get_reference_length(record.cigar().deref()) == 0
                                             || record.is_quality_check_failed()
                                             || record.is_duplicate()
-                                            || record.mapq() == 10
+                                            || record.mapq() < 10
                                         {
                                             continue;
                                         } else if !flag_filters.include_secondary
@@ -622,7 +617,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                 *hq_soft_clips,
                                                 log10ploidy,
                                                 likelihoodcount,
-                                                min_soft_clip_qual,
                                                 refr_base,
                                                 bq,
                                             )
@@ -696,13 +690,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
         let limiting_interval = Self::parse_limiting_interval(m);
 
-        // let min_variant_quality = m
-        //     .value_of("min-variant-quality")
-        //     .unwrap()
-        //     .parse::<i32>()
-        //     .unwrap();
-        let min_soft_clip_qual = 29;
-
         let ploidy: usize = m.value_of("ploidy").unwrap().parse().unwrap();
 
         let mut genotype_likelihoods = Vec::new();
@@ -729,7 +716,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         ReadType::Short,
                         ploidy,
                         bq,
-                        min_soft_clip_qual,
                         genomes_and_contigs,
                         concatenated_genomes,
                         flag_filters,
@@ -752,7 +738,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         ReadType::Long,
                         ploidy,
                         bq,
-                        min_soft_clip_qual,
                         genomes_and_contigs,
                         concatenated_genomes,
                         flag_filters,
@@ -806,7 +791,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
         readtype: ReadType,
         ploidy: usize,
         bq: u8,
-        min_soft_clip_qual: i32,
         genomes_and_contigs: &'b GenomesAndContigs,
         concatenated_genomes: &'b Option<String>,
         flag_filters: &'b FlagFilter,
@@ -858,7 +842,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let likelihoodcount = ploidy + 1;
         let log10ploidy = (likelihoodcount as f64).log10();
         let mut genotype_likelihoods = HashMap::new();
-        let chunk_size = 500000;
+        let chunk_size = 100000;
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
         match readtype {
@@ -923,15 +907,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                             )
                                         );
 
-                                        // match limiting_interval {
-                                        //     Some(limiting_interval) => {
-                                        //         bam_generated.fetch((tid as i32, limiting_interval.start as i64, limiting_interval.end as i64)).unwrap_or_else(|_| panic!("Failed to fetch interval {}:{}-{}", tid, limiting_interval.start, limiting_interval.end))
-                                        //     },
-                                        //     None => {
-                                        //         bam_generated.fetch(tid as u32).unwrap_or_else(|_| panic!("Failed to fetch tid {}", tid))
-                                        //     }
-                                        // };
-
                                         // Position based - Loop through the positions in the genome
                                         // Calculate likelihood of activity being present at this position
                                         match bam_generated.pileup() {
@@ -974,7 +949,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                             || CigarUtils::get_reference_length(record.cigar().deref()) == 0
                                                             || record.is_quality_check_failed()
                                                             || record.is_duplicate()
-                                                            || record.mapq() == 0
+                                                            || record.mapq() < 10
                                                         {
                                                             continue;
                                                         } else if !flag_filters.include_secondary
@@ -989,7 +964,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                                 *hq_soft_clips,
                                                                 log10ploidy,
                                                                 likelihoodcount,
-                                                                min_soft_clip_qual,
                                                                 refr_base,
                                                                 bq,
                                                             )
@@ -1035,7 +1009,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         sample_names: &[String],
         min_contig_length: u64,
     ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
-        if genotype_likelihoods.len() == 0 {
+        if genotype_likelihoods.len() == 1 {
             // Faster implementation for single sample analysis
             let per_contig_activity_profiles: HashMap<usize, Vec<BandPassActivityProfile>> =
                 genotype_likelihoods.into_iter().next().unwrap()
@@ -1103,7 +1077,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
 
                     let activity_profile =
-                        (0..(*length as usize)).into_par_iter().chunks(500000).map(|positions| {
+                        (0..(*length as usize)).into_par_iter().chunks(100000).map(|positions| {
                             let mut active_region_evaluation_genotyper_engine =
                                 self.active_region_evaluation_genotyper_engine.clone();
                             let mut activity_profile = BandPassActivityProfile::new(
@@ -1343,11 +1317,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let mut region_without_reads = region.clone_without_reads();
 
         // run the local assembler, getting back a collection of information on how we should proceed
-        debug!(
-            "region read sizes before assembly {} {}",
-            region.reads[0].get_length_on_reference(),
-            region.reads[1].get_length_on_reference()
-        );
         let mut untrimmed_assembly_result = AssemblyBasedCallerUtils::assemble_reads(
             region,
             &given_alleles,
@@ -1357,21 +1326,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             !args.is_present("do-not-correct-overlapping-base-qualities"),
             sample_names,
         );
-        debug!(
-            "region read sizes after ass {} {}",
-            untrimmed_assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
-            untrimmed_assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
-        );
-        debug!(
-            "Untrimmed haplotypes {:?}",
-            &untrimmed_assembly_result.haplotypes
-        );
 
-        debug!(
-            "There were {} haplotypes found with {} reads",
-            untrimmed_assembly_result.haplotypes.len(),
-            untrimmed_assembly_result.region_for_genotyping.reads.len()
-        );
         let all_variation_events = match untrimmed_assembly_result
             .get_variation_events(args.value_of("max-mnp-distance").unwrap().parse().unwrap()) {
             Ok(result) => result,
@@ -1413,11 +1368,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             &assembly_result.haplotypes
         );
 
-        debug!(
-            "region read sizes after trim {} {}",
-            assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
-            assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
-        );
 
         let read_stubs = assembly_result
             .region_for_genotyping
@@ -1440,11 +1390,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             &assembly_result.haplotypes.len()
         );
 
-        debug!(
-            "region read sizes after removing read stubs {} {}",
-            assembly_result.region_for_genotyping.reads[0].get_length_on_reference(),
-            assembly_result.region_for_genotyping.reads[1].get_length_on_reference()
-        );
 
         // filter out reads from genotyping which fail mapping quality based criteria
         //TODO - why don't do this before any assembly is done? Why not just once at the beginning of this method
@@ -1613,7 +1558,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
         hq_soft_clips: &mut RunningAverage,
         log10ploidy: f64,
         likelihoodcount: usize,
-        min_soft_clip_qual: i32,
         refr_base: u8,
         bq: u8,
     ) {
@@ -1631,7 +1575,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 &record,
                 &qpos,
                 refr_base,
-                min_soft_clip_qual
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD
             );
             if is_alt {
                 result.non_ref_depth += 1;
@@ -1661,7 +1605,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 qpos.unwrap(),
                 Some(hq_soft_clips),
                 false,
-                min_soft_clip_qual
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD
             );
         }
         result.read_counts += 1;
@@ -1682,7 +1626,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         record: &Record,
         qpos: &Option<usize>,
         refr_base: u8,
-        min_soft_clip_qual: i32,
+        min_soft_clip_qual: u8,
     ) -> bool {
         match qpos {
             Some(qpos) => {
@@ -1705,7 +1649,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
             },
             None => {
                 // is deletion or ref_skip
-                return true;
+                // we only care about del. Ref skips are weird
+                return alignment.is_del();
             }
         }
     }
@@ -1719,14 +1664,16 @@ impl<'c> HaplotypeCallerEngine<'c> {
         qpos: usize,
         mut hq_soft_clips: Option<&mut RunningAverage>,
         check_indels: bool,
-        min_soft_clip_qual: i32,
+        min_soft_clip_qual: u8,
     ) -> bool {
         let mut read_cursor = 0;
         let mut next_to_soft_clip = false;
+        // let cigar = &record.cigar().0;
         for cig in record.cigar().iter() {
-            // Cigar immediately before current position
-            // in read
+            // Cigar immediately before current position in read
             if qpos as i32 == read_cursor - 1 || qpos as i32 == read_cursor + 1 {
+
+                // dbg!(qpos, read_cursor, cig, record.cigar());
                 match cig {
                     Cigar::SoftClip(_) => {
                         next_to_soft_clip = true;
@@ -1750,22 +1697,18 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         // Not a soft clip
                     }
                 }
+                break
             } else if read_cursor > qpos as i32 {
                 // break out of loop since we have passed
                 // the position
                 break;
             }
-            match cig {
-                // Progress the cigar cursor
-                Cigar::Match(_)
-                | Cigar::Diff(_)
-                | Cigar::Equal(_)
-                | Cigar::Ins(_)
-                | Cigar::SoftClip(_) => {
-                    read_cursor += cig.len() as i32;
-                }
-                _ => {}
+
+            // Progress the cigar cursor
+            if CigarUtils::cigar_consumes_read_bases(cig) {
+                read_cursor += cig.len() as i32;
             }
+
         }
         return next_to_soft_clip
     }
@@ -1774,7 +1717,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         cig: &Cigar,
         record: &Record,
         cigar_cursor: usize,
-        min_soft_clip_qual: i32,
+        min_soft_clip_qual: u8,
     ) -> f64 {
         // https://gatk.broadinstitute.org/hc/en-us/articles/360036227652?id=4147
         // If we have high quality soft clips then we want to
@@ -1782,7 +1725,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         // get mean base quality
         let mut num_high_quality_soft_clips = 0.0;
         for rpos in cigar_cursor..(cigar_cursor + cig.len() as usize) {
-            let qual_pos = record.qual()[rpos] as i32;
+            let qual_pos = record.qual()[rpos];
             if qual_pos >= min_soft_clip_qual {
                 num_high_quality_soft_clips += 1.0
             }

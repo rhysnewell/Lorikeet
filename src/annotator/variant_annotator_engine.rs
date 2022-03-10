@@ -3,7 +3,7 @@ use genotype::genotype_builder::{AttributeObject, Genotype, GenotypesContext};
 use haplotype::haplotype::Haplotype;
 use hashlink::LinkedHashMap;
 use model::allele_likelihoods::AlleleLikelihoods;
-use model::byte_array_allele::Allele;
+use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variant_context::VariantContext;
 use rust_htslib::bcf::Header;
 use std::collections::HashMap;
@@ -28,9 +28,9 @@ impl VariantAnnotationEngine {
      * @param addAnnot function that indicates if the given annotation type should be added to the variant
      *
      */
-    pub fn annotate_context(
+    pub fn annotate_context<A: Allele>(
         vc: &VariantContext,
-        read_likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        read_likelihoods: &mut AlleleLikelihoods<A>,
         add_annotation: Box<dyn Fn(&Annotation) -> bool>,
     ) -> VariantContext {
         // annotate genotypes, creating another new VC in the process
@@ -50,9 +50,9 @@ impl VariantAnnotationEngine {
         return builder;
     }
 
-    fn add_genotype_annotations(
+    fn add_genotype_annotations<A: Allele>(
         vc: &mut VariantContext,
-        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        likelihoods: &mut AlleleLikelihoods<A>,
     ) -> GenotypesContext {
         let mut genotypes = GenotypesContext::create(vc.get_n_samples());
 
@@ -68,9 +68,9 @@ impl VariantAnnotationEngine {
         return genotypes;
     }
 
-    fn add_info_annotations(
+    fn add_info_annotations<A: Allele>(
         vc: &mut VariantContext,
-        likelihoods: &mut AlleleLikelihoods<Haplotype<SimpleInterval>>,
+        likelihoods: &mut AlleleLikelihoods<A>,
         add_annotation: Box<dyn Fn(&Annotation) -> bool>,
     ) -> LinkedHashMap<String, AttributeObject> {
         let mut info_annot_map = LinkedHashMap::new();
