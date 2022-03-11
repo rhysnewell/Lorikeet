@@ -63,7 +63,9 @@ Variant calling options (Basic):
                                                 compressed using bgzip and indexed using bcftools index. If no index
                                                 is present, and index will be attempted to be created.
                                                 If the file is not properly compressed, Lorikeet will
-                                                segfault with no error message.
+                                                unfortunately SEGFAULT with no error message.
+  --qual-by-depth-filter                        The minimum QD value for a variant to have for it to be
+                                                included in the genotyping or ANI analyses. [default: 20]
   -q, --min-base-quality                        Minimum base quality required to consider a
                                                 base for calling. [default: 10]
   --min-mapq                                    Minimum MAPQ score for longreads to be considered
@@ -264,8 +266,6 @@ pub fn genotype_full_help() -> String {
 
 Genotyping arguments (optional):
 
-  --qual-by-depth-filter                The minimum QD value for a variant to have for it to be
-                                        included in the genotyping analysis. [default: 20]
   --min-variant-depth-for-genotyping    The minimum total depth of a variant - across all samples -
                                         for it to be included in the strain genotyping process.
                                         Lower values tend to confuse and break the UMAP embedding
@@ -1035,6 +1035,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("base-quality-score-threshold")
                         .long("base-quality-score-threshold")
                         .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -2334,6 +2339,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("18"),
                 )
                 .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20"),
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -2968,6 +2978,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("base-quality-score-threshold")
                         .long("base-quality-score-threshold")
                         .default_value("18"),
+                )
+                .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")

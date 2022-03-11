@@ -291,7 +291,6 @@ impl HaplotypeCallerGenotypingEngine {
                             //     &variant_calling_relevant_overlap,
                             // );
 
-
                             let mut annotated_call;
                             if call.get_alleles().len() != read_allele_likelihoods.number_of_alleles() {
                                 let mut read_allele_likelihoods = AlleleLikelihoods::consume_likelihoods(
@@ -306,7 +305,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 };
                                 read_allele_likelihoods.update_non_ref_allele_likelihoods(
                                     AlleleList::new(&call.alleles),
-                                    None
+                                    non_ref_index
                                 );
 
                                 // Skim the filtered map based on the location so that we do not add filtered read that are going to be removed
@@ -353,7 +352,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 .iter()
                                 .map(|g| g.dp - g.ad[0])
                                 .sum::<i64>()
-                                >= 2
+                                >= 0
                             {
                                 // at least two supporting reads
                                 debug!(">= 2 supporting reads");
@@ -711,6 +710,7 @@ impl HaplotypeCallerGenotypingEngine {
         return Box::new(|read: &BirdToolRead, target: &SimpleInterval| -> bool {
             // NOTE: we must make this comparison in target -> read order because occasionally realignment/assembly produces
             // reads that consume no reference bases and this can cause them to overlap adjacent
+            debug!("Target -> {}:{} Read -> {}:{} ({:?}:{:?}) {} {:?}", target.get_start(), target.get_end(), read.get_start(), read.get_end(), read.get_soft_start(), read.get_soft_end(), target.overlaps(read), read.read.cigar().to_string());
             target.overlaps(read)
         });
     }

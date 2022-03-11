@@ -754,7 +754,9 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .filter(|(_, read)| !predicate(read, interval))
                 .map(|(idx, _)| idx)
                 .collect::<Vec<usize>>();
+            debug!("Before remove {}", self.evidence_by_sample_index.get(&s).unwrap().len());
             self.remove_evidence_by_index(s, remove_indices);
+            debug!("After remove {}", self.evidence_by_sample_index.get(&s).unwrap().len());
 
             // If applicable also apply the predicate to the filters
             self.filtered_evidence_by_sample_index
@@ -782,6 +784,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 continue;
             };
 
+
             let old_evidence_count = self
                 .evidence_by_sample_index
                 .get(&sample_index)
@@ -793,6 +796,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .get(&sample_index)
                 .unwrap()
                 .len();
+
+            debug!("OLD Count -> {} NEW Count -> {}", old_evidence_count, new_evidence_count);
             self.extends_likelihood_arrays(
                 initial_likelihood,
                 sample_index,
@@ -906,6 +911,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
             {
                 let sample_evidence = self.evidence_by_sample_index.get(&sample_index).unwrap();
                 let number_of_evidence = sample_evidence.len();
+                debug!("Number of evidences {}", number_of_evidence);
                 indexes_to_remove = (0..number_of_evidence)
                     .into_iter()
                     .filter(|i| {
@@ -931,6 +937,8 @@ impl<A: Allele> AlleleLikelihoods<A> {
             .filtered_evidence_by_sample_index
             .entry(sample_index)
             .or_insert_with(Vec::new);
+
+        debug!("Evidences to remove {}", evidences_to_remove.len());
         let num_to_remove = evidences_to_remove.len();
         if num_to_remove > 0 {
             let old_evidence_count = self.number_of_evidences[sample_index];
@@ -1037,6 +1045,7 @@ impl<A: Allele> AlleleLikelihoods<A> {
                 .map(|a| (tie_breaking_priority)(a))
                 .collect::<Vec<i32>>(),
         );
+
         let evidence_count = std::cmp::min(
             self.evidence_by_sample_index.get(&sample_index).unwrap().len(),
             self.values_by_sample_index[sample_index].ncols()

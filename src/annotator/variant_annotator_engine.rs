@@ -94,6 +94,7 @@ impl VariantAnnotationEngine {
             Annotation::new(VariantAnnotations::QualByDepth, AnnotationType::Info),
             Annotation::new(VariantAnnotations::MappingQuality, AnnotationType::Info),
             Annotation::new(VariantAnnotations::BaseQuality, AnnotationType::Info),
+            Annotation::new(VariantAnnotations::Qualified, AnnotationType::Info),
         ]
     }
 

@@ -35,7 +35,7 @@ pub trait Profile {
 
     fn get_span(&self) -> Option<SimpleInterval>;
 
-    fn get_end(&self) -> usize;
+    fn get_end(&self) -> Option<usize>;
 
     fn get_state_list(&self) -> &Vec<ActivityProfileState>;
 
@@ -154,12 +154,13 @@ impl Profile for ActivityProfile {
         if self.is_empty() {
             None
         } else {
-            Some(
-                self.region_start_loc
-                    .as_ref()
-                    .unwrap()
-                    .span_with(&self.region_stop_loc.as_ref().unwrap()),
-            )
+            if let Some(ref start) = &self.region_start_loc {
+                if let Some(ref stop) = &self.region_stop_loc {
+                    return Some(start.span_with(stop));
+                }
+                return None;
+            }
+            return None;
         }
     }
 
@@ -167,8 +168,11 @@ impl Profile for ActivityProfile {
         self.region_start_loc.as_ref().unwrap().get_contig()
     }
 
-    fn get_end(&self) -> usize {
-        self.region_stop_loc.as_ref().unwrap().get_end()
+    fn get_end(&self) -> Option<usize> {
+        if let Some(ref loc) = &self.region_stop_loc {
+            return Some(loc.get_end())
+        }
+        None
     }
 
     /**
@@ -371,17 +375,29 @@ impl Profile for ActivityProfile {
         assert!(max_region_size > 0, "max_region_size must be >= 1");
 
         let mut regions = Vec::new();
-
+        let mut region_start = None;
         loop {
+            let force_conversion = if let Some(start) = region_start {
+                if let Some(end) = self.get_end() {
+                    start != end + 1
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
             let next_region = self.pop_next_ready_assembly_region(
                 assembly_region_extension,
                 min_region_size,
                 max_region_size,
-                force_conversion,
+                force_conversion
             );
 
             match next_region {
-                Some(region) => regions.push(region),
+                Some(region) => {
+                    region_start = Some(region.padded_span.start);
+                    regions.push(region);
+                },
                 None => return regions,
             }
         }
@@ -418,9 +434,11 @@ impl Profile for ActivityProfile {
             let span = self.get_span();
             match span {
                 Some(span) => {
-                    // let states_to_trim_away = &self.state_list[span.size()..self.state_list.len()];
+                    // self.state_list = &self.state_list[span.size()..];
                     // self.state_list.retain(|state| !states_to_trim_away.contains(state));
-                    self.state_list = self.state_list[0..span.size() + 1].to_vec();
+                    if span.size() < self.state_list.len() {
+                        self.state_list = self.state_list[0..=span.size()].to_vec();
+                    }
                 }
                 None => {
                     // Do nothing I guess?
@@ -428,7 +446,7 @@ impl Profile for ActivityProfile {
             }
         }
 
-        debug!("Active prob 0 {} 1 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.state_list[1].is_active_prob(), &self.active_prob_threshold);
+        debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,

@@ -269,7 +269,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let contexts = if self.args.is_present("low-memory") {
+                    let mut contexts = if self.args.is_present("low-memory") {
                         assembly_engine.collect_shards_low_mem(
                             self.args,
                             &indexed_bam_readers,
@@ -323,15 +323,22 @@ impl<'a> LorikeetEngine<'a> {
                         .map(|(_, length)| length)
                         .sum::<u64>();
 
+                    let qual_by_depth_filter: f64 = self.args
+                        .value_of("qual-by-depth-filter")
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
                         let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
-                            &contexts,
+                            &mut contexts,
                             &output_prefix,
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            qual_by_depth_filter,
                         );
 
                         {
@@ -354,13 +361,9 @@ impl<'a> LorikeetEngine<'a> {
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
                         // alleles
-                        let split_contexts = VariantContextUtils::split_contexts(
+                        let mut split_contexts = VariantContextUtils::split_contexts(
                             contexts,
-                            self.args
-                                .value_of("qual-by-depth-filter")
-                                .unwrap()
-                                .parse()
-                                .unwrap(),
+                            qual_by_depth_filter,
                             self.args
                                 .value_of("min-variant-depth-for-genotyping")
                                 .unwrap()
@@ -371,11 +374,12 @@ impl<'a> LorikeetEngine<'a> {
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
-                            &split_contexts,
+                            &mut split_contexts,
                             &output_prefix,
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            qual_by_depth_filter
                         );
 
                         if split_contexts.len() >= 1 {
@@ -471,11 +475,12 @@ impl<'a> LorikeetEngine<'a> {
                         // calculate ANI statistics
                         let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
                         ani_calculator.run_calculator(
-                            &contexts,
+                            &mut contexts,
                             &output_prefix,
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            qual_by_depth_filter
                         );
                         // Get sample distances
                         {

@@ -593,34 +593,34 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     let refr_base = reference_reader.current_sequence[pos];
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
-                                        if (!flag_filters.include_secondary
-                                            && record.is_secondary())
-                                            || (readtype == ReadType::Short
-                                            && !record.is_proper_pair()
-                                            && !flag_filters.include_improper_pairs)
-                                            || record.is_unmapped()
-                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                            || record.is_quality_check_failed()
-                                            || record.is_duplicate()
-                                            || record.mapq() < 10
-                                        {
-                                            continue;
-                                        } else if !flag_filters.include_secondary
-                                            && record.is_secondary()
-                                            && readtype == ReadType::Long
-                                        {
-                                            continue;
-                                        } else {
-                                            HaplotypeCallerEngine::alignment_context_creation(
-                                                &alignment,
-                                                *result,
-                                                *hq_soft_clips,
-                                                log10ploidy,
-                                                likelihoodcount,
-                                                refr_base,
-                                                bq,
-                                            )
-                                        }
+                                        // if (!flag_filters.include_secondary
+                                        //     && record.is_secondary())
+                                        //     || (readtype == ReadType::Short
+                                        //     && !record.is_proper_pair()
+                                        //     && !flag_filters.include_improper_pairs)
+                                        //     || record.is_unmapped()
+                                        //     || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                        //     || record.is_quality_check_failed()
+                                        //     || record.is_duplicate()
+                                        //     || record.mapq() < 10
+                                        // {
+                                        //     continue;
+                                        // } else if !flag_filters.include_secondary
+                                        //     && record.is_secondary()
+                                        //     && readtype == ReadType::Long
+                                        // {
+                                        //     continue;
+                                        // } else {
+                                        HaplotypeCallerEngine::alignment_context_creation(
+                                            &alignment,
+                                            *result,
+                                            *hq_soft_clips,
+                                            log10ploidy,
+                                            likelihoodcount,
+                                            refr_base,
+                                            bq,
+                                        )
+                                        // }
                                     }
 
                                     let denominator = result.read_counts as f64 * log10ploidy;
@@ -940,34 +940,34 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                                     for alignment in pileup.alignments() {
                                                         let record = alignment.record();
-                                                        if (!flag_filters.include_secondary
-                                                            && record.is_secondary())
-                                                            || (readtype == ReadType::Short
-                                                            && !record.is_proper_pair()
-                                                            && !flag_filters.include_improper_pairs)
-                                                            || record.is_unmapped()
-                                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                                            || record.is_quality_check_failed()
-                                                            || record.is_duplicate()
-                                                            || record.mapq() < 10
-                                                        {
-                                                            continue;
-                                                        } else if !flag_filters.include_secondary
-                                                            && record.is_secondary()
-                                                            && readtype == ReadType::Long
-                                                        {
-                                                            continue;
-                                                        } else {
-                                                            HaplotypeCallerEngine::alignment_context_creation(
-                                                                &alignment,
-                                                                *result,
-                                                                *hq_soft_clips,
-                                                                log10ploidy,
-                                                                likelihoodcount,
-                                                                refr_base,
-                                                                bq,
-                                                            )
-                                                        }
+                                                        // if (!flag_filters.include_secondary
+                                                        //     && record.is_secondary())
+                                                        //     || (readtype == ReadType::Short
+                                                        //     && !record.is_proper_pair()
+                                                        //     && !flag_filters.include_improper_pairs)
+                                                        //     || record.is_unmapped()
+                                                        //     || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                                        //     || record.is_quality_check_failed()
+                                                        //     || record.is_duplicate()
+                                                        //     || record.mapq() < 10
+                                                        // {
+                                                        //     continue;
+                                                        // } else if !flag_filters.include_secondary
+                                                        //     && record.is_secondary()
+                                                        //     && readtype == ReadType::Long
+                                                        // {
+                                                        //     continue;
+                                                        // } else {
+                                                        HaplotypeCallerEngine::alignment_context_creation(
+                                                            &alignment,
+                                                            *result,
+                                                            *hq_soft_clips,
+                                                            log10ploidy,
+                                                            likelihoodcount,
+                                                            refr_base,
+                                                            bq,
+                                                        )
+                                                        // }
                                                     }
 
                                                     let denominator = result.read_counts as f64 * log10ploidy;
@@ -1374,11 +1374,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             .reads
             .iter()
             .filter(|r| {
-                debug!(
-                    "read length {} read cigar {}",
-                    AlignmentUtils::unclipped_read_length(r),
-                    r.read.cigar().to_string()
-                );
                 AlignmentUtils::unclipped_read_length(r)
                     < AssemblyBasedCallerUtils::MINIMUM_READ_LENGTH_AFTER_TRIMMING
             })
@@ -1396,8 +1391,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
         //TODO - on the originalActiveRegion?
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
-        let (mut assembly_result, filtered_reads) =
-            self.filter_non_passing_reads(assembly_result, flag_filters);
+        // let (mut assembly_result, filtered_reads) =
+        //     self.filter_non_passing_reads(assembly_result, flag_filters);
+        let filtered_reads = Vec::new();
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
@@ -1424,6 +1420,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             assembly_result.region_for_genotyping.move_reads(),
             sample_names.len(),
         );
+        debug!("Read by sample: {:?}", reads.iter().map(|(_, r)| r.len()).collect::<Vec<usize>>());
 
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
@@ -1649,8 +1646,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             },
             None => {
                 // is deletion or ref_skip
-                // we only care about del. Ref skips are weird
-                return alignment.is_del();
+                return true;
             }
         }
     }
@@ -1671,9 +1667,11 @@ impl<'c> HaplotypeCallerEngine<'c> {
         // let cigar = &record.cigar().0;
         for cig in record.cigar().iter() {
             // Cigar immediately before current position in read
-            if qpos as i32 == read_cursor - 1 || qpos as i32 == read_cursor + 1 {
+            if qpos as i32 == read_cursor - 1
+                || qpos as i32 == read_cursor + 1
+                || qpos as i32 == read_cursor {
+                // debug!("Adjacent {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
 
-                // dbg!(qpos, read_cursor, cig, record.cigar());
                 match cig {
                     Cigar::SoftClip(_) => {
                         next_to_soft_clip = true;
@@ -1697,8 +1695,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         // Not a soft clip
                     }
                 }
-                break
+                // break
             } else if read_cursor > qpos as i32 {
+                // debug!("Breaking {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
                 // break out of loop since we have passed
                 // the position
                 break;

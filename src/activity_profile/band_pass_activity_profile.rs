@@ -172,17 +172,7 @@ impl Profile for BandPassActivityProfile {
      * @return a potentially null SimpleInterval.  Will be null if this profile is empty
      */
     fn get_span(&self) -> Option<SimpleInterval> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(
-                self.activity_profile
-                    .region_start_loc
-                    .as_ref()
-                    .unwrap()
-                    .span_with(&self.activity_profile.region_stop_loc.as_ref().unwrap()),
-            )
-        }
+        self.activity_profile.get_span()
     }
 
     fn get_contig(&self) -> usize {
@@ -193,11 +183,8 @@ impl Profile for BandPassActivityProfile {
             .get_contig()
     }
 
-    fn get_end(&self) -> usize {
+    fn get_end(&self) -> Option<usize> {
         self.activity_profile
-            .region_stop_loc
-            .as_ref()
-            .unwrap()
             .get_end()
     }
 

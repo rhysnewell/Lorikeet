@@ -4,6 +4,8 @@ use ndarray::Array2;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use genotype::genotype_builder::AttributeObject;
+use annotator::variant_annotation::{Annotation, VariantAnnotations};
 
 /// Holds the population and consensus ANI arrays
 /// Compares ANI between samples (Non-diagonal cells) and the ANI of sample compared to reference (Diagonals)
@@ -48,13 +50,14 @@ impl ANICalculator {
 
     pub fn run_calculator(
         &mut self,
-        contexts: &[VariantContext],
+        contexts: &mut [VariantContext],
         output_prefix: &str,
         sample_names: &[&str],
         reference_name: &str,
         genome_size: u64,
+        qual_by_depth_filter: f64,
     ) {
-        self.calculate_from_contexts(contexts, genome_size);
+        self.calculate_from_contexts(contexts, genome_size, qual_by_depth_filter);
 
         Self::write_ani_tables(
             output_prefix,
@@ -82,7 +85,12 @@ impl ANICalculator {
     /// Takes refernce to a vec of variant contexts and compares the consensus and population
     /// ANI between each sample. The input contexts need to be non split i.e. prior to being
     /// put through genotyping pipeline
-    fn calculate_from_contexts(&mut self, contexts: &[VariantContext], genome_size: u64) {
+    fn calculate_from_contexts(
+        &mut self,
+        contexts: &mut [VariantContext],
+        genome_size: u64,
+        qual_by_depth_filter: f64
+    ) {
         let n_samples = self.conANI.ncols();
 
         for context in contexts {
@@ -90,7 +98,38 @@ impl ANICalculator {
 
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
-            if context.log10_p_error <= -10.0 {
+            let passes = match context.attributes.get("QD").cloned() {
+                Some(attribute) => {
+                    match attribute {
+                        AttributeObject::f64(val) => {
+                            let result = val >= qual_by_depth_filter;
+                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                            result
+                        },
+                        _ => {
+                            if context.has_log10_p_error() {
+                                let result = context.log10_p_error <= -10.0;
+                                context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                                result
+                            } else {
+                                context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
+                                false
+                            }
+                        }
+                    }
+                },
+                None => {
+                    if context.has_log10_p_error() {
+                        let result = context.log10_p_error <= -10.0;
+                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                        result
+                    } else {
+                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
+                        false
+                    }
+                }
+            };
+            if passes {
                 // don't consider poor quality variant sites
                 for sample_idx_1 in 0..n_samples {
                     if consenus_allele_indices.len() == sample_idx_1 {

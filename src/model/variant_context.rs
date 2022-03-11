@@ -1285,6 +1285,22 @@ impl VariantContext {
                     .expect("Cannot push info tag");
             }
         }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::Qualified.to_key())
+        {
+            if let AttributeObject::String(val) = self
+                .attributes
+                .get(VariantAnnotations::Qualified.to_key())
+                .unwrap()
+            {
+                let val = val.as_bytes();
+                record
+                    .push_info_string(VariantAnnotations::Qualified.to_key().as_bytes(), &[val])
+                    .expect("Cannot push info tag");
+            }
+        }
     }
 
     fn add_genotype_format(&self, record: &mut Record, n_samples: usize) {

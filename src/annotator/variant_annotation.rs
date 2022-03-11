@@ -58,6 +58,7 @@ pub enum VariantAnnotations {
     Genotype,
     VariantGroup,
     Strain,
+    Qualified
 }
 
 /// The actual annotation struct, Holds all information about an annotation
@@ -89,6 +90,7 @@ impl VariantAnnotations {
             Self::Genotype => "GT",
             Self::VariantGroup => "VG",
             Self::Strain => "ST",
+            Self::Qualified => "QF",
         }
     }
 
@@ -101,6 +103,7 @@ impl VariantAnnotations {
     ) -> AttributeObject {
         match self {
             Self::Depth => {
+                debug!("Depth");
                 match annotation_type {
                     AnnotationType::Format => {
                         let mut genotype = genotype.unwrap();
@@ -129,6 +132,7 @@ impl VariantAnnotations {
             }
             Self::AlleleFraction => {
                 let mut genotype = genotype.unwrap();
+                debug!("Allele Fraction");
                 if genotype.has_ad() {
                     let allele_fractions = MathUtils::normalize_sum_to_one(
                         genotype
@@ -166,6 +170,7 @@ impl VariantAnnotations {
             }
             Self::AlleleCount => {
                 let mut genotype = genotype.unwrap();
+                debug!("Allele Count");
                 if genotype.has_ad() {
                     let allele_counts = genotype.get_ad().into_iter().filter(|ad| **ad > 0).count();
                     genotype.attribute(
@@ -211,11 +216,9 @@ impl VariantAnnotations {
                     allele_counts.insert(allele_index, 0);
                     subset.insert(allele_index, vec![allele]);
                 }
-                likelihoods.values_by_sample_index.iter().enumerate().for_each(|(i, array)| {
-                    debug!("likelihoods: {} {} {}", i, array.nrows(), array.ncols())
-                });
-                let subsetted = likelihoods.marginalize(&subset);
-                // let subsetted = likelihoods;
+                debug!("Subset {:?}", &subset);
+                // let subsetted = likelihoods.marginalize(&subset);
+                let subsetted = likelihoods;
 
 
                 let sample_index = subsetted
@@ -299,6 +302,7 @@ impl VariantAnnotations {
                 return AttributeObject::VecU8(statistics);
             }
             Self::QualByDepth => {
+                debug!("Qual by depth");
                 debug!(
                     "vc log10_p_error {} {}",
                     vc.log10_p_error,
@@ -337,9 +341,10 @@ impl VariantAnnotations {
             | Self::Genotype
             | Self::GenotypeQuality
             | Self::Strain
-            | Self::VariantGroup => {
+            | Self::VariantGroup
+            | Self::Qualified => {
                 // These are returned in genotype contexts already
-                // Or calculated elsewhere i.e. Strain
+                // Or calculated elsewhere i.e. Strain & Qualified
                 AttributeObject::None
             }
         }
@@ -451,6 +456,9 @@ impl VariantAnnotations {
             }
             VariantAnnotations::QualByDepth => {
                 format!("##INFO=<ID={},Number=1,Type=Float,Description=\"Variant Confidence/Quality by Depth\">", self.to_key())
+            }
+            VariantAnnotations::Qualified => {
+                format!("##INFO=<ID={},Number=1,Type=String,Description=\"Whether the variant passed quality checks to be included in ANI  analyses\">", self.to_key())
             }
             VariantAnnotations::DepthPerAlleleBySample => {
                 format!("##FORMAT=<ID={},Number=R,Type=Integer,Description=\"Allelic depths for the ref and alt alleles in the order listed\">", self.to_key())
