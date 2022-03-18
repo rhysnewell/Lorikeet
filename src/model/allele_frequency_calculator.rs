@@ -15,11 +15,13 @@ use std::sync::{Arc, Mutex};
 use utils::dirichlet::Dirichlet;
 use utils::math_utils::MathUtils;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 lazy_static!{
     //from the genotype likelihoods equations assuming the SNP ref conf model with no mismatches
     //PL[2] = GQ; scaleFactor = PL[3]/GQ ~ -10 * DP * log10(P_error) / (-10 * DP * log10(1/ploidy)) where BASE_QUALITY = -10 * log10(P_error)
-    static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i64 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/0.5.log10()) as i64;
+    static ref PLOIDY_2_HOM_VAR_SCALE_FACTOR: i64 = (AlleleFrequencyCalculator::TYPICAL_BASE_QUALITY as f64/-10.0/(0.5.log10())).round() as i64;
 }
 
 #[derive(Debug, Clone)]
@@ -156,8 +158,6 @@ impl AlleleFrequencyCalculator {
                 0,
                 log10_genotype_likelihoods.len(),
             ) == 0
-            && ((log10_genotype_likelihoods[0] - 0.5).abs() > f64::EPSILON
-                && log10_genotype_likelihoods.len() == 2)
         {
             return 0.;
         }
@@ -250,14 +250,10 @@ impl AlleleFrequencyCalculator {
         let mut non_variant_indices_by_ploidy = BTreeMap::new();
 
         // re-usable buffers of the log10 genotype posteriors of genotypes missing each allele
-        let mut log10_absent_posteriors = Arc::new(Mutex::new(vec![Vec::new(); num_alleles]));
+        let mut log10_absent_posteriors = Rc::new(RefCell::new(vec![Vec::new(); num_alleles]));
 
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
-            if !(g.has_likelihoods()
-                || g.has_gq()
-                || g.alleles
-                    .iter()
-                    .any(|a| a.is_called() && !a.is_reference() && !a.is_symbolic()))
+            if !g.genotype_usable_for_af_calculation()
             {
                 continue;
             }
@@ -314,26 +310,27 @@ impl AlleleFrequencyCalculator {
             // for each allele, we collect the log10 probabilities of genotypes in which the allele is absent, then add (in log space)
             // to get the log10 probability that the allele is absent in this sample
             {
-                let mut log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
+                let mut log10_absent_posteriors = log10_absent_posteriors.borrow_mut();
                 log10_absent_posteriors
                     .iter_mut()
                     .for_each(|arr| arr.clear());
             }
             for genotype in (0..gl_calc.genotype_count as usize).into_iter() {
                 let log10_genotype_posterior = log10_genotype_posteriors[genotype];
+                let log10_absent_posteriors = &log10_absent_posteriors;
                 gl_calc
                     .genotype_allele_counts_at(genotype)
                     .for_each_absent_allele_index(
                         |a| {
                             let mut log10_absent_posteriors =
-                                log10_absent_posteriors.lock().unwrap();
+                                log10_absent_posteriors.borrow_mut();
                             log10_absent_posteriors[a].push(log10_genotype_posterior)
                         },
                         num_alleles,
                     );
             }
 
-            let log10_absent_posteriors = log10_absent_posteriors.lock().unwrap();
+            let log10_absent_posteriors = log10_absent_posteriors.borrow_mut();
             let log10_p_no_allele = log10_absent_posteriors
                 .iter()
                 .map(|buffer| {
@@ -417,9 +414,9 @@ impl AlleleFrequencyCalculator {
         log10_allele_frequencies: &mut [f64],
     ) -> Vec<f64> {
         let num_alleles = vc.get_n_alleles();
-        let log10_result = Arc::new(Mutex::new(vec![std::f64::NEG_INFINITY; num_alleles]));
+        let mut log10_result = Rc::new(RefCell::new(vec![std::f64::NEG_INFINITY; num_alleles]));
         for (i, g) in vc.get_genotypes().genotypes().iter().enumerate() {
-            if !g.has_likelihoods() {
+            if !g.genotype_usable_for_af_calculation() {
                 continue;
             }
             let mut gl_calc =
@@ -432,10 +429,11 @@ impl AlleleFrequencyCalculator {
             );
 
             for genotype_index in (0..gl_calc.genotype_count as usize).into_iter() {
+                let log10_result = &log10_result;
                 gl_calc
                     .genotype_allele_counts_at(genotype_index)
                     .for_each_allele_index_and_count(|allele_index: usize, count: usize| {
-                        let mut log10_result = log10_result.lock().unwrap();
+                        let mut log10_result = log10_result.borrow_mut();
                         log10_result[allele_index] = MathUtils::log10_sum_log10_two_values(
                             log10_result[allele_index],
                             log10_genotype_posteriors[genotype_index] + (count as f64).log10(),
@@ -444,7 +442,7 @@ impl AlleleFrequencyCalculator {
             }
         }
 
-        let mut log10_result = log10_result.lock().unwrap();
+        let mut log10_result = log10_result.borrow_mut();
         log10_result.iter_mut().for_each(|x| *x = (10.0).powf(*x));
 
         return log10_result.to_vec();

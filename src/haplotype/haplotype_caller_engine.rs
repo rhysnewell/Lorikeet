@@ -11,7 +11,7 @@ use clap::ArgMatches;
 use coverm::bam_generator::*;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
-use genotype::genotype_builder::Genotype;
+use genotype::genotype_builder::{Genotype, GenotypesContext};
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use genotype::genotyping_engine::GenotypingEngine;
 use haplotype::haplotype::Haplotype;
@@ -348,7 +348,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                     })
             });
 
-        let chunk_size = 1000000;
+        let chunk_size = 100000;
         let contexts = tids.into_par_iter().flat_map(|tid| {
             let target_length = reference_reader.target_lens[&tid];
             let mut reference_reader = reference_reader.clone();
@@ -574,55 +574,56 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                 for p in pileups {
                                     let pileup = p.unwrap();
-                                    let pos = pileup.pos() as usize - 1;
+                                    let pos = pileup.pos() as usize;
 
                                     // overlapping reads in the fetched region might
                                     // get counted twice. So check that this position
                                     // is within the chunk
-                                    if pos < outer_chunk_location.start + chunk_multiplier || pos >= min(
-                                        outer_chunk_location.start + chunk_multiplier + chunk_size,
-                                        target_len as usize
-                                    ) {
-                                        continue
-                                    }
+                                    // if pos < outer_chunk_location.start + chunk_multiplier || pos >= min(
+                                    //     outer_chunk_location.start + chunk_multiplier + chunk_size,
+                                    //     target_len as usize
+                                    // ) {
+                                    //     continue
+                                    // }
                                     let (hq_soft_clips, result) = &mut positions[pos
                                         .saturating_sub(
                                             min(outer_chunk_location.start + chunk_multiplier,
                                                 target_len as usize))];
-
+                                    // let mut read_counter = 0;
                                     let refr_base = reference_reader.current_sequence[pos];
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
-                                        // if (!flag_filters.include_secondary
-                                        //     && record.is_secondary())
-                                        //     || (readtype == ReadType::Short
-                                        //     && !record.is_proper_pair()
-                                        //     && !flag_filters.include_improper_pairs)
-                                        //     || record.is_unmapped()
-                                        //     || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                        //     || record.is_quality_check_failed()
-                                        //     || record.is_duplicate()
-                                        //     || record.mapq() < 10
-                                        // {
-                                        //     continue;
-                                        // } else if !flag_filters.include_secondary
-                                        //     && record.is_secondary()
-                                        //     && readtype == ReadType::Long
-                                        // {
-                                        //     continue;
-                                        // } else {
-                                        HaplotypeCallerEngine::alignment_context_creation(
-                                            &alignment,
-                                            *result,
-                                            *hq_soft_clips,
-                                            log10ploidy,
-                                            likelihoodcount,
-                                            refr_base,
-                                            bq,
-                                        )
-                                        // }
+                                        if (!flag_filters.include_secondary
+                                            && record.is_secondary())
+                                            || (readtype == ReadType::Short
+                                            && !record.is_proper_pair()
+                                            && !flag_filters.include_improper_pairs)
+                                            || record.is_unmapped()
+                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                            || record.is_quality_check_failed()
+                                            || record.is_duplicate()
+                                            || record.mapq() < 10
+                                        {
+                                            continue;
+                                        } else if !flag_filters.include_secondary
+                                            && record.is_secondary()
+                                            && readtype == ReadType::Long
+                                        {
+                                            continue;
+                                        } else {
+                                            HaplotypeCallerEngine::alignment_context_creation(
+                                                &alignment,
+                                                *result,
+                                                *hq_soft_clips,
+                                                log10ploidy,
+                                                likelihoodcount,
+                                                refr_base,
+                                                bq,
+                                            );
+                                        }
+                                        // read_counter += 1;
                                     }
-
+                                    // debug!("read counter {} result {} denominator {}", read_counter, result.read_counts, result.read_counts as f64 * log10ploidy);
                                     let denominator = result.read_counts as f64 * log10ploidy;
                                     for i in 0..likelihoodcount {
                                         result.genotype_likelihoods[i] -= denominator
@@ -940,37 +941,38 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                                     for alignment in pileup.alignments() {
                                                         let record = alignment.record();
-                                                        // if (!flag_filters.include_secondary
-                                                        //     && record.is_secondary())
-                                                        //     || (readtype == ReadType::Short
-                                                        //     && !record.is_proper_pair()
-                                                        //     && !flag_filters.include_improper_pairs)
-                                                        //     || record.is_unmapped()
-                                                        //     || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                                        //     || record.is_quality_check_failed()
-                                                        //     || record.is_duplicate()
-                                                        //     || record.mapq() < 10
-                                                        // {
-                                                        //     continue;
-                                                        // } else if !flag_filters.include_secondary
-                                                        //     && record.is_secondary()
-                                                        //     && readtype == ReadType::Long
-                                                        // {
-                                                        //     continue;
-                                                        // } else {
-                                                        HaplotypeCallerEngine::alignment_context_creation(
-                                                            &alignment,
-                                                            *result,
-                                                            *hq_soft_clips,
-                                                            log10ploidy,
-                                                            likelihoodcount,
-                                                            refr_base,
-                                                            bq,
-                                                        )
-                                                        // }
+                                                        if (!flag_filters.include_secondary
+                                                            && record.is_secondary())
+                                                            || (readtype == ReadType::Short
+                                                            && !record.is_proper_pair()
+                                                            && !flag_filters.include_improper_pairs)
+                                                            || record.is_unmapped()
+                                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
+                                                            || record.is_quality_check_failed()
+                                                            || record.is_duplicate()
+                                                            || record.mapq() < 10
+                                                        {
+                                                            continue;
+                                                        } else if !flag_filters.include_secondary
+                                                            && record.is_secondary()
+                                                            && readtype == ReadType::Long
+                                                        {
+                                                            continue;
+                                                        } else {
+                                                            HaplotypeCallerEngine::alignment_context_creation(
+                                                                &alignment,
+                                                                *result,
+                                                                *hq_soft_clips,
+                                                                log10ploidy,
+                                                                likelihoodcount,
+                                                                refr_base,
+                                                                bq
+                                                            )
+                                                        }
                                                     }
 
                                                     let denominator = result.read_counts as f64 * log10ploidy;
+
                                                     for i in 0..likelihoodcount {
                                                         result.genotype_likelihoods[i] -= denominator
                                                     }
@@ -1009,7 +1011,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         sample_names: &[String],
         min_contig_length: u64,
     ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
-        if genotype_likelihoods.len() == 1 {
+        if genotype_likelihoods.len() == 0 { // don't use this, it seems slower?
             // Faster implementation for single sample analysis
             let per_contig_activity_profiles: HashMap<usize, Vec<BandPassActivityProfile>> =
                 genotype_likelihoods.into_iter().next().unwrap()
@@ -1037,7 +1039,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                         &ref_vs_any_result.genotype_likelihoods,
                                         true,
                                     );
-
                                 let per_base_hq_soft_clips =
                                     per_contig_per_base_hq_soft_clips.get(&tid).unwrap();
 
@@ -1077,7 +1078,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
 
                     let activity_profile =
-                        (0..(*length as usize)).into_par_iter().chunks(100000).map(|positions| {
+                        (0..(*length as usize)).into_par_iter().chunks(25000).map(|positions| {
                             let mut active_region_evaluation_genotyper_engine =
                                 self.active_region_evaluation_genotyper_engine.clone();
                             let mut activity_profile = BandPassActivityProfile::new(
@@ -1097,6 +1098,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                 for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
                                     let result = sample_likelihoods[tid][pos].genotype_likelihoods.clone();
+
                                     genotypes.push(Genotype::build(
                                         ploidy,
                                         result,
@@ -1566,14 +1568,18 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let qpos = alignment.qpos();
         let record_qual = if alignment.is_del() || alignment.is_refskip() { Self::REF_MODEL_DELETION_QUAL } else { record.qual()[qpos.unwrap()] };
         let mut is_alt = false;
+
         if record_qual >= bq || alignment.is_del() {
+            result.read_counts += 1;
+
             is_alt = Self::is_alt(
                 alignment,
                 &record,
                 &qpos,
                 refr_base,
-                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
             );
+
             if is_alt {
                 result.non_ref_depth += 1;
                 non_ref_likelihood = QualityUtils::qual_to_prob_log10(record_qual);
@@ -1602,11 +1608,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 qpos.unwrap(),
                 Some(hq_soft_clips),
                 false,
-                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
             );
         }
-        result.read_counts += 1;
-
     }
 
     /// Determine whether a pileup alignment is considered alternative
@@ -1635,7 +1639,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                     *qpos,
                     None,
                     true,
-                    min_soft_clip_qual
+                    min_soft_clip_qual,
                 );
 
                 if read_char != refr_base || next_to_sc_indel {
@@ -1665,49 +1669,88 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let mut read_cursor = 0;
         let mut next_to_soft_clip = false;
         // let cigar = &record.cigar().0;
+
         for cig in record.cigar().iter() {
             // Cigar immediately before current position in read
-            if qpos as i32 == read_cursor - 1
-                || qpos as i32 == read_cursor + 1
-                || qpos as i32 == read_cursor {
-                // debug!("Adjacent {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
+            if read_cursor < qpos as i32 {
+                // Progress the cigar cursor
+                if CigarUtils::cigar_consumes_read_bases(cig) {
+                    read_cursor += cig.len() as i32;
+                }
 
-                match cig {
-                    Cigar::SoftClip(_) => {
-                        next_to_soft_clip = true;
-                        if let Some(ref mut hq_soft_clips) = hq_soft_clips {
-                            hq_soft_clips.add(
-                                HaplotypeCallerEngine::count_high_quality_soft_clips(
-                                    &cig,
-                                    &record,
-                                    read_cursor as usize,
-                                    min_soft_clip_qual,
-                                ),
-                            )
-                        }
-                    },
-                    Cigar::Ins(_) | Cigar::Del(_) => {
-                        if check_indels {
-                            next_to_soft_clip = true
-                        }
-                    },
-                    _ => {
-                        // Not a soft clip
+                // check immediately against current cigar
+                // catches [Soft(25), Match(N)] where qpos == 25
+                if qpos as i32 == read_cursor - 1
+                    || qpos as i32 == read_cursor + 1
+                    || qpos as i32 == read_cursor {
+                    // debug!("Adjacent {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
+                    next_to_soft_clip = Self::check_position_against_cigar(
+                        &mut hq_soft_clips,
+                        record,
+                        cig,
+                        read_cursor,
+                        min_soft_clip_qual,
+                        check_indels,
+                    );
+
+                    if next_to_soft_clip {
+                        break
                     }
                 }
-                // break
-            } else if read_cursor > qpos as i32 {
-                // debug!("Breaking {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
-                // break out of loop since we have passed
-                // the position
+            } else if read_cursor >= qpos as i32 {
+                // should catch events after current position
+                if qpos as i32 == read_cursor - 1
+                    || qpos as i32 == read_cursor + 1
+                    || qpos as i32 == read_cursor {
+                    // debug!("Adjacent {} {} {:?} {:?}", qpos, read_cursor, cig, record.cigar());
+                    next_to_soft_clip = Self::check_position_against_cigar(
+                        &mut hq_soft_clips,
+                        record,
+                        cig,
+                        read_cursor,
+                        min_soft_clip_qual,
+                        check_indels,
+                    )
+                }
                 break;
             }
+        }
 
-            // Progress the cigar cursor
-            if CigarUtils::cigar_consumes_read_bases(cig) {
-                read_cursor += cig.len() as i32;
+        return next_to_soft_clip
+    }
+
+    fn check_position_against_cigar(
+        hq_soft_clips: &mut Option<&mut RunningAverage>,
+        record: &Record,
+        cig: &Cigar,
+        read_cursor: i32,
+        min_soft_clip_qual: u8,
+        check_indels: bool,
+    ) -> bool {
+        let mut next_to_soft_clip = false;
+        match cig {
+            Cigar::SoftClip(_) => {
+                next_to_soft_clip = true;
+                if let Some(ref mut hq_soft_clips) = hq_soft_clips {
+                    hq_soft_clips.add(
+                        HaplotypeCallerEngine::count_high_quality_soft_clips(
+                            &cig,
+                            &record,
+                            read_cursor as usize - cig.len() as usize,
+                            min_soft_clip_qual,
+                        ),
+                    )
+                }
+            },
+            Cigar::Ins(_) | Cigar::Del(_) => {
+                if check_indels {
+
+                    next_to_soft_clip = true
+                }
+            },
+            _ => {
+                // Not a soft clip
             }
-
         }
         return next_to_soft_clip
     }

@@ -122,6 +122,7 @@ impl GenotypingEngine {
         //Calculate the expected total length of the PL arrays for this VC to warn the user in the case that they will be exceptionally large
         let max_pl_length =
             GenotypeLikelihoods::calc_num_likelihoods(reduced_vc.get_n_alleles(), ploidy);
+        // println!("Max pl length {}", max_pl_length);
 
         if max_pl_length >= GenotypingEngine::TOO_LONG_PL as i64 {
             warn!("Length of PL arrays for this Variant Context \
@@ -143,6 +144,7 @@ impl GenotypingEngine {
         };
 
         // Add 0.0 removes -0.0 occurrences.
+        // println!("{}", log10_confidence);
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
         // return a None if we don't pass the confidence cutoff or the most likely allele frequency is zero

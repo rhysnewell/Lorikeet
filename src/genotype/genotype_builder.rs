@@ -1,5 +1,5 @@
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
-use model::byte_array_allele::ByteArrayAllele;
+use model::byte_array_allele::{ByteArrayAllele, Allele};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -211,6 +211,10 @@ impl Genotype {
 
     pub fn has_likelihoods(&self) -> bool {
         !self.pl.is_empty()
+    }
+
+    pub fn genotype_usable_for_af_calculation(&self) -> bool {
+        self.has_likelihoods() || self.has_gq() || self.alleles.iter().any(|a| a.is_called() && !a.is_ref && !a.is_symbolic)
     }
 
     pub fn pl(&mut self, pl: Vec<i64>) {
@@ -466,7 +470,7 @@ impl GenotypesContext {
     }
 
     pub fn get_dp(&self) -> i64 {
-        self.genotypes[0].dp
+        self.genotypes.iter().map(|g| g.dp).sum()
     }
 
     pub fn get_max_ploidy(&mut self, default_ploidy: usize) -> i32 {

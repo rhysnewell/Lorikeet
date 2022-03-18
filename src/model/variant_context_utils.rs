@@ -526,18 +526,22 @@ impl VariantContextUtils {
     /// Takes a set of variant contexts and filters them by their Qual By Depth value. If a variant
     /// context contains 2 or more alternate alleles, then that context is split up into multiple
     /// contexts. One for each alternate allele.
+    /// Returns the split VCs and the filtered VCs in separate vectors as a tuple
     pub fn split_contexts(
-        vcs: Vec<VariantContext>,
+        mut vcs: Vec<VariantContext>,
         min_qual_by_depth: f64,
         min_variant_depth: i64,
-    ) -> Vec<VariantContext> {
+    ) -> (Vec<VariantContext>, Vec<VariantContext>) {
         let mut split_vcs = Vec::new();
-        for vc in vcs {
-            match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()) {
+        let mut filtered_vcs = Vec::new();
+        for mut vc in vcs {
+            match vc.attributes.get(VariantAnnotations::QualByDepth.to_key()).clone() {
                 Some(qbd) => {
                     if let &AttributeObject::f64(qbd) = qbd {
                         // Filter by qbd value
-                        if qbd >= min_qual_by_depth && vc.log10_p_error <= -10.0 {
+                        let result = qbd >= min_qual_by_depth && vc.log10_p_error <= -15.0;
+                        vc.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                        if qbd >= min_qual_by_depth && vc.log10_p_error <= -15.0 {
                             let n_alts = vc.get_alternate_alleles().len();
                             if n_alts == 1 {
                                 let depth_sum: i64 =
@@ -623,14 +627,18 @@ impl VariantContextUtils {
 
                                 split_vcs.extend(new_vcs);
                             }
+                        } else {
+                            filtered_vcs.push(vc);
                         }
                     }
                 }
-                None => continue,
+                None => {
+                    filtered_vcs.push(vc)
+                },
             }
         }
 
-        return split_vcs;
+        return (split_vcs, filtered_vcs);
     }
 
     pub fn strip_pls_and_ad(genotypes: &mut GenotypesContext) {

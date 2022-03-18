@@ -121,12 +121,7 @@ impl VariantAnnotations {
                         return AttributeObject::None;
                     }
                     AnnotationType::Info => {
-                        if likelihoods.evidence_count() == 0 {
-                            return AttributeObject::None;
-                        } else {
-                            let depth = likelihoods.evidence_count();
-                            return AttributeObject::UnsizedInteger(depth);
-                        }
+                        return AttributeObject::UnsizedInteger(vc.genotypes.get_dp() as usize);
                     }
                 }
             }

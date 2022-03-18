@@ -361,7 +361,7 @@ impl<'a> LorikeetEngine<'a> {
                         // If a variant context contains more than one allele, we need to split
                         // this context into n different contexts, where n is number of variant
                         // alleles
-                        let mut split_contexts = VariantContextUtils::split_contexts(
+                        let (mut split_contexts, filtered_contexts) = VariantContextUtils::split_contexts(
                             contexts,
                             qual_by_depth_filter,
                             self.args
@@ -419,7 +419,7 @@ impl<'a> LorikeetEngine<'a> {
                                 &cleaned_sample_names,
                             );
 
-                            let (mut strain_ids_present, split_contexts) =
+                            let (mut strain_ids_present, mut split_contexts) =
                                 abundance_calculator_engine.run_abundance_calculator(
                                     n_strains,
                                     cleaned_sample_names.len(),
@@ -433,6 +433,8 @@ impl<'a> LorikeetEngine<'a> {
                                         format!("{}: Generating VCF file...", &reference,),
                                     );
                             }
+
+                            let mut all_contexts = split_contexts.extend(filtered_contexts);
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
                                 &split_contexts,
@@ -459,6 +461,14 @@ impl<'a> LorikeetEngine<'a> {
                                 },
                             );
                         } else {
+                            let mut all_contexts = split_contexts.extend(filtered_contexts);
+                            assembly_engine.evaluator.write_vcf(
+                                &output_prefix,
+                                &split_contexts,
+                                &cleaned_sample_names,
+                                &reference_reader,
+                                true,
+                            );
                             // Write genotypes to disk, reference specific
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];

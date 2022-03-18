@@ -352,7 +352,7 @@ impl HaplotypeCallerGenotypingEngine {
                                 .iter()
                                 .map(|g| g.dp - g.ad[0])
                                 .sum::<i64>()
-                                >= 0
+                                >= 2
                             {
                                 // at least two supporting reads
                                 debug!(">= 2 supporting reads");

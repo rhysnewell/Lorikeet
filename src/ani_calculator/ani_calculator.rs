@@ -102,13 +102,13 @@ impl ANICalculator {
                 Some(attribute) => {
                     match attribute {
                         AttributeObject::f64(val) => {
-                            let result = val >= qual_by_depth_filter;
+                            let result = val >= qual_by_depth_filter && context.log10_p_error <= -15.0;
                             context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                             result
                         },
                         _ => {
                             if context.has_log10_p_error() {
-                                let result = context.log10_p_error <= -10.0;
+                                let result = context.log10_p_error <= -15.0;
                                 context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                                 result
                             } else {
@@ -120,7 +120,7 @@ impl ANICalculator {
                 },
                 None => {
                     if context.has_log10_p_error() {
-                        let result = context.log10_p_error <= -10.0;
+                        let result = context.log10_p_error <= -15.0;
                         context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                         result
                     } else {
@@ -141,7 +141,7 @@ impl ANICalculator {
                         );
                         // which alleles are present in first sample
                         let mut which_are_present =
-                            context.alleles_present_in_sample(sample_idx_1, 1);
+                            context.alleles_present_in_sample(sample_idx_1, 2);
 
                         present_alleles.push(which_are_present);
                     }
@@ -160,7 +160,7 @@ impl ANICalculator {
                             );
                             // which alleles are present in first sample with at least two supporting reads
                             let mut which_are_present =
-                                context.alleles_present_in_sample(sample_idx_2, 1);
+                                context.alleles_present_in_sample(sample_idx_2, 2);
                             present_alleles.push(which_are_present);
                         }
 

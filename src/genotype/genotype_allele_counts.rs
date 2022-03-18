@@ -193,7 +193,7 @@ impl GenotypeAlleleCounts {
 
     pub fn for_each_allele_index_and_count<F>(&self, f: F)
     where
-        F: Fn(usize, usize) + Sync,
+        F: Fn(usize, usize),
     {
         (0..self.distinct_allele_count).into_iter().for_each(|n| {
             f(
