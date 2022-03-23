@@ -168,7 +168,7 @@ fn assemble(
         AssemblyRegion::new(loc.clone(), true, 0, contig_len, loc.get_contig(), 0);
     active_region.add_all(reads);
     let samples = vec!["sample_1".to_string()];
-    let assembly_result_set = assembler.run_local_assembly(
+    let assembly_result_set = assembler.run_local_assembly::<NearbyKmerErrorCorrector>(
         active_region,
         ref_haplotype,
         ref_bases.to_vec(),
@@ -274,7 +274,7 @@ fn test_assemble_ref_and_insertion(
     let contig_len = seq.index.sequences()[0].len as usize;
     let mut ref_bases = Vec::new();
     seq.read(&mut ref_bases);
-
+    println!("Ref bases {}", ref_bases.len());
     for insertion_length in 1..10 {
         let ref_base = ByteArrayAllele::new(&ref_bases[variant_site..=variant_site], true);
         let alt_base = ByteArrayAllele::new(
