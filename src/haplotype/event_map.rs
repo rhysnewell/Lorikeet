@@ -340,6 +340,7 @@ impl EventMap {
 
         b.get_type();
         b.alleles = vec![reference, alt];
+
         return b;
     }
 
@@ -358,16 +359,17 @@ impl EventMap {
      *                       at 10-12, a MNP at 14-15, and a SNP at 17.  May not be negative.
      * @return a sorted set of start positions of all events among all haplotypes
      */
-    pub fn build_event_maps_for_haplotypes<L: Locatable>(
-        haplotypes: &mut Vec<Haplotype<L>>,
+    pub fn build_event_maps_for_haplotypes<'a, L: 'a + Locatable, I>(
+        haplotypes: I,
         reference: &[u8],
         ref_loc: &SimpleInterval,
         max_mnp_distance: usize,
-    ) -> Result<BTreeSet<usize>, BirdToolError> {
+    ) -> Result<BTreeSet<usize>, BirdToolError>
+    where I: IntoIterator<Item = &'a mut Haplotype<L>>{
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let mut hap_number = 0;
         debug!("=== Best Haplotypes ===");
-
+        // let debug = ref_loc.get_start() <= 1102345 && ref_loc.get_end() >= 1102335;
         let mut start_pos_key_set = BTreeSet::new();
         for h in haplotypes.into_iter() {
             // Walk along the alignment and turn any difference from the reference into an event

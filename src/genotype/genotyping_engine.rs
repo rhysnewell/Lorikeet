@@ -144,7 +144,9 @@ impl GenotypingEngine {
         };
 
         // Add 0.0 removes -0.0 occurrences.
-        // println!("{}", log10_confidence);
+        // if log10_confidence.is_finite() {
+        //     println!("pos {} log10 {} phred {}", vc.loc.start, log10_confidence, (-10.0 * log10_confidence) + 0.0);
+        // }
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
         // return a None if we don't pass the confidence cutoff or the most likely allele frequency is zero

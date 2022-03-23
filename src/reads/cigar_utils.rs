@@ -25,6 +25,80 @@ lazy_static! {
 pub struct CigarUtils {}
 
 impl CigarUtils {
+
+    pub fn is_valid(cigar: &CigarString) -> bool {
+        if cigar.0.is_empty() {
+            return true
+        } else {
+            let mut seen_real_operator = false;
+            for (i, cig) in cigar.0.iter().enumerate() {
+                if cig.len() == 0 {
+                    // can't have cigar operator of length 0
+                    return false
+                }
+
+                if Self::is_clipping(cig) {
+                    if Self::cigar_is_hard_clip(cig) && (i != 0 && i != cigar.0.len() - 1){
+                        return false
+                    } else if i != 0 && i != cigar.0.len() - 1 {
+                        if i == 1 {
+                            if cigar.0.len() != 3
+                                || (!Self::cigar_is_hard_clip(&cigar.0[0])
+                                && !Self::cigar_is_hard_clip(&cigar.0[2])) {
+                                // Soft Clip CIGAR can only be inside of hard clipping operator
+                                // if not at start or end of cigar
+                                return false
+                            }
+                        } else if i == cigar.0.len() - 2 {
+                            if !Self::cigar_is_hard_clip(&cigar.0[cigar.0.len() - 1]) {
+                                return false
+                            }
+                        } else {
+                            return false
+                        }
+                    }
+                } else if Self::is_real_operator(cig) {
+                    seen_real_operator = true;
+                } else if Self::is_padding_operator(cig) && i != 0 {
+                    if i == cigar.0.len() - 1 {
+                        // padding operator not valid at end of cigar
+                        return false
+                    } else if !Self::is_real_operator(&cigar.0[i - 1])
+                        || !Self::is_real_operator(&cigar.0[i + 1]) {
+                        // padding operator not between real operators
+                        return false
+                    }
+                }
+            }
+
+            if !seen_real_operator {
+                // no real operators (M|I|D|N|X|=)
+                return false
+            }
+        }
+        return true
+    }
+
+    pub fn is_padding_operator(cig: &Cigar) -> bool {
+        match cig {
+            Cigar::Pad(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_real_operator(cig: &Cigar) -> bool {
+        match cig {
+            Cigar::Match(_)
+            | Cigar::Equal(_)
+            | Cigar::Diff(_)
+            | Cigar::Ins(_)
+            | Cigar::Del(_)
+            | Cigar::RefSkip(_) => true,
+            _ => false,
+        }
+    }
+
+
     pub fn cigar_consumes_read_bases(cig: &Cigar) -> bool {
         // Consumes read bases
         match cig {
@@ -53,6 +127,13 @@ impl CigarUtils {
         match cig {
             Cigar::SoftClip(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn cigar_is_hard_clip(cig: &Cigar) -> bool {
+        match cig {
+            Cigar::HardClip(_) => true,
+            _ => false
         }
     }
 
@@ -619,7 +700,7 @@ impl CigarUtils {
     /**
      * Checks if cigar starts with a deletion (ignoring any clips at the beginning).
      */
-    fn starts_or_ends_with_deletion_ignoring_clips(elems: &Vec<Cigar>) -> bool {
+    pub fn starts_or_ends_with_deletion_ignoring_clips(elems: &Vec<Cigar>) -> bool {
         for left_side in &[true, false] {
             if *left_side {
                 for elem in elems.iter() {

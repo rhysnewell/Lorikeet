@@ -27,6 +27,7 @@ use external_command_checker::{check_for_svim, check_for_bcftools};
 use bird_tool_utils::command::finish_command_safely;
 use std::process::{Command, Stdio};
 use num::Saturating;
+use rust_htslib::bcf::Read;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -339,6 +340,7 @@ impl<'a> LorikeetEngine<'a> {
                             reference,
                             genome_size,
                             qual_by_depth_filter,
+                            -15.0
                         );
 
                         {
@@ -379,7 +381,8 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             reference,
                             genome_size,
-                            qual_by_depth_filter
+                            qual_by_depth_filter,
+                            -15.0
                         );
 
                         if split_contexts.len() >= 1 {
@@ -490,7 +493,8 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             reference,
                             genome_size,
-                            qual_by_depth_filter
+                            qual_by_depth_filter,
+                            -15.0
                         );
                         // Get sample distances
                         {
@@ -878,4 +882,37 @@ pub fn start_lorikeet_engine<
 
         lorikeet_engine.apply_per_reference();
     }
+}
+
+pub fn run_summarize(args: &clap::ArgMatches) {
+    let vcf_files = args.values_of("vcfs").unwrap().collect::<Vec<&str>>();
+    let qual_by_depth_filter = args.value_of("qual-by-depth-filter").unwrap().parse().unwrap();
+    vcf_files.into_iter().for_each(|vcf_path| {
+        let mut reader = rust_htslib::bcf::Reader::from_path(vcf_path).unwrap();
+        let header = reader.header();
+        let mut variant_contexts = VariantContext::process_vcf_from_path(vcf_path, true);
+        let samples: Vec<&str> = header.samples().into_iter().map(|s| std::str::from_utf8(s).unwrap()).collect::<Vec<&str>>();
+
+        let genome_size: u64 = header.header_records().into_iter().map(|h_record| {
+            match h_record {
+                rust_htslib::bcf::header::HeaderRecord::Contig { key, values } => {
+                    let size = values.get("length").unwrap();
+                    let size: u64 = size.parse().unwrap();
+                    size
+                },
+                _ => 0,
+            }
+        }).sum();
+        // calculate ANI statistics
+        let mut ani_calculator = ANICalculator::new(variant_contexts[0].genotypes.len());
+        ani_calculator.run_calculator(
+            &mut variant_contexts,
+            args.value_of("output").unwrap(),
+            samples.as_slice(),
+            Path::new(vcf_path).file_stem().unwrap().to_str().unwrap(),
+            genome_size,
+            qual_by_depth_filter,
+            args.value_of("qual-threshold").unwrap().parse::<f64>().unwrap() / -10.0
+        );
+    })
 }

@@ -3,6 +3,10 @@ use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
 use utils::simple_interval::Locatable;
+use rust_htslib::bam::Record;
+use coverm::FlagFilter;
+use processing::lorikeet_engine::ReadType;
+use std::ops::Deref;
 
 pub struct ReadUtils {}
 
@@ -14,6 +18,30 @@ impl ReadUtils {
      * none are provided for this read.
      */
     pub const DEFAULT_INSERTION_DELETION_QUAL: u8 = 45;
+
+    pub fn read_is_filtered(record: &Record, flag_filters: &FlagFilter, mapq_threshold: u8, readtype: ReadType) -> bool {
+        let cigar = record.cigar();
+
+        (!flag_filters.include_secondary
+            && record.is_secondary())
+            || (readtype == ReadType::Short
+            && !flag_filters.include_supplementary
+            && record.is_supplementary())
+            || (readtype == ReadType::Short
+            && !record.is_proper_pair()
+            && !flag_filters.include_improper_pairs)
+            || record.is_unmapped()
+            || CigarUtils::get_reference_length(cigar.deref()) == 0
+            || record.is_quality_check_failed()
+            || record.is_duplicate()
+            || record.mapq() < mapq_threshold
+            || record.seq_len() as usize != record.qual().len()
+            || record.seq_len() as u32 != CigarUtils::get_read_length(cigar.deref())
+            || cigar.0.iter().any(|c| CigarUtils::cigar_elements_are_same_type(c, &Some(Cigar::RefSkip(0))))
+            || CigarUtils::has_consecutive_indels(&record.cigar().0)
+            || !CigarUtils::is_valid(cigar.deref())
+            || CigarUtils::starts_or_ends_with_deletion_ignoring_clips(&cigar.0)
+    }
 
     /**
      * Find the 0-based index within a read base array corresponding to a given 0-based position in the reference, along with the cigar operator of

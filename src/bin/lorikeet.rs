@@ -31,7 +31,7 @@ extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
-use lorikeet_genome::processing::lorikeet_engine::{start_lorikeet_engine, ReadType};
+use lorikeet_genome::processing::lorikeet_engine::{start_lorikeet_engine, ReadType, run_summarize};
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 
 fn main() {
@@ -40,15 +40,15 @@ fn main() {
     set_log_level(&matches, false);
 
     match matches.subcommand_name() {
-        // Some("summarize") => {
-        //     let m = matches.subcommand_matches("summarize").unwrap();
-        //     let mode = "summarize";
-        //     if m.is_present("full-help") {
-        //         println!("{}", summarize_full_help());
-        //         process::exit(1);
-        //     }
-        //     prepare_pileup(m, mode);
-        // }
+        Some("summarize") => {
+            let m = matches.subcommand_matches("summarize").unwrap();
+
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(m.value_of("threads").unwrap().parse().unwrap())
+                .build_global()
+                .unwrap();
+            run_summarize(m);
+        }
         Some("genotype") => {
             let m = matches.subcommand_matches("genotype").unwrap();
             let mode = "genotype";

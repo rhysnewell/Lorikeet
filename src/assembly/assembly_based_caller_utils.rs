@@ -101,6 +101,7 @@ impl AssemblyBasedCallerUtils {
         correct_overlapping_base_qualities: bool,
         soft_clip_low_quality_ends: bool,
     ) {
+        let debug = region.get_start() <= 1102345 && region.get_end() >= 1102335;
         if !region.is_finalized() {
             let min_tail_quality_to_use = if error_correct_reads {
                 HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION as u8
@@ -254,6 +255,7 @@ impl AssemblyBasedCallerUtils {
         correct_overlapping_base_qualities: bool,
         sample_names: &[String],
     ) -> AssemblyResultSet<ReadThreadingGraph> {
+        let debug = region.get_start() <= 1102345 && region.get_end() >= 1102335;
         Self::finalize_regions(
             &mut region,
             args.is_present("error-correct-reads"),
@@ -596,14 +598,18 @@ impl AssemblyBasedCallerUtils {
     ) -> Vec<&'b VariantContext> {
         let mut results = Vec::new();
         let mut unique_locations_and_alleles = HashSet::new();
-
         haplotypes
             .iter()
-            .flat_map(|h| h.event_map.as_ref().unwrap().get_overlapping_events(loc))
+            .flat_map(|h| {
+
+                let overlapping = h.event_map.as_ref().unwrap().get_overlapping_events(loc);
+                overlapping
+            })
             .filter(|v| (include_spanning_event || v.loc.get_start() == loc))
             .for_each(|v| {
                 let location_and_alleles =
                     LocationsAndAlleles::new(v.loc.get_start(), v.get_alleles());
+
                 if !unique_locations_and_alleles.contains(&location_and_alleles) {
                     unique_locations_and_alleles.insert(location_and_alleles);
                     results.push(&*v)

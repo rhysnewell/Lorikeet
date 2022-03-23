@@ -3043,5 +3043,40 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("force").long("force"))
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
                 .arg(Arg::with_name("quiet").long("quiet")),
+        )
+        .subcommand(
+            SubCommand::with_name("summarize")
+                .about("Summarizes ANI values of a given set of VCF files")
+                .arg(
+                    Arg::with_name("vcfs")
+                        .long("vcfs")
+                        .short("i")
+                        .takes_value(true)
+                        .multiple(true)
+                        .required(true)
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .long("output")
+                        .short("o")
+                        .default_value("./")
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .long("threads")
+                        .short("t")
+                        .default_value("8")
+                )
+                .arg(
+                    Arg::with_name("qual-by-depth-filter")
+                        .long("qual-by-depth-filter")
+                        .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("qual-threshold")
+                        .long("qual-threshold")
+                        .default_value("150")
+                )
+                .arg(Arg::with_name("verbose").short("v").long("verbose"))
         );
 }

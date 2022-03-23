@@ -9,8 +9,9 @@ use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use utils::simple_interval::SimpleInterval;
+use utils::simple_interval::{SimpleInterval, Locatable};
 use utils::errors::BirdToolError;
+use std::mem::swap;
 
 /**
  * Collection of read assembly using several kmerSizes.
@@ -281,11 +282,8 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
     }
 
     pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) -> Result<(), BirdToolError> {
-        let haplotype_list = self
-            .haplotypes
-            .iter()
-            .cloned()
-            .collect::<LinkedHashSet<Haplotype<SimpleInterval>>>();
+        let mut haplotype_list = LinkedHashSet::new();
+        swap(&mut self.haplotypes, &mut haplotype_list);
 
         let mut haplotype_list = haplotype_list.into_iter().collect::<Vec<Haplotype<SimpleInterval>>>();
 
@@ -303,6 +301,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         self.variation_events = self.get_all_variant_contexts(&haplotype_list);
         self.last_max_mnp_distance_used = Some(max_mnp_distance);
         self.variation_present = haplotype_list.iter().any(|h| !h.allele.is_ref);
+        self.haplotypes = haplotype_list.into_iter().collect::<LinkedHashSet<Haplotype<SimpleInterval>>>();
         Ok(())
     }
 
@@ -311,13 +310,14 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      * @param haplotypes the set of haplotypes to grab the VCs from
      * @return a sorted set of variant contexts
      */
-    fn get_all_variant_contexts(
+    fn get_all_variant_contexts<'a, I, L: 'a + Locatable>(
         &self,
-        haplotypes: &Vec<Haplotype<SimpleInterval>>,
-    ) -> BTreeSet<VariantContext> {
+        haplotypes: I,
+    ) -> BTreeSet<VariantContext>
+    where I: IntoIterator<Item = &'a Haplotype<L>>{
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let vcs = haplotypes
-            .iter()
+            .into_iter()
             .flat_map(|h| h.event_map.as_ref().unwrap().map.values().cloned())
             .collect::<BTreeSet<VariantContext>>();
 
@@ -372,9 +372,15 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             }
             match ass {
                 None => {
+                    if !trimmed.is_ref() {
+                        self.variation_present = true;
+                    }
                     new_haplotypes.insert(trimmed);
                 }
                 Some(ass) => {
+                    if !trimmed.is_ref() {
+                        self.variation_present = true;
+                    }
                     new_haplotypes.insert(trimmed.clone());
                     new_assembly_result_by_haplotype.insert(trimmed, *ass);
                 }
@@ -387,7 +393,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         self.assembly_result_by_haplotype.clear();
         self.haplotypes = new_haplotypes;
         self.assembly_result_by_haplotype = new_assembly_result_by_haplotype;
-        self.variation_present = self.haplotypes.iter().any(|hap| !hap.is_ref());
+        // self.variation_present = self.haplotypes.iter().any(|hap| !hap.is_ref());
 
         return self;
     }
@@ -411,7 +417,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         // trim down the haplotypes
         let sorted_original_by_trimmed_haplotypes =
             Self::trim_down_haplotypes(span, haplotype_list);
-
+        //TODO: Check these are sorted by size and bases
         return sorted_original_by_trimmed_haplotypes;
     }
 

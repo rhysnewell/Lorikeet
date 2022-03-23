@@ -1,8 +1,6 @@
 #![allow(
     non_upper_case_globals,
     unused_parens,
-    unused_mut,
-    unused_imports,
     non_snake_case,
     unused,
     non_camel_case_types

@@ -56,8 +56,9 @@ impl ANICalculator {
         reference_name: &str,
         genome_size: u64,
         qual_by_depth_filter: f64,
+        qual_threshold: f64
     ) {
-        self.calculate_from_contexts(contexts, genome_size, qual_by_depth_filter);
+        self.calculate_from_contexts(contexts, genome_size, qual_by_depth_filter, qual_threshold);
 
         Self::write_ani_tables(
             output_prefix,
@@ -89,7 +90,8 @@ impl ANICalculator {
         &mut self,
         contexts: &mut [VariantContext],
         genome_size: u64,
-        qual_by_depth_filter: f64
+        qual_by_depth_filter: f64,
+        qual_threshold: f64
     ) {
         let n_samples = self.conANI.ncols();
 
@@ -108,7 +110,7 @@ impl ANICalculator {
                         },
                         _ => {
                             if context.has_log10_p_error() {
-                                let result = context.log10_p_error <= -15.0;
+                                let result = context.log10_p_error <= qual_threshold;
                                 context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                                 result
                             } else {
@@ -120,7 +122,7 @@ impl ANICalculator {
                 },
                 None => {
                     if context.has_log10_p_error() {
-                        let result = context.log10_p_error <= -15.0;
+                        let result = context.log10_p_error <= qual_threshold;
                         context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                         result
                     } else {
@@ -130,6 +132,7 @@ impl ANICalculator {
                 }
             };
             if passes {
+                // println!("Context passes {} {}", context.log10_p_error, context.get_dp());
                 // don't consider poor quality variant sites
                 for sample_idx_1 in 0..n_samples {
                     if consenus_allele_indices.len() == sample_idx_1 {

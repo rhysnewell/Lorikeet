@@ -53,6 +53,7 @@ use num::traits::SaturatingSub;
 use reads::cigar_utils::CigarUtils;
 use std::ops::Deref;
 use rust_htslib::bam::pileup::Indel;
+use reads::read_utils::ReadUtils;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine<'c> {
@@ -519,7 +520,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
     ) {
 
         let likelihoodcount = ploidy + 1;
-        let log10ploidy = (likelihoodcount as f64).log10();
+        let log10ploidy = (ploidy as f64).log10();
         let chunk_size = 50000;
 
         // for each genomic position, only has hashmap when variants are present. Includes read ids
@@ -593,21 +594,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     let refr_base = reference_reader.current_sequence[pos];
                                     for alignment in pileup.alignments() {
                                         let record = alignment.record();
-                                        if (!flag_filters.include_secondary
-                                            && record.is_secondary())
-                                            || (readtype == ReadType::Short
-                                            && !record.is_proper_pair()
-                                            && !flag_filters.include_improper_pairs)
-                                            || record.is_unmapped()
-                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                            || record.is_quality_check_failed()
-                                            || record.is_duplicate()
-                                            || record.mapq() < 10
-                                        {
-                                            continue;
-                                        } else if !flag_filters.include_secondary
-                                            && record.is_secondary()
-                                            && readtype == ReadType::Long
+                                        if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
                                         {
                                             continue;
                                         } else {
@@ -619,6 +606,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                 likelihoodcount,
                                                 refr_base,
                                                 bq,
+                                                // false
                                             );
                                         }
                                         // read_counter += 1;
@@ -841,7 +829,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         }
 
         let likelihoodcount = ploidy + 1;
-        let log10ploidy = (likelihoodcount as f64).log10();
+        let log10ploidy = (ploidy as f64).log10();
         let mut genotype_likelihoods = HashMap::new();
         let chunk_size = 100000;
 
@@ -891,6 +879,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                             .into_iter()
                                             .next()
                                             .unwrap();
+
+                                        
                                         let mut bam_generated = bam_generator.start();
                                         bam_generated
                                             .fetch((
@@ -939,23 +929,10 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                                                     let refr_base = reference_reader.current_sequence[pos];
 
+
                                                     for alignment in pileup.alignments() {
                                                         let record = alignment.record();
-                                                        if (!flag_filters.include_secondary
-                                                            && record.is_secondary())
-                                                            || (readtype == ReadType::Short
-                                                            && !record.is_proper_pair()
-                                                            && !flag_filters.include_improper_pairs)
-                                                            || record.is_unmapped()
-                                                            || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                                            || record.is_quality_check_failed()
-                                                            || record.is_duplicate()
-                                                            || record.mapq() < 10
-                                                        {
-                                                            continue;
-                                                        } else if !flag_filters.include_secondary
-                                                            && record.is_secondary()
-                                                            && readtype == ReadType::Long
+                                                        if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
                                                         {
                                                             continue;
                                                         } else {
@@ -966,13 +943,18 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                                 log10ploidy,
                                                                 likelihoodcount,
                                                                 refr_base,
-                                                                bq
+                                                                bq,
+                                                                // pos == 36998
                                                             )
                                                         }
                                                     }
 
                                                     let denominator = result.read_counts as f64 * log10ploidy;
 
+                                                    // if pos % 100000 == 0 || (pos >= 36990 && pos <= 37400) {
+                                                    //     println!("Pos {} counts {} likelihood {:?} ref count {} non ref {} p depth {}",
+                                                    //              pos, result.read_counts, &result.genotype_likelihoods, result.ref_depth, result.non_ref_depth, pileup.depth());
+                                                    // }
                                                     for i in 0..likelihoodcount {
                                                         result.genotype_likelihoods[i] -= denominator
                                                     }
@@ -1127,6 +1109,10 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     }
                                     None => 0.0,
                                 };
+
+                                // if pos % 25000 == 0 || (pos >= 36990 && pos <= 37400) {
+                                //     println!("pos {} active {} ", pos, is_active_prob);
+                                // }
 
                                 let activity_profile_state = ActivityProfileState::new(
                                     SimpleInterval::new(*tid, pos, pos),
@@ -1311,6 +1297,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
+
         if given_alleles.is_empty() && region.len() == 0 {
             debug!("Region was of length 0");
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
@@ -1336,6 +1323,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 return self.reference_model_for_no_variation(&mut untrimmed_assembly_result.region_for_genotyping, true, &vc_priors)
             }
         };
+
         debug!("All variation events  {:?}", &all_variation_events);
 
         let mut trimming_result = self.assembly_region_trimmer.trim(
@@ -1365,6 +1353,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         debug!("Move complete!");
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
+
         debug!(
             "Assembly result allele order after region trimming {:?}",
             &assembly_result.haplotypes
@@ -1393,8 +1382,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
         //TODO - on the originalActiveRegion?
         //TODO - if you move this up you might have to consider to change referenceModelForNoVariation
         //TODO - that does also filter reads.
-        // let (mut assembly_result, filtered_reads) =
-        //     self.filter_non_passing_reads(assembly_result, flag_filters);
+        let (mut assembly_result, filtered_reads) =
+            self.filter_non_passing_reads(assembly_result, flag_filters);
         let filtered_reads = Vec::new();
         debug!(
             "Assembly result allele order after read filter {:?}",
@@ -1465,9 +1454,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let called_haplotypes = match self.genotyping_engine.assign_genotype_likelihoods(
             assembly_result
                 .haplotypes
-                .iter()
-                .cloned()
-                .collect::<LinkedHashSet<Haplotype<SimpleInterval>>>(),
+                .clone(),
             read_likelihoods,
             per_sample_filtered_read_list,
             assembly_result.full_reference_with_padding.as_slice(),
@@ -1511,9 +1498,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
             .filter(|r| {
                 if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
-                    || (!r.read.is_proper_pair()
-                        && r.read_type != ReadType::Long
-                        && !flag_filters.include_improper_pairs)
+                    || ((r.read.is_mate_unmapped() || r.read.tid() != r.read.mtid())
+                        && r.read_type != ReadType::Long)
                     || (!flag_filters.include_secondary && r.read.is_secondary())
                 {
                     debug!("Removing read {:?}", r);
@@ -1559,6 +1545,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         likelihoodcount: usize,
         refr_base: u8,
         bq: u8,
+        // debug: bool,
     ) {
         let ref_likelihood;
         let non_ref_likelihood;
@@ -1578,6 +1565,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 &qpos,
                 refr_base,
                 Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
+                // debug,
             );
 
             if is_alt {
@@ -1608,7 +1596,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 qpos.unwrap(),
                 Some(hq_soft_clips),
                 false,
-                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD
             );
         }
     }
@@ -1628,6 +1616,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         qpos: &Option<usize>,
         refr_base: u8,
         min_soft_clip_qual: u8,
+        // debug: bool
     ) -> bool {
         match qpos {
             Some(qpos) => {
@@ -1650,6 +1639,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
             },
             None => {
                 // is deletion or ref_skip
+
                 return true;
             }
         }

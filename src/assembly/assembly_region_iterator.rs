@@ -14,6 +14,7 @@ use rust_htslib::bam::Record;
 use reads::cigar_utils::CigarUtils;
 use std::ops::Deref;
 use reads::alignment_utils::AlignmentUtils;
+use reads::read_utils::ReadUtils;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -99,18 +100,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            if (!flag_filters.include_secondary
-                                && record.is_secondary())
-                                || (read_type == ReadType::Short
-                                && !record.is_proper_pair()
-                                && !flag_filters.include_improper_pairs)
-                                || (read_type == ReadType::Long
-                                && record.mapq() < min_mapq)
-                                || record.is_unmapped()
-                                || CigarUtils::get_reference_length(record.cigar().deref()) == 0
-                                || record.is_quality_check_failed()
-                                || record.is_duplicate()
-                                || record.mapq() < 10
+                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type)
                             // Check against filter flags and current sample type
                             {
                                 continue;

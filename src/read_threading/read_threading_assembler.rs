@@ -308,6 +308,7 @@ impl ReadThreadingAssembler {
         avx_mode: AVXMode,
     ) -> Vec<AssemblyResult<SimpleInterval, ReadThreadingGraph>> {
         // first, try using the requested kmer sizes
+
         let mut results = self
             .kmer_sizes
             .par_iter()
@@ -356,10 +357,7 @@ impl ReadThreadingAssembler {
                         // pass
                     }
                     Some(assembly_result) => {
-                        debug!(
-                            "Found assembly result (With increase) graph -> {:?}",
-                            assembly_result.graph.as_ref().unwrap().base_graph
-                        );
+
                         results.push(assembly_result);
                     }
                 };

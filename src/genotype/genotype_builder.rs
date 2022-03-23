@@ -116,6 +116,22 @@ impl Genotype {
         }
     }
 
+    pub fn build_from_ads(ad: Vec<i64>) -> Genotype {
+        let dp = ad.iter().sum();
+        Genotype {
+            ploidy: 2,
+            alleles: Vec::new(),
+            ad,
+            pl: Vec::new(),
+            dp,
+            gq: -1,
+            is_phased: false,
+            sample_name: "".to_string(),
+            attributes: HashMap::new(),
+            genotype_type: None
+        }
+    }
+
     pub fn build_from_likelihoods(
         default_ploidy: usize,
         likelihoods: GenotypeLikelihoods,
