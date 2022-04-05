@@ -242,37 +242,33 @@ impl VariantAnnotations {
             }
             Self::DepthPerAlleleBySample => {
                 let mut genotype = genotype.unwrap();
-                let alleles = likelihoods.get_allele_list().list.into_iter().collect::<LinkedHashSet<_>>();
-                debug!("Depth per allele alleles {:?}", &alleles);
-                alleles.iter().for_each(|a| {
-                    // type difference mean we can't check if this allele is in the array at this point
-                    assert!(
-                        likelihoods.alleles.contains_allele(a),
-                        "Likelihoods {:?} does not contain {:?}",
-                        likelihoods.alleles,
-                        a
-                    )
-                });
+                let alleles = vc.alleles.clone().into_iter().collect::<LinkedHashSet<_>>();
+                // debug!("Depth per allele alleles {:?}", &alleles);
+                // alleles.iter().for_each(|a| {
+                //     // type difference mean we can't check if this allele is in the array at this point
+                //     assert!(
+                //         likelihoods.alleles.contains_allele(a),
+                //         "Likelihoods {:?} does not contain {:?}",
+                //         likelihoods.alleles,
+                //         a
+                //     )
+                // });
                 if likelihoods.number_of_alleles() <= 1 {
                     return AttributeObject::None
                 }
                 let mut allele_counts = LinkedHashMap::new();
-                let mut subset = LinkedHashMap::new();
+                // let mut subset = LinkedHashMap::new();
                 for (allele_index, allele) in alleles.iter().enumerate() {
                     allele_counts.insert(allele_index, 0);
-                    subset.insert(allele_index, vec![allele]);
+                    // subset.insert(allele_index, vec![allele]);
                 }
-                debug!("Subset {:?}", &subset);
-                // let subsetted = likelihoods.marginalize(&subset);
-                let subsetted = likelihoods;
 
-
-                let sample_index = subsetted
+                let sample_index = likelihoods
                     .samples
                     .iter()
                     .position(|s| s == &genotype.sample_name)
                     .unwrap_or(0);
-                subsetted
+                likelihoods
                     .best_alleles_breaking_ties_for_sample(sample_index)
                     .into_iter()
                     .filter(|ba| ba.is_informative())

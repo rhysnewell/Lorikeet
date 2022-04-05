@@ -16,6 +16,7 @@ use test_utils::allele_list_unit_tester::AlleleListUnitTester;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use hashlink::LinkedHashSet;
+use annotator::variant_annotation::VariantAnnotations::AlleleCount;
 
 lazy_static! {
     pub static ref LOG_10_INFORMATIVE_THRESHOLD: f64 = 0.2;
@@ -623,18 +624,19 @@ impl<A: Allele> AlleleLikelihoods<A> {
      *  or its values contain reference to non-existing alleles in this evidence-likelihood collection. Also no new allele
      *  can have zero old alleles mapping nor two new alleles can make reference to the same old allele.
      */
-    pub fn marginalize<'b>(
+    pub fn marginalize<'b, B: Allele>(
         &self,
         new_to_old_allele_map: &'b LinkedHashMap<usize, Vec<&'b A>>,
-    ) -> Self {
-        let new_alleles = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
+        new_allele_list: AlleleList<B>
+    ) -> AlleleLikelihoods<B> {
+        let new_alleles_indices = new_to_old_allele_map.keys().collect::<Vec<&usize>>();
         let old_allele_count = self.alleles.len();
-        let new_allele_count = new_alleles.len();
+        let new_allele_count = new_alleles_indices.len();
 
         // we get the index correspondence between new old -> new allele, None entries mean that the old
         // allele does not map to any new; supported but typically not the case.
         let old_to_new_allele_index_map =
-            self.old_to_new_allele_index_map(new_to_old_allele_map, old_allele_count, new_alleles);
+            self.old_to_new_allele_index_map(new_to_old_allele_map, old_allele_count, new_alleles_indices);
         debug!("old to new allele map {:?}", &old_to_new_allele_index_map);
         // We calculate the marginal likelihoods.
         let new_likelihood_values = self.marginal_likelihoods(
@@ -646,28 +648,28 @@ impl<A: Allele> AlleleLikelihoods<A> {
         let sample_count = self.number_of_samples();
         debug!("new liklelihood values {:?}", &new_likelihood_values);
 
-        let new_allele_list = old_to_new_allele_index_map
-            .iter()
-            .filter(|i| {
-                i.is_some()
-            })
-            .map(|i| {
-                match self.alleles.get_allele(i.unwrap()) {
-                    Some(new_allele) => new_allele,
-                    None => panic!(
-                        "New allele {} not present: {:?} alleles {:?} old allele count {} new allele count {}",
-                        i.unwrap(),
-                        new_to_old_allele_map.iter().map(|(index, alleles)| (*index, alleles.len())).collect::<HashMap<usize, usize>>(),
-                        &self.alleles.len(),
-                        old_allele_count,
-                        new_allele_count
-                    )
-                }.clone()
-            })
-            .collect::<LinkedHashSet<A>>();
-        let new_allele_list = new_allele_list.into_iter().collect::<Vec<A>>();
-        let mut result = Self::new_from_likelihoods(
-            AlleleList::new(&new_allele_list),
+        // let new_allele_list = old_to_new_allele_index_map
+        //     .iter()
+        //     .filter(|i| {
+        //         i.is_some()
+        //     })
+        //     .map(|i| {
+        //         match self.alleles.get_allele(i.unwrap()) {
+        //             Some(new_allele) => new_allele,
+        //             None => panic!(
+        //                 "New allele {} not present: {:?} alleles {:?} old allele count {} new allele count {}",
+        //                 i.unwrap(),
+        //                 new_to_old_allele_map.iter().map(|(index, alleles)| (*index, alleles.len())).collect::<HashMap<usize, usize>>(),
+        //                 &self.alleles.len(),
+        //                 old_allele_count,
+        //                 new_allele_count
+        //             )
+        //         }.clone()
+        //     })
+        //     .collect::<LinkedHashSet<A>>();
+        // let new_allele_list = new_allele_list.into_iter().collect::<Vec<A>>();
+        let mut result = AlleleLikelihoods::new_from_likelihoods(
+            new_allele_list,
             self.samples.clone(),
             self.evidence_by_sample_index.clone(),
             self.filtered_evidence_by_sample_index.clone(),

@@ -330,6 +330,17 @@ impl<'a> LorikeetEngine<'a> {
                         .parse()
                         .unwrap();
 
+                    let depth_per_sample_filter: i64 = self.args
+                        .value_of("depth-per-sample-filter")
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+
+                    let qual_filter = self.args.value_of("qual-threshold")
+                        .unwrap()
+                        .parse::<f64>()
+                        .unwrap() / -10.0;
+
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
                         let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
@@ -340,7 +351,8 @@ impl<'a> LorikeetEngine<'a> {
                             reference,
                             genome_size,
                             qual_by_depth_filter,
-                            -15.0
+                            qual_filter,
+                            depth_per_sample_filter
                         );
 
                         {
@@ -382,7 +394,8 @@ impl<'a> LorikeetEngine<'a> {
                             reference,
                             genome_size,
                             qual_by_depth_filter,
-                            -15.0
+                            qual_filter,
+                            depth_per_sample_filter
                         );
 
                         if split_contexts.len() >= 1 {
@@ -494,7 +507,8 @@ impl<'a> LorikeetEngine<'a> {
                             reference,
                             genome_size,
                             qual_by_depth_filter,
-                            -15.0
+                            qual_filter,
+                            depth_per_sample_filter
                         );
                         // Get sample distances
                         {
@@ -887,6 +901,13 @@ pub fn start_lorikeet_engine<
 pub fn run_summarize(args: &clap::ArgMatches) {
     let vcf_files = args.values_of("vcfs").unwrap().collect::<Vec<&str>>();
     let qual_by_depth_filter = args.value_of("qual-by-depth-filter").unwrap().parse().unwrap();
+    let qual_filter = args.value_of("qual-threshold").unwrap().parse::<f64>().unwrap() / -10.0;
+    let depth_per_sample_filter: i64 = args
+        .value_of("depth-per-sample-filter")
+        .unwrap()
+        .parse()
+        .unwrap();
+
     vcf_files.into_iter().for_each(|vcf_path| {
         let mut reader = rust_htslib::bcf::Reader::from_path(vcf_path).unwrap();
         let header = reader.header();
@@ -912,7 +933,8 @@ pub fn run_summarize(args: &clap::ArgMatches) {
             Path::new(vcf_path).file_stem().unwrap().to_str().unwrap(),
             genome_size,
             qual_by_depth_filter,
-            args.value_of("qual-threshold").unwrap().parse::<f64>().unwrap() / -10.0
+            qual_filter,
+            depth_per_sample_filter
         );
     })
 }

@@ -66,6 +66,11 @@ Variant calling options (Basic):
                                                 unfortunately SEGFAULT with no error message.
   --qual-by-depth-filter                        The minimum QD value for a variant to have for it to be
                                                 included in the genotyping or ANI analyses. [default: 20]
+  --qual-threshold                              The PHRED-scaled quality score threshold for use
+                                                with ANI calculations. [default: 150]
+  --depth-per-sample-filter                     Minimum depth of a variant in a sample for that
+                                                sample to be included in ANI calculations for that
+                                                variant. [default: 5]
   -q, --min-base-quality                        Minimum base quality required to consider a
                                                 base for calling. [default: 10]
   --min-mapq                                    Minimum MAPQ score for longreads to be considered
@@ -1042,6 +1047,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("qual-threshold")
+                        .long("qual-threshold")
+                        .default_value("150")
+                )
+                .arg(
+                    Arg::with_name("depth-per-sample-filter")
+                        .long("depth-per-sample-filter")
+                        .default_value("5")
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -1690,6 +1705,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
                         .default_value("20"),
+                )
+                .arg(
+                    Arg::with_name("qual-threshold")
+                        .long("qual-threshold")
+                        .default_value("150")
+                )
+                .arg(
+                    Arg::with_name("depth-per-sample-filter")
+                        .long("depth-per-sample-filter")
+                        .default_value("5")
                 )
                 .arg(
                     Arg::with_name("min-variant-depth-for-genotyping")
@@ -2344,6 +2369,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("qual-threshold")
+                        .long("qual-threshold")
+                        .default_value("150")
+                )
+                .arg(
+                    Arg::with_name("depth-per-sample-filter")
+                        .long("depth-per-sample-filter")
+                        .default_value("5")
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -2985,6 +3020,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("qual-threshold")
+                        .long("qual-threshold")
+                        .default_value("150")
+                )
+                .arg(
+                    Arg::with_name("depth-per-sample-filter")
+                        .long("depth-per-sample-filter")
+                        .default_value("5")
+                )
+                .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
                         .long("enable-dynamic-read-disqualification-for-genotyping")
                         .hidden(true),
@@ -3076,6 +3121,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
                         .default_value("150")
+                )
+                .arg(
+                    Arg::with_name("depth-per-sample-filter")
+                        .long("depth-per-sample-filter")
+                        .default_value("5")
                 )
                 .arg(Arg::with_name("verbose").short("v").long("verbose"))
         );

@@ -56,9 +56,12 @@ impl ANICalculator {
         reference_name: &str,
         genome_size: u64,
         qual_by_depth_filter: f64,
-        qual_threshold: f64
+        qual_threshold: f64,
+        depth_per_sample_filter: i64
     ) {
-        self.calculate_from_contexts(contexts, genome_size, qual_by_depth_filter, qual_threshold);
+        self.calculate_from_contexts(
+            contexts, genome_size, qual_by_depth_filter, qual_threshold, depth_per_sample_filter
+        );
 
         Self::write_ani_tables(
             output_prefix,
@@ -91,7 +94,8 @@ impl ANICalculator {
         contexts: &mut [VariantContext],
         genome_size: u64,
         qual_by_depth_filter: f64,
-        qual_threshold: f64
+        qual_threshold: f64,
+        depth_per_sample_filter: i64
     ) {
         let n_samples = self.conANI.ncols();
 
@@ -144,7 +148,7 @@ impl ANICalculator {
                         );
                         // which alleles are present in first sample
                         let mut which_are_present =
-                            context.alleles_present_in_sample(sample_idx_1, 2);
+                            context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter);
 
                         present_alleles.push(which_are_present);
                     }
@@ -163,7 +167,7 @@ impl ANICalculator {
                             );
                             // which alleles are present in first sample with at least two supporting reads
                             let mut which_are_present =
-                                context.alleles_present_in_sample(sample_idx_2, 2);
+                                context.alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
                             present_alleles.push(which_are_present);
                         }
 
