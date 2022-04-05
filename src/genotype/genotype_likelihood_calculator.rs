@@ -134,6 +134,7 @@ impl GenotypeLikelihoodCalculator {
     ) -> GenotypeLikelihoodCalculator {
         let genotype_count = allele_first_genotype_offset_by_ploidy[[ploidy, allele_count]];
         let maximum_distinct_alleles_in_genotype = std::cmp::min(ploidy, allele_count);
+        debug!("Genotype count {} Ploidy {} Allele Count {}", genotype_count, ploidy, allele_count);
 
         GenotypeLikelihoodCalculator {
             genotype_allele_counts: genotype_table_by_ploidy.remove(ploidy),
@@ -447,24 +448,22 @@ impl GenotypeLikelihoodCalculator {
                 return index + 1;
             }
             Some(cmp) => {
-                // if cmp == 0 {
-                //     result = self.genotype_allele_counts[index].clone();
-                //     result.increase(1);
-                //     self.genotype_allele_counts.push(result);
-                //     return index + 1;
-                // } else {
-                //     // allele_counts.increase(1);
-                //     // result = allele_counts;
-                //     // return result
-                //     result = self.genotype_allele_counts[index].clone();
-                //     result.increase(1);
-                //     self.genotype_allele_counts.push(result);
-                //     return index + 1;
-                // }
-                result = self.genotype_allele_counts[index].clone();
-                result.increase(1);
-                self.genotype_allele_counts.push(result);
-                return index + 1;
+                if cmp == 0 {
+                    self.genotype_allele_counts[index].increase(1);
+                    return index;
+                } else {
+                    // allele_counts.increase(1);
+                    // result = allele_counts;
+                    // return result
+                    result = self.genotype_allele_counts[index].clone();
+                    result.increase(1);
+                    self.genotype_allele_counts.push(result);
+                    return index + 1;
+                }
+                // result = self.genotype_allele_counts[index].clone();
+                // result.increase(1);
+                // self.genotype_allele_counts.push(result);
+                // return index + 1;
             }
         }
     }
@@ -713,13 +712,23 @@ impl GenotypeLikelihoodCalculator {
     fn genotype_index_map_per_genotype_index(
         &mut self,
         new_genotype_index: usize,
+        // old_allele_counts_index: Option<usize>,
         allele_counts_index: usize,
         old_to_new_allele_index_map: &[usize],
         destination: &mut Vec<usize>,
         sorted_allele_counts_buffer: &mut Vec<usize>,
     ) {
+        // let distinct_allele_count = match old_allele_counts_index {
+        //     None => {
+        //         let distinct_allele_count = self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
+        //         self.genotype_allele_counts[allele_counts_index].copy_allele_counts(destination, 0);
+        //         distinct_allele_count
+        //     },
+        //     Some(old_index) => {
+        //         if old_index == allele_counts_index
+        //     }
+        // }
         let distinct_allele_count = self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
-
         self.genotype_allele_counts[allele_counts_index].copy_allele_counts(destination, 0);
 
         let mut jj = 0;

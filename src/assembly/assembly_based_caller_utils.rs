@@ -1038,6 +1038,7 @@ impl AssemblyBasedCallerUtils {
 
         for g in vc.genotypes.genotypes_mut() {
             // let alleles = &mut g.alleles;
+            // let alleles = &g.alleles;
             // let mut new_alleles = alleles.clone();
             let phased_alt_allele_index = phase_gt.alt_allele_index;
 

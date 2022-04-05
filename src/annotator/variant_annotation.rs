@@ -189,6 +189,57 @@ impl VariantAnnotations {
                     return AttributeObject::None;
                 }
             }
+            Self::MappingQuality | Self::BaseQuality => {
+                let mut values: LinkedHashMap<usize, Vec<u8>> = LinkedHashMap::new();
+
+                likelihoods
+                    .best_alleles_breaking_ties_main(Box::new(
+                        |allele: &A| {
+                            if allele.is_reference() {
+                                1
+                            } else {
+                                0
+                            }
+                        },
+                    ))
+                    .into_iter()
+                    .filter(|ba| {
+                        ba.is_informative()
+                            && Self::is_usable_read(
+                            &likelihoods
+                                .evidence_by_sample_index
+                                .get(&ba.sample_index)
+                                .unwrap()[ba.evidence_index],
+                        )
+                    })
+                    .for_each(|ba| {
+                        let value = values.entry(ba.allele_index.unwrap()).or_insert(Vec::new());
+                        match self.get_value_u8(
+                            &likelihoods
+                                .evidence_by_sample_index
+                                .get(&ba.sample_index)
+                                .unwrap()[ba.evidence_index],
+                            vc,
+                        ) {
+                            None => {} // pass
+                            Some(val) => value.push(val),
+                        }
+                    });
+
+                let statistics = (0..vc.alleles.len())
+                    .into_iter()
+                    .map(|index| {
+                        let mut vals = values.entry(index).or_insert(Vec::new());
+                        if vals.len() > 0 {
+                            MathUtils::median(&mut vals)
+                        } else {
+                            30
+                        }
+                    })
+                    .collect::<Vec<u8>>();
+
+                return AttributeObject::VecU8(statistics);
+            }
             Self::DepthPerAlleleBySample => {
                 let mut genotype = genotype.unwrap();
                 let alleles = likelihoods.get_allele_list().list.into_iter().collect::<LinkedHashSet<_>>();
@@ -245,56 +296,6 @@ impl VariantAnnotations {
                 genotype.ad = counts;
 
                 return AttributeObject::None;
-            }
-            Self::MappingQuality | Self::BaseQuality => {
-                let mut values: LinkedHashMap<usize, Vec<u8>> = LinkedHashMap::new();
-
-                likelihoods
-                    .best_alleles_breaking_ties_main(Box::new(
-                        |allele: &A| {
-                            if allele.is_reference() {
-                                1
-                            } else {
-                                0
-                            }
-                        },
-                    ))
-                    .into_iter()
-                    .filter(|ba| {
-                        ba.is_informative()
-                            && Self::is_usable_read(
-                                &likelihoods
-                                    .evidence_by_sample_index
-                                    .get(&ba.sample_index)
-                                    .unwrap()[ba.evidence_index],
-                            )
-                    })
-                    .for_each(|ba| {
-                        let value = values.entry(ba.allele_index.unwrap()).or_insert(Vec::new());
-                        match self.get_value_u8(
-                            &likelihoods
-                                .evidence_by_sample_index
-                                .get(&ba.sample_index)
-                                .unwrap()[ba.evidence_index],
-                            vc,
-                        ) {
-                            None => {} // pass
-                            Some(val) => value.push(val),
-                        }
-                    });
-
-                let statistics = values
-                    .into_iter()
-                    .map(|(_, mut vals)| {
-                        if vals.len() > 0 {
-                            MathUtils::median(&mut vals)
-                        } else {
-                            30
-                        }
-                    })
-                    .collect::<Vec<u8>>();
-
-                return AttributeObject::VecU8(statistics);
             }
             Self::QualByDepth => {
                 debug!("Qual by depth");
@@ -370,7 +371,7 @@ impl VariantAnnotations {
 
         for genotype in genotypes.genotypes_mut() {
             // we care only about variant calls with likelihoods
-            if !genotype.is_het() && !genotype.is_hom_var() && !genotype.is_hom_ref() {
+            if !genotype.is_het() && !genotype.is_hom_var() {
                 debug!("Skipping: {} {} {:?}", genotype.is_het(), genotype.is_hom_var(), genotype.genotype_type);
                 continue;
             }
@@ -381,7 +382,7 @@ impl VariantAnnotations {
                 genotype.dp = total_ad;
                 if total_ad != 0 {
                     if total_ad - genotype.ad[0] > 0 {
-                        AD_restrict_depth += genotype.ad[1];
+                        AD_restrict_depth += total_ad;
                     }
                     depth += total_ad;
                     continue;
@@ -393,6 +394,8 @@ impl VariantAnnotations {
                 depth += likelihoods
                     .sample_evidence_count(sample_index)
                     as i64;
+            } else if genotype.has_dp() {
+                depth += genotype.dp;
             }
         }
 

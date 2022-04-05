@@ -319,19 +319,22 @@ impl GenotypingEngine {
      */
     fn record_deletions(&mut self, vc: &VariantContext, emitted_alleles: &Vec<ByteArrayAllele>) {
         while !self.upstream_deletions_loc.is_empty()
-            && (!self
-                .upstream_deletions_loc
-                .peek()
-                .unwrap_or(&SimpleInterval::new(0, 0, 0))
-                .contigs_match(&vc.loc)
-                || self
-                    .upstream_deletions_loc
-                    .peek()
-                    .unwrap_or(&SimpleInterval::new(0, 0, 0))
-                    .get_end()
-                    < vc.loc.get_start())
         {
-            self.upstream_deletions_loc.pop();
+            let mut condition_met = false;
+            match self.upstream_deletions_loc.peek() {
+                Some(upstream) => {
+                    if !upstream.contigs_match(&vc.loc) ||
+                        upstream.get_end() < vc.loc.get_start() {
+                        condition_met = true
+                    } else {
+                        break
+                    }
+                },
+                None => break,
+            }
+            if condition_met {
+                self.upstream_deletions_loc.pop();
+            }
         }
 
         for allele in emitted_alleles.iter() {

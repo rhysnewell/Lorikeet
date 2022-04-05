@@ -54,6 +54,7 @@ use reads::cigar_utils::CigarUtils;
 use std::ops::Deref;
 use rust_htslib::bam::pileup::Indel;
 use reads::read_utils::ReadUtils;
+use bio_types::sequence::SequenceRead;
 
 #[derive(Debug, Clone)]
 pub struct HaplotypeCallerEngine<'c> {
@@ -568,67 +569,199 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                 )
                             );
 
-                        // Position based - Loop through the positions in the genome
-                        // Calculate likelihood of activity being present at this position
-                        match bam_generated.pileup() {
-                            Some(pileups) => {
-
-                                for p in pileups {
-                                    let pileup = p.unwrap();
-                                    let pos = pileup.pos() as usize;
-
-                                    // overlapping reads in the fetched region might
-                                    // get counted twice. So check that this position
-                                    // is within the chunk
-                                    // if pos < outer_chunk_location.start + chunk_multiplier || pos >= min(
-                                    //     outer_chunk_location.start + chunk_multiplier + chunk_size,
-                                    //     target_len as usize
-                                    // ) {
-                                    //     continue
-                                    // }
-                                    let (hq_soft_clips, result) = &mut positions[pos
-                                        .saturating_sub(
-                                            min(outer_chunk_location.start + chunk_multiplier,
-                                                target_len as usize))];
-                                    // let mut read_counter = 0;
-                                    let refr_base = reference_reader.current_sequence[pos];
-                                    for alignment in pileup.alignments() {
-                                        let record = alignment.record();
-                                        if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
-                                        {
-                                            continue;
-                                        } else {
-                                            HaplotypeCallerEngine::alignment_context_creation(
-                                                &alignment,
-                                                *result,
-                                                *hq_soft_clips,
-                                                log10ploidy,
-                                                likelihoodcount,
-                                                refr_base,
-                                                bq,
-                                                // false
-                                            );
-                                        }
-                                        // read_counter += 1;
-                                    }
-                                    // debug!("read counter {} result {} denominator {}", read_counter, result.read_counts, result.read_counts as f64 * log10ploidy);
-                                    let denominator = result.read_counts as f64 * log10ploidy;
-                                    for i in 0..likelihoodcount {
-                                        result.genotype_likelihoods[i] -= denominator
-                                    }
-
-                                }
-
+                        let mut record = Record::new();
+                        // pileup does not provide all of the alignments at a pos
+                        // Unsure why, but there are positions where entire
+                        // alignments are being ignored. Solution: create our
+                        // own version of a pileup and hopefully records won't be
+                        // filtered
+                        while bam_generated.read(&mut record) {
+                            if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
+                            {
+                                continue;
                             }
-                            None => println!("no bam for pileups"),
-                        };
+
+                            Self::parse_record(
+                                &record,
+                                flag_filters,
+                                readtype,
+                                &mut positions,
+                                min(outer_chunk_location.start + chunk_multiplier,
+                                    target_len as usize),
+                                bq,
+                                likelihoodcount,
+                                reference_reader,
+                                log10ploidy,
+                                chunk_multiplier,
+                                min(outer_chunk_location.start + chunk_multiplier,
+                                    target_len as usize)
+                            );
+                        }
                     });
+                Self::update_ref_vs_any_results(&mut likelihoods, likelihoodcount, log10ploidy);
                 current_likelihoods.push(likelihoods);
             },
             _ => {}
         }
+    }
 
+    fn update_ref_vs_any_results(
+        likelihoods: &mut Vec<RefVsAnyResult>,
+        likelihoodcount: usize,
+        log10ploidy: f64,
+    ) {
+        for (pos, result) in likelihoods.iter_mut().enumerate() {
+            let denominator = result.read_counts as f64 * log10ploidy;
 
+            // if pos >= 1709882 && pos <= 1709882 {
+            debug!("Pos {} counts {} likelihood {:?} ref count {} non ref {}",
+                     pos, result.read_counts, &result.genotype_likelihoods, result.ref_depth, result.non_ref_depth);
+            // }
+            for i in 0..likelihoodcount {
+                result.genotype_likelihoods[i] -= denominator
+            }
+        }
+    }
+
+    fn parse_record(
+        record: &Record,
+        flag_filters: &FlagFilter,
+        readtype: ReadType,
+        positions: &mut Vec<(&mut RunningAverage, &mut RefVsAnyResult)>,
+        subtractor: usize,
+        bq: u8,
+        likelihoodcount: usize,
+        reference_reader: &ReferenceReader,
+        log10ploidy: f64,
+        bound_start: usize,
+        bound_end: usize
+    ) {
+        // we need to iterate through each read pos (qpos)
+        // and generate a pseudo pileup
+        let read_length = record.len();
+        let mut cigar_cursor = 0; // changes when cigar is consumed
+        let mut read_cursor = 0; // changes when read bases are consumed
+        let mut pos = record.pos() as usize; // read start alignment on reference.
+        // updated as ref consumed
+        for cig in &record.cigar() {
+
+            match cig {
+                Cigar::Del(len) => {
+                    if pos < bound_start {
+                        // read not within bounds yet
+                        cigar_cursor += *len as usize;
+                        continue;
+                    } else if pos >= bound_end {
+                        // read pass the bounds now so break
+                        break
+                    };
+                    let alignment = PosAlignment::new(None, true, false);
+                    let (hq_soft_clips, result) = &mut positions[pos.saturating_sub(subtractor)];
+                    let refr_base = reference_reader.current_sequence[pos];
+                    Self::alignment_context_creation(
+                        &alignment,
+                        &record,
+                        result,
+                        hq_soft_clips,
+                        log10ploidy,
+                        likelihoodcount,
+                        refr_base,
+                        bq,
+                    );
+                    cigar_cursor += *len as usize;
+                },
+                Cigar::RefSkip(len) => {
+                    if pos < bound_start {
+                        // read not within bounds yet
+                        cigar_cursor += *len as usize;
+                        continue;
+                    } else if pos >= bound_end {
+                        // read pass the bounds now so break
+                        break
+                    };
+                    let alignment = PosAlignment::new(None, false, true);
+                    let (hq_soft_clips, result) = &mut positions[pos.saturating_sub(subtractor)];
+                    let refr_base = reference_reader.current_sequence[pos];
+                    Self::alignment_context_creation(
+                        &alignment,
+                        &record,
+                        result,
+                        hq_soft_clips,
+                        log10ploidy,
+                        likelihoodcount,
+                        refr_base,
+                        bq,
+                    );
+                    cigar_cursor += *len as usize;
+                },
+                Cigar::SoftClip(len)
+                | Cigar::Ins(len) => {
+                    if pos < bound_start {
+                        // read not within bounds yet
+                        cigar_cursor += *len as usize;
+                        read_cursor += *len as usize;
+                        continue;
+                    } else if pos >= bound_end {
+                        // read pass the bounds now so break
+                        break
+                    };
+                    // insertion like event
+                    // read is consumed
+                    let alignment = PosAlignment::new(Some(read_cursor), false, false);
+                    let (hq_soft_clips, result) = &mut positions[pos.saturating_sub(subtractor)];
+                    let refr_base = reference_reader.current_sequence[pos];
+                    Self::alignment_context_creation(
+                        &alignment,
+                        &record,
+                        result,
+                        hq_soft_clips,
+                        log10ploidy,
+                        likelihoodcount,
+                        refr_base,
+                        bq,
+                    );
+                    cigar_cursor += *len as usize;
+                    read_cursor += *len as usize;
+                },
+                Cigar::Diff(len)
+                | Cigar::Match(len)
+                | Cigar::Equal(len) => {
+                    // we need to check each position in
+                    // these cigars
+                    for i in 0..*len as usize{
+                        if pos < bound_start {
+                            // read not within bounds yet
+                            read_cursor += 1;
+                            pos += 1;
+                        } else if pos >= bound_end {
+                            // read pass the bounds now so break
+                            break
+                        } else {
+                            let alignment = PosAlignment::new(Some(read_cursor), false, false);
+                            let (hq_soft_clips, result) = &mut positions[pos.saturating_sub(subtractor)];
+                            let refr_base = reference_reader.current_sequence[pos];
+                            Self::alignment_context_creation(
+                                &alignment,
+                                &record,
+                                result,
+                                hq_soft_clips,
+                                log10ploidy,
+                                likelihoodcount,
+                                refr_base,
+                                bq,
+                            );
+                            read_cursor += 1;
+                            pos += 1;
+                        }
+                    }
+                    cigar_cursor += *len as usize;
+                },
+                Cigar::HardClip(_)
+                | Cigar::Pad(_) => {
+                    // ignore these
+                }
+            }
+        }
     }
 
     /**
@@ -897,74 +1030,38 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                                 ) as i64
                                             )
                                         );
+                                        let mut record = Record::new();
+                                        // pileup does not provide all of the alignments at a pos
+                                        // Unsure why, but there are positions where entire
+                                        // alignments are being ignored. Solution: create our
+                                        // own version of a pileup and hopefully records won't be
+                                        // filtered
+                                        while bam_generated.read(&mut record) {
 
-                                        // Position based - Loop through the positions in the genome
-                                        // Calculate likelihood of activity being present at this position
-                                        match bam_generated.pileup() {
-                                            Some(pileups) => {
-
-                                                for p in pileups {
-                                                    let pileup = p.unwrap();
-                                                    let pos = pileup.pos() as usize;
-
-                                                    // overlapping reads in the fetched region might
-                                                    // get counted twice. So check that this position
-                                                    // is within the chunk
-                                                    if pos < chunk_multiplier || pos >= min(
-                                                        chunk_multiplier + chunk_size,
-                                                        target_len as usize
-                                                    ) {
-                                                        // debug!("Pileup {}: {} - {} Position {} Fixed {}", tid,
-                                                        //        chunk_multiplier,
-                                                        //        min(
-                                                        //            chunk_multiplier + chunk_size,
-                                                        //            target_len as usize
-                                                        //        ),
-                                                        //        pos, pos - chunk_idx * chunk_size);
-                                                        continue
-                                                    }
-
-                                                    let (hq_soft_clips, result) = &mut positions[pos - chunk_multiplier];
-                                                    // let result = &mut positions[pos - chunk_idx * chunk_size].1;
-
-                                                    let refr_base = reference_reader.current_sequence[pos];
-
-
-                                                    for alignment in pileup.alignments() {
-                                                        let record = alignment.record();
-                                                        if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
-                                                        {
-                                                            continue;
-                                                        } else {
-                                                            HaplotypeCallerEngine::alignment_context_creation(
-                                                                &alignment,
-                                                                *result,
-                                                                *hq_soft_clips,
-                                                                log10ploidy,
-                                                                likelihoodcount,
-                                                                refr_base,
-                                                                bq,
-                                                                // pos == 36998
-                                                            )
-                                                        }
-                                                    }
-
-                                                    let denominator = result.read_counts as f64 * log10ploidy;
-
-                                                    // if pos % 100000 == 0 || (pos >= 36990 && pos <= 37400) {
-                                                    //     println!("Pos {} counts {} likelihood {:?} ref count {} non ref {} p depth {}",
-                                                    //              pos, result.read_counts, &result.genotype_likelihoods, result.ref_depth, result.non_ref_depth, pileup.depth());
-                                                    // }
-                                                    for i in 0..likelihoodcount {
-                                                        result.genotype_likelihoods[i] -= denominator
-                                                    }
-
-                                                }
-
+                                            if ReadUtils::read_is_filtered(&record, &flag_filters, 20, readtype)
+                                            {
+                                                continue;
                                             }
-                                            None => println!("no bam for pileups"),
-                                        };
+
+                                            Self::parse_record(
+                                                &record,
+                                                flag_filters,
+                                                readtype,
+                                                &mut positions,
+                                                chunk_multiplier,
+                                                bq,
+                                                likelihoodcount,
+                                                reference_reader.deref(),
+                                                log10ploidy,
+                                                chunk_multiplier,
+                                                min(chunk_multiplier + chunk_size, target_len as usize)
+                                            );
+                                        }
                                     });
+
+                                Self::update_ref_vs_any_results(
+                                    likelihoods, likelihoodcount, log10ploidy
+                                );
                             };
                         }
                     });
@@ -1110,8 +1207,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                     None => 0.0,
                                 };
 
-                                // if pos % 25000 == 0 || (pos >= 36990 && pos <= 37400) {
-                                //     println!("pos {} active {} ", pos, is_active_prob);
+                                // if pos >= 1709882 && pos <= 1709882 {
+                                debug!("pos {} active {} ", pos, is_active_prob);
                                 // }
 
                                 let activity_profile_state = ActivityProfileState::new(
@@ -1181,7 +1278,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
 
                 // Create bandpass
                 debug!("Created bandpass profile");
-                // println!("Calculating activity on {} of {:?} {} {}", tid, chunk_location, positions[0], positions.last().unwrap());
+                debug!("Calculating activity on {} of {:?} {} {}", tid, chunk_location, positions[0], positions.last().unwrap());
                 let mut activity_profile = BandPassActivityProfile::new(
                     max_prob_propagation,
                     active_prob_threshold,
@@ -1303,6 +1400,11 @@ impl<'c> HaplotypeCallerEngine<'c> {
             return self.reference_model_for_no_variation(&mut region, true, &vc_priors);
         }
 
+        // let debug = region.padded_span.start <= 1709882 && region.padded_span.end >= 1709882;
+
+        // if debug {
+        debug!("Loc {:?} reads {}", &region.padded_span, region.reads.len());
+        // }
         let mut region_without_reads = region.clone_without_reads();
 
         // run the local assembler, getting back a collection of information on how we should proceed
@@ -1384,7 +1486,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         //TODO - that does also filter reads.
         let (mut assembly_result, filtered_reads) =
             self.filter_non_passing_reads(assembly_result, flag_filters);
-        let filtered_reads = Vec::new();
+        // let filtered_reads = Vec::new();
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
@@ -1411,11 +1513,16 @@ impl<'c> HaplotypeCallerEngine<'c> {
             assembly_result.region_for_genotyping.move_reads(),
             sample_names.len(),
         );
-        debug!("Read by sample: {:?}", reads.iter().map(|(_, r)| r.len()).collect::<Vec<usize>>());
+
 
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
+
+        // if debug {
+        debug!("Read by sample after compute: {:?}", (0..sample_names.len()).map(|s| read_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
+        // }
+
         debug!(
             "Read likelihoods first {:?} {:?} {:?}",
             read_likelihoods.alleles.len(),
@@ -1441,6 +1548,11 @@ impl<'c> HaplotypeCallerEngine<'c> {
             },
         );
         read_likelihoods.change_evidence(read_alignments);
+
+        // if debug {
+        debug!("After change {:?}", (0..sample_names.len()).map(|s| read_likelihoods.sample_evidence_count(s)).collect::<Vec<usize>>());
+        // }
+
         debug!(
             "Read likelihoods after change evidence {:?}",
             read_likelihoods.alleles.len()
@@ -1538,7 +1650,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
      * Populates reference and non reference depth vectors
      */
     fn alignment_context_creation(
-        alignment: &bam::pileup::Alignment,
+        alignment: &PosAlignment,
+        record: &Record,
         result: &mut RefVsAnyResult,
         hq_soft_clips: &mut RunningAverage,
         log10ploidy: f64,
@@ -1549,20 +1662,18 @@ impl<'c> HaplotypeCallerEngine<'c> {
     ) {
         let ref_likelihood;
         let non_ref_likelihood;
-        let record = alignment.record();
 
         // query position in read
-        let qpos = alignment.qpos();
-        let record_qual = if alignment.is_del() || alignment.is_refskip() { Self::REF_MODEL_DELETION_QUAL } else { record.qual()[qpos.unwrap()] };
+        let qpos = &alignment.qpos;
+        let record_qual = if alignment.is_del || alignment.is_refskip { Self::REF_MODEL_DELETION_QUAL } else { record.qual()[qpos.unwrap()] };
         let mut is_alt = false;
 
-        if record_qual >= bq || alignment.is_del() {
+        if record_qual >= bq || alignment.is_del {
             result.read_counts += 1;
 
             is_alt = Self::is_alt(
-                alignment,
                 &record,
-                &qpos,
+                qpos,
                 refr_base,
                 Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
                 // debug,
@@ -1590,7 +1701,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         }
 
         // add hq soft clips if possible
-        if is_alt && !(alignment.is_del() || alignment.is_refskip()) {
+        if is_alt && !(alignment.is_del || alignment.is_refskip) {
             Self::next_to_soft_clip_or_indel(
                 &record,
                 qpos.unwrap(),
@@ -1611,7 +1722,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
     ///     - is after insertion
     ///     - is next to softclip
     fn is_alt(
-        alignment: &Alignment,
         record: &Record,
         qpos: &Option<usize>,
         refr_base: u8,
@@ -1935,3 +2045,20 @@ impl<'c> HaplotypeCallerEngine<'c> {
         VariantAnnotationEngine::populate_vcf_header(header, strain_info);
     }
 }
+
+struct PosAlignment {
+    qpos: Option<usize>,
+    is_del: bool,
+    is_refskip: bool,
+}
+
+impl PosAlignment {
+    fn new(qpos: Option<usize>, is_del: bool, is_refskip: bool) -> Self {
+        Self {
+            qpos,
+            is_del,
+            is_refskip
+        }
+    }
+}
+

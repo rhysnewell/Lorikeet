@@ -7,6 +7,7 @@ use rust_htslib::bam::Record;
 use coverm::FlagFilter;
 use processing::lorikeet_engine::ReadType;
 use std::ops::Deref;
+use num::abs;
 
 pub struct ReadUtils {}
 
@@ -35,12 +36,15 @@ impl ReadUtils {
             || record.is_quality_check_failed()
             || record.is_duplicate()
             || record.mapq() < mapq_threshold
+            || record.mapq() == 255
             || record.seq_len() as usize != record.qual().len()
-            || record.seq_len() as u32 != CigarUtils::get_read_length(cigar.deref())
+            || record.seq_len() != CigarUtils::get_read_length(cigar.deref()) as usize
             || cigar.0.iter().any(|c| CigarUtils::cigar_elements_are_same_type(c, &Some(Cigar::RefSkip(0))))
             || CigarUtils::has_consecutive_indels(&record.cigar().0)
             || !CigarUtils::is_valid(cigar.deref())
             || CigarUtils::starts_or_ends_with_deletion_ignoring_clips(&cigar.0)
+            || record.pos() < 0
+            || ((record.pos() + CigarUtils::get_reference_length(cigar.deref()) as i64 - 1) - record.pos() + 1 < 0)
     }
 
     /**

@@ -104,7 +104,7 @@ impl ANICalculator {
                 Some(attribute) => {
                     match attribute {
                         AttributeObject::f64(val) => {
-                            let result = val >= qual_by_depth_filter && context.log10_p_error <= -15.0;
+                            let result = val >= qual_by_depth_filter && context.log10_p_error <= qual_threshold;
                             context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
                             result
                         },
