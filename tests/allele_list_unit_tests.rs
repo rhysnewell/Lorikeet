@@ -55,6 +55,30 @@ fn single_allele_list_data() {
     }
 }
 
+#[test]
+fn two_allele_list_data() {
+    let mut allele_lists = vec![Vec::new(); ALLELE_COUNT.len() * MAX_ALLELE_LENGTH.len()];
+    let mut allele_unit_tester = AlleleListUnitTester::new();
+    let mut next_index = 0;
+    for i in 0..ALLELE_COUNT.len() {
+        for j in 0..MAX_ALLELE_LENGTH.len() {
+            allele_lists[next_index] =
+                allele_unit_tester.generate_random_alleles(ALLELE_COUNT[i], MAX_ALLELE_LENGTH[j]);
+            next_index += 1;
+        }
+    }
+
+    for i in 0..allele_lists.len() {
+        for j in 0..allele_lists.len() {
+            test_equals(&allele_lists[i], &allele_lists[j])
+        }
+    }
+}
+
+// fn test_index_of_reference(alleles1: &Vec<ByteArrayAllele>) {
+//
+// }
+
 fn test_self_permutation(alleles1: &Vec<ByteArrayAllele>) {
     let original_allele_list = AlleleList::new(alleles1);
     let self_permutation = original_allele_list
@@ -185,4 +209,14 @@ fn test_shuffle_permutation(alleles1: &Vec<ByteArrayAllele>) {
             assert_eq!(permutation.from_index(i), from_index[i]);
         }
     }
+}
+
+fn test_equals(alleles1: &Vec<ByteArrayAllele>, alleles2: &Vec<ByteArrayAllele>) {
+    let allele_list1 = AlleleList::new(alleles1);
+    let allele_list2 = AlleleList::new(alleles2);
+
+    assert!(allele_list1.eq(&allele_list2));
+    assert!(allele_list2.eq(&allele_list1));
+
+    assert!(allele_list1.as_list_of_alleles() == allele_list2.as_list_of_alleles())
 }

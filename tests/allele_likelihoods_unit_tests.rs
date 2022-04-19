@@ -46,6 +46,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::sync::Mutex;
+use lorikeet_genome::model::allele_list::AlleleList;
 
 lazy_static! {
     static ref READ_COUNTS: Vec<Vec<usize>> = vec![
@@ -623,6 +624,7 @@ fn check_evidence_to_index_map_is_correct<A: Allele>(subject: &AlleleLikelihoods
 fn test_marginalization_with_overlap(
     samples: Vec<String>,
     alleles: Vec<ByteArrayAllele>,
+    to_alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
     new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
@@ -684,6 +686,7 @@ fn test_marginalization_with_overlap(
 fn test_marginalization(
     samples: Vec<String>,
     alleles: Vec<ByteArrayAllele>,
+    to_alleles: Vec<ByteArrayAllele>,
     reads: HashMap<usize, Vec<BirdToolRead>>,
     new_to_old_allele_mapping: LinkedHashMap<usize, Vec<&ByteArrayAllele>>,
 ) {
@@ -695,7 +698,7 @@ fn test_marginalization(
         "onew to old allele mapping {:?}",
         &new_to_old_allele_mapping
     );
-    let mut marginalized = original.marginalize(&new_to_old_allele_mapping);
+    let mut marginalized = original.marginalize(&new_to_old_allele_mapping, AlleleList::new(&to_alleles));
 
     assert_eq!(
         new_to_old_allele_mapping.len(),
@@ -897,8 +900,9 @@ fn data_for_test_marginalization_with_overlap() {
                     test_marginalization_with_overlap(
                         sample_set.clone(),
                         allele_set_1.clone(),
+                        allele_set_2.clone(),
                         data_set_reads(sample_set, &mut rnd),
-                        random_allele_map(&allele_set_1, &allele_set_1),
+                        random_allele_map(&allele_set_1, &allele_set_2),
                     );
                 }
             }
@@ -920,6 +924,7 @@ fn data_for_test_marginalization() {
                     test_marginalization(
                         sample_set.clone(),
                         allele_set_1.clone(),
+                        allele_set_2.clone(),
                         data_set_reads(sample_set, &mut rnd),
                         random_allele_map(&allele_set_1, &allele_set_2),
                     );

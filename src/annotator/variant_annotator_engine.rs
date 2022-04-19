@@ -21,6 +21,9 @@ pub struct VariantAnnotationEngine {}
 impl VariantAnnotationEngine {
     /**
      * Annotates the given variant context - adds all annotations that satisfy the predicate.
+     * NOTE: Due to trait impl limitations. read_likelihoods should be marginalized over the alleles
+     *       in vc BEFORE being passed to this function. GATK HaplotypeCaller Marginalizes inside
+     *       function, but this is not possible with current setup as it we want general functions :)
      * @param vc the variant context to annotate
      * @param features context containing the features that overlap the given variant
      * @param ref the reference context of the variant to annotate or null if there is none

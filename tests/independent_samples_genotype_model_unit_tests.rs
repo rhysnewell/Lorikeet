@@ -78,7 +78,7 @@ fn discard_alleles_at_random<A: Allele>(
 ) -> AlleleList<A> {
     let mut rnd = ThreadRng::default();
     let mut subset = likelihoods.list.into_iter().collect::<Vec<A>>();
-    for i in 0..discard_allele_count {
+    for _i in 0..discard_allele_count {
         subset.remove(rnd.gen_range(0, subset.len() - 1));
     }
 
