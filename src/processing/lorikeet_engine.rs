@@ -17,7 +17,7 @@ use reference::reference_writer::ReferenceWriter;
 use scoped_threadpool::Pool;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, File};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tempdir::TempDir;
@@ -28,6 +28,8 @@ use bird_tool_utils::command::finish_command_safely;
 use std::process::{Command, Stdio};
 use num::Saturating;
 use rust_htslib::bcf::Read;
+use processing::codon_structs::{CodonTable, Translations};
+use bio::io::gff::GffType::GFF3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -369,7 +371,25 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             &reference_reader,
                             false,
-                        )
+                        );
+
+                        if !self.args.is_present("do-not-calculate-evolution") {
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating evolutionary rates...",
+                                    &reference,
+                                ));
+                            }
+                            calculate_dnds(
+                                self.args,
+                                reference.as_str(),
+                                output_prefix.as_str(),
+                                &mut reference_reader,
+                                ref_idx,
+                                cleaned_sample_names.len()
+                            );
+                        }
                     } else if mode == "genotype" {
 
                         // If a variant context contains more than one allele, we need to split
@@ -459,6 +479,24 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
+                            if !self.args.is_present("do-not-calculate-evolution") {
+                                {
+                                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                    pb.progress_bar.set_message(format!(
+                                        "{}: Calculating evolutionary rates...",
+                                        &reference,
+                                    ));
+                                }
+                                calculate_dnds(
+                                    self.args,
+                                    reference.as_str(),
+                                    output_prefix.as_str(),
+                                    &mut reference_reader,
+                                    ref_idx,
+                                    cleaned_sample_names.len()
+                                );
+                            }
+
                             // Write genotypes to disk, reference specific
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -485,6 +523,24 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference_reader,
                                 true,
                             );
+
+                            if !self.args.is_present("do-not-calculate-evolution") {
+                                {
+                                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                    pb.progress_bar.set_message(format!(
+                                        "{}: Calculating evolutionary rates...",
+                                        &reference,
+                                    ));
+                                }
+                                calculate_dnds(
+                                    self.args,
+                                    reference.as_str(),
+                                    output_prefix.as_str(),
+                                    &mut reference_reader,
+                                    ref_idx,
+                                    cleaned_sample_names.len()
+                                );
+                            }
                             // Write genotypes to disk, reference specific
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -523,6 +579,24 @@ impl<'a> LorikeetEngine<'a> {
                             &reference_reader,
                             false,
                         );
+
+                        if !self.args.is_present("do-not-calculate-evolution") {
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating evolutionary rates...",
+                                    &reference,
+                                ));
+                            }
+                            calculate_dnds(
+                                self.args,
+                                reference.as_str(),
+                                output_prefix.as_str(),
+                                &mut reference_reader,
+                                ref_idx,
+                                cleaned_sample_names.len()
+                            );
+                        }
 
                         {
                             let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -937,4 +1011,122 @@ pub fn run_summarize(args: &clap::ArgMatches) {
             depth_per_sample_filter
         );
     })
+}
+
+/// Checks for the presence of gff file in the output directory for the current reference
+/// If none is present then generate one
+fn check_for_gff(reference: &str, output_prefix: &str, m: &clap::ArgMatches) -> Option<bio::io::gff::Reader<File>>{
+    let cache = glob::glob(&format!(
+        "{}/*.gff",
+        &output_prefix
+    )).expect("failed to interpret glob").map(|p| {
+        p.expect("Failed to read cached gff path")
+            .to_str()
+            .unwrap()
+            .to_string()
+    }).collect::<Vec<String>>();
+
+    if cache.len() > 1 {
+        debug!("Too many GFF files in output folder: {}", output_prefix);
+        return None
+    } else if cache.len() == 1 {
+        // Read in previous gff file
+        let gff_reader = bio::io::gff::Reader::from_file(
+            &cache[0],
+            bio::io::gff::GffType::GFF3,
+        ).expect("Failed to read GFF file");
+        Some(gff_reader)
+    } else {
+        let gff_path = format!("{}/genes.gff", output_prefix);
+        let cmd_string = format!(
+            "set -e -o pipefail; \
+            prodigal -o {} -i {} -f gff {}",
+            // prodigal
+            &gff_path,
+            &reference,
+            m.value_of("prodigal-params").unwrap(),
+        );
+        debug!("Queuing cmd_string: {}", cmd_string);
+        finish_command_safely(
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(&cmd_string)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .expect("Unable to execute bash"),
+            "prodigal",
+        );
+
+        // Read in newly created gff
+        let gff_reader = bio::io::gff::Reader::from_file(
+            gff_path,
+            bio::io::gff::GffType::GFF3,
+        ).expect("Failed to read GFF file");
+        Some(gff_reader)
+    }
+}
+
+fn calculate_dnds(
+    args: &clap::ArgMatches,
+    reference: &str,
+    output_prefix: &str,
+    reference_reader: &mut ReferenceReader,
+    ref_idx: usize,
+    sample_count: usize,
+) {
+    match check_for_gff(reference, output_prefix, args) {
+        Some(mut genes) => {
+            let vcf_path = format!(
+                "{}/{}.bcf",
+                output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
+            );
+            let mut variants = VariantContext::retrieve_indexed_vcf_file(vcf_path.as_str());
+
+            let mut dnds_calculator = CodonTable::setup();
+            dnds_calculator.get_codon_table(11);
+
+            let mut new_gff_writer = bio::io::gff::Writer::to_file(
+                format!(
+                    "{}/genes.gff",
+                    output_prefix,
+                ),
+                GFF3
+            ).expect("Unable to create GFF file");
+
+            for gene in genes.records() {
+                match gene {
+                    Ok(mut gene) => {
+                        let mut frameshifts = Vec::with_capacity(sample_count);
+                        let mut dnds_values = Vec::with_capacity(sample_count);
+
+                        for sample_index in 0..sample_count {
+                            let (frameshift, dnds) = dnds_calculator.find_mutations(
+                                &gene,
+                                &mut variants,
+                                reference_reader,
+                                ref_idx,
+                                sample_index
+                            );
+
+                            frameshifts.push(frameshift);
+                            dnds_values.push(dnds);
+                        }
+
+                        let attributes = gene.attributes_mut();
+                        attributes.insert("frameshifts".to_string(), format!("{:?}", frameshifts));
+                        attributes.insert("dN/dS".to_string(), format!("{:?}", dnds_values));
+                        new_gff_writer.write(&gene);
+                    },
+                    Err(_) => {
+                        continue
+                    }
+                }
+            }
+        },
+        None => {
+            // too many GFF files in output folder, abort this genome
+            warn!("Not calculating evolutionary rates for {} as their are too many GFF files in output folder: {}", &reference, &output_prefix);
+        }
+    };
 }

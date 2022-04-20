@@ -922,6 +922,9 @@ impl VariantContext {
         variants
     }
 
+    /// Attempts to retrieve a VCF rid given a contig name
+    /// If the provided contig name contains a `~` symbol, then this function attempts to remove
+    /// and find the rid from a split in the contig name
     pub fn get_contig_vcf_tid(vcf_header: &HeaderView, contig_name: &[u8]) -> Option<u32> {
         match vcf_header.name2rid(contig_name) {
             Ok(rid) => return Some(rid),

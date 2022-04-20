@@ -4,6 +4,10 @@ use itertools::{izip, Itertools};
 use model::variants::{Base, Variant};
 use std::collections::HashMap;
 use utils::utils::{mean, std_deviation};
+use model::variant_context::VariantContext;
+use model::variant_context_utils::VariantContextUtils;
+use rust_htslib::bcf::Read;
+use reference::reference_reader::ReferenceReader;
 
 #[allow(dead_code)]
 pub struct GeneInfo {
@@ -76,10 +80,11 @@ pub trait Translations {
     fn find_mutations(
         &self,
         gene: &bio::io::gff::Record,
-        variants: &HashMap<i64, HashMap<Variant, Base>>,
-        ref_sequence: &Vec<u8>,
+        variants: &mut rust_htslib::bcf::IndexedReader,
+        reference_reader: &mut ReferenceReader,
+        ref_idx: usize,
         sample_idx: usize,
-    ) -> f64;
+    ) -> (usize, f64);
     fn calculate_gene_coverage(
         &self,
         gene: &bio::io::gff::Record,
@@ -88,7 +93,6 @@ pub trait Translations {
 }
 
 impl Translations for CodonTable {
-    #[allow(unused)]
     fn get_codon_table(&mut self, table_id: usize) {
         // Convert NCBI format to something more usable
         let ncbi_format = NCBITable::get_translation_table(table_id);
@@ -134,26 +138,47 @@ impl Translations for CodonTable {
         }
     }
 
-    #[allow(unused)]
+    /// Finds all associate mutations within a gene region in the form of a gff record
+    /// If there are associated variants in this gene attempts to calculate dN/dS ratios for
+    /// the given sample
+    /// Returns a tuple of the number of frameshifts and dN/dS ratio
+    /// TODO: Refactor so calculates for all samples at once without having to re-read the variant
+    ///       region each time.
     fn find_mutations(
         &self,
         gene: &bio::io::gff::Record,
-        variants: &HashMap<i64, HashMap<Variant, Base>>,
-        ref_sequence: &Vec<u8>,
+        variants: &mut rust_htslib::bcf::IndexedReader,
+        reference_reader: &mut ReferenceReader,
+        ref_idx: usize,
         sample_idx: usize,
-    ) -> f64 {
+    ) -> (usize, f64) {
         match gene.strand() {
             Some(strand) => {
+
+                let contig_name = gene.seqname();
+                let rid = if let Some(rid) = VariantContext::get_contig_vcf_tid(variants.header(), contig_name.as_bytes()) {
+                    rid
+                } else {
+                    // no variants on this contig so skip
+                    return (0, 1.0)
+                };
+
+                reference_reader.fetch_contig_from_reference_by_tid(rid as usize, ref_idx);
+
                 // bio::gff documentation says start and end positions are 1-based, so we minus 1
-                // Additionally, end position is non-inclusive
-                let start = gene.start().clone() as usize - 1;
-                let end = gene.end().clone() as usize;
+                // Additionally, end position is non-inclusive so do minus 1
+                let start = *gene.start() as usize - 1;
+                let end = *gene.end() as usize - 1;
+
+                // fetch variants in this window
+                variants.fetch(rid, start as u64, Some(end as u64));
+
                 let frame: usize = match gene.frame().parse() {
                     Ok(frame_val) => frame_val,
-                    Err(_) => return 0.,
+                    Err(_) => 0,
                 };
-                let gene_sequence = ref_sequence[start..end].to_vec();
-                debug!("Gene Seq {:?}", String::from_utf8_lossy(&gene_sequence));
+                let gene_sequence = &reference_reader.current_sequence[start..=end];
+                debug!("Gene Seq {:?}", String::from_utf8_lossy(gene_sequence));
                 let codon_sequence = get_codons(&gene_sequence, frame, strand);
                 debug!("Codon Sequence {:?}", codon_sequence);
 
@@ -161,14 +186,14 @@ impl Translations for CodonTable {
                 let mut big_n: f64 = 0.0;
                 let mut big_s: f64 = 0.0;
                 for codon in codon_sequence.iter() {
-                    if String::from_utf8(codon.clone())
+                    if std::str::from_utf8(codon)
                         .expect("Unable to interpret codon")
                         .contains('N')
                         || codon.len() != 3
                     {
                         continue;
                     } else {
-                        let n = self.ns_sites[codon];
+                        let n = self.ns_sites.get(codon).unwrap();
                         big_n += n;
                         big_s += 3.0 - n;
                     }
@@ -187,120 +212,142 @@ impl Translations for CodonTable {
                 let mut new_codons: Vec<Vec<u8>> = vec![];
                 let mut positionals = 0;
                 let mut total_variants = 0;
-                let dummy = HashMap::new();
-                for (gene_cursor, cursor) in (start..end).into_iter().enumerate() {
-                    let variant_set = match variants.get(&(cursor as i64)) {
-                        Some(map) => map,
-                        None => &dummy,
-                    };
+                let mut gene_cursor = 0; // index inside gene, i.e, position of variant
+                let mut reference_cursor = start; // index of reference sequence
+                let mut frameshifts = 0;
+                for record in variants.records().into_iter() {
+                    match record {
+                        Ok(mut record) => {
+                            match VariantContext::from_vcf_record(&mut record, true) {
+                                Some(context) => {
+                                    // gained bases is the difference between current and previous
+                                    // position
+                                    let gained_bases = context.loc.start - gene_cursor;
+                                    // update previous position to current position
+                                    gene_cursor = context.loc.start;
+                                    // add gained bases to reference cursor
+                                    reference_cursor += gained_bases;
 
-                    let codon_idx = gene_cursor / 3 as usize;
-                    let codon_cursor = gene_cursor % 3;
-                    if String::from_utf8(codon.clone())
-                        .expect("Unable to interpret codon")
-                        .contains('N')
-                    {
-                        continue;
-                    }
+                                    // index of current codon in gene
+                                    // number of codons is gene size divided by three
+                                    let codon_idx = gene_cursor / 3 as usize;
+                                    // index of current position in the current codon
+                                    // all codons have size == 3
+                                    let codon_cursor = gene_cursor % 3;
 
-                    if codon_cursor == 0 || new_codons.len() == 0 {
-                        for new_codon in new_codons.iter_mut() {
-                            if (codon.len() == 3) && (new_codon.len() == 3) && (codon != *new_codon)
-                            {
-                                // get indices of different locations
-                                let mut pos = 0 as usize;
-                                let mut diffs = vec![];
-                                for (c1, c2) in codon.iter().zip(new_codon.iter()) {
-                                    if c1 != c2 {
-                                        diffs.push(pos);
+                                    if std::str::from_utf8(codon.as_slice())
+                                        .expect("Unable to interpret codon")
+                                        .contains('N')
+                                    {
+                                        continue;
                                     }
-                                    pos += 1;
-                                }
-                                total_variants += diffs.len();
-                                // get permuations of positions
-                                let permutations: Vec<Vec<usize>> =
-                                    diffs.iter().cloned().permutations(diffs.len()).collect();
 
-                                // calculate synonymous and non-synonymous for each permutation
-                                let mut ns = 0;
-                                let mut ss = 0;
-                                debug!(
-                                    "positional difference {:?} permutations {:?}",
-                                    diffs,
-                                    permutations.len()
-                                );
-                                positionals += permutations.len();
-                                for permutation in permutations.iter() {
-                                    let mut shifting = codon.clone();
-                                    let mut old_shift;
-                                    for pos in permutation {
-                                        // Check if one amino acid change causes an syn or non-syn
-                                        old_shift = shifting.clone();
-                                        shifting[*pos] = new_codon[*pos];
-                                        debug!("Old shift {:?}, new {:?}", old_shift, shifting);
-                                        if self.aminos[&old_shift] != self.aminos[&shifting] {
-                                            ns += 1;
-                                        } else {
-                                            ss += 1;
-                                        }
-                                    }
-                                }
-                                let nd = ns as f64 / permutations.len() as f64;
-                                let sd = ss as f64 / permutations.len() as f64;
-                                big_nd += nd;
-                                big_sd += sd;
-                            }
-                        }
-                        // begin working on new codon
-                        debug!(
-                            "Codon idx {} codonds {} gene length {} new_codons {:?}",
-                            codon_idx,
-                            codon_sequence.len(),
-                            gene_sequence.len(),
-                            new_codons
-                        );
-                        if codon_sequence.len() == 268 {
-                            debug!("{:?}", codon_sequence);
-                        }
-                        codon = codon_sequence[codon_idx].clone();
-                        if codon.len() != 3 {
-                            continue;
-                        }
-                        new_codons = vec![codon.clone()];
-                    }
-                    if variant_set.len() > 0 {
-                        debug!("variant map {:?}", variant_set);
-                        let mut variant_count = 0;
+                                    if codon_cursor == 0 || new_codons.len() == 0 {
+                                        for new_codon in new_codons.iter_mut() {
+                                            if (codon.len() == 3) && (new_codon.len() == 3) && (codon != *new_codon)
+                                            {
+                                                // get indices of different locations
+                                                let mut pos = 0 as usize;
+                                                let mut diffs = vec![];
+                                                for (c1, c2) in codon.iter().zip(new_codon.iter()) {
+                                                    if c1 != c2 {
+                                                        diffs.push(pos);
+                                                    }
+                                                    pos += 1;
+                                                }
+                                                total_variants += diffs.len();
+                                                // get permuations of positions
+                                                let permutations: Vec<Vec<&usize>> =
+                                                    diffs.iter().permutations(diffs.len()).collect();
 
-                        for (variant, base_info) in variant_set.iter() {
-                            match variant {
-                                Variant::SNV(var) => {
-                                    if base_info.truedepth[sample_idx] > 0 {
-                                        if variant_count > 0 {
-                                            // Create a copy of codon up to this point
-                                            // Not sure if reusing previous variants is bad, but
-                                            // not doing so can cause randomness to dN/dS values
-
-                                            new_codons.push(codon.clone());
-
-                                            new_codons[variant_count][codon_cursor] = *var;
-
-                                            debug!("multi variant codon {:?}", new_codons);
-                                        } else {
-                                            for var_idx in 0..new_codons.len() {
-                                                new_codons[var_idx][codon_cursor] = *var;
+                                                // calculate synonymous and non-synonymous for each permutation
+                                                let mut ns = 0;
+                                                let mut ss = 0;
+                                                debug!(
+                                                    "positional difference {:?} permutations {:?}",
+                                                    diffs,
+                                                    permutations.len()
+                                                );
+                                                positionals += permutations.len();
+                                                for permutation in permutations.iter() {
+                                                    let mut shifting = codon.clone();
+                                                    let mut old_shift;
+                                                    for pos in permutation {
+                                                        // Check if one amino acid change causes an syn or non-syn
+                                                        old_shift = shifting.clone();
+                                                        shifting[**pos] = new_codon[**pos];
+                                                        debug!("Old shift {:?}, new {:?}", old_shift, shifting);
+                                                        if self.aminos[&old_shift] != self.aminos[&shifting] {
+                                                            ns += 1;
+                                                        } else {
+                                                            ss += 1;
+                                                        }
+                                                    }
+                                                }
+                                                let nd = ns as f64 / permutations.len() as f64;
+                                                let sd = ss as f64 / permutations.len() as f64;
+                                                big_nd += nd;
+                                                big_sd += sd;
                                             }
                                         }
-                                        variant_count += 1;
+                                        // begin working on new codon
+                                        debug!(
+                                            "Codon idx {} codonds {} gene length {} new_codons {:?}",
+                                            codon_idx,
+                                            codon_sequence.len(),
+                                            gene_sequence.len(),
+                                            new_codons
+                                        );
+                                        codon = codon_sequence[codon_idx].clone();
+                                        if codon.len() != 3 {
+                                            continue;
+                                        }
+                                        new_codons = vec![codon.clone()];
                                     }
-                                }
-                                _ => {
-                                    // Frameshift mutations are not included in dN/dS calculations?
-                                    // Seems weird, but all formulas say no
-                                    debug!("Frameshift mutation variant {:?}", variant);
-                                    continue;
+
+                                    let ref_allele = context.get_reference();
+                                    let mut snp_count = 0;
+
+                                    // iterate through non reference alleles
+                                    // if those alleles are present in this sample then
+                                    // increment appropriate values
+                                    for (allele_index, allele) in context.get_alternate_alleles_with_index() {
+                                        if allele.bases.len() > 1 || allele.bases.len() != ref_allele.bases.len() {
+                                            if context.get_genotypes().genotypes()[sample_idx].ad[allele_index] > 0 {
+                                                frameshifts += 1;
+                                            }
+                                            continue
+                                        }
+
+                                        if context.get_genotypes().genotypes()[sample_idx].ad[allele_index] > 0 {
+                                            snp_count += 1;
+                                            if snp_count > 1 {
+                                                // Create a copy of codon up to this point
+                                                // Not sure if reusing previous variants is bad, but
+                                                // not doing so can cause randomness to dN/dS values
+
+                                                new_codons.push(codon.clone());
+
+                                                new_codons[snp_count][codon_cursor] = allele.bases[0];
+
+                                                debug!("multi snp codon {:?}", new_codons);
+                                            } else {
+                                                for var_idx in 0..new_codons.len() {
+                                                    new_codons[var_idx][codon_cursor] = allele.bases[0];
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                None => {
+                                    continue
                                 }
                             }
+
+                        },
+                        Err(_) => {
+                            // Skip error record
+                            continue
                         }
                     }
                 }
@@ -334,10 +381,9 @@ impl Translations for CodonTable {
                 if dnds.is_nan() {
                     dnds = 1.
                 }
-
-                return dnds;
+                return (frameshifts, dnds);
             }
-            _ => return 0.,
+            _ => return (0, 1.0),
         }
     }
 
@@ -357,8 +403,8 @@ impl Translations for CodonTable {
 }
 
 #[allow(unused)]
-pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: Strand) -> Vec<Vec<u8>> {
-    let codons = match strandedness {
+pub fn get_codons<'a>(sequence: &'a [u8], frame: usize, strandedness: Strand) -> Vec<Vec<u8>> {
+    match strandedness {
         Strand::Forward | Strand::Unknown => sequence[0 + frame..]
             .chunks(3)
             .map(|chunk| chunk.to_vec())
@@ -370,8 +416,7 @@ pub fn get_codons(sequence: &Vec<u8>, frame: usize, strandedness: Strand) -> Vec
                 .map(|chunk| chunk.to_vec())
                 .collect::<Vec<Vec<u8>>>()
         }
-    };
-    return codons;
+    }
 }
 
 #[cfg(test)]
