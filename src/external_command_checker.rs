@@ -111,4 +111,5 @@ fn check_for_external_command_presence(executable_name: &str, testing_cmd: &str)
             executable_name, testing_cmd
         );
     }
+    debug!("Success! {} found.", executable_name);
 }

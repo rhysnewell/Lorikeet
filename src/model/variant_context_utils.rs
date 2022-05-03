@@ -75,6 +75,78 @@ impl VariantContextUtils {
         }
     }
 
+    pub fn passes_thresholds(
+        context: &mut VariantContext,
+        qual_by_depth_filter: f64,
+        qual_threshold: f64
+    ) -> bool {
+        match context.attributes.get("QF").cloned() {
+            Some(attribute) => {
+                match attribute {
+                    AttributeObject::String(passes) => {
+                        match passes.as_str() {
+                            "true" => true,
+                            "false" => false,
+                            _ => Self::check_thresholds(
+                                context,
+                                qual_by_depth_filter,
+                                qual_threshold
+                            ),
+                        }
+                    },
+                    _ => Self::check_thresholds(
+                            context,
+                            qual_by_depth_filter,
+                            qual_threshold
+                        ),
+                }
+            },
+            None => Self::check_thresholds(
+                context,
+                qual_by_depth_filter,
+                qual_threshold
+            ),
+        }
+    }
+
+    fn check_thresholds(
+        context: &mut VariantContext,
+        qual_by_depth_filter: f64,
+        qual_threshold: f64
+    ) -> bool {
+        match context.attributes.get("QD").cloned() {
+            Some(attribute) => {
+                match attribute {
+                    AttributeObject::f64(val) => {
+                        let result = val >= qual_by_depth_filter && context.log10_p_error <= qual_threshold;
+                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                        result
+                    },
+                    _ => {
+                        if context.has_log10_p_error() {
+                            let result = context.log10_p_error <= qual_threshold;
+                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                            result
+                        } else {
+                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
+                            false
+                        }
+                    }
+                }
+            },
+            None => {
+                if context.has_log10_p_error() {
+                    let result = context.log10_p_error <= qual_threshold;
+                    context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
+                    result
+                } else {
+                    context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
+                    false
+                }
+            }
+        }
+    }
+
     pub fn get_num_tandem_repeat_units_main(
         ref_bases: &[u8],
         alt_bases: &[u8],

@@ -28,7 +28,7 @@ use bird_tool_utils::command::finish_command_safely;
 use std::process::{Command, Stdio};
 use num::Saturating;
 use rust_htslib::bcf::Read;
-use processing::codon_structs::{CodonTable, Translations};
+use evolve::codon_structs::{CodonTable, Translations};
 use bio::io::gff::GffType::GFF3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,13 +133,13 @@ impl<'a> LorikeetEngine<'a> {
                         "{}/*{}",
                         &output_prefix,
                         if mode == "call" {
-                            ".bcf"
+                            ".vcf*"
                         } else if mode == "genotype" {
                             "strain_coverages.tsv"
                         } else if mode == "consensus" {
                             "consensus_*.fna"
                         } else {
-                            ".bcf"
+                            ".vcf*"
                         }
                     ))
                     .expect("failed to interpret glob")
@@ -150,44 +150,104 @@ impl<'a> LorikeetEngine<'a> {
                             .to_string()
                     });
                     if cache.count() > 0 {
-                        {
-                            let elem = &progress_bars[ref_idx + 2];
-                            let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
-                        }
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
+                        if self.args.is_present("calculate-dnds") {
+                            scope.execute(move || {
+                                // This is here to calculate dnds values if calculate dnds is
+                                // specified but not force. Kind of an edge case, but I think
+                                // it could happen often. Avoids recalling variants.
+                                // Needs a refactor
+                                let reference = &genomes_and_contigs.genomes[ref_idx];
+                                Self::begin_tick(
+                                    ref_idx + 2,
+                                    &progress_bars,
+                                    &multi_inner,
+                                    "Calculating evolutionary rates...",
+                                );
 
-                            pb.progress_bar.set_message(format!(
-                                "{}: Output already present. Run with --force to overwrite",
-                                &genomes_and_contigs.genomes[ref_idx]
-                            ));
-                            pb.progress_bar.finish_and_clear();
-                        }
-                        {
-                            let pb = &tree.lock().unwrap()[1];
-                            pb.progress_bar.inc(1);
-                            pb.progress_bar.reset_eta();
-                            let pos = pb.progress_bar.position();
-                            let len = pb.progress_bar.length();
-                            if pos >= len {
-                                pb.progress_bar
-                                    .finish_with_message(format!("All genomes analyzed {}", "✔",));
+                                let mut reference_reader = ReferenceReader::new(
+                                    &Some(references[ref_idx].to_string()),
+                                    genomes_and_contigs.clone(),
+                                    genomes_and_contigs.contig_to_genome.len(),
+                                );
+
+                                calculate_dnds(
+                                    self.args,
+                                    references[ref_idx],
+                                    output_prefix.as_str(),
+                                    &mut reference_reader,
+                                    ref_idx,
+                                    self.short_read_bam_count + self.long_read_bam_count,
+                                );
+
+                                {
+                                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                    pb.progress_bar
+                                        .set_message(format!("{}: All steps completed {}", &reference, "✔",));
+                                    pb.progress_bar.finish_and_clear();
+                                }
+                                {
+                                    let pb = &tree.lock().unwrap()[1];
+                                    pb.progress_bar.inc(1);
+                                    let pos = pb.progress_bar.position();
+                                    let len = pb.progress_bar.length();
+                                    if pos >= len {
+                                        pb.progress_bar
+                                            .finish_with_message(format!("All genomes analyzed {}", "✔",));
+                                    }
+                                }
+                                {
+                                    let pb = &tree.lock().unwrap()[0];
+                                    pb.progress_bar.inc(1);
+                                    let pos = pb.progress_bar.position();
+                                    let len = pb.progress_bar.length();
+                                    if pos >= len {
+                                        pb.progress_bar
+                                            .finish_with_message(format!("All steps completed {}", "✔",));
+                                    }
+                                }
+                            });
+                            continue
+                        } else {
+                            {
+                                let elem = &progress_bars[ref_idx + 2];
+                                let pb = multi_inner.insert(ref_idx + 2, elem.progress_bar.clone());
                             }
-                        }
-                        {
-                            let pb = &tree.lock().unwrap()[0];
-                            pb.progress_bar.inc(
-                                1
-                            );
-                            pb.progress_bar.reset_eta();
-                            let pos = pb.progress_bar.position();
-                            let len = pb.progress_bar.length();
-                            if pos >= len {
-                                pb.progress_bar
-                                    .finish_with_message(format!("All steps completed {}", "✔",));
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Output already present. Run with --force to overwrite",
+                                    &genomes_and_contigs.genomes[ref_idx]
+                                ));
+                                pb.progress_bar.finish_and_clear();
                             }
+                            {
+                                let pb = &tree.lock().unwrap()[1];
+                                pb.progress_bar.inc(1);
+                                pb.progress_bar.reset_eta();
+                                let pos = pb.progress_bar.position();
+                                let len = pb.progress_bar.length();
+                                if pos >= len {
+                                    pb.progress_bar
+                                        .finish_with_message(format!("All genomes analyzed {}", "✔",));
+                                }
+                            }
+                            {
+                                let pb = &tree.lock().unwrap()[0];
+                                pb.progress_bar.inc(
+                                    1
+                                );
+                                pb.progress_bar.reset_eta();
+                                let pos = pb.progress_bar.position();
+                                let len = pb.progress_bar.length();
+                                if pos >= len {
+                                    pb.progress_bar
+                                        .finish_with_message(format!("All steps completed {}", "✔",));
+                                }
+                            }
+                            continue;
                         }
-                        continue;
+
                     }
                 }
 
@@ -373,7 +433,7 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-                        if !self.args.is_present("do-not-calculate-evolution") {
+                        if self.args.is_present("calculate-dnds") {
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar.set_message(format!(
@@ -383,7 +443,7 @@ impl<'a> LorikeetEngine<'a> {
                             }
                             calculate_dnds(
                                 self.args,
-                                reference.as_str(),
+                                references[ref_idx],
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
@@ -479,7 +539,7 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
-                            if !self.args.is_present("do-not-calculate-evolution") {
+                            if self.args.is_present("calculate-dnds") {
                                 {
                                     let pb = &tree.lock().unwrap()[ref_idx + 2];
                                     pb.progress_bar.set_message(format!(
@@ -489,7 +549,7 @@ impl<'a> LorikeetEngine<'a> {
                                 }
                                 calculate_dnds(
                                     self.args,
-                                    reference.as_str(),
+                                    references[ref_idx],
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
@@ -524,7 +584,7 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
-                            if !self.args.is_present("do-not-calculate-evolution") {
+                            if self.args.is_present("calculate-dnds") {
                                 {
                                     let pb = &tree.lock().unwrap()[ref_idx + 2];
                                     pb.progress_bar.set_message(format!(
@@ -534,7 +594,7 @@ impl<'a> LorikeetEngine<'a> {
                                 }
                                 calculate_dnds(
                                     self.args,
-                                    reference.as_str(),
+                                    references[ref_idx],
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
@@ -580,7 +640,7 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-                        if !self.args.is_present("do-not-calculate-evolution") {
+                        if self.args.is_present("calculate-dnds") {
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
                                 pb.progress_bar.set_message(format!(
@@ -590,7 +650,7 @@ impl<'a> LorikeetEngine<'a> {
                             }
                             calculate_dnds(
                                 self.args,
-                                reference.as_str(),
+                                references[ref_idx],
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
@@ -852,9 +912,10 @@ pub fn start_lorikeet_engine<
     concatenated_genomes: Option<NamedTempFile>,
 ) {
     let threads = m.value_of("threads").unwrap().parse().unwrap();
+    debug!("Parsing reference info...");
     let references = ReferenceReaderUtils::parse_references(&m);
     let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
-
+    debug!("Retrieving references...");
     ReferenceReaderUtils::retrieve_reference(&Some(
         concatenated_genomes
             .as_ref()
@@ -1030,6 +1091,7 @@ fn check_for_gff(reference: &str, output_prefix: &str, m: &clap::ArgMatches) -> 
         debug!("Too many GFF files in output folder: {}", output_prefix);
         return None
     } else if cache.len() == 1 {
+        debug!("Reading cached gff file: {}", &cache[0]);
         // Read in previous gff file
         let gff_reader = bio::io::gff::Reader::from_file(
             &cache[0],
@@ -1075,48 +1137,69 @@ fn calculate_dnds(
     ref_idx: usize,
     sample_count: usize,
 ) {
+    let qual_by_depth_filter: f64 = args
+        .value_of("qual-by-depth-filter")
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    let depth_per_sample_filter: i64 = args
+        .value_of("depth-per-sample-filter")
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    let qual_filter = args.value_of("qual-threshold")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap() / -10.0;
+
     match check_for_gff(reference, output_prefix, args) {
         Some(mut genes) => {
             let vcf_path = format!(
-                "{}/{}.bcf",
+                "{}/{}.vcf",
                 output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
             );
-            let mut variants = VariantContext::retrieve_indexed_vcf_file(vcf_path.as_str());
-
+            debug!("Reading VCF: {}", &vcf_path);
+            let mut variants = VariantContext::generate_vcf_index(vcf_path.as_str());
+            debug!("Success!");
             let mut dnds_calculator = CodonTable::setup();
             dnds_calculator.get_codon_table(11);
 
             let mut new_gff_writer = bio::io::gff::Writer::to_file(
                 format!(
-                    "{}/genes.gff",
+                    "{}/{}.gff",
                     output_prefix,
+                    &reference_reader.genomes_and_contigs.genomes[ref_idx]
                 ),
                 GFF3
             ).expect("Unable to create GFF file");
 
             for gene in genes.records() {
+
                 match gene {
                     Ok(mut gene) => {
-                        let mut frameshifts = Vec::with_capacity(sample_count);
-                        let mut dnds_values = Vec::with_capacity(sample_count);
 
-                        for sample_index in 0..sample_count {
-                            let (frameshift, dnds) = dnds_calculator.find_mutations(
-                                &gene,
-                                &mut variants,
-                                reference_reader,
-                                ref_idx,
-                                sample_index
-                            );
-
-                            frameshifts.push(frameshift);
-                            dnds_values.push(dnds);
-                        }
+                        let (snps, frameshifts, dnds_values) = dnds_calculator.find_mutations(
+                            &gene,
+                            &mut variants,
+                            reference_reader,
+                            ref_idx,
+                            sample_count,
+                            qual_by_depth_filter,
+                            qual_filter,
+                            depth_per_sample_filter
+                        );
 
                         let attributes = gene.attributes_mut();
-                        attributes.insert("frameshifts".to_string(), format!("{:?}", frameshifts));
+
+                        attributes.insert("snps".to_string(), format!("{:?}", snps));
+                        attributes.insert("indels".to_string(), format!("{:?}", frameshifts));
                         attributes.insert("dN/dS".to_string(), format!("{:?}", dnds_values));
-                        new_gff_writer.write(&gene);
+                        match new_gff_writer.write(&gene) {
+                            Ok(_) => continue,
+                            Err(_) => panic!("Unable to write to GFF file")
+                        };
                     },
                     Err(_) => {
                         continue
@@ -1126,7 +1209,12 @@ fn calculate_dnds(
         },
         None => {
             // too many GFF files in output folder, abort this genome
-            warn!("Not calculating evolutionary rates for {} as their are too many GFF files in output folder: {}", &reference, &output_prefix);
+            debug!("Not calculating evolutionary rates for {} as their are too many GFF files in output folder: {}", &reference, &output_prefix);
         }
     };
+
+    let placeholder_gene_file = format!("{}/genes.gff", output_prefix);
+    if Path::new(&placeholder_gene_file).exists() {
+        std::fs::remove_file(&placeholder_gene_file);
+    }
 }

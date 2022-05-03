@@ -24,6 +24,7 @@ use std::ops::Range;
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -681,7 +682,7 @@ impl VariantContext {
             .into_iter()
             .map(|record| {
                 let mut vcf_record = record.unwrap();
-                let vc = Self::from_vcf_record(&mut vcf_record, false);
+                let vc = Self::from_vcf_record(&mut vcf_record, true);
                 vc.unwrap()
             })
             .collect::<Vec<VariantContext>>();
@@ -714,7 +715,10 @@ impl VariantContext {
 
     pub fn retrieve_indexed_vcf_file(file: &str) -> IndexedReader {
         match IndexedReader::from_path(file) {
-            Ok(vcf_reader) => return vcf_reader,
+            Ok(vcf_reader) => {
+                debug!("Found readable VCF file");
+                return vcf_reader
+            },
             Err(_e) => {
                 // vcf file likely not indexed
                 Self::generate_vcf_index(file)
@@ -724,12 +728,23 @@ impl VariantContext {
 
     pub fn generate_vcf_index<S: AsRef<str>>(vcf_path: S) -> IndexedReader {
         check_for_bcftools();
-        info!("Generating VCF index");
-        let cmd_string = format!(
-            "set -e -o pipefail; \
-                     bcftools index {}",
-            vcf_path.as_ref()
-        );
+        debug!("Generating VCF index");
+        let gzip_path = format!("{}.gz", vcf_path.as_ref());
+        let cmd_string = if !Path::new(&gzip_path).exists() {
+            format!(
+                "set -e -o pipefail; \
+            bgzip {}; bcftools index {}.gz",
+                vcf_path.as_ref(),
+                vcf_path.as_ref(),
+            )
+        } else {
+            format!(
+                "set -e -o pipefail; \
+                bcftools index {}.gz",
+                vcf_path.as_ref(),
+            )
+        };
+
         debug!("Queuing cmd_string: {}", cmd_string);
 
         std::process::Command::new("bash")
@@ -739,7 +754,7 @@ impl VariantContext {
             .output()
             .expect("Unable to execute bash");
 
-        return IndexedReader::from_path(vcf_path.as_ref()).expect(
+        return IndexedReader::from_path(&gzip_path).expect(
             "Unable to generate index. Please ensure you have gzipped your file using 'bgzip -c'.",
         );
     }
@@ -927,15 +942,18 @@ impl VariantContext {
     /// and find the rid from a split in the contig name
     pub fn get_contig_vcf_tid(vcf_header: &HeaderView, contig_name: &[u8]) -> Option<u32> {
         match vcf_header.name2rid(contig_name) {
-            Ok(rid) => return Some(rid),
+            Ok(rid) => Some(rid),
             Err(_) => {
                 // Remove leading reference stem
                 debug!("Attempting to find {:?}", std::str::from_utf8(ReferenceReader::split_contig_name(contig_name, '~' as u8)));
                 match vcf_header
                     .name2rid(ReferenceReader::split_contig_name(contig_name, '~' as u8))
                 {
-                    Ok(rid) => return Some(rid),
-                    Err(_) => return None,
+                    Ok(rid) => Some(rid),
+                    Err(_) => match vcf_header.name2rid(contig_name) {
+                        Ok(rid) => Some(rid),
+                        Err(_) => None
+                    }
                 }
             }
         }

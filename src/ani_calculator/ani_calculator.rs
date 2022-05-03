@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 use genotype::genotype_builder::AttributeObject;
 use annotator::variant_annotation::{Annotation, VariantAnnotations};
+use model::variant_context_utils::VariantContextUtils;
 
 /// Holds the population and consensus ANI arrays
 /// Compares ANI between samples (Non-diagonal cells) and the ANI of sample compared to reference (Diagonals)
@@ -104,37 +105,9 @@ impl ANICalculator {
 
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
-            let passes = match context.attributes.get("QD").cloned() {
-                Some(attribute) => {
-                    match attribute {
-                        AttributeObject::f64(val) => {
-                            let result = val >= qual_by_depth_filter && context.log10_p_error <= qual_threshold;
-                            context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
-                            result
-                        },
-                        _ => {
-                            if context.has_log10_p_error() {
-                                let result = context.log10_p_error <= qual_threshold;
-                                context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
-                                result
-                            } else {
-                                context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
-                                false
-                            }
-                        }
-                    }
-                },
-                None => {
-                    if context.has_log10_p_error() {
-                        let result = context.log10_p_error <= qual_threshold;
-                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String(format!("{}", result)));
-                        result
-                    } else {
-                        context.attributes.insert(VariantAnnotations::Qualified.to_key().to_string(), AttributeObject::String("false".to_string()));
-                        false
-                    }
-                }
-            };
+            let passes = VariantContextUtils::passes_thresholds(
+                context, qual_by_depth_filter, qual_threshold
+            );
             if passes {
                 // println!("Context passes {} {}", context.log10_p_error, context.get_dp());
                 // don't consider poor quality variant sites

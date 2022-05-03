@@ -1107,6 +1107,17 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .required(false),
                 )
                 .arg(
+                    Arg::with_name("calculate-dnds")
+                        .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("prodigal-params")
+                        .long("prodigal-params")
+                        .takes_value(true)
+                        .default_value("-p meta")
+                )
+                .arg(
                     Arg::with_name("limiting-interval")
                         .long("limiting-interval")
                         .required(false)
@@ -1772,6 +1783,17 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .required(false),
                 )
                 .arg(
+                    Arg::with_name("calculate-dnds")
+                        .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("prodigal-params")
+                        .long("prodigal-params")
+                        .takes_value(true)
+                        .default_value("-p meta")
+                )
+                .arg(
                     Arg::with_name("limiting-interval")
                         .long("limiting-interval")
                         .required(false)
@@ -2429,6 +2451,17 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .required(false),
                 )
                 .arg(
+                    Arg::with_name("calculate-dnds")
+                        .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("prodigal-params")
+                        .long("prodigal-params")
+                        .default_value("-p meta")
+                        .takes_value(true)
+                )
+                .arg(
                     Arg::with_name("limiting-interval")
                         .long("limiting-interval")
                         .required(false)
@@ -3078,6 +3111,17 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("ploidy")
                         .default_value("1")
                         .required(false),
+                )
+                .arg(
+                    Arg::with_name("calculate-dnds")
+                        .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("prodigal-params")
+                        .long("prodigal-params")
+                        .takes_value(true)
+                        .default_value("-p meta")
                 )
                 .arg(
                     Arg::with_name("limiting-interval")

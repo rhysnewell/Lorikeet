@@ -15,6 +15,7 @@ pub mod annotator;
 pub mod assembly;
 pub mod cli;
 pub mod external_command_checker;
+pub mod evolve;
 pub mod genotype;
 pub mod graphs;
 pub mod haplotype;
