@@ -352,7 +352,7 @@ impl Translations for CodonTable {
                                                 );
                                             }
                                             // begin working on new codon
-                                            new_codons[sample_idx] = vec![codon.clone()];
+                                            new_codons[sample_idx] = Vec::new();
                                         }
 
                                         let mut which_are_present =
@@ -370,6 +370,9 @@ impl Translations for CodonTable {
                                         // if those alleles are present in this sample then
                                         // increment appropriate values
                                         for (allele_index, allele) in context.get_alternate_alleles_with_index() {
+                                            if new_codons[sample_idx].len() == 0 {
+                                                new_codons[sample_idx] = vec![codon.clone()];
+                                            }
                                             if allele.bases.len() > 1 || allele.bases.len() != ref_allele.bases.len() {
                                                 if which_are_present[allele_index] {
                                                     frameshifts[sample_idx] += 1;
@@ -394,9 +397,7 @@ impl Translations for CodonTable {
 
                                                     debug!("multi snp codon {:?}", new_codons[sample_idx]);
                                                 } else {
-                                                    if new_codons[sample_idx].len() == 0 {
-                                                        new_codons[sample_idx] = vec![codon.clone()];
-                                                    }
+
                                                     for var_idx in 0..new_codons[sample_idx].len() {
                                                         debug!("s {} v {} c {}. Size {}", sample_idx, var_idx, codon_cursor, new_codons[sample_idx].len());
                                                         new_codons[sample_idx][var_idx][codon_cursor] = allele.bases[0];
@@ -445,12 +446,10 @@ impl Translations for CodonTable {
 
                     // negative dnds values make no sense, but occur nonetheless
                     // Just make them 0.0
-                    if dnds.is_sign_negative() {
-                        dnds = 0.0
-                    }
-
-                    if dnds.is_nan() {
+                    if dnds.is_nan() || d_s - 0.0 <= f64::EPSILON {
                         dnds = 1.
+                    } else if dnds.is_sign_negative() {
+                        dnds = 0.0
                     }
                     dnds_values[sample_idx] = dnds
                 }
