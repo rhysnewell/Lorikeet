@@ -202,10 +202,17 @@ impl Translations for CodonTable {
                     {
                         continue;
                     } else {
-                        let n = self.ns_sites.get(codon).unwrap();
-                        for sample_idx in 0..n_samples {
-                            big_n[sample_idx] += n;
-                            big_s[sample_idx] += 3.0 - n;
+                        match self.ns_sites.get(codon) {
+                            Some(n) => {
+                                for sample_idx in 0..n_samples {
+                                    big_n[sample_idx] += n;
+                                    big_s[sample_idx] += 3.0 - n;
+                                }
+                            },
+                            None => {
+                                debug!("Codon {:?} not found", std::str::from_utf8(codon.as_slice()));
+                                continue
+                            }
                         }
                     }
                 }

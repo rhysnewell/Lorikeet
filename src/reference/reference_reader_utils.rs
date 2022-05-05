@@ -194,8 +194,8 @@ impl ReferenceReaderUtils {
                 // Dereplicate if required
                 // TODO: Properly implement dereplication in cli.rs and make sure function works
                 let dereplicated_genomes: Vec<String> = if m.is_present("dereplicate") {
-                    Self::dereplicate(m, &genome_fasta_files_opt.unwrap())
-                    // genome_fasta_files_opt.unwrap()
+                    // Self::dereplicate(m, &genome_fasta_files_opt.unwrap())
+                    genome_fasta_files_opt.unwrap()
                 } else {
                     genome_fasta_files_opt.unwrap()
                 };
@@ -212,7 +212,7 @@ impl ReferenceReaderUtils {
                     Self::extract_genomes_and_contigs_option(
                         m,
                         &dereplicated_genomes
-                            .clone()
+                            // .clone()
                             .iter()
                             .map(|s| s.as_str())
                             .collect(),

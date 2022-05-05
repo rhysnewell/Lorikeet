@@ -86,7 +86,8 @@ impl<'c> AssemblyRegionWalker<'c> {
         self.evaluator.collect_activity_profile_low_mem(
             indexed_bam_readers,
             self.short_read_bam_count,
-            self.long_read_bam_count,
+            // self.long_read_bam_count,
+            0,
             n_threads,
             self.ref_idx,
             args,
@@ -120,7 +121,8 @@ impl<'c> AssemblyRegionWalker<'c> {
         self.evaluator.collect_activity_profile(
             indexed_bam_readers,
             self.short_read_bam_count,
-            self.long_read_bam_count,
+            // self.long_read_bam_count,
+            0,
             n_threads,
             self.ref_idx,
             args,
