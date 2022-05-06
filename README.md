@@ -23,25 +23,7 @@ For detailed documentation of Lorikeet and the various algorithms and concepts i
 
 ### Installation
 
-#### Option 1: Install static binary
-You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
-conda environment using the lorikeet.yml.
-```
-GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
-cd Lorikeet;
-conda env create -n lorikeet -f lorikeet.yml;
-conda activate lorikeet
-```
-
-Once you have created the conda environment download and install the latest release file from github
-```
-wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.1.tar.gz;
-tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
-cp release/lorikeet $CONDA_PREFIX/bin;
-cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
-```
-
-#### Option 2: Build manually
+#### Option 1: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system. This method also assumes you have 
 previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
@@ -72,11 +54,11 @@ If you have access to https:// on port 443, then you can use this 'magic' comman
 git config --global url.https://github.com/.insteadOf git://github.com/
 ```
 
-#### Option 3: Conda *Only for version <= 0.5.0* 
+#### Option 2: Conda *Only for version <= 0.5.0* 
 #### Not recommended yet
 
 *NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
-up to date version, follow the instruction in option 2. 
+up to date version, follow the instruction in option 1. 
 
 Install into current conda environment:
 ```
@@ -87,6 +69,28 @@ Create fresh conda environment and install lorikeet there:
 ```
 conda create -n lorikeet -c bioconda lorikeet-genome && \
 conda activate lorikeet
+```
+
+#### Option 3: Install static binary **Not currently recommended**
+The static binary is the easiest to use, however it is compiled with `musl` which for some reason makes Lorikeet (and other
+rust binaries) perform much slower than they usually should. As such, we do not recommend using this static binary until
+this problem is sorted out.
+
+You can make use of the precompiled static binaries that come with this repository. You will have to install the lorikeet
+conda environment using the lorikeet.yml.
+```
+GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
+cd Lorikeet;
+conda env create -n lorikeet -f lorikeet.yml;
+conda activate lorikeet
+```
+
+Once you have created the conda environment download and install the latest release file from github
+```
+wget https://github.com/rhysnewell/Lorikeet/releases/download/latest/lorikeet-x86_64-unknown-linux-musl-v0.6.1.tar.gz;
+tar -xvzf lorikeet-x86_64-unknown-linux-musl-v*.tar.gz;
+cp release/lorikeet $CONDA_PREFIX/bin;
+cp release/remove_minimap2_duplicated_headers $CONDA_PREFIX/bin;
 ```
 
 ## Usage
