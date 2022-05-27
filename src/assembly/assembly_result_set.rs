@@ -75,6 +75,27 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         }
     }
 
+    pub fn default() -> Self {
+        Self {
+            assembly_result_by_kmer_size: HashMap::new(),
+            haplotypes: LinkedHashSet::new(),
+            assembly_result_by_haplotype: HashMap::new(),
+            region_for_genotyping: AssemblyRegion::new(SimpleInterval::new(0, 0, 1), false, 0, 1, 0, 0),
+            full_reference_with_padding: Vec::new(),
+            padded_reference_loc: SimpleInterval::new(0, 0, 1),
+            variation_present: false,
+            ref_haplotype: Haplotype::new("A".as_bytes(), false),
+            kmer_sizes: BTreeSet::new(),
+            variation_events: BTreeSet::new(),
+            last_max_mnp_distance_used: None,
+            assembly_results: Vec::new(),
+        }
+    }
+
+    pub fn get_ref_haplotype(&self) -> &Haplotype<SimpleInterval> {
+        &self.ref_haplotype
+    }
+
     /// Adds a haplotype to the result set without indicating a generating assembly result.
     ///
     ///

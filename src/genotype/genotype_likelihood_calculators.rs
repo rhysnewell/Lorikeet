@@ -288,7 +288,7 @@ impl GenotypeLikelihoodCalculators {
 
         let mut result = vec![GenotypeAlleleCounts::build_empty(); strong_ref_length];
         result[0] = GenotypeAlleleCounts::first(ploidy);
-        debug!("Strong ref length {}", strong_ref_length);
+        // debug!("Strong ref length {}", strong_ref_length);
         for genotype_index in 1..strong_ref_length {
             result[genotype_index] = result[genotype_index - 1].next();
         }

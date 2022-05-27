@@ -143,6 +143,41 @@ impl ReadThreadingAssembler {
         )
     }
 
+    pub fn default_with_kmers(
+        max_allowed_paths_for_read_threading_assembler: i32,
+        kmer_sizes: Vec<usize>,
+        prune_factor: i32,
+    ) -> Self {
+        Self::new(
+            max_allowed_paths_for_read_threading_assembler,
+            kmer_sizes,
+            true,
+            true,
+            1,
+            prune_factor,
+            false,
+            0.001,
+            2.0,
+            2.0,
+            std::usize::MAX,
+            false,
+            false,
+            3,
+        )
+    }
+
+    pub fn set_just_return_raw_graph(&mut self, value: bool) {
+        self.just_return_raw_graph = value;
+    }
+
+    pub fn set_remove_paths_not_connected_to_ref(&mut self, value: bool) {
+        self.remove_paths_not_connected_to_ref = value;
+    }
+
+    pub fn set_recover_dangling_branches(&mut self, value: bool) {
+        self.recover_dangling_branches = value;
+    }
+
     /**
      * Main entry point into the assembly engine. Build a set of deBruijn graphs out of the provided reference sequence and list of reads
      * @param assemblyRegion              AssemblyRegion object holding the reads which are to be used during assembly
@@ -299,7 +334,7 @@ impl ReadThreadingAssembler {
      * @param aligner {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return a non-null list of reads
      */
-    fn assemble<'b>(
+    pub fn assemble<'b>(
         &mut self,
         reads: &'b Vec<BirdToolRead>,
         ref_haplotype: &'b Haplotype<SimpleInterval>,
@@ -842,7 +877,9 @@ impl ReadThreadingAssembler {
         if ref_haplotype.len() < kmer_size {
             // happens in cases where the assembled region is just too small
             return Some(AssemblyResult::new(Status::Failed, None, None));
-        } else if !self.allow_non_unique_kmers_in_ref
+        }
+
+        if !self.allow_non_unique_kmers_in_ref
             && !ReadThreadingGraph::determine_non_unique_kmers(
                 &SequenceForKmers::new(
                     "ref".to_string(),
@@ -856,109 +893,111 @@ impl ReadThreadingAssembler {
             )
             .is_empty()
         {
+            debug!("Not using kmer size of {kmer_size} in read threading assembler because reference contains non-unique kmers");
             return None;
-        } else {
-            let mut rt_graph =
-            // if self.generate_seq_graph {
-                ReadThreadingGraph::new(
-                    kmer_size,
-                    false,
-                    self.min_base_quality_to_use_in_assembly,
-                    self.num_pruning_samples as usize,
-                    self.min_matching_bases_to_dangling_end_recovery,
-                    avx_mode
-                );
-            // } else {
-            //     // This is where the junction tree debruijn graph would go but considering it is experimental
-            //     // we will leave it out for now
-            //     ReadThreadingGraph::new(
-            //         kmer_size,
-            //         false,
-            //         self.min_base_quality_to_use_in_assembly,
-            //         self.num_pruning_samples as usize,
-            //         self.min_matching_bases_to_dangling_end_recovery,
-            //     )
-            // };
-
-            rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
-
-            // add the reference sequence to the graph
-            rt_graph.add_sequence(
-                "ref".to_string(),
-                // ReadThreadingGraph::ANONYMOUS_SAMPLE,
-                std::usize::MAX,
-                ref_haplotype.get_bases().to_vec(),
-                0,
-                ref_haplotype.get_bases().len(),
-                1,
-                true,
-            );
-
-            // Next pull kmers out of every read and throw them on the graph
-            for read in reads {
-                rt_graph.add_read(read, sample_names)
-            }
-
-            // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
-            // actually build the read threading graph
-            rt_graph.build_graph_if_necessary();
-
-            if self.debug_graph_transformations {
-                self.print_debug_graph_transform_abstract(
-                    &rt_graph,
-                    format!(
-                        "{}_{}-{}-sequenceGraph.{}.0.0.raw_threading_graph.dot",
-                        ref_haplotype.genome_location.as_ref().unwrap().tid(),
-                        ref_haplotype.genome_location.as_ref().unwrap().get_start(),
-                        ref_haplotype.genome_location.as_ref().unwrap().get_end(),
-                        kmer_size
-                    ),
-                )
-            }
-
-            // It's important to prune before recovering dangling ends so that we don't waste time recovering bad ends.
-            // It's also important to prune before checking for cycles so that sequencing errors don't create false cycles
-            // and unnecessarily abort assembly
-            if self.prune_before_cycle_counting {
-                self.chain_pruner
-                    .prune_low_weight_chains(rt_graph.get_base_graph_mut());
-            }
-
-            // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
-            if self.generate_seq_graph && rt_graph.has_cycles() {
-                debug!(
-                    "Not using kmer size of {}  in read threading assembler \
-                        because it contains a cycle",
-                    kmer_size
-                );
-                return None;
-            }
-
-            // sanity check: make sure the graph had enough complexity with the given kmer
-            if !allow_low_complexity_graphs && rt_graph.is_low_quality_graph() {
-                debug!(
-                    "Not using kmer size of {} in read threading assembler because it does not \
-                        produce a graph with enough complexity",
-                    kmer_size
-                );
-                return None;
-            }
-
-            let result = self.get_assembly_result(
-                ref_haplotype,
-                kmer_size,
-                rt_graph,
-                dangling_end_sw_parameters,
-            );
-            // check whether recovering dangling ends created cycles
-            if self.recover_all_dangling_branches
-                && result.threading_graph.as_ref().unwrap().has_cycles()
-            {
-                return None;
-            }
-
-            return Some(result);
         }
+
+        let mut rt_graph =
+        // if self.generate_seq_graph {
+            ReadThreadingGraph::new(
+                kmer_size,
+                false,
+                self.min_base_quality_to_use_in_assembly,
+                self.num_pruning_samples as usize,
+                self.min_matching_bases_to_dangling_end_recovery,
+                avx_mode
+            );
+        // } else {
+        //     // This is where the junction tree debruijn graph would go but considering it is experimental
+        //     // we will leave it out for now
+        //     ReadThreadingGraph::new(
+        //         kmer_size,
+        //         false,
+        //         self.min_base_quality_to_use_in_assembly,
+        //         self.num_pruning_samples as usize,
+        //         self.min_matching_bases_to_dangling_end_recovery,
+        //     )
+        // };
+
+        rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
+
+        // add the reference sequence to the graph
+        rt_graph.add_sequence(
+            "ref".to_string(),
+            // ReadThreadingGraph::ANONYMOUS_SAMPLE,
+            std::usize::MAX,
+            ref_haplotype.get_bases().to_vec(),
+            0,
+            ref_haplotype.get_bases().len(),
+            1,
+            true,
+        );
+
+        // Next pull kmers out of every read and throw them on the graph
+        for read in reads {
+            rt_graph.add_read(read, sample_names)
+        }
+
+        // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
+        // actually build the read threading graph
+        rt_graph.build_graph_if_necessary();
+
+        if self.debug_graph_transformations {
+            self.print_debug_graph_transform_abstract(
+                &rt_graph,
+                format!(
+                    "{}_{}-{}-sequenceGraph.{}.0.0.raw_threading_graph.dot",
+                    ref_haplotype.genome_location.as_ref().unwrap().tid(),
+                    ref_haplotype.genome_location.as_ref().unwrap().get_start(),
+                    ref_haplotype.genome_location.as_ref().unwrap().get_end(),
+                    kmer_size
+                ),
+            )
+        }
+
+        // It's important to prune before recovering dangling ends so that we don't waste time recovering bad ends.
+        // It's also important to prune before checking for cycles so that sequencing errors don't create false cycles
+        // and unnecessarily abort assembly
+        if self.prune_before_cycle_counting {
+            self.chain_pruner
+                .prune_low_weight_chains(rt_graph.get_base_graph_mut());
+        }
+
+        // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
+        if self.generate_seq_graph && rt_graph.has_cycles() {
+            debug!(
+                "Not using kmer size of {}  in read threading assembler \
+                    because it contains a cycle",
+                kmer_size
+            );
+            return None;
+        }
+
+        // sanity check: make sure the graph had enough complexity with the given kmer
+        if !allow_low_complexity_graphs && rt_graph.is_low_quality_graph() {
+            debug!(
+                "Not using kmer size of {} in read threading assembler because it does not \
+                    produce a graph with enough complexity",
+                kmer_size
+            );
+            return None;
+        }
+
+        let result = self.get_assembly_result(
+            ref_haplotype,
+            kmer_size,
+            rt_graph,
+            dangling_end_sw_parameters,
+        );
+        // check whether recovering dangling ends created cycles
+        if self.recover_all_dangling_branches
+            && result.threading_graph.as_ref().unwrap().has_cycles()
+        {
+            return None;
+        }
+
+        return Some(result);
+
     }
 
     fn get_assembly_result<A: AbstractReadThreadingGraph>(

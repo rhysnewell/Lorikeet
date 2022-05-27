@@ -214,7 +214,7 @@ Alignment filtering (optional):
                                          identity e.g. 0.95 for 95%. [default 0.0]
    --min-read-aligned-percent <FLOAT>         Exclude reads by percent aligned
                                          bases e.g. 0.95 means 95% of the read's
-                                         bases must be aligned. [default 0.97]
+                                         bases must be aligned. [default 0.0]
    --min-read-aligned-length-pair <INT>       Exclude pairs with smaller numbers of
                                          aligned bases.
                                          Require --discard-improper-pairs. [default 0.0]
@@ -229,14 +229,14 @@ Alignment filtering (optional):
                                          reported as having zero coverage.
                                          [default: 0.0]
    --contig-end-exclusion                Exclude bases at the ends of reference
-                                         sequences from calculation [default: 75]
+                                         sequences from calculation [default: 0]
    --trim-min FRACTION                   Remove this smallest fraction of positions
                                          when calculating trimmed_mean
-                                         [default: 0.05]
+                                         [default: 0.00]
    --trim-max FRACTION                   Maximum fraction for trimmed_mean
-                                         calculations [default: 0.95]
+                                         calculations [default: 1.00]
    --discard-improper-pairs              Discard improperly mapped read pairs for variant calling.
-   --include-supplementary               Includes read alignments flagged as supplementary
+   --discard-supplementary               Discard read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
    --low-memory                          Run in low memory mode. Good for larger genomes e.g. hg19/38
@@ -921,7 +921,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
-                        .default_value("75"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::with_name("max-prob-propagation-distance")
@@ -1003,12 +1003,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("trim-min")
                         .long("trim-min")
-                        .default_value("0.05"),
+                        .default_value("0.00"),
                 )
                 .arg(
                     Arg::with_name("trim-max")
                         .long("trim-max")
-                        .default_value("0.95"),
+                        .default_value("1.00"),
                 )
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
@@ -1099,7 +1099,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -1592,7 +1592,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
-                        .default_value("75"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::with_name("max-prob-propagation-distance")
@@ -1674,12 +1674,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("trim-min")
                         .long("trim-min")
-                        .default_value("0.05"),
+                        .default_value("0.00"),
                 )
                 .arg(
                     Arg::with_name("trim-max")
                         .long("trim-max")
-                        .default_value("0.95"),
+                        .default_value("1.00"),
                 )
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
@@ -1775,7 +1775,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -2259,7 +2259,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
-                        .default_value("75"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::with_name("max-prob-propagation-distance")
@@ -2347,12 +2347,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("trim-min")
                         .long("trim-min")
-                        .default_value("0.05"),
+                        .default_value("0.00"),
                 )
                 .arg(
                     Arg::with_name("trim-max")
                         .long("trim-max")
-                        .default_value("0.95"),
+                        .default_value("1.00"),
                 )
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
@@ -2443,7 +2443,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")
@@ -2927,7 +2927,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("contig-end-exclusion")
                         .long("contig-end-exclusion")
-                        .default_value("75"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::with_name("max-prob-propagation-distance")
@@ -3009,12 +3009,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("trim-min")
                         .long("trim-min")
-                        .default_value("0.05"),
+                        .default_value("0.00"),
                 )
                 .arg(
                     Arg::with_name("trim-max")
                         .long("trim-max")
-                        .default_value("0.95"),
+                        .default_value("1.00"),
                 )
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
@@ -3105,7 +3105,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
                 .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
-                .arg(Arg::with_name("include-supplementary").long("include-supplementary"))
+                .arg(Arg::with_name("discard-supplementary").long("discard-supplementary"))
                 .arg(
                     Arg::with_name("ploidy")
                         .long("ploidy")

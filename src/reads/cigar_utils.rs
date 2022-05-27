@@ -28,7 +28,7 @@ impl CigarUtils {
 
     pub fn is_valid(cigar: &CigarString) -> bool {
         if cigar.0.is_empty() {
-            return true
+            return false
         } else {
             let mut seen_real_operator = false;
             for (i, cig) in cigar.0.iter().enumerate() {
@@ -38,8 +38,10 @@ impl CigarUtils {
                 }
 
                 if Self::is_clipping(cig) {
-                    if Self::cigar_is_hard_clip(cig) && (i != 0 && i != cigar.0.len() - 1){
-                        return false
+                    if Self::cigar_is_hard_clip(cig) {
+                        if i != 0 && i != cigar.0.len() - 1 {
+                            return false
+                        }
                     } else if i != 0 && i != cigar.0.len() - 1 {
                         if i == 1 {
                             if cigar.0.len() != 3
@@ -54,6 +56,7 @@ impl CigarUtils {
                                 return false
                             }
                         } else {
+                            // soft clip in middle of read
                             return false
                         }
                     }
@@ -680,18 +683,15 @@ impl CigarUtils {
     pub fn has_consecutive_indels(elems: &Vec<Cigar>) -> bool {
         let mut prev_indel = false;
         for elem in elems {
-            match elem {
-                &Cigar::Ins(_) | &Cigar::Del(_) => {
-                    let is_indel = true;
-                    if prev_indel && is_indel {
-                        return true;
-                    };
-                    prev_indel = is_indel;
-                }
-                _ => {
-                    prev_indel = false;
-                }
+            let is_indel = match elem {
+                &Cigar::Ins(_) | &Cigar::Del(_) => true,
+                _ => false
             };
+
+            if prev_indel && is_indel {
+                return true;
+            };
+            prev_indel = is_indel;
         }
 
         return false;

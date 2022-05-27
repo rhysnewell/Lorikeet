@@ -73,4 +73,8 @@ impl<L: Locatable, A: AbstractReadThreadingGraph> AssemblyResult<L, A> {
             Some(graph) => graph.base_graph.get_kmer_size(),
         }
     }
+
+    pub fn get_seq_graph(self) -> Option<SeqGraph<BaseEdgeStruct>> {
+        self.graph
+    }
 }

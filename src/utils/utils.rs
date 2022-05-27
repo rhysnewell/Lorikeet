@@ -659,7 +659,7 @@ impl FilterParameters {
             flag_filters: FlagFilter {
                 include_improper_pairs: !m.is_present("discard-improper-pairs"),
                 include_secondary: m.is_present("include-secondary"),
-                include_supplementary: m.is_present("include-supplementary"),
+                include_supplementary: !m.is_present("discard-supplementary"),
             },
             min_aligned_length_single: match m.is_present("min-read-aligned-length") {
                 true => m

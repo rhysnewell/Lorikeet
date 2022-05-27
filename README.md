@@ -54,11 +54,7 @@ If you have access to https:// on port 443, then you can use this 'magic' comman
 git config --global url.https://github.com/.insteadOf git://github.com/
 ```
 
-#### Option 2: Conda *Only for version <= 0.5.0* 
-#### Not recommended yet
-
-*NOTE:* The conda version is often a few commits and/or versions behind the development version. If you want the most
-up to date version, follow the instruction in option 1. 
+#### Option 2: Conda 
 
 Install into current conda environment:
 ```

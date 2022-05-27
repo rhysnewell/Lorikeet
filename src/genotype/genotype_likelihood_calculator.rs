@@ -134,7 +134,7 @@ impl GenotypeLikelihoodCalculator {
     ) -> GenotypeLikelihoodCalculator {
         let genotype_count = allele_first_genotype_offset_by_ploidy[[ploidy, allele_count]];
         let maximum_distinct_alleles_in_genotype = std::cmp::min(ploidy, allele_count);
-        debug!("Genotype count {} Ploidy {} Allele Count {}", genotype_count, ploidy, allele_count);
+        // debug!("Genotype count {} Ploidy {} Allele Count {}", genotype_count, ploidy, allele_count);
 
         GenotypeLikelihoodCalculator {
             genotype_allele_counts: genotype_table_by_ploidy.remove(ploidy),

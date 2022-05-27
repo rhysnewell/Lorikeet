@@ -2,12 +2,13 @@ use reads::bird_tool_reads::BirdToolRead;
 use reads::cigar_utils::CigarUtils;
 use rust_htslib::bam::record::{Aux, AuxArray, Cigar, CigarString, CigarStringView};
 use std::cmp::Ordering;
-use utils::simple_interval::Locatable;
+use utils::simple_interval::{Locatable, SimpleInterval};
 use rust_htslib::bam::Record;
 use coverm::FlagFilter;
 use processing::lorikeet_engine::ReadType;
 use std::ops::Deref;
 use num::abs;
+use rust_htslib::bam::ext::BamRecordExtensions;
 
 pub struct ReadUtils {}
 
@@ -20,23 +21,31 @@ impl ReadUtils {
      */
     pub const DEFAULT_INSERTION_DELETION_QUAL: u8 = 45;
 
-    pub fn read_is_filtered(record: &Record, flag_filters: &FlagFilter, mapq_threshold: u8, readtype: ReadType) -> bool {
+    pub fn read_is_filtered(
+        record: &Record,
+        flag_filters: &FlagFilter,
+        mapq_threshold: u8,
+        readtype: ReadType,
+        limiting_interval: &Option<SimpleInterval>
+    ) -> bool {
         let cigar = record.cigar();
 
-        (!flag_filters.include_secondary
-            && record.is_secondary())
-            || (readtype == ReadType::Short
-            && !flag_filters.include_supplementary
-            && record.is_supplementary())
-            || (readtype == ReadType::Short
-            && !record.is_proper_pair()
-            && !flag_filters.include_improper_pairs)
+        let result = record.is_secondary()
+            || (!flag_filters.include_supplementary
+                && record.is_supplementary())
+            || (record.is_paired()
+                && !record.is_proper_pair() && !flag_filters.include_improper_pairs)
+            // || (record.is_paired()
+            //     && (record.is_mate_unmapped()
+            //         || (!record.is_unmapped() && record.tid() != record.mtid())))
             || record.is_unmapped()
             || CigarUtils::get_reference_length(cigar.deref()) == 0
             || record.is_quality_check_failed()
             || record.is_duplicate()
             || record.mapq() < mapq_threshold
             || record.mapq() == 255
+            || record.seq().len() == 0
+            || record.seq_len() < 30
             || record.seq_len() as usize != record.qual().len()
             || record.seq_len() != CigarUtils::get_read_length(cigar.deref()) as usize
             || cigar.0.iter().any(|c| CigarUtils::cigar_elements_are_same_type(c, &Some(Cigar::RefSkip(0))))
@@ -44,7 +53,15 @@ impl ReadUtils {
             || !CigarUtils::is_valid(cigar.deref())
             || CigarUtils::starts_or_ends_with_deletion_ignoring_clips(&cigar.0)
             || record.pos() < 0
-            || ((record.pos() + CigarUtils::get_reference_length(cigar.deref()) as i64 - 1) - record.pos() + 1 < 0)
+            || (record.reference_end() - record.reference_start() + 1 < 0);
+
+        match limiting_interval {
+            Some(interval) => {
+                result
+                    || !(record.reference_start() <= interval.end as i64 && record.reference_end() >= interval.start as i64)
+            },
+            None => result
+        }
     }
 
     /**

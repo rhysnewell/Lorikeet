@@ -145,7 +145,7 @@ impl GenotypingEngine {
 
         // Add 0.0 removes -0.0 occurrences.
         // if log10_confidence.is_finite() {
-        //     println!("pos {} log10 {} phred {}", vc.loc.start, log10_confidence, (-10.0 * log10_confidence) + 0.0);
+        debug!("pos {} log10 {} phred {}", vc.loc.start, log10_confidence, (-10.0 * log10_confidence) + 0.0);
         // }
         let phred_scaled_confidence = (-10.0 * log10_confidence) + 0.0;
 
@@ -159,7 +159,7 @@ impl GenotypingEngine {
             &output_alternative_alleles.alleles,
         ) && given_alleles_empty
         {
-            // debug!("Did not pass emit threshold {} {}", phred_scaled_confidence, stand_min_conf);
+            debug!("Did not pass emit threshold {} {}", phred_scaled_confidence, stand_min_conf);
             return None;
         }
 

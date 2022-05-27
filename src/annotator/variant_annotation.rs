@@ -70,8 +70,8 @@ pub struct Annotation {
 }
 
 impl VariantAnnotations {
-    const MAX_QD_BEFORE_FIXING: f64 = 45.0;
-    const IDEAL_HIGH_QD: f64 = 35.0;
+    const MAX_QD_BEFORE_FIXING: f64 = 45.0; // This is 35.0 in GATK
+    const IDEAL_HIGH_QD: f64 = 45.0; // this is 35.0 in GATK
     const JITTER_SIGMA: f64 = 3.0;
 
     pub fn to_key(&self) -> &str {

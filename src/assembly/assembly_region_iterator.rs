@@ -15,6 +15,7 @@ use reads::cigar_utils::CigarUtils;
 use std::ops::Deref;
 use reads::alignment_utils::AlignmentUtils;
 use reads::read_utils::ReadUtils;
+use utils::interval_utils::IntervalUtils;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -63,6 +64,8 @@ impl<'a> AssemblyRegionIterator<'a> {
         // should retrieve all reads regardles of if they have been seen before
 
         let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
+        let limiting_interval = IntervalUtils::parse_limiting_interval(args);
+
         let mut records: Vec<BirdToolRead> = self
             .indexed_bam_readers
             .par_iter()
@@ -100,7 +103,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type)
+                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type, &limiting_interval)
                             // Check against filter flags and current sample type
                             {
                                 continue;
