@@ -120,8 +120,8 @@ fn test_simple_haplotype_rethreading() {
 fn test_non_unique_middle() {
     let mut assembler = ReadThreadingGraph::default_with_kmer_size(3);
     let reference = "GACACACAGTCA";
-    let read1 = "GACAC---GTCA";
-    let read2 = "CAC---GTCA";
+    let read1 = "GACACGTCA";
+    let read2 = "CACGTCA";
     assembler.add_sequence(
         "anonymous".to_string(),
         0,
@@ -156,7 +156,7 @@ fn test_non_unique_middle() {
 #[test]
 fn test_read_creation_non_unique() {
     let mut assembler = ReadThreadingGraph::default_with_kmer_size(3);
-    let reference = "GCAC--GTCA"; // CAC is unique
+    let reference = "GCACGTCA"; // CAC is unique
     let read1 = "GCACACGTCA"; // makes CAC non unique because it has a duplication
     let read2 = "CACGTCA"; // shouldn't be allowed to match CAC as start
     assembler.add_sequence(

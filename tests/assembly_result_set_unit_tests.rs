@@ -36,6 +36,21 @@ use rand::rngs::ThreadRng;
 use rust_htslib::bam::record::Cigar;
 use std::collections::HashMap;
 
+// #[test]
+// fn test_add_reference_haplotype() {
+//     let mut reference = Haplotype::new("ACGT".as_bytes(), true);
+//     // let mut active_region =
+//     //     AssemblyRegion::new(SimpleInterval::new(0, 0, reference.len()), true, 25, 1000, 0, 0);
+//     reference.set_genome_location(SimpleInterval::new(0, 0, reference.len()));
+//     let mut subject = AssemblyResultSet::<ReadThreadingGraph>::default();
+//     assert!(subject.add_haplotype(reference.clone()));
+//     assert!(!subject.add_haplotype(reference.clone()));
+//
+//     assert_eq!(subject.get_ref_haplotype(), &reference);
+//     assert_eq!(subject.get_haplotypes().len(), 1);
+// }
+
+
 fn test_trim_to(
     haplotype_and_result_sets: HashMap<
         Haplotype<SimpleInterval>,

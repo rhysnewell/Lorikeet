@@ -18,6 +18,7 @@ extern crate gkl;
 extern crate itertools;
 extern crate rand;
 extern crate term;
+extern crate petgraph;
 
 use bio::io::fasta::IndexedReader;
 use gkl::smithwaterman::Parameters;
@@ -67,6 +68,10 @@ use std::convert::TryFrom;
 use std::fs::File;
 use std::ops::Deref;
 use std::sync::Mutex;
+use lorikeet_genome::graphs::seq_graph::SeqGraph;
+use lorikeet_genome::graphs::base_edge::BaseEdgeStruct;
+use lorikeet_genome::graphs::graph_based_k_best_haplotype_finder::GraphBasedKBestHaplotypeFinder;
+use petgraph::stable_graph::NodeIndex;
 
 lazy_static! {
     static ref DANGLING_END_SW_PARAMETERS: Parameters = *STANDARD_NGS;
@@ -130,7 +135,7 @@ fn test_assemble_ref(
     assert_eq!(haplotypes, vec![ref_haplotype_orig]);
 }
 
-#[test]
+// #[test]
 fn make_assemble_intervals_data() {
     let start = 100000;
     let end = 200001;
@@ -364,7 +369,7 @@ fn test_assembly_with_variant(
     );
 }
 
-#[test]
+// #[test]
 fn make_assemble_intervals_with_variant_data() {
     let start = 100000;
     let end = 101001;
@@ -394,7 +399,7 @@ fn make_assemble_intervals_with_variant_data() {
     }
 }
 
-#[test]
+// #[test]
 fn make_assemble_intervals_with_deletion_data() {
     let start = 100000;
     let end = 101001;
@@ -424,7 +429,7 @@ fn make_assemble_intervals_with_deletion_data() {
     }
 }
 
-#[test]
+// #[test]
 fn make_assemble_intervals_with_insertion_data() {
     let start = 100000;
     let end = 101001;
@@ -502,7 +507,7 @@ fn test_simple_assembly(
     assert_eq!(&haplotypes[1], &alt_haplotype);
 }
 
-#[test]
+// #[test]
 fn make_simple_assembly_test_data() {
     let start = 100000;
     let window_size = 200;
@@ -540,4 +545,213 @@ fn make_simple_assembly_test_data() {
             );
         }
     }
+}
+
+
+struct TestAssembler {
+    assembler: ReadThreadingAssembler,
+    ref_haplotype: Haplotype<SimpleInterval>,
+    reads: Vec<BirdToolRead>
+}
+
+impl TestAssembler {
+    fn new(kmer_size: usize) -> Self {
+        let mut assembler = ReadThreadingAssembler::default_with_kmers(
+            100000,
+            vec![kmer_size],
+            0
+        );
+        assembler.set_just_return_raw_graph(true);
+        Self {
+            assembler,
+            ref_haplotype: Haplotype::no_call(),
+            reads: Vec::new()
+        }
+    }
+
+    fn add_sequence(&mut self, bases: &[u8], is_ref: bool) {
+        if is_ref {
+            self.ref_haplotype = Haplotype::new(bases, true);
+        } else {
+            let quals = vec![30; bases.len()];
+            let read = ArtificialReadUtils::create_artificial_read(bases, quals.as_slice(), CigarString::from(vec![Cigar::Match(bases.len() as u32)]));
+            self.reads.push(read);
+        }
+    }
+
+    fn assemble(&mut self) -> SeqGraph<BaseEdgeStruct> {
+        self.assembler.set_remove_paths_not_connected_to_ref(false);
+        self.assembler.set_recover_dangling_branches(false);
+        let reads = self.reads.clone();
+        let ref_haplotype = self.ref_haplotype.clone();
+        let sample_names = vec!["SampleX".to_string()];
+        let graph = self.assembler.assemble(
+            &reads,
+            &ref_haplotype,
+            sample_names.as_slice(),
+            &*DANGLING_END_SW_PARAMETERS,
+            AVXMode::detect_mode(),
+        )[0].clone().get_seq_graph();
+
+        return graph.unwrap()
+    }
+}
+
+fn assert_linear_graph(assembler: &mut TestAssembler, seq: String) {
+    let mut graph = assembler.assemble();
+    graph.simplify_graph("");
+    assert_eq!(graph.base_graph.vertex_set().len(), 1);
+    assert_eq!(graph.base_graph.vertex_set().into_iter().map(|v|
+        String::from_utf8(v.sequence.clone()).unwrap()).collect::<Vec<String>>(), vec![seq]);
+}
+
+fn assert_single_bubble(assembler: &mut TestAssembler, one: String, two: String) {
+    let mut graph = assembler.assemble();
+    graph.simplify_graph("");
+
+    let sources = graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let paths = GraphBasedKBestHaplotypeFinder::new(&mut graph.base_graph, sources, sinks).find_best_haplotypes(usize::MAX, &graph.base_graph);
+    assert_eq!(paths.len(), 2);
+
+    let mut expected = HashSet::new();
+    expected.insert(one);
+    expected.insert(two);
+
+    for path in paths {
+        let seq = String::from_utf8(path.path.get_bases(&graph.base_graph)).unwrap();
+        assert!(expected.contains(&seq));
+        expected.remove(&seq);
+    }
+}
+
+#[test]
+fn test_ref_creation() {
+    let reference = "ACGTAACCGGTT";
+    let mut assembler = TestAssembler::new(3);
+    assembler.add_sequence(reference.as_bytes(), true);
+    assert_linear_graph(&mut assembler, reference.to_string());
+}
+
+#[test]
+fn test_ref_non_unique_creation() {
+    let reference = "GAAAAT";
+    let mut assembler = TestAssembler::new(3);
+    assembler.add_sequence(reference.as_bytes(), true);
+    assert_linear_graph(&mut assembler, reference.to_string());
+}
+
+#[test]
+fn test_ref_alt_creation() {
+    let reference = "ACAACTGA";
+    let alternate = "ACAGCTGA";
+    let mut assembler = TestAssembler::new(3);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate.as_bytes(), false);
+
+    assert_single_bubble(&mut assembler, reference.to_string(), alternate.to_string());
+}
+
+#[test]
+fn test_partial_reads_creation() {
+    let reference  = "ACAACTGA";
+    let alternate1 = "ACAGCT";
+    let alternate2 =    "GCTGA";
+    let mut assembler = TestAssembler::new(3);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate1.as_bytes(), false);
+    assembler.add_sequence(alternate2.as_bytes(), false);
+
+    assert_single_bubble(&mut assembler, reference.to_string(), "ACAGCTGA".to_string());
+}
+
+#[test]
+fn test_mismatch_in_first_kmer() {
+    let reference  = "ACAACTGA";
+    let alternate =    "AGCTGA";
+    let mut assembler = TestAssembler::new(3);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate.as_bytes(), false);
+
+    let mut graph = assembler.assemble();
+    graph.simplify_graph("");
+    graph.base_graph.remove_singleton_orphan_vertices();
+
+    let sources = graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
+
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sinks.len(), 1);
+
+    assert!(graph.base_graph.get_reference_sink_vertex().is_some());
+    assert!(graph.base_graph.get_reference_source_vertex().is_some());
+    let paths = GraphBasedKBestHaplotypeFinder::new(&mut graph.base_graph, sources, sinks).find_best_haplotypes(usize::MAX, &graph.base_graph);
+
+    assert_eq!(paths.len(), 1);
+}
+
+#[test]
+fn test_starts_in_middle() {
+    let reference = "CAAAATG";
+    let alternate =   "AAATG";
+    let mut assembler = TestAssembler::new(3);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate.as_bytes(), false);
+
+    assert_linear_graph(&mut assembler, reference.to_string());
+}
+
+#[test]
+fn test_starts_in_middle_with_single_bubble() {
+    let reference = "CAAAATGGGG";
+    let alternate =   "AAATCGGG";
+    let mut assembler = TestAssembler::new(3);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate.as_bytes(), false);
+
+    assert_single_bubble(&mut assembler, reference.to_string(), "CAAAATCGGG".to_string());
+}
+
+#[test]
+fn test_single_indel_as_double_indel_3_reads() {
+    let reference  = "GTTTTTCCTAGGCAAATGGTTTCTATAAAATTATGTGTGTGTGTCTCTCTCTGTGTGTGTGTGTGTGTGTGTGTGTATACCTAATCTCACACTCTTTTTTCTGG";
+    let alternate1 = "GTTTTTCCTAGGCAAATGGTTTCTATAAAATTATGTGTGTGTGTCTCTGTGTGTGTGTGTGTGTGTATACCTAATCTCACACTCTTTTTTCTGG";
+    let alternate2 = "GTTTTTCCTAGGCAAATGGTTTCTATAAAATTATGTGTGTGTGTCTCTGTGTGTGTGTGTGTGTGTATACCTAATCTCACACTCTTTTTTCTGG";
+
+    let mut assembler = TestAssembler::new(25);
+
+    assembler.add_sequence(reference.as_bytes(), true);
+    assembler.add_sequence(alternate1.as_bytes(), false);
+    assembler.add_sequence(alternate2.as_bytes(), false);
+
+    let mut graph = assembler.assemble();
+
+    let sources = graph
+        .base_graph
+        .get_sources_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let sinks = graph
+        .base_graph
+        .get_sinks_generic()
+        .collect::<HashSet<NodeIndex>>();
+    let paths = GraphBasedKBestHaplotypeFinder::new(&mut graph.base_graph, sources, sinks).find_best_haplotypes(usize::MAX, &graph.base_graph);
+
+    assert_eq!(paths.len(), 2);
 }
