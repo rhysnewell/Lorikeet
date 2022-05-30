@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::path::Path;
 use assembly::assembly_region::AssemblyRegion;
+use utils::interval_utils::IntervalUtils;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 pub struct AssemblyRegionWalker<'c> {
     pub(crate) evaluator: HaplotypeCallerEngine<'c>,
@@ -220,6 +222,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         );
 
         let features = args.value_of("features-vcf");
+        let limiting_interval = IntervalUtils::parse_limiting_interval(args);
         match features {
             Some(indexed_vcf_reader) => {
                 debug!("Attempting to extract features...");
@@ -227,53 +230,67 @@ impl<'c> AssemblyRegionWalker<'c> {
                 let contexts = pending_regions
                     .into_par_iter()
                     .flat_map(|mut assembly_region| {
-                        let mut reference_reader = reference_reader.clone();
-                        let mut evaluator = evaluator.clone();
-
-                        // read in feature variants across the assembly region location
-                        let mut feature_variants = retrieve_feature_variants(
-                            indexed_vcf_reader,
-                            &reference_reader,
-                            &assembly_region
-                        );
-
-                        if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                            let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
-                            if Path::new(&sv_path).exists() {
-                                // structural variants present so we will add them to feature variants
-                                let structural_variants = retrieve_feature_variants(
-                                    &sv_path,
-                                    &reference_reader,
-                                    &assembly_region,
-                                );
-
-                                feature_variants.extend(structural_variants);
+                        let within_bounds = match &limiting_interval {
+                            Some(limit) => {
+                                let limit = SimpleInterval::new(assembly_region.tid, limit.start, limit.end);
+                                assembly_region.padded_span.overlaps(&limit)
+                            },
+                            None => {
+                                true
                             }
-                        }
+                        };
 
-                        debug!("Feature variants {:?}", &feature_variants);
+                        if within_bounds {
+                            let mut reference_reader = reference_reader.clone();
+                            let mut evaluator = evaluator.clone();
 
-                        assembly_region_iter.fill_next_assembly_region_with_reads(
-                            &mut assembly_region,
-                            flag_filters,
-                            n_threads,
-                            short_read_bam_count,
-                            long_read_bam_count,
-                            max_input_depth,
-                            args,
-                        );
+                            // read in feature variants across the assembly region location
+                            let mut feature_variants = retrieve_feature_variants(
+                                indexed_vcf_reader,
+                                &reference_reader,
+                                &assembly_region
+                            );
 
+                            if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                                let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
+                                if Path::new(&sv_path).exists() {
+                                    // structural variants present so we will add them to feature variants
+                                    let structural_variants = retrieve_feature_variants(
+                                        &sv_path,
+                                        &reference_reader,
+                                        &assembly_region,
+                                    );
 
-                        evaluator
-                            .call_region(
-                                assembly_region,
-                                &mut reference_reader,
-                                feature_variants,
-                                args,
-                                sample_names,
+                                    feature_variants.extend(structural_variants);
+                                }
+                            }
+
+                            debug!("Feature variants {:?}", &feature_variants);
+
+                            assembly_region_iter.fill_next_assembly_region_with_reads(
+                                &mut assembly_region,
                                 flag_filters,
-                            )
-                            .into_par_iter()
+                                n_threads,
+                                short_read_bam_count,
+                                long_read_bam_count,
+                                max_input_depth,
+                                args,
+                            );
+
+
+                            evaluator
+                                .call_region(
+                                    assembly_region,
+                                    &mut reference_reader,
+                                    feature_variants,
+                                    args,
+                                    sample_names,
+                                    flag_filters,
+                                )
+                                .into_par_iter()
+                        } else {
+                            Vec::new().into_par_iter()
+                        }
                     })
                     .collect::<Vec<VariantContext>>();
 
@@ -283,44 +300,59 @@ impl<'c> AssemblyRegionWalker<'c> {
                 let contexts = pending_regions
                     .into_par_iter()
                     .flat_map(|mut assembly_region| {
-                        let mut reference_reader = reference_reader.clone();
-                        let mut evaluator = evaluator.clone();
-
-                        let feature_variants = if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                            let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
-                            if Path::new(&sv_path).exists() {
-                                // structural variants present so we will add them to feature variants
-                                retrieve_feature_variants(
-                                    &sv_path,
-                                    &reference_reader,
-                                    &assembly_region,
-                                )
-                            } else {
-                                Vec::new()
+                        let within_bounds = match &limiting_interval {
+                            Some(limit) => {
+                                let limit = SimpleInterval::new(assembly_region.tid, limit.start, limit.end);
+                                assembly_region.padded_span.overlaps(&limit)
+                            },
+                            None => {
+                                true
                             }
-                        } else { Vec::new() };
+                        };
 
-                        debug!("Filling with reads...");
-                        assembly_region_iter.fill_next_assembly_region_with_reads(
-                            &mut assembly_region,
-                            flag_filters,
-                            n_threads,
-                            short_read_bam_count,
-                            long_read_bam_count,
-                            max_input_depth,
-                            args,
-                        );
+                        if within_bounds {
+                            let mut reference_reader = reference_reader.clone();
+                            let mut evaluator = evaluator.clone();
 
-                        evaluator
-                            .call_region(
-                                assembly_region,
-                                &mut reference_reader,
-                                feature_variants,
-                                args,
-                                sample_names,
+                            let feature_variants = if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                                let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
+                                if Path::new(&sv_path).exists() {
+                                    // structural variants present so we will add them to feature variants
+                                    // retrieve_feature_variants(
+                                    //     &sv_path,
+                                    //     &reference_reader,
+                                    //     &assembly_region,
+                                    // )
+                                    Vec::new()
+                                } else {
+                                    Vec::new()
+                                }
+                            } else { Vec::new() };
+
+                            debug!("Filling with reads...");
+                            assembly_region_iter.fill_next_assembly_region_with_reads(
+                                &mut assembly_region,
                                 flag_filters,
-                            )
-                            .into_par_iter()
+                                n_threads,
+                                short_read_bam_count,
+                                long_read_bam_count,
+                                max_input_depth,
+                                args,
+                            );
+
+                            evaluator
+                                .call_region(
+                                    assembly_region,
+                                    &mut reference_reader,
+                                    feature_variants,
+                                    args,
+                                    sample_names,
+                                    flag_filters,
+                                )
+                                .into_par_iter()
+                        } else {
+                            Vec::new().into_par_iter()
+                        }
                     })
                     .collect::<Vec<VariantContext>>();
 

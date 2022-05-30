@@ -255,7 +255,6 @@ impl AssemblyBasedCallerUtils {
         correct_overlapping_base_qualities: bool,
         sample_names: &[String],
     ) -> AssemblyResultSet<ReadThreadingGraph> {
-        let debug = region.get_start() <= 1102345 && region.get_end() >= 1102335;
         Self::finalize_regions(
             &mut region,
             args.is_present("error-correct-reads"),

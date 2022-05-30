@@ -219,7 +219,7 @@ impl AlleleFrequencyCalculator {
         let mut allele_counts = vec![0.0; num_alleles];
         let flat_log10_allele_frequency = -((num_alleles as f64).log10());
         let mut log10_allele_frequencies = vec![flat_log10_allele_frequency; num_alleles];
-
+        // debug!("start {:?}", &log10_allele_frequencies);
         let mut allele_counts_maximum_difference = std::f64::INFINITY;
         while allele_counts_maximum_difference
             > AlleleFrequencyCalculator::THRESHOLD_FOR_ALLELE_COUNT_CONVERGENCE
@@ -240,6 +240,7 @@ impl AlleleFrequencyCalculator {
             // basically, we want a chance to get non-zero pseudocounts before using a prior that's biased against a variant
             log10_allele_frequencies =
                 Dirichlet::new(&posterior_pseudo_counts).log10_mean_weights();
+            // debug!("{allele_counts_maximum_difference} {:?} {:?} {:?}", &allele_counts, &posterior_pseudo_counts, &log10_allele_frequencies)
         }
 
         let mut log10_p_of_zero_counts_by_allele = vec![0.0; num_alleles];
@@ -344,6 +345,7 @@ impl AlleleFrequencyCalculator {
             MathUtils::ebe_add_in_place(&mut log10_p_of_zero_counts_by_allele, &log10_p_no_allele);
         }
 
+        debug!("zero counts {:?}", &log10_p_of_zero_counts_by_allele);
         // for biallelic the allele-specific qual equals the variant qual, and we short-circuited the calculation above
         if num_alleles == 2 && !spanning_deletion_present {
             log10_p_of_zero_counts_by_allele[1] = log10_p_no_variant

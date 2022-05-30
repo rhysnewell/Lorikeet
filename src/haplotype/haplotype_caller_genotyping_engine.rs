@@ -556,7 +556,7 @@ impl HaplotypeCallerGenotypingEngine {
                 self.genotyping_engine.samples[s].clone(),
             );
             genotype_builder.alleles = no_call_alleles.clone();
-            debug!("Adding genotype {:#?}", &genotype_builder);
+            // debug!("Adding genotype {:#?}", &genotype_builder);
             result.add(genotype_builder);
         }
 
@@ -752,7 +752,7 @@ impl HaplotypeCallerGenotypingEngine {
         return Box::new(|read: &BirdToolRead, target: &SimpleInterval| -> bool {
             // NOTE: we must make this comparison in target -> read order because occasionally realignment/assembly produces
             // reads that consume no reference bases and this can cause them to overlap adjacent
-            debug!("Target -> {}:{} Read -> {}:{} ({:?}:{:?}) {} {:?}", target.get_start(), target.get_end(), read.get_start(), read.get_end(), read.get_soft_start(), read.get_soft_end(), target.overlaps(read), read.read.cigar().to_string());
+            // debug!("Target -> {}:{} Read -> {}:{} ({:?}:{:?}) {} {:?}", target.get_start(), target.get_end(), read.get_start(), read.get_end(), read.get_soft_start(), read.get_soft_end(), target.overlaps(read), read.read.cigar().to_string());
             target.overlaps(read)
         });
     }

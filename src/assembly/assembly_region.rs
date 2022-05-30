@@ -34,7 +34,7 @@ use utils::simple_interval::SimpleInterval;
 #[derive(Debug, Clone)]
 pub struct AssemblyRegion {
     ref_idx: usize,
-    tid: usize,
+    pub(crate) tid: usize,
     contig_length: usize,
     /**
      * The reads included in this assembly region.  May be empty upon creation, and expand / contract

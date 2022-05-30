@@ -133,9 +133,12 @@ impl GenotypingEngine {
         let af_result = self
             .allele_frequency_calculator
             .calculate(reduced_vc, ploidy);
+        debug!("AFresult {:?}", &af_result);
+        debug!("VC {:?}", &vc);
         let given_alleles_empty = given_alleles.is_empty();
         let output_alternative_alleles =
             self.calculate_output_allele_subset(&af_result, &vc, given_alleles, stand_min_conf);
+        debug!("Ouput alt alleles {:?}", &output_alternative_alleles);
         // note the math.abs is necessary because -10 * 0.0 => -0.0 which isn't nice
         let log10_confidence = if !output_alternative_alleles.site_is_monomorphic {
             af_result.log10_prob_only_ref_allele_exists() + 0.0
@@ -338,7 +341,12 @@ impl GenotypingEngine {
         }
 
         for allele in emitted_alleles.iter() {
-            let deletion_size = vc.get_reference().length() - allele.length();
+
+            let deletion_size = if !allele.is_symbolic  {
+                vc.get_reference().length() - allele.length()
+            } else {
+                0
+            };
 
             if deletion_size > 0 {
                 let genome_loc = SimpleInterval::new(
@@ -395,17 +403,20 @@ impl GenotypingEngine {
                 let is_non_ref_which_is_lone_alt_allele =
                     alternative_allele_count == 1 && allele.eq(&*NON_REF_ALLELE);
 
+                debug!("is non ref which is lone alt_allele {}", is_non_ref_which_is_lone_alt_allele);
                 let is_plausible = af_calculation_result.passes_threshold(allele, stand_min_conf);
+                debug!("plausible {} {} {}", is_plausible, af_calculation_result.get_log10_posterior_of_allele_absent(allele), QualityUtils::qual_to_error_prob_log10(stand_min_conf as u8));
 
                 //it's possible that the upstream deletion that spanned this site was not emitted, mooting the symbolic spanning deletion allele
                 let is_spurious_spanning_deletion = VCFConstants::is_spanning_deletion(allele)
                     || self.is_vc_covered_by_deletion(vc);
+                debug!("is spurious spanning del {}", is_spurious_spanning_deletion);
 
                 let to_output = (is_plausible
                     || is_non_ref_which_is_lone_alt_allele
                     || forced_alleles.contains(&allele))
                     && !is_spurious_spanning_deletion;
-
+                debug!("to output {}", to_output);
                 site_is_monomorphic =
                     site_is_monomorphic & !(is_plausible && !is_spurious_spanning_deletion);
 

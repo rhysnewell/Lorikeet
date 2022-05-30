@@ -446,7 +446,7 @@ impl Profile for ActivityProfile {
             }
         }
 
-        debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
+        // debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,

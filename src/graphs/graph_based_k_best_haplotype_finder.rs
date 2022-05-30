@@ -93,7 +93,7 @@ impl GraphBasedKBestHaplotypeFinder {
 
         while !queue.is_empty() && result.len() < max_number_of_haplotypes {
             let mut path_to_extend = queue.pop().unwrap();
-            debug!("Path to extend {:?}", &path_to_extend);
+            // debug!("Path to extend {:?}", &path_to_extend);
             let vertex_to_extend = path_to_extend.path.last_vertex;
             if self
                 .k_best_haplotype_finder
@@ -108,7 +108,7 @@ impl GraphBasedKBestHaplotypeFinder {
                 if *vertex_count < max_number_of_haplotypes {
                     let outgoing_edges =
                         graph.edges_directed(vertex_to_extend, Direction::Outgoing);
-                    debug!("Outgoing edges {:?}", &outgoing_edges);
+                    // debug!("Outgoing edges {:?}", &outgoing_edges);
                     let mut total_outgoing_multiplicity = 0;
                     for edge in outgoing_edges.iter() {
                         total_outgoing_multiplicity +=

@@ -100,7 +100,7 @@ impl EventMap {
         let mut alignment_pos = 0;
         for cigar_index in 0..cigar.0.len() {
             let ce = &cigar.0[cigar_index];
-            debug!("Cigar {:?}", ce);
+            // debug!("Cigar {:?}", ce);
 
             match ce {
                 Cigar::Ins(len) => {
@@ -241,7 +241,7 @@ impl EventMap {
 
         debug!("Found {} events", proposed_events.len());
         for proposed_event in proposed_events {
-            debug!("Adding event {:?}", &proposed_event);
+            // debug!("Adding event {:?}", &proposed_event);
             self.add_vc(proposed_event, true)
         }
     }
