@@ -88,17 +88,17 @@ fn test_prune_low_weight_chains<E: BaseEdge>(
 ) {
     println!("remaining vertices {:?}", &remaining_vertices);
     let copy = remaining_vertices.clone();
-    let mut pruner = AdaptiveChainPruner::new(
+    let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
         0.001,
         MathUtils::log10_to_log(2.0),
         MathUtils::log10_to_log(4.0),
         50,
-    );
+    ));
 
     match chain_count_before_pruning {
         Some(chain_count_before_pruning) => {
             assert_eq!(
-                AdaptiveChainPruner::find_all_chains(&graph.base_graph).len(),
+                ChainPruner::find_all_chains(&graph.base_graph).len(),
                 chain_count_before_pruning
             );
         }
@@ -226,7 +226,8 @@ fn test_adaptive_pruning_with_adjacent_bad_edges() {
             );
         };
 
-        let mut pruner = AdaptiveChainPruner::new(0.01, 2.0, MathUtils::log10_to_log(4.0), 50);
+        let mut pruner = ChainPruner::AdaptiveChainPruner(
+            AdaptiveChainPruner::new(0.01, 2.0, MathUtils::log10_to_log(4.0), 50));
         pruner.prune_low_weight_chains(&mut graph.base_graph);
 
         assert!(!graph.base_graph.graph.contains_node(NodeIndex::new(4)));
@@ -314,12 +315,12 @@ fn test_adaptive_chain_pruning_with_bad_bubble() {
             );
         }
 
-        let mut pruner = AdaptiveChainPruner::new(
+        let mut pruner = ChainPruner::AdaptiveChainPruner(AdaptiveChainPruner::new(
             0.01,
             MathUtils::log10_to_log(1.0),
             MathUtils::log10_to_log(4.0),
             50,
-        );
+        ));
         pruner.prune_low_weight_chains(&mut graph.base_graph);
         assert!(!graph.base_graph.graph.contains_node(node_indices[4]));
         if variant_present {
@@ -405,7 +406,8 @@ fn test_adaptive_pruning(
     );
 
     let mut pruner =
-        AdaptiveChainPruner::new(0.001, log_odds_threshold, MathUtils::log10_to_log(4.0), 50);
+        ChainPruner::AdaptiveChainPruner(
+            AdaptiveChainPruner::new(0.001, log_odds_threshold, MathUtils::log10_to_log(4.0), 50));
     pruner.prune_low_weight_chains(graph.get_base_graph_mut());
     println!("Low weight chains pruned",);
     println!(

@@ -221,7 +221,7 @@ fn qual_interval_tests() {
             profile_type,
             vec![1.0],
             true,
-            SimpleInterval::new(0, 1, 100),
+            SimpleInterval::new(0, 0, 99),
             100,
             0,
             vec![0, 1],
@@ -230,7 +230,7 @@ fn qual_interval_tests() {
             profile_type,
             vec![1.0, 0.0],
             true,
-            SimpleInterval::new(0, 1, 100),
+            SimpleInterval::new(0, 0, 99),
             100,
             0,
             vec![0, 1, 2],
@@ -239,7 +239,7 @@ fn qual_interval_tests() {
             profile_type,
             vec![0.0, 1.0],
             false,
-            SimpleInterval::new(0, 1, 100),
+            SimpleInterval::new(0, 0, 99),
             100,
             0,
             vec![0, 1, 2],
@@ -248,7 +248,7 @@ fn qual_interval_tests() {
             profile_type,
             vec![1.0, 0.0, 1.0],
             true,
-            SimpleInterval::new(0, 1, 100),
+            SimpleInterval::new(0, 0, 99),
             100,
             0,
             vec![0, 1, 2, 3],
@@ -257,7 +257,7 @@ fn qual_interval_tests() {
             profile_type,
             vec![1.0, 1.0, 1.0],
             true,
-            SimpleInterval::new(0, 1, 100),
+            SimpleInterval::new(0, 0, 99),
             100,
             0,
             vec![0, 3],
@@ -588,7 +588,7 @@ fn test_active_region_cuts(
         contig_len,
     );
     for i in 0..=(max_region_size + profile.get_max_prob_propagation_distance()) {
-        let loc = SimpleInterval::new(0, i + 1, i + 1);
+        let loc = SimpleInterval::new(0, i, i);
         let prob = if i < probs.len() { probs[i] } else { 0.0 };
         let state = ActivityProfileState::new(loc, prob, Type::None);
         // println!("State: {:?}", &state);
@@ -602,7 +602,7 @@ fn test_active_region_cuts(
     );
     let region = &regions[0];
     // println!("min size: {} max size {} expected size {} region {:?}", min_region_size, max_region_size, expected_region_size, &region);
-    assert_eq!(region.get_span().get_start(), 1, "Region should start at 1");
+    assert_eq!(region.get_span().get_start(), 0, "Region should start at 0");
     assert_eq!(
         region.get_span().size(),
         expected_region_size,
