@@ -478,7 +478,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
                 // the weight must be 0 to preserve sum through the diamond
 
                 let mut edge_template = E::new(self.outer.base_graph.is_reference_node(v), 0, 0);
-                debug!("Edge template {:?}", &e);
+                // debug!("Edge template {:?}", &e);
                 return edge_template;
             }
             Some(e) => {

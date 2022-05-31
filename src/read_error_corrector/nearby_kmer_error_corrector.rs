@@ -48,13 +48,13 @@ use utils::quality_utils::QualityUtils;
  *
  *
  */
-pub struct NearbyKmerErrorCorrector {
+pub struct NearbyKmerErrorCorrector<'a> {
     /**
      * A map of for each kmer to its num occurrences in addKmers
      */
     pub counts_by_kmer: KmerCounter,
-    kmer_correction_map: HashMap<Kmer, Kmer>,
-    kmer_differing_bases: HashMap<Kmer, (Vec<usize>, Vec<u8>)>,
+    kmer_correction_map: HashMap<Kmer<'a>, Kmer<'a>>,
+    kmer_differing_bases: HashMap<Kmer<'a>, (Vec<usize>, Vec<u8>)>,
     kmer_length: usize,
     trim_low_quality_bases: bool,
     min_tail_quality: u8,
@@ -89,7 +89,7 @@ impl ReadErrorCorrectionStats {
     }
 }
 
-impl NearbyKmerErrorCorrector {
+impl<'a> NearbyKmerErrorCorrector<'a> {
     pub const MAX_MISMATCHES_TO_CORRECT: usize = 2;
     pub const QUALITY_OF_CORRECTED_BASES: u8 = 30;
     pub const MAX_OBSERVATIONS_FOR_KMER_TO_BE_CORRECTABLE: usize = 1;
@@ -172,18 +172,18 @@ impl NearbyKmerErrorCorrector {
      * Main entry routine to add all kmers in a read to the read map counter
      * @param read                        Read to add bases
      */
-    pub fn add_read_kmers(&mut self, read: &BirdToolRead) {
+    pub fn add_read_kmers(&mut self, read: &'a BirdToolRead) {
         if Self::DONT_CORRECT_IN_LONG_HOMOPOLYMERS
             && self.max_homopolymer_length_in_region > Self::MAX_HOMOPOLYMER_THRESHOLD
         {
             // pass
         } else {
             // TODO: Change KMER to be a refernce to a sequence to avoid cloning
-            let read_bases = read.read.seq().as_bytes();
+            let read_bases = read.seq();
             for offset in 0..read_bases.len().saturating_sub(self.kmer_length) {
                 self.counts_by_kmer.add_kmer(
                     Kmer::new_with_start_and_length(
-                        read_bases.clone(),
+                        read_bases,
                         offset,
                         self.kmer_length,
                     ),
@@ -262,7 +262,7 @@ impl NearbyKmerErrorCorrector {
 
         for offset in 0..corrected_bases.len().saturating_sub(self.kmer_length) {
             let kmer =
-                Kmer::new_with_start_and_length(corrected_bases.to_vec(), offset, self.kmer_length);
+                Kmer::new_with_start_and_length(corrected_bases, offset, self.kmer_length);
             debug!("Kmer setup: {:?}", &kmer);
             let new_kmer = self.kmer_correction_map.get(&kmer);
             match new_kmer {

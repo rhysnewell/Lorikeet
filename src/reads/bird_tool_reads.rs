@@ -55,9 +55,9 @@ impl BirdToolRead {
         self.bases = bases;
     }
 
-    // pub fn get_start(&self) -> usize {
-    //     self.read.reference_start() as usize
-    // }
+    pub fn seq(&self) -> &[u8] {
+        self.bases.as_slice()
+    }
 
     pub fn get_contig(&self) -> usize {
         self.read.tid() as usize

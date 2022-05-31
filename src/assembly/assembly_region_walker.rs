@@ -251,19 +251,19 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 &assembly_region
                             );
 
-                            if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                                let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
-                                if Path::new(&sv_path).exists() {
-                                    // structural variants present so we will add them to feature variants
-                                    let structural_variants = retrieve_feature_variants(
-                                        &sv_path,
-                                        &reference_reader,
-                                        &assembly_region,
-                                    );
-
-                                    feature_variants.extend(structural_variants);
-                                }
-                            }
+                            // if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                            //     let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
+                            //     if Path::new(&sv_path).exists() {
+                            //         // structural variants present so we will add them to feature variants
+                            //         let structural_variants = retrieve_feature_variants(
+                            //             &sv_path,
+                            //             &reference_reader,
+                            //             &assembly_region,
+                            //         );
+                            //
+                            //         feature_variants.extend(structural_variants);
+                            //     }
+                            // }
 
                             debug!("Feature variants {:?}", &feature_variants);
 

@@ -20,9 +20,9 @@ use utils::base_utils::BaseUtils;
 #[derive(Debug, Clone)]
 pub struct AdaptiveChainPruner {
     pub initial_error_probability: f64,
-    log_odds_threshold: f64,
-    seeding_log_odds_threshold: f64, // threshold for seeding subgraph of good vertices
-    max_unpruned_variants: usize,
+    pub(crate) log_odds_threshold: f64,
+    pub(crate) seeding_log_odds_threshold: f64, // threshold for seeding subgraph of good vertices
+    pub(crate) max_unpruned_variants: usize,
 }
 
 // TODO: This whole thing needs some unit tests, I don't trust parts of this code as there might be
@@ -284,122 +284,5 @@ impl AdaptiveChainPruner {
                     })
             })
             .unwrap()
-    }
-}
-
-impl<V: BaseVertex + std::marker::Sync, E: BaseEdge + std::marker::Sync> ChainPruner<V, E>
-    for AdaptiveChainPruner
-{
-    fn prune_low_weight_chains(&self, graph: &mut BaseGraph<V, E>) {
-        let chains = Self::find_all_chains(&graph);
-
-        let chains_to_remove = self.chains_to_remove(&chains, &graph);
-        chains_to_remove
-            .into_iter()
-            .for_each(|chain| graph.remove_all_edges(chain.get_edges()));
-
-        graph.remove_singleton_orphan_vertices();
-    }
-
-    fn find_all_chains(graph: &BaseGraph<V, E>) -> VecDeque<Path> {
-        let mut chain_starts = graph.get_sources();
-        let mut chains = VecDeque::new();
-        let mut already_seen = chain_starts
-            .clone()
-            .into_iter()
-            .collect::<HashSet<NodeIndex>>();
-        while !chain_starts.is_empty() {
-            let chain_start = chain_starts.pop_front().unwrap();
-            for out_edge in graph.graph.edges_directed(chain_start, Direction::Outgoing) {
-                let chain = Self::find_chain(out_edge.id(), graph);
-                let chain_end = chain.get_last_vertex();
-                chains.push_back(chain);
-                if !already_seen.contains(&chain_end) {
-                    chain_starts.push_back(chain_end);
-                    already_seen.insert(chain_end);
-                }
-            }
-        }
-        chains
-    }
-
-    /**
-     *
-     * @return a fully extended linear path
-     */
-    fn find_chain(start_edge: EdgeIndex, graph: &BaseGraph<V, E>) -> Path {
-        let mut edges = vec![start_edge];
-        let start_edge_endpoints = graph.graph.edge_endpoints(start_edge).unwrap();
-        let first_vertex_id = start_edge_endpoints.0;
-        let mut last_vertex_id = start_edge_endpoints.1;
-
-        loop {
-            // chain ends if: 1) no out edges; 2) multiple out edges;
-            // 3) multiple in edges; 4) cycle back to start of chain
-            let out_edges = graph
-                .graph
-                .edges_directed(last_vertex_id, Direction::Outgoing)
-                .map(|e| e.id())
-                .collect::<HashSet<EdgeIndex>>();
-            if out_edges.len() != 1
-                || graph.in_degree_of(last_vertex_id) > 1
-                || last_vertex_id == first_vertex_id
-            {
-                break;
-            }
-            let next_edge = out_edges.into_iter().next().unwrap();
-            edges.push(next_edge);
-            last_vertex_id = graph.graph.edge_endpoints(next_edge).unwrap().1;
-        }
-
-        Path::new(last_vertex_id, edges)
-    }
-
-    fn chains_to_remove<'a>(
-        &self,
-        chains: &'a VecDeque<Path>,
-        graph: &BaseGraph<V, E>,
-    ) -> Vec<&'a Path> {
-        if chains.is_empty() {
-            return Vec::new();
-        }
-        let probable_error_chains =
-            self.likely_error_chains(&chains, graph, self.initial_error_probability);
-
-        let error_count = probable_error_chains
-            .into_iter()
-            .map(|chain| {
-                // chain
-                //     .get_edges()
-                //     .par_iter()
-                //     .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
-                //     .sum::<usize>()
-                graph
-                    .graph
-                    .edge_weight(chain.get_last_edge())
-                    .unwrap()
-                    .get_multiplicity()
-            })
-            .sum::<usize>();
-        let total_bases = chains
-            .iter()
-            .map(|chain| {
-                chain
-                    .get_edges()
-                    .iter()
-                    .map(|e| graph.graph.edge_weight(*e).unwrap().get_multiplicity())
-                    .sum::<usize>()
-            })
-            .sum::<usize>();
-        let error_rate = error_count as f64 / total_bases as f64;
-
-        self.likely_error_chains(&chains, graph, error_rate)
-            .into_iter()
-            .filter(|c| {
-                !c.get_edges()
-                    .iter()
-                    .any(|e| graph.graph.edge_weight(*e).unwrap().is_ref())
-            })
-            .collect::<Vec<&Path>>()
     }
 }

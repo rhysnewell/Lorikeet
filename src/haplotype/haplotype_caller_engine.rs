@@ -144,12 +144,12 @@ impl<'c> HaplotypeCallerEngine<'c> {
                 .unwrap()
                 .parse()
                 .unwrap(),
-            if !args.is_present("dont-use-adaptive-pruning") {
+            if args.is_present("use-adaptive-pruning") {
                 0
             } else {
                 args.value_of("min-prune-factor").unwrap().parse().unwrap()
             },
-            !args.is_present("dont-use-adaptive-pruning"),
+            args.is_present("use-adaptive-pruning"),
             args.value_of("initial-error-rate-for-pruning")
                 .unwrap()
                 .parse()

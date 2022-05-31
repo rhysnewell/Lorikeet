@@ -61,7 +61,7 @@ impl CommonSuffixSplitter {
                         .unwrap()
                         .without_suffix(suffix_v_template.get_sequence());
                     let out = graph.base_graph.outgoing_edge_of(*mid).unwrap();
-                    debug!("Mid {:?} out {:?}", &mid, &out);
+                    // debug!("Mid {:?} out {:?}", &mid, &out);
                     let mut incoming_target;
                     match prefix_v {
                         None => {
@@ -81,7 +81,7 @@ impl CommonSuffixSplitter {
                             edges_to_remove.push(out);
                         }
                     }
-                    debug!("Incoming target {:?}", &incoming_target);
+                    // debug!("Incoming target {:?}", &incoming_target);
                     graph.base_graph.graph.add_edge(
                         suffix_v,
                         graph.base_graph.get_edge_target(out),
@@ -102,8 +102,8 @@ impl CommonSuffixSplitter {
                         edges_to_remove.push(incoming_index);
                     }
                 }
-                debug!("Node to remove {:?}", &to_split);
-                debug!("Edges to remove {:?}", &edges_to_remove);
+                // debug!("Node to remove {:?}", &to_split);
+                // debug!("Edges to remove {:?}", &edges_to_remove);
                 graph.base_graph.remove_all_vertices(&to_split);
                 graph.base_graph.remove_all_edges(&edges_to_remove);
                 return true;
@@ -234,10 +234,10 @@ impl CommonSuffixSplitter {
         let suffix_len = GraphUtils::common_maximum_suffix_length(&kmers, min);
         let kmer = &kmers[0];
         let suffix = kmer[kmer.len() - suffix_len..kmer.len()].to_vec();
-        debug!(
-            "Choosing suffix {:?}",
-            std::str::from_utf8(&suffix).unwrap()
-        );
+        // debug!(
+        //     "Choosing suffix {:?}",
+        //     std::str::from_utf8(&suffix).unwrap()
+        // );
         return SeqVertex::new(suffix);
     }
 }

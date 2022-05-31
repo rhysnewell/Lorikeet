@@ -126,6 +126,12 @@ Variant calling options (Advanced):
   --recover-all-dangling-branches               Recover all dangling branches.
   --min-dangling-branch-length                  Minimum length of a dangling branch to
                                                 attempt recovery. [default: 4]
+  --min-prune-factor                            Minimum support to not prune paths in the graph.
+                                                [default: 2]
+  --use-adaptive-pruning                        Use more advanced pruning algorithm to prune paths in
+                                                graph. Better suited when performing variant calling
+                                                on when depth along a genome is variable e.g. RNA
+                                                and exome data.
   --graph-output                                Write debug assembly graph information to this file.
   --num-pruning-samples                         Number of samples that must pass the
                                                 min_pruning threshold [default: 1]
@@ -879,12 +885,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
                         .default_value("2")
-                        .hidden(true),
                 )
                 .arg(
-                    Arg::with_name("dont-use-adaptive-pruning")
-                        .long("dont-use-adaptive-pruning")
-                        .hidden(true),
+                    Arg::with_name("use-adaptive-pruning")
+                        .long("use-adaptive-pruning")
                 )
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
@@ -1550,12 +1554,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
                         .default_value("2")
-                        .hidden(true),
                 )
                 .arg(
-                    Arg::with_name("dont-use-adaptive-pruning")
-                        .long("dont-use-adaptive-pruning")
-                        .hidden(true),
+                    Arg::with_name("use-adaptive-pruning")
+                        .long("use-adaptive-pruning")
                 )
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
@@ -2217,12 +2219,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
                         .default_value("2")
-                        .hidden(true),
                 )
                 .arg(
-                    Arg::with_name("dont-use-adaptive-pruning")
-                        .long("dont-use-adaptive-pruning")
-                        .hidden(true),
+                    Arg::with_name("use-adaptive-pruning")
+                        .long("use-adaptive-pruning")
                 )
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
@@ -2885,12 +2885,10 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
                         .default_value("2")
-                        .hidden(true),
                 )
                 .arg(
-                    Arg::with_name("dont-use-adaptive-pruning")
-                        .long("dont-use-adaptive-pruning")
-                        .hidden(true),
+                    Arg::with_name("use-adaptive-pruning")
+                        .long("use-adaptive-pruning")
                 )
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")

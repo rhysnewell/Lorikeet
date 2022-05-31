@@ -29,6 +29,7 @@ use rust_htslib::bam::record::{Cigar, CigarString};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use utils::simple_interval::{Locatable, SimpleInterval};
+use graphs::low_weight_chain_pruner::LowWeightChainPruner;
 
 #[derive(Debug, Clone)]
 pub struct ReadThreadingAssembler {
@@ -46,9 +47,9 @@ pub struct ReadThreadingAssembler {
     pub(crate) recover_all_dangling_branches: bool,
     pub(crate) min_dangling_branch_length: i32,
     pub(crate) min_base_quality_to_use_in_assembly: u8,
-    prune_factor: i32,
+    prune_factor: usize,
     min_matching_bases_to_dangling_end_recovery: i32,
-    chain_pruner: AdaptiveChainPruner,
+    chain_pruner: ChainPruner,
     pub(crate) debug_graph_transformations: bool,
     pub(crate) debug_graph_output_path: Option<String>,
     graph_haplotype_histogram_path: Option<String>,
@@ -73,7 +74,7 @@ impl ReadThreadingAssembler {
         dont_increase_kmer_sizes_for_cycles: bool,
         allow_non_unique_kmers_in_ref: bool,
         num_pruning_samples: i32,
-        prune_factor: i32,
+        prune_factor: usize,
         use_adaptive_pruning: bool,
         initial_error_rate_for_pruning: f64,
         pruning_log_odds_threshold: f64,
@@ -90,12 +91,21 @@ impl ReadThreadingAssembler {
         );
         kmer_sizes.sort_unstable();
 
-        let chain_pruner = AdaptiveChainPruner::new(
-            initial_error_rate_for_pruning,
-            pruning_log_odds_threshold,
-            pruning_seeding_log_odds_threshold,
-            max_unpruned_variants,
-        );
+        let chain_pruner = if use_adaptive_pruning {
+            ChainPruner::AdaptiveChainPruner(
+                AdaptiveChainPruner::new(
+                initial_error_rate_for_pruning,
+                pruning_log_odds_threshold,
+                pruning_seeding_log_odds_threshold,
+                max_unpruned_variants,
+            ))
+        } else {
+            ChainPruner::LowWeightChainPruner(
+                LowWeightChainPruner::new(
+                    prune_factor
+                )
+            )
+        };
 
         // TODO: //!use_linked_debruijn_graphs should be used for generate_seq_graph
         //      but have not yet implement junction tree method
@@ -146,7 +156,7 @@ impl ReadThreadingAssembler {
     pub fn default_with_kmers(
         max_allowed_paths_for_read_threading_assembler: i32,
         kmer_sizes: Vec<usize>,
-        prune_factor: i32,
+        prune_factor: usize,
     ) -> Self {
         Self::new(
             max_allowed_paths_for_read_threading_assembler,
@@ -225,7 +235,7 @@ impl ReadThreadingAssembler {
             .par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
-
+        debug!("Corrected reads {}", corrected_reads.len());
         // let non_ref_rt_graphs: Vec<ReadThreadingGraph> = Vec::new();
         // let non_ref_seq_graphs: Vec<SeqGraph<BaseEdgeStruct>> = Vec::new();
         let active_region_extended_location = assembly_region.get_padded_span();
@@ -932,15 +942,20 @@ impl ReadThreadingAssembler {
             1,
             true,
         );
+        debug!("1 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
+
 
         // Next pull kmers out of every read and throw them on the graph
+        debug!("1.5 - Reads {}", reads.len());
+        let mut count = 0;
         for read in reads {
-            rt_graph.add_read(read, sample_names)
+            rt_graph.add_read(read, sample_names, &mut count)
         }
-
+        debug!("1.5 - Count {}", reads.len());
         // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
         // actually build the read threading graph
         rt_graph.build_graph_if_necessary();
+        debug!("2 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
 
         if self.debug_graph_transformations {
             self.print_debug_graph_transform_abstract(
@@ -962,6 +977,7 @@ impl ReadThreadingAssembler {
             self.chain_pruner
                 .prune_low_weight_chains(rt_graph.get_base_graph_mut());
         }
+        debug!("3 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
 
         // sanity check: make sure there are no cycles in the graph, unless we are in experimental mode
         if self.generate_seq_graph && rt_graph.has_cycles() {

@@ -16,6 +16,7 @@ use std::ops::Deref;
 use reads::alignment_utils::AlignmentUtils;
 use reads::read_utils::ReadUtils;
 use utils::interval_utils::IntervalUtils;
+use utils::simple_interval::SimpleInterval;
 
 /**
  * Given a {@link BandPassActivityProfile} and {@link AssemblyRegionWalker}, iterates over each {@link AssemblyRegion} within
@@ -40,6 +41,8 @@ pub struct AssemblyRegionIterator<'a> {
 }
 
 impl<'a> AssemblyRegionIterator<'a> {
+    const DUMMY_LIMITING_INTERVAL: Option<SimpleInterval> = None;
+
     pub fn new(indexed_bam_readers: &'a [String], n_threads: u32) -> AssemblyRegionIterator<'a> {
         // Assume no forced conversion here since we have already traverse the entire
         // activity profile prior to reaching here. This is quite different to how
@@ -97,13 +100,13 @@ impl<'a> AssemblyRegionIterator<'a> {
                         bam_generated.fetch((
                             region.get_contig() as i32,
                             region.get_padded_span().start as i64,
-                            region.get_padded_span().end as i64,
+                            region.get_padded_span().end as i64 + 1,
                         ));
 
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type, &limiting_interval)
+                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type, &Self::DUMMY_LIMITING_INTERVAL)
                             // Check against filter flags and current sample type
                             {
                                 continue;

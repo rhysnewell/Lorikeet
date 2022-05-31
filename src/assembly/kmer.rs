@@ -12,25 +12,29 @@ use std::hash::{Hash, Hasher};
  *    only does the work of that operation once, updating its internal state
  */
 #[derive(Debug, Clone)]
-pub struct Kmer {
+pub struct Kmer<'a> {
     // this values may be updated in the course of interacting with this kmer
-    pub bases: Vec<u8>,
+    pub bases: &'a [u8],
     start: usize,
     // two constants
     length: usize,
+    hash: usize,
 }
 
 // TODO: Change Kmer to take a reference to a sequence and have a lifetime
-impl Kmer {
+impl<'a> Kmer<'a> {
     /**
      * Create a new kmer using all bases in kmer
      * @param kmer a non-null byte[]. The input array must not be modified by the caller.
      */
-    pub fn new(kmer: Vec<u8>) -> Kmer {
-        Kmer {
+    pub fn new(kmer: &'a [u8]) -> Self {
+
+        let hash = Self::hash_code(kmer.as_slice(), 0, kmer.len());
+        Self {
             start: 0,
             length: kmer.len(),
             bases: kmer,
+            hash,
         }
     }
 
@@ -44,11 +48,16 @@ impl Kmer {
      * @param start the start of the kmer in bases, must be >= 0 and < bases.length
      * @param length the length of the kmer.  Must be >= 0 and start + length < bases.length
      */
-    pub fn new_with_start_and_length(bases: Vec<u8>, start: usize, length: usize) -> Kmer {
-        Kmer {
+    pub fn new_with_start_and_length(
+        bases: &'a [u8], start: usize, length: usize
+    ) -> Self {
+        let hash = Self::hash_code(bases.as_slice(), start, length);
+
+        Self {
             bases,
             start,
             length,
+            hash
         }
     }
 
@@ -58,12 +67,25 @@ impl Kmer {
      * @param newLength the new length
      * @return a new kmer based on the data in this kmer.  Does not make a copy, so shares most of the data
      */
-    pub fn sub_kmer(&self, new_start: usize, new_length: usize) -> Kmer {
-        Kmer {
-            bases: self.bases.to_vec(),
-            start: self.start + new_start,
-            length: new_length,
+    pub fn sub_kmer(&'a self, new_start: usize, new_length: usize) -> Self {
+        Self::new_with_start_and_length(self.bases, self.start + new_start, new_length)
+    }
+
+    /**
+     *  Compute the hashcode for a KMer.
+     *  Equivalent to <code>new String(bases, start, length).hashCode()</code>
+     */
+    fn hash_code(bases: &[u8], start: usize, length: usize) -> usize {
+        if length == 0 {
+            return 0
         }
+
+        let mut h = 0;
+        for i in start..(start + length) {
+            h = 31 * h + bases[i] as usize;
+        }
+
+        h
     }
 
     /**
@@ -77,11 +99,11 @@ impl Kmer {
         if self.start != 0 || self.bases.len() != self.length {
             // update operation.  Rip out the exact byte[] and update start so we don't ever do this again
             self.bases =
-                self.bases[self.start..min((self.start + self.length), self.bases.len())].to_vec();
+                self.bases[self.start..min((self.start + self.length), self.bases.len())];
             self.start = 0;
         }
 
-        return &self.bases;
+        return self.bases;
     }
 
     pub fn len(&self) -> usize {
@@ -133,7 +155,7 @@ impl Kmer {
             "Kmer{{{}}}",
             format!(
                 "{}{}{}",
-                std::str::from_utf8(&self.bases).unwrap(),
+                std::str::from_utf8(self.bases).unwrap(),
                 self.start,
                 self.length
             )
@@ -143,8 +165,7 @@ impl Kmer {
 
 impl PartialEq for Kmer {
     fn eq(&self, other: &Self) -> bool {
-        self.bases[self.start..min((self.start + self.length), self.bases.len())]
-            == other.bases[other.start..min((other.start + other.length), other.bases.len())]
+        self.hash == other.hash && self.length == other.length
     }
 }
 
@@ -152,6 +173,6 @@ impl Eq for Kmer {}
 
 impl Hash for Kmer {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.bases[self.start..min((self.start + self.length), self.bases.len())].hash(state)
+        self.hash.hash(state)
     }
 }
