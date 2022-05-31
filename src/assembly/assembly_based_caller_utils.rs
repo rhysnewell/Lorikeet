@@ -19,7 +19,7 @@ use pair_hmm::pair_hmm_likelihood_calculation_engine::{
     AVXMode, PCRErrorModel, PairHMMLikelihoodCalculationEngine,
 };
 use rayon::prelude::*;
-use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+// use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use read_threading::read_threading_assembler::ReadThreadingAssembler;
 use read_threading::read_threading_graph::ReadThreadingGraph;
@@ -294,24 +294,24 @@ impl AssemblyBasedCallerUtils {
             false,
         );
 
-        let mut read_error_corrector;
+        // let mut read_error_corrector = None;
 
-        if args.is_present("error-correct-reads") {
-            read_error_corrector = Some(NearbyKmerErrorCorrector::default(
-                args.value_of("kmer-length-for-read-error-correction")
-                    .unwrap()
-                    .parse::<usize>()
-                    .unwrap(),
-                HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
-                args.value_of("min-observation-for-kmer-to-be-solid")
-                    .unwrap()
-                    .parse::<usize>()
-                    .unwrap(),
-                full_reference_with_padding.as_slice(),
-            ))
-        } else {
-            read_error_corrector = None
-        }
+        // if args.is_present("error-correct-reads") {
+        //     read_error_corrector = Some(NearbyKmerErrorCorrector::default(
+        //         args.value_of("kmer-length-for-read-error-correction")
+        //             .unwrap()
+        //             .parse::<usize>()
+        //             .unwrap(),
+        //         HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION,
+        //         args.value_of("min-observation-for-kmer-to-be-solid")
+        //             .unwrap()
+        //             .parse::<usize>()
+        //             .unwrap(),
+        //         full_reference_with_padding.as_slice(),
+        //     ))
+        // } else {
+        //     read_error_corrector = None
+        // }
 
         let region_padded_start = region.get_padded_span().get_start();
         let mut assembly_result_set = assembly_engine.run_local_assembly(
@@ -319,7 +319,7 @@ impl AssemblyBasedCallerUtils {
             &mut ref_haplotype,
             full_reference_with_padding,
             padded_reference_loc,
-            read_error_corrector,
+            // read_error_corrector,
             sample_names,
             *STANDARD_NGS,
             *NEW_SW_PARAMETERS,

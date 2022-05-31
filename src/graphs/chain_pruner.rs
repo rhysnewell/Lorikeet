@@ -117,7 +117,7 @@ impl ChainPruner {
                 debug!("Probable error chains {}", probable_error_chains.len());
 
                 let error_count = probable_error_chains
-                    .into_iter()
+                    .into_par_iter()
                     .map(|chain| {
                         // chain
                         //     .get_edges()
@@ -134,7 +134,7 @@ impl ChainPruner {
                 debug!("Error count {}", error_count);
 
                 let total_bases = chains
-                    .iter()
+                    .par_iter()
                     .map(|chain| {
                         chain
                             .get_edges()

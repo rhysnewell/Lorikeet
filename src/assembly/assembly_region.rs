@@ -235,6 +235,10 @@ impl AssemblyRegion {
         self.reads.clone()
     }
 
+    pub fn take_reads(&mut self) -> Vec<BirdToolRead> {
+        std::mem::replace(&mut self.reads, Vec::new())
+    }
+
     /**
      * Trim this region to just the span, producing a new assembly region without any reads that has only
      * the extent of newExtend intersected with the current extent

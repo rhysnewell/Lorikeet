@@ -12,13 +12,13 @@ use graphs::k_best_haplotype::KBestHaplotype;
 use graphs::seq_graph::SeqGraph;
 use graphs::seq_vertex::SeqVertex;
 use haplotype::haplotype::Haplotype;
-use hashlink::LinkedHashSet;
+use hashlink::{LinkedHashSet, LinkedHashMap};
 use model::byte_array_allele::Allele;
 use ordered_float::OrderedFloat;
 use pair_hmm::pair_hmm_likelihood_calculation_engine::AVXMode;
 use petgraph::stable_graph::NodeIndex;
 use rayon::prelude::*;
-use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
+// use read_error_corrector::nearby_kmer_error_corrector::NearbyKmerErrorCorrector;
 use read_error_corrector::read_error_corrector::ReadErrorCorrector;
 use read_threading::abstract_read_threading_graph::{AbstractReadThreadingGraph, SequenceForKmers};
 use read_threading::read_threading_graph::ReadThreadingGraph;
@@ -198,13 +198,13 @@ impl ReadThreadingAssembler {
      * @param aligner                   {@link SmithWatermanAligner} used to align dangling ends in assembly graphs to the reference sequence
      * @return                          the resulting assembly-result-set
      */
-    pub fn run_local_assembly<'b, C: ReadErrorCorrector>(
+    pub fn run_local_assembly<'b>(
         &mut self,
         mut assembly_region: AssemblyRegion,
         ref_haplotype: &'b mut Haplotype<SimpleInterval>,
         full_reference_with_padding: Vec<u8>,
         ref_loc: SimpleInterval,
-        read_error_corrector: Option<C>,
+        // read_error_corrector: Option<C>,
         sample_names: &'b [String],
         dangling_end_sw_parameters: Parameters,
         reference_to_haplotype_sw_parameters: Parameters,
@@ -219,19 +219,20 @@ impl ReadThreadingAssembler {
 
         // Note that error correction does not modify the original reads,
         // which are used for genotyping TODO this might come before error correction /
-        let mut corrected_reads = match read_error_corrector {
-            // TODO: Is it possible to perform this
-            //      without cloning? Perhaps get_reads() should just return ownership of reads?
-            //      Can't move reads out of assembly region as they are required later on during
-            //      read threading phase. Very annoying
-            None => assembly_region.get_reads_cloned(),
-            Some(mut read_error_corrector) => {
-                read_error_corrector.correct_reads(assembly_region.get_reads_cloned())
-            }
-        };
+        // let mut corrected_reads = assembly_region.get_reads_cloned();
+        // match read_error_corrector {
+        //     // TODO: Is it possible to perform this
+        //     //      without cloning? Perhaps get_reads() should just return ownership of reads?
+        //     //      Can't move reads out of assembly region as they are required later on during
+        //     //      read threading phase. Very annoying
+        //     None => assembly_region.get_reads_cloned(),
+        //     Some(mut read_error_corrector) => {
+        //         read_error_corrector.correct_reads(assembly_region.get_reads_cloned())
+        //     }
+        // };
 
         // Revert clipped bases if necessary (since we do not want to assemble them)
-        corrected_reads = corrected_reads
+        let corrected_reads = assembly_region.reads
             .par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
@@ -893,7 +894,7 @@ impl ReadThreadingAssembler {
             && !ReadThreadingGraph::determine_non_unique_kmers(
                 &SequenceForKmers::new(
                     "ref".to_string(),
-                    ref_haplotype.get_bases().to_vec(),
+                    ref_haplotype.get_bases(),
                     0,
                     ref_haplotype.get_bases().len(),
                     1,
@@ -932,11 +933,13 @@ impl ReadThreadingAssembler {
         rt_graph.set_threading_start_only_at_existing_vertex(!self.recover_dangling_branches);
 
         // add the reference sequence to the graph
+        let mut pending = LinkedHashMap::new();
         rt_graph.add_sequence(
+            &mut pending,
             "ref".to_string(),
             // ReadThreadingGraph::ANONYMOUS_SAMPLE,
             std::usize::MAX,
-            ref_haplotype.get_bases().to_vec(),
+            ref_haplotype.get_bases(),
             0,
             ref_haplotype.get_bases().len(),
             1,
@@ -948,13 +951,14 @@ impl ReadThreadingAssembler {
         // Next pull kmers out of every read and throw them on the graph
         debug!("1.5 - Reads {}", reads.len());
         let mut count = 0;
+
         for read in reads {
-            rt_graph.add_read(read, sample_names, &mut count)
+            rt_graph.add_read(read, sample_names, &mut count, &mut pending)
         }
-        debug!("1.5 - Count {}", reads.len());
+        debug!("1.5 - Count {}", count);
         // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
         // actually build the read threading graph
-        rt_graph.build_graph_if_necessary();
+        rt_graph.build_graph_if_necessary(&mut pending);
         debug!("2 - Graph Kmer {} Edges {} Nodes {}", kmer_size, rt_graph.base_graph.graph.edge_count(), rt_graph.base_graph.graph.node_count());
 
         if self.debug_graph_transformations {

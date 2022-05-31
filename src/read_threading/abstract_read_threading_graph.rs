@@ -12,6 +12,7 @@ use reads::bird_tool_reads::BirdToolRead;
 use rust_htslib::bam::record::{Cigar, CigarString};
 use std::fmt::Debug;
 use utils::simple_interval::Locatable;
+use hashlink::LinkedHashMap;
 
 /**
  * Read threading graph class intended to contain duplicated code between {@link ReadThreadingGraph} and {@link JunctionTreeLinkedDeBruijnGraph}.
@@ -67,11 +68,12 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      * @param count    the representative count of this sequence (to use as the weight)
      * @param isRef    is this the reference sequence.
      */
-    fn add_sequence(
-        &mut self,
+    fn add_sequence<'a>(
+        &self,
+        pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>,
         seq_name: String,
         sample_index: usize,
-        sequence: Vec<u8>,
+        sequence: &'a [u8],
         start: usize,
         stop: usize,
         count: usize,
@@ -136,7 +138,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      *
      * @param read a non-null read
      */
-    fn add_read(&mut self, read: &BirdToolRead, sample_names: &[String], count: &mut usize);
+    fn add_read<'a>(&mut self, read: &'a BirdToolRead, sample_names: &[String], count: &mut usize, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>);
 
     // only add the new kmer to the map if it exists and isn't in our non-unique kmer list
     fn track_kmer(&mut self, kmer: Kmer, new_vertex: NodeIndex);
@@ -154,20 +156,20 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
     /**
      * Since we want to duplicate non-unique kmers in the graph code we must determine what those kmers are
      */
-    fn preprocess_reads(&mut self);
+    fn preprocess_reads<'a>(&mut self, pending: &LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>);
 
     /**
      * Build the read threaded assembly graph if it hasn't already been constructed from the sequences that have
      * been added to the graph.
      */
-    fn build_graph_if_necessary(&mut self);
+    fn build_graph_if_necessary<'a>(&mut self, pending: &mut LinkedHashMap<usize, Vec<SequenceForKmers<'a>>>);
 
     /**
      * Thread sequence seqForKmers through the current graph, updating the graph as appropriate
      *
      * @param seqForKmers a non-null sequence
      */
-    fn thread_sequence(&mut self, seq_for_kmers: &SequenceForKmers);
+    fn thread_sequence<'a>(&mut self, seq_for_kmers: &SequenceForKmers<'a>);
 
     /**
      * Find vertex and its position in seqForKmers where we should start assembling seqForKmers
@@ -175,7 +177,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      * @param seqForKmers the sequence we want to thread into the graph
      * @return the position of the starting vertex in seqForKmer, or -1 if it cannot find one
      */
-    fn find_start(&self, seq_for_kmers: &SequenceForKmers) -> Option<usize>;
+    fn find_start<'a>(&self, seq_for_kmers: &SequenceForKmers<'a>) -> Option<usize>;
 
     // whether reads are needed after graph construction
     fn should_remove_reads_after_graph_construction(&self) -> bool;
@@ -462,7 +464,7 @@ pub trait AbstractReadThreadingGraph: Sized + Send + Sync + Debug {
      * @param kmer the kmer we want to create a vertex for
      * @return the non-null created vertex
      */
-    fn create_vertex(&mut self, kmer: Kmer) -> NodeIndex;
+    fn create_vertex(&mut self, sequence: &[u8], kmer: Kmer) -> NodeIndex;
 
     fn increase_counts_in_matched_kmers(
         &mut self,
@@ -560,22 +562,22 @@ pub enum TraversalDirection {
  * Keeps track of the information needed to add a sequence to the read threading assembly graph
  */
 #[derive(Debug, Clone)]
-pub struct SequenceForKmers {
+pub struct SequenceForKmers<'a> {
     pub name: String,
-    pub sequence: Vec<u8>,
+    pub sequence: &'a [u8],
     pub start: usize,
     pub stop: usize,
     pub count: usize,
     pub is_ref: bool,
 }
 
-impl SequenceForKmers {
+impl<'a> SequenceForKmers<'a> {
     /**
      * Create a new sequence for creating kmers
      */
     pub fn new(
         name: String,
-        sequence: Vec<u8>,
+        sequence: &'a [u8],
         start: usize,
         stop: usize,
         count: usize,
