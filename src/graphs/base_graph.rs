@@ -64,7 +64,7 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
                     .to_vec(),
             );
             sv.set_additional_info(v_weight.get_additional_info());
-            let sv_ind = seq_graph.base_graph.add_node(sv);
+            let sv_ind = seq_graph.base_graph.add_node(&sv);
             vertex_map.insert(dv, sv_ind);
         }
 
@@ -841,7 +841,9 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
         return bytes;
     }
 
-    pub fn add_vertices(&mut self, vertices: Vec<V>) -> Vec<NodeIndex> {
+    pub fn add_vertices<'a, I>(&mut self, vertices: I) -> Vec<NodeIndex>
+    where V: BaseVertex + 'a, I: IntoIterator<Item=&'a V>
+    {
         let node_indices = vertices
             .into_iter()
             .map(|v| self.add_node(v))
@@ -954,15 +956,15 @@ impl<V: BaseVertex + Hash, E: BaseEdge> BaseGraph<V, E> {
      * have identical nodes especially when dealing with k-mers
      * **Returns** the NodeIndex of the provided vertex/node
      */
-    pub fn add_node(&mut self, v: V) -> NodeIndex {
+    pub fn add_node(&mut self, v: &V) -> NodeIndex {
         if v.merge_identical_nodes() {
-            let index = self.graph.node_indices().find(|i| &self.graph[*i] == &v);
+            let index = self.graph.node_indices().find(|i| &self.graph[*i] == v);
             match index {
-                None => return self.graph.add_node(v),
+                None => return self.graph.add_node(v.clone()),
                 Some(index) => return index,
             }
         } else {
-            return self.graph.add_node(v);
+            return self.graph.add_node(v.clone());
         }
     }
 
@@ -1029,7 +1031,7 @@ impl TestGraph {
         let v2 = MultiDeBruijnVertex::new(kmer_2.to_vec(), true);
         let to_add = BaseEdgeStruct::new(is_ref, multiplicity, 0);
 
-        let node_indices = self.graph.add_vertices(vec![v1, v2]);
+        let node_indices = self.graph.add_vertices(vec![&v1, &v2]);
         self.graph
             .add_or_update_edge(node_indices[0], node_indices[1], to_add);
     }

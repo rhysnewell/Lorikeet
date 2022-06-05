@@ -196,8 +196,14 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         &mut self,
         assembly_result_set: &'b mut AssemblyResultSet<A>,
         samples: Vec<String>,
-        per_sample_read_list: HashMap<usize, Vec<BirdToolRead>>,
+        mut per_sample_read_list: HashMap<usize, Vec<BirdToolRead>>,
     ) -> AlleleLikelihoods<Haplotype<SimpleInterval>> {
+        if samples.len() != per_sample_read_list.keys().len() {
+            (0..samples.len()).for_each(|i| {
+                per_sample_read_list.entry(i).or_insert(Vec::new());
+            });
+        }
+
         let haplotypes: Vec<Haplotype<SimpleInterval>> = assembly_result_set
             .haplotypes
             .iter()
@@ -211,6 +217,11 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
         let mut result = AlleleLikelihoods::new(haplotypes.clone(), samples, per_sample_read_list);
 
         for i in 0..sample_count {
+            if !result
+                .evidence_by_sample_index
+                .contains_key(&i) {
+                continue
+            }
             self.compute_read_likelihoods_in_matrix(i, &mut result, &mut pair_hmm);
         }
         result.normalize_likelihoods(
@@ -378,7 +389,7 @@ impl<'a> PairHMMLikelihoodCalculationEngine<'a> {
                         read_del_quals,
                     )
                 } else {
-                    let maybe_unclipped = ReadClipper::new(&read).hard_clip_soft_clipped_bases();
+                    let maybe_unclipped = ReadClipper::new(read.clone()).hard_clip_soft_clipped_bases();
                     let bases = maybe_unclipped.bases.as_slice();
 
                     let mut read_quals = maybe_unclipped.read.qual().to_vec();

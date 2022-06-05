@@ -145,7 +145,7 @@ fn make_prune_chains_data() {
                 let new_nodes =
                     graph
                         .base_graph
-                        .add_vertices(vec![v1.clone(), v2.clone(), v3.clone()]);
+                        .add_vertices(vec![&v1, &v2, &v3]);
                 graph.base_graph.add_edges(
                     new_nodes[0],
                     new_nodes[1..].to_vec(),

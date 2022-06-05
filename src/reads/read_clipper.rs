@@ -38,14 +38,14 @@ use utils::simple_interval::Locatable;
  *   of the read (before clipping).
  *
  */
-pub struct ReadClipper<'a> {
-    read: &'a BirdToolRead,
+pub struct ReadClipper {
+    read: BirdToolRead,
     was_clipped: bool,
     ops: Vec<ClippingOp>,
 }
 
-impl<'a> ReadClipper<'a> {
-    pub fn new(read: &'a BirdToolRead) -> ReadClipper {
+impl ReadClipper {
+    pub fn new(read: BirdToolRead) -> ReadClipper {
         ReadClipper {
             read,
             was_clipped: false,
@@ -82,16 +82,16 @@ impl<'a> ReadClipper<'a> {
     ) -> BirdToolRead {
         if alignment_start <= ref_stop && alignment_stop >= ref_start {
             if alignment_start < ref_start && alignment_stop > ref_stop {
-                return ReadClipper::new(&read).hard_clip_both_ends_by_reference_coordinates(
-                    ref_start.checked_sub(1).unwrap_or(0),
+                return ReadClipper::new(read).hard_clip_both_ends_by_reference_coordinates(
+                    ref_start.saturating_sub(1),
                     ref_stop + 1,
                 );
             } else if alignment_start < ref_start {
-                return ReadClipper::new(&read).hard_clip_by_reference_coordinates_left_tail(
-                    ref_start.checked_sub(1).unwrap_or(0),
+                return ReadClipper::new(read).hard_clip_by_reference_coordinates_left_tail(
+                    ref_start.saturating_sub(1),
                 );
             } else if alignment_stop > ref_stop {
-                return ReadClipper::new(&read)
+                return ReadClipper::new(read)
                     .hard_clip_by_reference_coordinates_right_tail(ref_stop + 1);
             }
 
@@ -120,7 +120,7 @@ impl<'a> ReadClipper<'a> {
         clipping_op: ClippingRepresentation,
     ) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone();
+            return self.read;
         }
         if clipping_op == ClippingRepresentation::SoftclipBases && self.read.read.is_unmapped() {
             panic!(
@@ -182,7 +182,7 @@ impl<'a> ReadClipper<'a> {
         }
 
         if start.is_none() || stop.is_none() {
-            return self.read.clone();
+            return self.read;
         };
 
         if stop.unwrap_or(0) > self.read.read.seq_len() - 1 {
@@ -254,7 +254,7 @@ impl<'a> ReadClipper<'a> {
             ReadUtils::empty_read_mut(&mut left_tail_read);
             return left_tail_read;
         } else {
-            let mut clipper = ReadClipper::new(&left_tail_read);
+            let mut clipper = ReadClipper::new(left_tail_read);
             return clipper.hard_clip_by_reference_coordinates_left_tail(left);
         }
     }
@@ -289,7 +289,7 @@ impl<'a> ReadClipper<'a> {
             ReadUtils::empty_read_mut(&mut left_tail_read);
             return left_tail_read;
         } else {
-            let mut clipper = ReadClipper::new(&left_tail_read);
+            let mut clipper = ReadClipper::new(left_tail_read);
             return clipper.soft_clip_by_reference_coordinates_left_tail(left);
         }
     }
@@ -364,10 +364,10 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn clip_read(mut self, algorithm: ClippingRepresentation) -> BirdToolRead {
         if self.ops.is_empty() {
-            return self.read.clone();
+            return self.read;
         }
 
-        let mut clipped_read = self.read.clone();
+        let mut clipped_read = self.read;
 
         for op in self.ops.iter_mut() {
             let read_length = clipped_read.len();
@@ -396,7 +396,7 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn hard_clip_soft_clipped_bases(mut self) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone();
+            return self.read;
         }
 
         let mut read_index = 0;
@@ -428,7 +428,7 @@ impl<'a> ReadClipper<'a> {
         if cut_right >= 0 {
             self.add_op(ClippingOp::new(
                 cut_right as usize,
-                self.read.read.seq_len() - 1,
+                self.read.bases.len(),
             ));
         }
 
@@ -445,7 +445,7 @@ impl<'a> ReadClipper<'a> {
      */
     pub fn revert_soft_clipped_bases(mut self) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone();
+            return self.read;
         }
 
         self.add_op(ClippingOp::new(0, 0));
@@ -464,9 +464,9 @@ impl<'a> ReadClipper<'a> {
         let adaptor_boundary = self.read.get_adaptor_boundary();
 
         if adaptor_boundary == ReadUtils::CANNOT_COMPUTE_ADAPTOR_BOUNDARY
-            || !ReadUtils::is_inside_read(self.read, adaptor_boundary)
+            || !ReadUtils::is_inside_read(&self.read, adaptor_boundary)
         {
-            return self.read.clone();
+            return self.read;
         };
 
         if self.read.read.is_reverse() {
@@ -478,6 +478,10 @@ impl<'a> ReadClipper<'a> {
 
     pub fn hard_clip_low_qual_ends(mut self, low_qual: u8) -> BirdToolRead {
         self.clip_low_qual_ends(ClippingRepresentation::HardclipBases, low_qual)
+    }
+
+    pub fn soft_clip_low_qual_ends(mut self, low_qual: u8) -> BirdToolRead {
+        self.clip_low_qual_ends(ClippingRepresentation::SoftclipBases, low_qual)
     }
 
     /**
@@ -496,24 +500,28 @@ impl<'a> ReadClipper<'a> {
         low_qual: u8,
     ) -> BirdToolRead {
         if self.read.is_empty() {
-            return self.read.clone();
+            return self.read;
         };
 
-        let read_length = self.read.read.seq_len();
+        let read_length = self.read.bases.len();
         let mut left_clip_index = 0;
-        let mut right_clip_index = read_length - 1;
+        let mut right_clip_index = read_length.saturating_sub(1);
 
         let read_quals = self.read.read.qual();
+        // debug!("Quals {:?}", read_quals);
         // check how far we can clip both sides
         while right_clip_index > 0 && read_quals[right_clip_index] <= low_qual {
-            right_clip_index -= 1;
+            right_clip_index = match right_clip_index.checked_sub(1) {
+                Some(r) => r,
+                None => break
+            };
         }
         while left_clip_index < read_length && read_quals[left_clip_index] <= low_qual {
             left_clip_index += 1;
         }
 
         // if the entire read should be clipped, then return an empty read.
-        if left_clip_index < read_length - 1 {
+        if left_clip_index > right_clip_index {
             return ReadUtils::empty_read(&self.read);
         };
 

@@ -65,7 +65,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                         let mut multi = 1;
                         let mut graph = SeqGraph::new(11);
                         let v = SeqVertex::new(b"GGGG".to_vec());
-                        let v_i = graph.base_graph.add_node(v.clone());
+                        let v_i = graph.base_graph.add_node(&v);
 
                         let mut tops = Vec::new();
                         let mut mids = Vec::new();
@@ -74,7 +74,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                             let mid = SeqVertex::new(
                                 format!("{}{}", bases[i], common_suffix).as_bytes().to_vec(),
                             );
-                            let mid_i = graph.base_graph.add_node(mid.clone());
+                            let mid_i = graph.base_graph.add_node(&mid);
                             graph.base_graph.add_edges(
                                 mid_i,
                                 vec![v_i],
@@ -87,7 +87,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                             tops.push(SeqVertex::new(bases[i].as_bytes().to_vec()));
                         }
 
-                        let top_indices = graph.base_graph.add_vertices(tops);
+                        let top_indices = graph.base_graph.add_vertices(tops.iter());
                         for t_i in top_indices {
                             for i in 0..n_top_connections {
                                 graph.base_graph.add_or_update_edge(
@@ -101,7 +101,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
 
                         for i in 0..n_bots {
                             let bot = SeqVertex::new(bases[i].as_bytes().to_vec());
-                            let bot_i = graph.base_graph.add_node(bot);
+                            let bot_i = graph.base_graph.add_node(&bot);
                             graph.base_graph.add_or_update_edge(
                                 v_i,
                                 bot_i,
@@ -210,7 +210,7 @@ fn test_doesnt_merge_source_nodes() {
 
     let node_indices = g
         .base_graph
-        .add_vertices(vec![top.clone(), v1, v2, v3, top, b]);
+        .add_vertices(vec![&top, &v1, &v2, &v3, &top, &b]);
     g.base_graph.add_edges(
         node_indices[0],
         vec![node_indices[1], node_indices[5]],

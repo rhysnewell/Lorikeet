@@ -390,6 +390,9 @@ impl<A: Allele> AlleleLikelihoods<A> {
             // debug!("Allele count {}", allele_count);
             if !(allele_count == 0 || allele_count == 1) {
                 for s in 0..self.values_by_sample_index.len() {
+                    if !self.evidence_by_sample_index.contains_key(&s) {
+                        continue
+                    }
                     let evidence_count = self.evidence_by_sample_index.get(&s).unwrap().len();
                     for r in 0..evidence_count {
                         self.normalize_likelihoods_per_evidence(
@@ -911,6 +914,9 @@ impl<A: Allele> AlleleLikelihoods<A> {
         for sample_index in 0..number_of_samples {
             let mut indexes_to_remove;
             {
+                if !self.evidence_by_sample_index.contains_key(&sample_index) {
+                    continue
+                }
                 let sample_evidence = self.evidence_by_sample_index.get(&sample_index).unwrap();
                 let number_of_evidence = sample_evidence.len();
                 debug!("Number of evidences {}", number_of_evidence);

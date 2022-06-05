@@ -1492,7 +1492,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
         debug!("Moving reads....");
         trimming_result.original_region.reads =
             untrimmed_assembly_result.region_for_genotyping.move_reads();
-        debug!("Move complete!");
+        debug!("Move complete! {}", trimming_result.original_region.reads.len());
         let mut assembly_result =
             untrimmed_assembly_result.trim_to(trimming_result.get_variant_region());
 
@@ -1500,7 +1500,6 @@ impl<'c> HaplotypeCallerEngine<'c> {
             "Assembly result allele order after region trimming {:?}",
             &assembly_result.haplotypes
         );
-
 
         let read_stubs = assembly_result
             .region_for_genotyping
@@ -1514,8 +1513,8 @@ impl<'c> HaplotypeCallerEngine<'c> {
             .collect::<Vec<BirdToolRead>>();
         let mut assembly_result = assembly_result.remove_all(&read_stubs);
         debug!(
-            "Assembly result allele order after stub filter {:?}",
-            &assembly_result.haplotypes.len()
+            "Assembly result allele order after stub filter {:?} -> read stubs {}",
+            &assembly_result.haplotypes.len(), read_stubs.len()
         );
 
 
@@ -1527,12 +1526,13 @@ impl<'c> HaplotypeCallerEngine<'c> {
         let (mut assembly_result, filtered_reads) =
             self.filter_non_passing_reads(assembly_result, flag_filters);
         // let filtered_reads = Vec::new();
+        debug!("Filtered reads {}", filtered_reads.len());
         debug!(
             "Assembly result allele order after read filter {:?}",
             &assembly_result.haplotypes.len()
         );
         let per_sample_filtered_read_list =
-            AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads, sample_names.len());
+            AssemblyBasedCallerUtils::split_reads_by_sample(filtered_reads);
 
         if !assembly_result.variation_present || assembly_result.region_for_genotyping.len() == 0 {
             return self.reference_model_for_no_variation(
@@ -1551,10 +1551,9 @@ impl<'c> HaplotypeCallerEngine<'c> {
         debug!("==========================================================================");
         let reads = AssemblyBasedCallerUtils::split_reads_by_sample(
             assembly_result.region_for_genotyping.move_reads(),
-            sample_names.len(),
         );
 
-
+        debug!("Before change: {}", reads.values().map(|r| r.len()).sum::<usize>());
         let mut read_likelihoods: AlleleLikelihoods<Haplotype<SimpleInterval>> = self
             .likelihood_calculation_engine
             .compute_read_likelihoods(&mut assembly_result, sample_names.to_vec(), reads);
@@ -1650,8 +1649,10 @@ impl<'c> HaplotypeCallerEngine<'c> {
             .filter(|r| {
                 if AlignmentUtils::unclipped_read_length(r) < Self::READ_LENGTH_FILTER_THRESHOLD
                     || r.read.mapq() < self.mapping_quality_threshold
-                    || (r.read.is_paired() && (r.read.is_mate_unmapped() || r.read.tid() != r.read.mtid()))
-                    || (!flag_filters.include_secondary && r.read.is_secondary())
+                    || (r.read.is_paired()
+                        && (!r.read.is_mate_unmapped()
+                        && (!r.read.is_unmapped() && r.read.tid() != r.read.mtid())))
+                    // || (!flag_filters.include_secondary && r.read.is_secondary())
                 {
                     // debug!("Removing read {:?}", r);
                     true

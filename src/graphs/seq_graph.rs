@@ -330,7 +330,7 @@ impl<E: BaseEdge + std::marker::Sync> SeqGraph<E> {
         // TODO -- performance problem -- can be optimized if we want
         let added_vertex = self.merge_linear_chain_vertices(linear_chain);
 
-        let added_node_index = self.base_graph.add_node(added_vertex);
+        let added_node_index = self.base_graph.add_node(&added_vertex);
 
         // update the incoming and outgoing edges to point to the new vertex
         for edge in self.base_graph.edges_directed(*last, Direction::Outgoing) {

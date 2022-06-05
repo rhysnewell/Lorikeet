@@ -357,6 +357,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                         start,
                         end
                     );
+                    // debug!("Read {name}");
                     self.add_sequence(
                         pending,
                         name,
@@ -412,6 +413,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
         // let pending = self.get_pending();
         // go through the pending sequences, and add them to the graph
         for (name, sequences_for_samples) in pending.iter() {
+            debug!("Sample {} reads {}", *name, sequences_for_samples.len());
             for sequence_for_kmers in sequences_for_samples.iter() {
                 self.thread_sequence(sequence_for_kmers);
                 if Self::WRITE_GRAPH {
@@ -427,12 +429,12 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
                 }
                 self.counter += 1;
             }
-            debug!("Threaded {} Nodes {} Edges {}", self.counter, self.base_graph.vertex_set().len(), self.base_graph.graph.edge_count());
+            debug!("Threaded {} Nodes {} Edges {}", self.counter, self.base_graph.graph.node_count(), self.base_graph.graph.edge_count());
             // flush the single sample edge values from the graph
             for e in self.base_graph.graph.edge_weights_mut() {
                 e.flush_single_sample_multiplicity()
             }
-            debug!("Flushed {} Nodes {} Edges {}", self.counter, self.base_graph.vertex_set().len(), self.base_graph.graph.edge_count());
+            debug!("Flushed {} Nodes {} Edges {}", self.counter, self.base_graph.graph.node_count(), self.base_graph.graph.edge_count());
         }
 
         // self.replace_pending(&mut pending);
@@ -614,7 +616,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
      */
     fn create_vertex(&mut self, sequence: &[u8], mut kmer: Kmer) -> NodeIndex {
         let new_vertex = MultiDeBruijnVertex::new(kmer.bases(sequence).to_vec(), false);
-        let node_index = self.base_graph.add_node(new_vertex);
+        let node_index = self.base_graph.add_node(&new_vertex);
 
         self.track_kmer(kmer, node_index);
 
@@ -1269,7 +1271,7 @@ impl AbstractReadThreadingGraph for ReadThreadingGraph {
             let new_v = MultiDeBruijnVertex::new_with_sequence(
                 sequence_to_extend[i..i + self.base_graph.get_kmer_size()].to_vec(),
             );
-            let new_v_index = self.base_graph.add_node(new_v);
+            let new_v_index = self.base_graph.add_node(&new_v);
             let new_e =
                 MultiSampleEdge::new(false, removed_edge.multiplicity, self.num_pruning_samples);
             let new_e_index = self.base_graph.graph.add_edge(new_v_index, prev_v, new_e);

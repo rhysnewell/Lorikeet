@@ -67,7 +67,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                         let mut multi = 1;
                         let mut graph = SeqGraph::new(11);
                         let v = SeqVertex::new(b"GGGG".to_vec());
-                        let v_i = graph.base_graph.add_node(v.clone());
+                        let v_i = graph.base_graph.add_node(&v);
 
                         let mut tops = Vec::new();
                         let mut mids = Vec::new();
@@ -76,7 +76,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                             let mid = SeqVertex::new(
                                 format!("{}{}", bases[i], common_suffix).as_bytes().to_vec(),
                             );
-                            let mid_i = graph.base_graph.add_node(mid.clone());
+                            let mid_i = graph.base_graph.add_node(&mid);
                             graph.base_graph.add_edges(
                                 mid_i,
                                 vec![v_i],
@@ -89,7 +89,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
                             tops.push(SeqVertex::new(bases[i].as_bytes().to_vec()));
                         }
 
-                        let top_indices = graph.base_graph.add_vertices(tops);
+                        let top_indices = graph.base_graph.add_vertices(tops.iter());
                         for t_i in top_indices {
                             for i in 0..n_top_connections {
                                 graph.base_graph.add_or_update_edge(
@@ -103,7 +103,7 @@ pub fn make_split_merge_data(test_function: Box<dyn Fn(SplitMergeData)>) {
 
                         for i in 0..n_bots {
                             let bot = SeqVertex::new(bases[i].as_bytes().to_vec());
-                            let bot_i = graph.base_graph.add_node(bot);
+                            let bot_i = graph.base_graph.add_node(&bot);
                             graph.base_graph.add_or_update_edge(
                                 v_i,
                                 bot_i,
@@ -233,7 +233,7 @@ fn test_split_prev_have_multiple_edges() {
     let v3 = SeqVertex::new(b"A".to_vec());
     let v4 = SeqVertex::new(b"A".to_vec());
 
-    let node_indices = original.base_graph.add_vertices(vec![v1, v2, v3, v4]);
+    let node_indices = original.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4]);
     original.base_graph.add_or_update_edge(
         node_indices[0],
         node_indices[2],
@@ -270,7 +270,7 @@ fn test_split_no_cycles() {
     let v3 = SeqVertex::new(b"TC".to_vec());
     let v4 = SeqVertex::new(b"G".to_vec());
 
-    let node_indices = original.base_graph.add_vertices(vec![v1, v2, v3, v4]);
+    let node_indices = original.base_graph.add_vertices(vec![&v1, &v2, &v3, &v4]);
     original.base_graph.add_edges(
         node_indices[0],
         vec![node_indices[2], node_indices[3]],
@@ -311,7 +311,7 @@ fn test_split_complex_cycle() {
 
     let node_indices = original
         .base_graph
-        .add_vertices(vec![r1, r2, cat1, cat2, c1, c2]);
+        .add_vertices(vec![&r1, &r2, &cat1, &cat2, &c1, &c2]);
     original.base_graph.add_edges(
         node_indices[0],
         vec![
@@ -331,6 +331,61 @@ fn test_split_complex_cycle() {
 
     for v in node_indices {
         let mut graph = original.clone();
+        let success = CommonSuffixSplitter::split(&mut graph, v);
+        assert!(!success);
+    }
+}
+
+
+#[test]
+fn test_split_infinite_cycle_failure() {
+    let mut original = SeqGraph::new(11);
+    let v1 = SeqVertex::new(b"GC".to_vec());
+    let v2 = SeqVertex::new(b"X".to_vec());
+    let v3 = SeqVertex::new(b"N".to_vec());
+    let v4 = SeqVertex::new(b"C".to_vec());
+
+    let node_indices = original
+        .base_graph
+        .add_vertices(vec![&v1, &v2, &v3, &v4]);
+    original.base_graph.add_edges(
+        node_indices[0],
+        vec![
+            node_indices[1]
+        ],
+        BaseEdgeStruct::new(false, 12, 0),
+    );
+
+    original.base_graph.add_edges(
+        node_indices[1],
+        vec![
+            node_indices[2]
+        ],
+        BaseEdgeStruct::new(false, 23, 0),
+    );
+
+    original.base_graph.add_edges(
+        node_indices[2],
+        vec![
+            node_indices[3]
+        ],
+        BaseEdgeStruct::new(false, 34, 0),
+    );
+
+    original.base_graph.add_edges(
+        node_indices[3],
+        vec![
+            node_indices[1]
+        ],
+        BaseEdgeStruct::new(false, 42, 0),
+    );
+
+    let mut graph = original.clone();
+    let success = CommonSuffixSplitter::split(&mut graph, node_indices[1]);
+    assert!(success);
+
+    let vertex_set = graph.base_graph.graph.node_indices().map(|node| node.clone()).collect::<Vec<NodeIndex>>();
+    for v in vertex_set {
         let success = CommonSuffixSplitter::split(&mut graph, v);
         assert!(!success);
     }

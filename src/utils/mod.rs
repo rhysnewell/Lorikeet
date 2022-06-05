@@ -9,3 +9,5 @@ pub mod quality_utils;
 pub mod simple_interval;
 pub mod utils;
 pub mod vcf_constants;
+pub mod fragment_collection;
+pub mod fragment_utils;

@@ -830,7 +830,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .default_value("256")
+                        .default_value("128")
                         .hidden(true),
                 )
                 .arg(
@@ -1499,7 +1499,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .default_value("256")
+                        .default_value("128")
                         .hidden(true),
                 )
                 .arg(
@@ -2164,7 +2164,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .default_value("256")
+                        .default_value("128")
                         .hidden(true),
                 )
                 .arg(
@@ -2357,8 +2357,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("mapping-quality-threshold-for-genotyping")
                         .long("mapping-quality-threshold-for-genotyping")
-                        .default_value("20")
-                        .hidden(true),
+                        .default_value("20"),
                 )
                 .arg(
                     Arg::with_name("min-sv-qual")
@@ -2830,7 +2829,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
                         .long("max-allowed-path-for-read-threading-assembler")
-                        .default_value("256")
+                        .default_value("128")
                         .hidden(true),
                 )
                 .arg(

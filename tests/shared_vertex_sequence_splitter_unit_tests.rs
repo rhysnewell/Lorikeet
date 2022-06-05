@@ -92,7 +92,7 @@ fn test_splitter(strings: Vec<&str>, expected_prefix_len: usize, expected_suffix
         v.push(SeqVertex::new(s.as_bytes().to_vec()));
     }
 
-    let nodes = graph.base_graph.add_vertices(v);
+    let nodes = graph.base_graph.add_vertices(v.iter());
 
     let expected_prefix = &strings[0].as_bytes()[0..expected_prefix_len];
     let expected_suffix = &strings[0].as_bytes()[strings[0].len() - expected_suffix_len..];
@@ -198,13 +198,13 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
     for s in &strings {
         v.push(SeqVertex::new(s.as_bytes().to_vec()));
     }
-
-    let mut nodes = graph.base_graph.add_vertices(v);
+    println!("vertices {:?}", &v);
+    let mut nodes = graph.base_graph.add_vertices(v.iter());
     let first = nodes[0];
 
     let mut top_index = None;
     if has_top {
-        top_index = Some(graph.base_graph.add_node(top.unwrap()));
+        top_index = Some(graph.base_graph.add_node(top.as_ref().unwrap()));
         for vi in nodes.iter() {
             graph.base_graph.add_or_update_edge(
                 *top_index.as_ref().unwrap(),
@@ -217,7 +217,7 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
 
     let mut bot_index = None;
     if has_bot {
-        bot_index = Some(graph.base_graph.add_node(bot.unwrap()));
+        bot_index = Some(graph.base_graph.add_node(bot.as_ref().unwrap()));
         for vi in nodes.iter() {
             graph.base_graph.add_or_update_edge(
                 *vi,
@@ -228,8 +228,11 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
         }
     }
 
-    let sources = graph.base_graph.get_sources_generic().collect();
-    let sinks = graph.base_graph.get_sinks_generic().collect();
+    println!("{has_top} {has_bot}");
+    let sources = graph.base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
+    let sinks = graph.base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+    println!("{} {}", sources.len(), sinks.len());
+    println!("Initial: Nodes {} Edges {}", graph.base_graph.graph.node_count(), graph.base_graph.graph.edge_count());
 
     let mut graph_clone = graph.clone();
     let original_paths =
@@ -240,14 +243,25 @@ fn test_splitter_complete_cycle(strings: Vec<&str>, has_top: bool, has_bot: bool
         .iter()
         .map(|p| p.haplotype(&graph_clone.base_graph))
         .collect::<HashSet<Haplotype<SimpleInterval>>>();
-
+    println!("Haplotypes {}", haplotypes.len());
     let to_split = nodes.into_iter().collect();
     let mut splitter = SharedVertexSequenceSplitter::new(&mut graph, to_split);
+    println!("Prefix {} Suffix {}", std::str::from_utf8(splitter.get_prefix().sequence.as_slice()).unwrap(), std::str::from_utf8(splitter.get_suffix().sequence.as_slice()).unwrap());
     splitter.split();
-    splitter.update_graph(top_index, bot_index);
+    println!("Middle {:?}", splitter.get_new_middles());
+    println!("To split {:?}", &splitter.to_splits);
+    println!("Split: Nodes {} Edges {}", splitter.get_split_graph().base_graph.graph.node_count(), splitter.get_split_graph().base_graph.graph.edge_count());
+    let sources = splitter.get_split_graph().base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
+    let sinks = splitter.get_split_graph().base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+    println!("Split sources {} sinks {}", sources.len(), sinks.len());
 
-    let sources = graph.base_graph.get_sources_generic().collect();
-    let sinks = graph.base_graph.get_sinks_generic().collect();
+    splitter.update_graph(top_index, bot_index);
+    println!("Update: Nodes {} Edges {}", graph.base_graph.graph.node_count(), graph.base_graph.graph.edge_count());
+
+    let sources = graph.base_graph.get_sources_generic().collect::<HashSet<NodeIndex>>();
+    let sinks = graph.base_graph.get_sinks_generic().collect::<HashSet<NodeIndex>>();
+
+    println!("{} {}", sources.len(), sinks.len());
     let split_paths = GraphBasedKBestHaplotypeFinder::new(&mut graph.base_graph, sources, sinks)
         .find_best_haplotypes(std::usize::MAX, &graph.base_graph);
 

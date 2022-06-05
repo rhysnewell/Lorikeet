@@ -39,6 +39,8 @@ use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
+use utils::fragment_collection::FragmentCollection;
+use utils::fragment_utils::adjust_quals_of_overlapping_paired_fragments;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -101,62 +103,84 @@ impl AssemblyBasedCallerUtils {
         correct_overlapping_base_qualities: bool,
         soft_clip_low_quality_ends: bool,
     ) {
-        let debug = region.get_start() <= 1102345 && region.get_end() >= 1102335;
-        if !region.is_finalized() {
-            let min_tail_quality_to_use = if error_correct_reads {
-                HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION as u8
+        if region.is_finalized() {
+            return
+        }
+
+        let min_tail_quality_to_use = if error_correct_reads {
+            HaplotypeCallerEngine::MIN_TAIL_QUALITY_WITH_ERROR_CORRECTION as u8
+        } else {
+            min_tail_quality
+        };
+
+        let original_reads = region.move_reads();
+        debug!("Original reads {}", original_reads.len());
+
+        let mut reads_to_use = original_reads.into_par_iter().filter_map(|original_read| {
+            // TODO unclipping soft clips may introduce bases that aren't in the extended region if the unclipped bases
+            // TODO include a deletion w.r.t. the reference.  We must remove kmers that occur before the reference haplotype start
+            let mut hard_clipped = false;
+            let mut read = if dont_use_soft_clipped_bases
+                || !ReadUtils::has_well_defined_fragment_size(&original_read)
+            {
+                hard_clipped = true;
+                ReadClipper::new(original_read).hard_clip_soft_clipped_bases()
             } else {
-                min_tail_quality
+                ReadClipper::new(original_read).revert_soft_clipped_bases()
             };
 
-            let mut reads_to_use = Vec::new();
-            for original_read in region.get_reads().iter() {
-                // TODO unclipping soft clips may introduce bases that aren't in the extended region if the unclipped bases
-                // TODO include a deletion w.r.t. the reference.  We must remove kmers that occur before the reference haplotype start
-                let mut read = if dont_use_soft_clipped_bases
-                    || !ReadUtils::has_well_defined_fragment_size(&original_read)
-                {
-                    ReadClipper::new(original_read).hard_clip_soft_clipped_bases()
+            read = if soft_clip_low_quality_ends {
+                ReadClipper::new(read).soft_clip_low_qual_ends(min_tail_quality_to_use)
+            } else {
+                ReadClipper::new(read).hard_clip_low_qual_ends(min_tail_quality_to_use)
+            };
+
+            let mut adaptored = false;
+            if read.get_start() <= read.get_end() {
+                read = if read.read.is_unmapped() {
+                    read
                 } else {
-                    ReadClipper::new(original_read).revert_soft_clipped_bases()
+                    adaptored = true;
+                    ReadClipper::new(read).hard_clip_adaptor_sequence()
                 };
 
-                if read.get_start() <= read.get_end() {
-                    read = if read.read.is_unmapped() {
-                        read
+                if !read.is_empty() && read.read.seq_len_from_cigar(false) > 0 {
+                    read = ReadClipper::hard_clip_to_region(
+                        read,
+                        region.get_padded_span().get_start(),
+                        region.get_padded_span().get_end(),
+                    );
+
+                    if read.get_start() <= read.get_end()
+                        && read.len() > 0
+                        && read.overlaps(&region.get_padded_span())
+                    {
+                        // NOTE: here we make a defensive copy of the read if it has not been modified by the above operations
+                        // which might only make copies in the case that the read is actually clipped
+                        Some(read)
                     } else {
-                        ReadClipper::new(&read).hard_clip_adaptor_sequence()
-                    };
-
-                    if !read.is_empty() && read.read.seq_len_from_cigar(false) > 0 {
-                        read = ReadClipper::hard_clip_to_region(
-                            read,
-                            region.get_padded_span().get_start(),
-                            region.get_padded_span().get_end(),
-                        );
-
-                        if read.get_start() <= read.get_end()
-                            && read.len() > 0
-                            && read.overlaps(&region.get_padded_span())
-                        {
-                            // NOTE: here we make a defensive copy of the read if it has not been modified by the above operations
-                            // which might only make copies in the case that the read is actually clipped
-                            reads_to_use.push(read);
-                        }
+                        None
                     }
+                } else {
+                    None
                 }
+            } else {
+                None
             }
+        }).collect::<Vec<BirdToolRead>>();
 
-            reads_to_use.par_sort_unstable();
 
-            // handle overlapping read pairs from the same fragment
-            // if correct_overlapping_base_qualities {
-            //
-            // }
-            region.clear_reads();
-            region.add_all(reads_to_use);
-            region.set_finalized(true);
+        reads_to_use.par_sort_unstable();
+
+        // handle overlapping read pairs from the same fragment
+        if correct_overlapping_base_qualities {
+            reads_to_use = Self::clean_overlapping_read_pairs(reads_to_use, true, None, None)
         }
+
+        reads_to_use.par_sort_unstable();
+        region.clear_reads();
+        region.add_all(reads_to_use);
+        region.set_finalized(true);
     }
 
     pub fn haplotype_alignment_tiebreaking_priority(
@@ -218,28 +242,40 @@ impl AssemblyBasedCallerUtils {
             .collect::<HashMap<ReadIndexer, BirdToolRead>>();
     }
 
-    // /**
-    //  *  Modify base qualities when paired reads overlap to account for the possibility of PCR error.
-    //  *
-    //  *  Overlapping mates provded independent evidence as far as sequencing error is concerned, but their PCR errors
-    //  *  are correlated.  The base qualities are thus limited by the sequencing base quality as well as half of the PCR
-    //  *  quality.  We use half of the PCR quality because downstream we treat read pairs as independent, and summing two halves
-    //  *  effectively gives the PCR quality of the pairs when taken together.
-    //  *
-    //  * @param reads the list of reads to consider
-    //  * @param samplesList   list of samples
-    //  * @param readsHeader   bam header of reads' source
-    //  * @param setConflictingToZero if true, set base qualities to zero when mates have different base at overlapping position
-    //  * @param halfOfPcrSnvQual half of phred-scaled quality of substitution errors from PCR
-    //  * @param halfOfPcrIndelQual half of phred-scaled quality of indel errors from PCR
-    //  */
-    // TODO: Need to be able to split apart reads by sample name for this to work, not high priority
-    // pub fn clean_overlapping_read_pairs(
-    //     read: &mut Vec<BirdToolRead>, set_conflicting_to_zero: bool,
-    //     half_of_pcr_snv_qual: Option<usize>, half_of_pcr_indel_qual: Option<usize>
-    // ) {
-    //     for
-    // }
+    /**
+     *  Modify base qualities when paired reads overlap to account for the possibility of PCR error.
+     *
+     *  Overlapping mates provded independent evidence as far as sequencing error is concerned, but their PCR errors
+     *  are correlated.  The base qualities are thus limited by the sequencing base quality as well as half of the PCR
+     *  quality.  We use half of the PCR quality because downstream we treat read pairs as independent, and summing two halves
+     *  effectively gives the PCR quality of the pairs when taken together.
+     *
+     * @param reads the list of reads to consider
+     * @param samplesList   list of samples
+     * @param readsHeader   bam header of reads' source
+     * @param setConflictingToZero if true, set base qualities to zero when mates have different base at overlapping position
+     * @param halfOfPcrSnvQual half of phred-scaled quality of substitution errors from PCR
+     * @param halfOfPcrIndelQual half of phred-scaled quality of indel errors from PCR
+     */
+    pub fn clean_overlapping_read_pairs(
+        reads: Vec<BirdToolRead>, set_conflicting_to_zero: bool,
+        half_of_pcr_snv_qual: Option<u8>, half_of_pcr_indel_qual: Option<u8>
+    ) -> Vec<BirdToolRead> {
+        let n_reads = reads.len();
+        let mut split_reads_by_sample = Self::split_reads_by_sample(reads);
+
+        let mut reads = Vec::with_capacity(n_reads);
+        for per_sample_read_list in split_reads_by_sample.into_values() {
+            let mut fragment_collection = FragmentCollection::create(per_sample_read_list);
+            let (singletons, mut overlapping_pairs) = fragment_collection.consume();
+            reads.extend(singletons);
+            for overlapping_pair in overlapping_pairs {
+                let fixed_pair = adjust_quals_of_overlapping_paired_fragments(overlapping_pair, set_conflicting_to_zero, half_of_pcr_snv_qual, half_of_pcr_indel_qual);
+                reads.extend([fixed_pair.0, fixed_pair.1]);
+            }
+        }
+        reads
+    }
 
     /**
      * High-level function that runs the assembler on the given region's reads,
@@ -872,12 +908,12 @@ impl AssemblyBasedCallerUtils {
 
     pub fn split_reads_by_sample(
         reads: Vec<BirdToolRead>,
-        n_samples: usize,
+        // n_samples: usize,
     ) -> HashMap<usize, Vec<BirdToolRead>> {
         let mut return_map = HashMap::new();
-        (0..n_samples).into_iter().for_each(|sample_index| {
-            return_map.entry(sample_index).or_insert_with(Vec::new);
-        });
+        // (0..n_samples).into_iter().for_each(|sample_index| {
+        //     return_map.entry(sample_index).or_insert_with(Vec::new);
+        // });
 
         for read in reads.into_iter() {
             let read_vec = return_map.entry(read.sample_index).or_insert_with(Vec::new);

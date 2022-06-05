@@ -37,6 +37,9 @@ impl QualityUtils {
         (1.0 - 10.0.powf((qual as f64) / -10.0)).log10()
     }
 
+    pub fn get_phred_score_from_obs_and_errors(probability: f64) -> u8 {
+        (-10.0 * probability.log10()).round() as u8
+    }
     /**
      * Calculate the sum of phred scores.
      * @param phreds the phred score values.

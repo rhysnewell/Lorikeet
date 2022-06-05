@@ -232,8 +232,9 @@ impl ReadThreadingAssembler {
         // };
 
         // Revert clipped bases if necessary (since we do not want to assemble them)
-        let corrected_reads = assembly_region.reads
-            .par_iter()
+        let mut corrected_reads = assembly_region.move_reads();
+        let corrected_reads = corrected_reads
+            .into_par_iter()
             .map(|read| ReadClipper::new(read).hard_clip_soft_clipped_bases())
             .collect::<Vec<BirdToolRead>>();
         debug!("Corrected reads {}", corrected_reads.len());
@@ -242,12 +243,12 @@ impl ReadThreadingAssembler {
         let active_region_extended_location = assembly_region.get_padded_span();
         ref_haplotype.set_genome_location(active_region_extended_location.clone());
 
-        let mut result_set = Arc::new(Mutex::new(AssemblyResultSet::new(
+        let mut result_set = AssemblyResultSet::new(
             assembly_region,
             full_reference_with_padding,
             ref_loc.clone(),
             ref_haplotype.clone(),
-        )));
+        );
         // either follow the old method for building graphs and then assembling or assemble and haplotype call before expanding kmers
 
         if self.generate_seq_graph {
@@ -255,7 +256,7 @@ impl ReadThreadingAssembler {
                 &ref_haplotype,
                 &ref_loc,
                 &corrected_reads,
-                &result_set,
+                &mut result_set,
                 &active_region_extended_location,
                 sample_names,
                 &dangling_end_sw_parameters,
@@ -267,7 +268,7 @@ impl ReadThreadingAssembler {
                 &ref_haplotype,
                 &ref_loc,
                 &corrected_reads,
-                &result_set,
+                &mut result_set,
                 &active_region_extended_location,
                 sample_names,
                 &dangling_end_sw_parameters,
@@ -278,10 +279,9 @@ impl ReadThreadingAssembler {
 
         // If we get to this point then no graph worked... thats bad and indicates something
         // horrible happened, in this case we just return a reference haplotype
-        Arc::try_unwrap(result_set)
-            .expect("Lock on result set still has multiple owners")
-            .into_inner()
-            .expect("Lock won't release assembly result set")
+        result_set.region_for_genotyping.reads = corrected_reads;
+        debug!("Found {} to compare every read against", result_set.haplotypes.len());
+        result_set
     }
 
     /**
@@ -294,7 +294,7 @@ impl ReadThreadingAssembler {
         ref_loc: &'b SimpleInterval,
         corrected_reads: &'b Vec<BirdToolRead>,
         // non_ref_seq_graphs: &mut Vec<SeqGraph<BaseEdgeStruct>>,
-        result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
+        result_set: &mut AssemblyResultSet<ReadThreadingGraph>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
@@ -309,7 +309,7 @@ impl ReadThreadingAssembler {
             dangling_end_sw_parameters,
             avx_mode,
         )
-        .into_par_iter()
+        .into_iter()
         .for_each(|mut result| {
             // debug!("graph after assembly {:?}", &result.graph.as_ref().unwrap().base_graph);
             debug!(
@@ -424,7 +424,7 @@ impl ReadThreadingAssembler {
         ref_haplotype: &'b Haplotype<SimpleInterval>,
         ref_loc: &'b SimpleInterval,
         corrected_reads: &'b Vec<BirdToolRead>,
-        result_set: &Arc<Mutex<AssemblyResultSet<ReadThreadingGraph>>>,
+        result_set: &mut AssemblyResultSet<ReadThreadingGraph>,
         active_region_extended_location: &'b SimpleInterval,
         sample_names: &'b [String],
         dangling_end_sw_parameters: &Parameters,
@@ -501,7 +501,7 @@ impl ReadThreadingAssembler {
                                 // we have found our workable kmer size so lets add the results and finish
                                 let assembled_result = saved_assembly_results.last().unwrap();
                                 if !assembled_result.contains_suspect_haploptypes {
-                                    let mut result_set = result_set.lock().unwrap();
+                                    // let mut result_set = result_set.lock().unwrap();
                                     for h in assembled_result.discovered_haplotypes.clone() {
                                         result_set.add_haplotype(h);
                                     }
@@ -527,7 +527,7 @@ impl ReadThreadingAssembler {
             saved_assembly_results.reverse();
             for result in saved_assembly_results {
                 if result.discovered_haplotypes.len() > 1 {
-                    let mut result_set = result_set.lock().unwrap();
+                    // let mut result_set = result_set.lock().unwrap();
                     let ar_index = result_set.add_assembly_result(result);
                     for h in result_set.assembly_results[ar_index]
                         .discovered_haplotypes
@@ -565,8 +565,12 @@ impl ReadThreadingAssembler {
             != ref_haplotype.get_bases()
         {
             panic!(
-                "Mismatch between the reference haplotype and the reference assembly graph path.\
-                    for graph = {} compared to haplotype = {}",
+                "Mismatch between the reference haplotype and the reference assembly graph path for \n\
+                 +++++++++ \n\
+                 graph     = {} \n\
+                 haplotype = {} \n\
+                 loc       = {:?} \n\
+                 +++++++++ \n",
                 std::str::from_utf8(
                     graph
                         .get_reference_bytes(
@@ -578,7 +582,8 @@ impl ReadThreadingAssembler {
                         .as_slice()
                 )
                 .unwrap(),
-                std::str::from_utf8(ref_haplotype.get_bases()).unwrap()
+                std::str::from_utf8(ref_haplotype.get_bases()).unwrap(),
+                &ref_haplotype.genome_location
             );
         };
     }
@@ -667,12 +672,12 @@ impl ReadThreadingAssembler {
         ref_loc: &'b SimpleInterval,
         active_region_window: &'b SimpleInterval,
         haplotype_to_reference_sw_parameters: &Parameters,
-        result_set: &Arc<Mutex<AssemblyResultSet<A>>>,
+        result_set: &mut AssemblyResultSet<A>,
         avx_mode: AVXMode,
     ) {
         // add the reference haplotype separately from all the others to ensure
         // that it is present in the list of haplotypes
-        let mut return_haplotypes = LinkedHashSet::new();
+        // let mut return_haplotypes = LinkedHashSet::new();
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut failed_cigars = 0;
         {
@@ -720,23 +725,23 @@ impl ReadThreadingAssembler {
                     k_best_haplotype.haplotype(&assembly_result.graph.as_ref().unwrap().base_graph);
                 h.kmer_size = k_best_haplotype.kmer_size;
 
-                if !return_haplotypes.contains(&h) {
-                    debug!(
-                        "Potential location {:?} potential haplotype {:?}",
-                        active_region_window, &h
-                    );
+                if !result_set.haplotypes.contains(&h) {
+                    // debug!(
+                    //     "Potential location {:?} potential haplotype {:?}",
+                    //     active_region_window, &h
+                    // );
                     // TODO this score seems to be irrelevant at this point...
                     // if k_best_haplotype.is_reference {
                     //     ref_haplotype.score = OrderedFloat(k_best_haplotype.score);
                     // };
 
-                    debug!("+++++++++==================================== Candidates ====================================+++++++++");
-                    debug!(
-                        "ref -> {}",
-                        std::str::from_utf8(ref_haplotype.get_bases()).unwrap()
-                    );
-                    debug!("alt -> {}", std::str::from_utf8(h.get_bases()).unwrap());
-                    debug!("+++++++++====================================++++++++++++====================================+++++++++");
+                    // debug!("+++++++++==================================== Candidates ====================================+++++++++");
+                    // debug!(
+                    //     "ref -> {}",
+                    //     std::str::from_utf8(ref_haplotype.get_bases()).unwrap()
+                    // );
+                    // debug!("alt -> {}", std::str::from_utf8(h.get_bases()).unwrap());
+                    // debug!("+++++++++====================================++++++++++++====================================+++++++++");
                     let cigar = CigarUtils::calculate_cigar(
                         ref_haplotype.get_bases(),
                         h.get_bases(),
@@ -823,9 +828,9 @@ impl ReadThreadingAssembler {
                                     .base_graph
                                     .get_kmer_size()
                             );
-                            return_haplotypes.insert(h.clone());
+                            // return_haplotypes.insert(h.clone());
                             // result set would get added to here
-                            let mut result_set = result_set.lock().unwrap();
+                            // let mut result_set = result_set.lock().unwrap();
                             result_set.add_haplotype(h);
                         }
                     }
@@ -836,9 +841,9 @@ impl ReadThreadingAssembler {
         // Make sure that the ref haplotype is amongst the return haplotypes and calculate its score as
         // the first returned by any finder.
         // HERE we want to preserve the signal that assembly failed completely so in this case we don't add anything to the empty list
-        if !return_haplotypes.is_empty() && !return_haplotypes.contains(ref_haplotype) {
-            return_haplotypes.insert(ref_haplotype.clone());
-        };
+        // if !result_set.haplotypes.is_empty() && !result_set.haplotypes.contains(ref_haplotype) {
+        //     return_haplotypes.insert(ref_haplotype.clone());
+        // };
 
         if failed_cigars != 0 {
             debug!(
@@ -848,7 +853,7 @@ impl ReadThreadingAssembler {
             )
         }
 
-        assembly_result.set_discovered_haplotypes(return_haplotypes);
+        // assembly_result.set_discovered_haplotypes(return_haplotypes);
     }
 
     /**
@@ -952,10 +957,13 @@ impl ReadThreadingAssembler {
         debug!("1.5 - Reads {}", reads.len());
         let mut count = 0;
 
+        let mut sample_count = LinkedHashMap::new();
         for read in reads {
+            let s_count = sample_count.entry(read.sample_index).or_insert(0);
+            *s_count += 1;
             rt_graph.add_read(read, sample_names, &mut count, &mut pending)
         }
-        debug!("1.5 - Count {}", count);
+        debug!("1.5 - Count {} -> {:?}", count, sample_count);
         // let pending = rt_graph.get_pending(); // retrieve pending sequences and clear pending from graph
         // actually build the read threading graph
         rt_graph.build_graph_if_necessary(&mut pending);
@@ -1254,7 +1262,7 @@ impl ReadThreadingAssembler {
             // TODO -- ref properties should really be on the vertices, not the graph itself
             let complete = seq_graph.base_graph.graph.node_indices().next().unwrap();
             let dummy = SeqVertex::new(Vec::new());
-            let dummy_index = seq_graph.base_graph.add_node(dummy);
+            let dummy_index = seq_graph.base_graph.add_node(&dummy);
             seq_graph.base_graph.graph.add_edge(
                 complete,
                 dummy_index,

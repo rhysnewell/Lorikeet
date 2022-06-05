@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
  * but are distinct elements of the graph.
  *
  */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct SeqVertex {
     pub sequence: Vec<u8>,
     pub additional_info: String,
@@ -188,16 +188,18 @@ impl BaseVertex for SeqVertex {
     }
 }
 
-impl Hash for SeqVertex {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.sequence.hash(state);
-        self.identity_code.hash(state);
-    }
-}
+// impl Hash for SeqVertex {
+//     fn hash<H: Hasher>(&self, state: &mut H) {
+//         self.sequence.hash(state);
+//         self.identity_code.hash(state);
+//     }
+// }
 
 impl PartialEq for SeqVertex {
     fn eq(&self, other: &Self) -> bool {
-        self.sequence == other.sequence && self.identity_code == other.identity_code
+        self.sequence == other.sequence
+            && self.additional_info == other.additional_info
+            && self.identity_code == other.identity_code
     }
 }
 

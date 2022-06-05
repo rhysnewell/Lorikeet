@@ -60,7 +60,7 @@ pub struct SharedVertexSequenceSplitter<'a, E: BaseEdge> {
     suffix_v: SeqVertex,
     prefix_v_index: NodeIndex,
     suffix_v_index: NodeIndex,
-    to_splits: LinkedHashSet<NodeIndex>,
+    pub to_splits: LinkedHashSet<NodeIndex>,
     split_graph: SeqGraph<E>,
     new_middles: Vec<NodeIndex>,
     edges_to_remove: Vec<EdgeIndex>,
@@ -163,10 +163,10 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
         let fix_indices = self
             .split_graph
             .base_graph
-            .add_vertices(vec![self.prefix_v.clone(), self.suffix_v.clone()]);
+            .add_vertices(vec![&self.prefix_v, &self.suffix_v]);
         self.prefix_v_index = fix_indices[0];
         self.suffix_v_index = fix_indices[1];
-        let to_splits = self.to_splits.clone(); //hate this
+        let to_splits = self.to_splits.clone();
         for mid in to_splits {
             let mut to_mid =
                 self.process_edge_to_remove(mid, self.outer.base_graph.incoming_edge_of(mid));
@@ -186,7 +186,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             match remaining {
                 Some(remaining) => {
                     // there's some sequence prefix + seq + suffix, so add the node and make edges
-                    let remaining_index = self.split_graph.base_graph.add_node(remaining);
+                    let remaining_index = self.split_graph.base_graph.add_node(&remaining);
                     self.new_middles.push(remaining_index);
 
                     // update edge from top -> middle to be top -> without suffix
@@ -243,9 +243,9 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             self.split_graph
                 .base_graph
                 .get_node_weights(&self.new_middles)
-                .into_par_iter()
-                .map(|v| v.cloned().unwrap())
-                .collect::<Vec<SeqVertex>>(),
+                .into_iter()
+                .map(|v| v.unwrap())
+                .collect::<Vec<&SeqVertex>>(),
         );
 
         let has_prefix_suffix_edge = self
@@ -263,6 +263,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
             !self.prefix_v.is_empty() || (top.is_none() && !has_only_prefix_suffix_edges);
         let need_suffix_node =
             !self.suffix_v.is_empty() || (bot.is_none() && !has_only_prefix_suffix_edges);
+
 
         let mut outer_prefix_index = None;
         if need_prefix_node {
@@ -378,7 +379,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
     }
 
     fn add_suffix_node_and_edges(&mut self, bot: Option<NodeIndex>) -> NodeIndex {
-        let suffix_v_index = self.outer.base_graph.add_node(self.suffix_v.clone());
+        let suffix_v_index = self.outer.base_graph.add_node(&self.suffix_v);
         match bot {
             Some(bot) => {
                 self.outer.base_graph.graph.add_edge(
@@ -405,7 +406,7 @@ impl<'a, E: BaseEdge> SharedVertexSequenceSplitter<'a, E> {
     }
 
     fn add_prefix_node_and_edges(&mut self, top: Option<NodeIndex>) -> NodeIndex {
-        let prefix_v_index = self.outer.base_graph.add_node(self.prefix_v.clone());
+        let prefix_v_index = self.outer.base_graph.add_node(&self.prefix_v);
         match top {
             Some(top) => {
                 self.outer.base_graph.graph.add_edge(

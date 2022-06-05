@@ -111,7 +111,7 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         if self.haplotypes.contains(&h) {
             return false;
         } else {
-            debug!("Loc {:?} hap {:?}", &self.padded_reference_loc, &h);
+            // debug!("Loc {:?} hap {:?}", &self.padded_reference_loc, &h);
             self.update_reference_haplotype(&h);
             self.haplotypes.insert(h);
             return true;

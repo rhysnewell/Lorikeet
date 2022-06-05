@@ -48,12 +48,17 @@ impl CommonSuffixSplitter {
 
         let suffix_v_template = Self::common_suffix(&graph, v, &to_split);
         match suffix_v_template {
-            None => return false,
+            None => {
+                debug!("None {:?} -> {} [{:?}]", v, std::str::from_utf8(graph.base_graph.get_sequence_from_index(v)).unwrap(), to_split.iter().map(|ve| std::str::from_utf8(graph.base_graph.get_sequence_from_index(*ve)).unwrap()).collect::<Vec<&str>>());
+                return false
+            },
             Some(suffix_v_template) => {
+                debug!("Common {}", std::str::from_utf8(suffix_v_template.get_sequence()).unwrap());
                 let mut edges_to_remove = Vec::new();
 
                 for mid in to_split.iter() {
-                    let suffix_v = graph.base_graph.add_node(suffix_v_template.clone());
+                    // let suffix_vertex = SeqVertex::new(suffix_v_template.sequence.clone());
+                    let suffix_v = graph.base_graph.add_node(&suffix_v_template);
                     let prefix_v = graph
                         .base_graph
                         .graph
@@ -69,7 +74,8 @@ impl CommonSuffixSplitter {
                             incoming_target = suffix_v;
                         }
                         Some(prefix_v) => {
-                            let prefix_v_index = graph.base_graph.add_node(prefix_v);
+                            debug!("Prefix {}", std::str::from_utf8(prefix_v.get_sequence()).unwrap());
+                            let prefix_v_index = graph.base_graph.add_node(&prefix_v);
                             incoming_target = prefix_v_index;
                             let mut out_weight =
                                 graph.base_graph.graph.edge_weight(out).unwrap().clone();
@@ -197,7 +203,7 @@ impl CommonSuffixSplitter {
                 .graph
                 .edges_directed(*m, Direction::Outgoing)
                 .map(|e| e.id())
-                .collect::<HashSet<EdgeIndex>>();
+                .collect::<LinkedHashSet<EdgeIndex>>();
             if m == &bot
                 || outs.len() != 1
                 || !graph.base_graph.outgoing_vertices_of(*m).contains(&bot)
