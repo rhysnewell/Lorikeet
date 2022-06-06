@@ -451,7 +451,7 @@ impl AssemblyRegion {
             debug!("Fetching interval... {:?}", &interval);
             reference_reader.fetch_reference_context(self.ref_idx, &interval);
             reference_reader.read_sequence_to_vec();
-
+            reference_reader.current_sequence = reference_reader.current_sequence.to_ascii_uppercase();
             if reference_reader.current_sequence.is_empty() {
                 panic!(
                     "Retrieved sequence appears to be empty ref_idx {} tid {}",

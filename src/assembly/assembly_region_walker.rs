@@ -218,7 +218,7 @@ impl<'c> AssemblyRegionWalker<'c> {
             assembly_region_padding,
             min_assembly_region_size,
             max_assembly_region_size,
-            true, // not used, calculated in function
+            false, // not used, calculated in function
         );
 
         let features = args.value_of("features-vcf");

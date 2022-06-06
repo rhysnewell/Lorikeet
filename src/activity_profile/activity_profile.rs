@@ -328,6 +328,7 @@ impl Profile for ActivityProfile {
                         }
                     }
                 }
+                debug!("Soft clips added {}", states.len());
                 return states;
             }
             Type::None => {
@@ -386,6 +387,9 @@ impl Profile for ActivityProfile {
             } else {
                 false
             };
+            // let force_conversion = false;
+
+            debug!("Force conversion {}", force_conversion);
             let next_region = self.pop_next_ready_assembly_region(
                 assembly_region_extension,
                 min_region_size,
@@ -393,12 +397,17 @@ impl Profile for ActivityProfile {
                 force_conversion
             );
 
+
             match next_region {
                 Some(region) => {
-                    region_start = Some(region.padded_span.start);
+                    region_start = Some(region.active_span.start);
+                    debug!("Next region {:?}", &region.active_span);
                     regions.push(region);
                 },
-                None => return regions,
+                None => {
+
+                    return regions
+                },
             }
         }
     }
@@ -436,8 +445,10 @@ impl Profile for ActivityProfile {
                 Some(span) => {
                     // self.state_list = &self.state_list[span.size()..];
                     // self.state_list.retain(|state| !states_to_trim_away.contains(state));
+                    debug!("Span size {} states {}", span.size(), self.state_list.len());
                     if span.size() < self.state_list.len() {
-                        self.state_list = self.state_list[0..=span.size()].to_vec();
+                        debug!("Drained {}", self.state_list.drain(span.size()..self.state_list.len()).count());
+                        // self.state_list = self.state_list[0..span.size()].to_vec();
                     }
                 }
                 None => {
@@ -448,6 +459,7 @@ impl Profile for ActivityProfile {
 
         // debug!("Active prob 0 {} Threshold {}", &self.state_list[0].is_active_prob(), &self.active_prob_threshold);
         let is_active_region = &self.state_list[0].is_active_prob() > &self.active_prob_threshold;
+        debug!("First {:?} active? {}", &self.state_list[0], is_active_region);
         let offset_of_next_region_end = self.find_end_of_region(
             is_active_region,
             min_region_size,
@@ -455,6 +467,7 @@ impl Profile for ActivityProfile {
             force_conversion,
         );
 
+        debug!("Offset {:?}", &offset_of_next_region_end);
         match offset_of_next_region_end {
             Some(offset_of_next_region_end) => {
                 // we need to create the active region, and clip out the states we're extracting from this profile
@@ -481,6 +494,7 @@ impl Profile for ActivityProfile {
                         self.contig_len - 1,
                     ),
                 );
+                debug!("regionLoc {:?}", &region_loc);
                 return Some(AssemblyRegion::new(
                     region_loc,
                     is_active_region,
@@ -531,9 +545,10 @@ impl Profile for ActivityProfile {
 
         let mut end_of_active_region =
             self.find_first_activity_boundary(is_active_region, max_region_size);
-
+        debug!("Find end 1 {}", end_of_active_region);
         if is_active_region && (end_of_active_region == max_region_size) {
             end_of_active_region = self.find_best_cut_site(end_of_active_region, min_region_size);
+            debug!("Find end 2 {}", end_of_active_region);
         }
 
         return end_of_active_region.checked_sub(1);
@@ -559,13 +574,18 @@ impl Profile for ActivityProfile {
         let mut min_i = end_of_active_region - 1;
         let mut min_p = std::f32::MAX;
 
-        for i in ((min_region_size - 1)..=min_i).into_iter().rev() {
+        let mut i = min_i;
+        while i >= min_region_size {
             let cur = self.get_prob(i);
             if cur < min_p && self.is_minimum(i) {
                 min_p = cur;
                 min_i = i;
             }
+            i -= 1;
         }
+        // for i in ((min_region_size - 1)..=min_i).into_iter().rev() {
+        //
+        // }
 
         return min_i + 1;
     }
@@ -597,7 +617,11 @@ impl Profile for ActivityProfile {
             if (self.get_prob(end_of_active_region) > self.active_prob_threshold)
                 != is_active_region
             {
+                debug!("Active {}", self.get_prob(end_of_active_region));
                 break;
+            }
+            if end_of_active_region % 25 == 0 {
+                debug!("Inactive {}", self.get_prob(end_of_active_region));
             }
             end_of_active_region += 1;
         }

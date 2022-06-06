@@ -380,7 +380,7 @@ impl MathUtils {
         //     "mean, sd, or, x : Normal parameters must be well formatted (non-INF, non-NAN)"
         // );
 
-        return (-((x - mean).powf(2.0)) / (2.0 * sd.powf(2.0))).exp() / (sd * *ROOT_TWO_PI);
+        return (-(x - mean) * (x - mean) / (2.0 * sd * sd)).exp() / (sd * *ROOT_TWO_PI);
     }
 
     /**

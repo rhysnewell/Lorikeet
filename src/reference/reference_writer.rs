@@ -54,8 +54,10 @@ impl<'a> ReferenceWriter<'a> {
             let mut file_open =
                 File::create(file_path).expect("No Read or Write Permission in current directory");
             for tid in tids.iter() {
-                self.reference_reader
-                    .fetch_contig_from_reference_by_tid(*tid, ref_idx);
+                if self.reference_reader
+                    .fetch_contig_from_reference_by_tid(*tid, ref_idx).is_err() {
+                    continue
+                };
                 self.reference_reader.read_sequence_to_vec();
 
                 let mut new_bases = std::mem::take(&mut self.reference_reader.current_sequence);
@@ -140,8 +142,10 @@ impl<'a> ReferenceWriter<'a> {
                 )
             });
             for tid in tids.iter() {
-                self.reference_reader
-                    .fetch_contig_from_reference_by_tid(*tid, ref_idx);
+                if self.reference_reader
+                    .fetch_contig_from_reference_by_tid(*tid, ref_idx).is_err() {
+                    continue
+                };
                 self.reference_reader.read_sequence_to_vec();
                 debug!(
                     "Fetched length {} tid {} ref_idx {} ",

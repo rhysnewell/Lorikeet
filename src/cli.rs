@@ -245,8 +245,8 @@ Alignment filtering (optional):
    --discard-supplementary               Discard read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   --low-memory                          Run in low memory mode. Good for larger genomes e.g. hg19/38
-                                         but slower than standard mode.
+   --high-memory                         Run in high memory mode. Can be slightly faster sometimes
+                                         but consumes much more RAM than standard mode.
    --split-bams                          Split the mapped read files up per reference.
                                          Useful if you think run time is being hampered
                                          by I/O. Most of the time this will not improve
@@ -681,8 +681,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("reference"),
                 )
                 .arg(
-                    Arg::with_name("low-memory")
-                        .long("low-memory")
+                    Arg::with_name("high-memory")
+                        .long("high-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -1330,8 +1330,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("reference"),
                 )
                 .arg(
-                    Arg::with_name("low-memory")
-                        .long("low-memory")
+                    Arg::with_name("high-memory")
+                        .long("high-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -2004,8 +2004,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("reference"),
                 )
                 .arg(
-                    Arg::with_name("low-memory")
-                        .long("low-memory")
+                    Arg::with_name("high-memory")
+                        .long("high-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
@@ -2669,8 +2669,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .requires("reference"),
                 )
                 .arg(
-                    Arg::with_name("low-memory")
-                        .long("low-memory")
+                    Arg::with_name("high-memory")
+                        .long("high-memory")
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")

@@ -246,39 +246,42 @@ impl ReferenceReader {
         };
     }
 
-    pub fn fetch_contig_from_reference_by_tid(&mut self, tid: usize, ref_idx: usize) {
+    pub fn fetch_contig_from_reference_by_tid(&mut self, tid: usize, ref_idx: usize) -> Result<(), std::io::Error> {
         match self
             .indexed_reader
             .fetch_all(std::str::from_utf8(&self.target_names[&tid]).unwrap())
         {
-            Ok(reference) => reference,
+            Ok(reference) => Ok(reference),
             Err(_e) => match self.indexed_reader.fetch_all(&format!(
                 "{}",
-                std::str::from_utf8(&self.target_names[&tid])
+                match std::str::from_utf8(&self.target_names[&tid])
                     .unwrap()
                     .splitn(2, '~')
-                    .nth(1)
-                    .unwrap()
+                    .nth(1) {
+                    None => std::str::from_utf8(&self.target_names[&tid]).unwrap(),
+                    Some(contig) => contig,
+                }
             )) {
-                Ok(reference) => reference,
+                Ok(reference) => Ok(reference),
                 Err(_e) => {
                     match self.indexed_reader.fetch_all(&format!(
                         "{}~{}",
                         self.genomes_and_contigs.genomes[ref_idx],
                         std::str::from_utf8(&self.target_names[&tid]).unwrap()
                     )) {
-                        Ok(reference) => reference,
+                        Ok(reference) => Ok(reference),
                         Err(e) => {
-                            panic!(
+                            debug!(
                                 "Cannot read sequence from {}: {}",
                                 std::str::from_utf8(&self.target_names[&tid]).unwrap(),
                                 e
-                            )
+                            );
+                            Err(e)
                         }
                     }
                 }
             },
-        };
+        }
     }
 
     /// Fetches the reference sequence from a given SimpleInterval

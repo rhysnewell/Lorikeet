@@ -332,7 +332,7 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let mut contexts = if self.args.is_present("low-memory") {
+                    let mut contexts = if !self.args.is_present("high-memory"){
                         assembly_engine.collect_shards_low_mem(
                             self.args,
                             &indexed_bam_readers,
