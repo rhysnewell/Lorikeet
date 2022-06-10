@@ -1799,13 +1799,19 @@ impl<'c> HaplotypeCallerEngine<'c> {
         // add hq soft clips if possible
         if is_alt
             && Self::next_to_soft_clip(record, cig_index, alignment.qpos) {
+            // TODO: Counts are different to GATK. hq soft clips seems to cap out
+            //       at 101, not sure if that is an issue with rolling average or
+            //       this section of code. GATK also has average soft clips values greater
+            //       than length of read, so we might be correct here.
+            let soft_clips = HaplotypeCallerEngine::count_high_quality_soft_clips(
+                // &cig,
+                &record,
+                // read_cursor as usize,
+                Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
+            );
+            // debug!("Adding {}", soft_clips);
             hq_soft_clips.add(
-                HaplotypeCallerEngine::count_high_quality_soft_clips(
-                    // &cig,
-                    &record,
-                    // read_cursor as usize,
-                    Self::HQ_BASE_QUALITY_SOFTCLIP_THRESHOLD,
-                ),
+                soft_clips
             );
         }
     }

@@ -277,6 +277,13 @@ impl Genotype {
         ads
     }
 
+    pub fn af(&self) -> Vec<f32> {
+        let sum = self.ad.iter().sum::<i64>() as f32;
+        let mut afs: Vec<f32> = self.ad.iter().map(|i| (*i as f32) / sum ).collect();
+
+        afs
+    }
+
     pub fn ad_str(&self) -> String {
         let mut buf = String::new();
         self.ad.iter().for_each(|ad| {

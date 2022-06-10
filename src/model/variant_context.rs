@@ -68,9 +68,13 @@ impl VariantType {
 // instead of a max-heap.
 impl Ord for VariantContext {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .loc.get_start()
-            .cmp(&self.loc.get_start())
+        self.loc.tid
+            .cmp(&other.loc.tid)
+            .then_with(|| {
+                self
+                    .loc.start
+                    .cmp(&other.loc.start)
+            })
             .then_with(|| {
                 self.get_reference()
                     .length()
@@ -1257,6 +1261,25 @@ impl VariantContext {
                     .push_info_integer(
                         VariantAnnotations::Depth.to_key().as_bytes(),
                         &vec![*val as i32],
+                    )
+                    .expect("Cannot push info tag");
+            }
+        }
+
+        if self
+            .attributes
+            .contains_key(VariantAnnotations::AlleleFraction.to_key())
+        {
+            if let AttributeObject::Vecf64(val) = self
+                .attributes
+                .get(VariantAnnotations::AlleleFraction.to_key())
+                .unwrap()
+            {
+                let val = val.into_iter().map(|v| *v as f32).collect::<Vec<f32>>();
+                record
+                    .push_info_float(
+                        VariantAnnotations::AlleleFraction.to_key().as_bytes(),
+                        val.as_slice(),
                     )
                     .expect("Cannot push info tag");
             }

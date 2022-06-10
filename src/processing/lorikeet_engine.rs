@@ -15,7 +15,7 @@ use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use reference::reference_writer::ReferenceWriter;
 use scoped_threadpool::Pool;
-use std::cmp::min;
+use std::cmp::{min, Reverse};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::path::Path;
@@ -372,7 +372,8 @@ impl<'a> LorikeetEngine<'a> {
                         )
 
                     };
-
+                    contexts.par_sort_unstable();
+                    // contexts.reverse();
                     debug!("example variant {:?}", &contexts.first());
 
                     let cleaned_sample_names = get_cleaned_sample_names(&indexed_bam_readers);
@@ -530,7 +531,8 @@ impl<'a> LorikeetEngine<'a> {
                                     );
                             }
 
-                            let mut all_contexts = split_contexts.extend(filtered_contexts);
+                            split_contexts.extend(filtered_contexts);
+                            split_contexts.par_sort_unstable();
                             assembly_engine.evaluator.write_vcf(
                                 &output_prefix,
                                 &split_contexts,

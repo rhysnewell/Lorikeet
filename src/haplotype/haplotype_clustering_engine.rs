@@ -219,17 +219,6 @@ impl<'a> HaplotypeClusteringEngine<'a> {
             Array::from_elem((self.variants.len(), self.n_samples * 2 + 2), 0);
 
         for (row_id, var) in self.variants.iter().enumerate() {
-            debug!(
-                "loc {:?} vars {} genotypes {} ads {:?}",
-                &var.loc,
-                var.alleles.len(),
-                var.genotypes.genotypes().len(),
-                var.genotypes
-                    .genotypes()
-                    .iter()
-                    .map(|g| &g.ad)
-                    .collect::<Vec<&Vec<i64>>>()
-            );
             var_depth_array[[row_id, 0]] = var.loc.tid();
             var_depth_array[[row_id, 1]] = var.loc.start as i32;
             for (sample_index, genotype) in var.genotypes.genotypes().into_iter().enumerate() {

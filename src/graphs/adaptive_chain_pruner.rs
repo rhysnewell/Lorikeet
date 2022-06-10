@@ -25,8 +25,7 @@ pub struct AdaptiveChainPruner {
     pub(crate) max_unpruned_variants: usize,
 }
 
-// TODO: This whole thing needs some unit tests, I don't trust parts of this code as there might be
-//       some issues with refrence/ownership and also chained comparators.
+
 impl AdaptiveChainPruner {
     pub fn new(
         initial_error_probability: f64,
