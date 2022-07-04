@@ -26,16 +26,15 @@ For detailed documentation of Lorikeet and the various algorithms and concepts i
 #### Option 1: Build manually
 You may need to manually set the paths for `C_INCLUDE_PATH`, `LIBRARY_PATH`, `LIBCLANG_PATH`, and `OPENSSL_DIR` to their corresponding
 paths in the your conda environment if they can't properly be found on your system. This method also assumes you have 
-previously installed rust via rustup on your system. The conda version of rust currently seems to be broken, so system 
-versions need to be used for installation.
+previously installed rust via rustup on your system.
 ```
 GIT_LFS_SKIP_SMUDGE=1 git clone --recursive https://github.com/rhysnewell/Lorikeet.git;
 cd Lorikeet;
 conda env create -n lorikeet -f lorikeet.yml; 
 conda activate lorikeet;
 pip install --upgrade cmake;
-bash install.sh # or run without installing e.g. `cargo run --release -- genotype -h`;
-lorikeet genotype -h
+bash install.sh # or run without installing e.g. `cargo run --release -- call -h`;
+lorikeet call -h
 ```
 
 Depending on your local network configuration, you may have problems obtaining Lorikeet via git.
