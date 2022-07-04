@@ -1048,7 +1048,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20"),
+                        .default_value("25"),
                 )
                 .arg(
                     Arg::with_name("qual-threshold")
@@ -1717,7 +1717,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20"),
+                        .default_value("25"),
                 )
                 .arg(
                     Arg::with_name("qual-threshold")
@@ -2387,7 +2387,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20"),
+                        .default_value("25"),
                 )
                 .arg(
                     Arg::with_name("qual-threshold")
@@ -3047,7 +3047,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20"),
+                        .default_value("25"),
                 )
                 .arg(
                     Arg::with_name("qual-threshold")
@@ -3156,7 +3156,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
                         .long("qual-by-depth-filter")
-                        .default_value("20"),
+                        .default_value("25"),
                 )
                 .arg(
                     Arg::with_name("qual-threshold")

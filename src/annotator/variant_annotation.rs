@@ -367,7 +367,7 @@ impl VariantAnnotations {
 
         for genotype in genotypes.genotypes_mut() {
             // we care only about variant calls with likelihoods
-            if !genotype.is_het() && !genotype.is_hom_var() {
+            if !genotype.is_het() && !genotype.is_hom_var() && !genotype.is_hom_ref() {
                 debug!("Skipping: {} {} {:?}", genotype.is_het(), genotype.is_hom_var(), genotype.genotype_type);
                 continue;
             }
