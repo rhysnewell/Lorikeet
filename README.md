@@ -57,12 +57,12 @@ git config --global url.https://github.com/.insteadOf git://github.com/
 
 Install into current conda environment:
 ```
-conda install -c bioconda lorikeet-genome
+conda install -c conda-forge bioconda lorikeet-genome
 ```
 
 Create fresh conda environment and install lorikeet there:
 ```
-conda create -n lorikeet -c bioconda lorikeet-genome && \
+conda create -n lorikeet -c conda-forge bioconda lorikeet-genome && \
 conda activate lorikeet
 ```
 
