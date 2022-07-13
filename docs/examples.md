@@ -16,7 +16,7 @@ The list of variants must be provided in VCF format with some caveats on how the
 ```
 ##fileformat=VCFv4.2
 ##FILTER=<ID=PASS,Description="All filters passed">
-##source=lorikeet-v0.6.0
+##source=lorikeet-v0.7.0
 ##contig=<ID=random10000~random_sequence_length_10000_1,length=10000>
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER
 random10000~random_sequence_length_10000_1	223	.	G	C	1445.63	.

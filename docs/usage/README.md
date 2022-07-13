@@ -18,7 +18,7 @@ Main subcommands:
     genotype    Resolve strain-level genotypes of MAGs from microbial communities
     consensus   Creates consensus genomes for each input reference and for each sample
     call        Performs variant calling with no downstream analysis
-    evolve      *unavailable* Calculate dN/dS values for genes from read mappings
+    evolve      Calculate dN/dS values for genes from read mappings
 
 Other options:
     -V, --version   Print version information
@@ -58,6 +58,5 @@ lorikeet_output --
                  | - GenomeN --
                               |
                               | - BCF
-                              | - Consensus, Population, Subpopulation ANI
-                              | - Optional Reconstructed Strain Genomes and Strain Relative Abundances    
+                              | - Consensus, Population, Subpopulation ANI 
 ```
