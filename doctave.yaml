@@ -1,6 +1,9 @@
 ---
 title: "Lorikeet"
 base_path: /Lorikeet
+logo: images/mini_logo.png
+colors:
+  main: "#EE592E"
 navigation:
   - path: docs/installation.md
   - path: docs/usage

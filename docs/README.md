@@ -33,4 +33,4 @@ On its way :P
 
 ## License
 
-Code is [GPL-3.0](LICENSE)
+Code is GPL-3.0
