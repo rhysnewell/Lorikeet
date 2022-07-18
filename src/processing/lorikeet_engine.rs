@@ -165,14 +165,14 @@ impl<'a> LorikeetEngine<'a> {
                                 );
 
                                 let mut reference_reader = ReferenceReader::new(
-                                    &Some(references[ref_idx].to_string()),
+                                    &Some(reference_stem.to_string()),
                                     genomes_and_contigs.clone(),
                                     genomes_and_contigs.contig_to_genome.len(),
                                 );
 
                                 calculate_dnds(
                                     self.args,
-                                    references[ref_idx],
+                                    &reference_stem,
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
@@ -260,7 +260,7 @@ impl<'a> LorikeetEngine<'a> {
                         "Preparing variants",
                     );
 
-                    debug!("Reference: {} {}", &reference, references[ref_idx]);
+                    debug!("Reference: {} {}", &reference, &reference_stem);
 
                     // Read BAMs back in as indexed
                     let mut indexed_bam_readers = recover_bams(
@@ -285,7 +285,7 @@ impl<'a> LorikeetEngine<'a> {
                     // );
 
                     let mut reference_reader = ReferenceReader::new(
-                        &Some(references[ref_idx].to_string()),
+                        &Some(reference_stem.to_string()),
                         genomes_and_contigs.clone(),
                         genomes_and_contigs.contig_to_genome.len(),
                     );
@@ -444,7 +444,7 @@ impl<'a> LorikeetEngine<'a> {
                             }
                             calculate_dnds(
                                 self.args,
-                                references[ref_idx],
+                                &reference_stem,
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
@@ -551,7 +551,7 @@ impl<'a> LorikeetEngine<'a> {
                                 }
                                 calculate_dnds(
                                     self.args,
-                                    references[ref_idx],
+                                    &reference_stem,
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
@@ -596,7 +596,7 @@ impl<'a> LorikeetEngine<'a> {
                                 }
                                 calculate_dnds(
                                     self.args,
-                                    references[ref_idx],
+                                    &reference_stem,
                                     output_prefix.as_str(),
                                     &mut reference_reader,
                                     ref_idx,
@@ -652,7 +652,7 @@ impl<'a> LorikeetEngine<'a> {
                             }
                             calculate_dnds(
                                 self.args,
-                                references[ref_idx],
+                                &reference_stem,
                                 output_prefix.as_str(),
                                 &mut reference_reader,
                                 ref_idx,
