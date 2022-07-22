@@ -736,6 +736,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("trimmed_mean"),
                 )
                 .arg(
+                    Arg::with_name("min-covered-fraction")
+                        .long("min-covered-fraction")
+                        .default_value("0.0"),
+                )
+                .arg(
+                    Arg::with_name("min-contig-size")
+                        .long("min-contig-size")
+                        .default_value("2500"),
+                )
+                .arg(
                     Arg::with_name("phred-scaled-global-read-mismapping-rate")
                         .long("phred-scaled-global-read-mismapping-rate")
                         .default_value("45"),
@@ -1383,16 +1393,6 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(true)
                         .possible_values(&["trimmed_mean", "mean", "metabat"])
                         .default_value("trimmed_mean"),
-                )
-                .arg(
-                    Arg::with_name("pts-min")
-                        .long("pts-min")
-                        .default_value("0.05"),
-                )
-                .arg(
-                    Arg::with_name("pts-max")
-                        .long("pts-max")
-                        .default_value("0.1"),
                 )
                 .arg(
                     Arg::with_name("min-covered-fraction")

@@ -1162,7 +1162,14 @@ fn calculate_dnds(
                 "{}/{}.vcf",
                 output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx],
             );
+            if !Path::new(&vcf_path).exists() {
+                // no variants founds
+                return
+            }
+
             debug!("Reading VCF: {}", &vcf_path);
+
+
             let mut variants = VariantContext::generate_vcf_index(vcf_path.as_str());
             debug!("Success!");
             let mut dnds_calculator = CodonTable::setup();
