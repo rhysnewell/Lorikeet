@@ -23,8 +23,8 @@ vendored-openssl = ["openssl-sys/vendored"]
 [dependencies]
 approx = "0.5.0"
 ansi_term = "0.12.1"
-bio = "0.35"
-bio-types = "0.12.0"
+bio = "0.38"
+bio-types = "0.13"
 bird_tool_utils = "^0.3"
 bstr = "^0.2.17"
 clap = "2"
@@ -60,6 +60,7 @@ ordered-float = "1"
 pest = "2"
 pest_derive = "2"
 petgraph = {version = "^0.6.0", features = ["stable_graph"]}
+#polars = "0.22.8"
 rand = "0.6"
 rayon = "^1.5.1"
 rust-htslib = "0.38.2"
