@@ -7,8 +7,9 @@ use std::path::Path;
 use genotype::genotype_builder::AttributeObject;
 use annotator::variant_annotation::{Annotation, VariantAnnotations};
 use model::variant_context_utils::VariantContextUtils;
+// use polars;
 
-/// Holds the population and consensus ANI arrays
+/// Holds the population and consensus ANI & Fst arrays
 /// Compares ANI between samples (Non-diagonal cells) and the ANI of sample compared to reference (Diagonals)
 ///
 /// Defined by InStrain: https://www.nature.com/articles/s41587-020-00797-0?proof=t%3B#Sec9
@@ -38,6 +39,7 @@ pub struct ANICalculator {
     popANI: Array2<f64>,
     subpopANI: Array2<f64>,
     conANI: Array2<f64>,
+    // fst: Array2<f64>
 }
 
 impl ANICalculator {
@@ -46,6 +48,7 @@ impl ANICalculator {
             popANI: Array2::default((n_samples, n_samples)),
             subpopANI: Array2::default((n_samples, n_samples)),
             conANI: Array2::default((n_samples, n_samples)),
+            // fst: Array2::default((n_samples, n_samples)),
         }
     }
 
@@ -105,133 +108,134 @@ impl ANICalculator {
 
             let mut consenus_allele_indices = Vec::with_capacity(n_samples);
             let mut present_alleles = Vec::with_capacity(n_samples);
-            let passes = VariantContextUtils::passes_thresholds(
+            if !VariantContextUtils::passes_thresholds(
                 context, qual_by_depth_filter, qual_threshold
-            );
-            if passes {
-                // println!("Context passes {} {}", context.log10_p_error, context.get_dp());
-                // don't consider poor quality variant sites
-                for sample_idx_1 in 0..n_samples {
-                    if consenus_allele_indices.len() == sample_idx_1 {
-                        // get consensus of first sample
+            ) {
+                continue
+            }
+
+            // println!("Context passes {} {}", context.log10_p_error, context.get_dp());
+            // don't consider poor quality variant sites
+            for sample_idx_1 in 0..n_samples {
+                if consenus_allele_indices.len() == sample_idx_1 {
+                    // get consensus of first sample
+                    consenus_allele_indices.push(
+                        context
+                            .get_consensus_allele_index(sample_idx_1)
+                            .unwrap_or_default(),
+                    );
+                    // which alleles are present in first sample
+                    let mut which_are_present =
+                        context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter);
+
+                    present_alleles.push(which_are_present);
+                }
+
+                if !present_alleles[sample_idx_1].iter().any(|val| *val) {
+                    continue; // nothing present here
+                }
+
+                for sample_idx_2 in 0..n_samples {
+                    if consenus_allele_indices.len() == sample_idx_2 {
+                        // get consensus of first sample, default to ref
                         consenus_allele_indices.push(
                             context
-                                .get_consensus_allele_index(sample_idx_1)
+                                .get_consensus_allele_index(sample_idx_2)
                                 .unwrap_or_default(),
                         );
-                        // which alleles are present in first sample
+                        // which alleles are present in first sample with at least two supporting reads
                         let mut which_are_present =
-                            context.alleles_present_in_sample(sample_idx_1, depth_per_sample_filter);
-
+                            context.alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
                         present_alleles.push(which_are_present);
                     }
 
-                    if !present_alleles[sample_idx_1].iter().any(|val| *val) {
+                    if !present_alleles[sample_idx_2].iter().any(|val| *val) {
                         continue; // nothing present here
                     }
 
-                    for sample_idx_2 in 0..n_samples {
-                        if consenus_allele_indices.len() == sample_idx_2 {
-                            // get consensus of first sample, default to ref
-                            consenus_allele_indices.push(
-                                context
-                                    .get_consensus_allele_index(sample_idx_2)
-                                    .unwrap_or_default(),
-                            );
-                            // which alleles are present in first sample with at least two supporting reads
-                            let mut which_are_present =
-                                context.alleles_present_in_sample(sample_idx_2, depth_per_sample_filter);
-                            present_alleles.push(which_are_present);
-                        }
+                    if sample_idx_1 != sample_idx_2 {
+                        let consensus_1 = &consenus_allele_indices[sample_idx_1];
+                        let allele_present_1 = &present_alleles[sample_idx_1];
 
-                        if !present_alleles[sample_idx_2].iter().any(|val| *val) {
-                            continue; // nothing present here
-                        }
+                        let consensus_2 = &consenus_allele_indices[sample_idx_2];
+                        let allele_present_2 = &present_alleles[sample_idx_2];
 
-                        if sample_idx_1 != sample_idx_2 {
-                            let consensus_1 = &consenus_allele_indices[sample_idx_1];
-                            let allele_present_1 = &present_alleles[sample_idx_1];
-
-                            let consensus_2 = &consenus_allele_indices[sample_idx_2];
-                            let allele_present_2 = &present_alleles[sample_idx_2];
-
-                            if consensus_1 != consensus_2 {
-                                if context.alleles[*consensus_1].len() > 1
-                                    || context.alleles[*consensus_2].len() > 1
-                                {
-                                    let bases_different = (context.alleles[*consensus_1].len()
-                                        as f64
-                                        - context.alleles[*consensus_2].len() as f64)
-                                        .abs();
-                                    self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                                } else {
-                                    self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
-                                }
+                        if consensus_1 != consensus_2 {
+                            if context.alleles[*consensus_1].len() > 1
+                                || context.alleles[*consensus_2].len() > 1
+                            {
+                                let bases_different = (context.alleles[*consensus_1].len()
+                                    as f64
+                                    - context.alleles[*consensus_2].len() as f64)
+                                    .abs();
+                                self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            } else {
+                                self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
                             }
+                        }
 
+                        let mut bases_different = 0.0;
+                        let mut divisor = 0.0;
+                        for (idx, (present_1, present_2)) in allele_present_1
+                            .iter()
+                            .zip(allele_present_2.iter())
+                            .enumerate()
+                        {
+                            if present_1 != present_2 {
+                                bases_different += context.alleles[idx].len() as f64;
+                                divisor += 1.0;
+                            }
+                        }
+
+                        bases_different =
+                            bases_different / if divisor > 0.0 { divisor } else { 1.0 };
+
+                        if !allele_present_1
+                            .iter()
+                            .zip(allele_present_2.iter())
+                            .any(|(present_1, present_2)| *present_1 && *present_2)
+                        {
+                            // if they share ANY alleles, then popANI does not change
+
+                            self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                        }
+
+                        if allele_present_1 != allele_present_2 {
+                            self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                        }
+                    } else {
+                        let consensus_1 = &consenus_allele_indices[sample_idx_1];
+                        let allele_present_1 = &present_alleles[sample_idx_1];
+
+                        if *consensus_1 != 0 {
+                            if context.alleles[*consensus_1].len() > 1
+                                || context.alleles[0].len() > 1
+                            {
+                                let bases_different = (context.alleles[*consensus_1].len()
+                                    as f64
+                                    - context.alleles[0].len() as f64)
+                                    .abs();
+                                self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            } else {
+                                self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
+                            }
+                        }
+
+                        if !allele_present_1[0] {
+                            // reference not present
                             let mut bases_different = 0.0;
                             let mut divisor = 0.0;
-                            for (idx, (present_1, present_2)) in allele_present_1
-                                .iter()
-                                .zip(allele_present_2.iter())
-                                .enumerate()
-                            {
-                                if present_1 != present_2 {
+                            for (idx, present) in allele_present_1.iter().enumerate() {
+                                if *present {
                                     bases_different += context.alleles[idx].len() as f64;
                                     divisor += 1.0;
                                 }
                             }
-
                             bases_different =
                                 bases_different / if divisor > 0.0 { divisor } else { 1.0 };
 
-                            if !allele_present_1
-                                .iter()
-                                .zip(allele_present_2.iter())
-                                .any(|(present_1, present_2)| *present_1 && *present_2)
-                            {
-                                // if they share ANY alleles, then popANI does not change
-
-                                self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                            }
-
-                            if allele_present_1 != allele_present_2 {
-                                self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                            }
-                        } else {
-                            let consensus_1 = &consenus_allele_indices[sample_idx_1];
-                            let allele_present_1 = &present_alleles[sample_idx_1];
-
-                            if *consensus_1 != 0 {
-                                if context.alleles[*consensus_1].len() > 1
-                                    || context.alleles[0].len() > 1
-                                {
-                                    let bases_different = (context.alleles[*consensus_1].len()
-                                        as f64
-                                        - context.alleles[0].len() as f64)
-                                        .abs();
-                                    self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                                } else {
-                                    self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
-                                }
-                            }
-
-                            if !allele_present_1[0] {
-                                // reference not present
-                                let mut bases_different = 0.0;
-                                let mut divisor = 0.0;
-                                for (idx, present) in allele_present_1.iter().enumerate() {
-                                    if *present {
-                                        bases_different += context.alleles[idx].len() as f64;
-                                        divisor += 1.0;
-                                    }
-                                }
-                                bases_different =
-                                    bases_different / if divisor > 0.0 { divisor } else { 1.0 };
-
-                                self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                                self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
-                            }
+                            self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
                         }
                     }
                 }

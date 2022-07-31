@@ -50,6 +50,7 @@ extern crate ndarray;
 extern crate mathru;
 extern crate ndarray_npy;
 extern crate statrs;
+// extern crate polars;
 
 // Utilities
 #[macro_use]

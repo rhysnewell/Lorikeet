@@ -9,12 +9,16 @@
 extern crate lorikeet_genome;
 #[macro_use]
 extern crate lazy_static;
+extern crate num;
+extern crate statrs;
 
 use lorikeet_genome::model::byte_array_allele::{Allele, ByteArrayAllele};
 use lorikeet_genome::model::variant_context;
 use lorikeet_genome::model::variant_context::{VariantContext, VariantType};
 use lorikeet_genome::model::variant_context_utils;
 use lorikeet_genome::utils::simple_interval::Locatable;
+use num::integer::binomial;
+use statrs::function::factorial::factorial;
 
 static snp_loc: &str = "chr1";
 const snp_loc_start: usize = 10;
@@ -108,7 +112,7 @@ impl VariantContextUnitTest {
 fn test_determine_types() {
     let AC_ref: ByteArrayAllele = ByteArrayAllele::new("AC".as_bytes(), true);
     let AC: ByteArrayAllele = ByteArrayAllele::new("AC".as_bytes(), false);
-    let AT: ByteArrayAllele = ByteArrayAllele::new("AC".as_bytes(), false);
+    let AT: ByteArrayAllele = ByteArrayAllele::new("AT".as_bytes(), false);
 
     let C: ByteArrayAllele = ByteArrayAllele::new("C".as_bytes(), false);
     let CAT: ByteArrayAllele = ByteArrayAllele::new("CAT".as_bytes(), false);
@@ -182,6 +186,7 @@ fn test_determine_types() {
     assert_eq!(vc.get_type(), &VariantType::Indel);
 
     // test MIXED
+    println!("Mixed start");
     let alleles = vec![TA_ref.clone(), vc_unit_test.T.clone(), TC.clone()];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
@@ -190,6 +195,7 @@ fn test_determine_types() {
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
 
+    println!("Broken");
     let alleles = vec![AC_ref.clone(), vc_unit_test.ATC.clone(), AT.clone()];
     let mut vc = VariantContext::build(0, snp_loc_start, snp_loc_stop + 1, alleles);
     assert_eq!(vc.get_type(), &VariantType::Mixed);
@@ -256,4 +262,61 @@ fn test_creating_snp_variant_context() {
     assert_eq!(vc.get_n_alleles(), 2);
     assert_eq!(vc.get_alternate_alleles().len(), 1);
     assert_eq!(vc.get_alternate_alleles()[0], &vc_unit_test.T)
+}
+
+
+#[test]
+fn test_genotype_tag_calc() {
+    let pls = vec![0, 1, 2];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![0, 0]);
+
+    let pls = vec![1, 0, 2];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![0, 1]);
+
+    let pls = vec![1, 1, 0];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 2), vec![1, 1]);
+
+    let pls = vec![1, 1, 0, 1, 1, 1];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![1, 1]);
+
+    let pls = vec![1, 1, 1, 0, 1, 1];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![0, 2]);
+
+    let pls = vec![1, 1, 1, 1, 1, 0];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 2, 3), vec![2, 2]);
+
+    let pls = vec![0, 1, 2, 3];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 0, 0]);
+
+    let pls = vec![1, 0, 2, 3];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 0, 1]);
+
+    let pls = vec![1, 1, 0, 3];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![0, 1, 1]);
+
+    let pls = vec![1, 2, 2, 0];
+    assert_eq!(VariantContext::calculate_genotype_tag(
+        pls.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap(), 3, 2), vec![1, 1, 1]);
+
+    for ploidy in 1..=5 {
+        for alleles in 1..=5 {
+            let num = factorial(ploidy + alleles - 1);
+            let den = factorial(ploidy) * factorial(alleles - 1);
+            let combos_with_repeats = (num / den) as usize;
+            let mut pls = vec![1; combos_with_repeats];
+            let mut gts = vec![0; combos_with_repeats];
+            for gt in 0..combos_with_repeats {
+                pls[gt] = 0;
+            }
+        }
+    }
 }

@@ -1,13 +1,13 @@
 use annotator::variant_annotation::VariantAnnotations;
 use external_command_checker::check_for_bcftools;
 use genotype::genotype_builder::{
-    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext,
+    AttributeObject, Genotype, GenotypeAssignmentMethod, GenotypesContext, GenotypeType
 };
 use genotype::genotype_likelihood_calculators::GenotypeLikelihoodCalculators;
 use genotype::genotype_likelihoods::GenotypeLikelihoods;
 use genotype::genotype_prior_calculator::GenotypePriorCalculator;
 use hashlink::{LinkedHashMap, LinkedHashSet};
-use itertools::Itertools;
+use itertools::{Itertools};
 use model::byte_array_allele::{Allele, ByteArrayAllele};
 use model::variants::{Filter, Variant, NON_REF_ALLELE};
 use ordered_float::OrderedFloat;
@@ -17,7 +17,7 @@ use reference::reference_reader::ReferenceReader;
 use rust_htslib::bcf::header::HeaderView;
 use rust_htslib::bcf::record::{GenotypeAllele, Numeric};
 use rust_htslib::bcf::{IndexedReader, Read, Reader, Record, Writer};
-use std::cmp::Ordering;
+use std::cmp::{Ordering, max, min};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
@@ -1376,51 +1376,25 @@ impl VariantContext {
         let mut gqs = Vec::new();
         let mut dps = Vec::new();
         for genotype in self.genotypes.genotypes() {
-            let mut phased = Vec::new();
-            if genotype.is_phased {
-                let pgt = genotype.attributes.get("PGT");
-                match pgt {
-                    None => {
-                        phased = vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-                        // assume this
-                    }
-                    Some(pgt) => {
-                        match pgt {
-                            AttributeObject::String(string) => {
-                                let slash = string.contains('/');
-                                for (idx, byte) in string.as_bytes().into_iter().enumerate() {
-                                    let val = if *byte == 48 {
-                                        // utf8 to int
-                                        0
-                                    } else if *byte == 49 {
-                                        1
-                                    } else {
-                                        2
-                                    };
-                                    if val == 0 || val == 1 {
-                                        if idx == 0 {
-                                            if slash {
-                                                phased.push(GenotypeAllele::Unphased(val))
-                                            } else {
-                                                phased.push(GenotypeAllele::Phased(val))
-                                            }
-                                        } else {
-                                            phased.push(GenotypeAllele::Phased(val))
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                phased =
-                                    vec![GenotypeAllele::Unphased(0), GenotypeAllele::Phased(1)]
-                                // assume this
-                            }
-                        }
-                    }
+            if genotype.dp == -1 || genotype.dp == 0 || genotype.alleles.len() == 0 {
+                phases.extend(vec![GenotypeAllele::UnphasedMissing; genotype.ploidy]);
+                continue
+            };
+
+            let mut phased = vec![GenotypeAllele::Unphased(0); genotype.ploidy];
+            // let n_alleles = genotype.alleles.len();
+            let pls_index = genotype.pl.iter().enumerate().min_by(|(_, a), (_, b)| a.cmp(b)).map(|(index, _)| index).unwrap();
+
+            let genotype_tag_vals = Self::calculate_genotype_tag(pls_index, genotype.ploidy, genotype.alleles.len());
+
+            genotype_tag_vals.into_iter().enumerate().for_each(|(i, tag_val)| {
+                if genotype.is_phased && i != 0 {
+                    phased[i] = GenotypeAllele::Phased(tag_val)
+                } else {
+                    phased[i] = GenotypeAllele::Unphased(tag_val)
                 }
-            } else {
-                phased = vec![GenotypeAllele::Unphased(1); 2]
-            }
+            });
+
             phases.extend(phased);
 
             pls.push(genotype.pl_str());
@@ -1435,7 +1409,7 @@ impl VariantContext {
             }
         }
         record
-            .push_genotypes(&phases)
+            .push_genotypes(phases.as_slice())
             .expect("Unable to push genotypes");
         record
             .push_format_string(
@@ -1462,4 +1436,136 @@ impl VariantContext {
             .push_format_integer(VariantAnnotations::Depth.to_key().as_bytes(), &dps)
             .expect("Unable to push format tag");
     }
+
+    /// Given the most likely index from a set of likelihoods i.e. for phred scaled [10, 0, 20],
+    /// index 1 would be the most likely. Also, given the ploidy and number of alleles in this
+    /// genotype, calculate the genotype tag.
+    ///
+    /// For example pls [10, 0, 20], pls_index=1, ploidy=2, n_alleles=2 then return [0, 1] indicating
+    /// this individual is heterozygous.
+    ///
+    /// For three alleles [10, 20, 30, 40, 0, 60], the number of likelihoods increases.
+    /// this would return [1, 2], indicating the individual is heterozygous with two alternative alleles
+    ///
+    /// Should be stable over all ploidies and allele counts
+    pub fn calculate_genotype_tag(pls_index: usize, ploidy: usize, n_alleles: usize) -> Vec<i32> {
+        let mut genotype_tag_vals = vec![0; ploidy];
+        if pls_index == 0 {
+            return genotype_tag_vals // easy homozygous ref result
+        }
+        let mut ploidy_index = ploidy.saturating_sub(1); // start from back of tag
+
+        let mut allele_counts = vec![0; ploidy]; // count of times we have saturated this position
+        let mut allele_index = ploidy.saturating_sub(1); // this is the allele index of the last tag
+        let mut rounds = 0;
+        let mut max_allele_allowed = 1;
+        for tag_index in 0..pls_index {
+
+            if ploidy_index == 0 && genotype_tag_vals[ploidy_index] == max_allele_allowed { // reached end of round
+                rounds += 1;
+                ploidy_index = ploidy.saturating_sub(1); // reset ploidy index
+                genotype_tag_vals.fill(0);
+
+                // as more alleles appear, more tags appear. These tags fill up (to a max value of
+                // n_allele - 1), once a tag is full we need to use the number of rounds to determine
+                // if the next tag is also full
+                genotype_tag_vals[ploidy_index] = max_allele_allowed;
+                max_allele_allowed = min(max_allele_allowed + 1, n_alleles as i32 - 1);
+            }
+
+            if genotype_tag_vals[ploidy_index] == max_allele_allowed {
+                ploidy_index = ploidy_index.saturating_sub(1);
+                genotype_tag_vals[ploidy_index] += 1;
+            } else {
+                allele_counts[ploidy_index] += 1;
+                genotype_tag_vals[ploidy_index] += 1;
+            }
+        }
+
+        genotype_tag_vals
+    }
+
+    // /// Calculates Fst, or Fixation index, for two or more samples at a specific variant context
+    // pub fn calc_fst(&mut self, sample_indices: &[usize]) {
+    //     let N_alleles = context.get_n_alleles();
+    //
+    //     let N_pops = sample_indices.len(); // treat each sample as a population
+    //
+    //     let ploidy = self.genotypes.get_max_ploidy(2) as usize; // check ploidy
+    //     // Need to account for ploidy of genotypes here, not just diploid
+    //     // let mut zygosity = vec![vec![]]
+    //     let mut N_hom = Vec::new();
+    //     let mut N_het = Vec::new();
+    //     let mut n = vec![0.0; N_pops];
+    //     let mut p = vec![vec![0.0; N_alleles]; N_pops];
+    //
+    //     let mut nbar = 0.0;
+    //     let mut pbar = vec![0.0; N_alleles];
+    //     let mut hbar = vec![0.0; N_alleles];
+    //     let mut ssqr = vec![0.0; N_alleles];
+    //     let mut sum_nsqr = 0.0;
+    //     let mut n_sum = 0.0;
+    //
+    //     for i in 0..N_pops {
+    //         self.get_multiple_genotype_counts(sample_indices, &mut N_hom, &mut N_het);
+    //
+    //         for j in 0..N_alleles {
+    //             n[i] += N_hom[j] + 0.5 * N_het[j] as f64;
+    //             p[i][j] = N_het[j] + 2.0 * N_hom[j] as f64;
+    //
+    //             nbar += n[i];
+    //             pbar[j] += p[i][j];
+    //             hbar[j] += N_het[j];
+    //         }
+    //
+    //         for j in 0..N_alleles {
+    //             p[i][j] /
+    //         }
+    //     }
+    // }
+    //
+    // pub fn get_multiple_genotype_counts(
+    //     &mut self,
+    //     sample_indices: &[usize],
+    //     out_N_hom: &mut Vec<usize>,
+    //     out_N_het: &mut Vec<usize>
+    // ) {
+    //     out_N_het.fill(0);
+    //     out_N_het.resize(self.get_n_alleles(), 0);
+    //
+    //     out_N_hom.fill(0);
+    //     out_N_hom.resize(self.get_n_alleles(), 0);
+    //
+    //     for sample_index in sample_indices {
+    //         let genotype_type: Option<&GenotypeType> =
+    //             self.get_genotypes_mut().genotypes_mut()[sample_index].get_type();
+    //
+    //         // actual index of first allele in genotype i.e. most abundant allele
+    //         let allele_index = match self.get_alternate_alleles_with_index().iter().filter_map(|a| {
+    //             if a.1 == &self.get_genotypes().genotypes()[0].alleles[0] {
+    //                 a.0
+    //             }
+    //         }).next() {
+    //             Some(i) => i,
+    //             None => continue
+    //         };
+    //
+    //         match genotype_type {
+    //             None => continue,
+    //             Some(gt_type) => {
+    //                 match gt_type {
+    //                     GenotypeType::HomRef
+    //                     | GenotypeType::HomVar => {
+    //
+    //                         out_N_hom[allele_index] += 1;
+    //                     },
+    //                     GenotypeType::Het => {
+    //                         out_N_het[allele_index] += 1;
+    //                     },
+    //                     _ => continue,
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }

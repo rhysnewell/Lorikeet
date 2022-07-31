@@ -517,7 +517,7 @@ impl GenotypesContext {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum GenotypeType {
-    /** The sample is no-called (all alleles are NO_CALL */
+    /** The sample is no-called (all alleles are NO_CALL) */
     NoCall,
     /** The sample is homozygous reference */
     HomRef,
