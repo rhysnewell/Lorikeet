@@ -1378,6 +1378,10 @@ impl VariantContext {
         for genotype in self.genotypes.genotypes() {
             if genotype.dp == -1 || genotype.dp == 0 || genotype.alleles.len() == 0 {
                 phases.extend(vec![GenotypeAllele::UnphasedMissing; genotype.ploidy]);
+                pls.push(genotype.pl_str());
+                ads.push(genotype.ad_str());
+                dps.push(0);
+                gqs.push(0);
                 continue
             };
 
@@ -1399,24 +1403,21 @@ impl VariantContext {
 
             pls.push(genotype.pl_str());
             ads.push(genotype.ad_str());
-
-            if genotype.dp != -1 {
-                dps.push(genotype.dp as i32);
-                gqs.push(genotype.gq as i32);
-            } else {
-                dps.push(0);
-                gqs.push(0);
-            }
+            dps.push(genotype.dp as i32);
+            gqs.push(genotype.gq as i32);
         }
+
         record
             .push_genotypes(phases.as_slice())
             .expect("Unable to push genotypes");
+
         record
             .push_format_string(
                 VariantAnnotations::PhredLikelihoods.to_key().as_bytes(),
                 &pls.iter().map(|p| p.as_bytes()).collect::<Vec<&[u8]>>(),
             )
             .expect("Unable to push format tag");
+
         record
             .push_format_string(
                 VariantAnnotations::DepthPerAlleleBySample
@@ -1425,7 +1426,6 @@ impl VariantContext {
                 &ads.iter().map(|a| a.as_bytes()).collect::<Vec<&[u8]>>(),
             )
             .expect("Unable to push format tag");
-
         record
             .push_format_integer(
                 VariantAnnotations::GenotypeQuality.to_key().as_bytes(),
