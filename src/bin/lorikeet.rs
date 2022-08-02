@@ -67,15 +67,6 @@ fn main() {
             }
             prepare_pileup(m, mode);
         }
-        Some("evolve") => {
-            let m = matches.subcommand_matches("evolve").unwrap();
-            let mode = "evolve";
-            if m.is_present("full-help") {
-                println!("{}", call_full_help());
-                process::exit(1);
-            }
-            prepare_pileup(m, mode);
-        }
         Some("consensus") => {
             let m = matches.subcommand_matches("consensus").unwrap();
             let mode = "consensus";
