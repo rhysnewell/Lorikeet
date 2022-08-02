@@ -119,6 +119,8 @@ impl<'a> LorikeetEngine<'a> {
                 let mut coverage_estimators = self.coverage_estimators.clone();
                 let genomes_and_contigs = self.genomes_and_contigs.clone();
 
+                let ploidy = self.args.value_of("ploidy").unwrap().parse().unwrap();
+
                 let output_prefix = format!(
                     "{}/{}",
                     &output_prefix,
@@ -151,7 +153,7 @@ impl<'a> LorikeetEngine<'a> {
                             .to_string()
                     });
                     if cache.count() > 0 {
-                        if self.args.is_present("calculate-dnds") {
+                        if self.args.is_present("calculate-dnds") || self.args.is_present("calculate-fst") {
                             scope.execute(move || {
                                 // This is here to calculate dnds values if calculate dnds is
                                 // specified but not force. Kind of an edge case, but I think
@@ -171,14 +173,31 @@ impl<'a> LorikeetEngine<'a> {
                                     genomes_and_contigs.contig_to_genome.len(),
                                 );
 
-                                calculate_dnds(
-                                    self.args,
-                                    &reference_stem,
-                                    output_prefix.as_str(),
-                                    &mut reference_reader,
-                                    ref_idx,
-                                    self.short_read_bam_count + self.long_read_bam_count,
-                                );
+                                if self.args.is_present("calculate-fst") && ploidy == 1 {
+                                    match calculate_fst(
+                                        &output_prefix,
+                                        &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                        ploidy
+                                    ) {
+                                        Ok(_) => {
+                                            //
+                                        },
+                                        Err(e) => {
+                                            println!("Python error {:?}", e);
+                                        }
+                                    }
+                                }
+
+                                if self.args.is_present("calculate-fst") {
+                                    calculate_dnds(
+                                        self.args,
+                                        &reference_stem,
+                                        output_prefix.as_str(),
+                                        &mut reference_reader,
+                                        ref_idx,
+                                        self.short_read_bam_count + self.long_read_bam_count,
+                                    );
+                                }
 
                                 {
                                     let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -435,16 +454,19 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-                        match calculate_fst(
-                            &output_prefix,
-                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                            self.args.value_of("ploidy").unwrap().parse().unwrap()
-                        ) {
-                            Ok(_) => {
-                                //
-                            },
-                            Err(e) => {
-                                println!("Python error {:?}", e);
+
+                        if self.args.is_present("calculate-fst") && ploidy == 1 {
+                            match calculate_fst(
+                                &output_prefix,
+                                &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                ploidy
+                            ) {
+                                Ok(_) => {
+                                    //
+                                },
+                                Err(e) => {
+                                    println!("Python error {:?}", e);
+                                }
                             }
                         }
 
@@ -555,6 +577,21 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
+                            if self.args.is_present("calculate-fst") && ploidy == 1 {
+                                match calculate_fst(
+                                    &output_prefix,
+                                    &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                    ploidy
+                                ) {
+                                    Ok(_) => {
+                                        //
+                                    },
+                                    Err(e) => {
+                                        println!("Python error {:?}", e);
+                                    }
+                                }
+                            }
+
                             if self.args.is_present("calculate-dnds") {
                                 {
                                     let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -599,6 +636,21 @@ impl<'a> LorikeetEngine<'a> {
                                 &reference_reader,
                                 true,
                             );
+
+                            if self.args.is_present("calculate-fst") && ploidy == 1 {
+                                match calculate_fst(
+                                    &output_prefix,
+                                    &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                    ploidy
+                                ) {
+                                    Ok(_) => {
+                                        //
+                                    },
+                                    Err(e) => {
+                                        println!("Python error {:?}", e);
+                                    }
+                                }
+                            }
 
                             if self.args.is_present("calculate-dnds") {
                                 {
@@ -655,6 +707,21 @@ impl<'a> LorikeetEngine<'a> {
                             &reference_reader,
                             false,
                         );
+
+                        if self.args.is_present("calculate-fst") && ploidy == 1 {
+                            match calculate_fst(
+                                &output_prefix,
+                                &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                ploidy
+                            ) {
+                                Ok(_) => {
+                                    //
+                                },
+                                Err(e) => {
+                                    println!("Python error {:?}", e);
+                                }
+                            }
+                        }
 
                         if self.args.is_present("calculate-dnds") {
                             {

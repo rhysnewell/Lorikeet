@@ -49,13 +49,20 @@ Read mapping options:
                                   that usage of this parameter has security
                                   implications if untrusted input is specified.\n";
 
-const VARIANT_CALLING_HELP: &str = "
+const VARIANT_CALLING_HELP: &str = dbg!("
 Variant calling options (Basic):
   -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
                                                 Multiple values at once are accepted and encouraged
                                                 e.g. 10 25 [default: 25] \n
   --ploidy <INT>                                Sets the default ploidy for the analysis to N.
                                                 [default: 1]\n
+  --calculate-fst                               Calculate Fst values between samples and variants
+                                                if the ploidy is set 1. Otherwise, Fst values can
+                                                easily be caculated using the VCF and scikit-allel.
+                                                *Microbial only*
+  --calculate-dnds                              Calculate coding regions and perform dN/dS calculations
+                                                along them using called variants.
+                                                *Microbial only*
   -f, --features-vcf                            The set of alleles to force-call regardless
                                                 of evidence. Note: The sight containing these alleles
                                                 has to be called as 'active' in order for them to appear
@@ -155,7 +162,7 @@ Variant calling options (Advanced):
                                                 within this given span on all contigs. E.g. providing
                                                 '1000-2000' would only call variants between the 1000
                                                 and 2000 bp span on each provided contig.
-  --force                                       Forcefully overwrite previous runs.\n";
+  --force                                       Forcefully overwrite previous runs.\n");
 
 const ALIGNMENT_OPTIONS: &str = "
 Define mapping(s) (required):
@@ -1126,6 +1133,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(false)
                 )
                 .arg(
+                    Arg::with_name("calculate-fst")
+                        .long("calculate-fst")
+                        .takes_value(false)
+                )
+                .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .takes_value(true)
@@ -1787,6 +1799,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("calculate-fst")
+                        .long("calculate-fst")
                         .takes_value(false)
                 )
                 .arg(
@@ -2455,6 +2472,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .takes_value(false)
                 )
                 .arg(
+                    Arg::with_name("calculate-fst")
+                        .long("calculate-fst")
+                        .takes_value(false)
+                )
+                .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .default_value("-p meta")
@@ -3112,6 +3134,11 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
+                        .takes_value(false)
+                )
+                .arg(
+                    Arg::with_name("calculate-fst")
+                        .long("calculate-fst")
                         .takes_value(false)
                 )
                 .arg(
