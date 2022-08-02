@@ -30,6 +30,7 @@ use num::Saturating;
 use rust_htslib::bcf::Read;
 use evolve::codon_structs::{CodonTable, Translations};
 use bio::io::gff::GffType::GFF3;
+use model::fst_calculator::calculate_fst;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -433,6 +434,19 @@ impl<'a> LorikeetEngine<'a> {
                             &reference_reader,
                             false,
                         );
+
+                        match calculate_fst(
+                            &output_prefix,
+                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                            self.args.value_of("ploidy").unwrap().parse().unwrap()
+                        ) {
+                            Ok(_) => {
+                                //
+                            },
+                            Err(e) => {
+                                println!("Python error {:?}", e);
+                            }
+                        }
 
                         if self.args.is_present("calculate-dnds") {
                             {
@@ -1227,3 +1241,4 @@ fn calculate_dnds(
         std::fs::remove_file(&placeholder_gene_file);
     }
 }
+

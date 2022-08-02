@@ -69,6 +69,7 @@ extern crate multimap;
 extern crate nix;
 extern crate num;
 extern crate ordered_float;
+extern crate pyo3;
 extern crate petgraph;
 extern crate rand;
 extern crate rayon;

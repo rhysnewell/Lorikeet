@@ -9,3 +9,4 @@ pub mod location_and_alleles;
 pub mod variant_context;
 pub mod variant_context_utils;
 pub mod variants;
+pub mod fst_calculator;
