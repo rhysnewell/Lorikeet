@@ -8,24 +8,27 @@ dependencies:
   - cxx-compiler
   - rust
   - python>=3.8
-  - pysam=0.16
+#  - pysam=0.16
   - prodigal
   - samtools=1.9
   - starcode
   - bwa-mem2
   - minimap2>=2.20
-  - umap-learn>=0.5
-  - hdbscan
-  - matplotlib-base
+#  - umap-learn>=0.5
+#  - hdbscan
+#  - matplotlib-base
   - numpy
-  - seaborn
-  - scikit-learn
-  - scikit-bio
-  - biopython
-  - numba
-  - pynndescent
+#  - seaborn
+#  - scikit-learn
+#  - scikit-bio
+  - scikit-allel
+#  - biopython
+#  - numba
+#  - pynndescent
   - svim
   - bcftools
   - pip
+  - polars
+  - scipy
   - pip:
       - cmake>=3.21
