@@ -49,7 +49,7 @@ Read mapping options:
                                   that usage of this parameter has security
                                   implications if untrusted input is specified.\n";
 
-const VARIANT_CALLING_HELP: &str = dbg!("
+const VARIANT_CALLING_HELP: &str = "
 Variant calling options (Basic):
   -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
                                                 Multiple values at once are accepted and encouraged
@@ -162,7 +162,7 @@ Variant calling options (Advanced):
                                                 within this given span on all contigs. E.g. providing
                                                 '1000-2000' would only call variants between the 1000
                                                 and 2000 bp span on each provided contig.
-  --force                                       Forcefully overwrite previous runs.\n");
+  --force                                       Forcefully overwrite previous runs.\n";
 
 const ALIGNMENT_OPTIONS: &str = "
 Define mapping(s) (required):
