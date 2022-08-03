@@ -12,7 +12,7 @@ jobs:
       - name: Set env
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - id: 'compile'
-        uses: rhysnewell/rust-cargo-musl-action@v0.1.16
+        uses: rhysnewell/rust-cargo-musl-action@v0.1.20
         with:
           command: 'build'
           flags: '--features vendored-openssl'
