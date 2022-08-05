@@ -56,13 +56,10 @@ Variant calling options (Basic):
                                                 e.g. 10 25 [default: 25] \n
   --ploidy <INT>                                Sets the default ploidy for the analysis to N.
                                                 [default: 1]\n
-  --calculate-fst                               Calculate Fst values between samples and variants
-                                                if the ploidy is set 1. Otherwise, Fst values can
-                                                easily be caculated using the VCF and scikit-allel.
-                                                *Microbial only*
+  --calculate-fst                               Calculate Fst values between samples and variants.
   --calculate-dnds                              Calculate coding regions and perform dN/dS calculations
                                                 along them using called variants.
-                                                *Microbial only*
+                                                *Microbial only*.
   -f, --features-vcf                            The set of alleles to force-call regardless
                                                 of evidence. Note: The sight containing these alleles
                                                 has to be called as 'active' in order for them to appear

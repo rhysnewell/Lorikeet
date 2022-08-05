@@ -173,7 +173,7 @@ impl<'a> LorikeetEngine<'a> {
                                     genomes_and_contigs.contig_to_genome.len(),
                                 );
 
-                                if self.args.is_present("calculate-fst") && ploidy == 1 {
+                                if self.args.is_present("calculate-fst") {
                                     match calculate_fst(
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx],
@@ -455,7 +455,7 @@ impl<'a> LorikeetEngine<'a> {
                         );
 
 
-                        if self.args.is_present("calculate-fst") && ploidy == 1 {
+                        if self.args.is_present("calculate-fst") {
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
@@ -577,7 +577,7 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
-                            if self.args.is_present("calculate-fst") && ploidy == 1 {
+                            if self.args.is_present("calculate-fst") {
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
@@ -637,7 +637,7 @@ impl<'a> LorikeetEngine<'a> {
                                 true,
                             );
 
-                            if self.args.is_present("calculate-fst") && ploidy == 1 {
+                            if self.args.is_present("calculate-fst") {
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
@@ -708,7 +708,7 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
-                        if self.args.is_present("calculate-fst") && ploidy == 1 {
+                        if self.args.is_present("calculate-fst") {
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
