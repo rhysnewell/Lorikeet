@@ -183,7 +183,7 @@ impl<'a> LorikeetEngine<'a> {
                                             //
                                         },
                                         Err(e) => {
-                                            println!("Python error {:?}", e);
+                                            warn!("Python error {:?}", e);
                                         }
                                     }
                                 }
@@ -465,7 +465,7 @@ impl<'a> LorikeetEngine<'a> {
                                     //
                                 },
                                 Err(e) => {
-                                    println!("Python error {:?}", e);
+                                    warn!("Python error {:?}", e);
                                 }
                             }
                         }
@@ -587,7 +587,7 @@ impl<'a> LorikeetEngine<'a> {
                                         //
                                     },
                                     Err(e) => {
-                                        println!("Python error {:?}", e);
+                                        warn!("Python error {:?}", e);
                                     }
                                 }
                             }
@@ -647,7 +647,7 @@ impl<'a> LorikeetEngine<'a> {
                                         //
                                     },
                                     Err(e) => {
-                                        println!("Python error {:?}", e);
+                                        warn!("Python error {:?}", e);
                                     }
                                 }
                             }
@@ -718,7 +718,7 @@ impl<'a> LorikeetEngine<'a> {
                                     //
                                 },
                                 Err(e) => {
-                                    println!("Python error {:?}", e);
+                                    warn!("Python error {:?}", e);
                                 }
                             }
                         }

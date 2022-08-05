@@ -20,50 +20,39 @@ import allel
 import scipy.special
 
 vcf = allel.read_vcf(f'{output_prefix}/{genome_name}.vcf',
-      fields=['variants/CHROM', 'variants/POS', 'variants/DP', 'calldata/GT', 'calldata/AD', 'calldata/DP'])
-
-vcf['calldata/AD'][0, 0, :]
-haplotype_arrays = []
-for j in range(vcf['calldata/AD'].shape[1]): # samples (or populations)
-    population_j = []
-    max_depth = vcf['calldata/DP'][:, j].max() # All variants have to info for this many individuals
-    for i in range(vcf['calldata/AD'].shape[0]): # variant sites
-        site_i = np.array([-1 for _ in range(max_depth)])
-        depth_count = 0
-        for k in range(vcf['calldata/AD'].shape[2]): # alleles at site in sample
-            if k <= 0:
-                continue
-
-            ad = vcf['calldata/AD'][i, j, k] # allele depth
-            site_i[depth_count:(depth_count + ad)] = k
-            depth_count += ad # update minimum index
-
-        population_j.append(site_i)
-    haplotype_arrays.append(allel.HaplotypeArray(population_j))
-
-
+      fields=['variants/CHROM', 'variants/POS', 'variants/DP', 'variants/QF', 'calldata/GT', 'calldata/AD', 'calldata/DP'])
 
 col_dict = ['sample_1', 'sample_2']
+n_variants = 0
 for variant_i in range(vcf['calldata/AD'].shape[0]):
+    if vcf['variants/QF'][variant_i] == 'false':
+            continue # do not include unqualified variants
     col_dict.append(f'variant_{variant_i}')
+    n_variants += 1
 
-fst_df = np.zeros(shape=(int(scipy.special.binom(vcf['calldata/DP'].shape[1], 2)) * 2, vcf['calldata/AD'].shape[0] + 2))
+fst_df = np.zeros(shape=(int(scipy.special.binom(vcf['calldata/DP'].shape[1], 2)) * 2, n_variants + 2))
 mean_fst_df = np.zeros(shape=(vcf['calldata/DP'].shape[1], vcf['calldata/DP'].shape[1]))
 row = 0
+allele_counts = vcf['calldata/AD'][vcf['variants/QF'] == 'true']
+
 for sample1 in range(vcf['calldata/AD'].shape[1]):
     for sample2 in range(vcf['calldata/AD'].shape[1]):
         if sample1 == sample2:
             continue
+        for var_i in range(allele_counts.shape[0]):
+            h1 = allel.HaplotypeArray([allele_counts[var_i, sample1][allele_counts[var_i, sample1] != -1]])
+            h2 = allel.HaplotypeArray([allele_counts[var_i, sample2][allele_counts[var_i, sample2] != -1]])
+            num, den = allel.hudson_fst(h1, h2)
+            fst = (num / den)
 
-        num, den = allel.hudson_fst(haplotype_arrays[sample1], haplotype_arrays[sample2])
-        fst = (num / den)
-        np.nan_to_num(fst, copy=False, nan=0.0, posinf=None, neginf=None)
-        fst[fst < 0] = 0
+            np.nan_to_num(fst, copy=False, nan=0.0, posinf=None, neginf=None)
 
-        mean_fst = max(fst.mean(), 0)
+            fst[fst < 0] = 0
+            fst_df[row, var_i + 2] = fst
+
+        mean_fst = max(fst_df[row, 2:].mean(), 0)
         mean_fst_df[sample1, sample2] = mean_fst
         fst_df[row, 0:2] = [sample1, sample2]
-        fst_df[row, 2:] = fst
         row += 1
 
 pr_df = pr.DataFrame(fst_df, columns=col_dict)
