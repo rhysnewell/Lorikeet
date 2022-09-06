@@ -167,6 +167,12 @@ impl<'a> LorikeetEngine<'a> {
                                     "Calculating evolutionary rates...",
                                 );
 
+                                let depth_per_sample_filter: i64 = self.args
+                                    .value_of("depth-per-sample-filter")
+                                    .unwrap()
+                                    .parse()
+                                    .unwrap();
+
                                 let mut reference_reader = ReferenceReader::new(
                                     &Some(reference_stem.to_string()),
                                     genomes_and_contigs.clone(),
@@ -174,10 +180,18 @@ impl<'a> LorikeetEngine<'a> {
                                 );
 
                                 if self.args.is_present("calculate-fst") {
+                                    {
+                                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                        pb.progress_bar.set_message(format!(
+                                            "{}: Calculating Fst values...",
+                                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                        ));
+                                    }
                                     match calculate_fst(
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                                        ploidy
+                                        ploidy,
+                                        depth_per_sample_filter
                                     ) {
                                         Ok(_) => {
                                             //
@@ -189,6 +203,13 @@ impl<'a> LorikeetEngine<'a> {
                                 }
 
                                 if self.args.is_present("calculate-fst") {
+                                    {
+                                        let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                        pb.progress_bar.set_message(format!(
+                                            "{}: Calculating evolutionary rates...",
+                                            &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                        ));
+                                    }
                                     calculate_dnds(
                                         self.args,
                                         &reference_stem,
@@ -456,10 +477,18 @@ impl<'a> LorikeetEngine<'a> {
 
 
                         if self.args.is_present("calculate-fst") {
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating Fst values...",
+                                    &reference,
+                                ));
+                            }
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                                ploidy
+                                ploidy,
+                                depth_per_sample_filter
                             ) {
                                 Ok(_) => {
                                     //
@@ -578,10 +607,18 @@ impl<'a> LorikeetEngine<'a> {
                             );
 
                             if self.args.is_present("calculate-fst") {
+                                {
+                                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                    pb.progress_bar.set_message(format!(
+                                        "{}: Calculating Fst values...",
+                                        &reference,
+                                    ));
+                                }
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                                    ploidy
+                                    ploidy,
+                                    depth_per_sample_filter
                                 ) {
                                     Ok(_) => {
                                         //
@@ -638,10 +675,18 @@ impl<'a> LorikeetEngine<'a> {
                             );
 
                             if self.args.is_present("calculate-fst") {
+                                {
+                                    let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                    pb.progress_bar.set_message(format!(
+                                        "{}: Calculating Fst values...",
+                                        &reference,
+                                    ));
+                                }
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                                    ploidy
+                                    ploidy,
+                                    depth_per_sample_filter
                                 ) {
                                     Ok(_) => {
                                         //
@@ -709,10 +754,18 @@ impl<'a> LorikeetEngine<'a> {
                         );
 
                         if self.args.is_present("calculate-fst") {
+                            {
+                                let pb = &tree.lock().unwrap()[ref_idx + 2];
+                                pb.progress_bar.set_message(format!(
+                                    "{}: Calculating Fst values...",
+                                    &reference,
+                                ));
+                            }
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
-                                ploidy
+                                ploidy,
+                                depth_per_sample_filter
                             ) {
                                 Ok(_) => {
                                     //
