@@ -31,7 +31,9 @@ extern crate log;
 use log::LevelFilter;
 extern crate env_logger;
 use env_logger::Builder;
-use lorikeet_genome::processing::lorikeet_engine::{start_lorikeet_engine, ReadType, run_summarize};
+use lorikeet_genome::processing::lorikeet_engine::{
+    run_summarize, start_lorikeet_engine, ReadType,
+};
 use lorikeet_genome::reference::reference_reader_utils::ReferenceReaderUtils;
 
 fn main() {
@@ -40,8 +42,8 @@ fn main() {
     set_log_level(&matches, false);
 
     match matches.subcommand_name() {
-        Some("summarize") => {
-            let m = matches.subcommand_matches("summarize").unwrap();
+        Some("summarise") => {
+            let m = matches.subcommand_matches("summarise").unwrap();
 
             rayon::ThreadPoolBuilder::new()
                 .num_threads(m.value_of("threads").unwrap().parse().unwrap())

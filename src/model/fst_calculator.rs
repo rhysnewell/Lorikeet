@@ -4,6 +4,7 @@ use pyo3::types::IntoPyDict;
 pub fn calculate_fst(
     output_prefix: &str,
     genome_name: &str,
+    vcf_path: &str,
     ploidy: usize,
     depth_per_sample_filter: i64
 ) -> PyResult<()> {
@@ -18,6 +19,7 @@ pub fn calculate_fst(
         let locals = [
             ("output_prefix", output_prefix),
             ("genome_name", genome_name),
+            ("vcf_path", vcf_path),
             ("depth_per_sample", depth_per_sample_str.as_str())
         ].into_py_dict(py);
         let code =r#"
@@ -30,8 +32,12 @@ import warnings
 # Warnings break the lorikeet interface
 warnings.filterwarnings('ignore')
 depth_per_sample = int(depth_per_sample)
-vcf = allel.read_vcf(f'{output_prefix}/{genome_name}.vcf.gz',
-      fields=['variants/CHROM', 'variants/POS', 'variants/DP', 'variants/QF', 'calldata/GT', 'calldata/AD', 'calldata/DP'])
+try:
+    vcf = allel.read_vcf(vcf_path,
+          fields=['variants/CHROM', 'variants/POS', 'variants/DP', 'variants/QF', 'calldata/GT', 'calldata/AD', 'calldata/DP'])
+except FileNotFoundError:
+    vcf = allel.read_vcf(f"{vcf_path}.gz",
+          fields=['variants/CHROM', 'variants/POS', 'variants/DP', 'variants/QF', 'calldata/GT', 'calldata/AD', 'calldata/DP'])
 
 col_dict = ['sample_1', 'sample_2']
 n_variants = 0

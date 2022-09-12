@@ -10,11 +10,11 @@ use reads::bird_tool_reads::BirdToolRead;
 use std::cmp::Reverse;
 use std::fs::File;
 
-use rust_htslib::bam::Record;
-use reads::cigar_utils::CigarUtils;
-use std::ops::Deref;
 use reads::alignment_utils::AlignmentUtils;
+use reads::cigar_utils::CigarUtils;
 use reads::read_utils::ReadUtils;
+use rust_htslib::bam::Record;
+use std::ops::Deref;
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::SimpleInterval;
 
@@ -106,7 +106,13 @@ impl<'a> AssemblyRegionIterator<'a> {
                         let mut records = Vec::new(); // container for the records to be collected
 
                         while bam_generated.read(&mut record) == true {
-                            if ReadUtils::read_is_filtered(&record, flag_filters, 20, read_type, &Self::DUMMY_LIMITING_INTERVAL)
+                            if ReadUtils::read_is_filtered(
+                                &record,
+                                flag_filters,
+                                20,
+                                read_type,
+                                &Self::DUMMY_LIMITING_INTERVAL,
+                            )
                             // Check against filter flags and current sample type
                             {
                                 continue;
@@ -137,7 +143,11 @@ impl<'a> AssemblyRegionIterator<'a> {
             records = records.into_iter().take(max_input_depth).collect();
         }
 
-        debug!("Region {:?} No. reads {}", &region.padded_span, records.len());
+        debug!(
+            "Region {:?} No. reads {}",
+            &region.padded_span,
+            records.len()
+        );
         records.par_sort_unstable();
         region.add_all(records);
     }

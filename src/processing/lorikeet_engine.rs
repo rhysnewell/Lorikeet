@@ -173,6 +173,8 @@ impl<'a> LorikeetEngine<'a> {
                                     .parse()
                                     .unwrap();
 
+
+
                                 let mut reference_reader = ReferenceReader::new(
                                     &Some(reference_stem.to_string()),
                                     genomes_and_contigs.clone(),
@@ -187,9 +189,13 @@ impl<'a> LorikeetEngine<'a> {
                                             &reference_reader.genomes_and_contigs.genomes[ref_idx],
                                         ));
                                     }
+
+                                    let vcf_path = format!("{}/{}.vcf", &output_prefix, &reference_reader.genomes_and_contigs.genomes[ref_idx]);
+
                                     match calculate_fst(
                                         &output_prefix,
                                         &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                        vcf_path.as_str(),
                                         ploidy,
                                         depth_per_sample_filter
                                     ) {
@@ -373,46 +379,33 @@ impl<'a> LorikeetEngine<'a> {
                         ));
                     }
 
-                    let mut contexts = if !self.args.is_present("high-memory"){
-                        assembly_engine.collect_shards_low_mem(
-                            self.args,
-                            &indexed_bam_readers,
-                            &genomes_and_contigs,
-                            &concatenated_genomes,
-                            flag_filters,
-                            n_threads,
-                            &mut reference_reader,
-                            &output_prefix
-                        )
-                    } else {
-                        let mut shards = assembly_engine.collect_shards(
-                            self.args,
-                            &indexed_bam_readers,
-                            &genomes_and_contigs,
-                            &concatenated_genomes,
-                            flag_filters,
-                            n_threads,
-                            tree,
-                            &mut reference_reader,
-                        );
 
-                        {
-                            let pb = &tree.lock().unwrap()[ref_idx + 2];
-                            pb.progress_bar.set_message(format!(
-                                "{}: Performing variant calling on active regions...",
-                                pb.key
-                            ));
+                    let vec_of_contexts_sites_tuple = assembly_engine.collect_shards_low_mem(
+                        self.args,
+                        &indexed_bam_readers,
+                        &genomes_and_contigs,
+                        &concatenated_genomes,
+                        flag_filters,
+                        n_threads,
+                        &mut reference_reader,
+                        &output_prefix
+                    );
+
+                    let genome_size = reference_reader
+                        .target_lens
+                        .iter()
+                        .map(|(_, length)| length)
+                        .sum::<u64>();
+
+                    let mut contexts = Vec::with_capacity(genome_size as usize);
+                    let mut passing_sites = vec![Vec::with_capacity(genome_size as usize); indexed_bam_readers.len()];
+                    vec_of_contexts_sites_tuple.into_iter().for_each(|result| {
+                        contexts.extend(result.0);
+                        for (i, sites) in result.1.into_iter().enumerate() {
+                            passing_sites[i].extend(sites)
                         }
-                        assembly_engine.traverse(
-                            shards,
-                            flag_filters,
-                            self.args,
-                            &indexed_bam_readers,
-                            &mut reference_reader,
-                            &output_prefix
-                        )
+                    });
 
-                    };
                     contexts.par_sort_unstable();
                     // contexts.reverse();
                     debug!("example variant {:?}", &contexts.first());
@@ -422,11 +415,7 @@ impl<'a> LorikeetEngine<'a> {
                     // ensure output path exists
                     create_dir_all(&output_prefix).expect("Unable to create output directory");
 
-                    let genome_size = reference_reader
-                        .target_lens
-                        .iter()
-                        .map(|(_, length)| length)
-                        .sum::<u64>();
+
 
                     let qual_by_depth_filter: f64 = self.args
                         .value_of("qual-by-depth-filter")
@@ -445,6 +434,9 @@ impl<'a> LorikeetEngine<'a> {
                         .parse::<f64>()
                         .unwrap() / -10.0;
 
+                    let vcf_path = format!("{}/{}.vcf",
+                                           &output_prefix,
+                                           &reference_reader.genomes_and_contigs.genomes[ref_idx]);
                     if mode == "call" {
                         // calculate ANI statistics for short reads only
                         let mut ani_calculator = ANICalculator::new((self.short_read_bam_count + self.long_read_bam_count));
@@ -454,6 +446,7 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
                             depth_per_sample_filter
@@ -487,6 +480,7 @@ impl<'a> LorikeetEngine<'a> {
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                vcf_path.as_str(),
                                 ploidy,
                                 depth_per_sample_filter
                             ) {
@@ -539,6 +533,7 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
                             depth_per_sample_filter
@@ -617,6 +612,7 @@ impl<'a> LorikeetEngine<'a> {
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                    vcf_path.as_str(),
                                     ploidy,
                                     depth_per_sample_filter
                                 ) {
@@ -685,6 +681,7 @@ impl<'a> LorikeetEngine<'a> {
                                 match calculate_fst(
                                     &output_prefix,
                                     &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                    vcf_path.as_str(),
                                     ploidy,
                                     depth_per_sample_filter
                                 ) {
@@ -735,6 +732,7 @@ impl<'a> LorikeetEngine<'a> {
                             &cleaned_sample_names,
                             reference,
                             genome_size,
+                            Some(passing_sites),
                             qual_by_depth_filter,
                             qual_filter,
                             depth_per_sample_filter
@@ -753,6 +751,7 @@ impl<'a> LorikeetEngine<'a> {
                             false,
                         );
 
+
                         if self.args.is_present("calculate-fst") {
                             {
                                 let pb = &tree.lock().unwrap()[ref_idx + 2];
@@ -764,6 +763,7 @@ impl<'a> LorikeetEngine<'a> {
                             match calculate_fst(
                                 &output_prefix,
                                 &reference_reader.genomes_and_contigs.genomes[ref_idx],
+                                vcf_path.as_str(),
                                 ploidy,
                                 depth_per_sample_filter
                             ) {
@@ -1179,10 +1179,32 @@ pub fn run_summarize(args: &clap::ArgMatches) {
         .parse()
         .unwrap();
 
+    let output_prefix = match args.is_present("output") {
+        true => {
+            match std::fs::create_dir_all(
+                args.value_of("output").unwrap().to_string(),
+            ) {
+                Ok(_) => {}
+                Err(err) => panic!("Unable to create output directory {:?}", err),
+            };
+            args.value_of("output").unwrap()
+        }
+        false => "./",
+    };
+
     vcf_files.into_iter().for_each(|vcf_path| {
         let mut reader = rust_htslib::bcf::Reader::from_path(vcf_path).unwrap();
         let header = reader.header();
         let mut variant_contexts = VariantContext::process_vcf_from_path(vcf_path, true);
+        let mut ploidy = 2;
+
+        // workout ploidy
+        match variant_contexts.first_mut() {
+            Some(record) => {
+                ploidy = record.genotypes.get_max_ploidy(2)
+            },
+            None => {},
+        }
         let samples: Vec<&str> = header.samples().into_iter().map(|s| std::str::from_utf8(s).unwrap()).collect::<Vec<&str>>();
 
         let genome_size: u64 = header.header_records().into_iter().map(|h_record| {
@@ -1199,13 +1221,22 @@ pub fn run_summarize(args: &clap::ArgMatches) {
         let mut ani_calculator = ANICalculator::new(variant_contexts[0].genotypes.len());
         ani_calculator.run_calculator(
             &mut variant_contexts,
-            args.value_of("output").unwrap(),
+            output_prefix,
             samples.as_slice(),
             Path::new(vcf_path).file_stem().unwrap().to_str().unwrap(),
             genome_size,
+            None,
             qual_by_depth_filter,
             qual_filter,
             depth_per_sample_filter
+        );
+
+        calculate_fst(
+            output_prefix,
+            Path::new(vcf_path).file_stem().unwrap().to_str().unwrap(),
+            vcf_path,
+            ploidy as usize,
+            depth_per_sample_filter,
         );
     })
 }

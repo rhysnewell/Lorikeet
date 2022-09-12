@@ -20,11 +20,12 @@ use rust_htslib::bcf::{IndexedReader, Read, Reader, Record, Writer};
 use std::cmp::{Ordering, max, min};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::ops::Range;
+use std::ops::{Range, Deref};
 use utils::math_utils::MathUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
 use std::path::Path;
+use std::fmt::Error;
 
 #[derive(Debug, Clone)]
 pub struct VariantContext {
@@ -766,48 +767,49 @@ impl VariantContext {
     pub fn from_vcf_record(record: &mut Record, with_depths: bool) -> Option<VariantContext> {
         debug!("Found VCF record with {:?} alleles", record.allele_count());
         let variants = Self::collect_variants(record, false, false, None);
-        if variants.len() > 0 {
-            // Get elements from record
-
-            let mut vc = Self::build(
-                record.rid().unwrap() as usize,
-                record.pos() as usize,
-                record.pos() as usize,
-                variants,
-            );
-            if with_depths {
-                let allele_depths = record.format(b"AD").integer().unwrap();
-                debug!("Allele depths {:?} {:?}", &allele_depths, record.format(b"AD").integer().unwrap());
-                let mut genotypes = allele_depths.iter().map(|depths| {
-                    let mut depths = depths.into_iter().map(|d| *d as i64).collect::<Vec<i64>>();
-                    if depths.len() == 1 {
-                        depths = vec![0; vc.alleles.len()];
-                    };
-                    // println!("Depths {:?}", &depths);
-                    Genotype::build_from_ads(depths)
-                }).collect::<Vec<Genotype>>();
-
-                let genotype_context = GenotypesContext::new(genotypes);
-                vc.genotypes = genotype_context;
-
-                let qd = record.info(b"QD").float().unwrap();
-                vc.attributes.insert(VariantAnnotations::QualByDepth.to_key().to_string(), AttributeObject::f64(qd.unwrap()[0] as f64));
-            }
-            vc.log10_p_error((record.qual() as f64) / -10.0);
-
-            // Separate filters into hashset of filter struct
-            let filters = record.filters();
-            let header = record.header();
-            for filter in filters {
-                vc.filter(Filter::from_result(std::str::from_utf8(
-                    &header.id_to_name(filter)[..],
-                )));
-            }
-            debug!("VC {:?}", &vc);
-            Some(vc)
-        } else {
-            None
+        if variants.len() == 0 {
+            return None;
         }
+
+        // Get elements from record
+        let mut vc = Self::build(
+            record.rid().unwrap() as usize,
+            record.pos() as usize,
+            record.pos() as usize,
+            variants,
+        );
+        if with_depths {
+            let allele_depths = record.format(b"AD").integer().unwrap();
+            let genotype_tags = record.format(b"GT").string().unwrap();
+            let ploidy = genotype_tags.as_slice().iter().map(|g| g.len()).max().unwrap();
+            debug!("Allele depths {:?} {:?}", &allele_depths, record.format(b"AD").integer().unwrap());
+            let mut genotypes = allele_depths.iter().map(|depths| {
+                let mut depths = depths.into_iter().map(|d| *d as i64).collect::<Vec<i64>>();
+                if depths.len() == 1 {
+                    depths = vec![0; vc.alleles.len()];
+                };
+                // println!("Depths {:?}", &depths);
+                Genotype::build_from_ads(ploidy, depths)
+            }).collect::<Vec<Genotype>>();
+
+            let genotype_context = GenotypesContext::new(genotypes);
+            vc.genotypes = genotype_context;
+
+            let qd = record.info(b"QD").float().unwrap();
+            vc.attributes.insert(VariantAnnotations::QualByDepth.to_key().to_string(), AttributeObject::f64(qd.unwrap()[0] as f64));
+        }
+        vc.log10_p_error((record.qual() as f64) / -10.0);
+
+        // Separate filters into hashset of filter struct
+        let filters = record.filters();
+        let header = record.header();
+        for filter in filters {
+            vc.filter(Filter::from_result(std::str::from_utf8(
+                &header.id_to_name(filter)[..],
+            )));
+        }
+        debug!("VC {:?}", &vc);
+        Some(vc)
     }
 
     /// Collect variants from a given ´bcf::Record`.

@@ -3,12 +3,12 @@ use annotator::variant_annotation::VariantAnnotations;
 use genotype::genotype_builder::AttributeObject;
 use hashlink::LinkedHashMap;
 use model::variant_context::VariantContext;
+use rand::seq::index::sample;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use rand::seq::index::sample;
 
 /// Calculates the per sample strain abundance for a list of variant contexts
 /// that have been annotated with their potential strain assignments
@@ -204,9 +204,9 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                                     // We divide the total depth of variant here by the total amount of strains that
                                     // variant occurs in. E.g. if a variant had a depth of 6
                                     // and occurred in 3 genotypes, then for each genotype its initialization value would be 2
-                                    let mut weight =
-                                        vc.genotypes.genotypes()[sample_index].ad[0] as f64
-                                            / total_depth;
+                                    let mut weight = vc.genotypes.genotypes()[sample_index].ad[0]
+                                        as f64
+                                        / total_depth;
 
                                     // let weight =
                                     //     reference_depth / (n_strains - strains.len()) as f64;
@@ -330,14 +330,17 @@ impl<'a> AbundanceCalculatorEngine<'a> {
                     // strain_presences.iter_mut().for_each(|vec| {
                     //     vec.remove(position_of_strain_id);
                     // });
-                    abundance_vectors = abundance_vectors.into_iter().map(|sample_calculator| {
-                        sample_calculator
-                            .into_iter()
-                            .filter(|strain_calculator| {
-                                strain_calculator.index != *strain_id_to_remove
-                            })
-                            .collect()
-                    }).collect();
+                    abundance_vectors = abundance_vectors
+                        .into_iter()
+                        .map(|sample_calculator| {
+                            sample_calculator
+                                .into_iter()
+                                .filter(|strain_calculator| {
+                                    strain_calculator.index != *strain_id_to_remove
+                                })
+                                .collect()
+                        })
+                        .collect();
 
                     // something_removed = true;
                     n_strains -= 1;

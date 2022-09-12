@@ -35,12 +35,12 @@ use gkl::smithwaterman::{OverhangStrategy, Parameters};
 use smith_waterman::smith_waterman_aligner::{NEW_SW_PARAMETERS, STANDARD_NGS};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
+use utils::fragment_collection::FragmentCollection;
+use utils::fragment_utils::adjust_quals_of_overlapping_paired_fragments;
 use utils::math_utils::MathUtils;
 use utils::quality_utils::QualityUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 use utils::vcf_constants::*;
-use utils::fragment_collection::FragmentCollection;
-use utils::fragment_utils::adjust_quals_of_overlapping_paired_fragments;
 
 lazy_static! {
     static ref PHASE_01: PhaseGroup = PhaseGroup::new("0|1".to_string(), 1);
@@ -104,7 +104,7 @@ impl AssemblyBasedCallerUtils {
         soft_clip_low_quality_ends: bool,
     ) {
         if region.is_finalized() {
-            return
+            return;
         }
 
         let min_tail_quality_to_use = if error_correct_reads {
@@ -116,59 +116,61 @@ impl AssemblyBasedCallerUtils {
         let original_reads = region.move_reads();
         debug!("Original reads {}", original_reads.len());
 
-        let mut reads_to_use = original_reads.into_par_iter().filter_map(|original_read| {
-            // TODO unclipping soft clips may introduce bases that aren't in the extended region if the unclipped bases
-            // TODO include a deletion w.r.t. the reference.  We must remove kmers that occur before the reference haplotype start
-            let mut hard_clipped = false;
-            let mut read = if dont_use_soft_clipped_bases
-                || !ReadUtils::has_well_defined_fragment_size(&original_read)
-            {
-                hard_clipped = true;
-                ReadClipper::new(original_read).hard_clip_soft_clipped_bases()
-            } else {
-                ReadClipper::new(original_read).revert_soft_clipped_bases()
-            };
-
-            read = if soft_clip_low_quality_ends {
-                ReadClipper::new(read).soft_clip_low_qual_ends(min_tail_quality_to_use)
-            } else {
-                ReadClipper::new(read).hard_clip_low_qual_ends(min_tail_quality_to_use)
-            };
-
-            let mut adaptored = false;
-            if read.get_start() <= read.get_end() {
-                read = if read.read.is_unmapped() {
-                    read
+        let mut reads_to_use = original_reads
+            .into_par_iter()
+            .filter_map(|original_read| {
+                // TODO unclipping soft clips may introduce bases that aren't in the extended region if the unclipped bases
+                // TODO include a deletion w.r.t. the reference.  We must remove kmers that occur before the reference haplotype start
+                let mut hard_clipped = false;
+                let mut read = if dont_use_soft_clipped_bases
+                    || !ReadUtils::has_well_defined_fragment_size(&original_read)
+                {
+                    hard_clipped = true;
+                    ReadClipper::new(original_read).hard_clip_soft_clipped_bases()
                 } else {
-                    adaptored = true;
-                    ReadClipper::new(read).hard_clip_adaptor_sequence()
+                    ReadClipper::new(original_read).revert_soft_clipped_bases()
                 };
 
-                if !read.is_empty() && read.read.seq_len_from_cigar(false) > 0 {
-                    read = ReadClipper::hard_clip_to_region(
-                        read,
-                        region.get_padded_span().get_start(),
-                        region.get_padded_span().get_end(),
-                    );
+                read = if soft_clip_low_quality_ends {
+                    ReadClipper::new(read).soft_clip_low_qual_ends(min_tail_quality_to_use)
+                } else {
+                    ReadClipper::new(read).hard_clip_low_qual_ends(min_tail_quality_to_use)
+                };
 
-                    if read.get_start() <= read.get_end()
-                        && read.len() > 0
-                        && read.overlaps(&region.get_padded_span())
-                    {
-                        // NOTE: here we make a defensive copy of the read if it has not been modified by the above operations
-                        // which might only make copies in the case that the read is actually clipped
-                        Some(read)
+                let mut adaptored = false;
+                if read.get_start() <= read.get_end() {
+                    read = if read.read.is_unmapped() {
+                        read
+                    } else {
+                        adaptored = true;
+                        ReadClipper::new(read).hard_clip_adaptor_sequence()
+                    };
+
+                    if !read.is_empty() && read.read.seq_len_from_cigar(false) > 0 {
+                        read = ReadClipper::hard_clip_to_region(
+                            read,
+                            region.get_padded_span().get_start(),
+                            region.get_padded_span().get_end(),
+                        );
+
+                        if read.get_start() <= read.get_end()
+                            && read.len() > 0
+                            && read.overlaps(&region.get_padded_span())
+                        {
+                            // NOTE: here we make a defensive copy of the read if it has not been modified by the above operations
+                            // which might only make copies in the case that the read is actually clipped
+                            Some(read)
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
                 } else {
                     None
                 }
-            } else {
-                None
-            }
-        }).collect::<Vec<BirdToolRead>>();
-
+            })
+            .collect::<Vec<BirdToolRead>>();
 
         reads_to_use.par_sort_unstable();
 
@@ -217,9 +219,10 @@ impl AssemblyBasedCallerUtils {
             .map(|best_allele| {
                 let best_haplotype = match original_read_likelihoods
                     .alleles
-                    .get_allele(best_allele.allele_index.unwrap()) {
+                    .get_allele(best_allele.allele_index.unwrap())
+                {
                     Some(best_haplotype) => best_haplotype,
-                    None => panic!("Could not retrieve index of {:?}", best_allele)
+                    None => panic!("Could not retrieve index of {:?}", best_allele),
                 };
                 let original_read = &original_read_likelihoods
                     .evidence_by_sample_index
@@ -258,8 +261,10 @@ impl AssemblyBasedCallerUtils {
      * @param halfOfPcrIndelQual half of phred-scaled quality of indel errors from PCR
      */
     pub fn clean_overlapping_read_pairs(
-        reads: Vec<BirdToolRead>, set_conflicting_to_zero: bool,
-        half_of_pcr_snv_qual: Option<u8>, half_of_pcr_indel_qual: Option<u8>
+        reads: Vec<BirdToolRead>,
+        set_conflicting_to_zero: bool,
+        half_of_pcr_snv_qual: Option<u8>,
+        half_of_pcr_indel_qual: Option<u8>,
     ) -> Vec<BirdToolRead> {
         let n_reads = reads.len();
         let mut split_reads_by_sample = Self::split_reads_by_sample(reads);
@@ -270,7 +275,12 @@ impl AssemblyBasedCallerUtils {
             let (singletons, mut overlapping_pairs) = fragment_collection.consume();
             reads.extend(singletons);
             for overlapping_pair in overlapping_pairs {
-                let fixed_pair = adjust_quals_of_overlapping_paired_fragments(overlapping_pair, set_conflicting_to_zero, half_of_pcr_snv_qual, half_of_pcr_indel_qual);
+                let fixed_pair = adjust_quals_of_overlapping_paired_fragments(
+                    overlapping_pair,
+                    set_conflicting_to_zero,
+                    half_of_pcr_snv_qual,
+                    half_of_pcr_indel_qual,
+                );
                 reads.extend([fixed_pair.0, fixed_pair.1]);
             }
         }
@@ -396,19 +406,16 @@ impl AssemblyBasedCallerUtils {
     ) {
         let active_region_start = ref_haplotype.alignment_start_hap_wrt_ref;
         let mut grouped_by = HashMap::new(); // vcs grouped by start
-        match assembly_result_set
-            .get_variation_events(max_mnp_distance) {
+        match assembly_result_set.get_variation_events(max_mnp_distance) {
             Ok(result) => {
-                result
-                    .into_iter()
-                    .for_each(|vc| {
-                        let pos = grouped_by
-                            .entry(vc.loc.get_start())
-                            .or_insert_with(Vec::new);
-                        pos.push(vc);
-                    });
-            },
-            Err(error) => panic!("{:?}", error)
+                result.into_iter().for_each(|vc| {
+                    let pos = grouped_by
+                        .entry(vc.loc.get_start())
+                        .or_insert_with(Vec::new);
+                    pos.push(vc);
+                });
+            }
+            Err(error) => panic!("{:?}", error),
         };
 
         let mut assembled_variants = grouped_by
@@ -636,7 +643,6 @@ impl AssemblyBasedCallerUtils {
         haplotypes
             .iter()
             .flat_map(|h| {
-
                 let overlapping = h.event_map.as_ref().unwrap().get_overlapping_events(loc);
                 overlapping
             })

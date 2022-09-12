@@ -28,7 +28,6 @@ impl Kmer {
      * @param kmer a non-null byte[]. The input array must not be modified by the caller.
      */
     pub fn new(kmer: &[u8]) -> Self {
-
         let hash = Self::hash_code(kmer, 0, kmer.len());
         Self {
             start: 0,
@@ -47,15 +46,13 @@ impl Kmer {
      * @param start the start of the kmer in bases, must be >= 0 and < bases.length
      * @param length the length of the kmer.  Must be >= 0 and start + length < bases.length
      */
-    pub fn new_with_start_and_length(
-        bases: &[u8], start: usize, length: usize
-    ) -> Self {
+    pub fn new_with_start_and_length(bases: &[u8], start: usize, length: usize) -> Self {
         let hash = Self::hash_code(bases, start, length);
 
         Self {
             start,
             length,
-            hash
+            hash,
         }
     }
 
@@ -75,7 +72,7 @@ impl Kmer {
      */
     fn hash_code(bases: &[u8], start: usize, length: usize) -> usize {
         if length == 0 {
-            return 0
+            return 0;
         }
 
         let mut h = 0;
@@ -145,14 +142,7 @@ impl Kmer {
     // }
 
     pub fn to_string(&self) -> String {
-        return format!(
-            "Kmer{{{}}}",
-            format!(
-                "{}{}",
-                self.start,
-                self.length
-            )
-        );
+        return format!("Kmer{{{}}}", format!("{}{}", self.start, self.length));
     }
 }
 

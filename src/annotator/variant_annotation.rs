@@ -58,7 +58,7 @@ pub enum VariantAnnotations {
     Genotype,
     VariantGroup,
     Strain,
-    Qualified
+    Qualified,
 }
 
 /// The actual annotation struct, Holds all information about an annotation
@@ -193,24 +193,22 @@ impl VariantAnnotations {
                 let mut values: LinkedHashMap<usize, Vec<u8>> = LinkedHashMap::new();
 
                 likelihoods
-                    .best_alleles_breaking_ties_main(Box::new(
-                        |allele: &A| {
-                            if allele.is_reference() {
-                                1
-                            } else {
-                                0
-                            }
-                        },
-                    ))
+                    .best_alleles_breaking_ties_main(Box::new(|allele: &A| {
+                        if allele.is_reference() {
+                            1
+                        } else {
+                            0
+                        }
+                    }))
                     .into_iter()
                     .filter(|ba| {
                         ba.is_informative()
                             && Self::is_usable_read(
-                            &likelihoods
-                                .evidence_by_sample_index
-                                .get(&ba.sample_index)
-                                .unwrap()[ba.evidence_index],
-                        )
+                                &likelihoods
+                                    .evidence_by_sample_index
+                                    .get(&ba.sample_index)
+                                    .unwrap()[ba.evidence_index],
+                            )
                     })
                     .for_each(|ba| {
                         let value = values.entry(ba.allele_index.unwrap()).or_insert(Vec::new());
@@ -254,7 +252,7 @@ impl VariantAnnotations {
                 //     )
                 // });
                 if likelihoods.number_of_alleles() <= 1 {
-                    return AttributeObject::None
+                    return AttributeObject::None;
                 }
                 let mut allele_counts = LinkedHashMap::new();
                 // let mut subset = LinkedHashMap::new();
@@ -284,7 +282,12 @@ impl VariantAnnotations {
                     .into_iter()
                     .enumerate()
                 {
-                    debug!("{} {} \n {:?}", vec_index, allele_index, allele_counts.get(&allele_index));
+                    debug!(
+                        "{} {} \n {:?}",
+                        vec_index,
+                        allele_index,
+                        allele_counts.get(&allele_index)
+                    );
                     counts[vec_index + 1] = *allele_counts.get(&allele_index).unwrap();
                 }
 
@@ -368,7 +371,12 @@ impl VariantAnnotations {
         for genotype in genotypes.genotypes_mut() {
             // we care only about variant calls with likelihoods
             if !genotype.is_het() && !genotype.is_hom_var() && !genotype.is_hom_ref() {
-                debug!("Skipping: {} {} {:?}", genotype.is_het(), genotype.is_hom_var(), genotype.genotype_type);
+                debug!(
+                    "Skipping: {} {} {:?}",
+                    genotype.is_het(),
+                    genotype.is_hom_var(),
+                    genotype.genotype_type
+                );
                 continue;
             }
 
@@ -387,9 +395,7 @@ impl VariantAnnotations {
 
             // if there is no AD value or it is a dummy value, we want to look to other means to get the depth
             if let Some(sample_index) = likelihoods.index_of_sample(&genotype.sample_name) {
-                depth += likelihoods
-                    .sample_evidence_count(sample_index)
-                    as i64;
+                depth += likelihoods.sample_evidence_count(sample_index) as i64;
             } else if genotype.has_dp() {
                 depth += genotype.dp;
             }

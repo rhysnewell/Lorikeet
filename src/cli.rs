@@ -69,11 +69,11 @@ Variant calling options (Basic):
                                                 If the file is not properly compressed, Lorikeet will
                                                 unfortunately SEGFAULT with no error message.
   --qual-by-depth-filter                        The minimum QD value for a variant to have for it to be
-                                                included in the genotyping or ANI analyses. [default: 20]
+                                                included in the genotyping or ANI analyses. [default: 25]
   --qual-threshold                              The PHRED-scaled quality score threshold for use
                                                 with ANI calculations. [default: 150]
   --depth-per-sample-filter                     Minimum depth of a variant in a sample for that
-                                                sample to be included in ANI calculations for that
+                                                sample to be included in ANI & Fst calculations for that
                                                 variant. [default: 5]
   -q, --min-base-quality                        Minimum base quality required to consider a
                                                 base for calling. [default: 10]
@@ -249,8 +249,6 @@ Alignment filtering (optional):
    --discard-supplementary               Discard read alignments flagged as supplementary
    --include-secondary                   Includes read alignments flagged as secondary
    --discard-unmapped                    Exclude unmapped reads from cached BAM files.
-   --high-memory                         Run in high memory mode. Can be slightly faster sometimes
-                                         but consumes much more RAM than standard mode.
    --split-bams                          Split the mapped read files up per reference.
                                          Useful if you think run time is being hampered
                                          by I/O. Most of the time this will not improve
@@ -379,17 +377,17 @@ See lorikeet evolve --full-help for further options and further detail.
 
 {}
 
-  lorikeet summarize --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --window-size 1
+  lorikeet summarise --coupled read1.fastq.gz read2.fastq.gz --reference assembly.fna --threads 10 --window-size 1
 
 {}
 
-  lorikeet summarize --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
+  lorikeet summarise --bam-files my.bam --longread-bam-files my-longread.bam --genome-fasta-directory genomes/ -x fna
     --bam-file-cache-directory saved_bam_files --output-directory lorikeet_out/ --threads 10
 
-See lorikeet summarize --full-help for further options and further detail.
+See lorikeet summarise --full-help for further options and further detail.
 ",
             ansi_term::Colour::Green.paint(
-                "lorikeet summarize"),
+                "lorikeet summarise"),
             ansi_term::Colour::Green.paint(
                 "Summarizes contigs stats across given window size"),
             ansi_term::Colour::Purple.paint(
@@ -469,6 +467,7 @@ Main subcommands:
 \tcall      \tPerforms variant calling on the provides genomes
 \tgenotype  \tReport strain-level genotypes and abundances from metagenomes (*experimental*)
 \tconsensus \tCreates consensus genomes for each input reference and for each sample
+\tsummarise \tCalculate microdiversity statistics for a given set of VCF files
 
 Other options:
 \t-V, --version\tPrint version information
@@ -678,16 +677,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -889,12 +886,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -1030,10 +1024,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
@@ -1058,12 +1049,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("min-variant-depth-for-genotyping")
@@ -1123,18 +1114,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .takes_value(true)
-                        .default_value("-p meta")
+                        .default_value("-p meta"),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -1347,16 +1338,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -1559,12 +1548,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -1705,10 +1691,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
@@ -1733,12 +1716,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -1793,18 +1776,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .default_value("-p meta")
-                        .takes_value(true)
+                        .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -2017,16 +2000,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("high-memory")
                         .long("high-memory")
+                        .hidden(true),
                 )
                 .arg(
                     Arg::with_name("discard-unmapped")
                         .long("discard-unmapped")
                         .requires("bam-file-cache-directory"),
                 )
-                .arg(
-                    Arg::with_name("split-bams")
-                        .long("split-bams")
-                )
+                .arg(Arg::with_name("split-bams").long("split-bams"))
                 .arg(
                     Arg::with_name("min-read-aligned-length")
                         .long("min-read-aligned-length")
@@ -2229,12 +2210,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("min-prune-factor")
                         .long("min-prune-factor")
-                        .default_value("2")
+                        .default_value("2"),
                 )
-                .arg(
-                    Arg::with_name("use-adaptive-pruning")
-                        .long("use-adaptive-pruning")
-                )
+                .arg(Arg::with_name("use-adaptive-pruning").long("use-adaptive-pruning"))
                 .arg(
                     Arg::with_name("dont-use-soft-clipped-bases")
                         .long("dont-use-soft-clipped-bases"),
@@ -2370,10 +2348,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .long("min-sv-qual")
                         .default_value("3"),
                 )
-                .arg(
-                    Arg::with_name("do-not-call-svs")
-                        .long("do-not-call-svs"),
-                )
+                .arg(Arg::with_name("do-not-call-svs").long("do-not-call-svs"))
                 .arg(
                     Arg::with_name("min-mapq")
                         .long("min-mapq")
@@ -2398,12 +2373,12 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
                 .arg(
                     Arg::with_name("enable-dynamic-read-disqualification-for-genotyping")
@@ -2458,18 +2433,18 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("calculate-dnds")
                         .long("calculate-dnds")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("calculate-fst")
                         .long("calculate-fst")
-                        .takes_value(false)
+                        .takes_value(false),
                 )
                 .arg(
                     Arg::with_name("prodigal-params")
                         .long("prodigal-params")
                         .takes_value(true)
-                        .default_value("-p meta")
+                        .default_value("-p meta"),
                 )
                 .arg(
                     Arg::with_name("limiting-interval")
@@ -2482,7 +2457,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("quiet").long("quiet")),
         )
         .subcommand(
-            SubCommand::with_name("summarize")
+            SubCommand::with_name("summarise")
                 .about("Summarizes ANI values of a given set of VCF files")
                 .arg(
                     Arg::with_name("vcfs")
@@ -2490,19 +2465,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .short("i")
                         .takes_value(true)
                         .multiple(true)
-                        .required(true)
+                        .required(true),
                 )
                 .arg(
                     Arg::with_name("output")
                         .long("output")
                         .short("o")
-                        .default_value("./")
+                        .default_value("./"),
                 )
                 .arg(
                     Arg::with_name("threads")
                         .long("threads")
                         .short("t")
-                        .default_value("8")
+                        .default_value("8"),
                 )
                 .arg(
                     Arg::with_name("qual-by-depth-filter")
@@ -2512,13 +2487,13 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(
                     Arg::with_name("qual-threshold")
                         .long("qual-threshold")
-                        .default_value("150")
+                        .default_value("150"),
                 )
                 .arg(
                     Arg::with_name("depth-per-sample-filter")
                         .long("depth-per-sample-filter")
-                        .default_value("5")
+                        .default_value("5"),
                 )
-                .arg(Arg::with_name("verbose").short("v").long("verbose"))
+                .arg(Arg::with_name("verbose").short("v").long("verbose")),
         );
 }

@@ -9,9 +9,9 @@ use rayon::prelude::*;
 use read_threading::abstract_read_threading_graph::AbstractReadThreadingGraph;
 use reads::bird_tool_reads::BirdToolRead;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use utils::simple_interval::{SimpleInterval, Locatable};
-use utils::errors::BirdToolError;
 use std::mem::swap;
+use utils::errors::BirdToolError;
+use utils::simple_interval::{Locatable, SimpleInterval};
 
 /**
  * Collection of read assembly using several kmerSizes.
@@ -80,7 +80,14 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             assembly_result_by_kmer_size: HashMap::new(),
             haplotypes: LinkedHashSet::new(),
             assembly_result_by_haplotype: HashMap::new(),
-            region_for_genotyping: AssemblyRegion::new(SimpleInterval::new(0, 0, 1), false, 0, 1, 0, 0),
+            region_for_genotyping: AssemblyRegion::new(
+                SimpleInterval::new(0, 0, 1),
+                false,
+                0,
+                1,
+                0,
+                0,
+            ),
             full_reference_with_padding: Vec::new(),
             padded_reference_loc: SimpleInterval::new(0, 0, 1),
             variation_present: false,
@@ -272,7 +279,10 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
      *                       at 10-12, a MNP at 14-15, and a SNP at 17.  May not be negative.
      * @return never {@code null}, but perhaps an empty collection.
      */
-    pub fn get_variation_events(&mut self, max_mnp_distance: usize) -> Result<BTreeSet<VariantContext>, BirdToolError> {
+    pub fn get_variation_events(
+        &mut self,
+        max_mnp_distance: usize,
+    ) -> Result<BTreeSet<VariantContext>, BirdToolError> {
         let same_mnp_distance = if self.last_max_mnp_distance_used.is_some() {
             if &max_mnp_distance == self.last_max_mnp_distance_used.as_ref().unwrap() {
                 true
@@ -294,19 +304,24 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
             match self.regenerate_variation_events(max_mnp_distance) {
                 Ok(_) => {
                     // pass
-                },
-                Err(error) => return Err(error)
+                }
+                Err(error) => return Err(error),
             }
         }
 
         return Ok(self.variation_events.clone());
     }
 
-    pub fn regenerate_variation_events(&mut self, max_mnp_distance: usize) -> Result<(), BirdToolError> {
+    pub fn regenerate_variation_events(
+        &mut self,
+        max_mnp_distance: usize,
+    ) -> Result<(), BirdToolError> {
         let mut haplotype_list = LinkedHashSet::new();
         swap(&mut self.haplotypes, &mut haplotype_list);
 
-        let mut haplotype_list = haplotype_list.into_iter().collect::<Vec<Haplotype<SimpleInterval>>>();
+        let mut haplotype_list = haplotype_list
+            .into_iter()
+            .collect::<Vec<Haplotype<SimpleInterval>>>();
 
         match EventMap::build_event_maps_for_haplotypes(
             &mut haplotype_list,
@@ -316,13 +331,15 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         ) {
             Ok(_) => {
                 // pass
-            },
-            Err(error) => return Err(error)
+            }
+            Err(error) => return Err(error),
         }
         self.variation_events = self.get_all_variant_contexts(&haplotype_list);
         self.last_max_mnp_distance_used = Some(max_mnp_distance);
         self.variation_present = haplotype_list.iter().any(|h| !h.allele.is_ref);
-        self.haplotypes = haplotype_list.into_iter().collect::<LinkedHashSet<Haplotype<SimpleInterval>>>();
+        self.haplotypes = haplotype_list
+            .into_iter()
+            .collect::<LinkedHashSet<Haplotype<SimpleInterval>>>();
         Ok(())
     }
 
@@ -335,7 +352,9 @@ impl<A: AbstractReadThreadingGraph> AssemblyResultSet<A> {
         &self,
         haplotypes: I,
     ) -> BTreeSet<VariantContext>
-    where I: IntoIterator<Item = &'a Haplotype<L>>{
+    where
+        I: IntoIterator<Item = &'a Haplotype<L>>,
+    {
         // Using the cigar from each called haplotype figure out what events need to be written out in a VCF file
         let vcs = haplotypes
             .into_iter()

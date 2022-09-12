@@ -678,7 +678,11 @@ impl GenotypeLikelihoodCalculator {
      */
     pub fn genotype_index_map(&mut self, old_to_new_allele_index_map: &[usize]) -> Vec<usize> {
         let result_allele_count = old_to_new_allele_index_map.len();
-        assert!(result_allele_count <= self.allele_count, "This calculator does not have enough capacity for handling {} alleles", result_allele_count);
+        assert!(
+            result_allele_count <= self.allele_count,
+            "This calculator does not have enough capacity for handling {} alleles",
+            result_allele_count
+        );
 
         let result_length = if result_allele_count == self.allele_count {
             self.genotype_count as usize
@@ -691,7 +695,13 @@ impl GenotypeLikelihoodCalculator {
         self.allele_heap.clear();
         let mut allele_counts_index = 0;
         for i in 0..result_length {
-            self.genotype_index_map_per_genotype_index(i, allele_counts_index, old_to_new_allele_index_map, &mut result, &mut sorted_allele_counts);
+            self.genotype_index_map_per_genotype_index(
+                i,
+                allele_counts_index,
+                old_to_new_allele_index_map,
+                &mut result,
+                &mut sorted_allele_counts,
+            );
             if i < result_length - 1 {
                 allele_counts_index = self.next_genotype_allele_counts(allele_counts_index);
             }
@@ -728,7 +738,8 @@ impl GenotypeLikelihoodCalculator {
         //         if old_index == allele_counts_index
         //     }
         // }
-        let distinct_allele_count = self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
+        let distinct_allele_count =
+            self.genotype_allele_counts[allele_counts_index].distinct_allele_count();
         self.genotype_allele_counts[allele_counts_index].copy_allele_counts(destination, 0);
 
         let mut jj = 0;
@@ -741,7 +752,10 @@ impl GenotypeLikelihoodCalculator {
             jj += 1;
 
             if new_index >= self.allele_count {
-                panic!("Found invalid new allele index ({}) for old index ({})", new_index, old_index);
+                panic!(
+                    "Found invalid new allele index ({}) for old index ({})",
+                    new_index, old_index
+                );
             };
 
             for k in 0..repeats {

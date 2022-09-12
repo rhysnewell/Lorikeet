@@ -25,7 +25,6 @@ pub struct AdaptiveChainPruner {
     pub(crate) max_unpruned_variants: usize,
 }
 
-
 impl AdaptiveChainPruner {
     pub fn new(
         initial_error_probability: f64,

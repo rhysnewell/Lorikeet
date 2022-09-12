@@ -1,5 +1,6 @@
 use activity_profile::activity_profile::Profile;
 use activity_profile::band_pass_activity_profile::BandPassActivityProfile;
+use assembly::assembly_region::AssemblyRegion;
 use assembly::assembly_region_iterator::AssemblyRegionIterator;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::FlagFilter;
@@ -12,9 +13,8 @@ use reference::reference_reader::ReferenceReader;
 use reference::reference_reader_utils::ReferenceReaderUtils;
 use rust_htslib::bcf::{IndexedReader, Read};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::path::Path;
-use assembly::assembly_region::AssemblyRegion;
+use std::sync::{Arc, Mutex};
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
 
@@ -84,7 +84,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         n_threads: usize,
         reference_reader: &mut ReferenceReader,
         output_prefix: &str,
-    ) -> Vec<VariantContext> {
+    ) -> Vec<(Vec<VariantContext>, Vec<Vec<i32>>)> {
         self.evaluator.collect_activity_profile_low_mem(
             indexed_bam_readers,
             self.short_read_bam_count,
@@ -105,7 +105,6 @@ impl<'c> AssemblyRegionWalker<'c> {
             args.value_of("max-input-depth").unwrap().parse().unwrap(),
             output_prefix,
         )
-
     }
 
     pub fn collect_shards(
@@ -119,7 +118,6 @@ impl<'c> AssemblyRegionWalker<'c> {
         tree: &Arc<Mutex<Vec<&Elem>>>,
         reference_reader: &mut ReferenceReader,
     ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
-
         self.evaluator.collect_activity_profile(
             indexed_bam_readers,
             self.short_read_bam_count,
@@ -134,7 +132,6 @@ impl<'c> AssemblyRegionWalker<'c> {
             tree,
             reference_reader,
         )
-
     }
 
     /**
@@ -147,13 +144,12 @@ impl<'c> AssemblyRegionWalker<'c> {
         args: &'a clap::ArgMatches,
         sample_names: &'a [String],
         reference_reader: &'b mut ReferenceReader,
-        output_prefix: &'a str
+        output_prefix: &'a str,
     ) -> Vec<VariantContext> {
         let max_input_depth = args.value_of("max-input-depth").unwrap().parse().unwrap();
         let contexts = shards
             .into_par_iter()
             .flat_map(|(tid, mut activity_profiles)| {
-
                 let ref_idx = &self.ref_idx;
                 let n_threads = &self.n_threads;
                 let assembly_region_padding = &self.assembly_region_padding;
@@ -232,12 +228,14 @@ impl<'c> AssemblyRegionWalker<'c> {
                     .flat_map(|mut assembly_region| {
                         let within_bounds = match &limiting_interval {
                             Some(limit) => {
-                                let limit = SimpleInterval::new(assembly_region.tid, limit.start, limit.end);
+                                let limit = SimpleInterval::new(
+                                    assembly_region.tid,
+                                    limit.start,
+                                    limit.end,
+                                );
                                 assembly_region.padded_span.overlaps(&limit)
-                            },
-                            None => {
-                                true
                             }
+                            None => true,
                         };
 
                         if within_bounds {
@@ -248,7 +246,7 @@ impl<'c> AssemblyRegionWalker<'c> {
                             let mut feature_variants = retrieve_feature_variants(
                                 indexed_vcf_reader,
                                 &reference_reader,
-                                &assembly_region
+                                &assembly_region,
                             );
 
                             // if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
@@ -277,7 +275,6 @@ impl<'c> AssemblyRegionWalker<'c> {
                                 args,
                             );
 
-
                             evaluator
                                 .call_region(
                                     assembly_region,
@@ -302,32 +299,38 @@ impl<'c> AssemblyRegionWalker<'c> {
                     .flat_map(|mut assembly_region| {
                         let within_bounds = match &limiting_interval {
                             Some(limit) => {
-                                let limit = SimpleInterval::new(assembly_region.tid, limit.start, limit.end);
+                                let limit = SimpleInterval::new(
+                                    assembly_region.tid,
+                                    limit.start,
+                                    limit.end,
+                                );
                                 assembly_region.padded_span.overlaps(&limit)
-                            },
-                            None => {
-                                true
                             }
+                            None => true,
                         };
 
                         if within_bounds {
                             let mut reference_reader = reference_reader.clone();
                             let mut evaluator = evaluator.clone();
 
-                            let feature_variants = if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                                let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
-                                if Path::new(&sv_path).exists() {
-                                    // structural variants present so we will add them to feature variants
-                                    // retrieve_feature_variants(
-                                    //     &sv_path,
-                                    //     &reference_reader,
-                                    //     &assembly_region,
-                                    // )
-                                    Vec::new()
+                            let feature_variants =
+                                if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                                    let sv_path =
+                                        format!("{}/structural_variants.vcf.gz", output_prefix);
+                                    if Path::new(&sv_path).exists() {
+                                        // structural variants present so we will add them to feature variants
+                                        // retrieve_feature_variants(
+                                        //     &sv_path,
+                                        //     &reference_reader,
+                                        //     &assembly_region,
+                                        // )
+                                        Vec::new()
+                                    } else {
+                                        Vec::new()
+                                    }
                                 } else {
                                     Vec::new()
-                                }
-                            } else { Vec::new() };
+                                };
 
                             debug!("Filling with reads...");
                             assembly_region_iter.fill_next_assembly_region_with_reads(
@@ -362,15 +365,12 @@ impl<'c> AssemblyRegionWalker<'c> {
     }
 }
 
-
 fn retrieve_feature_variants(
     indexed_vcf_reader: &str,
     reference_reader: &ReferenceReader,
-    assembly_region: &AssemblyRegion
+    assembly_region: &AssemblyRegion,
 ) -> Vec<VariantContext> {
-
-    let mut indexed_vcf_reader =
-        VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
+    let mut indexed_vcf_reader = VariantContext::retrieve_indexed_vcf_file(indexed_vcf_reader);
     debug!("Retrieved indexed VCF...");
 
     let vcf_rid = VariantContext::get_contig_vcf_tid(
