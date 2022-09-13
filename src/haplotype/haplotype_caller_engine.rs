@@ -583,12 +583,12 @@ impl<'c> HaplotypeCallerEngine<'c> {
                     .fetch((
                         tid as i32,
                         outer_chunk_location.start as i64,
-                        min(outer_chunk_location.end, target_len as usize - 1) as i64)
+                        min(outer_chunk_location.end + 1, target_len as usize - 1) as i64)
                     ).unwrap_or_else(|_|
                         panic!(
                             "Failed to fetch interval {}:{}-{}", tid,
                             outer_chunk_location.start,
-                            min(outer_chunk_location.end, target_len as usize - 1)
+                            min(outer_chunk_location.end + 1, target_len as usize - 1)
                         )
                     );
 
@@ -622,7 +622,7 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         reference_reader,
                         log10ploidy,
                         outer_chunk_location.start,
-                        min(outer_chunk_location.end,
+                        min(outer_chunk_location.end + 1,
                             target_len as usize),
                         false
                     );
@@ -1393,6 +1393,18 @@ impl<'c> HaplotypeCallerEngine<'c> {
                         let mut genotypes = Vec::new();
                         let hq_soft_clips = per_contig_per_base_hq_soft_clips[pos];
 
+                        // ANI should only be performed on "compared bases", that is bases that were >= depth per sample filter in both sample.
+                        // First we need to store the number of bases in a sample above the require depth, for a contig of length 10:
+                        //
+                        // ```
+                        // [5, 5, 5, 5, 0, 0, 0, 5, 5, 5] # sample 1
+                        //
+                        // [5, 5, 5, 0, 0, 5, 5, 5, 5, 0] # sample 2
+                        // ```
+                        //
+                        // we could store the information compressed as such if the depth per sample filter = 5:
+                        // - `[4, -3, 3]`
+                        // - `[3, -2, 4, -1]`
                         for (idx, sample_likelihoods) in genotype_likelihoods.iter().enumerate() {
                             let ref_v_any = &sample_likelihoods[pos];
 
@@ -1403,15 +1415,15 @@ impl<'c> HaplotypeCallerEngine<'c> {
                                 if depths_counters[idx] >= 0 { // positively increment current sample counter
                                     depths_counters[idx] += 1;
                                 } else {
-                                    depth_of_position[idx].push(depths_counters[idx]);
+                                    depth_of_position[idx].push(depths_counters[idx]); // push previous stretch of negative bases
                                     depths_counters[idx] = 0;
                                     depths_counters[idx] += 1;
                                 }
                             } else {
-                                if depths_counters[idx] <= 0 {
+                                if depths_counters[idx] <= 0 { // negatively increment when a base does not have suffcient coverage
                                     depths_counters[idx] -= 1;
                                 } else {
-                                    depth_of_position[idx].push(depths_counters[idx]);
+                                    depth_of_position[idx].push(depths_counters[idx]); // push previosu stretch of positive bases
                                     depths_counters[idx] = 0;
                                     depths_counters[idx] -= 1;
                                 }
