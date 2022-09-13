@@ -69,6 +69,8 @@ impl ANICalculator {
         let compared_bases =
             self.calculate_compared_bases(passing_sites, genome_size, sample_names.len());
 
+
+        debug!("Comparable bases \n{:?}", &compared_bases);
         self.calculate_from_contexts(
             contexts,
             genome_size,
@@ -130,7 +132,9 @@ impl ANICalculator {
                             let abs1 = val1.abs() - used1;
                             let abs2 = val2.abs() - used2;
 
-                            if val1.sign() != val2.sign() {
+                            // check if either val is negative. i.e. non-comparable
+                            if val1.is_negative() || val2.is_negative() {
+                                // for differing states use val1.sign() != val2.sign()
                                 differing_bases += min(abs1, abs2);
                             }
                             used1 += min(abs1, abs2);
@@ -154,6 +158,9 @@ impl ANICalculator {
                         compared_bases[[s1_ind, s2_ind]] = comparable_bases;
                         compared_bases[[s2_ind, s1_ind]] = comparable_bases;
                     }
+                    let comparable_bases_to_ref = (genome_size as i32
+                        + s1.into_iter().filter(|x| x.is_negative()).sum::<i32>()) as f64;
+                    compared_bases[[s1_ind, s1_ind]] = comparable_bases_to_ref;
                 }
             }
             _ => {
@@ -213,7 +220,7 @@ impl ANICalculator {
                     continue; // nothing present here
                 }
 
-                for sample_idx_2 in 0..n_samples {
+                for sample_idx_2 in sample_idx_1..n_samples {
                     if consenus_allele_indices.len() == sample_idx_2 {
                         // get consensus of first sample, default to ref
                         consenus_allele_indices.push(
@@ -246,8 +253,10 @@ impl ANICalculator {
                                     - context.alleles[*consensus_2].len() as f64)
                                     .abs();
                                 self.conANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                                self.conANI[[sample_idx_2, sample_idx_1]] += bases_different;
                             } else {
                                 self.conANI[[sample_idx_1, sample_idx_2]] += 1.0;
+                                self.conANI[[sample_idx_2, sample_idx_1]] += 1.0;
                             }
                         }
 
@@ -275,10 +284,12 @@ impl ANICalculator {
                             // if they share ANY alleles, then popANI does not change
 
                             self.popANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.popANI[[sample_idx_2, sample_idx_1]] += bases_different;
                         }
 
                         if allele_present_1 != allele_present_2 {
                             self.subpopANI[[sample_idx_1, sample_idx_2]] += bases_different;
+                            self.subpopANI[[sample_idx_2, sample_idx_1]] += bases_different;
                         }
                     } else {
                         let consensus_1 = &consenus_allele_indices[sample_idx_1];
