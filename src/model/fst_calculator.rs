@@ -52,6 +52,8 @@ mean_fst_df = np.zeros(shape=(vcf['calldata/DP'].shape[1], vcf['calldata/DP'].sh
 row = 0
 allele_counts = vcf['calldata/AD'][vcf['variants/QF'] == 'true']
 population_size = vcf['calldata/DP'][vcf['variants/QF'] == 'true']
+# allele_counts = vcf['calldata/AD']
+# population_size = vcf['calldata/DP']
 
 for sample1 in range(vcf['calldata/AD'].shape[1]):
     for sample2 in range(sample1 + 1):
@@ -64,8 +66,8 @@ for sample1 in range(vcf['calldata/AD'].shape[1]):
         sample2_depths = population_size[:, sample2]
         sample2_allele_counts = allele_counts[:, sample2, (allele_counts!=-1)[:, sample2].all(axis=0)]
 
-        variants_to_include_1 = (sample1_depths > depth_per_sample) #+ ((sample1_allele_counts / sample1_depths) > 0.01)
-        variants_to_include_2 = (sample2_depths > depth_per_sample) #+ ((sample2_allele_counts / sample2_depths) > 0.01)
+        variants_to_include_1 = (sample1_depths >= depth_per_sample) #+ ((sample1_allele_counts / sample1_depths) > 0.01)
+        variants_to_include_2 = (sample2_depths >= depth_per_sample) #+ ((sample2_allele_counts / sample2_depths) > 0.01)
         variants_to_include = np.array([variants_to_include_1, variants_to_include_2]).all(axis=0)
 
         h1 = allel.HaplotypeArray(sample1_allele_counts[variants_to_include])

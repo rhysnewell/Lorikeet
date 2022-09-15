@@ -53,7 +53,7 @@ const VARIANT_CALLING_HELP: &str = "
 Variant calling options (Basic):
   -k, --kmer-sizes <INT>                        K-mer sizes used to generate DeBruijn Graphs.
                                                 Multiple values at once are accepted and encouraged
-                                                e.g. 10 25 [default: 25] \n
+                                                e.g. 10 25 [default: 10 25] \n
   --ploidy <INT>                                Sets the default ploidy for the analysis to N.
                                                 [default: 1]\n
   --calculate-fst                               Calculate Fst values between samples and variants.
@@ -826,8 +826,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
                         .short("k")
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        // .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
@@ -1488,8 +1489,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
                         .short("k")
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        // .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")
@@ -2150,8 +2152,9 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("kmer-sizes")
                         .long("kmer-sizes")
                         .short("k")
+                        .takes_value(true)
                         .multiple(true)
-                        .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
+                        // .default_value("25"), //TODO: Wait for clap v3 and change this to default_values
                 )
                 .arg(
                     Arg::with_name("max-allowed-path-for-read-threading-assembler")

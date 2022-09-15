@@ -131,15 +131,20 @@ impl<'c> HaplotypeCallerEngine<'c> {
         do_allele_specific_calcs: bool,
         sample_ploidy: usize,
     ) -> HaplotypeCallerEngine<'c> {
+        let kmer_sizes = match args.values_of("kmer-sizes") {
+            Some(vals) => {
+                vals.map(|k_size| k_size.parse().unwrap())
+                    .collect::<Vec<usize>>()
+            },
+            _ => vec![10, 25]
+        };
+
         let mut assembly_engine = ReadThreadingAssembler::new(
             args.value_of("max-allowed-path-for-read-threading-assembler")
                 .unwrap()
                 .parse()
                 .unwrap(),
-            args.values_of("kmer-sizes")
-                .unwrap()
-                .map(|k_size| k_size.parse().unwrap())
-                .collect::<Vec<usize>>(),
+            kmer_sizes,
             args.is_present("dont-increase-kmer-sizes-for-cycles"),
             args.is_present("allow-non-unique-kmers-in-ref"),
             args.value_of("num-pruning-samples")

@@ -208,7 +208,7 @@ impl<'a> LorikeetEngine<'a> {
                                     }
                                 }
 
-                                if self.args.is_present("calculate-fst") {
+                                if self.args.is_present("calculate-dnds") {
                                     {
                                         let pb = &tree.lock().unwrap()[ref_idx + 2];
                                         pb.progress_bar.set_message(format!(
