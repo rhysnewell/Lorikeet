@@ -53,7 +53,7 @@ openssl-sys = "0.9"
 openssl = "0.10"
 ordered-float = "1"
 petgraph = {version = "^0.6.0", features = ["stable_graph"]}
-pyo3 = "^0.16.5"
+pyo3 = "^0.17.1"
 rand = "0.6"
 rayon = "^1.5.1"
 roff = "^0.2"
