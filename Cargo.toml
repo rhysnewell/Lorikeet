@@ -51,7 +51,7 @@ needletail = "^0.4.1"
 num = "0.4.0"
 openssl-sys = "0.9"
 openssl = "0.10"
-ordered-float = "1"
+ordered-float = "3"
 petgraph = {version = "^0.6.0", features = ["stable_graph"]}
 pyo3 = "^0.16.5"
 rand = "0.6"
