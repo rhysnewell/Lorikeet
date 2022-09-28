@@ -1,115 +1,54 @@
 use std;
 use std::io::Read;
+use bird_tool_utils::external_command_checker::*;
+
 
 pub fn check_for_bwa() {
-    self::check_for_external_command_presence("BWA", "which bwa");
+    check_for_external_command_presence("BWA", "which bwa").expect("Failed to find installed BWA");
+}
+
+pub fn check_for_bwa_mem2() {
+    check_for_external_command_presence("BWA", "which bwa-mem2")
+        .expect("Failed to find installed BWA");
+    default_version_check("bwa-mem2", "2.0", false, Some("bwa-mem2 version"))
+        .expect("Failed to find sufficient version of bwa-mem2");
 }
 
 pub fn check_for_samtools() {
-    self::check_for_external_command_presence("samtools", "which samtools");
-}
-
-pub fn check_for_tabix() {
-    self::check_for_external_command_presence("tabix", "which tabix");
-}
-
-pub fn check_for_samclip() {
-    self::check_for_external_command_presence("samclip", "which samclip");
+    check_for_external_command_presence("samtools", "which samtools")
+        .expect("Failed to find installed samtools");
+    default_version_check("samtools", "1.9", false, None)
+        .expect("Failed to find sufficient version of samtools");
 }
 
 pub fn check_for_bcftools() {
-    self::check_for_external_command_presence("bcftools", "which bcftools");
-}
-
-pub fn check_for_vt() {
-    self::check_for_external_command_presence("vt", "which vt");
-}
-
-pub fn check_for_prokka() {
-    self::check_for_external_command_presence("prokka", "which prokka");
+    check_for_external_command_presence("bcftools", "which bcftools")
+        .expect("Failed to find installed bcftools");
 }
 
 pub fn check_for_prodigal() {
-    self::check_for_external_command_presence("prodigal", "which prodigal");
-}
-
-pub fn check_for_pilon() {
-    self::check_for_external_command_presence("pilon", "which pilon");
-}
-
-pub fn check_for_snippy() {
-    self::check_for_external_command_presence("snippy", "which snippy");
+    check_for_external_command_presence("prodigal", "which prodigal")
+        .expect("Failed to find installed prodigal");
 }
 
 pub fn check_for_svim() {
-    self::check_for_external_command_presence("svim", "which svim");
+    check_for_external_command_presence("svim", "which svim")
+        .expect("Failed to find installed svim");
 }
 
 pub fn check_for_svim_asm() {
-    self::check_for_external_command_presence("svim-asm", "which svim-asm");
-}
-
-pub fn check_for_sniffles() {
-    self::check_for_external_command_presence("sniffles", "which sniffles");
-}
-
-pub fn check_for_gatk() {
-    self::check_for_external_command_presence("gatk", "which gatk");
-}
-
-pub fn check_for_freebayes() {
-    self::check_for_external_command_presence("freebayes", "which freebayes");
-}
-
-pub fn check_for_freebayes_parallel() {
-    self::check_for_external_command_presence("freebayes-parallel", "which freebayes-parallel");
-}
-
-pub fn check_for_fasta_generate_regions() {
-    self::check_for_external_command_presence(
-        "fasta_generate_regions.py",
-        "which fasta_generate_regions.py",
-    )
+    check_for_external_command_presence("svim-asm", "which svim-asm")
+        .expect("Failed to find installed svim-asm");
 }
 
 pub fn check_for_minimap2() {
-    self::check_for_external_command_presence("minimap2", "which minimap2");
+    check_for_external_command_presence("minimap2", "which minimap2")
+        .expect("Failed to find installed minimap2");
+    default_version_check("minimap2", "2.24-r1122", false, None)
+        .expect("Failed to find sufficient version of minimap2");
 }
 
 pub fn check_for_ngmlr() {
-    self::check_for_external_command_presence("ngmlr", "which ngmlr");
-}
-
-fn check_for_external_command_presence(executable_name: &str, testing_cmd: &str) {
-    debug!("Checking for {} ..", executable_name);
-    let mut cmd = std::process::Command::new("bash");
-    cmd.arg("-c")
-        .arg(testing_cmd)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    let mut process = cmd.spawn().expect("Unable to execute bash");
-    let es = process.wait().unwrap_or_else(|_| {
-        panic!(
-            "Failed to glean exitstatus while checking for presence of {}",
-            executable_name
-        )
-    });
-    if !es.success() {
-        error!(
-            "Could not find an available {} executable.",
-            executable_name
-        );
-        let mut err = String::new();
-        process
-            .stderr
-            .expect("Failed to grab stderr from failed executable finding process")
-            .read_to_string(&mut err)
-            .expect("Failed to read stderr into string");
-        error!("The STDERR was: {:?}", err);
-        panic!(
-            "Cannot continue without {}. Testing for presence with `{}` failed",
-            executable_name, testing_cmd
-        );
-    }
-    debug!("Success! {} found.", executable_name);
+    check_for_external_command_presence("ngmlr", "which ngmlr")
+        .expect("Failed to find ngmlr installed");
 }

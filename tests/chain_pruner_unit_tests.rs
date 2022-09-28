@@ -18,8 +18,6 @@ extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
 
 use bio::io::fasta::IndexedReader;
 use itertools::Itertools;

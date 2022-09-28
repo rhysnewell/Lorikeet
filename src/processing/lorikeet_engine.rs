@@ -6,7 +6,7 @@ use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::mosdepth_genome_coverage_estimators::CoverageEstimator;
 use coverm::FlagFilter;
 use haplotype::haplotype_clustering_engine::HaplotypeClusteringEngine;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle, style::TemplateError};
 use model::variant_context::VariantContext;
 use model::variant_context_utils::VariantContextUtils;
 use processing::bams::index_bams::*;
@@ -31,6 +31,8 @@ use rust_htslib::bcf::Read;
 use evolve::codon_structs::{CodonTable, Translations};
 use bio::io::gff::GffType::GFF3;
 use model::fst_calculator::calculate_fst;
+use utils::errors::BirdToolError;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReadType {
@@ -51,7 +53,7 @@ pub struct Elem {
 ///
 /// @author Rhys Newell <rhys.newell@.hdr.qut.edu.au>
 pub struct LorikeetEngine<'a> {
-    args: &'a clap::ArgMatches<'a>,
+    args: &'a clap::ArgMatches,
     short_read_bam_count: usize,
     long_read_bam_count: usize,
     coverage_estimators: Vec<CoverageEstimator>,
@@ -236,7 +238,7 @@ impl<'a> LorikeetEngine<'a> {
                                     let pb = &tree.lock().unwrap()[1];
                                     pb.progress_bar.inc(1);
                                     let pos = pb.progress_bar.position();
-                                    let len = pb.progress_bar.length();
+                                    let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                     if pos >= len {
                                         pb.progress_bar
                                             .finish_with_message(format!("All genomes analyzed {}", "✔",));
@@ -246,7 +248,7 @@ impl<'a> LorikeetEngine<'a> {
                                     let pb = &tree.lock().unwrap()[0];
                                     pb.progress_bar.inc(1);
                                     let pos = pb.progress_bar.position();
-                                    let len = pb.progress_bar.length();
+                                    let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                     if pos >= len {
                                         pb.progress_bar
                                             .finish_with_message(format!("All steps completed {}", "✔",));
@@ -273,7 +275,7 @@ impl<'a> LorikeetEngine<'a> {
                                 pb.progress_bar.inc(1);
                                 pb.progress_bar.reset_eta();
                                 let pos = pb.progress_bar.position();
-                                let len = pb.progress_bar.length();
+                                let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                 if pos >= len {
                                     pb.progress_bar
                                         .finish_with_message(format!("All genomes analyzed {}", "✔",));
@@ -286,7 +288,7 @@ impl<'a> LorikeetEngine<'a> {
                                 );
                                 pb.progress_bar.reset_eta();
                                 let pos = pb.progress_bar.position();
-                                let len = pb.progress_bar.length();
+                                let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                                 if pos >= len {
                                     pb.progress_bar
                                         .finish_with_message(format!("All steps completed {}", "✔",));
@@ -821,7 +823,7 @@ impl<'a> LorikeetEngine<'a> {
                         let pb = &tree.lock().unwrap()[1];
                         pb.progress_bar.inc(1);
                         let pos = pb.progress_bar.position();
-                        let len = pb.progress_bar.length();
+                        let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                         if pos >= len {
                             pb.progress_bar
                                 .finish_with_message(format!("All genomes analyzed {}", "✔",));
@@ -831,7 +833,7 @@ impl<'a> LorikeetEngine<'a> {
                         let pb = &tree.lock().unwrap()[0];
                         pb.progress_bar.inc(1);
                         let pos = pb.progress_bar.position();
-                        let len = pb.progress_bar.length();
+                        let len = pb.progress_bar.length().unwrap_or_else(|| 0);
                         if pos >= len {
                             pb.progress_bar
                                 .finish_with_message(format!("All steps completed {}", "✔",));
@@ -840,7 +842,7 @@ impl<'a> LorikeetEngine<'a> {
                 });
             }
 
-            self.multi.join().unwrap();
+            // self.multi.join().unwrap();
         });
     }
 
@@ -955,7 +957,7 @@ impl<'a> LorikeetEngine<'a> {
         genomes_and_contigs: &GenomesAndContigs,
         short_sample_count: usize,
         long_sample_count: usize,
-    ) -> Vec<Elem> {
+    ) -> Result<Vec<Elem>, TemplateError> {
         // Put reference index in the variant map and initialize matrix
         let mut progress_bars = vec![
             Elem {
@@ -1004,16 +1006,16 @@ impl<'a> LorikeetEngine<'a> {
         };
 
         let sty_eta = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]")?;
 
         let sty_aux = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}");
+            .template("[{elapsed_precise}] {spinner:.green} {msg} {pos:>4}/{len:4}")?;
         progress_bars
             .par_iter()
             .for_each(|pb| pb.progress_bar.set_style(sty_aux.clone()));
         progress_bars[0].progress_bar.set_style(sty_eta);
 
-        return progress_bars;
+        return Ok(progress_bars);
     }
 
     pub fn begin_tick(
@@ -1025,7 +1027,7 @@ impl<'a> LorikeetEngine<'a> {
         let elem = &progress_bars[index];
         let pb = multi_inner.insert(index, elem.progress_bar.clone());
 
-        pb.enable_steady_tick(500);
+        pb.enable_steady_tick(Duration::new(0, 500));
 
         pb.set_message(format!("{}: {}...", &elem.key, message));
     }
@@ -1046,8 +1048,11 @@ pub fn start_lorikeet_engine<
     genomes_and_contigs: GenomesAndContigs,
     tmp_bam_file_cache: Option<TempDir>,
     concatenated_genomes: Option<NamedTempFile>,
-) {
-    let threads = m.value_of("threads").unwrap().parse().unwrap();
+) -> Result<(), BirdToolError>{
+    let threads = match m.value_of("threads").unwrap().parse() {
+        Ok(val) => val,
+        Err(_) => return Err(BirdToolError::DebugError("Failed to parse number of threads.".to_string()))
+    };
     debug!("Parsing reference info...");
     let references = ReferenceReaderUtils::parse_references(&m);
     let references = references.par_iter().map(|p| &**p).collect::<Vec<&str>>();
@@ -1117,7 +1122,7 @@ pub fn start_lorikeet_engine<
     let multi = Arc::new(MultiProgress::new());
 
     let multi_inner = Arc::clone(&multi);
-    let mut progress_bars = LorikeetEngine::setup_progress_bars(
+    let mut progress_bars = match LorikeetEngine::setup_progress_bars(
         &references,
         &mut reference_map,
         &genomes_and_contigs,
@@ -1125,7 +1130,10 @@ pub fn start_lorikeet_engine<
         // long_read_bam_count,
         0,
         0,
-    );
+    ) {
+        Ok(val) => val,
+        Err(e) => return Err(BirdToolError::DebugError(e.to_string()))
+    };
 
     let tree: Arc<Mutex<Vec<&Elem>>> =
         Arc::new(Mutex::new(Vec::with_capacity(progress_bars.len())));
@@ -1167,6 +1175,7 @@ pub fn start_lorikeet_engine<
 
         lorikeet_engine.apply_per_reference();
     }
+    Ok(())
 }
 
 pub fn run_summarize(args: &clap::ArgMatches) {

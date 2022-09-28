@@ -1,4 +1,3 @@
-use std::io::Error;
 
 #[derive(Debug, Clone)]
 pub enum BirdToolError {
@@ -7,5 +6,6 @@ pub enum BirdToolError {
     InvalidLocation(String),
     NonContiguousIntervals(String),
     SkipException(String),
-    InvalidVariationEvent(String)
+    InvalidVariationEvent(String),
+    DebugError(String)
 }

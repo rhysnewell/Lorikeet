@@ -5,6 +5,7 @@ use coverm::mapping_parameters::*;
 use coverm::FlagFilter;
 use processing::lorikeet_engine::ReadType;
 
+
 use rayon::prelude::*;
 use std::str;
 use tempdir::TempDir;
@@ -91,7 +92,7 @@ pub fn get_cleaned_sample_names(samples: &[String]) -> Vec<&str> {
 }
 
 pub fn get_streamed_bam_readers<'a>(
-    m: &'a ArgMatches,
+    m: &'a clap::ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &'a Option<NamedTempFile>,
     readtype: &ReadType,
@@ -220,7 +221,7 @@ pub fn get_streamed_bam_readers<'a>(
 }
 
 pub fn long_generator_setup(
-    m: &ArgMatches,
+    m: &clap::ArgMatches,
     reference_tempfile: &Option<NamedTempFile>,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
@@ -250,7 +251,7 @@ pub fn long_generator_setup(
 }
 
 pub fn assembly_generator_setup(
-    m: &ArgMatches,
+    m: &clap::ArgMatches,
     reference_tempfile: &Option<NamedTempFile>,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
@@ -282,9 +283,11 @@ pub fn assembly_generator_setup(
 pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
     let mapping_program = match mapper {
         Some("bwa-mem") => MappingProgram::BWA_MEM,
+        Some("bwa-mem2") => MappingProgram::BWA_MEM2,
         Some("minimap2-sr") => MappingProgram::MINIMAP2_SR,
         Some("minimap2-ont") => MappingProgram::MINIMAP2_ONT,
         Some("minimap2-pb") => MappingProgram::MINIMAP2_PB,
+        Some("minimap2-hifi") => MappingProgram::MINIMAP2_HIFI,
         Some("minimap2-assembly") => MappingProgram::MINIMAP2_ASS,
         Some("minimap2-no-preset") => MappingProgram::MINIMAP2_NO_PRESET,
         Some("ngmlr-ont") => MappingProgram::NGMLR_ONT,
@@ -296,8 +299,12 @@ pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
         MappingProgram::BWA_MEM => {
             external_command_checker::check_for_bwa();
         }
+        MappingProgram::BWA_MEM2 => {
+            external_command_checker::check_for_bwa_mem2();
+        }
         MappingProgram::MINIMAP2_SR
         | MappingProgram::MINIMAP2_ONT
+        | MappingProgram::MINIMAP2_HIFI
         | MappingProgram::MINIMAP2_PB
         | MappingProgram::MINIMAP2_ASS
         | MappingProgram::MINIMAP2_NO_PRESET => {
@@ -311,7 +318,7 @@ pub fn parse_mapping_program(mapper: Option<&str>) -> MappingProgram {
 }
 
 pub fn get_streamed_filtered_bam_readers(
-    m: &ArgMatches,
+    m: &clap::ArgMatches,
     mapping_program: MappingProgram,
     reference_tempfile: &Option<NamedTempFile>,
     filter_params: &FilterParameters,
@@ -448,16 +455,20 @@ pub fn get_streamed_filtered_bam_readers(
 
 pub fn setup_mapping_index(
     reference_wise_params: &SingleReferenceMappingParameters,
-    m: &ArgMatches,
+    m: &clap::ArgMatches,
     mapping_program: MappingProgram,
-) -> Option<Box<dyn mapping_index_maintenance::MappingIndex>> {
+) -> Option<Box<dyn coverm::mapping_index_maintenance::MappingIndex>> {
     match mapping_program {
-        MappingProgram::BWA_MEM => Some(mapping_index_maintenance::generate_bwa_index(
-            reference_wise_params.reference,
-            None,
-        )),
+        MappingProgram::BWA_MEM | MappingProgram::BWA_MEM2 => {
+            Some(coverm::mapping_index_maintenance::generate_bwa_index(
+                reference_wise_params.reference,
+                None,
+                mapping_program,
+            ))
+        }
         MappingProgram::MINIMAP2_SR
         | MappingProgram::MINIMAP2_ONT
+        | MappingProgram::MINIMAP2_HIFI
         | MappingProgram::MINIMAP2_PB
         | MappingProgram::MINIMAP2_ASS
         | MappingProgram::MINIMAP2_NO_PRESET => {
@@ -472,7 +483,7 @@ pub fn setup_mapping_index(
                 }
                 None
             } else {
-                Some(mapping_index_maintenance::generate_minimap2_index(
+                Some(coverm::mapping_index_maintenance::generate_minimap2_index(
                     reference_wise_params.reference,
                     Some(m.value_of("threads").unwrap().parse::<usize>().unwrap()),
                     Some(m.value_of("minimap2-params").unwrap_or("")),
@@ -480,9 +491,8 @@ pub fn setup_mapping_index(
                 ))
             }
         }
-        MappingProgram::NGMLR_ONT | MappingProgram::NGMLR_PB => {
-            // NGMLR won't let us create a mapping index, we use --skip-write to avoid index being written
-            // to disk
+        MappingProgram::NGMLR_PB | MappingProgram::NGMLR_ONT => {
+            // NGMLR won't let us just create mapping index, so we will use the --skip-write parameter
             None
         }
     }
@@ -497,12 +507,13 @@ pub fn setup_bam_cache_directory(cache_directory: &str) {
             .permissions()
             .readonly()
         {
-            panic!(
+            error!(
                 "Cache directory {} does not appear to be writeable, not continuing",
                 cache_directory
             );
+            process::exit(1);
         } else {
-            debug!(
+            info!(
                 "Writing BAM files to already existing directory {}",
                 cache_directory
             )
@@ -516,53 +527,55 @@ pub fn setup_bam_cache_directory(cache_directory: &str) {
                 };
                 if parent2
                     .canonicalize()
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "Unable to canonicalize parent of cache directory {}",
-                            cache_directory
-                        )
-                    })
+                    .expect(&format!(
+                        "Unable to canonicalize parent of cache directory {}",
+                        cache_directory
+                    ))
                     .is_dir()
                 {
                     if parent2
                         .metadata()
-                        .unwrap_or_else(|_| {
-                            panic!(
-                                "Unable to get metadata for parent of cache directory {}",
-                                cache_directory
-                            )
-                        })
+                        .expect(&format!(
+                            "Unable to get metadata for parent of cache directory {}",
+                            cache_directory
+                        ))
                         .permissions()
                         .readonly()
                     {
-                        panic!(
+                        error!(
                             "The parent directory of the (currently non-existent) \
-                                 cache directory {} is not writeable, not continuing",
+                             cache directory {} is not writeable, not continuing",
                             cache_directory
                         );
+                        process::exit(1);
                     } else {
                         info!("Creating cache directory {}", cache_directory);
                         std::fs::create_dir(path).expect("Unable to create cache directory");
                     }
                 } else {
-                    panic!(
+                    error!(
                         "The parent directory of the cache directory {} does not \
-                            yet exist, so not creating that cache directory, and not continuing.",
+                         yet exist, so not creating that cache directory, and not continuing.",
                         cache_directory
-                    )
+                    );
+                    process::exit(1);
                 }
             }
-            None => panic!("Cannot create root directory {}", cache_directory),
+            None => {
+                error!("Cannot create root directory {}", cache_directory);
+                process::exit(1);
+            }
         }
     }
     // Test writing a tempfile to the directory, to test it actually is
     // writeable.
     let tf_result = tempfile::tempfile_in(path);
     if tf_result.is_err() {
-        panic!(
+        error!(
             "Failed to create test file in bam cache directory: {}",
             tf_result.err().unwrap()
-        )
+        );
+        process::exit(1);
     }
 }
 
@@ -654,12 +667,12 @@ pub struct FilterParameters {
     pub min_aligned_percent_pair: f32,
 }
 impl FilterParameters {
-    pub fn generate_from_clap(m: &ArgMatches) -> FilterParameters {
+    pub fn generate_from_clap(m: &clap::ArgMatches) -> FilterParameters {
         let mut f = FilterParameters {
             flag_filters: FlagFilter {
-                include_improper_pairs: !m.is_present("discard-improper-pairs"),
+                include_improper_pairs: !m.is_present("proper-pairs-only"),
                 include_secondary: m.is_present("include-secondary"),
-                include_supplementary: !m.is_present("discard-supplementary"),
+                include_supplementary: !m.is_present("exclude-supplementary"),
             },
             min_aligned_length_single: match m.is_present("min-read-aligned-length") {
                 true => m

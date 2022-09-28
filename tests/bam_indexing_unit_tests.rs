@@ -19,8 +19,6 @@ extern crate itertools;
 extern crate petgraph;
 extern crate rand;
 extern crate term;
-#[macro_use]
-extern crate ntest;
 
 use coverm::bam_generator::generate_indexed_named_bam_readers_from_bam_files;
 use coverm::bam_generator::IndexedNamedBamReader;

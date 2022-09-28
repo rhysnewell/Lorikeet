@@ -8,6 +8,10 @@ use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use utils::errors::BirdToolError;
+use std::time::Duration;
+use std::result::Result::Err;
+// use std::io::Error;
 
 /// Ensures mapping is completed for provided bams. If multiple references are provided and
 /// the user has asked to run genomes in parallel, then the bams are split per reference to
@@ -18,16 +22,19 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
     references: &GenomesAndContigs,
     parallel_genomes: bool,
     mapping: bool,
-) {
+) -> Result<(), BirdToolError>{
     if !parallel_genomes {
-        let mut record: bam::record::Record = bam::Record::new();
+        let mut record: bam::Record = bam::Record::new();
 
         // progress bar
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+        let sty = match ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]") {
+            Ok(s) => s,
+            Err(e) => return Err(BirdToolError::DebugError(e.to_string()))
+        };
         let pb1 = ProgressBar::new(bams.len() as u64);
         pb1.set_style(sty);
-        pb1.enable_steady_tick(500);
+        pb1.enable_steady_tick(Duration::new(0, 500));
         for bam_generator in bams {
             let mut bam = bam_generator.start();
             // bam.set_threads(std::cmp::max(n_threads / 2, 1));
@@ -69,13 +76,16 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
         let mut record: bam::record::Record = bam::Record::new();
 
         // progress bar
-        let sty = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]");
+        let sty = match ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ETA: [{eta}]") {
+            Ok(s) => s,
+            Err(e) => return Err(BirdToolError::DebugError(e.to_string()))
+        };
         let pb1 = Arc::new(Mutex::new(ProgressBar::new(bams.len() as u64)));
         {
             let mut pb1 = pb1.lock().unwrap();
             pb1.set_style(sty);
-            pb1.enable_steady_tick(500);
+            pb1.enable_steady_tick(Duration::new(0, 500));
             pb1.set_message("Splitting bam files per reference...");
         }
         let mut paths = Vec::with_capacity(bams.len());
@@ -104,7 +114,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             let header = bam.header();
             let stoit_name = bam.name().to_string().replace('/', ".");
             let path_prefix = path.rsplitn(2, '/').nth(1).unwrap();
-            let mut tmp_header = bam::header::Header::from_template(&header);
+            let mut tmp_header = bam::header::Header::from_template(header);
             let mut need_to_write = false;
             let mut writers = references
                 .genomes
@@ -162,6 +172,7 @@ pub fn finish_bams<R: NamedBamReader, G: NamedBamReaderGenerator<R>>(
             pb1.finish_with_message(format!("Reads and BAM files processed..."));
         }
     }
+    Ok(())
 }
 
 pub fn recover_bams(

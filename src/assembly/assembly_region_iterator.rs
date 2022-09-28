@@ -64,7 +64,7 @@ impl<'a> AssemblyRegionIterator<'a> {
         args: &clap::ArgMatches,
     ) {
         // We don't need to check previous region reads as the implementation of fetch we have
-        // should retrieve all reads regardles of if they have been seen before
+        // should retrieve all reads regardless of if they have been seen before
 
         let min_mapq = args.value_of("min-mapq").unwrap().parse::<u8>().unwrap();
         let limiting_interval = IntervalUtils::parse_limiting_interval(args);
@@ -81,7 +81,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                 };
 
                 match read_type {
-                    ReadType::Short => {
+                    ReadType::Short | ReadType::Long => {
                         let mut record = Record::new(); // Empty bam record
                         let mut bam_generated = generate_indexed_named_bam_readers_from_bam_files(
                             vec![&bam_generator],
@@ -109,7 +109,7 @@ impl<'a> AssemblyRegionIterator<'a> {
                             if ReadUtils::read_is_filtered(
                                 &record,
                                 flag_filters,
-                                20,
+                                min_mapq,
                                 read_type,
                                 &Self::DUMMY_LIMITING_INTERVAL,
                             )

@@ -1,5 +1,4 @@
 use bio::io::fasta::IndexedReader;
-use clap::ArgMatches;
 use coverm::genomes_and_contigs::GenomesAndContigs;
 use coverm::genomes_and_contigs::*;
 use external_command_checker;
@@ -134,7 +133,7 @@ impl ReferenceReaderUtils {
     }
 
     pub fn setup_genome_fasta_files(
-        m: &ArgMatches,
+        m: &clap::ArgMatches,
     ) -> (Option<NamedTempFile>, Option<GenomesAndContigs>) {
         let genome_fasta_files_opt = {
             match bird_tool_utils::clap_utils::parse_list_of_genome_fasta_files(m, false) {
@@ -225,7 +224,7 @@ impl ReferenceReaderUtils {
         return (concatenated_genomes, genomes_and_contigs_option);
     }
 
-    pub fn parse_references(m: &ArgMatches) -> Vec<String> {
+    pub fn parse_references(m: &clap::ArgMatches) -> Vec<String> {
         let references = match m.values_of("genome-fasta-files") {
             Some(vec) => {
                 let reference_paths = vec.map(|p| p.to_string()).collect::<Vec<String>>();
@@ -255,7 +254,7 @@ impl ReferenceReaderUtils {
     }
 
     pub fn extract_genomes_and_contigs_option(
-        m: &ArgMatches,
+        m: &clap::ArgMatches,
         genome_fasta_files: &Vec<&str>,
     ) -> Option<GenomesAndContigs> {
         match m.is_present("genome-definition") {
