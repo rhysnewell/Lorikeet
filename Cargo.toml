@@ -23,7 +23,7 @@ vendored-openssl = ["openssl-sys/vendored"]
 [dependencies]
 approx = "0.5.0"
 ansi_term = "0.12.1"
-bio = "0.41.0"
+bio = "0.42.0"
 bio-types = "0.13.0"
 bird_tool_utils = { git = "https://github.com/wwood/bird_tool_utils" }
 bird_tool_utils-man = "^0.4"
