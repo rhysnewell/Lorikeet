@@ -26,6 +26,24 @@ Other options:
 Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
 ```
 
+
+# Shell completion
+
+Completion scripts for various shells e.g. BASH can be generated. For example, to install the bash completion script system-wide (this requires root privileges):
+
+```
+lorikeet shell-completion --output-file lorikeet --shell bash
+mv lorikeet /etc/bash_completion.d/
+```
+
+It can also be installed into a user's home directory (root privileges not required):
+
+```
+lorikeet shell-completion --shell bash --output-file /dev/stdout >>~/.bash_completion
+```
+
+In both cases, to take effect, the terminal will likely need to be restarted. To test, type `lorikeet ca` and it should complete after pressing the TAB key.
+
 # Quick Start
 
 As a simple example, imagine we have a single sample where the reads have previously mapped to our metagenome or set

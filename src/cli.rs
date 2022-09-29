@@ -1566,14 +1566,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
                         .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
@@ -2123,6 +2123,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .about("Perform variant calling across the given genomes and samples")
                 .help(CALL_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("bam-files")
                         .short('b').long("bam-files")
@@ -2260,14 +2261,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
                         .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
@@ -2815,6 +2816,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .about("Generate consensus genomes across all provided samples")
                 .help(CONSENSUS_HELP.as_str())
                 .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("bam-files")
                         .short('b')
@@ -2956,14 +2958,14 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .alias("genome-fasta-files")
                         .takes_value(true)
                         .multiple(true)
-                        .required_unless_one(&["genome-fasta-directory", "full-help"]),
+                        .required_unless_one(&["genome-fasta-directory", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-directory")
                         .long("genome-fasta-directory")
                         .short('d')
                         .takes_value(true)
-                        .required_unless_one(&["genome-fasta-files", "full-help"]),
+                        .required_unless_one(&["genome-fasta-files", "full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("genome-fasta-extension")
@@ -3507,13 +3509,15 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
         .subcommand(
             SubCommand::with_name("summarise")
                 .about("Summarizes ANI values of a given set of VCF files")
+                .arg(Arg::with_name("full-help").long("full-help"))
+                .arg(Arg::with_name("full-help-roff").long("full-help-roff"))
                 .arg(
                     Arg::with_name("vcfs")
                         .long("vcfs")
                         .short('i')
                         .takes_value(true)
                         .multiple(true)
-                        .required(true),
+                        .required_unless_one(&["full-help", "full-help-roff"]),
                 )
                 .arg(
                     Arg::with_name("output")
