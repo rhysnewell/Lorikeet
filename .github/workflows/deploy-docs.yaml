@@ -9,7 +9,6 @@ on:
       - 'src/cli.rs'
       - 'doctave.yml'
       - '.github/workflows/deploy-docs.yaml'
-  workflow_dispatch:
 
 jobs:
   build:
