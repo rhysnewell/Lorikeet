@@ -1,6 +1,6 @@
 ---
 title: "lorikeet summarise usage"
----# NAME
+---
 
 lorikeet summarise - Calculate ANI and Fst metrics on a given set of VCF
 files (version 0.7.3)
