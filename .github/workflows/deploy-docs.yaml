@@ -15,23 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
       - name: 'Build manual pages'
-      - with:
+        uses: actions-rs/toolchain@v1
+        with:
         toolchain: stable
-      - uses: docker://pandoc/core:2.9
-      - run: bash release.sh
+        uses: docker://pandoc/core:2.9
+        run: bash release.sh
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions-rs/toolchain@v1
       - name: 'Deploys documentation'
-      - run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
-      - run: doctave build --release --allow-failed-checks
-      - name: 'GitHub Pages'
-      - if: github.ref == 'refs/heads/master'
-      - uses: crazy-max/ghaction-github-pages@v3.0.0
-      - with:
+        run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
+        run: doctave build --release --allow-failed-checks
+        name: 'GitHub Pages'
+        if: github.ref == 'refs/heads/master'
+        uses: crazy-max/ghaction-github-pages@v3.0.0
+        with:
         build_dir: site/
-      - env:
+        env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
