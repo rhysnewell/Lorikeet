@@ -12,28 +12,29 @@ on:
 
 jobs:
   build:
-    name: 'Build manual pages'
     runs-on: ubuntu-latest
     steps:
-        uses: actions/checkout@v2
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-        uses: docker://pandoc/core:2.9
-        run: bash release.sh
+      - name: 'Build manual pages'
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+      - with:
+        toolchain: stable
+      - uses: docker://pandoc/core:2.9
+      - run: bash release.sh
   deploy:
-    name: 'Deploys documentation'
     runs-on: ubuntu-latest
     steps:
-      uses: actions-rs/toolchain@v1
-      run: |
-        cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
-        doctave build --release --allow-failed-checks
-
-    name: GitHub Pages
-    if: github.ref == 'refs/heads/master'
-    uses: crazy-max/ghaction-github-pages@v3.0.0
-    with:
-      build_dir: site/
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 'Deploys documentation'
+      - uses: actions-rs/toolchain@v1
+      - run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
+      - run: doctave build --release --allow-failed-checks
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'GitHub Pages'
+      - if: github.ref == 'refs/heads/master'
+      - uses: crazy-max/ghaction-github-pages@v3.0.0
+      - with:
+        build_dir: site/
+      - env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
