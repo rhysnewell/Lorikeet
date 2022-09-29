@@ -18,13 +18,15 @@ jobs:
       - name: 'Build manual pages'
         uses: actions-rs/toolchain@v1
         with:
-        toolchain: stable
+          toolchain: stable
         uses: docker://pandoc/core:2.9
         run: bash release.sh
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
       - name: 'Deploys documentation'
         run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
         run: doctave build --release --allow-failed-checks
