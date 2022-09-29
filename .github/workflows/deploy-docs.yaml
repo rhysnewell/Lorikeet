@@ -1,13 +1,13 @@
-name: Deploy documentation site
+name: Build manual pages and deploy documentation
 
 on:
   push:
     branches:
       - master
     paths:
-    - 'docs/**'
-    - 'src/cli.rs'
-    - 'doctave.yml'
+      - 'docs/**'
+      - 'src/cli.rs'
+      - 'doctave.yml'
   workflow_dispatch:
 
 jobs:
@@ -31,9 +31,9 @@ jobs:
         doctave build --release --allow-failed-checks
 
     name: GitHub Pages
-      if: github.ref == 'refs/heads/master'
-      uses: crazy-max/ghaction-github-pages@v3.0.0
-      with:
-        build_dir: site/
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    if: github.ref == 'refs/heads/master'
+    uses: crazy-max/ghaction-github-pages@v3.0.0
+    with:
+      build_dir: site/
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
