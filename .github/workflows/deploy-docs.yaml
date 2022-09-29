@@ -14,9 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 'Build manual pages'
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
+      - name: 'Build manual pages'
       - with:
         toolchain: stable
       - uses: docker://pandoc/core:2.9
@@ -24,13 +24,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 'Deploys documentation'
       - uses: actions-rs/toolchain@v1
+      - name: 'Deploys documentation'
       - run: cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
       - run: doctave build --release --allow-failed-checks
-  pages:
-    runs-on: ubuntu-latest
-    steps:
       - name: 'GitHub Pages'
       - if: github.ref == 'refs/heads/master'
       - uses: crazy-max/ghaction-github-pages@v3.0.0
