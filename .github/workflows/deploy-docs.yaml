@@ -6,6 +6,7 @@ on:
       - master
     paths:
     - 'docs/**'
+    - 'src/cli.rs'
     - 'doctave.yml'
   workflow_dispatch:
 
@@ -16,11 +17,26 @@ jobs:
     steps:
     - name: 'Checkout GitHub Action'
       uses: actions/checkout@master
+    - name: 'Install tools'
+      - uses: actions-rs/toolchain@v1
+      - with:
+        - toolchain: stable
+      - uses: actions-rs/cargo@v1
+      - uses: docker://pandoc/core:2.9
+
+    - name: 'Update usage pages'
+        - shell: bash
+          - run: |
+              bash release.sh
+
+    - name: 'Install doctave'
+      - shell: bash
+        - run: |
+            cargo install --git https://github.com/Doctave/doctave --tag 0.4.2
 
     - name: 'Build and deploy'
       shell: bash
       run: |
-        brew install doctave/doctave/doctave
         doctave build --release --allow-failed-checks
 
     - name: GitHub Pages
