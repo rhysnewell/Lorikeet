@@ -178,7 +178,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
@@ -229,7 +229,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
@@ -303,7 +303,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),
@@ -336,7 +336,23 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
             }
         } else {
             debug!("Not filtering..");
-            let all_generators: Vec<PlaceholderBamFileReader> = vec![];
+            let readtype = ReadType::Short;
+            let generator_sets = get_streamed_bam_readers(
+                m,
+                mapping_program,
+                &concatenated_genomes,
+                &readtype,
+                &Some(references.clone()),
+                &tmp_dir,
+            );
+            let mut all_generators = vec![];
+            let mut indices = vec![]; // Prevent indices from being dropped
+            for set in generator_sets {
+                indices.push(set.index);
+                for g in set.generators {
+                    all_generators.push(g)
+                }
+            }
 
             if m.is_present("longread-bam-files") {
                 let bam_files = m.values_of("longread-bam-files").unwrap().collect();
@@ -356,7 +372,7 @@ fn prepare_pileup(m: &clap::ArgMatches, mode: &str) -> Result<(), BirdToolError>
                 )
             } else if m.is_present("longreads") {
                 // Perform mapping
-                let long_generators = long_generator_setup(
+                let (long_generators, _indices) = long_generator_setup(
                     &m,
                     &concatenated_genomes,
                     &Some(references.clone()),

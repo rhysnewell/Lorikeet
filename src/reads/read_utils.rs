@@ -26,11 +26,20 @@ impl ReadUtils {
         flag_filters: &FlagFilter,
         mapq_threshold: u8,
         readtype: ReadType,
-        limiting_interval: &Option<SimpleInterval>
+        limiting_interval: &Option<SimpleInterval>,
+        minimum_long_read_size: usize,
+        minimum_long_read_average_base_qual: usize
     ) -> bool {
+        if record.seq_len() == 0 ||
+            record.qual().len() == 0 ||
+            record.cigar_len() == 0 ||
+            record.seq().len() == 0 {
+            return true
+        }
+
         let cigar = record.cigar();
 
-        let result = record.is_secondary()
+        let mut result = record.is_secondary()
             || (!flag_filters.include_supplementary
                 && record.is_supplementary())
             || (record.is_paired()
@@ -54,6 +63,18 @@ impl ReadUtils {
             || CigarUtils::starts_or_ends_with_deletion_ignoring_clips(&cigar.0)
             || record.pos() < 0
             || (record.reference_end() - record.reference_start() + 1 < 0);
+
+        result = match readtype {
+            ReadType::Long => {
+                let average_base_qual: usize = record.qual().iter().map(|q| *q as usize).sum::<usize>() / record.qual().len();
+                result
+                || record.seq_len() < minimum_long_read_size
+                || average_base_qual < minimum_long_read_average_base_qual
+            }
+            _ => {
+                result
+            }
+        };
 
         match limiting_interval {
             Some(interval) => {

@@ -528,6 +528,22 @@ fn variant_calling_section_basic() -> Section {
         )
         .option(
             Opt::new("INT")
+                .long("--min-long-read-size")
+                .help(
+                    "The minimum size for long reads to be used for analysis \
+                    [default: 1500]"
+                )
+        )
+        .option(
+            Opt::new("INT")
+                .long("--min-long-read-average-base-qual")
+                .help(
+                    "The minimum average base quality of a long read \
+                     for it to be used for analysis [default: 20]"
+                )
+        )
+        .option(
+            Opt::new("INT")
                 .short("-q")
                 .long("--min-base-quality")
                 .help(
@@ -1421,7 +1437,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ]),
@@ -1438,7 +1454,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -1455,7 +1471,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -1472,7 +1488,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -1488,7 +1504,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -1504,7 +1520,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -1520,7 +1536,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longread-bam-files"
                         ])
                         .conflicts_with_all(&["longread-bam-files"]),
@@ -1536,7 +1553,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longreads",
                         ])
                         .conflicts_with_all(&["longreads"]),
@@ -1657,19 +1675,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -1984,6 +2002,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short('q')
@@ -2055,7 +2083,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(
@@ -2106,7 +2134,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ]),
@@ -2123,7 +2151,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2140,7 +2168,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2156,7 +2184,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2172,7 +2200,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2188,7 +2216,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2204,7 +2232,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longread-bam-files"
                         ])
                         .conflicts_with_all(&["longread-bam-files"]),
@@ -2219,7 +2248,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longreads",
                         ])
                         .conflicts_with_all(&["longreads"]),
@@ -2337,19 +2367,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -2669,6 +2699,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short('q')
@@ -2735,7 +2775,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(
@@ -2787,7 +2827,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ]),
@@ -2804,7 +2844,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2821,7 +2861,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "coupled",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2838,7 +2878,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "interleaved",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2854,7 +2894,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "single",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2870,7 +2910,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "full-help", "full-help-roff",
                             "longreads",
                             "longread-bam-files"
                         ])
@@ -2886,7 +2926,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longread-bam-files"
                         ])
                         .conflicts_with_all(&["longread-bam-files"]),
@@ -2902,7 +2943,8 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                             "read1",
                             "coupled",
                             "interleaved",
-                            "full-help",
+                            "single",
+                            "full-help", "full-help-roff",
                             "longreads",
                         ])
                         .conflicts_with_all(&["longreads"]),
@@ -3023,19 +3065,19 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                     Arg::with_name("min-read-aligned-length-pair")
                         .long("min-read-aligned-length-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-percent-identity-pair")
                         .long("min-read-percent-identity-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("min-read-aligned-percent-pair")
                         .long("min-read-aligned-percent-pair")
                         .takes_value(true)
-                        .requires("discard-improper-pairs"),
+                        .requires("proper-pairs-only"),
                 )
                 .arg(
                     Arg::with_name("method")
@@ -3351,6 +3393,16 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                         .default_value("20"),
                 )
                 .arg(
+                    Arg::with_name("min-long-read-size")
+                        .long("min-long-read-size")
+                        .default_value("1500"),
+                )
+                .arg(
+                    Arg::with_name("min-long-read-average-base-qual")
+                        .long("min-long-read-average-base-qual")
+                        .default_value("20"),
+                )
+                .arg(
                     Arg::with_name("min-base-quality")
                         .long("min-base-quality")
                         .short('q')
@@ -3417,7 +3469,7 @@ Rhys J. P. Newell <rhys.newell near hdr.qut.edu.au>
                 .arg(Arg::with_name("disable-optimizations").long("disable-optimizations"))
                 .arg(Arg::with_name("disable-avx").long("disable-avx"))
                 .arg(Arg::with_name("no-zeros").long("no-zeros"))
-                .arg(Arg::with_name("discard-improper-pairs").long("discard-improper-pairs"))
+                .arg(Arg::with_name("proper-pairs-only").long("proper-pairs-only"))
                 .arg(Arg::with_name("include-secondary").long("include-secondary"))
                 .arg(Arg::with_name("exclude-supplementary").long("exclude-supplementary"))
                 .arg(

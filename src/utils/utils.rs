@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use std::str;
 use tempdir::TempDir;
 use tempfile::NamedTempFile;
+use coverm::mapping_index_maintenance::MappingIndex;
 
 pub const NUMERICAL_EPSILON: f64 = 1e-3;
 pub const CONCATENATED_REFERENCE_CACHE_STEM: &str = "lorikeet-genome";
@@ -126,7 +127,7 @@ pub fn get_streamed_bam_readers<'a>(
         }
     }
     let discard_unmapped = m.is_present("discard-unmapped");
-
+    debug!("Reference Tempfile: {:?}", &reference_tempfile);
     let params = match readtype {
         &ReadType::Short => MappingParameters::generate_from_clap(
             m,
@@ -147,8 +148,10 @@ pub fn get_streamed_bam_readers<'a>(
             &references,
         ),
     };
+
     let mut generator_set = vec![];
     for reference_wise_params in params {
+        debug!("Ref Wise Params: {:?}", &reference_wise_params.len());
         let mut bam_readers = vec![];
         let index = setup_mapping_index(&reference_wise_params, &m, mapping_program);
 
@@ -225,7 +228,7 @@ pub fn long_generator_setup(
     reference_tempfile: &Option<NamedTempFile>,
     references: &Option<Vec<&str>>,
     tmp_bam_file_cache: &Option<TempDir>,
-) -> Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator> {
+) -> (Vec<coverm::bam_generator::StreamingNamedBamReaderGenerator>, Vec<Option<Box<dyn MappingIndex>>>) {
     // Perform mapping
     let mapping_program = parse_mapping_program(m.value_of("longread-mapper"));
     let readtype = ReadType::Long;
@@ -247,7 +250,7 @@ pub fn long_generator_setup(
         }
     }
 
-    return long_generators;
+    return (long_generators, indices);
 }
 
 pub fn assembly_generator_setup(

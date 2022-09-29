@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use utils::interval_utils::IntervalUtils;
 use utils::simple_interval::{Locatable, SimpleInterval};
+use utils::errors::BirdToolError;
 
 pub struct AssemblyRegionWalker<'c> {
     pub(crate) evaluator: HaplotypeCallerEngine<'c>,
@@ -74,7 +75,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         }
     }
 
-    pub fn collect_shards_low_mem(
+    pub fn collect_shards(
         &mut self,
         args: &clap::ArgMatches,
         indexed_bam_readers: &[String],
@@ -85,7 +86,7 @@ impl<'c> AssemblyRegionWalker<'c> {
         reference_reader: &mut ReferenceReader,
         output_prefix: &str,
     ) -> Vec<(Vec<VariantContext>, Vec<Vec<i32>>)> {
-        self.evaluator.collect_activity_profile_low_mem(
+        self.evaluator.collect_activity_profile(
             indexed_bam_readers,
             self.short_read_bam_count,
             // self.long_read_bam_count,
@@ -105,91 +106,6 @@ impl<'c> AssemblyRegionWalker<'c> {
             args.value_of("max-input-depth").unwrap().parse().unwrap(),
             output_prefix,
         )
-    }
-
-    pub fn collect_shards(
-        &mut self,
-        args: &clap::ArgMatches,
-        indexed_bam_readers: &[String],
-        genomes_and_contigs: &GenomesAndContigs,
-        concatenated_genomes: &Option<String>,
-        flag_filters: &FlagFilter,
-        n_threads: usize,
-        tree: &Arc<Mutex<Vec<&Elem>>>,
-        reference_reader: &mut ReferenceReader,
-    ) -> HashMap<usize, Vec<BandPassActivityProfile>> {
-        self.evaluator.collect_activity_profile(
-            indexed_bam_readers,
-            self.short_read_bam_count,
-            // self.long_read_bam_count,
-            0,
-            n_threads,
-            self.ref_idx,
-            args,
-            genomes_and_contigs,
-            concatenated_genomes,
-            flag_filters,
-            tree,
-            reference_reader,
-        )
-    }
-
-    /**
-     * Iterates through activity profiles per contig, sending each activity profile to be processed
-     */
-    pub fn traverse<'a, 'b>(
-        &'b mut self,
-        mut shards: HashMap<usize, Vec<BandPassActivityProfile>>,
-        flag_filters: &'a FlagFilter,
-        args: &'a clap::ArgMatches,
-        sample_names: &'a [String],
-        reference_reader: &'b mut ReferenceReader,
-        output_prefix: &'a str,
-    ) -> Vec<VariantContext> {
-        let max_input_depth = args.value_of("max-input-depth").unwrap().parse().unwrap();
-        let contexts = shards
-            .into_par_iter()
-            .flat_map(|(tid, mut activity_profiles)| {
-                let ref_idx = &self.ref_idx;
-                let n_threads = &self.n_threads;
-                let assembly_region_padding = &self.assembly_region_padding;
-                let min_assembly_region_size = &self.min_assembly_region_size;
-                let max_assembly_region_size = &self.max_assembly_region_size;
-                let short_read_bam_count = &self.short_read_bam_count;
-                let long_read_bam_count = &self.long_read_bam_count;
-                let evaluator = &self.evaluator;
-                let reference_reader = &reference_reader;
-
-                activity_profiles
-                    .into_par_iter()
-                    .flat_map(move |mut activity_profile| {
-                        let mut inner_reader = ReferenceReader::new_from_reader_with_tid_and_rid(
-                            reference_reader,
-                            *ref_idx,
-                            tid,
-                        );
-
-                        Self::process_shard(
-                            activity_profile,
-                            flag_filters,
-                            args,
-                            sample_names,
-                            &inner_reader,
-                            *n_threads,
-                            *assembly_region_padding,
-                            *min_assembly_region_size,
-                            *max_assembly_region_size,
-                            *short_read_bam_count,
-                            *long_read_bam_count,
-                            &evaluator,
-                            max_input_depth,
-                            output_prefix,
-                        )
-                        .into_par_iter()
-                    })
-            })
-            .collect::<Vec<VariantContext>>();
-        return contexts;
     }
 
     pub fn process_shard<'a, 'b>(
@@ -223,143 +139,145 @@ impl<'c> AssemblyRegionWalker<'c> {
             Some(indexed_vcf_reader) => {
                 debug!("Attempting to extract features...");
 
-                let contexts = pending_regions
-                    .into_par_iter()
-                    .flat_map(|mut assembly_region| {
-                        let within_bounds = match &limiting_interval {
-                            Some(limit) => {
-                                let limit = SimpleInterval::new(
-                                    assembly_region.tid,
-                                    limit.start,
-                                    limit.end,
+                let contexts =
+                    pending_regions
+                        .into_par_iter()
+                        .flat_map(|mut assembly_region| {
+                            let within_bounds = match &limiting_interval {
+                                Some(limit) => {
+                                    let limit = SimpleInterval::new(
+                                        assembly_region.tid,
+                                        limit.start,
+                                        limit.end,
+                                    );
+                                    assembly_region.padded_span.overlaps(&limit)
+                                }
+                                None => true,
+                            };
+
+                            if within_bounds {
+                                let mut reference_reader = reference_reader.clone();
+                                let mut evaluator = evaluator.clone();
+
+                                // read in feature variants across the assembly region location
+                                let mut feature_variants = retrieve_feature_variants(
+                                    indexed_vcf_reader,
+                                    &reference_reader,
+                                    &assembly_region,
                                 );
-                                assembly_region.padded_span.overlaps(&limit)
-                            }
-                            None => true,
-                        };
 
-                        if within_bounds {
-                            let mut reference_reader = reference_reader.clone();
-                            let mut evaluator = evaluator.clone();
+                                // if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                                //     let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
+                                //     if Path::new(&sv_path).exists() {
+                                //         // structural variants present so we will add them to feature variants
+                                //         let structural_variants = retrieve_feature_variants(
+                                //             &sv_path,
+                                //             &reference_reader,
+                                //             &assembly_region,
+                                //         );
+                                //
+                                //         feature_variants.extend(structural_variants);
+                                //     }
+                                // }
 
-                            // read in feature variants across the assembly region location
-                            let mut feature_variants = retrieve_feature_variants(
-                                indexed_vcf_reader,
-                                &reference_reader,
-                                &assembly_region,
-                            );
+                                debug!("Feature variants {:?}", &feature_variants);
 
-                            // if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                            //     let sv_path = format!("{}/structural_variants.vcf.gz", output_prefix);
-                            //     if Path::new(&sv_path).exists() {
-                            //         // structural variants present so we will add them to feature variants
-                            //         let structural_variants = retrieve_feature_variants(
-                            //             &sv_path,
-                            //             &reference_reader,
-                            //             &assembly_region,
-                            //         );
-                            //
-                            //         feature_variants.extend(structural_variants);
-                            //     }
-                            // }
-
-                            debug!("Feature variants {:?}", &feature_variants);
-
-                            assembly_region_iter.fill_next_assembly_region_with_reads(
-                                &mut assembly_region,
-                                flag_filters,
-                                n_threads,
-                                short_read_bam_count,
-                                long_read_bam_count,
-                                max_input_depth,
-                                args,
-                            );
-
-                            evaluator
-                                .call_region(
-                                    assembly_region,
-                                    &mut reference_reader,
-                                    feature_variants,
-                                    args,
-                                    sample_names,
+                                assembly_region_iter.fill_next_assembly_region_with_reads(
+                                    &mut assembly_region,
                                     flag_filters,
-                                )
-                                .into_par_iter()
-                        } else {
-                            Vec::new().into_par_iter()
-                        }
-                    })
-                    .collect::<Vec<VariantContext>>();
+                                    n_threads,
+                                    short_read_bam_count,
+                                    long_read_bam_count,
+                                    max_input_depth,
+                                    args,
+                                );
 
-                return contexts;
+                                evaluator
+                                    .call_region(
+                                        assembly_region,
+                                        &mut reference_reader,
+                                        feature_variants,
+                                        args,
+                                        sample_names,
+                                        flag_filters,
+                                    )
+                                    .into_par_iter()
+                            } else {
+                                Vec::new().into_par_iter()
+                            }
+                        })
+                        .collect::<Vec<VariantContext>>();
+
+                contexts
             }
             None => {
-                let contexts = pending_regions
-                    .into_par_iter()
-                    .flat_map(|mut assembly_region| {
-                        let within_bounds = match &limiting_interval {
-                            Some(limit) => {
-                                let limit = SimpleInterval::new(
-                                    assembly_region.tid,
-                                    limit.start,
-                                    limit.end,
-                                );
-                                assembly_region.padded_span.overlaps(&limit)
-                            }
-                            None => true,
-                        };
+                let contexts =
+                    pending_regions
+                        .into_par_iter()
+                        .flat_map(|mut assembly_region| {
+                            let within_bounds = match &limiting_interval {
+                                Some(limit) => {
+                                    let limit = SimpleInterval::new(
+                                        assembly_region.tid,
+                                        limit.start,
+                                        limit.end,
+                                    );
+                                    assembly_region.padded_span.overlaps(&limit)
+                                }
+                                None => true,
+                            };
 
-                        if within_bounds {
-                            let mut reference_reader = reference_reader.clone();
-                            let mut evaluator = evaluator.clone();
+                            if within_bounds {
+                                let mut reference_reader = reference_reader.clone();
+                                let mut evaluator = evaluator.clone();
 
-                            let feature_variants =
-                                if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
-                                    let sv_path =
-                                        format!("{}/structural_variants.vcf.gz", output_prefix);
-                                    if Path::new(&sv_path).exists() {
-                                        // structural variants present so we will add them to feature variants
-                                        // retrieve_feature_variants(
-                                        //     &sv_path,
-                                        //     &reference_reader,
-                                        //     &assembly_region,
-                                        // )
-                                        Vec::new()
+                                let feature_variants =
+                                    if long_read_bam_count > 0 && !args.is_present("do-not-call-svs") {
+                                        let sv_path =
+                                            format!("{}/structural_variants.vcf.gz", output_prefix);
+                                        if Path::new(&sv_path).exists() {
+                                            // structural variants present so we will add them to feature variants
+                                            // retrieve_feature_variants(
+                                            //     &sv_path,
+                                            //     &reference_reader,
+                                            //     &assembly_region,
+                                            // )
+                                            Vec::new()
+                                        } else {
+                                            Vec::new()
+                                        }
                                     } else {
                                         Vec::new()
-                                    }
-                                } else {
-                                    Vec::new()
-                                };
+                                    };
 
-                            debug!("Filling with reads...");
-                            assembly_region_iter.fill_next_assembly_region_with_reads(
-                                &mut assembly_region,
-                                flag_filters,
-                                n_threads,
-                                short_read_bam_count,
-                                long_read_bam_count,
-                                max_input_depth,
-                                args,
-                            );
-
-                            evaluator
-                                .call_region(
-                                    assembly_region,
-                                    &mut reference_reader,
-                                    feature_variants,
-                                    args,
-                                    sample_names,
+                                debug!("Filling with reads...");
+                                assembly_region_iter.fill_next_assembly_region_with_reads(
+                                    &mut assembly_region,
                                     flag_filters,
-                                )
-                                .into_par_iter()
-                        } else {
-                            Vec::new().into_par_iter()
-                        }
-                    })
-                    .collect::<Vec<VariantContext>>();
+                                    n_threads,
+                                    short_read_bam_count,
+                                    long_read_bam_count,
+                                    max_input_depth,
+                                    args,
+                                );
 
-                return contexts;
+                                evaluator
+                                    .call_region(
+                                        assembly_region,
+                                        &mut reference_reader,
+                                        feature_variants,
+                                        args,
+                                        sample_names,
+                                        flag_filters,
+                                    )
+                                    .into_par_iter()
+                            } else {
+                                Vec::new().into_par_iter()
+                            }
+                        })
+                        .collect::<Vec<VariantContext>>();
+
+                contexts
             }
         }
     }

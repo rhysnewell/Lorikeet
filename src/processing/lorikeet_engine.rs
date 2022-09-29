@@ -300,6 +300,7 @@ impl<'a> LorikeetEngine<'a> {
                     }
                 }
 
+
                 scope.execute(move || {
                     let reference = &genomes_and_contigs.genomes[ref_idx];
                     Self::begin_tick(
@@ -382,7 +383,7 @@ impl<'a> LorikeetEngine<'a> {
                     }
 
 
-                    let vec_of_contexts_sites_tuple = assembly_engine.collect_shards_low_mem(
+                    let vec_of_contexts_sites_tuple = assembly_engine.collect_shards(
                         self.args,
                         &indexed_bam_readers,
                         &genomes_and_contigs,
@@ -1027,7 +1028,7 @@ impl<'a> LorikeetEngine<'a> {
         let elem = &progress_bars[index];
         let pb = multi_inner.insert(index, elem.progress_bar.clone());
 
-        pb.enable_steady_tick(Duration::new(0, 500));
+        pb.enable_steady_tick(Duration::from_millis(200));
 
         pb.set_message(format!("{}: {}...", &elem.key, message));
     }

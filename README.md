@@ -118,6 +118,24 @@ Call variants from short reads and longread bam files:
 
 `lorikeet call -r input_genome.fna -1 forward_reads.fastq -2 reverse_reads.fastq -l longread.bam`
 
+
+## Shell completion
+
+Completion scripts for various shells e.g. BASH can be generated. For example, to install the bash completion script system-wide (this requires root privileges):
+
+```
+lorikeet shell-completion --output-file lorikeet --shell bash
+mv lorikeet /etc/bash_completion.d/
+```
+
+It can also be installed into a user's home directory (root privileges not required):
+
+```
+lorikeet shell-completion --shell bash --output-file /dev/stdout >>~/.bash_completion
+```
+
+In both cases, to take effect, the terminal will likely need to be restarted. To test, type `lorikeet ca` and it should complete after pressing the TAB key.
+
 ## License
 
 Code is [GPL-3.0](LICENSE)

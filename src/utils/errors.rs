@@ -7,5 +7,6 @@ pub enum BirdToolError {
     NonContiguousIntervals(String),
     SkipException(String),
     InvalidVariationEvent(String),
+    ProcessPanicked(String),
     DebugError(String)
 }
